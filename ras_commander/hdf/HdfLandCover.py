@@ -27,6 +27,7 @@ Example:
 """
 
 import logging
+import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -383,6 +384,297 @@ class HdfLandCover:
         except Exception as e:
             logger.error(f"Error reading land cover raster map from {landcover_hdf_path}: {e}")
             return None
+
+    @staticmethod
+    def _detect_sidecar_format(
+        hdf_path: Union[str, Path]
+    ) -> str:
+        """
+        Detect land cover sidecar HDF format version.
+
+        Returns:
+            'v5' -- Has IDs, ManningsN, Names flat arrays
+            'v6_0' -- Has Raster Map with ManningsN column + Variables
+            'v6_modern' -- Has Raster Map + Variables, no ManningsN in Raster Map
+        """
+        hdf_path = Path(hdf_path)
+
+        with h5py.File(hdf_path, 'r') as hdf_file:
+            if all(key in hdf_file for key in ('IDs', 'ManningsN', 'Names')):
+                return 'v5'
+
+            raster_map_path = None
+            for candidate in ['Raster Map', '//Raster Map']:
+                if candidate in hdf_file:
+                    raster_map_path = candidate
+                    break
+
+            if raster_map_path is not None:
+                raster_map_fields = hdf_file[raster_map_path].dtype.names or ()
+                if 'ManningsN' in raster_map_fields:
+                    return 'v6_0'
+                return 'v6_modern'
+
+            raise ValueError(f"Unknown sidecar format: {list(hdf_file.keys())}")
+
+    @staticmethod
+    @log_call
+    def set_landcover_raster_map(
+        hdf_path: Union[str, Path],
+        class_mapping: Dict[str, float],
+        ras_object: Any = None,
+    ) -> dict:
+        """
+        Write Manning's N values to a land cover sidecar HDF file.
+
+        Creates a .bak backup before any modification. Validates that all
+        class names in class_mapping exist in the sidecar before writing.
+
+        Args:
+            hdf_path: Path to the land cover sidecar HDF file
+            class_mapping: Dict mapping class name -> Manning's N value
+                Example: {"Open Water": 0.020, "Forest": 0.120}
+            ras_object: Optional RasPrj object
+
+        Returns:
+            dict with keys:
+                'changed': int -- number of classes modified
+                'unchanged': int -- number of classes not in mapping
+                'format': str -- detected format version
+                'backup_path': Path -- path to .bak file
+                'class_details': list of dicts with per-class info
+
+        Raises:
+            FileNotFoundError: If hdf_path doesn't exist
+            ValueError: If any class name in mapping not found in sidecar
+            ValueError: If unknown sidecar format detected
+        """
+        hdf_path = Path(hdf_path)
+        if not hdf_path.exists():
+            raise FileNotFoundError(f"Land cover HDF not found: {hdf_path}")
+
+        normalized_mapping = {
+            str(class_name): float(mannings_n)
+            for class_name, mannings_n in class_mapping.items()
+        }
+
+        backup_path = Path(str(hdf_path) + '.bak')
+        shutil.copy2(hdf_path, backup_path)
+        logger.info(f"Created backup for land cover sidecar: {backup_path}")
+
+        sidecar_format = HdfLandCover._detect_sidecar_format(hdf_path)
+        class_names: List[str] = []
+        current_values: List[float] = []
+        variables_path = None
+        raster_map_path = None
+        raster_map_names: List[str] = []
+
+        with h5py.File(hdf_path, 'r') as hdf_file:
+            if sidecar_format == 'v5':
+                class_names = [
+                    str(HdfUtils.convert_ras_string(name)).strip()
+                    for name in hdf_file['Names'][()]
+                ]
+                current_values = [
+                    float(value) for value in hdf_file['ManningsN'][()]
+                ]
+            else:
+                for candidate in ['Variables', '//Variables']:
+                    if candidate in hdf_file:
+                        variables_path = candidate
+                        break
+                if variables_path is None:
+                    raise ValueError(
+                        f"Detected {sidecar_format} sidecar without Variables "
+                        f"dataset: {hdf_path}"
+                    )
+
+                variables_data = hdf_file[variables_path][()]
+                variable_fields = variables_data.dtype.names or ()
+                if 'Name' not in variable_fields or 'ManningsN' not in variable_fields:
+                    raise ValueError(
+                        f"Variables dataset missing Name or ManningsN fields: "
+                        f"{variables_path}"
+                    )
+
+                class_names = [
+                    str(HdfUtils.convert_ras_string(row['Name'])).strip()
+                    for row in variables_data
+                ]
+                current_values = [
+                    float(row['ManningsN']) for row in variables_data
+                ]
+
+                if sidecar_format == 'v6_0':
+                    for candidate in ['Raster Map', '//Raster Map']:
+                        if candidate in hdf_file:
+                            raster_map_path = candidate
+                            break
+                    if raster_map_path is None:
+                        raise ValueError(
+                            f"Detected v6_0 sidecar without Raster Map dataset: "
+                            f"{hdf_path}"
+                        )
+
+                    raster_map_data = hdf_file[raster_map_path][()]
+                    raster_map_fields = raster_map_data.dtype.names or ()
+                    if 'Name' not in raster_map_fields or 'ManningsN' not in raster_map_fields:
+                        raise ValueError(
+                            f"Raster Map dataset missing Name or ManningsN "
+                            f"fields: {raster_map_path}"
+                        )
+
+                    raster_map_names = [
+                        str(HdfUtils.convert_ras_string(row['Name'])).strip()
+                        for row in raster_map_data
+                    ]
+
+        seen_names = set()
+        duplicate_names = set()
+        for class_name in class_names:
+            if class_name in seen_names:
+                duplicate_names.add(class_name)
+            seen_names.add(class_name)
+        if duplicate_names:
+            duplicates = ', '.join(sorted(duplicate_names))
+            raise ValueError(
+                f"Duplicate land cover class names found in sidecar: {duplicates}"
+            )
+
+        missing_classes = sorted(
+            set(normalized_mapping) - set(class_names)
+        )
+        if missing_classes:
+            missing_str = ', '.join(missing_classes)
+            raise ValueError(
+                f"Class names not found in sidecar: {missing_str}"
+            )
+
+        if sidecar_format == 'v6_0':
+            seen_raster_names = set()
+            duplicate_raster_names = set()
+            for class_name in raster_map_names:
+                if class_name in seen_raster_names:
+                    duplicate_raster_names.add(class_name)
+                seen_raster_names.add(class_name)
+            if duplicate_raster_names:
+                duplicates = ', '.join(sorted(duplicate_raster_names))
+                raise ValueError(
+                    f"Duplicate Raster Map class names found in sidecar: "
+                    f"{duplicates}"
+                )
+
+            missing_raster_map_classes = sorted(
+                set(normalized_mapping) - set(raster_map_names)
+            )
+            if missing_raster_map_classes:
+                missing_str = ', '.join(missing_raster_map_classes)
+                raise ValueError(
+                    f"Class names not found in Raster Map dataset: {missing_str}"
+                )
+
+        if not normalized_mapping:
+            logger.info(f"No land cover classes supplied for update in {hdf_path}")
+
+        name_to_index = {
+            class_name: idx for idx, class_name in enumerate(class_names)
+        }
+        changed = len(normalized_mapping)
+
+        if normalized_mapping:
+            if sidecar_format == 'v5':
+                with h5py.File(hdf_path, 'r+') as hdf_file:
+                    mannings = hdf_file['ManningsN'][()]
+                    for class_name, new_n in normalized_mapping.items():
+                        idx = name_to_index[class_name]
+                        old_n = float(mannings[idx])
+                        mannings[idx] = new_n
+                        logger.info(
+                            f"Updated '{class_name}' in {hdf_path.name} "
+                            f"(v5): {old_n} -> {new_n}"
+                        )
+                    hdf_file['ManningsN'][()] = mannings
+
+            elif sidecar_format == 'v6_0':
+                with h5py.File(hdf_path, 'r+') as hdf_file:
+                    if variables_path is None or raster_map_path is None:
+                        raise ValueError(
+                            "Variables or Raster Map dataset path not resolved "
+                            "for v6_0 write"
+                        )
+
+                    variables = hdf_file[variables_path]
+                    raster_map = hdf_file[raster_map_path]
+                    raster_map_index = {
+                        class_name: idx
+                        for idx, class_name in enumerate(raster_map_names)
+                    }
+
+                    for class_name, new_n in normalized_mapping.items():
+                        idx = name_to_index[class_name]
+                        row = variables[idx]
+                        old_n = float(row['ManningsN'])
+                        row['ManningsN'] = new_n
+                        variables[idx] = row
+
+                        raster_idx = raster_map_index[class_name]
+                        raster_row = raster_map[raster_idx]
+                        raster_row['ManningsN'] = new_n
+                        raster_map[raster_idx] = raster_row
+
+                        logger.info(
+                            f"Updated '{class_name}' in {hdf_path.name} "
+                            f"(v6_0 Variables + Raster Map): {old_n} -> {new_n}"
+                        )
+
+            elif sidecar_format == 'v6_modern':
+                with h5py.File(hdf_path, 'r+') as hdf_file:
+                    if variables_path is None:
+                        raise ValueError(
+                            "Variables dataset path not resolved for v6_modern "
+                            "write"
+                        )
+
+                    variables = hdf_file[variables_path]
+                    for class_name, new_n in normalized_mapping.items():
+                        idx = name_to_index[class_name]
+                        row = variables[idx]
+                        old_n = float(row['ManningsN'])
+                        row['ManningsN'] = new_n
+                        variables[idx] = row
+                        logger.info(
+                            f"Updated '{class_name}' in {hdf_path.name} "
+                            f"(v6_modern Variables): {old_n} -> {new_n}"
+                        )
+
+        class_details = []
+        for class_name, old_n in zip(class_names, current_values):
+            new_n = float(normalized_mapping.get(class_name, old_n))
+            class_details.append({
+                'class_name': class_name,
+                'old_mannings_n': old_n,
+                'new_mannings_n': new_n,
+                'changed': class_name in normalized_mapping,
+                'value_changed': (
+                    class_name in normalized_mapping and
+                    not np.isclose(old_n, new_n)
+                ),
+            })
+
+        actually_changed = sum(1 for d in class_details if d['value_changed'])
+        logger.info(
+            f"Completed land cover update for {hdf_path}: "
+            f"format={sidecar_format}, changed={actually_changed}, "
+            f"unchanged={len(class_names) - len(normalized_mapping)}"
+        )
+
+        return {
+            'changed': actually_changed,
+            'unchanged': len(class_names) - len(normalized_mapping),
+            'format': sidecar_format,
+            'backup_path': backup_path,
+            'class_details': class_details,
+        }
 
     # ---- Phase 3: Comparison and Statistics ----
 
