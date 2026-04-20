@@ -412,6 +412,28 @@ How agents should use notebooks
 
 ---
 
+## 960s: Cloud-Native Export (ras2cng)
+
+960_cloud_native_geometry_export.ipynb
+- Focus: Export HEC-RAS geometry to cloud-native GeoParquet format using ras2cng, query with DuckDB, generate PMTiles for web maps.
+- Functions: export_geometry_layers (ras2cng/geometry.py), export_all_hdf_layers (ras2cng/geometry.py), query_parquet (ras2cng/duckdb_session.py), DuckSession (ras2cng/duckdb_session.py), generate_pmtiles_from_input (ras2cng/pmtiles.py).
+- Pattern: Two examples — BaldEagleCrkMulti2D (2D mesh cells, BC lines, breaklines) and Muncie (1D cross sections from text geometry); DuckDB spatial queries; geopandas.explore() interactive maps; optional PMTiles generation.
+- Dependencies: ras-commander, ras2cng, ras2cng[duckdb]; optional: tippecanoe + pmtiles CLIs for PMTiles.
+
+961_cloud_native_results_export.ipynb
+- Focus: Export HEC-RAS simulation results to GeoParquet, build interactive flood depth maps, full project archive with manifest.
+- Functions: export_results_layer (ras2cng/results.py), export_all_variables (ras2cng/results.py), archive_project (ras2cng/project.py), inspect_project (ras2cng/project.py), query_parquet (ras2cng/duckdb_session.py), generate_pmtiles_from_input (ras2cng/pmtiles.py).
+- Pattern: Run HEC-RAS plan → export mesh geometry → export results joined to polygons → DuckDB flood statistics → interactive choropleth map → full project archive with manifest.json; optional PMTiles for web deployment.
+- Dependencies: ras-commander, ras2cng, ras2cng[duckdb], HEC-RAS (for execution); optional: tippecanoe + pmtiles CLIs.
+
+962_cloud_native_cog_results_export.ipynb
+- Focus: Generate Cloud Optimized GeoTIFF (COG) result rasters from HEC-RAS simulations using ras2cng's generate_result_maps() backed by RasStoreMapHelper.exe.
+- Functions: generate_result_maps (ras2cng/mapping.py), MapResult (ras2cng/mapping.py).
+- Pattern: Two examples — core rasters (WSE, Depth, Velocity with COG) and extended map types (Froude, Shear Stress, DxV with WGS84 reprojection + depth threshold); rasterio inspection and matplotlib visualization.
+- Dependencies: ras-commander, ras2cng, HEC-RAS (for execution), rasterio, matplotlib; optional: GDAL CLI for COG conversion.
+
+---
+
 ## Notebook-Only Utilities and Unique Logic
 
 - `calculate_discharge_weighted_velocity(...)` (412_2d_detail_face_data_extraction): discharge-weighted velocity aggregation (Vw = Sum(|Q|*V)/Sum(|Q|)); candidate for library API.
@@ -622,7 +644,7 @@ The `RasMap` class provides functions for managing RASMapper configuration files
 ```python
 from ras_commander import init_ras_project, RasMap
 
-init_ras_project("/path/to/project", "6.6")
+init_ras_project("/path/to/project", "7.0")
 
 # Add boundary conditions layer
 RasMap.add_map_layer(
@@ -651,7 +673,7 @@ gdf_wgs84.to_file("output.geojson", driver="GeoJSON")
 ```python
 from ras_commander import init_ras_project, RasMap
 
-init_ras_project("/path/to/project", "6.6")
+init_ras_project("/path/to/project", "7.0")
 
 # List all geometries
 geoms = RasMap.list_geometries()

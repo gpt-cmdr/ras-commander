@@ -330,7 +330,7 @@ event_precip = PrecipAorc.retrieve_aorc_data(
 # ... (DSS export as shown above)
 
 # 4. Run HEC-RAS with historical precipitation
-init_ras_project("C:/Projects/Potomac", "6.6")
+init_ras_project("C:/Projects/Potomac", "7.0")
 RasCmdr.compute_plan("01", num_cores=4)
 
 # 5. Compare modeled vs observed (validation)
@@ -527,7 +527,7 @@ RasUsgsFileIo.export_to_dss(
 )
 
 # 4. Run simulation
-init_ras_project("C:/Projects/Continuous", "6.6")
+init_ras_project("C:/Projects/Continuous", "7.0")
 RasCmdr.compute_plan("01", num_cores=8)
 ```
 
@@ -668,8 +668,8 @@ AORC data is accessed from NOAA's cloud storage (AWS S3):
 
 Comprehensive AORC workflow demonstrations:
 
-- [AORC Precipitation](../notebooks/900_aorc_precipitation.ipynb) - Basic retrieval and processing
-- [AORC Storm Catalog](../notebooks/901_aorc_precipitation_catalog.ipynb) - Automated storm extraction
+- [AORC Precipitation](../notebooks/900_aorc_precipitation.md) - Basic retrieval and processing
+- [AORC Storm Catalog](../notebooks/901_aorc_precipitation_catalog.md) - Automated storm extraction
 
 ## Common Workflows
 

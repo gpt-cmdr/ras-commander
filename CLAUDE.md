@@ -392,7 +392,7 @@ from ras_commander import RasExamples, init_ras_project, RasCmdr
 path = RasExamples.extract_project("Muncie")
 
 # Initialize and execute
-init_ras_project(path, "6.5")
+init_ras_project(path, "7.0")
 RasCmdr.compute_plan("01")
 ```
 
@@ -488,7 +488,7 @@ from ras_commander.hdf import HdfResultsPlan
 path = RasExamples.extract_project("Muncie")
 
 # Initialize
-init_ras_project(path, "6.5")
+init_ras_project(path, "7.0")
 
 # Execute plan (smart skip automatically detects if results are current)
 RasCmdr.compute_plan("01")
@@ -534,7 +534,7 @@ from ras_commander.ebfe_models import RasEbfeModels
 organized = RasEbfeModels.organize_upper_guadalupe(source, validate_dss=True)
 
 # Result: Runnable HEC-RAS model - tested in GUI, opens without errors
-init_ras_project(organized / "RAS Model/UPGU1", "6.5")
+init_ras_project(organized / "RAS Model/UPGU1", "7.0")
 # ✓ No "DSS path needs correction" dialog
 # ✓ Terrain loads correctly
 # ✓ 41 GB pre-run results accessible
@@ -594,6 +594,40 @@ cn = HdfInfiltration.get_preprocessed_infiltration("01", variable='Curve Number'
 arr = HdfLandCover.compute_final_mannings_raster("01", output_tif_path="final_n.tif")
 
 # See examples/211_final_mannings_and_infiltration.ipynb for complete workflow
+```
+
+**Cloud-native export** (GeoParquet, PMTiles, DuckDB via ras2cng):
+```python
+from ras2cng import (
+    archive_project, inspect_project,
+    export_geometry_layers, export_results_layer,
+    query_parquet, generate_pmtiles_from_input,
+)
+from pathlib import Path
+
+# Full project archive (geometry + results + terrain)
+manifest = archive_project(Path("MyProject/"), Path("./archive/"),
+    include_results=True, include_terrain=True)
+
+# Export mesh cell polygons to GeoParquet
+export_geometry_layers(Path("model.g01.hdf"), Path("mesh_cells.parquet"),
+    layer="mesh_cells")
+
+# Export results joined to polygon geometry
+export_results_layer(Path("model.p01.hdf"), Path("max_depth.parquet"),
+    variable="Maximum Depth", geom_file=Path("mesh_cells.parquet"))
+
+# DuckDB SQL analytics (table alias is always _)
+df = query_parquet(Path("max_depth.parquet"),
+    "SELECT mesh_name, MAX(maximum_depth) FROM _ GROUP BY mesh_name")
+
+# Generate PMTiles for serverless web maps (requires tippecanoe + pmtiles CLIs)
+generate_pmtiles_from_input(Path("mesh_cells.parquet"),
+    Path("mesh.pmtiles"), layer_name="mesh_cells")
+
+# See examples/960_cloud_native_geometry_export.ipynb
+# See examples/961_cloud_native_results_export.ipynb
+# See docs/user-guide/cloud-native-export.md
 ```
 
 ### Common Pitfalls

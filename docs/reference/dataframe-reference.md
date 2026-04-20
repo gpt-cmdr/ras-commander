@@ -560,7 +560,7 @@ def set_computation_interval(plan_path: Path, interval: str) -> None:
 
     GUI location: Plan > Options > Computation Settings > Computation Interval
 
-    Discovered in versions: 5.0.7, 6.0, 6.1, 6.3, 6.4, 6.5, 6.6
+    Discovered in versions: 5.0.7, 6.0, 6.1, 6.3, 6.4, 6.5, 6.6, 7.0
     """
     pass
 ```
@@ -606,10 +606,11 @@ The HEC-RAS ecosystem spans multiple decades of development, with regulatory mod
 | **3.x** | Legacy | Significant number of regulatory models still in production |
 | **4.x** | Legacy | Many active regulatory models |
 | **5.x** | Stable | Widespread regulatory adoption |
-| **6.x** | Current | Version 6.7 still in active development (as of Dec 2025) |
+| **6.x** | Stable | Final 6.x series release was 6.6 |
+| **7.0** | **Current** | Current stable release (2025) |
 | **2025** | **Alpha** | Not yet suitable for regulatory work |
 
-**Key point:** A significant portion of funded H&H (Hydrology & Hydraulics) work still involves regulatory models in versions 3.x through 5.x. Version 6.x regulatory models are only recently being published.
+**Key point:** A significant portion of funded H&H (Hydrology & Hydraulics) work still involves regulatory models in versions 3.x through 5.x. Version 6.x and 7.0 regulatory models are now being published.
 
 ### HEC-RAS 2025: Current State
 
@@ -657,7 +658,7 @@ If you're interested in HEC-RAS 2025:
 
 1. **Test independently** - Try ras-commander's HDF parsing logic against 2025 files and report compatibility
 2. **Build your own frameworks** - Use ras-commander patterns as a foundation for 2025-specific tools
-3. **Focus on production needs** - For regulatory work, version 6.x remains the appropriate target
+3. **Focus on production needs** - For regulatory work, version 7.0 is the current stable target
 4. **Contribute findings** - Share what works and what doesn't in GitHub issues
 
 **It will take years for active H&H development to migrate to RAS 2025.** In its current Alpha state, it serves primarily as a preview of future capabilities rather than a production-ready platform. The most valuable contribution to the water resources community today is building robust tooling for the versions that power actual regulatory work.

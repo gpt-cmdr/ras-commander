@@ -2,7 +2,7 @@
 
 RAS Commander supports distributed computation across multiple machines using the `ras_commander.remote` subpackage.
 
-**Tested Configuration:** Windows 10/11, HEC-RAS 5.x-6.x, Local Administrator Account
+**Tested Configuration:** Windows 10/11, HEC-RAS 5.x-7.x, Local Administrator Account
 
 ## Overview
 
@@ -34,16 +34,16 @@ from ras_commander import init_ras_project
 from ras_commander.remote import init_ras_worker, compute_parallel_remote
 
 # Initialize project
-init_ras_project("/path/to/project", "6.6")
+init_ras_project("/path/to/project", "7.0")
 
 # Create workers
 workers = [
-    init_ras_worker("local", ras_version="6.6", num_cores=4),
+    init_ras_worker("local", ras_version="7.0", num_cores=4),
     init_ras_worker("psexec",
         hostname="192.168.1.100",
         share_path=r"\\192.168.1.100\RasRemote",
         credentials={"username": "user", "password": "pass"},
-        ras_exe_path=r"C:\Program Files (x86)\HEC\HEC-RAS\6.6\RAS.exe",
+        ras_exe_path=r"C:\Program Files (x86)\HEC\HEC-RAS\7.0\RAS.exe",
         session_id=2
     ),
 ]
@@ -72,7 +72,7 @@ results = compute_parallel_remote(
 **On Remote Worker Machine:**
 
 - Windows 10 or Windows 11
-- HEC-RAS installed (any version 5.x - 6.x)
+- HEC-RAS installed (any version 5.x - 7.x)
 - Local administrator account
 - Network connectivity (same network or VPN)
 - Administrator access to configure system
@@ -293,7 +293,8 @@ Pre-built images for multiple HEC-RAS versions:
 
 | Image Tag | HEC-RAS Version | Size | Notes |
 |-----------|-----------------|------|-------|
-| `hecras:6.6` | 6.6 | ~2.58 GB | Latest, recommended |
+| `hecras:7.0` | 7.0 | ~2.58 GB | Latest, recommended |
+| `hecras:6.6` | 6.6 | ~2.58 GB | |
 | `hecras:6.5` | 6.5 | ~2.95 GB | |
 | `hecras:6.1` | 6.1 | ~2.71 GB | |
 | `hecras:5.0.7` | 5.0.7 | ~2.43 GB | Binary: `rasUnsteady64` |
@@ -314,12 +315,12 @@ from ras_commander import init_ras_project
 from ras_commander.remote import init_ras_worker, compute_parallel_remote
 
 # Initialize project
-init_ras_project(r"C:\Projects\MyProject", "6.6")
+init_ras_project(r"C:\Projects\MyProject", "7.0")
 
 # Create Docker worker (remote Docker host via SSH)
 worker = init_ras_worker(
     "docker",
-    docker_image="hecras:6.6",
+    docker_image="hecras:7.0",
     docker_host="ssh://user@192.168.3.8",
     share_path=r"\\192.168.3.8\RasRemote",
     remote_staging_path=r"C:\RasRemote",
@@ -406,7 +407,7 @@ sc create PSEXESVC binPath= "C:\Windows\PSEXESVC.exe" start= demand
 from ras_commander import init_ras_project
 from ras_commander.remote import init_ras_worker, compute_parallel_remote
 
-init_ras_project(r"C:\Projects\MyProject", "6.6")
+init_ras_project(r"C:\Projects\MyProject", "7.0")
 
 workers = [
     init_ras_worker(
@@ -414,7 +415,7 @@ workers = [
         hostname="192.168.3.8",  # CLB-04
         share_path=r"\\192.168.3.8\RasRemote",
         credentials={"username": "bill", "password": "pass"},
-        ras_exe_path=r"C:\Program Files (x86)\HEC\HEC-RAS\6.6\RAS.exe",
+        ras_exe_path=r"C:\Program Files (x86)\HEC\HEC-RAS\7.0\RAS.exe",
         session_id=2,
         system_account=False
     ),

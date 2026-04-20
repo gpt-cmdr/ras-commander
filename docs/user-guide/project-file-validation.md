@@ -189,7 +189,7 @@ from ras_commander.dss import RasDss
 from ras_commander import RasMap
 
 # Initialize project
-init_ras_project("C:/Projects/MyModel", "6.6")
+init_ras_project("C:/Projects/MyModel", "7.0")
 
 # Define all boundary conditions
 boundary_conditions = {
@@ -404,8 +404,8 @@ else:
 
 Validation framework demonstrations:
 
-- [DSS Path Validation](../notebooks/311_validating_dss_paths.ipynb) - DSS boundary validation
-- [Map Layer Validation](../notebooks/611_validating_map_layers.ipynb) - Terrain and land cover validation
+- [DSS Path Validation](../notebooks/311_validating_dss_paths.md) - DSS boundary validation
+- [Map Layer Validation](../notebooks/611_validating_map_layers.md) - Terrain and land cover validation
 
 ## See Also
 
