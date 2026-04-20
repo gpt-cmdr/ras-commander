@@ -72,6 +72,7 @@ When adding a new component, add it to the appropriate domain group AND the rela
 | Component | Type | Path |
 |-----------|------|------|
 | `terrain.md` | rule | `.claude/rules/hec-ras/terrain.md` |
+| `terrain-modification.md` | rule | `.claude/rules/hec-ras/terrain-modification.md` |
 | `RasTerrainMod` | module | `ras_commander/terrain/RasTerrainMod.py` |
 | `HdfLandCover` | module | `ras_commander/hdf/HdfLandCover.py` |
 | `930_terrain_modification_analysis` | notebook | `examples/930_terrain_modification_analysis.ipynb` |
@@ -81,6 +82,7 @@ When adding a new component, add it to the appropriate domain group AND the rela
 
 | Component | Type | Path |
 |-----------|------|------|
+| `ebfe_crawl_s3-catalog` | skill | `.claude/skills/ebfe_crawl_s3-catalog/SKILL.md` |
 | `ebfe_organize_models` | skill | `.claude/skills/ebfe_organize_models/SKILL.md` |
 | `ebfe_validate_models` | skill | `.claude/skills/ebfe_validate_models/SKILL.md` |
 | `ebfe-organizer` | agent | `.claude/agents/ebfe-organizer/SUBAGENT.md` |
@@ -99,6 +101,7 @@ When adding a new component, add it to the appropriate domain group AND the rela
 | Component | Type | Path |
 |-----------|------|------|
 | `hecras_explore_gui` | skill | `.claude/skills/hecras_explore_gui/SKILL.md` |
+| `hecras_screenshot` | skill | `.claude/skills/hecras_screenshot/SKILL.md` |
 | `hecras_export_cloud-native` | skill | `.claude/skills/hecras_export_cloud-native/SKILL.md` |
 | `win32com-automation-expert` | agent | `.claude/agents/win32com-automation-expert.md` |
 | `hecras-code-archaeologist` | agent | `.claude/agents/hecras-code-archaeologist.md` |
@@ -109,6 +112,14 @@ When adding a new component, add it to the appropriate domain group AND the rela
 |-----------|------|------|
 | `hecras-project-inspector` | agent | `.claude/agents/hecras-project-inspector.md` |
 | `hecras-notebook-qaqc` | agent | `.claude/agents/hecras-notebook-qaqc.md` |
+
+### Calibration
+
+| Component | Type | Path |
+|-----------|------|------|
+| `calibration.md` | rule | `.claude/rules/hec-ras/calibration.md` |
+| `RasCalibrate` | module | `ras_commander/RasCalibrate.py` |
+| `ras-commander-first.md` | rule | `.claude/rules/hec-ras/ras-commander-first.md` |
 
 ### Python Patterns
 
@@ -163,6 +174,7 @@ When adding a new component, add it to the appropriate domain group AND the rela
 | `dev_invoke_gemini-cli` | skill | `.claude/skills/dev_invoke_gemini-cli/SKILL.md` |
 | `dev_invoke_kimi-cli` | skill | `.claude/skills/dev_invoke_kimi-cli/SKILL.md` |
 | `dev_manage_git-worktrees` | skill | `.claude/skills/dev_manage_git-worktrees/SKILL.md` |
+| `dev_gate_merge-to-main` | skill | `.claude/skills/dev_gate_merge-to-main/SKILL.md` |
 | `code-oracle-codex` | agent | `.claude/agents/code-oracle-codex.md` |
 | `code-oracle-gemini` | agent | `.claude/agents/code-oracle-gemini.md` |
 | `git-operations` | agent | `.claude/agents/git-operations/SUBAGENT.md` |
@@ -175,6 +187,7 @@ When adding a new component, add it to the appropriate domain group AND the rela
 | `subagent-output-pattern.md` | rule | `.claude/rules/subagent-output-pattern.md` |
 | `primitive-extraction-workflow.md` | rule | `.claude/rules/workflow/primitive-extraction-workflow.md` |
 | `clb-engineering-recommendation.md` | rule | `.claude/rules/clb-engineering-recommendation.md` |
+| `agents-md-bridge.md` | rule | `.claude/rules/agents-md-bridge.md` |
 | `hec-hms-documentation-scout` | agent | `.claude/agents/hec-hms-documentation-scout.md` |
 | `claude-code-guide` | agent | `.claude/agents/claude-code-guide.md` |
 
@@ -200,6 +213,15 @@ When adding a new component, add it to the appropriate domain group AND the rela
 | `agent-crossrepo` | command | `.claude/commands/agent-crossrepo.md` |
 | `agents-start-gitworktree` | command | `.claude/commands/agents-start-gitworktree.md` |
 | `agents-close-gitworktree` | command | `.claude/commands/agents-close-gitworktree.md` |
+
+### Cross-Validation & QAQC
+
+| Component | Type | Path |
+|-----------|------|------|
+| `dual-qaqc` | command | `.claude/commands/dual-qaqc.md` |
+| `qa_review_triple-model` | skill | `.claude/skills/qa_review_triple-model/SKILL.md` |
+| `code-oracle-codex` | agent | `.claude/agents/code-oracle-codex.md` |
+| `code-oracle-gemini` | agent | `.claude/agents/code-oracle-gemini.md` |
 
 ---
 
@@ -286,7 +308,12 @@ When adding a new component, add it to the appropriate domain group AND the rela
 
 ### eBFE/BLE Domain
 
+**`ebfe_crawl_s3-catalog`** (skill) -- public BLE/eBFE catalog discovery
+- Downstream: `ebfe_organize_models` skill
+- Agents: `ebfe-organizer`
+
 **`ebfe_organize_models`** (skill) -- model organization
+- Upstream: `ebfe_crawl_s3-catalog` skill
 - Downstream: `ebfe_validate_models` skill
 - Agents: `ebfe-organizer`
 
@@ -307,6 +334,10 @@ When adding a new component, add it to the appropriate domain group AND the rela
 
 ### Dev Tooling Domain
 
+**`dev_gate_merge-to-main`** (skill) -- feature-branch guardrail
+- Agents: `git-operations`
+- Commands: `agent-taskupdate`, `agent-engagesubagents`
+
 **`dev_invoke_codex-cli`** (skill) -- Codex CLI delegation
 - Agents: `code-oracle-codex`
 
@@ -318,6 +349,16 @@ When adding a new component, add it to the appropriate domain group AND the rela
 **`dev_manage_git-worktrees`** (skill) -- worktree management
 - Agents: `git-operations`
 - Commands: `agents-start-gitworktree`, `agents-close-gitworktree`
+
+### HEC-RAS GUI & Documentation Domain
+
+**`hecras_explore_gui`** (skill) -- GUI exploration
+- Agents: `win32com-automation-expert`, `hecras-code-archaeologist`
+- Related skills: `hecras_screenshot`
+
+**`hecras_screenshot`** (skill) -- GUI screenshot capture
+- Agents: `win32com-automation-expert`, `hecras-code-archaeologist`
+- Related skills: `hecras_explore_gui`
 
 ### Notebook Operations Domain
 

@@ -47,6 +47,7 @@ Both use Claude Skills framework - the distinction is **scope and distribution**
 
 ### HEC-RAS GUI (`hecras_explore_*`)
 - **hecras_explore_gui** - HEC-RAS GUI exploration and documentation
+- **hecras_screenshot** - Screenshot capture workflow for HEC-RAS GUI documentation/debugging
 
 ### DSS Operations (`dss_*`)
 - **dss_read_boundary-data** - RasDss API, HEC-DSS V6/V7 files
@@ -57,6 +58,7 @@ Both use Claude Skills framework - the distinction is **scope and distribution**
 - **precip_analyze_atlas14-variance** - Atlas 14 precipitation spatial analysis
 
 ### eBFE/BLE Models (`ebfe_*`)
+- **ebfe_crawl_s3-catalog** - Crawl/cache FEMA public BLE/eBFE catalog availability
 - **ebfe_organize_models** - FEMA eBFE/BLE model organization
 - **ebfe_validate_models** - Validate organized eBFE models
 
@@ -65,6 +67,7 @@ Both use Claude Skills framework - the distinction is **scope and distribution**
 - **qa_review_triple-model** - Multi-LLM code review (Opus, Gemini, Codex)
 
 ### Development Tools (`dev_*`)
+- **dev_gate_merge-to-main** - Feature-branch guardrail for merge/push operations targeting `main`
 - **dev_manage_git-worktrees** - Git worktree management for feature isolation
 
 ### CLI Invocation Skills (`dev_invoke_*`)

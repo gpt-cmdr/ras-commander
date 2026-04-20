@@ -40,11 +40,12 @@
 **Repository Layout**
 - `ras_commander/` — core library (e.g., `RasCmdr`, `RasPrj`, `RasPlan`, `RasMap`, `Hdf*`, `Ras*`). One class per module is typical (e.g., `HdfMesh.py`). See `ras_commander/AGENTS.md` for coding-level details.
 - `examples/` — Jupyter notebooks and sample data for scenario validation. See `examples/AGENTS.md` for a detailed, agent-friendly index.
-- Top-level docs: `README.md`, `STYLE_GUIDE.md`, `Comprehensive_Library_Guide.md`, `api.md`.
+- Top-level docs: `README.md`, `CONTRIBUTING.md`, `ROADMAP.md`, `INTEGRATION.md`, `COMMIT_READY.md`.
+- Site docs: `docs/` with navigation in `mkdocs.yml`.
 - Packaging: `setup.py`, `pyproject.toml`.
 
 **Coding Style**
-- Follow `STYLE_GUIDE.md` (PEP 8, 4-space indents, ≤79-char lines, imports: stdlib → third-party → local).
+- Follow PEP 8 and existing repository patterns (4-space indents, imports ordered stdlib → third-party → local, keep lines reasonably short).
 - Names: `snake_case` for functions/variables; `PascalCase` for classes; `UPPER_CASE` for constants.
 - Logging pattern:
   - `from ras_commander import get_logger, log_call`
@@ -70,6 +71,12 @@
   - Update `agent_tasks/.agent/PROGRESS.md` at session end with detailed handoff notes
   - See `CLAUDE.md` § "Agent Coordination for Long-Running Tasks" for complete lifecycle
 - Not every session needs coordination—only use for complex, multi-file features that require planning and tracking across sessions.
+
+**Stale TASK.md Path Fallback**
+- If a TASK.md references a file path that does not exist, treat the path as stale (likely from a pre-migration era using `C:\GH\` or `\GH\`).
+- Remap: `C:\GH\` → `G:\GH\`, `C:\GH\ras-commander` → `G:\GH\ras-commander`.
+- If the remapped path also does not exist, search by filename under `G:\GH\ras-commander\` before asking the user.
+- Always resolve paths before failing — do not abort a task solely because an input path in TASK.md is stale.
 
 **Discovering HEC-RAS Projects**
 - Before initializing a project, agents often need to find valid HEC-RAS folders in a directory tree.
@@ -100,6 +107,16 @@
 - Commits: imperative mood, concise subject, optional scope. Example: `HdfXsec: fix ineffective-flow handling`.
 - PRs: include summary, motivation, linked issues, reproduction steps, and before/after notes.
 - Update documentation when APIs change; keep diffs focused and consistent.
+
+**Cross-Repo Feature Requests**
+- Reusable feature gaps discovered in sibling repos such as `ras-agent` or `hms-commander` should be tracked as GitHub issues in this repository when the work belongs here.
+- Prefer the existing GitHub feature request template for these requests.
+- A good cross-repo issue should include:
+  - source repo and workflow exposing the gap
+  - why the capability belongs in `ras-commander`
+  - proposed API or behavior
+  - downstream integration impact and blocking status
+  - acceptance criteria, example projects, and validation notes
 
 **HEC Commander (companion repo)**
 - Apply this `AGENTS.md` standard there as well. Remove outdated custom GPT files. Republishing as standardized CLB agents can follow separately. This repo's `AGENTS.md` is self-sufficient for Ras Commander.

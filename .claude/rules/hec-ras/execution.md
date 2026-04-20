@@ -694,6 +694,108 @@ RasCmdr.compute_plan("01", force_geompre=True)
 
 **Manual override**: Not currently supported (flag always enabled)
 
+## Post-Execution Protocol (Required)
+
+**After every compute operation, always:**
+
+### 1. Enable Verbose Streaming During Execution
+
+Always pass `stream_callback` with verbose output — never run silent:
+
+```python
+from ras_commander.callbacks import ConsoleCallback, FileLoggerCallback
+
+# ✅ Standard: stream to console
+RasCmdr.compute_plan("01", stream_callback=ConsoleCallback(verbose=True))
+
+# ✅ Better for notebooks/CI: stream to file + console
+RasCmdr.compute_plan("01", stream_callback=FileLoggerCallback("logs/plan_01.log", verbose=True))
+
+# ❌ Never run without a callback — silent failures are invisible
+RasCmdr.compute_plan("01")  # Don't do this
+```
+
+### 2. Read Compute Messages After Every Run
+
+Always call `get_compute_messages()` after execution and review the output:
+
+```python
+from ras_commander.hdf import HdfResultsPlan
+
+# Read messages (HDF primary, .computeMsgs.txt fallback, .comp_msgs.txt fallback)
+messages = HdfResultsPlan.get_compute_messages("01")
+print(messages)  # Always print — don't silently discard
+```
+
+### 3. Check for Warnings and Errors
+
+Scan messages for these patterns and report them — do not silently pass:
+
+```python
+# Standard message review
+messages = HdfResultsPlan.get_compute_messages("01")
+lines = messages.splitlines()
+
+errors   = [l for l in lines if "ERROR"    in l.upper()]
+warnings = [l for l in lines if "WARNING"  in l.upper()]
+unstable = [l for l in lines if "UNSTABLE" in l.upper() or "NEGATIVE DEPTH" in l.upper()]
+converge = [l for l in lines if "COURANT"  in l.upper() or "NOT CONVERGE" in l.upper()]
+
+if errors:
+    raise RuntimeError(f"HEC-RAS errors:\n" + "\n".join(errors))
+if unstable:
+    print(f"⚠️  Instability warnings ({len(unstable)}):\n" + "\n".join(unstable[:5]))
+if warnings:
+    print(f"⚠️  Warnings ({len(warnings)}):\n" + "\n".join(warnings[:10]))
+if not errors and not unstable:
+    runtime = HdfResultsPlan.get_runtime_data("01")
+    if runtime is not None:
+        hrs = runtime['Complete Process (hr)'].values[0]
+        print(f"✅  Plan 01 complete in {hrs:.2f} hr")
+```
+
+### 4. Report Findings to User
+
+Always summarize what was found in compute messages — even for successful runs:
+- **Success**: Report runtime duration and confirm no warnings
+- **Warnings**: List all warnings; let user decide if they're acceptable
+- **Errors**: Always surface errors immediately — never continue past an error
+
+### Default Pattern (Copy-Paste Template)
+
+```python
+from ras_commander import init_ras_project, RasCmdr
+from ras_commander.hdf import HdfResultsPlan
+from ras_commander.callbacks import ConsoleCallback
+
+init_ras_project("/path/to/project", "6.6")
+
+# Execute with verbose streaming
+RasCmdr.compute_plan("01", stream_callback=ConsoleCallback(verbose=True))
+
+# Review messages
+messages = HdfResultsPlan.get_compute_messages("01")
+lines = messages.splitlines()
+errors   = [l for l in lines if "ERROR"    in l.upper()]
+warnings = [l for l in lines if "WARNING"  in l.upper()]
+unstable = [l for l in lines if "UNSTABLE" in l.upper() or "NEGATIVE DEPTH" in l.upper()]
+
+if errors:
+    raise RuntimeError("HEC-RAS errors:\n" + "\n".join(errors))
+if unstable or warnings:
+    print(f"⚠️  {len(warnings)} warnings, {len(unstable)} instability notices")
+    for w in (unstable + warnings)[:10]:
+        print(f"   {w}")
+else:
+    runtime = HdfResultsPlan.get_runtime_data("01")
+    hrs = runtime['Complete Process (hr)'].values[0] if runtime is not None else "?"
+    print(f"✅  Plan 01 complete in {hrs} hr — no warnings")
+```
+
+**Note**: `Write Detailed= 1` is automatically set by all compute functions — detailed messages are always generated. The only question is whether you read them.
+
+---
+
 ## Cross-References
 
 **Skills** (invoke these):
