@@ -67,7 +67,7 @@ ts = HdfResultsMesh.get_mesh_cells_timeseries(plan_number, ras_object=ras)
 When using a local `ras` object (not the global), always pass `ras_object`:
 
 ```python
-ras = init_ras_project(project_folder, "6.6")
+ras = init_ras_project(project_folder, "7.0")
 
 # MUST pass ras_object
 mesh = HdfMesh.get_mesh_cell_points(plan, ras_object=ras)

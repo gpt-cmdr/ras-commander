@@ -60,7 +60,7 @@ class hdf_results_plan:  # Wrong - use PascalCase
 ```python
 MAX_PLAN_NUMBER = 99
 DEFAULT_NUM_CORES = 4
-HEC_RAS_VERSIONS = ["6.3", "6.5", "6.6"]
+HEC_RAS_VERSIONS = ["6.3", "6.5", "6.6", "7.0"]
 ```
 
 **❌ Incorrect**:

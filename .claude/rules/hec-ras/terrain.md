@@ -111,7 +111,7 @@ terrain = RasTerrain.create_terrain_hdf(
     output_hdf=Path("Terrain/Terrain.hdf"),
     projection_prj=Path("Terrain/Projection.prj"),
     units="Feet",
-    hecras_version="6.6"
+    hecras_version="7.0"
 )
 
 # Convert VRT to TIFF (preprocessing)

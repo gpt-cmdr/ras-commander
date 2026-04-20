@@ -99,7 +99,7 @@ When you encounter missing API functionality:
 # CORRECT: Use DataFrames
 from ras_commander import init_ras_project, ras
 
-init_ras_project("/path/to/project", "6.6")
+init_ras_project("/path/to/project", "7.0")
 
 # Plan inventory
 all_plans = ras.plan_df['plan_number'].tolist()

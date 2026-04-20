@@ -405,7 +405,7 @@ class RasDss:
         Example:
             from ras_commander import init_ras_project, RasDss
 
-            ras = init_ras_project("project_path", "6.6")
+            ras = init_ras_project("project_path", "7.0")
 
             # Extract all DSS boundary data
             enhanced_boundaries = RasDss.extract_boundary_timeseries(

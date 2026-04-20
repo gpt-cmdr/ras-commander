@@ -768,7 +768,7 @@ from ras_commander import init_ras_project, RasCmdr
 from ras_commander.hdf import HdfResultsPlan
 from ras_commander.callbacks import ConsoleCallback
 
-init_ras_project("/path/to/project", "6.6")
+init_ras_project("/path/to/project", "7.0")
 
 # Execute with verbose streaming
 RasCmdr.compute_plan("01", stream_callback=ConsoleCallback(verbose=True))

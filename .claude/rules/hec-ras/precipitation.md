@@ -128,7 +128,7 @@ RasUnsteady.set_precipitation_hyetograph("project.u01", hyeto)
 from ras_commander import init_ras_project, RasUnsteady
 from ras_commander.precip import Atlas14Storm
 
-init_ras_project("path/to/project", "6.6")
+init_ras_project("path/to/project", "7.0")
 
 # Generate 100-year 24-hour storm
 hyeto = Atlas14Storm.generate_hyetograph(total_depth_inches=17.0, state="tx", region=3)

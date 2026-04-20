@@ -24,7 +24,7 @@ Example:
     >>> from ras_commander import RasModPuls, init_ras_project, RasCmdr
     >>> from shapely.geometry import LineString
     >>>
-    >>> init_ras_project("path/to/project", "6.6")
+    >>> init_ras_project("path/to/project", "7.0")
     >>> flows = RasModPuls.write_stepped_hydrograph("project.u01", flows=[500, 1000, 2000, 5000])
     >>> RasCmdr.compute_plan("01")
     >>> profile_line = LineString([(x1, y1), (x2, y2)])

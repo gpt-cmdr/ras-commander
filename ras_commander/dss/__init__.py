@@ -31,7 +31,7 @@ Usage:
 
     # Extract all DSS boundary conditions
     from ras_commander import init_ras_project
-    ras = init_ras_project("project_path", "6.6")
+    ras = init_ras_project("project_path", "7.0")
     enhanced = RasDss.extract_boundary_timeseries(ras.boundaries_df, ras_object=ras)
 
 See Also:

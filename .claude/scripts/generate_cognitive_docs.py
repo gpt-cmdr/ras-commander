@@ -390,7 +390,7 @@ Skills are automatically invoked based on trigger phrases in your prompts:
 # Example: Executing HEC-RAS Plans
 from ras_commander import init_ras_project, RasCmdr
 
-init_ras_project(r"C:\\Models\\MyProject", "6.6")
+init_ras_project(r"C:\\Models\\MyProject", "7.0")
 RasCmdr.compute_plan("01", num_cores=4)
 ```
 

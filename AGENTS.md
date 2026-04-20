@@ -35,7 +35,7 @@
 **HEC-RAS Requirement**
 - HEC-RAS 6.x must be installed to execute plans. Pass an explicit `Ras.exe` path when needed, for example:
   - `from ras_commander import init_ras_project`
-  - `init_ras_project(<project_folder>, r"D:/Programs/HEC/HEC-RAS/6.6/Ras.exe")`
+  - `init_ras_project(<project_folder>, r"D:/Programs/HEC/HEC-RAS/7.0/Ras.exe")`
 
 **Repository Layout**
 - `ras_commander/` — core library (e.g., `RasCmdr`, `RasPrj`, `RasPlan`, `RasMap`, `Hdf*`, `Ras*`). One class per module is typical (e.g., `HdfMesh.py`). See `ras_commander/AGENTS.md` for coding-level details.

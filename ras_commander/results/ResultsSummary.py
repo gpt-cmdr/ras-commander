@@ -329,7 +329,7 @@ class ResultsSummary:
         Example:
             >>> from ras_commander import init_ras_project, ras
             >>> from ras_commander.results import ResultsSummary
-            >>> init_ras_project("/path/to/project", "6.6")
+            >>> init_ras_project("/path/to/project", "7.0")
             >>> # Use plan_df directly
             >>> plan_entries = ras.plan_df.to_dict('records')
             >>> summary_df = ResultsSummary.summarize_plans(plan_entries, ras.project_folder)

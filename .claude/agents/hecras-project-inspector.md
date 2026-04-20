@@ -45,7 +45,7 @@ Do not use Explore/Bash to inventory files -- this bypasses DataFrame intelligen
 from ras_commander import init_ras_project, ras
 
 # Initialize - this populates ALL DataFrames
-init_ras_project("/path/to/project", "6.6")
+init_ras_project("/path/to/project", "7.0")
 
 # Project analysis via DataFrames (NOT file exploration)
 total_plans = len(ras.plan_df)
@@ -141,7 +141,7 @@ Load HEC-RAS projects, analyze all DataFrames, and produce structured intelligen
 from ras_commander import init_ras_project, ras
 
 # Initialize project
-init_ras_project("/path/to/project", "6.6")
+init_ras_project("/path/to/project", "7.0")
 
 # Access DataFrames
 print(f"Plans: {len(ras.plan_df)}")

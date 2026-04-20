@@ -385,7 +385,7 @@ from ras_commander import init_ras_project, RasUnsteady, RasCmdr
 from ras_commander.precip import Atlas14Storm, ATLAS14_AVAILABLE
 
 # Initialize project
-init_ras_project("C:/Projects/MyModel", "6.6")
+init_ras_project("C:/Projects/MyModel", "7.0")
 
 if ATLAS14_AVAILABLE:
     # Generate HMS-equivalent hyetograph
@@ -416,7 +416,7 @@ Generate and execute a suite of AEP design storms:
 from ras_commander import init_ras_project, RasCmdr, RasPlan, RasUnsteady
 from ras_commander.precip import StormGenerator
 
-init_ras_project("C:/Projects/FloodStudy", "6.6")
+init_ras_project("C:/Projects/FloodStudy", "7.0")
 
 # DDF data for temporal pattern (download once, reuse for all AEPs)
 ddf_data = StormGenerator.download_from_coordinates(29.76, -95.37)

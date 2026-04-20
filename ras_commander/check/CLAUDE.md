@@ -247,7 +247,7 @@ Individual check execution:
 ```python
 # NT Check only (works for both steady and unsteady)
 from ras_commander import init_ras_project
-init_ras_project("C:/Projects/MyModel", "6.6")
+init_ras_project("C:/Projects/MyModel", "7.0")
 nt_results = RasCheck.check_nt(geom_hdf)
 
 # Unsteady-specific checks

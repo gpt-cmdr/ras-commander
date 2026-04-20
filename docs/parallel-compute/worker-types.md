@@ -471,7 +471,7 @@ By default, `preprocess_on_host=True` handles this automatically.
 | Version | Base Image | Download Size | Notes |
 |---------|------------|---------------|-------|
 | 6.6 | CentOS 7 | ~2.75 GB | Intel MKL, AVX512 |
-| 6.7 | Rocky Linux 8 | ~2.58 GB | Beta version |
+| 7.0 | Rocky Linux 8 | ~2.58 GB | Current stable release |
 
 ### Docker Troubleshooting
 

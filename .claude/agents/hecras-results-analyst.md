@@ -48,7 +48,7 @@ The API provides:
 from ras_commander import init_ras_project, ras
 from ras_commander.hdf import HdfResultsPlan, HdfResultsMesh
 
-init_ras_project("/path/to/project", "6.6")
+init_ras_project("/path/to/project", "7.0")
 
 # Execution verification
 messages = HdfResultsPlan.get_compute_messages("01", ras_object=ras)
@@ -128,7 +128,7 @@ Build on top of extraction data to provide:
 ```python
 from ras_commander import init_ras_project, HdfResultsPlan
 
-init_ras_project("/path/to/project", "6.6")
+init_ras_project("/path/to/project", "7.0")
 
 # Get compute messages
 messages = HdfResultsPlan.get_compute_messages("01")

@@ -22,7 +22,7 @@ description: |
 from ras_commander import init_ras_project, RasDss
 
 # Initialize project
-ras = init_ras_project("path/to/project", "6.6")
+ras = init_ras_project("path/to/project", "7.0")
 
 # Read DSS catalog
 catalog = RasDss.get_catalog("file.dss")
@@ -189,7 +189,7 @@ print(f"Points: {len(df)}")
 from ras_commander import init_ras_project, RasDss
 
 # Initialize project
-ras = init_ras_project("project_path", "6.6")
+ras = init_ras_project("project_path", "7.0")
 
 # Extract all DSS boundary data
 enhanced = RasDss.extract_boundary_timeseries(

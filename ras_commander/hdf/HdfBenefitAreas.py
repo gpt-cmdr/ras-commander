@@ -45,7 +45,7 @@ class HdfBenefitAreas:
         >>> from ras_commander import init_ras_project, HdfBenefitAreas
         >>>
         >>> # Initialize project
-        >>> init_ras_project("/path/to/project", "6.6")
+        >>> init_ras_project("/path/to/project", "7.0")
         >>>
         >>> # Compare existing vs proposed using plan numbers
         >>> results = HdfBenefitAreas.identify_benefit_areas(
@@ -140,7 +140,7 @@ class HdfBenefitAreas:
             >>> from ras_commander import init_ras_project, HdfBenefitAreas
             >>>
             >>> # Initialize project
-            >>> init_ras_project("/path/to/project", "6.6")
+            >>> init_ras_project("/path/to/project", "7.0")
             >>>
             >>> # Option 1: Use plan numbers
             >>> results = HdfBenefitAreas.identify_benefit_areas(

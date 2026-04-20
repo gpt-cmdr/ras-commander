@@ -192,7 +192,7 @@ def execute_local_plan(
             return False
 
         # Get version from original ras object
-        ras_version = getattr(ras_obj, 'ras_version', '6.6')
+        ras_version = getattr(ras_obj, 'ras_version', '7.0')
         init_ras_project(str(worker_project_path), ras_version, ras_object=temp_ras)
 
         logger.info(f"Executing plan {plan_number} with RasCmdr.compute_plan()")

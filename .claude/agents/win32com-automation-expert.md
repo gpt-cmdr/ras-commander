@@ -268,7 +268,7 @@ Discovered via `RasGuiAutomation.enumerate_all_menus()`:
 ```python
 from ras_commander import init_ras_project, RasControl
 
-init_ras_project("C:/Project", "6.6")
+init_ras_project("C:/Project", "7.0")
 success, msgs = RasControl.run_plan("01")
 ```
 

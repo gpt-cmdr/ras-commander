@@ -37,7 +37,7 @@ def process_project(project_folder):
     """Process a HEC-RAS project with sensitivity analysis."""
 
     # Create local ras context
-    ras = init_ras_project(project_folder, "6.6")
+    ras = init_ras_project(project_folder, "7.0")
 
     # ✅ CORRECT: Pass ras_object to ALL calls
     new_plan = RasPlan.clone_plan("01", new_plan_shortid="modified", ras_object=ras)
@@ -63,7 +63,7 @@ def process_project(project_folder):
     """BROKEN: Missing ras_object parameters."""
 
     # Create local ras context
-    ras = init_ras_project(project_folder, "6.6")
+    ras = init_ras_project(project_folder, "7.0")
 
     # ❌ WRONG: Missing ras_object parameter
     new_plan = RasPlan.clone_plan("01", new_plan_shortid="modified")
@@ -105,7 +105,7 @@ If your code only uses the global `ras` object (single project):
 from ras_commander import init_ras_project, RasCmdr
 
 # Initialize global ras object
-init_ras_project("/path/to/project", "6.6")
+init_ras_project("/path/to/project", "7.0")
 
 # No ras_object needed - uses global
 RasCmdr.compute_plan("01")  # Uses global ras object
@@ -114,7 +114,7 @@ RasCmdr.compute_plan("01")  # Uses global ras object
 If your code creates a local `ras` object:
 ```python
 # MUST pass ras_object to every call
-ras = init_ras_project("/path/to/project", "6.6")
+ras = init_ras_project("/path/to/project", "7.0")
 RasCmdr.compute_plan("01", ras_object=ras)  # REQUIRED
 ```
 
@@ -149,7 +149,7 @@ from ras_commander import RasExamples, init_ras_project
 project_folder = RasExamples.extract_project("BaldEagleCrkMulti2D", suffix="105")
 
 # Initialize with returned path
-init_ras_project(project_folder, "6.6")
+init_ras_project(project_folder, "7.0")
 ```
 
 **Result**: Extracts to `example_projects/BaldEagleCrkMulti2D_105/`
@@ -168,7 +168,7 @@ RasExamples.extract_project(
 
 # ❌ WRONG: Initialize from different location (doesn't exist!)
 project_folder = Path("example_projects") / "BaldEagleCrkMulti2D"
-init_ras_project(project_folder, "6.6")  # FileNotFoundError!
+init_ras_project(project_folder, "7.0")  # FileNotFoundError!
 ```
 
 **Anti-Pattern 2: Not capturing return value**
@@ -178,7 +178,7 @@ RasExamples.extract_project("BaldEagleCrkMulti2D", suffix="105")
 
 # ❌ WRONG: Manually construct path (may be wrong)
 project_folder = Path("example_projects") / "BaldEagleCrkMulti2D_105"
-init_ras_project(project_folder, "6.6")  # Fragile!
+init_ras_project(project_folder, "7.0")  # Fragile!
 ```
 
 ### Why suffix Is Better
@@ -230,7 +230,7 @@ def sensitivity_analysis(project_folder, template_plan, point_of_interest, ...):
         point_of_interest: Coordinates for result extraction
     """
     # Validate prerequisite
-    ras = init_ras_project(project_folder, "6.6")
+    ras = init_ras_project(project_folder, "7.0")
     hdf_path = ras.plan_df.loc[
         ras.plan_df['plan_number'] == template_plan, 'hdf_path'
     ].values[0]
@@ -250,7 +250,7 @@ def sensitivity_analysis(project_folder, template_plan, point_of_interest, ...):
 
 ```python
 # Cell N: Execute template plan (prerequisite)
-init_ras_project(project_folder, "6.6")
+init_ras_project(project_folder, "7.0")
 RasCmdr.compute_plan(template_plan, num_cores=2)
 print(f"Template plan {template_plan} complete - HDF file created")
 

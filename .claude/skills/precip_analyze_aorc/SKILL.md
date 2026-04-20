@@ -219,7 +219,7 @@ from ras_commander import init_ras_project
 from ras_commander.hdf import HdfProject
 
 # Initialize project
-ras = init_ras_project("path/to/project", "6.6")
+ras = init_ras_project("path/to/project", "7.0")
 
 # Get project bounds from geometry HDF
 geom_hdf = ras.project_folder / f"{ras.project_name}.g09.hdf"
