@@ -43,6 +43,8 @@ from .RasScreenshot import RasScreenshot
 from .RasBreach import RasBreach
 from .RasHydroCompare import RasHydroCompare
 from .RasModPuls import RasModPuls
+from .RasPermutation import RasPermutation, RangeSpec
+from .RasCalibrate import CalibrationPoint, RasCalibrate
 
 # Validation framework - core validation infrastructure
 from .RasValidation import ValidationSeverity, ValidationResult, ValidationReport
@@ -68,7 +70,7 @@ from .geom import (
 from .hdf import (
     HdfBase, HdfUtils, HdfPlan,
     HdfMesh, HdfXsec, HdfBndry, HdfStruc, HdfHydraulicTables,
-    HdfResultsPlan, HdfResultsMesh, HdfResultsXsec, HdfResultsBreach,
+    HdfResultsPlan, HdfResultsMesh, HdfResultsQuery, HdfResultsXsec, HdfResultsBreach,
     HdfPipe, HdfPump, HdfInfiltration,
     HdfPlot, HdfResultsPlot,
     HdfFluvialPluvial, HdfBenefitAreas, HdfChannelCapacity, HdfResultsAnalysis,
@@ -149,7 +151,8 @@ __all__ = [
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult', 'PreprocessResult',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
-    'RasModPuls',
+    'RasModPuls', 'RasPermutation', 'RangeSpec',
+    'CalibrationPoint', 'RasCalibrate',
 
     # Geometry handling (new in v0.86.0)
     'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
@@ -191,7 +194,7 @@ __all__ = [
 
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan', 'HdfProject',
-    'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsXsec',
+    'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsQuery', 'HdfResultsXsec',
     'HdfStruc', 'HdfUtils', 'HdfXsec', 'HdfPump',
     'HdfPipe', 'HdfInfiltration', 'HdfHydraulicTables', 'HdfResultsBreach', 'RasBreach',
     'HdfBenefitAreas', 'HdfChannelCapacity', 'HdfResultsAnalysis',

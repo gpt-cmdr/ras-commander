@@ -1930,3 +1930,164 @@ class RasUtils:
 
         logger.info(f"dos2unix: converted {modified_count} files in {project_dir}")
         return modified_count
+
+    @staticmethod
+    @log_call
+    def discover_ras_versions() -> Dict[str, Path]:
+        """
+        Discover installed HEC-RAS versions by scanning Windows Registry,
+        filesystem, and Wine prefixes (on Linux).
+
+        Resolution order:
+        1. Windows Registry (HKLM, WOW6432Node, HKCU) -- Windows only
+        2. Standard filesystem paths (Program Files) -- Windows only
+        3. Wine prefix paths (~/.wine, /opt/hecras-wine, etc.) -- Linux only
+
+        Returns:
+            Dict[str, Path]: Mapping of version string -> Path to Ras.exe
+            Example: {"7.0": Path("C:/Program Files (x86)/HEC/HEC-RAS/6.6/Ras.exe")}
+        """
+        discovered: Dict[str, Path] = {}
+
+        # Version folder names matching RasPrj.get_ras_exe()
+        ras_version_folders = [
+            "7.0", "6.7 Beta 5", "6.7 Beta 4", "7.0", "6.5", "6.4.1", "6.3.1", "6.3", "6.2",
+            "6.1", "6.0", "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3",
+            "5.0.1", "5.0", "4.1.0", "4.0"
+        ]
+
+        version_aliases = {
+            "4.1": "4.1.0", "41": "4.1.0", "410": "4.1.0",
+            "40": "4.0", "50": "5.0", "501": "5.0.1", "503": "5.0.3",
+            "504": "5.0.4", "505": "5.0.5", "506": "5.0.6", "507": "5.0.7",
+            "60": "6.0", "61": "6.1", "62": "6.2", "63": "6.3",
+            "631": "6.3.1", "6.4": "6.4.1", "64": "6.4.1", "641": "6.4.1",
+            "65": "6.5", "66": "7.0", "6.7": "6.7 Beta 5", "67": "6.7 Beta 5",
+            "70": "7.0",
+        }
+
+        def _normalize_version(raw: str, install_dir: Optional[Path] = None) -> str:
+            v = str(raw).strip()
+            if v in version_aliases:
+                return version_aliases[v]
+            if install_dir is not None:
+                fn = install_dir.name.strip()
+                if fn in version_aliases:
+                    return version_aliases[fn]
+                if fn in ras_version_folders:
+                    return fn
+            return v
+
+        def _add(version: str, exe_path: Path, source: str) -> None:
+            if version in discovered:
+                logger.debug(f"Skipping duplicate HEC-RAS {version} from {source}")
+                return
+            discovered[version] = exe_path
+            logger.info(f"Discovered HEC-RAS {version} at {exe_path} via {source}")
+
+        def _scan_root(root_dir: Path, source_label: str) -> None:
+            """Scan a directory containing versioned HEC-RAS subfolders."""
+            if not root_dir.exists():
+                return
+            # Check known folder names first
+            for folder_name in ras_version_folders:
+                exe = root_dir / folder_name / "Ras.exe"
+                if exe.is_file():
+                    v = _normalize_version(folder_name, exe.parent)
+                    _add(v, exe, source_label)
+            # Glob for any other folders with Ras.exe
+            try:
+                for exe in sorted(root_dir.glob("*/Ras.exe")):
+                    v = _normalize_version(exe.parent.name, exe.parent)
+                    _add(v, exe, source_label)
+            except OSError as exc:
+                logger.warning(f"Filesystem scan failed for {root_dir}: {exc}")
+
+        # --- Windows: Registry + Program Files ---
+        if os.name == 'nt':
+            # Registry scan
+            try:
+                import winreg
+
+                def _is_no_more(exc: OSError) -> bool:
+                    return getattr(exc, "winerror", None) == 259
+
+                hive_map = {
+                    "HKLM": winreg.HKEY_LOCAL_MACHINE,
+                    "HKCU": winreg.HKEY_CURRENT_USER,
+                }
+                registry_locations = [
+                    ("HKLM", r"SOFTWARE\HEC\HEC-RAS"),
+                    ("HKLM", r"SOFTWARE\WOW6432Node\HEC\HEC-RAS"),
+                    ("HKCU", r"SOFTWARE\HEC\HEC-RAS"),
+                ]
+                install_value_names = (
+                    "InstallDir", "InstallPath", "Install Path",
+                    "Path", "ExePath", "RasExePath",
+                )
+
+                for hive_name, subkey_path in registry_locations:
+                    try:
+                        with winreg.OpenKey(hive_map[hive_name], subkey_path) as root_key:
+                            idx = 0
+                            while True:
+                                try:
+                                    vk_name = winreg.EnumKey(root_key, idx)
+                                except OSError as exc:
+                                    if _is_no_more(exc):
+                                        break
+                                    break
+                                idx += 1
+                                try:
+                                    with winreg.OpenKey(root_key, vk_name) as vk:
+                                        install_val = None
+                                        for val_name in install_value_names:
+                                            try:
+                                                val, _ = winreg.QueryValueEx(vk, val_name)
+                                                if val:
+                                                    install_val = str(val)
+                                                    break
+                                            except (FileNotFoundError, OSError):
+                                                continue
+                                        if install_val:
+                                            p = Path(os.path.expandvars(install_val.strip().strip('"')))
+                                            if p.suffix.lower() != '.exe':
+                                                p = p / "Ras.exe"
+                                            if p.name.lower() == "ras.exe" and p.is_file():
+                                                v = _normalize_version(vk_name, p.parent)
+                                                _add(v, p, f"registry {hive_name}\\{subkey_path}")
+                                except (FileNotFoundError, OSError):
+                                    continue
+                    except (FileNotFoundError, OSError):
+                        continue
+            except ImportError:
+                logger.debug("winreg not available, skipping registry scan")
+
+            # Filesystem scan (standard Windows paths)
+            _scan_root(Path("C:/Program Files (x86)/HEC/HEC-RAS"), "filesystem (x86)")
+            _scan_root(Path("C:/Program Files/HEC/HEC-RAS"), "filesystem")
+
+        # --- Linux: Wine prefix scan ---
+        else:
+            wine_prefix_candidates = [
+                Path(os.path.expanduser("~/.wine")),
+                Path("/opt/hecras-wine"),
+                Path(os.path.expanduser("~/hecras-wine")),
+            ]
+            # Also check WINEPREFIX env var
+            env_prefix = os.environ.get("WINEPREFIX")
+            if env_prefix:
+                wine_prefix_candidates.insert(0, Path(env_prefix))
+
+            for prefix in wine_prefix_candidates:
+                drive_c = prefix / "drive_c"
+                if not drive_c.exists():
+                    continue
+                logger.debug(f"Scanning Wine prefix: {prefix}")
+                # Standard HEC-RAS locations under drive_c
+                _scan_root(drive_c / "Program Files (x86)" / "HEC" / "HEC-RAS", f"wine {prefix}")
+                _scan_root(drive_c / "Program Files" / "HEC" / "HEC-RAS", f"wine {prefix}")
+                _scan_root(drive_c / "HEC-RAS", f"wine {prefix}")
+
+        logger.info(f"Discovered {len(discovered)} installed HEC-RAS version(s)")
+        return discovered
