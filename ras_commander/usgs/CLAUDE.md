@@ -188,22 +188,23 @@ project_folder/
 
 ### Study Primitives (study.py)
 
-**UsgsObservations** - Unified observation data management (NEW v0.90.0+):
-- `from_gauges()` - Build observation dataset from matched gauge data
-- `get_timeseries()` - Retrieve time series for a specific gauge and parameter
-- `get_summary()` - Summary statistics for all observations
-- `filter_by_period()` - Filter observations to simulation period
+**UsgsObservations** - Primitive-first gauge data helpers (NEW v0.94.0+):
+- `get_gauge_metadata(site_id)` - Retrieve one gauge's metadata from USGS
+- `get_dataset(site_id, dataset_id, start_date, end_date)` - Retrieve one normalized dataset by ID
+- `get_peak_flow_data(site_id)` - Retrieve peak-flow observations
+- `summarize_dataset(dataset_df, site_id, dataset_id)` - Build dataset summary metadata dict
+- `analyze_gaps(dataset_df, expected_interval)` - Build gap analysis dict for a dataset
+- `resolve_services(overrides)` - Merge custom service callables with defaults
 
-**UsgsDrainageAreaComparison** - Drainage area consistency checks (NEW v0.90.0+):
-- `compare()` - Compare USGS-reported drainage area to model upstream area
-- `get_ratio()` - Drainage area ratio (model/gauge) for flow adjustment
-- `flag_mismatches()` - Identify gauges with significant area discrepancies
-- `generate_report()` - Formatted comparison report
+**UsgsDrainageAreaComparison** - Multi-source drainage area comparison (NEW v0.94.0+):
+- `compare_areas(gauge_area, official_basin_area, taudem_area, model_area, reference)` - Compare up to 4 area sources, return DataFrame with pairwise percent differences and agreement status
 
-**Use cases**:
-- Assembling calibration/validation observation datasets from multiple gauges
-- Pre-screening gauge suitability via drainage area comparison
-- Flow adjustment using drainage area ratios
+**Workflow-only classes** (in study.py but NOT main public API):
+- `UsgsGaugeStudy` - Notebook-level workspace builder, data collector, JSON packager
+- `UsgsModelPrepValidation` - Readiness checks for model prep
+- `UsgsModelPrepReport` - HTML/markdown report assembly
+
+These workflow classes exist for notebook 911a but are intentionally excluded from the package surface to keep the library focused on composable primitives.
 
 **Example notebook**: `examples/911a_usgs_study_package_from_primitives.ipynb`
 
