@@ -244,43 +244,52 @@ def _remove_perimeter_points(perim, bad_indices: list, ns: dict):
 
 
 def _remove_short_perimeter_segments(perim, min_length: float, ns: dict):
-    """Tier 0: remove perimeter segments shorter than min_length."""
+    """Tier 0: greedy forward pass removing vertices closer than min_length.
+
+    Keeps a vertex only if it is at least min_length from the last kept vertex.
+    Runs multiple passes until stable (handles cascading short segments).
+    """
     try:
         n = perim.Count
-        if n < 4:
+        if n < 4 or min_length <= 0:
             return perim
 
-        keep = [True] * n
-        changed = True
-        passes = 0
-        while changed and passes < 20:
-            changed = False
-            passes += 1
-            for i in range(n - 1):
-                if not keep[i]:
-                    continue
-                j = i + 1
-                while j < n and not keep[j]:
-                    j += 1
-                if j >= n:
-                    break
-                p1 = perim.PointM(i)
-                p2 = perim.PointM(j)
-                dx = float(p2.X) - float(p1.X)
-                dy = float(p2.Y) - float(p1.Y)
-                dist = (dx * dx + dy * dy) ** 0.5
-                if dist < min_length:
-                    keep[j] = False
-                    changed = True
+        coords = [(float(perim.PointM(i).X), float(perim.PointM(i).Y))
+                  for i in range(n)]
 
-        good_indices = [i for i in range(n) if keep[i]]
-        if len(good_indices) < 3 or len(good_indices) == n:
+        min_sq = min_length * min_length
+
+        def _one_pass(pts):
+            kept = [pts[0]]
+            for pt in pts[1:]:
+                dx = pt[0] - kept[-1][0]
+                dy = pt[1] - kept[-1][1]
+                if dx * dx + dy * dy >= min_sq:
+                    kept.append(pt)
+            if len(kept) > 1:
+                dx = kept[0][0] - kept[-1][0]
+                dy = kept[0][1] - kept[-1][1]
+                if dx * dx + dy * dy < min_sq:
+                    kept.pop()
+            return kept
+
+        new_coords = coords
+        for _ in range(20):
+            filtered = _one_pass(new_coords)
+            if len(filtered) == len(new_coords):
+                break
+            if len(filtered) < 3:
+                return perim
+            new_coords = filtered
+
+        if len(new_coords) == n:
             return perim
 
         from RasMapperLib import PointMs as _PointMs, Polygon as _Polygon  # type: ignore
+        from RasMapperLib import PointM as _PointM  # type: ignore
         pt_list = _PointMs()
-        for i in good_indices:
-            pt_list.Add(perim.PointM(i))
+        for x, y in new_coords:
+            pt_list.Add(_PointM(float(x), float(y)))
         return _Polygon(pt_list)
     except Exception as exc:
         logger.warning(f"_remove_short_perimeter_segments failed: {exc}")
@@ -344,18 +353,49 @@ def _douglas_peucker_polygon(perim, tolerance: float, ns: dict):
 
 
 def _find_error_locations(mesh, cell_size: float, min_ratio: float) -> list:
-    """Locate problem zones (short perimeter faces) for localized Tier 4."""
+    """Return (x, y) locations of FacePerimeterConnectionError problem zones.
+
+    Primary: mesh.BadIndexes cell centers.
+    Fallback: midpoints of shortest perimeter faces (bottom 5%).
+    """
+    pts: list = []
+
     try:
-        bad = list(mesh.BadIndexes)
-        if bad:
-            coords = []
-            for cidx in bad:
-                cc = mesh.CellCenterCoordinate(cidx)
-                coords.append((float(cc.X), float(cc.Y)))
-            return coords
+        bad = mesh.BadIndexes
+        n_bad = bad.Count if hasattr(bad, 'Count') else len(bad)
+        for i in range(n_bad):
+            idx = int(bad[i])
+            if idx < 0:
+                continue
+            cell = mesh.Cell(idx)
+            pts.append((float(cell.Point.X), float(cell.Point.Y)))
     except Exception:
         pass
-    return []
+
+    if pts:
+        return pts
+
+    try:
+        threshold = cell_size * min_ratio
+        perim_faces = []
+        for f in range(int(mesh.FaceCount)):
+            if mesh.FaceIsPerimeter(f):
+                length = float(mesh.FaceSegment(f).Length)
+                perim_faces.append((length, f))
+        if not perim_faces:
+            return []
+        short_faces = [(ln, f) for ln, f in perim_faces if ln < threshold]
+        if not short_faces:
+            sorted_faces = sorted(perim_faces)
+            n_fallback = max(1, len(sorted_faces) // 20)
+            short_faces = sorted_faces[:n_fallback]
+        for _length, f in short_faces:
+            mp = mesh.FaceSegment(f).MidPoint()
+            pts.append((float(mp.X), float(mp.Y)))
+    except Exception:
+        pass
+
+    return pts
 
 
 def _localized_douglas_peucker(perim, error_midpoints, cell_size, tol, ns, buf_multiplier=3.0):
@@ -675,11 +715,13 @@ class GeomMesh:
             current_perim = perim
             current_seeds_pm = seeds_pm
 
-            # Tier 0: Pre-simplify
+            # Tier 0: Pre-simplify — use cell_size * 0.5 as minimum segment length.
+            # Natural watershed boundaries have many short segments that cause
+            # FacePerimeterConnectionError; aggressive removal prevents this.
             if cell_size is not None:
                 pre_n = current_perim.Count
                 current_perim = _remove_short_perimeter_segments(
-                    current_perim, cell_size * min_face_length_ratio, ns
+                    current_perim, cell_size * 0.5, ns
                 )
                 post_n = current_perim.Count
                 if post_n < pre_n:
