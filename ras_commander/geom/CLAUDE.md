@@ -23,6 +23,7 @@ The `geom` subpackage provides comprehensive functionality for parsing and modif
 | GeomHtab.py | `GeomHtab` | Unified HTAB parameter optimization |
 | GeomHtabUtils.py | `GeomHtabUtils` | HTAB calculation utilities |
 | GeomMetadata.py | `GeomMetadata` | Efficient geometry element count extraction |
+| GeomReferenceFeatures.py | `GeomReferenceFeatures` | Reference lines/points for 2D calibration |
 
 ## Technical Patterns
 
@@ -183,6 +184,29 @@ counts = GeomMetadata.get_geometry_counts(
 print(f"1D XS: {counts['num_cross_sections']}")
 print(f"2D Mesh: {counts['mesh_area_names']}")
 print(f"Total cells: {counts['mesh_cell_count']}")
+```
+
+### GeomReferenceFeatures (Reference Lines & Points)
+- `add_reference_lines(geom_file, lines, storage_area)` - Insert reference lines into .g## file
+- `add_reference_points(geom_file, points)` - Insert reference points (as IC Points) into .g## file
+- `get_reference_lines(geom_file)` - Read reference lines from .g## file
+- `get_reference_points(geom_file)` - Read reference points from .g## file
+
+Reference lines act as virtual cross sections in 2D models for flow extraction (calibration against streamflow gauges). Reference points provide WSE/depth extraction at specific cell locations.
+
+**Example:**
+```python
+from ras_commander.geom import GeomReferenceFeatures
+
+# Add a reference line across a 2D mesh
+GeomReferenceFeatures.add_reference_lines(
+    "model.g01",
+    lines=[{"name": "Gauge_XS", "coordinates": [(1000, 2000), (1100, 2000)]}],
+    storage_area="MyMesh",
+)
+
+# Read them back
+ref_lines = GeomReferenceFeatures.get_reference_lines("model.g01")
 ```
 
 ## geom_df Metadata Integration

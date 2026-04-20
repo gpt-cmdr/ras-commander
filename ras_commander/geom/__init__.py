@@ -54,6 +54,7 @@ from .GeomCulvert import GeomCulvert
 from .GeomHtabUtils import GeomHtabUtils
 from .GeomHtab import GeomHtab
 from .GeomMetadata import GeomMetadata
+from .GeomReferenceFeatures import GeomReferenceFeatures
 
 __all__ = [
     'GeomParser',
@@ -68,4 +69,5 @@ __all__ = [
     'GeomHtabUtils',
     'GeomHtab',
     'GeomMetadata',
+    'GeomReferenceFeatures',
 ]
