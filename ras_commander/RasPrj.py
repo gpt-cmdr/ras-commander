@@ -2233,8 +2233,9 @@ def get_ras_exe(ras_version=None):
         "641": "6.4.1",
         "65": "6.5",
         "66": "6.6",
-        "6.7": "6.7 Beta 4", # User passes "6.7" → finds "6.7 Beta 4"
-        "67": "6.7 Beta 4",
+        "6.7": "6.7 Beta 5", # User passes "6.7" → finds "6.7 Beta 5"
+        "67": "6.7 Beta 5",
+        "70": "7.0",
     }
 
     # Check if input is a direct path to an executable
@@ -2244,6 +2245,16 @@ def get_ras_exe(ras_version=None):
         return str(hecras_path)
 
     version_str = str(ras_version)
+
+    # Normalize compact dotted legacy formats before alias lookup:
+    #   5.03 -> 5.0.3
+    #   6.31 -> 6.3.1
+    #   4.10 -> 4.1.0
+    legacy_dotted_match = re.fullmatch(r'(\d)\.(\d{2})', version_str)
+    if legacy_dotted_match:
+        major, compact_minor = legacy_dotted_match.groups()
+        version_str = f"{major}.{compact_minor[0]}.{int(compact_minor[1])}"
+        logger.debug(f"Normalized legacy dotted version '{ras_version}' to '{version_str}'")
 
     # Check if there's an alias for this version
     if version_str in version_aliases:

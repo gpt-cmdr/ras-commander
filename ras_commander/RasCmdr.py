@@ -644,10 +644,15 @@ class RasCmdr:
                     _ras_obj.flow_df = _ras_obj.get_flow_entries()
                     _ras_obj.unsteady_df = _ras_obj.get_unsteady_entries()
                     if _did_execute:
-                        _ras_obj.update_results_df(plan_numbers=[plan_number])
+                        normalized_plan_number = RasUtils.normalize_ras_number(
+                            plan_number
+                        )
+                        _ras_obj.update_results_df(
+                            plan_numbers=[normalized_plan_number]
+                        )
                         # Capture results_df row for the executed plan
                         try:
-                            plan_num_str = str(plan_number).zfill(2)
+                            plan_num_str = normalized_plan_number
                             mask = _ras_obj.results_df['plan_number'] == plan_num_str
                             if mask.any():
                                 _results_df_row = _ras_obj.results_df[mask].iloc[0].copy()
