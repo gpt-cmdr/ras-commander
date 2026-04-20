@@ -341,6 +341,10 @@
          <lastmod>2026-04-20</lastmod>
     </url>
     <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/911a_usgs_study_package_from_primitives/</loc>
+         <lastmod>2026-04-20</lastmod>
+    </url>
+    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/912_usgs_real_time_monitoring/</loc>
          <lastmod>2026-04-20</lastmod>
     </url>
@@ -402,6 +406,18 @@
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/952_ebfe_upper_guadalupe_cascade/</loc>
+         <lastmod>2026-04-20</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/960_cloud_native_geometry_export/</loc>
+         <lastmod>2026-04-20</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/961_cloud_native_results_export/</loc>
+         <lastmod>2026-04-20</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/962_cloud_native_cog_results_export/</loc>
          <lastmod>2026-04-20</lastmod>
     </url>
     <url>
@@ -470,6 +486,10 @@
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/boundary-conditions/</loc>
+         <lastmod>2026-04-20</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/user-guide/cloud-native-export/</loc>
          <lastmod>2026-04-20</lastmod>
     </url>
     <url>
