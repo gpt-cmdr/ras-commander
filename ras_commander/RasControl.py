@@ -477,7 +477,7 @@ class RasControl:
 
     Supported Versions:
         All installed versions: 3.x, 4.x, 5.0.x, 6.0-6.7+
-        Accepts formats: "4.1", "41", "5.0.6", "506", "6.6", "66", etc.
+        Accepts formats: "4.1", "41", "5.0.6", "506", "7.0", "66", etc.
     """
 
     # Version mapping based on ACTUAL COM interfaces registered on system
@@ -543,6 +543,9 @@ class RasControl:
         '6.7': 'RAS67.HECRASController',    # ✓ EXISTS
         '67': 'RAS67.HECRASController',
         '6.7 Beta 4': 'RAS67.HECRASController',
+        '6.7 Beta 5': 'RAS67.HECRASController',
+        '7.0': 'RAS70.HECRASController',    # ✓ EXISTS
+        '70': 'RAS70.HECRASController',
     }
 
     # Legacy reference (kept for backwards compatibility)
@@ -571,7 +574,7 @@ class RasControl:
         Normalize version string to match VERSION_MAP keys.
 
         Handles formats like:
-            "6.6", "66" → "6.6"
+            "7.0", "66" → "7.0"
             "4.1", "41" → "4.1"
             "5.0.6", "506" → "5.0.6"
             "6.7 Beta 4" → "6.7 Beta 4"
@@ -591,11 +594,11 @@ class RasControl:
         # Try common normalizations
         normalized_candidates = [
             version_str,
-            version_str.replace('.', ''),  # "6.6" → "66"
+            version_str.replace('.', ''),  # "7.0" → "66"
         ]
 
         # Try adding periods for compact formats
-        if len(version_str) == 2:  # "66" → "6.6"
+        if len(version_str) == 2:  # "66" → "7.0"
             normalized_candidates.append(f"{version_str[0]}.{version_str[1]}")
         elif len(version_str) == 3 and version_str.startswith('5'):  # "506" → "5.0.6"
             normalized_candidates.append(f"5.0.{version_str[2]}")
@@ -615,6 +618,7 @@ class RasControl:
             f"  4.x: 4.0, 4.1\n"
             f"  5.0.x: 5.0, 5.0.1, 5.0.3, 5.0.4, 5.0.5, 5.0.6, 5.0.7\n"
             f"  6.x: 6.0, 6.1, 6.2, 6.3, 6.3.1, 6.4, 6.4.1, 6.5, 6.6, 6.7\n"
+            f"  7.x: 7.0\n"
             f"  Formats: Can use '6.6' or '66', '5.0.6' or '506', etc."
         )
 
@@ -689,7 +693,7 @@ class RasControl:
         This is the core COM interface handler. All public methods use this.
         Includes session tracking for robust cleanup on crashes/kernel restarts.
         """
-        # Normalize version (handles "6.6" → "6.6", "66" → "6.6", etc.)
+        # Normalize version (handles "7.0" → "7.0", "66" → "7.0", etc.)
         normalized_version = RasControl._normalize_version(version)
 
         if not project_path.exists():
@@ -1638,11 +1642,12 @@ class RasControl:
         and contains detailed messages about the computation process,
         including warnings, errors, and convergence information.
 
-        This method checks for two .txt naming patterns (version-dependent):
-        - .comp_msgs.txt (HEC-RAS 3.x-5.x)
+        This method checks multiple naming patterns (version-dependent):
+        - .comp_msgs.txt (HEC-RAS 3.x-5.x COM interface)
         - .computeMsgs.txt (HEC-RAS 6.x+)
+        - .bco## (HEC-RAS 5.x detailed compute output)
 
-        If neither .txt file exists, falls back to HDF extraction.
+        If no text file exists, falls back to HDF extraction.
 
         Args:
             plan: Plan number ("01", "02") or path to .prj file
@@ -1659,8 +1664,9 @@ class RasControl:
 
         Note:
             File naming conventions vary by HEC-RAS version:
-            - Older: {plan_file}.comp_msgs.txt
-            - Newer: {plan_file}.computeMsgs.txt
+            - COM interface: {plan_file}.comp_msgs.txt
+            - HEC-RAS 6.x+: {plan_file}.computeMsgs.txt
+            - HEC-RAS 5.x: {project_name}.bco{plan_number}
             Falls back to HDF: /Results/Summary/Compute Messages (text)
         """
         info = RasControl._get_project_info(plan, ras_object)
@@ -1693,9 +1699,22 @@ class RasControl:
             except Exception as e:
                 logger.error(f"Error reading .txt file: {e}, attempting HDF fallback")
 
-        # If no .txt file found, try HDF fallback
+        # Try .bco## file (HEC-RAS 5.x detailed compute output)
+        bco_file = info.project_path.parent / f"{project_base}.bco{info.plan_number}"
+        if bco_file.exists():
+            logger.info(f"Reading computation messages from .bco file: {bco_file}")
+            try:
+                with open(bco_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    contents = f.read()
+                if contents.strip():
+                    logger.info(f"Read {len(contents)} characters from .bco file")
+                    return contents
+            except Exception as e:
+                logger.error(f"Error reading .bco file: {e}, attempting HDF fallback")
+
+        # If no .txt or .bco file found, try HDF fallback
         logger.warning(
-            f"Computation messages .txt file not found (tried .comp_msgs.txt and .computeMsgs.txt), "
+            f"Computation messages file not found (tried .comp_msgs.txt, .computeMsgs.txt, and .bco{info.plan_number}), "
             f"falling back to HDF extraction"
         )
 

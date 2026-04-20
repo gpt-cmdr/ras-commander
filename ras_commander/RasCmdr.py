@@ -602,6 +602,32 @@ class RasCmdr:
                 logger.error(f"Error message: {e.output}")
                 logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
 
+                # Read .bco## file for detailed compute messages (HEC-RAS 5.x)
+                try:
+                    plan_num_str = str(plan_number).zfill(2) if isinstance(plan_number, (int, Number)) else str(plan_number)
+                    bco_path = Path(compute_ras.project_folder) / f"{compute_ras.project_name}.bco{plan_num_str}"
+                    if bco_path.exists():
+                        bco_content = bco_path.read_text(encoding='utf-8', errors='ignore')
+                        if bco_content.strip():
+                            logger.error(f"Compute messages from {bco_path.name}:\n{bco_content}")
+                        else:
+                            logger.debug(f"BCO file {bco_path.name} exists but is empty")
+                except Exception as bco_err:
+                    logger.debug(f"Could not read .bco file: {bco_err}")
+
+                # Also check for .computeMsgs.txt and .comp_msgs.txt (HEC-RAS 6.x+)
+                try:
+                    plan_num_str = str(plan_number).zfill(2) if isinstance(plan_number, (int, Number)) else str(plan_number)
+                    for suffix in [f".p{plan_num_str}.computeMsgs.txt", f".p{plan_num_str}.comp_msgs.txt"]:
+                        msg_path = Path(compute_ras.project_folder) / f"{compute_ras.project_name}{suffix}"
+                        if msg_path.exists():
+                            msg_content = msg_path.read_text(encoding='utf-8', errors='ignore')
+                            if msg_content.strip():
+                                logger.error(f"Compute messages from {msg_path.name}:\n{msg_content}")
+                            break
+                except Exception as msg_err:
+                    logger.debug(f"Could not read compute messages file: {msg_err}")
+
                 # Callback: execution complete (failure case)
                 if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
                     stream_callback.on_exec_complete(str(plan_number), False, run_time)
