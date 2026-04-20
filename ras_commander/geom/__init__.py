@@ -55,6 +55,8 @@ from .GeomHtabUtils import GeomHtabUtils
 from .GeomHtab import GeomHtab
 from .GeomMetadata import GeomMetadata
 from .GeomReferenceFeatures import GeomReferenceFeatures
+from .GeomMesh import GeomMesh
+from .GeomMeshDataclasses import MeshResult, BCConflict, BCFixResult
 
 __all__ = [
     'GeomParser',
@@ -70,4 +72,8 @@ __all__ = [
     'GeomHtab',
     'GeomMetadata',
     'GeomReferenceFeatures',
+    'GeomMesh',
+    'MeshResult',
+    'BCConflict',
+    'BCFixResult',
 ]

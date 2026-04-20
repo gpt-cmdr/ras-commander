@@ -95,6 +95,8 @@ setup(
         'precip-huc12': ['pygeohydro>=0.19.0'],  # HUC12 watershed boundaries for Atlas14Variance
         # Notebook dependencies (raster visualization, coordinate systems)
         'notebooks': ['rasterio', 'pyproj', 'aiohttp', 'dataretrieval>=1.0'],
+        # Headless mesh generation (Windows only, requires HEC-RAS 6.6)
+        'mesh': ['pythonnet>=3.0.5'],
         # DSS file operations (requires Java JRE/JDK 8+)
         'dss': ['pyjnius'],
         # Everything (all optional dependencies)
