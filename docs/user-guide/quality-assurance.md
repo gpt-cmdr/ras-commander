@@ -10,7 +10,7 @@
 !!! info "Based on FEMA cHECk-RAS"
     This module implements the validation checks described in FEMA's
     [cHECk-RAS](https://www.fema.gov/flood-maps/tutorials/check-ras) quality assurance tool
-    for HEC-RAS 6.x models, using ras-commander's HDF function library.
+    for HEC-RAS 6.x/7.x models, using ras-commander's HDF function library.
 
     From FEMA's cHECk-RAS page:
 
@@ -18,7 +18,7 @@
     > version, 5.0.7). Note, cHECk-RAS is not compatible with the two-dimensional component
     > of HEC-RAS 5.0.7."*
 
-    This Python implementation extends these validation checks to work with modern HEC-RAS 6.x
+    This Python implementation extends these validation checks to work with modern HEC-RAS 6.x/7.x
     HDF-based outputs, providing equivalent functionality through the ras-commander library.
 
 !!! warning "For Informational Purposes Only"
@@ -28,7 +28,7 @@
 
 ## Overview
 
-RasCheck provides automated quality assurance validation for HEC-RAS 6.x models. It performs comprehensive checks based on FEMA guidelines, HEC-RAS best practices, and the original cHECk-RAS methodology.
+RasCheck provides automated quality assurance validation for HEC-RAS 6.x/7.x models. It performs comprehensive checks based on FEMA guidelines, HEC-RAS best practices, and the original cHECk-RAS methodology.
 
 **Flow Type Support**: RasCheck automatically detects whether a plan is steady flow or unsteady flow and runs appropriate validation checks for each type.
 
@@ -49,7 +49,7 @@ from ras_commander import init_ras_project
 from ras_commander.check import RasCheck
 
 # Initialize project
-init_ras_project(r"C:\Projects\MySteadyModel", "6.6")
+init_ras_project(r"C:\Projects\MySteadyModel", "7.0")
 
 # Run all checks on a steady flow plan
 results = RasCheck.run_all(
@@ -75,7 +75,7 @@ from ras_commander import init_ras_project
 from ras_commander.check import RasCheck
 
 # Initialize project
-init_ras_project(r"C:\Projects\MyUnsteadyModel", "6.6")
+init_ras_project(r"C:\Projects\MyUnsteadyModel", "7.0")
 
 # Run all checks - auto-detects unsteady flow
 results = RasCheck.run_all(plan="01")
@@ -298,7 +298,7 @@ For comprehensive documentation of all validation checks and message IDs:
 | Feature | FEMA cHECk-RAS | ras-commander RasCheck |
 |---------|----------------|------------------------|
 | Platform | Windows (.NET) | Cross-platform (Python) |
-| HEC-RAS Version | 4.x (COM) | 6.x (HDF) |
+| HEC-RAS Version | 4.x (COM) | 6.x-7.x (HDF) |
 | Flow Types | Steady only | Steady only |
 | Data Access | Text files + COM | HDF5 directly |
 | Report Format | HTML/PDF | HTML/CSV/DataFrame |
@@ -318,7 +318,7 @@ For comprehensive documentation of all validation checks and message IDs:
 
     **Not Applicable to Unsteady**: Floodway analysis (steady-state concept)
 
-- Only validates HEC-RAS 6.x models with HDF output
+- Only validates HEC-RAS 6.x/7.x models with HDF output
 - Requires computed plan results (not geometry-only)
 - Some original cHECk-RAS features not yet implemented:
     - Interactive flagging/commenting through GUI
@@ -335,6 +335,6 @@ For comprehensive documentation of all validation checks and message IDs:
 
 ## See Also
 
-- [Example Notebook: RasCheck Validation](../notebooks/300_quality_assurance_rascheck.ipynb)
+- [Example Notebook: RasCheck Validation](../notebooks/800_quality_assurance_rascheck.md)
 - [Steady Flow Analysis](steady-flow-analysis.md)
 - [HDF Data Extraction](hdf-data-extraction.md)

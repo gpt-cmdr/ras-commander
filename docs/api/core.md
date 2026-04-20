@@ -208,13 +208,14 @@ All callback methods are **optional** - implement only what you need. The protoc
 | `"501"`, `"503"`, `"505"`, `"506"` | 5.0.x | 2015-2019 |
 | `"60"` | 6.0 | 2020 |
 | `"63"` | 6.3 | 2021-2022 |
-| `"66"` | 6.6 | 2023+ |
+| `"66"` | 6.6 | 2023-2024 |
+| `"70"` | 7.0 | 2025+ |
 
 ##### RasControl vs RasCmdr
 
 | Aspect | RasControl | RasCmdr |
 |--------|------------|---------|
-| **HEC-RAS Versions** | 3.x - 6.x (COM) | 5.x+ (command line) |
+| **HEC-RAS Versions** | 3.x - 7.x (COM) | 5.x+ (command line) |
 | **Data Source** | Live COM extraction | HDF file results |
 | **Requires GUI** | Yes (HEC-RAS installed) | Yes (HEC-RAS installed) |
 | **Use Case** | Legacy models, validation | Modern automation |
@@ -479,7 +480,7 @@ The `profile` parameter accepts:
 from ras_commander import init_ras_project, RasProcess
 
 # Initialize project
-init_ras_project("path/to/project", "6.6")
+init_ras_project("path/to/project", "7.0")
 
 # Generate default maps (WSE, Depth, Velocity)
 results = RasProcess.store_maps(
