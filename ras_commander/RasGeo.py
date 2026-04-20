@@ -28,10 +28,12 @@ List of Functions in RasGeo:
 - get_mannings_regionoverrides(): Reads Manning's n region overrides from a geometry file [DEPRECATED]
 - set_mannings_baseoverrides(): Writes base Manning's n values to a geometry file [DEPRECATED]
 - set_mannings_regionoverrides(): Writes regional Manning's n overrides to a geometry file [DEPRECATED]
+- clone_geom(): Copy geometry files from a template with optional title and description
 """
 import warnings
+from numbers import Number
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Union
 import pandas as pd
 from .RasPrj import ras
 from .LoggingConfig import get_logger
@@ -200,3 +202,98 @@ class RasGeo:
 
         from .geom import GeomLandCover
         return GeomLandCover.set_region_mannings_n(geom_file_path, mannings_data)
+
+    @staticmethod
+    @log_call
+    def clone_geom(
+        template_geom: Union[str, Number],
+        new_title: Optional[str] = None,
+        description: Optional[str] = None,
+        ras_object=None,
+    ) -> str:
+        """
+        Copy geometry files from a template, find the next geometry number,
+        and update the project file accordingly.
+
+        Parameters
+        ----------
+        template_geom : Union[str, Number]
+            Geometry number to use as template (e.g., ``'01'``, ``1``, or
+            ``1.0``).
+        new_title : Optional[str], optional
+            If provided, set this as the ``Geom Title`` in the new geometry
+            file after cloning.  Must be 32 characters or fewer.
+            ``None`` keeps the template's original title (default ``None``).
+        description : Optional[str], optional
+            If provided, write this as the geometry description block in the
+            new geometry file after cloning.  ``None`` keeps the template's
+            original description (default ``None``).
+        ras_object : optional
+            Specific :class:`~ras_commander.RasPrj.RasPrj` instance to use.
+            If ``None``, uses the global ``ras`` instance.
+
+        Returns
+        -------
+        str
+            New geometry number (e.g., ``'03'``).
+
+        Raises
+        ------
+        ValueError
+            If the template geometry is not found, or if *new_title* exceeds
+            32 characters.
+
+        Examples
+        --------
+        >>> # Clone without changes
+        >>> new_num = RasGeo.clone_geom('01')
+
+        >>> # Clone with a new title
+        >>> new_num = RasGeo.clone_geom('01', new_title='Updated Geometry')
+
+        >>> # Clone with title and description
+        >>> new_num = RasGeo.clone_geom(
+        ...     '01',
+        ...     new_title='High Flow Scenario',
+        ...     description='Modified breakline spacing for 500-yr event',
+        ... )
+
+        Notes
+        -----
+        This method updates the ``ras`` object's DataFrames after modifying
+        the project structure.  The backwards-compatible wrapper
+        :meth:`RasPlan.clone_geom` delegates here.
+        """
+        from .RasPlan import RasPlan
+        from .RasPrj import ras as _ras
+
+        ras_obj = ras_object or _ras
+
+        # Delegate the file-copy / project-update work to the shared helper.
+        # new_title is intentionally NOT passed here; we apply it ourselves
+        # afterwards so we can use GeomParser.set_geom_title (which preserves
+        # the file via safe_write_geometry) instead of the inline update_title
+        # callback inside _clone_component.
+        new_num = RasPlan._clone_component(
+            template_number=template_geom,
+            component_type='Geom',
+            file_prefix='g',
+            df_attr='geom_df',
+            number_column='geom_number',
+            new_title=None,
+            title_keyword='Geom Title',
+            copy_hdf=True,
+            ras_object=ras_obj,
+        )
+
+        # Determine the path of the newly created geometry file.
+        new_g_file = ras_obj.project_folder / f"{ras_obj.project_name}.g{new_num}"
+
+        if new_title is not None:
+            from .geom.GeomParser import GeomParser
+            GeomParser.set_geom_title(new_g_file, new_title, create_backup=False)
+
+        if description is not None:
+            RasPlan.update_geom_description(new_g_file, description, ras_object=ras_obj)
+
+        return new_num

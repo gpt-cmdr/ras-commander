@@ -914,6 +914,10 @@ class RasPlan:
         Copy geometry files from a template, find the next geometry number,
         and update the project file accordingly.
 
+        .. deprecated::
+            Use :meth:`RasGeo.clone_geom` instead, which supports
+            ``new_title`` and ``description`` parameters.
+
         Parameters:
         template_geom (Union[str, Number]): Geometry number to use as template (e.g., '01', 1, or 1.0)
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
@@ -930,17 +934,8 @@ class RasPlan:
         Note:
             This function updates the ras object's dataframes after modifying the project structure.
         """
-        return RasPlan._clone_component(
-            template_number=template_geom,
-            component_type='Geom',
-            file_prefix='g',
-            df_attr='geom_df',
-            number_column='geom_number',
-            new_title=None,
-            title_keyword='Geom Title',
-            copy_hdf=True,
-            ras_object=ras_object,
-        )
+        from .RasGeo import RasGeo
+        return RasGeo.clone_geom(template_geom, ras_object=ras_object)
 
     @staticmethod
     @log_call
