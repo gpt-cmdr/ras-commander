@@ -43,6 +43,7 @@ from .RasScreenshot import RasScreenshot
 from .RasBreach import RasBreach
 from .RasHydroCompare import RasHydroCompare
 from .RasModPuls import RasModPuls
+from .RasPermutation import RasPermutation, RangeSpec
 
 # Validation framework - core validation infrastructure
 from .RasValidation import ValidationSeverity, ValidationResult, ValidationReport
@@ -149,7 +150,7 @@ __all__ = [
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult', 'PreprocessResult',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
-    'RasModPuls',
+    'RasModPuls', 'RasPermutation', 'RangeSpec',
 
     # Geometry handling (new in v0.86.0)
     'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
