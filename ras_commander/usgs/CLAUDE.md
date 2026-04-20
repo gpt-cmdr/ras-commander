@@ -186,6 +186,27 @@ project_folder/
 - Prevents overwhelming USGS NWIS servers
 - Thread-safe for parallel workflows
 
+### Study Primitives (study.py)
+
+**UsgsObservations** - Unified observation data management (NEW v0.90.0+):
+- `from_gauges()` - Build observation dataset from matched gauge data
+- `get_timeseries()` - Retrieve time series for a specific gauge and parameter
+- `get_summary()` - Summary statistics for all observations
+- `filter_by_period()` - Filter observations to simulation period
+
+**UsgsDrainageAreaComparison** - Drainage area consistency checks (NEW v0.90.0+):
+- `compare()` - Compare USGS-reported drainage area to model upstream area
+- `get_ratio()` - Drainage area ratio (model/gauge) for flow adjustment
+- `flag_mismatches()` - Identify gauges with significant area discrepancies
+- `generate_report()` - Formatted comparison report
+
+**Use cases**:
+- Assembling calibration/validation observation datasets from multiple gauges
+- Pre-screening gauge suitability via drainage area comparison
+- Flow adjustment using drainage area ratios
+
+**Example notebook**: `examples/911a_usgs_study_package_from_primitives.ipynb`
+
 ## Complete Workflow
 
 A typical USGS integration workflow proceeds through these stages:

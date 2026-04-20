@@ -91,6 +91,21 @@ Public API:
             - get_gauge_folder: Get path to gauge folder
             - update_gauge_catalog: Refresh existing catalog with new data
 
+    From study:
+        - UsgsObservations: Primitive-first gauge data helpers
+            - get_gauge_metadata: Retrieve one gauge's metadata
+            - get_dataset: Retrieve one normalized dataset by dataset id
+            - get_peak_flow_data: Retrieve peak-flow observations
+            - summarize_dataset: Build dataset summary metadata
+            - analyze_gaps: Build dataset gap analysis
+        - UsgsDrainageAreaComparison: Drainage-area comparison helper
+            - compare_areas: Compare gauge/basin/TauDEM/model areas
+
+    Workflow note:
+        Gauge-study packaging and model-prep readiness/report assembly are kept
+        in example notebooks rather than the main public package surface so the
+        library stays focused on composable primitives.
+
     From rate_limiter:
         - test_api_key: Validate USGS API key functionality
         - UsgsRateLimiter: Token bucket rate limiter for API requests
@@ -213,6 +228,12 @@ from .catalog import (
     UsgsGaugeCatalog,
 )
 
+# Import basin-first study utilities
+from .study import (
+    UsgsObservations,
+    UsgsDrainageAreaComparison,
+)
+
 # Import rate limiting utilities
 from .rate_limiter import (
     UsgsRateLimiter,
@@ -261,6 +282,13 @@ load_gauge_catalog = UsgsGaugeCatalog.load_gauge_catalog
 load_gauge_data = UsgsGaugeCatalog.load_gauge_data
 get_gauge_folder = UsgsGaugeCatalog.get_gauge_folder
 update_gauge_catalog = UsgsGaugeCatalog.update_gauge_catalog
+
+# From study module
+retrieve_peak_flow_data = UsgsObservations.get_peak_flow_data
+retrieve_observed_dataset = UsgsObservations.get_dataset
+summarize_observed_dataset = UsgsObservations.summarize_dataset
+analyze_observation_gaps = UsgsObservations.analyze_gaps
+compare_drainage_areas = UsgsDrainageAreaComparison.compare_areas
 
 def check_dependencies():
     """
@@ -318,6 +346,8 @@ __all__ = [
     'GaugeMatcher',
     'RasUsgsRealTime',
     'UsgsGaugeCatalog',
+    'UsgsObservations',
+    'UsgsDrainageAreaComparison',
     # Core data retrieval functions
     'retrieve_flow_data',
     'retrieve_stage_data',
@@ -395,6 +425,12 @@ __all__ = [
     'load_gauge_data',
     'get_gauge_folder',
     'update_gauge_catalog',
+    # Basin-first study functions
+    'retrieve_peak_flow_data',
+    'retrieve_observed_dataset',
+    'summarize_observed_dataset',
+    'analyze_observation_gaps',
+    'compare_drainage_areas',
     # Rate limiting utilities
     'UsgsRateLimiter',
     'retry_with_backoff',
