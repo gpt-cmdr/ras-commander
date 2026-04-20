@@ -2265,7 +2265,24 @@ def get_ras_exe(ras_version=None):
         logger.debug(f"Mapped version '{version_str}' to folder '{actual_folder}'")
         version_str = actual_folder
 
-    # Check if this is a known folder name
+    # PRIMARY: Use discover_ras_versions() to find actual install location.
+    # This handles non-standard installs, new versions, and registry-based discovery.
+    try:
+        from .RasUtils import RasUtils
+        discovered = RasUtils.discover_ras_versions()
+        if version_str in discovered:
+            exe_path = discovered[version_str]
+            logger.info(f"HEC-RAS {version_str} found via version discovery: {exe_path}")
+            return str(exe_path)
+        # Also check if the original user input (before alias resolution) matches
+        if str(ras_version) != version_str and str(ras_version) in discovered:
+            exe_path = discovered[str(ras_version)]
+            logger.debug(f"HEC-RAS {ras_version} found via version discovery: {exe_path}")
+            return str(exe_path)
+    except Exception as e:
+        logger.debug(f"Version discovery failed, falling back to hardcoded paths: {e}")
+
+    # FALLBACK: Hardcoded path construction (original logic, kept for robustness)
     if version_str in ras_version_folders:
         default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{version_str}/Ras.exe")
         if default_path.is_file():
@@ -2275,12 +2292,10 @@ def get_ras_exe(ras_version=None):
             error_msg = f"HEC-RAS Version {version_str} folder exists but Ras.exe not found at expected path. Running HEC-RAS will fail."
             logger.error(error_msg)
             return "Ras.exe"
-    
-    # Final fallback: Try to find a matching version from folder list
+
+    # FALLBACK 2: Fuzzy match against known folder list
     try:
-        # Try to find a matching version from our list
         for known_folder in ras_version_folders:
-            # Check for partial matches or compact formats
             if version_str in known_folder or known_folder.replace('.', '') == version_str:
                 default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{known_folder}/Ras.exe")
                 if default_path.is_file():
