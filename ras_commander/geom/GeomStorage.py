@@ -11,6 +11,7 @@ List of Functions:
 - get_elevation_volume() - Read elevation-volume curve for a storage area
 - set_elevation_volume() - Write elevation-volume curve to a storage area
 - get_storage_area_polygons() - Extract storage area polygon perimeter geometry
+- set_2d_flow_area_perimeter() - Create/update 2D flow area perimeter geometry
 - get_2d_flow_area_settings() - Read 2D flow area cell/face property settings
 - set_2d_flow_area_settings() - Write 2D flow area cell/face property settings
 
@@ -35,8 +36,9 @@ Example Usage:
     ... )
 """
 
+from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Union, Optional, List
+from typing import TYPE_CHECKING, Union, Optional, List, Sequence
 import pandas as pd
 
 if TYPE_CHECKING:
@@ -59,6 +61,577 @@ class GeomStorage:
     # HEC-RAS format constants
     FIXED_WIDTH_COLUMN = 8      # Character width for numeric data in geometry files
     VALUES_PER_LINE = 10        # Number of values per line in fixed-width format
+    SURFACE_LINE_COLUMN = 16
+    SURFACE_LINE_VALUES_PER_LINE = 2
+    SURFACE_LINE_PRECISION = 7
+
+    DEFAULT_2D_POINT_GENERATION_DATA = ",,,"
+
+    _INVALID_NAME_CHARS = set(',=') | {chr(c) for c in range(0, 32)} | {chr(127)}
+
+    # Plain text keywords for 2D flow area settings
+    _SETTINGS_KEYWORDS = {
+        'Storage Area Mannings': 'mannings_n',
+        '2D Cell Volume Filter Tolerance': 'cell_vol_tol',
+        '2D Cell Minimum Area Fraction': 'cell_min_area_fraction',
+        '2D Face Profile Filter Tolerance': 'face_profile_tol',
+        '2D Face Area Elevation Profile Filter Tolerance': 'face_area_tol',
+        '2D Face Area Elevation Conveyance Ratio': 'face_conv_ratio',
+        '2D Face Area Laminar Depth': 'laminar_depth',
+        '2D Face Min Length Ratio': 'min_face_length_ratio',
+    }
+
+    # Boolean keywords: present with =-1 means True, absent means False
+    _BOOLEAN_KEYWORDS = {
+        '2D Multiple Face Mann n': 'spatially_varied_mann_on_faces',
+        '2D Composite LC': 'composite_classification',
+    }
+
+    _DEFAULT_2D_SETTINGS = {
+        'mannings_n': 0.04,
+        'spatially_varied_mann_on_faces': False,
+        'composite_classification': False,
+        'cell_vol_tol': 0.01,
+        'cell_min_area_fraction': 0.01,
+        'face_profile_tol': 0.01,
+        'face_area_tol': 0.01,
+        'face_conv_ratio': 0.02,
+        'laminar_depth': 0.2,
+        'min_face_length_ratio': float('nan'),
+        'point_generation_data': DEFAULT_2D_POINT_GENERATION_DATA,
+    }
+
+    @staticmethod
+    def _extract_storage_area_name(line: str) -> str:
+        """Return the storage area name from a Storage Area= header line."""
+        value_str = GeomParser.extract_keyword_value(line, "Storage Area")
+        parts = [p.strip() for p in value_str.split(',')]
+        return parts[0] if parts else value_str
+
+    @staticmethod
+    def _extract_storage_area_header(line: str) -> dict:
+        """Parse name and centroid coordinates from a Storage Area= header line."""
+        value_str = GeomParser.extract_keyword_value(line, "Storage Area")
+        parts = [p.strip() for p in value_str.split(',')]
+        result = {
+            'name': parts[0] if parts else value_str,
+            'centroid_x': None,
+            'centroid_y': None,
+        }
+
+        try:
+            result['centroid_x'] = float(parts[1]) if len(parts) > 1 else None
+            result['centroid_y'] = float(parts[2]) if len(parts) > 2 else None
+        except ValueError:
+            result['centroid_x'] = None
+            result['centroid_y'] = None
+
+        return result
+
+    @staticmethod
+    def _validate_flow_area_name(name: str) -> None:
+        """Reject names containing characters that corrupt the .g## header format."""
+        bad = GeomStorage._INVALID_NAME_CHARS.intersection(name)
+        if bad:
+            raise ValueError(
+                f"flow_area_name contains invalid characters {bad!r}: {name!r}"
+            )
+
+    _BLOCK_TERMINATORS = (
+        "Storage Area=",
+        "River Reach=",
+        "BreakLine Name=",
+        "Connection=",
+        "BC Line Name=",
+        "LCMann Time=",
+        "Chan Stop Cuts=",
+    )
+
+    @staticmethod
+    def _iter_storage_area_blocks(lines: List[str]):
+        """Yield (start_idx, end_idx, block_lines) for each storage area block."""
+        i = 0
+        while i < len(lines):
+            if lines[i].startswith("Storage Area="):
+                start_idx = i
+                end_idx = i + 1
+                while end_idx < len(lines):
+                    if any(
+                        lines[end_idx].startswith(term)
+                        for term in GeomStorage._BLOCK_TERMINATORS
+                    ):
+                        break
+                    end_idx += 1
+                yield start_idx, end_idx, lines[start_idx:end_idx]
+                i = end_idx
+                continue
+            i += 1
+
+    @staticmethod
+    def _find_storage_area_block(lines: List[str], storage_name: str):
+        """Return (start_idx, end_idx, block_lines) for a named storage area."""
+        for start_idx, end_idx, block_lines in GeomStorage._iter_storage_area_blocks(lines):
+            if GeomStorage._extract_storage_area_name(block_lines[0]) == storage_name:
+                return start_idx, end_idx, block_lines
+        return None
+
+    @staticmethod
+    def _find_section_end(block_lines: List[str], keyword_idx: int) -> int:
+        """Return the exclusive end index for a fixed-width data section."""
+        end_idx = keyword_idx + 1
+        while end_idx < len(block_lines):
+            if '=' in block_lines[end_idx]:
+                break
+            end_idx += 1
+        return end_idx
+
+    @staticmethod
+    def _inspect_storage_area_block(block_lines: List[str]) -> dict:
+        """Collect key indices and parsed settings for a storage area block."""
+        info = {
+            'header': GeomStorage._extract_storage_area_header(block_lines[0]),
+            'surface_line_idx': None,
+            'surface_line_end': None,
+            'type_line_idx': None,
+            'area_line_idx': None,
+            'min_elev_line_idx': None,
+            'is2d_line_idx': None,
+            'point_generation_idx': None,
+            'point_generation_data': None,
+            'points_idx': None,
+            'points_end': None,
+            'points_time_idx': None,
+            'settings_start': None,
+            'settings_end': None,
+            'is_2d': False,
+            'settings': dict(GeomStorage._DEFAULT_2D_SETTINGS),
+        }
+        info['settings']['point_generation_data'] = None
+
+        for idx, line in enumerate(block_lines):
+            if line.startswith("Storage Area Surface Line="):
+                info['surface_line_idx'] = idx
+                info['surface_line_end'] = GeomStorage._find_section_end(block_lines, idx)
+            elif line.startswith("Storage Area Type="):
+                info['type_line_idx'] = idx
+            elif line.startswith("Storage Area Area="):
+                info['area_line_idx'] = idx
+            elif line.startswith("Storage Area Min Elev="):
+                info['min_elev_line_idx'] = idx
+            elif line.startswith("Storage Area Is2D="):
+                info['is2d_line_idx'] = idx
+                is2d_str = GeomParser.extract_keyword_value(line, "Storage Area Is2D")
+                try:
+                    info['is_2d'] = int(is2d_str.strip()) == -1
+                except ValueError:
+                    info['is_2d'] = False
+            elif line.startswith("Storage Area Point Generation Data="):
+                info['point_generation_idx'] = idx
+                info['point_generation_data'] = GeomParser.extract_keyword_value(
+                    line, "Storage Area Point Generation Data"
+                )
+                info['settings']['point_generation_data'] = info['point_generation_data']
+            elif line.startswith("Storage Area 2D Points="):
+                info['points_idx'] = idx
+                info['points_end'] = GeomStorage._find_section_end(block_lines, idx)
+            elif line.startswith("Storage Area 2D PointsPerimeterTime="):
+                info['points_time_idx'] = idx
+            else:
+                matched_setting = False
+                for keyword, column in GeomStorage._SETTINGS_KEYWORDS.items():
+                    if line.startswith(keyword + '='):
+                        val_str = GeomParser.extract_keyword_value(line, keyword)
+                        try:
+                            info['settings'][column] = float(val_str.strip())
+                        except ValueError:
+                            pass
+                        matched_setting = True
+                        break
+
+                if matched_setting:
+                    continue
+
+                for keyword, column in GeomStorage._BOOLEAN_KEYWORDS.items():
+                    if line.startswith(keyword + '='):
+                        val_str = GeomParser.extract_keyword_value(line, keyword)
+                        try:
+                            info['settings'][column] = int(val_str.strip()) == -1
+                        except ValueError:
+                            pass
+                        break
+
+        setting_prefixes = tuple(
+            f"{keyword}=" for keyword in (
+                list(GeomStorage._SETTINGS_KEYWORDS.keys()) +
+                list(GeomStorage._BOOLEAN_KEYWORDS.keys())
+            )
+        )
+
+        for idx, line in enumerate(block_lines):
+            if line.startswith(setting_prefixes):
+                info['settings_start'] = idx
+                break
+
+        if info['settings_start'] is not None:
+            end_idx = info['settings_start']
+            while end_idx < len(block_lines):
+                stripped = block_lines[end_idx].strip()
+                if not stripped:
+                    break
+                if block_lines[end_idx].startswith(setting_prefixes):
+                    end_idx += 1
+                    continue
+                break
+            info['settings_end'] = end_idx
+
+        return info
+
+    @staticmethod
+    def _format_storage_area_header(
+        name: str,
+        centroid_x: float,
+        centroid_y: float,
+        raw_header_line: Optional[str] = None,
+    ) -> str:
+        """Format a Storage Area= header line with centroid coordinates.
+
+        When raw_header_line is provided, preserves the original header text
+        verbatim (keeping original centroid formatting and name padding).
+        """
+        if raw_header_line is not None:
+            return raw_header_line if raw_header_line.endswith('\n') else raw_header_line + '\n'
+        return f"Storage Area={name},{centroid_x:.7f},{centroid_y:.7f}\n"
+
+    @staticmethod
+    def _max_precision_for_field(value: float, column_width: int) -> int:
+        """Compute the max decimal places that fit a value in a fixed-width field.
+
+        Uses a fit loop: starts from an arithmetic estimate and decrements
+        until the formatted string actually fits, handling rounding carry
+        (e.g. 99.9999… rounding to 100).
+        """
+        sign_chars = 1 if value < 0 else 0
+        integer_part = int(abs(value))
+        int_digits = max(1, len(str(integer_part)))
+        overhead = sign_chars + int_digits + 1
+        prec = max(0, column_width - overhead)
+
+        while prec > 0:
+            formatted = f"{value:{column_width}.{prec}f}"
+            if len(formatted) <= column_width:
+                return prec
+            prec -= 1
+
+        return 0
+
+    @staticmethod
+    def _format_surface_line_lines(coords: List[tuple[float, float]]) -> List[str]:
+        """Format perimeter XY pairs in HEC-RAS fixed-width surface line form.
+
+        Uses adaptive precision: each value gets the maximum decimal places
+        that fit within the 16-character field width, preserving more
+        significant digits than a fixed 7-decimal approach.
+        """
+        col_w = GeomStorage.SURFACE_LINE_COLUMN
+        vpl = GeomStorage.SURFACE_LINE_VALUES_PER_LINE
+        lines = []
+        flat_values = []
+        for x_coord, y_coord in coords:
+            flat_values.extend([x_coord, y_coord])
+
+        for i in range(0, len(flat_values), vpl):
+            row_values = flat_values[i:i + vpl]
+            parts = []
+            for val in row_values:
+                prec = GeomStorage._max_precision_for_field(val, col_w)
+                parts.append(f"{val:{col_w}.{prec}f}")
+            lines.append("".join(parts) + "\n")
+
+        return lines
+
+    @staticmethod
+    def _current_timestamp() -> str:
+        """Return a HEC-RAS style timestamp string for perimeter edits."""
+        return datetime.now().strftime("%d%b%Y %H:%M:%S")
+
+    @staticmethod
+    def _normalize_perimeter_coords(
+        coordinates: Optional[Sequence[Sequence[float]]] = None,
+        geometry=None,
+    ) -> List[tuple[float, float]]:
+        """Normalize coordinate or shapely polygon input into a closed XY ring."""
+        if coordinates is None and geometry is None:
+            raise ValueError("Provide polygon coordinates or a shapely geometry")
+        if coordinates is not None and geometry is not None:
+            raise ValueError("Provide either coordinates or geometry, not both")
+
+        if geometry is not None:
+            geom_type = getattr(geometry, "geom_type", None)
+            if geom_type == "Polygon":
+                raw_coords = list(geometry.exterior.coords)
+            elif geom_type == "LinearRing":
+                raw_coords = list(geometry.coords)
+            else:
+                raise ValueError(
+                    f"Unsupported geometry type for 2D flow area perimeter: {geom_type}"
+                )
+        else:
+            raw_coords = list(coordinates)
+
+        normalized = []
+        for pair in raw_coords:
+            if len(pair) < 2:
+                raise ValueError("Each perimeter coordinate must contain at least x and y values")
+            normalized.append((float(pair[0]), float(pair[1])))
+
+        if len(normalized) < 3:
+            raise ValueError("At least three perimeter vertices are required")
+
+        if normalized[0] != normalized[-1]:
+            normalized.append(normalized[0])
+
+        unique_vertices = {(x_coord, y_coord) for x_coord, y_coord in normalized[:-1]}
+        if len(unique_vertices) < 3:
+            raise ValueError("2D flow area perimeter must contain at least three unique vertices")
+
+        return normalized
+
+    @staticmethod
+    def _polygon_centroid(coords: List[tuple[float, float]]) -> tuple[float, float]:
+        """Compute polygon centroid from a closed XY ring."""
+        if coords[0] != coords[-1]:
+            raise ValueError("Polygon centroid requires a closed coordinate ring")
+
+        twice_area = 0.0
+        centroid_x = 0.0
+        centroid_y = 0.0
+
+        for (x0, y0), (x1, y1) in zip(coords[:-1], coords[1:]):
+            cross = x0 * y1 - x1 * y0
+            twice_area += cross
+            centroid_x += (x0 + x1) * cross
+            centroid_y += (y0 + y1) * cross
+
+        if abs(twice_area) < 1e-12:
+            xs = [x_coord for x_coord, _ in coords[:-1]]
+            ys = [y_coord for _, y_coord in coords[:-1]]
+            return sum(xs) / len(xs), sum(ys) / len(ys)
+
+        area = twice_area / 2.0
+        return centroid_x / (6.0 * area), centroid_y / (6.0 * area)
+
+    @staticmethod
+    def _format_scalar_value(value) -> str:
+        """Format numeric/text values for keyword lines without forcing decimals."""
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            return "-1" if value else "0"
+        if isinstance(value, int):
+            return str(value)
+        if isinstance(value, float):
+            return f"{value:g}"
+        return str(value).strip()
+
+    @staticmethod
+    def _normalize_point_generation_data(point_generation_data) -> Optional[str]:
+        """Normalize point-generation settings to the 4-field raw HEC-RAS string."""
+        if point_generation_data is None:
+            return None
+
+        if isinstance(point_generation_data, str):
+            parts = [part.strip() for part in point_generation_data.split(',')]
+        elif isinstance(point_generation_data, Sequence):
+            parts = [
+                "" if value is None else GeomStorage._format_scalar_value(value)
+                for value in point_generation_data
+            ]
+        else:
+            raise TypeError(
+                "point_generation_data must be a comma-delimited string or a sequence"
+            )
+
+        if len(parts) > 4:
+            raise ValueError("point_generation_data may contain at most four values")
+
+        parts.extend([""] * (4 - len(parts)))
+        return ",".join(parts[:4])
+
+    @staticmethod
+    def _build_2d_settings_lines(settings: dict) -> List[str]:
+        """Render settings dict values into canonical 2D flow area keyword lines."""
+        lines = []
+
+        for keyword, column in GeomStorage._SETTINGS_KEYWORDS.items():
+            value = settings.get(column)
+            if value is None or pd.isna(value):
+                continue
+            lines.append(f"{keyword}={GeomStorage._format_scalar_value(value)}\n")
+
+        for keyword, column in GeomStorage._BOOLEAN_KEYWORDS.items():
+            if settings.get(column):
+                lines.append(f"{keyword}=-1\n")
+
+        return lines
+
+    @staticmethod
+    def _extract_block_keyword_value(
+        block_lines: List[str],
+        line_idx: Optional[int],
+        keyword: str,
+        default: str = "",
+    ) -> str:
+        """Read a keyword value from a block line when present."""
+        if line_idx is None:
+            return default
+        value = GeomParser.extract_keyword_value(block_lines[line_idx], keyword)
+        return value if value != "" else default
+
+    @staticmethod
+    def _parse_surface_line_coords(block_lines: List[str], info: dict) -> List[tuple[float, float]]:
+        """Parse Storage Area Surface Line XY rows from a storage area block."""
+        if info['surface_line_idx'] is None or info['surface_line_end'] is None:
+            raise ValueError("Storage area block is missing a surface line section")
+
+        values = []
+        for line in block_lines[info['surface_line_idx'] + 1:info['surface_line_end']]:
+            values.extend(
+                GeomParser.parse_fixed_width(line, GeomStorage.SURFACE_LINE_COLUMN)
+            )
+
+        if len(values) % 2 != 0:
+            raise ValueError("Surface line section contains an odd number of coordinate values")
+
+        coords = []
+        for idx in range(0, len(values), 2):
+            coords.append((values[idx], values[idx + 1]))
+
+        if len(coords) < 3:
+            raise ValueError("Surface line section must contain at least three vertices")
+
+        return coords
+
+    @staticmethod
+    def _storage_area_tail_start(info: dict, block_length: int) -> int:
+        """Return the first line after the managed 2D flow area section."""
+        if info['settings_end'] is not None:
+            return info['settings_end']
+
+        candidates = [
+            info['points_time_idx'] + 1 if info['points_time_idx'] is not None else None,
+            info['points_end'],
+            info['points_idx'] + 1 if info['points_idx'] is not None else None,
+            info['point_generation_idx'] + 1 if info['point_generation_idx'] is not None else None,
+            info['is2d_line_idx'] + 1 if info['is2d_line_idx'] is not None else None,
+            info['min_elev_line_idx'] + 1 if info['min_elev_line_idx'] is not None else None,
+            info['area_line_idx'] + 1 if info['area_line_idx'] is not None else None,
+            info['type_line_idx'] + 1 if info['type_line_idx'] is not None else None,
+            info['surface_line_end'],
+            info['surface_line_idx'] + 1 if info['surface_line_idx'] is not None else None,
+        ]
+
+        valid = [candidate for candidate in candidates if candidate is not None]
+        if not valid:
+            return min(block_length, 1)
+
+        return min(block_length, max(valid))
+
+    @staticmethod
+    def _storage_area_insert_index(lines: List[str]) -> int:
+        """Choose an insertion point for a new storage area block."""
+        last_storage_end = None
+        for _, end_idx, _ in GeomStorage._iter_storage_area_blocks(lines):
+            last_storage_end = end_idx
+
+        if last_storage_end is not None:
+            return last_storage_end
+
+        for idx, line in enumerate(lines):
+            if line.startswith("River Reach="):
+                return idx
+
+        return len(lines)
+
+    @staticmethod
+    def _build_2d_flow_area_block(
+        flow_area_name: str,
+        coords: List[tuple[float, float]],
+        settings: dict,
+        *,
+        centroid_x: float,
+        centroid_y: float,
+        raw_header_line: Optional[str] = None,
+        type_value: str = "0",
+        area_value: str = "",
+        min_elev_value: str = "",
+        prefix_lines: Optional[List[str]] = None,
+        tail_lines: Optional[List[str]] = None,
+        existing_points_lines: Optional[List[str]] = None,
+        existing_points_time_line: Optional[str] = None,
+    ) -> List[str]:
+        """Build a canonical storage-area-backed 2D flow area block.
+
+        When existing_points_lines and existing_points_time_line are provided
+        (unchanged-perimeter path), the mesh data and timestamp are preserved.
+        """
+        normalized_settings = dict(GeomStorage._DEFAULT_2D_SETTINGS)
+        normalized_settings.update(settings)
+
+        point_generation_data = GeomStorage._normalize_point_generation_data(
+            normalized_settings.get('point_generation_data')
+        )
+        if point_generation_data is None:
+            point_generation_data = GeomStorage.DEFAULT_2D_POINT_GENERATION_DATA
+        normalized_settings['point_generation_data'] = point_generation_data
+
+        block_lines = [
+            GeomStorage._format_storage_area_header(
+                flow_area_name, centroid_x, centroid_y,
+                raw_header_line=raw_header_line,
+            ),
+        ]
+        if prefix_lines:
+            block_lines.extend(prefix_lines)
+
+        block_lines.append(f"Storage Area Surface Line= {len(coords)}\n")
+        block_lines.extend(GeomStorage._format_surface_line_lines(coords))
+        block_lines.append(f"Storage Area Type= {type_value or '0'}\n")
+        block_lines.append(
+            f"Storage Area Area={area_value}\n" if area_value else "Storage Area Area=\n"
+        )
+        block_lines.append(
+            f"Storage Area Min Elev={min_elev_value}\n"
+            if min_elev_value else
+            "Storage Area Min Elev=\n"
+        )
+        block_lines.append("Storage Area Is2D=-1\n")
+        block_lines.append(f"Storage Area Point Generation Data={point_generation_data}\n")
+
+        if existing_points_lines is not None:
+            block_lines.extend(existing_points_lines)
+        else:
+            block_lines.append("Storage Area 2D Points= 0\n")
+
+        if existing_points_time_line is not None:
+            time_line = existing_points_time_line
+            if not time_line.endswith('\n'):
+                time_line += '\n'
+            block_lines.append(time_line)
+        else:
+            block_lines.append(
+                f"Storage Area 2D PointsPerimeterTime={GeomStorage._current_timestamp()}\n"
+            )
+
+        block_lines.extend(GeomStorage._build_2d_settings_lines(normalized_settings))
+
+        if tail_lines:
+            if tail_lines[0].strip():
+                block_lines.append("\n")
+            block_lines.extend(tail_lines)
+        else:
+            block_lines.append("\n")
+
+        return block_lines
 
     @staticmethod
     @log_call
@@ -165,7 +738,6 @@ class GeomStorage:
                                     if elevations:
                                         min_elev = elevations[0]
                                         max_elev = elevations[-1] if len(elevations) > 1 else elevations[0]
-                            break
 
                     storage_areas.append({
                         'Name': sa_name,
@@ -639,61 +1211,10 @@ class GeomStorage:
             logger.error(f"Error reading storage area polygons: {str(e)}")
             raise IOError(f"Failed to read storage area polygons: {str(e)}")
 
-    # Plain text keywords for 2D flow area settings
-    _SETTINGS_KEYWORDS = {
-        'Storage Area Mannings': 'mannings_n',
-        '2D Cell Volume Filter Tolerance': 'cell_vol_tol',
-        '2D Cell Minimum Area Fraction': 'cell_min_area_fraction',
-        '2D Face Profile Filter Tolerance': 'face_profile_tol',
-        '2D Face Area Elevation Profile Filter Tolerance': 'face_area_tol',
-        '2D Face Area Elevation Conveyance Ratio': 'face_conv_ratio',
-        '2D Face Area Laminar Depth': 'laminar_depth',
-        '2D Face Min Length Ratio': 'min_face_length_ratio',
-    }
-
-    # Boolean keywords: present with =-1 means True, absent means False
-    _BOOLEAN_KEYWORDS = {
-        '2D Multiple Face Mann n': 'spatially_varied_mann_on_faces',
-        '2D Composite LC': 'composite_classification',
-    }
-
     @staticmethod
     @log_call
     def get_2d_flow_area_settings(geom_file: Union[str, Path]) -> pd.DataFrame:
-        """
-        Read 2D flow area cell/face property settings from plain text geometry file.
-
-        Extracts per-flow-area settings including default Manning's n,
-        tolerance/filter values, and subgrid sampling options (spatially
-        varied Manning's n on faces, composite classification in cells).
-
-        Parameters:
-            geom_file (Union[str, Path]): Path to geometry file (.g##)
-
-        Returns:
-            pd.DataFrame: DataFrame with one row per 2D flow area. Columns:
-                - name (str): 2D flow area name
-                - mannings_n (float): Default Manning's n
-                - spatially_varied_mann_on_faces (bool): Spatially varied Manning's n
-                - composite_classification (bool): Composite classification values
-                - cell_vol_tol (float): Cell volume filter tolerance
-                - cell_min_area_fraction (float): Cell minimum area fraction
-                - face_profile_tol (float): Face profile filter tolerance
-                - face_area_tol (float): Face area elevation profile filter tolerance
-                - face_conv_ratio (float): Face area elevation conveyance ratio
-                - laminar_depth (float): Face area laminar depth
-                - min_face_length_ratio (float): Min face length ratio (NaN if absent)
-
-        Raises:
-            FileNotFoundError: If geometry file doesn't exist
-
-        Example:
-            >>> settings = GeomStorage.get_2d_flow_area_settings("model.g01")
-            >>> for _, row in settings.iterrows():
-            ...     print(f"{row['name']}: Mann n={row['mannings_n']}, "
-            ...           f"Spatial={row['spatially_varied_mann_on_faces']}, "
-            ...           f"Composite={row['composite_classification']}")
-        """
+        """Read 2D flow area settings from storage-area-backed .g## blocks."""
         geom_file = Path(geom_file)
         if not geom_file.exists():
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
@@ -702,73 +1223,199 @@ class GeomStorage:
             lines = f.readlines()
 
         records = []
-        i = 0
-        while i < len(lines):
-            line = lines[i]
+        for _, _, block_lines in GeomStorage._iter_storage_area_blocks(lines):
+            info = GeomStorage._inspect_storage_area_block(block_lines)
+            if not info['is_2d']:
+                continue
 
-            if line.startswith("Storage Area="):
-                value_str = GeomParser.extract_keyword_value(line, "Storage Area")
-                parts = [p.strip() for p in value_str.split(',')]
-                sa_name = parts[0] if parts else value_str
+            settings = dict(info['settings'])
+            if settings.get('point_generation_data') is None:
+                settings['point_generation_data'] = (
+                    info['point_generation_data'] or
+                    GeomStorage.DEFAULT_2D_POINT_GENERATION_DATA
+                )
 
-                is_2d = False
-                settings = {
-                    'name': sa_name,
-                    'mannings_n': float('nan'),
-                    'spatially_varied_mann_on_faces': False,
-                    'composite_classification': False,
-                    'cell_vol_tol': float('nan'),
-                    'cell_min_area_fraction': float('nan'),
-                    'face_profile_tol': float('nan'),
-                    'face_area_tol': float('nan'),
-                    'face_conv_ratio': float('nan'),
-                    'laminar_depth': float('nan'),
-                    'min_face_length_ratio': float('nan'),
-                }
+            records.append({
+                'name': info['header']['name'],
+                **settings,
+            })
 
-                for j in range(i + 1, len(lines)):
-                    if lines[j].startswith("Storage Area=") or lines[j].startswith("River Reach="):
-                        break
+        columns = [
+            'name',
+            'mannings_n',
+            'spatially_varied_mann_on_faces',
+            'composite_classification',
+            'cell_vol_tol',
+            'cell_min_area_fraction',
+            'face_profile_tol',
+            'face_area_tol',
+            'face_conv_ratio',
+            'laminar_depth',
+            'min_face_length_ratio',
+            'point_generation_data',
+        ]
 
-                    if lines[j].startswith("Storage Area Is2D="):
-                        is2d_str = GeomParser.extract_keyword_value(lines[j], "Storage Area Is2D")
-                        try:
-                            is_2d = int(is2d_str.strip()) == -1
-                        except ValueError:
-                            pass
-
-                    for keyword, column in GeomStorage._SETTINGS_KEYWORDS.items():
-                        if lines[j].startswith(keyword + '='):
-                            val_str = GeomParser.extract_keyword_value(lines[j], keyword)
-                            try:
-                                settings[column] = float(val_str.strip())
-                            except ValueError:
-                                pass
-
-                    for keyword, column in GeomStorage._BOOLEAN_KEYWORDS.items():
-                        if lines[j].startswith(keyword + '='):
-                            val_str = GeomParser.extract_keyword_value(lines[j], keyword)
-                            try:
-                                settings[column] = int(val_str.strip()) == -1
-                            except ValueError:
-                                pass
-
-                if is_2d:
-                    records.append(settings)
-
-            i += 1
-
-        df = pd.DataFrame(records)
-        if df.empty:
-            df = pd.DataFrame(columns=[
-                'name', 'mannings_n', 'spatially_varied_mann_on_faces',
-                'composite_classification', 'cell_vol_tol', 'cell_min_area_fraction',
-                'face_profile_tol', 'face_area_tol', 'face_conv_ratio',
-                'laminar_depth', 'min_face_length_ratio',
-            ])
-
+        df = pd.DataFrame(records, columns=columns)
         logger.debug(f"Found {len(df)} 2D flow area settings in {geom_file.name}")
         return df
+
+    @staticmethod
+    def _coords_match(coords_a: List[tuple[float, float]], coords_b: List[tuple[float, float]]) -> bool:
+        """Return True if two closed coordinate rings are identical within float tolerance."""
+        if len(coords_a) != len(coords_b):
+            return False
+        return all(
+            abs(ax - bx) < 1e-6 and abs(ay - by) < 1e-6
+            for (ax, ay), (bx, by) in zip(coords_a, coords_b)
+        )
+
+    @staticmethod
+    @log_call
+    def set_2d_flow_area_perimeter(
+        geom_file: Union[str, Path],
+        flow_area_name: str,
+        coordinates: Optional[Sequence[Sequence[float]]] = None,
+        geometry=None,
+        point_generation_data: Optional[Union[str, Sequence[Optional[float]]]] = None,
+        recompute_centroid: bool = False,
+        create_backup: bool = True,
+    ) -> Path:
+        """Create or update a storage-area-backed 2D flow area perimeter in .g## text.
+
+        Args:
+            recompute_centroid: When updating an existing block, recompute the
+                header centroid from the polygon. Default False preserves the
+                original header coordinates.
+        """
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        GeomStorage._validate_flow_area_name(flow_area_name)
+
+        coords = GeomStorage._normalize_perimeter_coords(
+            coordinates=coordinates,
+            geometry=geometry,
+        )
+        centroid_x, centroid_y = GeomStorage._polygon_centroid(coords)
+        normalized_point_generation_data = GeomStorage._normalize_point_generation_data(
+            point_generation_data
+        )
+
+        with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+            lines = f.readlines()
+
+        backup_path = None
+        if create_backup:
+            backup_path = GeomParser.create_backup(geom_file)
+            logger.info(f"Created backup: {backup_path}")
+
+        existing_block = GeomStorage._find_storage_area_block(lines, flow_area_name)
+
+        if existing_block is None:
+            settings = dict(GeomStorage._DEFAULT_2D_SETTINGS)
+            settings['point_generation_data'] = (
+                normalized_point_generation_data or
+                GeomStorage.DEFAULT_2D_POINT_GENERATION_DATA
+            )
+            new_block_lines = GeomStorage._build_2d_flow_area_block(
+                flow_area_name,
+                coords,
+                settings,
+                centroid_x=centroid_x,
+                centroid_y=centroid_y,
+            )
+            insert_idx = GeomStorage._storage_area_insert_index(lines)
+            new_lines = lines[:insert_idx] + new_block_lines + lines[insert_idx:]
+        else:
+            start_idx, end_idx, block_lines = existing_block
+            info = GeomStorage._inspect_storage_area_block(block_lines)
+
+            if info['is2d_line_idx'] is not None and not info['is_2d']:
+                raise ValueError(
+                    f"Existing storage area '{flow_area_name}' is not marked as a 2D flow area"
+                )
+
+            # Check if perimeter is unchanged — preserve mesh data if so
+            perimeter_changed = True
+            existing_points_lines = None
+            existing_points_time_line = None
+            try:
+                existing_coords = GeomStorage._parse_surface_line_coords(block_lines, info)
+                if GeomStorage._coords_match(coords, existing_coords):
+                    perimeter_changed = False
+            except ValueError:
+                pass
+
+            if not perimeter_changed:
+                if info['points_idx'] is not None:
+                    pts_end = info.get('points_end') or (info['points_idx'] + 1)
+                    existing_points_lines = block_lines[info['points_idx']:pts_end]
+                if info['points_time_idx'] is not None:
+                    existing_points_time_line = block_lines[info['points_time_idx']]
+
+            settings = dict(info['settings'])
+            settings['point_generation_data'] = (
+                normalized_point_generation_data or
+                info['point_generation_data'] or
+                settings.get('point_generation_data') or
+                GeomStorage.DEFAULT_2D_POINT_GENERATION_DATA
+            )
+
+            managed_indices = [
+                idx for idx in [
+                    info['surface_line_idx'],
+                    info['type_line_idx'],
+                    info['area_line_idx'],
+                    info['min_elev_line_idx'],
+                    info['is2d_line_idx'],
+                    info['point_generation_idx'],
+                    info['points_idx'],
+                    info['points_time_idx'],
+                    info['settings_start'],
+                ]
+                if idx is not None
+            ]
+            prefix_end = min(managed_indices) if managed_indices else len(block_lines)
+            prefix_lines = block_lines[1:prefix_end]
+            tail_start = GeomStorage._storage_area_tail_start(info, len(block_lines))
+            tail_lines = block_lines[tail_start:]
+
+            raw_header = None if recompute_centroid else block_lines[0]
+            header_cx = centroid_x if recompute_centroid else info['header'].get('centroid_x', centroid_x)
+            header_cy = centroid_y if recompute_centroid else info['header'].get('centroid_y', centroid_y)
+
+            new_block_lines = GeomStorage._build_2d_flow_area_block(
+                flow_area_name,
+                coords,
+                settings,
+                centroid_x=header_cx,
+                centroid_y=header_cy,
+                raw_header_line=raw_header,
+                type_value=GeomStorage._extract_block_keyword_value(
+                    block_lines, info['type_line_idx'], "Storage Area Type", "0"
+                ),
+                area_value=GeomStorage._extract_block_keyword_value(
+                    block_lines, info['area_line_idx'], "Storage Area Area", ""
+                ),
+                min_elev_value=GeomStorage._extract_block_keyword_value(
+                    block_lines, info['min_elev_line_idx'], "Storage Area Min Elev", ""
+                ),
+                prefix_lines=prefix_lines,
+                tail_lines=tail_lines,
+                existing_points_lines=existing_points_lines,
+                existing_points_time_line=existing_points_time_line,
+            )
+            new_lines = lines[:start_idx] + new_block_lines + lines[end_idx:]
+
+        with open(geom_file, 'w', encoding='utf-8') as f:
+            f.writelines(new_lines)
+
+        logger.info(
+            f"Upserted 2D flow area perimeter for {flow_area_name}: "
+            f"{len(coords) - 1} unique edges"
+        )
+        return backup_path if backup_path else geom_file
 
     @staticmethod
     @log_call
@@ -778,174 +1425,120 @@ class GeomStorage:
         spatially_varied_mann_on_faces: Optional[bool] = None,
         composite_classification: Optional[bool] = None,
         mannings_n: Optional[float] = None,
+        cell_vol_tol: Optional[float] = None,
+        cell_min_area_fraction: Optional[float] = None,
+        face_profile_tol: Optional[float] = None,
+        face_area_tol: Optional[float] = None,
+        face_conv_ratio: Optional[float] = None,
+        laminar_depth: Optional[float] = None,
+        min_face_length_ratio: Optional[float] = None,
+        point_generation_data: Optional[Union[str, Sequence[Optional[float]]]] = None,
         create_backup: bool = True,
     ) -> Path:
-        """
-        Set 2D flow area cell/face property settings in plain text geometry file.
-
-        Modifies settings for a specific 2D flow area. Only parameters that
-        are explicitly provided (not None) are modified; others are left unchanged.
-
-        The geometry HDF is rebuilt from the plain text file during preprocessing,
-        so changes here propagate to the HDF automatically.
-
-        Parameters:
-            geom_file (Union[str, Path]): Path to geometry file (.g##)
-            flow_area_name (str): Name of the 2D flow area (case-sensitive)
-            spatially_varied_mann_on_faces (Optional[bool]): Enable/disable
-                spatially varied Manning's n on faces. None = no change.
-            composite_classification (Optional[bool]): Enable/disable
-                composite classification values in cells. None = no change.
-            mannings_n (Optional[float]): Default Manning's n value.
-                None = no change.
-            create_backup (bool): Create .bak backup before modification (default True)
-
-        Returns:
-            Path: Path to backup file if created, or geometry file path if no backup
-
-        Raises:
-            FileNotFoundError: If geometry file doesn't exist
-            ValueError: If flow area not found or not a 2D flow area
-
-        Example:
-            >>> # Enable both subgrid sampling options
-            >>> GeomStorage.set_2d_flow_area_settings(
-            ...     "model.g01",
-            ...     flow_area_name="Perimeter 1",
-            ...     spatially_varied_mann_on_faces=True,
-            ...     composite_classification=True,
-            ... )
-
-            >>> # Change default Manning's n and disable composite
-            >>> GeomStorage.set_2d_flow_area_settings(
-            ...     "model.g01",
-            ...     flow_area_name="Perimeter 1",
-            ...     mannings_n=0.04,
-            ...     composite_classification=False,
-            ... )
-        """
+        """Update 2D flow area text settings without making HDF the edit target."""
         geom_file = Path(geom_file)
         if not geom_file.exists():
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
-        if (spatially_varied_mann_on_faces is None and
-                composite_classification is None and
-                mannings_n is None):
-            logger.info("No settings to change")
+        GeomStorage._validate_flow_area_name(flow_area_name)
+
+        updates = {
+            'spatially_varied_mann_on_faces': spatially_varied_mann_on_faces,
+            'composite_classification': composite_classification,
+            'mannings_n': mannings_n,
+            'cell_vol_tol': cell_vol_tol,
+            'cell_min_area_fraction': cell_min_area_fraction,
+            'face_profile_tol': face_profile_tol,
+            'face_area_tol': face_area_tol,
+            'face_conv_ratio': face_conv_ratio,
+            'laminar_depth': laminar_depth,
+            'min_face_length_ratio': min_face_length_ratio,
+            'point_generation_data': point_generation_data,
+        }
+
+        if all(value is None for value in updates.values()):
+            logger.info("No 2D flow area settings changes requested")
             return geom_file
 
         with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
-        # Find the target 2D flow area block
-        sa_idx = None
-        block_end = None
-        is_2d = False
-
-        for i, line in enumerate(lines):
-            if line.startswith("Storage Area="):
-                value_str = GeomParser.extract_keyword_value(line, "Storage Area")
-                parts = [p.strip() for p in value_str.split(',')]
-                sa_name = parts[0] if parts else value_str
-                if sa_name == flow_area_name:
-                    sa_idx = i
-                    # Find end of this storage area block
-                    for j in range(i + 1, len(lines)):
-                        if lines[j].startswith("Storage Area=") or lines[j].startswith("River Reach="):
-                            block_end = j
-                            break
-                    if block_end is None:
-                        block_end = len(lines)
-                    # Check it's a 2D flow area
-                    for j in range(i + 1, block_end):
-                        if lines[j].startswith("Storage Area Is2D="):
-                            is2d_str = GeomParser.extract_keyword_value(lines[j], "Storage Area Is2D")
-                            try:
-                                is_2d = int(is2d_str.strip()) == -1
-                            except ValueError:
-                                pass
-                    break
-
-        if sa_idx is None:
+        existing_block = GeomStorage._find_storage_area_block(lines, flow_area_name)
+        if existing_block is None:
             raise ValueError(f"Flow area not found: {flow_area_name}")
-        if not is_2d:
+
+        start_idx, end_idx, block_lines = existing_block
+        info = GeomStorage._inspect_storage_area_block(block_lines)
+        if not info['is_2d']:
             raise ValueError(f"'{flow_area_name}' is not a 2D flow area")
 
-        # Find the settings sub-block (between PointsPerimeterTime and
-        # blank line or BreakLine)
-        settings_start = None
-        settings_end = None
-        for j in range(sa_idx + 1, block_end):
-            if lines[j].startswith("Storage Area Mannings="):
-                settings_start = j
-            if settings_start is not None and j > settings_start:
-                stripped = lines[j].strip()
-                if (stripped == '' or
-                        lines[j].startswith("BreakLine ") or
-                        lines[j].startswith("Storage Area=") or
-                        lines[j].startswith("River Reach=")):
-                    settings_end = j
-                    break
-        if settings_end is None and settings_start is not None:
-            settings_end = block_end
+        normalized_settings = dict(info['settings'])
+        for key, value in updates.items():
+            if value is None:
+                continue
+            if key == 'point_generation_data':
+                normalized_settings[key] = GeomStorage._normalize_point_generation_data(value)
+            else:
+                normalized_settings[key] = value
 
-        if settings_start is None:
-            raise ValueError(
-                f"Could not find settings block for '{flow_area_name}'. "
-                f"Expected 'Storage Area Mannings=' line."
+        if normalized_settings.get('point_generation_data') is None:
+            normalized_settings['point_generation_data'] = (
+                info['point_generation_data'] or
+                GeomStorage.DEFAULT_2D_POINT_GENERATION_DATA
             )
 
-        # Create backup before modifying
+        updated_block_lines = list(block_lines)
+
+        point_generation_line = (
+            "Storage Area Point Generation Data="
+            f"{normalized_settings['point_generation_data']}\n"
+        )
+        if info['point_generation_idx'] is not None:
+            updated_block_lines[info['point_generation_idx']] = point_generation_line
+        else:
+            point_insert_candidates = [
+                info['points_idx'],
+                info['points_time_idx'],
+                info['settings_start'],
+                info['is2d_line_idx'] + 1 if info['is2d_line_idx'] is not None else None,
+                info['min_elev_line_idx'] + 1 if info['min_elev_line_idx'] is not None else None,
+                info['area_line_idx'] + 1 if info['area_line_idx'] is not None else None,
+                info['type_line_idx'] + 1 if info['type_line_idx'] is not None else None,
+                len(updated_block_lines),
+            ]
+            point_insert_idx = min(
+                candidate for candidate in point_insert_candidates if candidate is not None
+            )
+            updated_block_lines.insert(point_insert_idx, point_generation_line)
+
+        updated_info = GeomStorage._inspect_storage_area_block(updated_block_lines)
+        settings_lines = GeomStorage._build_2d_settings_lines(normalized_settings)
+
+        if updated_info['settings_start'] is not None:
+            updated_block_lines = (
+                updated_block_lines[:updated_info['settings_start']] +
+                settings_lines +
+                updated_block_lines[updated_info['settings_end']:]
+            )
+        else:
+            settings_insert_idx = GeomStorage._storage_area_tail_start(
+                updated_info,
+                len(updated_block_lines),
+            )
+            updated_block_lines = (
+                updated_block_lines[:settings_insert_idx] +
+                settings_lines +
+                updated_block_lines[settings_insert_idx:]
+            )
+
         backup_path = None
         if create_backup:
             backup_path = GeomParser.create_backup(geom_file)
             logger.info(f"Created backup: {backup_path}")
 
-        # Modify settings in place
-        # 1. Update Manning's n if requested
-        if mannings_n is not None:
-            for j in range(settings_start, settings_end):
-                if lines[j].startswith("Storage Area Mannings="):
-                    lines[j] = f"Storage Area Mannings={mannings_n}\n"
-                    break
-
-        # 2. Handle boolean settings (add/remove lines)
-        bool_changes = {}
-        if spatially_varied_mann_on_faces is not None:
-            bool_changes['2D Multiple Face Mann n'] = spatially_varied_mann_on_faces
-        if composite_classification is not None:
-            bool_changes['2D Composite LC'] = composite_classification
-
-        for keyword, enabled in bool_changes.items():
-            # Find if line already exists
-            existing_idx = None
-            for j in range(settings_start, settings_end):
-                if lines[j].startswith(keyword + '='):
-                    existing_idx = j
-                    break
-
-            if enabled and existing_idx is None:
-                # Add the line before settings_end
-                new_line = f"{keyword}=-1\n"
-                lines.insert(settings_end, new_line)
-                settings_end += 1  # Adjust for inserted line
-            elif not enabled and existing_idx is not None:
-                # Remove the line
-                lines.pop(existing_idx)
-                settings_end -= 1  # Adjust for removed line
-
-        # Write modified file
+        new_lines = lines[:start_idx] + updated_block_lines + lines[end_idx:]
         with open(geom_file, 'w', encoding='utf-8') as f:
-            f.writelines(lines)
+            f.writelines(new_lines)
 
-        changes = []
-        if mannings_n is not None:
-            changes.append(f"Manning's n={mannings_n}")
-        if spatially_varied_mann_on_faces is not None:
-            changes.append(f"Spatially Varied={'ON' if spatially_varied_mann_on_faces else 'OFF'}")
-        if composite_classification is not None:
-            changes.append(f"Composite LC={'ON' if composite_classification else 'OFF'}")
-
-        logger.info(f"Updated {flow_area_name}: {', '.join(changes)}")
-
+        logger.info(f"Updated 2D flow area settings for {flow_area_name}")
         return backup_path if backup_path else geom_file
