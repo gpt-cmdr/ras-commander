@@ -5535,7 +5535,7 @@
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;📦 PIP PACKAGE MODE: Loading installed ras-commander&quot;</span><span class="p">)</span>
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1"># Import ras-commander</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasExamples</span><span class="p">,</span> <span class="n">RasPlan</span><span class="p">,</span> <span class="n">RasUnsteady</span><span class="p">,</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">ras</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasExamples</span><span class="p">,</span> <span class="n">RasPlan</span><span class="p">,</span> <span class="n">RasUnsteady</span><span class="p">,</span> <span class="n">RasCmdr</span>
 </span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">PrecipAorc</span>
 </span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf.HdfProject</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfProject</span>
 </span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
@@ -5552,6 +5552,9 @@
 </span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
+✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
+</code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># =============================================================================</span>
@@ -5560,8 +5563,8 @@
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># Project Configuration</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;BaldEagleCrkMulti2D&quot;</span>           <span class="c1"># Example project to extract</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">RAS_VERSION</span> <span class="o">=</span> <span class="s2">&quot;6.6&quot;</span>               <span class="c1"># HEC-RAS version (6.3, 6.5, 6.6, etc.)</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;Muncie&quot;</span>           <span class="c1"># Example project to extract</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">RAS_VERSION</span> <span class="o">=</span> <span class="s2">&quot;7.0&quot;</span>               <span class="c1"># HEC-RAS version (6.3, 6.5, 6.6, etc.)</span>
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">SUFFIX</span> <span class="o">=</span> <span class="s2">&quot;901&quot;</span>                    <span class="c1"># Notebook identifier for project folder</span>
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># AORC Settings</span>
@@ -5598,42 +5601,30 @@
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">NUM_CORES</span> <span class="o">=</span> <span class="mi">2</span>  <span class="c1"># Cores per HEC-RAS instance</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">MAX_WORKERS</span> <span class="o">=</span> <span class="mi">3</span>  <span class="c1"># Parallel worker processes</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Extract base example project (unique suffix avoids collisions with notebook 900)</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Extract base example project</span>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">base_project</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="n">SUFFIX</span><span class="p">)</span>
 </span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Base project extracted to: </span><span class="si">{</span><span class="n">base_project</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c1"># Clean up only THIS notebook&#39;s AORC folders (not 900&#39;s)</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Cleaning up existing 901 AORC folders...&quot;</span><span class="p">)</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="n">existing_folders</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">base_project</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;BaldEagleCrkMulti2D_AORC_*_</span><span class="si">{</span><span class="n">SUFFIX</span><span class="si">}</span><span class="s2">*&quot;</span><span class="p">))</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="k">for</span> <span class="n">folder</span> <span class="ow">in</span> <span class="n">existing_folders</span><span class="p">:</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>    <span class="k">if</span> <span class="n">folder</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>        <span class="k">try</span><span class="p">:</span>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>            <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span>
-</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Removed: </span><span class="si">{</span><span class="n">folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>        <span class="k">except</span> <span class="ne">PermissionError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Skipped (locked): </span><span class="si">{</span><span class="n">folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Cleaned </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">existing_folders</span><span class="p">)</span><span class="si">}</span><span class="s2"> existing folders&quot;</span><span class="p">)</span>
-</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>
-</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="c1"># Create labeled working copy (SUFFIX ensures uniqueness vs notebook 900)</span>
-</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="n">working_folder</span> <span class="o">=</span> <span class="n">base_project</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;BaldEagleCrkMulti2D_AORC_</span><span class="si">{</span><span class="n">YEAR</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="k">if</span> <span class="n">working_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>    <span class="k">try</span><span class="p">:</span>
-</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a>        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">working_folder</span><span class="p">)</span>
-</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a>    <span class="k">except</span> <span class="ne">PermissionError</span><span class="p">:</span>
-</span><span id="__span-4-29"><a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a>        <span class="c1"># If locked, create with a timestamp suffix</span>
-</span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>        <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-</span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>        <span class="n">ts</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">())</span> <span class="o">%</span> <span class="mi">10000</span>
-</span><span id="__span-4-32"><a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a>        <span class="n">working_folder</span> <span class="o">=</span> <span class="n">base_project</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;BaldEagleCrkMulti2D_AORC_</span><span class="si">{</span><span class="n">YEAR</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">SUFFIX</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">ts</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="__span-4-33"><a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Using timestamped folder to avoid lock: </span><span class="si">{</span><span class="n">working_folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-4-34"><a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a>
-</span><span id="__span-4-35"><a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Creating working copy: </span><span class="si">{</span><span class="n">working_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-4-36"><a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a><span class="n">shutil</span><span class="o">.</span><span class="n">copytree</span><span class="p">(</span><span class="n">base_project</span><span class="p">,</span> <span class="n">working_folder</span><span class="p">)</span>
-</span><span id="__span-4-37"><a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a>
-</span><span id="__span-4-38"><a id="__codelineno-4-38" name="__codelineno-4-38" href="#__codelineno-4-38"></a><span class="c1"># Initialize project</span>
-</span><span id="__span-4-39"><a id="__codelineno-4-39" name="__codelineno-4-39" href="#__codelineno-4-39"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">working_folder</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
-</span><span id="__span-4-40"><a id="__codelineno-4-40" name="__codelineno-4-40" href="#__codelineno-4-40"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-4-41"><a id="__codelineno-4-41" name="__codelineno-4-41" href="#__codelineno-4-41"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Location: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-4-42"><a id="__codelineno-4-42" name="__codelineno-4-42" href="#__codelineno-4-42"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plans: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c1"># Clean up any existing AORC folders (for repeatability)</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Cleaning up existing AORC folders...&quot;</span><span class="p">)</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="n">aorc_pattern</span> <span class="o">=</span> <span class="n">base_project</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">&quot;BaldEagleCrkMulti2D_AORC_*&quot;</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="n">existing_folders</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">base_project</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;BaldEagleCrkMulti2D_AORC_*&quot;</span><span class="p">))</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="k">for</span> <span class="n">folder</span> <span class="ow">in</span> <span class="n">existing_folders</span><span class="p">:</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    <span class="k">if</span> <span class="n">folder</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Removing: </span><span class="si">{</span><span class="n">folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span>
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Removed </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">existing_folders</span><span class="p">)</span><span class="si">}</span><span class="s2"> existing folders&quot;</span><span class="p">)</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="c1"># Create labeled working copy (include SUFFIX for concurrent testing)</span>
+</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="n">working_folder</span> <span class="o">=</span> <span class="n">base_project</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;BaldEagleCrkMulti2D_AORC_</span><span class="si">{</span><span class="n">YEAR</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Creating working copy: </span><span class="si">{</span><span class="n">working_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="n">shutil</span><span class="o">.</span><span class="n">copytree</span><span class="p">(</span><span class="n">base_project</span><span class="p">,</span> <span class="n">working_folder</span><span class="p">)</span>
+</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="c1"># Initialize project</span>
+</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="n">ras</span> <span class="o">=</span> <span class="n">init_ras_project</span><span class="p">(</span><span class="n">working_folder</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
+</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-4-29"><a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Location: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plans: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="step-2-get-project-bounds-from-geometry-hdf">Step 2: Get Project Bounds from Geometry HDF<a class="headerlink" href="#step-2-get-project-bounds-from-geometry-hdf" title="Permanent link">&para;</a></h2>
 <p>Use <code>HdfProject.get_project_bounds_latlon()</code> to extract proper bounds with buffering.
@@ -5667,6 +5658,39 @@ This handles CRS transformation and ensures precipitation coverage.</p>
 </span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  North: </span><span class="si">{</span><span class="n">north</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Size:  </span><span class="si">{</span><span class="n">east</span><span class="o">-</span><span class="n">west</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> x </span><span class="si">{</span><span class="n">north</span><span class="o">-</span><span class="n">south</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> degrees&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-17 22:05:09 - ras_commander.hdf.HdfProject - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.g09.hdf
+2025-12-17 22:05:09 - ras_commander.hdf.HdfProject - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.g09.hdf
+2025-12-17 22:05:09 - ras_commander.hdf.HdfProject - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.g09.hdf
+2025-12-17 22:05:09 - ras_commander.hdf.HdfProject - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.g09.hdf
+2025-12-17 22:05:09 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.g09.hdf
+2025-12-17 22:05:09 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.g09.hdf
+2025-12-17 22:05:09 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.g09.hdf
+2025-12-17 22:05:09 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.g09.hdf
+2025-12-17 22:05:09 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.g09.hdf
+2025-12-17 22:05:09 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.g09.hdf
+2025-12-17 22:05:09 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.g09.hdf
+2025-12-17 22:05:09 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.g09.hdf
+2025-12-17 22:05:09 - ras_commander.hdf.HdfProject - INFO - Found 1 2D flow areas
+2025-12-17 22:05:09 - ras_commander.hdf.HdfXsec - ERROR - Error processing cross-section data: &quot;Unable to synchronously open object (object &#39;Polyline Info&#39; doesn&#39;t exist)&quot;
+2025-12-17 22:05:09 - ras_commander.hdf.HdfXsec - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.g09.hdf
+2025-12-17 22:05:09 - ras_commander.hdf.HdfXsec - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.g09.hdf
+2025-12-17 22:05:09 - ras_commander.hdf.HdfXsec - WARNING - No river centerlines found in geometry file
+2025-12-17 22:05:09 - ras_commander.hdf.HdfProject - INFO - Original extent: (1965981.77, 289578.11, 2084790.14, 371007.58)
+2025-12-17 22:05:09 - ras_commander.hdf.HdfProject - INFO - Buffered extent (50.0% x, 50.0% y): (1936279.68, 269220.75, 2114492.23, 391364.95)
+2025-12-17 22:05:09 - ras_commander.hdf.HdfProject - INFO - WGS84 bounds: W=-77.867158, S=40.904353, E=-77.219156, N=41.240758
+
+
+Template plan 06 uses geometry: g09
+Geometry HDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.g09.hdf
+Exists: True
+
+Project Bounds (WGS84 with 50% buffer):
+  West:  -77.8672
+  South: 40.9044
+  East:  -77.2192
+  North: 41.2408
+  Size:  0.6480 x 0.3364 degrees
+</code></pre></div>
 <h2 id="step-3-generate-storm-catalog">Step 3: Generate Storm Catalog<a class="headerlink" href="#step-3-generate-storm-catalog" title="Permanent link">&para;</a></h2>
 <p>Analyze AORC data to identify all significant precipitation events for the year.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Generate storm catalog</span>
@@ -5683,6 +5707,36 @@ This handles CRS transformation and ensures precipitation coverage.</p>
 </span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="nb">print</span><span class="p">(</span><span class="n">storm_catalog</span><span class="p">[[</span><span class="s1">&#39;storm_id&#39;</span><span class="p">,</span> <span class="s1">&#39;start_time&#39;</span><span class="p">,</span> <span class="s1">&#39;end_time&#39;</span><span class="p">,</span> <span class="s1">&#39;total_depth_in&#39;</span><span class="p">,</span> 
 </span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>                     <span class="s1">&#39;peak_intensity_in_hr&#39;</span><span class="p">,</span> <span class="s1">&#39;duration_hours&#39;</span><span class="p">,</span> <span class="s1">&#39;rank&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">to_string</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-17 22:05:10 - ras_commander.precip.PrecipAorc - INFO - Generating storm catalog for 2020
+2025-12-17 22:05:10 - ras_commander.precip.PrecipAorc - INFO -   Bounds: W=-77.8672, S=40.9044, E=-77.2192, N=41.2408
+2025-12-17 22:05:10 - ras_commander.precip.PrecipAorc - INFO -   Parameters: inter_event=8.0h, min_depth=0.75in, buffer=48h
+2025-12-17 22:05:10 - ras_commander.precip.PrecipAorc - INFO - Connecting to AWS S3...
+2025-12-17 22:05:10 - ras_commander.precip.PrecipAorc - INFO - Loading s3://noaa-nws-aorc-v1-1-1km/2020.zarr...
+2025-12-17 22:05:11 - ras_commander.precip.PrecipAorc - INFO - Loading spatial subset...
+2025-12-17 22:05:12 - ras_commander.precip.PrecipAorc - INFO - Loaded 8784 hourly timesteps
+2025-12-17 22:05:12 - ras_commander.precip.PrecipAorc - INFO - Identified 137 raw events
+2025-12-17 22:05:12 - ras_commander.precip.PrecipAorc - INFO - Storm catalog complete: 12 storms
+2025-12-17 22:05:12 - ras_commander.precip.PrecipAorc - INFO -   Total depth range: 0.76 - 2.72 inches
+2025-12-17 22:05:12 - ras_commander.precip.PrecipAorc - INFO -   Largest storm: 2020-12-24 12:00:00 (2.72 in)
+
+
+
+Storm Catalog: 12 events for 2020
+==========================================================================================
+ storm_id          start_time            end_time  total_depth_in  peak_intensity_in_hr  duration_hours  rank
+        1 2020-02-07 09:00:00 2020-02-07 17:00:00           1.023                 0.287               9     9
+        2 2020-03-19 01:00:00 2020-03-19 10:00:00           0.763                 0.209              10    12
+        3 2020-03-28 08:00:00 2020-03-29 11:00:00           1.530                 0.156              28     6
+        4 2020-04-17 17:00:00 2020-04-18 08:00:00           0.777                 0.093              16    11
+        5 2020-04-30 04:00:00 2020-05-01 00:00:00           2.115                 0.203              21     2
+        6 2020-05-28 12:00:00 2020-05-30 01:00:00           1.188                 0.284              38     8
+        7 2020-06-03 06:00:00 2020-06-03 22:00:00           0.846                 0.360              17    10
+        8 2020-09-29 11:00:00 2020-09-30 08:00:00           1.278                 0.177              22     7
+        9 2020-10-29 07:00:00 2020-10-30 18:00:00           1.735                 0.127              36     5
+       10 2020-11-11 12:00:00 2020-11-11 22:00:00           1.989                 0.448              11     3
+       11 2020-12-16 17:00:00 2020-12-17 09:00:00           1.834                 0.174              17     4
+       12 2020-12-24 12:00:00 2020-12-25 12:00:00           2.720                 0.202              25     1
+</code></pre></div>
 <h2 id="step-4-download-aorc-data-and-export-precipitation-records">Step 4: Download AORC Data and Export Precipitation Records<a class="headerlink" href="#step-4-download-aorc-data-and-export-precipitation-records" title="Permanent link">&para;</a></h2>
 <p>Download precipitation data, export storm catalog CSV, and generate hyetograph plots for documentation.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Create precipitation folder structure</span>
@@ -5723,6 +5777,219 @@ This handles CRS transformation and ensures precipitation coverage.</p>
 </span><span id="__span-7-36"><a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a>
 </span><span id="__span-7-37"><a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Downloaded </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">precip_files</span><span class="p">)</span><span class="si">}</span><span class="s2"> precipitation files to </span><span class="si">{</span><span class="n">precip_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-17 22:05:12 - ras_commander.precip.PrecipAorc - INFO - Downloading AORC data:
+2025-12-17 22:05:12 - ras_commander.precip.PrecipAorc - INFO -   Bounds: W=-77.8672, S=40.9044, E=-77.2192, N=41.2408
+2025-12-17 22:05:12 - ras_commander.precip.PrecipAorc - INFO -   Time range: 2020-02-05 09:00:00 to 2020-02-09 17:00:00
+2025-12-17 22:05:12 - ras_commander.precip.PrecipAorc - INFO -   Variable: APCP_surface
+2025-12-17 22:05:12 - ras_commander.precip.PrecipAorc - INFO - Connecting to AWS S3...
+2025-12-17 22:05:12 - ras_commander.precip.PrecipAorc - INFO -   Loading year 2020 from s3://noaa-nws-aorc-v1-1-1km/2020.zarr
+
+
+Storm catalog exported to: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_catalog.csv
+
+Downloading AORC precipitation data for 12 storms...
+======================================================================
+  Storm  1: Feb 07 - Downloading...
+
+
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO -     Loaded Frozen({&#39;time&#39;: 120, &#39;latitude&#39;: 40, &#39;longitude&#39;: 77})
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO - Combining datasets...
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO - Reprojecting to EPSG:5070 at 2000.0m resolution...
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO - Reprojected grid shape: (120, 24, 30)
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO - Writing to NetCDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200207.nc
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO - Download complete: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200207.nc (0.2 MB)
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO - Downloading AORC data:
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO -   Bounds: W=-77.8672, S=40.9044, E=-77.2192, N=41.2408
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO -   Time range: 2020-03-17 01:00:00 to 2020-03-21 10:00:00
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO -   Variable: APCP_surface
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO - Connecting to AWS S3...
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO -   Loading year 2020 from s3://noaa-nws-aorc-v1-1-1km/2020.zarr
+
+
+  Storm  2: Mar 19 - Downloading...
+
+
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO -     Loaded Frozen({&#39;time&#39;: 120, &#39;latitude&#39;: 40, &#39;longitude&#39;: 77})
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO - Combining datasets...
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO - Reprojecting to EPSG:5070 at 2000.0m resolution...
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO - Reprojected grid shape: (120, 24, 30)
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO - Writing to NetCDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200319.nc
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO - Download complete: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200319.nc (0.2 MB)
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO - Downloading AORC data:
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO -   Bounds: W=-77.8672, S=40.9044, E=-77.2192, N=41.2408
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO -   Time range: 2020-03-26 08:00:00 to 2020-03-31 11:00:00
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO -   Variable: APCP_surface
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO - Connecting to AWS S3...
+2025-12-17 22:05:13 - ras_commander.precip.PrecipAorc - INFO -   Loading year 2020 from s3://noaa-nws-aorc-v1-1-1km/2020.zarr
+
+
+  Storm  3: Mar 28 - Downloading...
+
+
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO -     Loaded Frozen({&#39;time&#39;: 144, &#39;latitude&#39;: 40, &#39;longitude&#39;: 77})
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO - Combining datasets...
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO - Reprojecting to EPSG:5070 at 2000.0m resolution...
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO - Reprojected grid shape: (144, 24, 30)
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO - Writing to NetCDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200328.nc
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO - Download complete: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200328.nc (0.2 MB)
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO - Downloading AORC data:
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO -   Bounds: W=-77.8672, S=40.9044, E=-77.2192, N=41.2408
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO -   Time range: 2020-04-15 17:00:00 to 2020-04-20 08:00:00
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO -   Variable: APCP_surface
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO - Connecting to AWS S3...
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO -   Loading year 2020 from s3://noaa-nws-aorc-v1-1-1km/2020.zarr
+
+
+  Storm  4: Apr 17 - Downloading...
+
+
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO -     Loaded Frozen({&#39;time&#39;: 144, &#39;latitude&#39;: 40, &#39;longitude&#39;: 77})
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO - Combining datasets...
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO - Reprojecting to EPSG:5070 at 2000.0m resolution...
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO - Reprojected grid shape: (144, 24, 30)
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO - Writing to NetCDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200417.nc
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO - Download complete: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200417.nc (0.2 MB)
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO - Downloading AORC data:
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO -   Bounds: W=-77.8672, S=40.9044, E=-77.2192, N=41.2408
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO -   Time range: 2020-04-28 04:00:00 to 2020-05-03 00:00:00
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO -   Variable: APCP_surface
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO - Connecting to AWS S3...
+2025-12-17 22:05:14 - ras_commander.precip.PrecipAorc - INFO -   Loading year 2020 from s3://noaa-nws-aorc-v1-1-1km/2020.zarr
+
+
+  Storm  5: Apr 30 - Downloading...
+
+
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -     Loaded Frozen({&#39;time&#39;: 144, &#39;latitude&#39;: 40, &#39;longitude&#39;: 77})
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Combining datasets...
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Reprojecting to EPSG:5070 at 2000.0m resolution...
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Reprojected grid shape: (144, 24, 30)
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Writing to NetCDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200430.nc
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Download complete: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200430.nc (0.2 MB)
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Downloading AORC data:
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -   Bounds: W=-77.8672, S=40.9044, E=-77.2192, N=41.2408
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -   Time range: 2020-05-26 12:00:00 to 2020-06-01 01:00:00
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -   Variable: APCP_surface
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Connecting to AWS S3...
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -   Loading year 2020 from s3://noaa-nws-aorc-v1-1-1km/2020.zarr
+
+
+  Storm  6: May 28 - Downloading...
+
+
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -     Loaded Frozen({&#39;time&#39;: 168, &#39;latitude&#39;: 40, &#39;longitude&#39;: 77})
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Combining datasets...
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Reprojecting to EPSG:5070 at 2000.0m resolution...
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Reprojected grid shape: (168, 24, 30)
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Writing to NetCDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200528.nc
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Download complete: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200528.nc (0.3 MB)
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Downloading AORC data:
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -   Bounds: W=-77.8672, S=40.9044, E=-77.2192, N=41.2408
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -   Time range: 2020-06-01 06:00:00 to 2020-06-05 22:00:00
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -   Variable: APCP_surface
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Connecting to AWS S3...
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -   Loading year 2020 from s3://noaa-nws-aorc-v1-1-1km/2020.zarr
+
+
+  Storm  7: Jun 03 - Downloading...
+
+
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -     Loaded Frozen({&#39;time&#39;: 120, &#39;latitude&#39;: 40, &#39;longitude&#39;: 77})
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Combining datasets...
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Reprojecting to EPSG:5070 at 2000.0m resolution...
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Reprojected grid shape: (120, 24, 30)
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Writing to NetCDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200603.nc
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Download complete: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200603.nc (0.2 MB)
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Downloading AORC data:
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -   Bounds: W=-77.8672, S=40.9044, E=-77.2192, N=41.2408
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -   Time range: 2020-09-27 11:00:00 to 2020-10-02 08:00:00
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -   Variable: APCP_surface
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO - Connecting to AWS S3...
+2025-12-17 22:05:15 - ras_commander.precip.PrecipAorc - INFO -   Loading year 2020 from s3://noaa-nws-aorc-v1-1-1km/2020.zarr
+
+
+  Storm  8: Sep 29 - Downloading...
+
+
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO -     Loaded Frozen({&#39;time&#39;: 144, &#39;latitude&#39;: 40, &#39;longitude&#39;: 77})
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO - Combining datasets...
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO - Reprojecting to EPSG:5070 at 2000.0m resolution...
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO - Reprojected grid shape: (144, 24, 30)
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO - Writing to NetCDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200929.nc
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO - Download complete: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20200929.nc (0.2 MB)
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO - Downloading AORC data:
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO -   Bounds: W=-77.8672, S=40.9044, E=-77.2192, N=41.2408
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO -   Time range: 2020-10-27 07:00:00 to 2020-11-01 18:00:00
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO -   Variable: APCP_surface
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO - Connecting to AWS S3...
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO -   Loading year 2020 from s3://noaa-nws-aorc-v1-1-1km/2020.zarr
+
+
+  Storm  9: Oct 29 - Downloading...
+
+
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO -     Loaded Frozen({&#39;time&#39;: 144, &#39;latitude&#39;: 40, &#39;longitude&#39;: 77})
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO - Combining datasets...
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO - Reprojecting to EPSG:5070 at 2000.0m resolution...
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO - Reprojected grid shape: (144, 24, 30)
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO - Writing to NetCDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20201029.nc
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO - Download complete: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20201029.nc (0.2 MB)
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO - Downloading AORC data:
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO -   Bounds: W=-77.8672, S=40.9044, E=-77.2192, N=41.2408
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO -   Time range: 2020-11-09 12:00:00 to 2020-11-13 22:00:00
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO -   Variable: APCP_surface
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO - Connecting to AWS S3...
+2025-12-17 22:05:16 - ras_commander.precip.PrecipAorc - INFO -   Loading year 2020 from s3://noaa-nws-aorc-v1-1-1km/2020.zarr
+
+
+  Storm 10: Nov 11 - Downloading...
+
+
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO -     Loaded Frozen({&#39;time&#39;: 120, &#39;latitude&#39;: 40, &#39;longitude&#39;: 77})
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Combining datasets...
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Reprojecting to EPSG:5070 at 2000.0m resolution...
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Reprojected grid shape: (120, 24, 30)
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Writing to NetCDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20201111.nc
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Download complete: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20201111.nc (0.2 MB)
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Downloading AORC data:
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO -   Bounds: W=-77.8672, S=40.9044, E=-77.2192, N=41.2408
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO -   Time range: 2020-12-14 17:00:00 to 2020-12-19 09:00:00
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO -   Variable: APCP_surface
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Connecting to AWS S3...
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO -   Loading year 2020 from s3://noaa-nws-aorc-v1-1-1km/2020.zarr
+
+
+  Storm 11: Dec 16 - Downloading...
+
+
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO -     Loaded Frozen({&#39;time&#39;: 144, &#39;latitude&#39;: 40, &#39;longitude&#39;: 77})
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Combining datasets...
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Reprojecting to EPSG:5070 at 2000.0m resolution...
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Reprojected grid shape: (144, 24, 30)
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Writing to NetCDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20201216.nc
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Download complete: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20201216.nc (0.2 MB)
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Downloading AORC data:
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO -   Bounds: W=-77.8672, S=40.9044, E=-77.2192, N=41.2408
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO -   Time range: 2020-12-22 12:00:00 to 2020-12-27 12:00:00
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO -   Variable: APCP_surface
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Connecting to AWS S3...
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO -   Loading year 2020 from s3://noaa-nws-aorc-v1-1-1km/2020.zarr
+
+
+  Storm 12: Dec 24 - Downloading...
+
+
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO -     Loaded Frozen({&#39;time&#39;: 144, &#39;latitude&#39;: 40, &#39;longitude&#39;: 77})
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Combining datasets...
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Reprojecting to EPSG:5070 at 2000.0m resolution...
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Reprojected grid shape: (144, 24, 30)
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Writing to NetCDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20201224.nc
+2025-12-17 22:05:17 - ras_commander.precip.PrecipAorc - INFO - Download complete: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_20201224.nc (0.2 MB)
+
+
+
+Downloaded 12 precipitation files to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Generate and save individual hyetograph plots for each storm</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generating hyetograph plots for </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">storm_catalog</span><span class="p">)</span><span class="si">}</span><span class="s2"> storms...&quot;</span><span class="p">)</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">70</span><span class="p">)</span>
@@ -5771,6 +6038,23 @@ This handles CRS transformation and ensures precipitation coverage.</p>
 </span><span id="__span-8-46"><a id="__codelineno-8-46" name="__codelineno-8-46" href="#__codelineno-8-46"></a>
 </span><span id="__span-8-47"><a id="__codelineno-8-47" name="__codelineno-8-47" href="#__codelineno-8-47"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Hyetographs saved to: </span><span class="si">{</span><span class="n">hyetograph_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Generating hyetograph plots for 12 storms...
+======================================================================
+  Storm  1: Feb 07 - Saved to storm_20200207_hyetograph.png
+  Storm  2: Mar 19 - Saved to storm_20200319_hyetograph.png
+  Storm  3: Mar 28 - Saved to storm_20200328_hyetograph.png
+  Storm  4: Apr 17 - Saved to storm_20200417_hyetograph.png
+  Storm  5: Apr 30 - Saved to storm_20200430_hyetograph.png
+  Storm  6: May 28 - Saved to storm_20200528_hyetograph.png
+  Storm  7: Jun 03 - Saved to storm_20200603_hyetograph.png
+  Storm  8: Sep 29 - Saved to storm_20200929_hyetograph.png
+  Storm  9: Oct 29 - Saved to storm_20201029_hyetograph.png
+  Storm 10: Nov 11 - Saved to storm_20201111_hyetograph.png
+  Storm 11: Dec 16 - Saved to storm_20201216_hyetograph.png
+  Storm 12: Dec 24 - Saved to storm_20201224_hyetograph.png
+
+Hyetographs saved to: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\hyetographs
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Create storm catalog summary plot</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
@@ -5823,6 +6107,9 @@ This handles CRS transformation and ensures precipitation coverage.</p>
 </span><span id="__span-9-50"><a id="__codelineno-9-50" name="__codelineno-9-50" href="#__codelineno-9-50"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Summary plot saved to: </span><span class="si">{</span><span class="n">summary_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-9-51"><a id="__codelineno-9-51" name="__codelineno-9-51" href="#__codelineno-9-51"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Summary plot saved to: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation\storm_catalog_summary.png
+</code></pre></div>
+<p><img alt="png" src="../901_aorc_precipitation_catalog_files/901_aorc_precipitation_catalog_15_1.png" /></p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Create storm plans with precipitation data written to HDF</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Creating HEC-RAS plans for </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">storm_catalog</span><span class="p">)</span><span class="si">}</span><span class="s2"> storms...&quot;</span><span class="p">)</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">70</span><span class="p">)</span>
@@ -5846,6 +6133,312 @@ This handles CRS transformation and ensures precipitation coverage.</p>
 </span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">get_plan_entries</span><span class="p">()</span>
 </span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Total plans in project: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-17 22:05:23 - ras_commander.precip.PrecipAorc - INFO - Creating storm plans from template plan 06 (unsteady 03)
+2025-12-17 22:05:23 - ras_commander.precip.PrecipAorc - INFO -   Precipitation folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation
+2025-12-17 22:05:23 - ras_commander.precip.PrecipAorc - INFO -   Processing 12 storms
+2025-12-17 22:05:23 - ras_commander.precip.PrecipAorc - INFO - Storm 1: 2020-02-07 (1.02 in)
+2025-12-17 22:05:23 - ras_commander.precip.PrecipAorc - INFO -   Cloning unsteady file...
+2025-12-17 22:05:23 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u03 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u04
+2025-12-17 22:05:23 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u04
+2025-12-17 22:05:23 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 04
+2025-12-17 22:05:23 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:23 - ras_commander.precip.PrecipAorc - INFO -   Configuring gridded precipitation...
+2025-12-17 22:05:23 - ras_commander.RasUnsteady - INFO - Configuring gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u04
+2025-12-17 22:05:23 - ras_commander.RasUnsteady - INFO -   NetCDF file: .\Precipitation\storm_20200207.nc
+2025-12-17 22:05:23 - ras_commander.RasUnsteady - INFO -   Interpolation: Bilinear
+2025-12-17 22:05:23 - ras_commander.RasUnsteady - INFO - Successfully configured gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u04
+2025-12-17 22:05:23 - ras_commander.RasUnsteady - INFO - Updating precipitation in HDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u04.hdf
+2025-12-17 22:05:23 - ras_commander.RasUnsteady - INFO -   NetCDF: 120 timesteps, 24x30 grid
+2025-12-17 22:05:23 - ras_commander.RasUnsteady - INFO -   Imported 120 timesteps, 720 cells (cumulative)
+2025-12-17 22:05:23 - ras_commander.RasUnsteady - INFO -   Precip range: 0.0 - 41.2 mm
+2025-12-17 22:05:23 - ras_commander.precip.PrecipAorc - INFO -   Cloning plan file...
+2025-12-17 22:05:23 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p07
+2025-12-17 22:05:23 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p07
+2025-12-17 22:05:23 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 07
+
+
+Creating HEC-RAS plans for 12 storms...
+======================================================================
+
+
+2025-12-17 22:05:23 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:24 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p07
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Enabled HDF time series output
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Created plan 07 with unsteady 04
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO - Storm 2: 2020-03-19 (0.76 in)
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Cloning unsteady file...
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u03 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u05
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u05
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 05
+2025-12-17 22:05:24 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Configuring gridded precipitation...
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO - Configuring gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u05
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   NetCDF file: .\Precipitation\storm_20200319.nc
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   Interpolation: Bilinear
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO - Successfully configured gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u05
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO - Updating precipitation in HDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u05.hdf
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   NetCDF: 120 timesteps, 24x30 grid
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   Imported 120 timesteps, 720 cells (cumulative)
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   Precip range: 0.0 - 45.9 mm
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Cloning plan file...
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p08
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p08
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 08
+2025-12-17 22:05:24 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:24 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p08
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Enabled HDF time series output
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Created plan 08 with unsteady 05
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO - Storm 3: 2020-03-28 (1.53 in)
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Cloning unsteady file...
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u03 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u06
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u06
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 06
+2025-12-17 22:05:24 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Configuring gridded precipitation...
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO - Configuring gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u06
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   NetCDF file: .\Precipitation\storm_20200328.nc
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   Interpolation: Bilinear
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO - Successfully configured gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u06
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO - Updating precipitation in HDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u06.hdf
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   NetCDF: 144 timesteps, 24x30 grid
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   Imported 144 timesteps, 720 cells (cumulative)
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   Precip range: 0.0 - 62.8 mm
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Cloning plan file...
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p09
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p09
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 09
+2025-12-17 22:05:24 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:24 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p09
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Enabled HDF time series output
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Created plan 09 with unsteady 06
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO - Storm 4: 2020-04-17 (0.78 in)
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Cloning unsteady file...
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u03 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u14
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u14
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 14
+2025-12-17 22:05:24 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Configuring gridded precipitation...
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO - Configuring gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u14
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   NetCDF file: .\Precipitation\storm_20200417.nc
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   Interpolation: Bilinear
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO - Successfully configured gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u14
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO - Updating precipitation in HDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u14.hdf
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   NetCDF: 144 timesteps, 24x30 grid
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   Imported 144 timesteps, 720 cells (cumulative)
+2025-12-17 22:05:24 - ras_commander.RasUnsteady - INFO -   Precip range: 0.0 - 30.2 mm
+2025-12-17 22:05:24 - ras_commander.precip.PrecipAorc - INFO -   Cloning plan file...
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p10
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p10
+2025-12-17 22:05:24 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 10
+2025-12-17 22:05:24 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:24 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p10
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Enabled HDF time series output
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Created plan 10 with unsteady 14
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO - Storm 5: 2020-04-30 (2.12 in)
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Cloning unsteady file...
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u03 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u15
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u15
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 15
+2025-12-17 22:05:25 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Configuring gridded precipitation...
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO - Configuring gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u15
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   NetCDF file: .\Precipitation\storm_20200430.nc
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   Interpolation: Bilinear
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO - Successfully configured gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u15
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO - Updating precipitation in HDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u15.hdf
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   NetCDF: 144 timesteps, 24x30 grid
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   Imported 144 timesteps, 720 cells (cumulative)
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   Precip range: 0.0 - 69.2 mm
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Cloning plan file...
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p11
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p11
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 11
+2025-12-17 22:05:25 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:25 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p11
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Enabled HDF time series output
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Created plan 11 with unsteady 15
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO - Storm 6: 2020-05-28 (1.19 in)
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Cloning unsteady file...
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u03 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u16
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u16
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 16
+2025-12-17 22:05:25 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Configuring gridded precipitation...
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO - Configuring gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u16
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   NetCDF file: .\Precipitation\storm_20200528.nc
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   Interpolation: Bilinear
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO - Successfully configured gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u16
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO - Updating precipitation in HDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u16.hdf
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   NetCDF: 168 timesteps, 24x30 grid
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   Imported 168 timesteps, 720 cells (cumulative)
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   Precip range: 0.0 - 61.2 mm
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Cloning plan file...
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p12
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p12
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 12
+2025-12-17 22:05:25 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:25 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p12
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Enabled HDF time series output
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Created plan 12 with unsteady 16
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO - Storm 7: 2020-06-03 (0.85 in)
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Cloning unsteady file...
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u03 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u17
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u17
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 17
+2025-12-17 22:05:25 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Configuring gridded precipitation...
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO - Configuring gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u17
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   NetCDF file: .\Precipitation\storm_20200603.nc
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   Interpolation: Bilinear
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO - Successfully configured gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u17
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO - Updating precipitation in HDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u17.hdf
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   NetCDF: 120 timesteps, 24x30 grid
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   Imported 120 timesteps, 720 cells (cumulative)
+2025-12-17 22:05:25 - ras_commander.RasUnsteady - INFO -   Precip range: 0.0 - 47.1 mm
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Cloning plan file...
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p14
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p14
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 14
+2025-12-17 22:05:25 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:25 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p14
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Enabled HDF time series output
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Created plan 14 with unsteady 17
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO - Storm 8: 2020-09-29 (1.28 in)
+2025-12-17 22:05:25 - ras_commander.precip.PrecipAorc - INFO -   Cloning unsteady file...
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u03 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u18
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u18
+2025-12-17 22:05:25 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 18
+2025-12-17 22:05:26 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:26 - ras_commander.precip.PrecipAorc - INFO -   Configuring gridded precipitation...
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO - Configuring gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u18
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   NetCDF file: .\Precipitation\storm_20200929.nc
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   Interpolation: Bilinear
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO - Successfully configured gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u18
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO - Updating precipitation in HDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u18.hdf
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   NetCDF: 144 timesteps, 24x30 grid
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   Imported 144 timesteps, 720 cells (cumulative)
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   Precip range: 0.0 - 39.5 mm
+2025-12-17 22:05:26 - ras_commander.precip.PrecipAorc - INFO -   Cloning plan file...
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p16
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p16
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 16
+2025-12-17 22:05:26 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:26 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p16
+2025-12-17 22:05:26 - ras_commander.precip.PrecipAorc - INFO -   Enabled HDF time series output
+2025-12-17 22:05:26 - ras_commander.precip.PrecipAorc - INFO -   Created plan 16 with unsteady 18
+2025-12-17 22:05:26 - ras_commander.precip.PrecipAorc - INFO - Storm 9: 2020-10-29 (1.74 in)
+2025-12-17 22:05:26 - ras_commander.precip.PrecipAorc - INFO -   Cloning unsteady file...
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u03 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u19
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u19
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 19
+2025-12-17 22:05:26 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:26 - ras_commander.precip.PrecipAorc - INFO -   Configuring gridded precipitation...
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO - Configuring gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u19
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   NetCDF file: .\Precipitation\storm_20201029.nc
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   Interpolation: Bilinear
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO - Successfully configured gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u19
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO - Updating precipitation in HDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u19.hdf
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   NetCDF: 144 timesteps, 24x30 grid
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   Imported 144 timesteps, 720 cells (cumulative)
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   Precip range: 0.0 - 60.8 mm
+2025-12-17 22:05:26 - ras_commander.precip.PrecipAorc - INFO -   Cloning plan file...
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p20
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p20
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 20
+2025-12-17 22:05:26 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:26 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p20
+2025-12-17 22:05:26 - ras_commander.precip.PrecipAorc - INFO -   Enabled HDF time series output
+2025-12-17 22:05:26 - ras_commander.precip.PrecipAorc - INFO -   Created plan 20 with unsteady 19
+2025-12-17 22:05:26 - ras_commander.precip.PrecipAorc - INFO - Storm 10: 2020-11-11 (1.99 in)
+2025-12-17 22:05:26 - ras_commander.precip.PrecipAorc - INFO -   Cloning unsteady file...
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u03 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u20
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u20
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 20
+2025-12-17 22:05:26 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:26 - ras_commander.precip.PrecipAorc - INFO -   Configuring gridded precipitation...
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO - Configuring gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u20
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   NetCDF file: .\Precipitation\storm_20201111.nc
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   Interpolation: Bilinear
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO - Successfully configured gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u20
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO - Updating precipitation in HDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u20.hdf
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   NetCDF: 120 timesteps, 24x30 grid
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   Imported 120 timesteps, 720 cells (cumulative)
+2025-12-17 22:05:26 - ras_commander.RasUnsteady - INFO -   Precip range: 0.0 - 77.9 mm
+2025-12-17 22:05:26 - ras_commander.precip.PrecipAorc - INFO -   Cloning plan file...
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p21
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p21
+2025-12-17 22:05:26 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 21
+2025-12-17 22:05:26 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:26 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p21
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO -   Enabled HDF time series output
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO -   Created plan 21 with unsteady 20
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO - Storm 11: 2020-12-16 (1.83 in)
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO -   Cloning unsteady file...
+2025-12-17 22:05:27 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u03 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u21
+2025-12-17 22:05:27 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u21
+2025-12-17 22:05:27 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 21
+2025-12-17 22:05:27 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO -   Configuring gridded precipitation...
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO - Configuring gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u21
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO -   NetCDF file: .\Precipitation\storm_20201216.nc
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO -   Interpolation: Bilinear
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO - Successfully configured gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u21
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO - Updating precipitation in HDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u21.hdf
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO -   NetCDF: 144 timesteps, 24x30 grid
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO -   Imported 144 timesteps, 720 cells (cumulative)
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO -   Precip range: 0.0 - 63.2 mm
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO -   Cloning plan file...
+2025-12-17 22:05:27 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p22
+2025-12-17 22:05:27 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p22
+2025-12-17 22:05:27 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 22
+2025-12-17 22:05:27 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:27 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p22
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO -   Enabled HDF time series output
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO -   Created plan 22 with unsteady 21
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO - Storm 12: 2020-12-24 (2.72 in)
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO -   Cloning unsteady file...
+2025-12-17 22:05:27 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u03 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u22
+2025-12-17 22:05:27 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u22
+2025-12-17 22:05:27 - ras_commander.RasUtils - INFO - Project file updated with new Unsteady entry: 22
+2025-12-17 22:05:27 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO -   Configuring gridded precipitation...
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO - Configuring gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u22
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO -   NetCDF file: .\Precipitation\storm_20201224.nc
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO -   Interpolation: Bilinear
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO - Successfully configured gridded precipitation in C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u22
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO - Updating precipitation in HDF: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.u22.hdf
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO -   NetCDF: 144 timesteps, 24x30 grid
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO -   Imported 144 timesteps, 720 cells (cumulative)
+2025-12-17 22:05:27 - ras_commander.RasUnsteady - INFO -   Precip range: 0.0 - 89.5 mm
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO -   Cloning plan file...
+2025-12-17 22:05:27 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p23
+2025-12-17 22:05:27 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p23
+2025-12-17 22:05:27 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 23
+2025-12-17 22:05:27 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:27 - ras_commander.RasPlan - INFO - Updated simulation date in plan file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\BaldEagleDamBrk.p23
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO -   Enabled HDF time series output
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO -   Created plan 23 with unsteady 22
+2025-12-17 22:05:27 - ras_commander.precip.PrecipAorc - INFO - Storm plan creation complete: 12/12 successful
+
+
+
+Plan Creation Results:
+ storm_id          start_time  total_depth_in plan_number  status
+        1 2020-02-07 09:00:00           1.023          07 success
+        2 2020-03-19 01:00:00           0.763          08 success
+        3 2020-03-28 08:00:00           1.530          09 success
+        4 2020-04-17 17:00:00           0.777          10 success
+        5 2020-04-30 04:00:00           2.115          11 success
+        6 2020-05-28 12:00:00           1.188          12 success
+        7 2020-06-03 06:00:00           0.846          14 success
+        8 2020-09-29 11:00:00           1.278          16 success
+        9 2020-10-29 07:00:00           1.735          20 success
+       10 2020-11-11 12:00:00           1.989          21 success
+       11 2020-12-16 17:00:00           1.834          22 success
+       12 2020-12-24 12:00:00           2.720          23 success
+
+Total plans in project: 23
+</code></pre></div>
 <h2 id="step-5-execute-storm-plans-in-parallel">Step 5: Execute Storm Plans in Parallel<a class="headerlink" href="#step-5-execute-storm-plans-in-parallel" title="Permanent link">&para;</a></h2>
 <p>Run all storm plans using parallel execution with 2 cores per instance and 3 workers.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Get list of storm plan numbers</span>
@@ -5854,6 +6447,10 @@ This handles CRS transformation and ensures precipitation coverage.</p>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Execution config: </span><span class="si">{</span><span class="n">NUM_CORES</span><span class="si">}</span><span class="s2"> cores x </span><span class="si">{</span><span class="n">MAX_WORKERS</span><span class="si">}</span><span class="s2"> workers&quot;</span><span class="p">)</span>
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">70</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Plans to execute: [&#39;07&#39;, &#39;08&#39;, &#39;09&#39;, &#39;10&#39;, &#39;11&#39;, &#39;12&#39;, &#39;14&#39;, &#39;16&#39;, &#39;20&#39;, &#39;21&#39;, &#39;22&#39;, &#39;23&#39;]
+Execution config: 2 cores x 3 workers
+======================================================================
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Execute plans in parallel</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
@@ -5879,6 +6476,152 @@ This handles CRS transformation and ensures precipitation coverage.</p>
 </span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Failed: </span><span class="si">{</span><span class="n">fail_count</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Results copied to: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span><span class="o">.</span><span class="n">parent</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">project_folder</span><span class="o">.</span><span class="n">name</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s1">&#39; [Computed]&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>2025-12-17 22:05:27 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;07&#39;, &#39;08&#39;, &#39;09&#39;, &#39;10&#39;, &#39;11&#39;, &#39;12&#39;, &#39;14&#39;, &#39;16&#39;, &#39;20&#39;, &#39;21&#39;, &#39;22&#39;, &#39;23&#39;]
+2025-12-17 22:05:27 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 3 based on the number of plans to compute: 12
+
+
+Starting parallel execution of 12 plans...
+
+
+2025-12-17 22:05:28 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]
+2025-12-17 22:05:28 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:28 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]
+2025-12-17 22:05:29 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:29 - ras_commander.RasCmdr - INFO - Created worker folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]
+2025-12-17 22:05:29 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.rasmap
+2025-12-17 22:05:29 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]
+2025-12-17 22:05:29 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]
+2025-12-17 22:05:29 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]
+2025-12-17 22:05:29 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.p07
+2025-12-17 22:05:29 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.p08
+2025-12-17 22:05:29 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.p07
+2025-12-17 22:05:29 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.p08
+2025-12-17 22:05:30 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.p09
+2025-12-17 22:05:30 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.p09
+2025-12-17 22:05:30 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 08
+2025-12-17 22:05:30 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-17 22:05:30 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 07
+2025-12-17 22:05:30 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-17 22:05:30 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.p08&quot;
+2025-12-17 22:05:30 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 09
+2025-12-17 22:05:30 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.p07&quot;
+2025-12-17 22:05:30 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-17 22:05:30 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.p09&quot;
+2025-12-17 22:18:46 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 07
+2025-12-17 22:18:46 - ras_commander.RasCmdr - INFO - Total run time for plan 07: 796.55 seconds
+2025-12-17 22:18:46 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]
+2025-12-17 22:18:46 - ras_commander.RasCmdr - INFO - Plan 07 executed in worker 1: Successful
+2025-12-17 22:18:46 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.p10
+2025-12-17 22:18:46 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.p10
+2025-12-17 22:18:46 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 10
+2025-12-17 22:18:46 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-17 22:18:46 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.p10&quot;
+2025-12-17 22:19:56 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 08
+2025-12-17 22:19:56 - ras_commander.RasCmdr - INFO - Total run time for plan 08: 866.38 seconds
+2025-12-17 22:19:56 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]
+2025-12-17 22:19:56 - ras_commander.RasCmdr - INFO - Plan 08 executed in worker 2: Successful
+2025-12-17 22:19:56 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.p11
+2025-12-17 22:19:56 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.p11
+2025-12-17 22:19:56 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 11
+2025-12-17 22:19:56 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-17 22:19:56 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.p11&quot;
+2025-12-17 22:22:01 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 09
+2025-12-17 22:22:01 - ras_commander.RasCmdr - INFO - Total run time for plan 09: 991.30 seconds
+2025-12-17 22:22:01 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]
+2025-12-17 22:22:01 - ras_commander.RasCmdr - INFO - Plan 09 executed in worker 3: Successful
+2025-12-17 22:22:01 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.p12
+2025-12-17 22:22:01 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.p12
+2025-12-17 22:22:01 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 12
+2025-12-17 22:22:01 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-17 22:22:01 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.p12&quot;
+2025-12-17 22:31:42 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 10
+2025-12-17 22:31:42 - ras_commander.RasCmdr - INFO - Total run time for plan 10: 775.36 seconds
+2025-12-17 22:31:42 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]
+2025-12-17 22:31:42 - ras_commander.RasCmdr - INFO - Plan 10 executed in worker 1: Successful
+2025-12-17 22:31:42 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.p14
+2025-12-17 22:31:42 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.p14
+2025-12-17 22:31:42 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 14
+2025-12-17 22:31:42 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-17 22:31:42 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.p14&quot;
+2025-12-17 22:33:48 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 11
+2025-12-17 22:33:48 - ras_commander.RasCmdr - INFO - Total run time for plan 11: 832.09 seconds
+2025-12-17 22:33:48 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]
+2025-12-17 22:33:48 - ras_commander.RasCmdr - INFO - Plan 11 executed in worker 2: Successful
+2025-12-17 22:33:48 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.p16
+2025-12-17 22:33:48 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.p16
+2025-12-17 22:33:48 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 16
+2025-12-17 22:33:48 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-17 22:33:48 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.p16&quot;
+2025-12-17 22:40:18 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 12
+2025-12-17 22:40:18 - ras_commander.RasCmdr - INFO - Total run time for plan 12: 1097.28 seconds
+2025-12-17 22:40:18 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]
+2025-12-17 22:40:18 - ras_commander.RasCmdr - INFO - Plan 12 executed in worker 3: Successful
+2025-12-17 22:40:18 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.p20
+2025-12-17 22:40:18 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.p20
+2025-12-17 22:40:18 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 20
+2025-12-17 22:40:18 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-17 22:40:18 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.p20&quot;
+2025-12-17 22:47:24 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 14
+2025-12-17 22:47:24 - ras_commander.RasCmdr - INFO - Total run time for plan 14: 942.27 seconds
+2025-12-17 22:47:25 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]
+2025-12-17 22:47:25 - ras_commander.RasCmdr - INFO - Plan 14 executed in worker 1: Successful
+2025-12-17 22:47:25 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.p21
+2025-12-17 22:47:25 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.p21
+2025-12-17 22:47:25 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 21
+2025-12-17 22:47:25 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-17 22:47:25 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 1]\BaldEagleDamBrk.p21&quot;
+2025-12-17 22:50:49 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 16
+2025-12-17 22:50:49 - ras_commander.RasCmdr - INFO - Total run time for plan 16: 1020.38 seconds
+2025-12-17 22:50:49 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]
+2025-12-17 22:50:49 - ras_commander.RasCmdr - INFO - Plan 16 executed in worker 2: Successful
+2025-12-17 22:50:49 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.p22
+2025-12-17 22:50:49 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.p22
+2025-12-17 22:50:49 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 22
+2025-12-17 22:50:49 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-17 22:50:49 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 2]\BaldEagleDamBrk.p22&quot;
+2025-12-17 22:57:51 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 20
+2025-12-17 22:57:51 - ras_commander.RasCmdr - INFO - Total run time for plan 20: 1053.01 seconds
+2025-12-17 22:57:51 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]
+2025-12-17 22:57:51 - ras_commander.RasCmdr - INFO - Plan 20 executed in worker 3: Successful
+2025-12-17 22:57:51 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.p23
+2025-12-17 22:57:51 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.p23
+2025-12-17 22:57:51 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 23
+2025-12-17 22:57:51 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+2025-12-17 22:57:51 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe&quot; -c &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.prj&quot; &quot;C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Worker 3]\BaldEagleDamBrk.p23&quot;
+2025-12-17 22:58:40 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 21
+2025-12-17 22:58:40 - ras_commander.RasCmdr - INFO - Total run time for plan 21: 674.75 seconds
+2025-12-17 22:58:40 - ras_commander.RasCmdr - INFO - Plan 21 executed in worker 1: Successful
+2025-12-17 23:02:37 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 22
+2025-12-17 23:02:37 - ras_commander.RasCmdr - INFO - Total run time for plan 22: 707.57 seconds
+2025-12-17 23:02:37 - ras_commander.RasCmdr - INFO - Plan 22 executed in worker 2: Successful
+2025-12-17 23:09:24 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 23
+2025-12-17 23:09:24 - ras_commander.RasCmdr - INFO - Total run time for plan 23: 692.16 seconds
+2025-12-17 23:09:24 - ras_commander.RasCmdr - INFO - Plan 23 executed in worker 3: Successful
+2025-12-17 23:09:24 - ras_commander.RasCmdr - INFO - Final destination for computed results: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Computed]
+2025-12-17 23:11:55 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Computed]\BaldEagleDamBrk.rasmap
+2025-12-17 23:11:55 - ras_commander.RasCmdr - INFO - 
+Execution Results:
+2025-12-17 23:11:55 - ras_commander.RasCmdr - INFO - Plan 07: Successful
+2025-12-17 23:11:55 - ras_commander.RasCmdr - INFO - Plan 08: Successful
+2025-12-17 23:11:55 - ras_commander.RasCmdr - INFO - Plan 09: Successful
+2025-12-17 23:11:55 - ras_commander.RasCmdr - INFO - Plan 10: Successful
+2025-12-17 23:11:55 - ras_commander.RasCmdr - INFO - Plan 11: Successful
+2025-12-17 23:11:55 - ras_commander.RasCmdr - INFO - Plan 12: Successful
+2025-12-17 23:11:55 - ras_commander.RasCmdr - INFO - Plan 14: Successful
+2025-12-17 23:11:55 - ras_commander.RasCmdr - INFO - Plan 16: Successful
+2025-12-17 23:11:55 - ras_commander.RasCmdr - INFO - Plan 20: Successful
+2025-12-17 23:11:55 - ras_commander.RasCmdr - INFO - Plan 21: Successful
+2025-12-17 23:11:55 - ras_commander.RasCmdr - INFO - Plan 22: Successful
+2025-12-17 23:11:55 - ras_commander.RasCmdr - INFO - Plan 23: Successful
+
+
+
+Execution complete in 66.5 minutes
+  Successful: 12
+  Failed: 0
+
+Results copied to: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020 [Computed]
+</code></pre></div>
 <h2 id="step-6-extract-and-compare-results">Step 6: Extract and Compare Results<a class="headerlink" href="#step-6-extract-and-compare-results" title="Permanent link">&para;</a></h2>
 <p>Re-initialize from the computed folder and extract results summary.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Results are already in original folder (v0.88.1+) - no re-initialization needed</span>
@@ -5930,6 +6673,25 @@ This handles CRS transformation and ensures precipitation coverage.</p>
 </span><span id="__span-13-47"><a id="__codelineno-13-47" name="__codelineno-13-47" href="#__codelineno-13-47"></a>
 </span><span id="__span-13-48"><a id="__codelineno-13-48" name="__codelineno-13-48" href="#__codelineno-13-48"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Completed: </span><span class="si">{</span><span class="nb">sum</span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">storm_results</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;exec_success&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2"> of </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">storm_results</span><span class="p">)</span><span class="si">}</span><span class="s2"> storms&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Warning: Computed folder not found
+
+Storm Execution Results
+================================================================================
+Storm  1 (Feb 07): Plan 07 - OK - 6609.5 MB
+Storm  2 (Mar 19): Plan 08 - OK - 6898.7 MB
+Storm  3 (Mar 28): Plan 09 - OK - 9728.2 MB
+Storm  4 (Apr 17): Plan 10 - OK - 6553.5 MB
+Storm  5 (Apr 30): Plan 11 - OK - 7938.8 MB
+Storm  6 (May 28): Plan 12 - OK - 9764.3 MB
+Storm  7 (Jun 03): Plan 14 - OK - 7177.6 MB
+Storm  8 (Sep 29): Plan 16 - OK - 7073.5 MB
+Storm  9 (Oct 29): Plan 20 - OK - 10036.5 MB
+Storm 10 (Nov 11): Plan 21 - OK - 6230.5 MB
+Storm 11 (Dec 16): Plan 22 - OK - 6915.7 MB
+Storm 12 (Dec 24): Plan 23 - OK - 9077.6 MB
+
+Completed: 12 of 12 storms
+</code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Display results summary from results_df</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># Shows execution status, completion, errors/warnings, and runtime for all plans</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;plan_title&#39;</span><span class="p">,</span> <span class="s1">&#39;completed&#39;</span><span class="p">,</span> <span class="s1">&#39;has_errors&#39;</span><span class="p">,</span> <span class="s1">&#39;has_warnings&#39;</span><span class="p">,</span> <span class="s1">&#39;runtime_complete_process_hours&#39;</span><span class="p">]]</span>
@@ -5967,6 +6729,7 @@ This handles CRS transformation and ensures precipitation coverage.</p>
 </span><span id="__span-15-31"><a id="__codelineno-15-31" name="__codelineno-15-31" href="#__codelineno-15-31"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-15-32"><a id="__codelineno-15-32" name="__codelineno-15-32" href="#__codelineno-15-32"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
+<p><img alt="png" src="../901_aorc_precipitation_catalog_files/901_aorc_precipitation_catalog_23_0.png" /></p>
 <h2 id="data-export-summary">Data Export Summary<a class="headerlink" href="#data-export-summary" title="Permanent link">&para;</a></h2>
 <p>All precipitation data has been exported to the project's <code>Precipitation/</code> folder:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># List all exported files</span>
@@ -5998,6 +6761,26 @@ This handles CRS transformation and ensures precipitation coverage.</p>
 </span><span id="__span-16-27"><a id="__codelineno-16-27" name="__codelineno-16-27" href="#__codelineno-16-27"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    hyetographs/&quot;</span><span class="p">)</span>
 </span><span id="__span-16-28"><a id="__codelineno-16-28" name="__codelineno-16-28" href="#__codelineno-16-28"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;      storm_YYYYMMDD_hyetograph.png  (x</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">png_files</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Precipitation Data Export Summary
+Location: C:\GH\ras-commander\examples\example_projects_400_aorc_precipitation_catalog\BaldEagleCrkMulti2D_AORC_2020\Precipitation
+======================================================================
+
+Exported Files:
+  Storm Catalog CSV:    1 file(s)
+  NetCDF Precip Files:  12 file(s)
+  Hyetograph PNGs:      12 file(s)
+  Summary Plot:         1 file(s)
+
+Total Size: 3.4 MB
+
+Folder Structure:
+  Precipitation/
+    storm_catalog.csv
+    storm_catalog_summary.png
+    storm_YYYYMMDD.nc  (x12)
+    hyetographs/
+      storm_YYYYMMDD_hyetograph.png  (x12)
+</code></pre></div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated a complete AORC precipitation workflow:</p>
 <ol>
@@ -6045,7 +6828,7 @@ This handles CRS transformation and ensures precipitation coverage.</p>
 Each year gets its own project folder with full precipitation data export.</p>
 <p><strong>Warning</strong>: This can take a very long time and generate many files!</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># OPTIONAL: Process all AORC years</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># Set PROCESS_ALL_YEARS = False to run</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># Set PROCESS_ALL_YEARS = True to run</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">PROCESS_ALL_YEARS</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># Set to True to run</span>
 </span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>
@@ -6061,7 +6844,7 @@ Each year gets its own project folder with full precipitation data export.</p>
 </span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a>
 </span><span id="__span-17-16"><a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a>    <span class="c1"># Clean up ALL existing AORC folders first</span>
 </span><span id="__span-17-17"><a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Cleaning up existing AORC folders...&quot;</span><span class="p">)</span>
-</span><span id="__span-17-18"><a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a>    <span class="n">existing_folders</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">base_project</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;BaldEagleCrkMulti2D_AORC_*_</span><span class="si">{</span><span class="n">SUFFIX</span><span class="si">}</span><span class="s2">*&quot;</span><span class="p">))</span>
+</span><span id="__span-17-18"><a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a>    <span class="n">existing_folders</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">base_project</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;BaldEagleCrkMulti2D_AORC_*&quot;</span><span class="p">))</span>
 </span><span id="__span-17-19"><a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a>    <span class="k">for</span> <span class="n">folder</span> <span class="ow">in</span> <span class="n">existing_folders</span><span class="p">:</span>
 </span><span id="__span-17-20"><a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a>        <span class="k">if</span> <span class="n">folder</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
 </span><span id="__span-17-21"><a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Removing: </span><span class="si">{</span><span class="n">folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -6077,7 +6860,7 @@ Each year gets its own project folder with full precipitation data export.</p>
 </span><span id="__span-17-31"><a id="__codelineno-17-31" name="__codelineno-17-31" href="#__codelineno-17-31"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">80</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-17-32"><a id="__codelineno-17-32" name="__codelineno-17-32" href="#__codelineno-17-32"></a>
 </span><span id="__span-17-33"><a id="__codelineno-17-33" name="__codelineno-17-33" href="#__codelineno-17-33"></a>            <span class="c1"># Create year-specific working folder</span>
-</span><span id="__span-17-34"><a id="__codelineno-17-34" name="__codelineno-17-34" href="#__codelineno-17-34"></a>            <span class="n">year_folder</span> <span class="o">=</span> <span class="n">base_project</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;BaldEagleCrkMulti2D_AORC_</span><span class="si">{</span><span class="n">year</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-17-34"><a id="__codelineno-17-34" name="__codelineno-17-34" href="#__codelineno-17-34"></a>            <span class="n">year_folder</span> <span class="o">=</span> <span class="n">base_project</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;BaldEagleCrkMulti2D_AORC_</span><span class="si">{</span><span class="n">year</span><span class="si">}</span><span class="s2">&quot;</span>
 </span><span id="__span-17-35"><a id="__codelineno-17-35" name="__codelineno-17-35" href="#__codelineno-17-35"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Creating: </span><span class="si">{</span><span class="n">year_folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-17-36"><a id="__codelineno-17-36" name="__codelineno-17-36" href="#__codelineno-17-36"></a>            <span class="n">shutil</span><span class="o">.</span><span class="n">copytree</span><span class="p">(</span><span class="n">base_project</span><span class="p">,</span> <span class="n">year_folder</span><span class="p">)</span>
 </span><span id="__span-17-37"><a id="__codelineno-17-37" name="__codelineno-17-37" href="#__codelineno-17-37"></a>
@@ -6221,7 +7004,7 @@ Each year gets its own project folder with full precipitation data export.</p>
 </span><span id="__span-17-175"><a id="__codelineno-17-175" name="__codelineno-17-175" href="#__codelineno-17-175"></a>
 </span><span id="__span-17-176"><a id="__codelineno-17-176" name="__codelineno-17-176" href="#__codelineno-17-176"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">TOTAL: </span><span class="si">{</span><span class="n">total_storms</span><span class="si">}</span><span class="s2"> storms, </span><span class="si">{</span><span class="n">total_success</span><span class="si">}</span><span class="s2"> successful simulations&quot;</span><span class="p">)</span>
 </span><span id="__span-17-177"><a id="__codelineno-17-177" name="__codelineno-17-177" href="#__codelineno-17-177"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-17-178"><a id="__codelineno-17-178" name="__codelineno-17-178" href="#__codelineno-17-178"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Set PROCESS_ALL_YEARS = False to process all AORC years (1979-2024)&quot;</span><span class="p">)</span>
+</span><span id="__span-17-178"><a id="__codelineno-17-178" name="__codelineno-17-178" href="#__codelineno-17-178"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Set PROCESS_ALL_YEARS = True to process all AORC years (1979-2024)&quot;</span><span class="p">)</span>
 </span><span id="__span-17-179"><a id="__codelineno-17-179" name="__codelineno-17-179" href="#__codelineno-17-179"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Warning: This will take many hours and create ~50 project folders!&quot;</span><span class="p">)</span>
 </span><span id="__span-17-180"><a id="__codelineno-17-180" name="__codelineno-17-180" href="#__codelineno-17-180"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Each year will include:&quot;</span><span class="p">)</span>
 </span><span id="__span-17-181"><a id="__codelineno-17-181" name="__codelineno-17-181" href="#__codelineno-17-181"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  - Precipitation/storm_catalog.csv&quot;</span><span class="p">)</span>
@@ -6229,6 +7012,15 @@ Each year gets its own project folder with full precipitation data export.</p>
 </span><span id="__span-17-183"><a id="__codelineno-17-183" name="__codelineno-17-183" href="#__codelineno-17-183"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  - Precipitation/storm_YYYYMMDD.nc (per storm)&quot;</span><span class="p">)</span>
 </span><span id="__span-17-184"><a id="__codelineno-17-184" name="__codelineno-17-184" href="#__codelineno-17-184"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  - Precipitation/hyetographs/storm_YYYYMMDD_hyetograph.png (per storm)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>Set PROCESS_ALL_YEARS = True to process all AORC years (1979-2024)
+Warning: This will take many hours and create ~50 project folders!
+
+Each year will include:
+  - Precipitation/storm_catalog.csv
+  - Precipitation/storm_catalog_summary.png
+  - Precipitation/storm_YYYYMMDD.nc (per storm)
+  - Precipitation/hyetographs/storm_YYYYMMDD_hyetograph.png (per storm)
+</code></pre></div>
 
 
 
@@ -6251,7 +7043,7 @@ Each year gets its own project folder with full precipitation data export.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 20, 2026 12:41:32 UTC">April 20, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 20, 2026 12:45:10 UTC">April 20, 2026</span>
   </span>
 
     
@@ -6261,7 +7053,7 @@ Each year gets its own project folder with full precipitation data export.</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 20, 2026 12:41:32 UTC">April 20, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 20, 2026 12:45:10 UTC">April 20, 2026</span>
   </span>
 
     
