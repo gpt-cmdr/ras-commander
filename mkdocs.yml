@@ -145,6 +145,7 @@ nav:
       - Profiles Check: user-guide/quality-assurance/profiles-check.md
     - Legacy COM Interface: user-guide/legacy-com-interface.md
     - Remote Execution: user-guide/remote-execution.md
+    - Cloud-Native Export (ras2cng): user-guide/cloud-native-export.md
   - Example Notebooks:
     - Overview: examples/index.md
     - Basic Automation & Project Data (100s):
@@ -215,6 +216,10 @@ nav:
       - STOFS-3D Coastal Boundary: notebooks/917_stofs3d_coastal_boundary.md
       - HMS-RAS Coupled Forecast: notebooks/918_hms_ras_coupled_forecast.md
       - Operational Forecast Cycling: notebooks/919_operational_forecast_cycling.md
+    - Cloud-Native Export (960s):
+      - Geometry Export: notebooks/960_cloud_native_geometry_export.md
+      - Results Export: notebooks/961_cloud_native_results_export.md
+      - COG Results Export: notebooks/962_cloud_native_cog_results_export.md
   - Parallel Compute:
     - Overview: parallel-compute/index.md
     - Local Parallel: parallel-compute/local-parallel.md
