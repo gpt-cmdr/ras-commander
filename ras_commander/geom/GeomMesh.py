@@ -219,8 +219,11 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
 
     Calls the private RegenerateMeshPoints instance method via reflection,
     which internally runs the full EnforceBreaklines 5-step pipeline.
-    Requires a compiled .g##.hdf file (RASGeometry needs HDF to populate
-    D2FlowArea layers).
+
+    Replicates the GUI's SA2DLinesAsBreakLines behavior: SA2D structures
+    (internal dams, weirs) are temporarily added as breaklines with their
+    spacing parameters (Near Repeats, Protection Radius) so that
+    EnforceBreaklines generates the correct corridor seeds.
 
     Args:
         geom_hdf_path: Path to compiled .g##.hdf file.
@@ -234,45 +237,77 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
     import System  # type: ignore
 
     geom = ns["RASGeometry"](str(geom_hdf_path))
-    pg = ns["PointGenerator"](geom)
     d2fa = geom.D2FlowArea
+    bl = geom.BreakLines
 
-    bl_count = geom.BreakLines.FeatureCount() if geom.BreakLines else 0
-    perim_count = d2fa.FeatureCount()
+    # --- Replicate SA2DLinesAsBreakLines ---
+    # The GUI temporarily adds SA2D structures as breaklines and copies
+    # their spacing parameters (Near Repeats, Protection Radius).
+    sa2d = geom.SA2DStructures
+    struct_bl_fids: list[int] = []
+    sa2d_count = sa2d.FeatureCount() if sa2d else 0
+    if sa2d_count > 0:
+        spacing_cols = [
+            "Near Spacing", "Far Spacing",
+            "Near Repeats", "Enforce 1 Cell Protection Radius",
+        ]
+        for sa2d_fid in sa2d.FilteredFIDS():
+            sa2d_fid = int(sa2d_fid)
+            bl.AddFeature(sa2d.Feature(sa2d_fid))
+            new_fid = bl.FeatureCount() - 1
+            struct_bl_fids.append(new_fid)
+            sa2d_row = sa2d.FeatureRow(sa2d_fid)
+            bl_row = bl.FeatureRow(new_fid)
+            for col in spacing_cols:
+                bl_row[col] = sa2d_row[col]
+        logger.debug(
+            f"Added {len(struct_bl_fids)} SA2D structure(s) as temp breaklines"
+        )
 
-    bl_idx = NetList[System.Int32]()
-    for i in range(bl_count):
-        bl_idx.Add(i)
-    perim_idx = NetList[System.Int32]()
-    for i in range(perim_count):
-        perim_idx.Add(i)
-    region_idx = NetList[System.Int32]()
+    try:
+        bl_count = bl.FeatureCount()
+        perim_count = d2fa.FeatureCount()
 
-    pg_type = pg.GetType()
-    method = pg_type.GetMethod(
-        "RegenerateMeshPoints",
-        BindingFlags.Instance | BindingFlags.NonPublic,
-    )
-    if method is None:
-        raise RuntimeError("Cannot find private RegenerateMeshPoints on PointGenerator")
+        bl_idx = NetList[System.Int32]()
+        for i in range(bl_count):
+            bl_idx.Add(i)
+        perim_idx = NetList[System.Int32]()
+        for i in range(perim_count):
+            perim_idx.Add(i)
+        region_idx = NetList[System.Int32]()
 
-    method.Invoke(
-        pg,
-        System.Array[System.Object](
-            [bl_idx, region_idx, perim_idx, perim_idx, None, None, False]
-        ),
-    )
+        pg = ns["PointGenerator"](geom)
+        pg_type = pg.GetType()
+        method = pg_type.GetMethod(
+            "RegenerateMeshPoints",
+            BindingFlags.Instance | BindingFlags.NonPublic,
+        )
+        if method is None:
+            raise RuntimeError(
+                "Cannot find private RegenerateMeshPoints on PointGenerator"
+            )
 
-    mp = d2fa.Geometry.MeshPoints[fid]
-    seeds_pm = ns["PointMs"]()
-    for i in range(mp.PointMCount()):
-        seeds_pm.Add(mp.PointM(i))
+        method.Invoke(
+            pg,
+            System.Array[System.Object](
+                [bl_idx, region_idx, perim_idx, perim_idx, None, None, False]
+            ),
+        )
 
-    logger.info(
-        f"Seeds via .NET RegenerateMeshPoints: {seeds_pm.Count} "
-        f"({bl_count} breaklines, {perim_count} perimeters)"
-    )
-    return seeds_pm
+        mp = d2fa.Geometry.MeshPoints[fid]
+        seeds_pm = ns["PointMs"]()
+        for i in range(mp.PointMCount()):
+            seeds_pm.Add(mp.PointM(i))
+
+        logger.info(
+            f"Seeds via .NET RegenerateMeshPoints: {seeds_pm.Count} "
+            f"({bl_count} breaklines incl {len(struct_bl_fids)} struct, "
+            f"{perim_count} perimeters)"
+        )
+        return seeds_pm
+    finally:
+        for rm_fid in sorted(struct_bl_fids, reverse=True):
+            bl.DeleteFeature(rm_fid)
 
 
 def _build_breaklines(d2fa, ns: dict):
@@ -1264,20 +1299,21 @@ class GeomMesh:
             breaklines = _build_breaklines(d2fa, ns)
 
             # ── Step 4: Generate seeds via .NET ──────────────────────────
+            # Always try RegenerateMeshPoints first — it uses the correct
+            # grid origin from the HDF regardless of whether breaklines exist.
             PointGenerator = ns["PointGenerator"]
             net_seeds_ok = False
-            if breaklines is not None:
-                try:
-                    seeds_pm = _generate_seeds_via_net(str(hdf_path), ns, fid=fid)
-                    net_seeds_ok = True
-                    logger.info(
-                        f"[{mesh_name}] {seeds_pm.Count} seeds via "
-                        f".NET RegenerateMeshPoints"
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        f"[{mesh_name}] RegenerateMeshPoints failed: {exc}"
-                    )
+            try:
+                seeds_pm = _generate_seeds_via_net(str(hdf_path), ns, fid=fid)
+                net_seeds_ok = True
+                logger.info(
+                    f"[{mesh_name}] {seeds_pm.Count} seeds via "
+                    f".NET RegenerateMeshPoints"
+                )
+            except Exception as exc:
+                logger.warning(
+                    f"[{mesh_name}] RegenerateMeshPoints failed: {exc}"
+                )
 
             if not net_seeds_ok:
                 seeds_pm = _generate_seeds_safe(perim, cell_size, ns)
