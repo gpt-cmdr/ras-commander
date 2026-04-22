@@ -1,7 +1,6 @@
 from importlib import import_module
-from types import ModuleType
+import pytest
 import subprocess
-import sys
 
 
 usgs_module = import_module("ras_commander.terrain.Usgs3depAws")
@@ -72,31 +71,13 @@ def test_create_vrt_prefers_hecras_gdalbuildvrt(monkeypatch, tmp_path):
     ]
 
 
-def test_create_vrt_falls_back_to_osgeo_gdal(monkeypatch, tmp_path):
+def test_create_vrt_requires_hecras_gdalbuildvrt(monkeypatch, tmp_path):
     tile_a = tmp_path / "tile_a.tif"
     tile_b = tmp_path / "tile_b.tif"
     tile_a.write_text("a", encoding="utf-8")
     tile_b.write_text("b", encoding="utf-8")
 
     output_vrt = tmp_path / "terrain.vrt"
-    calls = {}
-
-    class FakeGdal:
-        @staticmethod
-        def BuildVRTOptions(**kwargs):
-            calls["options_kwargs"] = kwargs
-            return kwargs
-
-        @staticmethod
-        def BuildVRT(output, inputs, options=None):
-            calls["output"] = output
-            calls["inputs"] = inputs
-            calls["options"] = options
-            output_vrt.write_text("<VRTDataset />", encoding="utf-8")
-            return object()
-
-    fake_osgeo = ModuleType("osgeo")
-    fake_osgeo.gdal = FakeGdal
 
     monkeypatch.setattr(
         Usgs3depAws,
@@ -105,15 +86,9 @@ def test_create_vrt_falls_back_to_osgeo_gdal(monkeypatch, tmp_path):
             lambda hecras_version=None: (_ for _ in ()).throw(FileNotFoundError("not installed"))
         ),
     )
-    monkeypatch.setitem(sys.modules, "osgeo", fake_osgeo)
 
-    result = Usgs3depAws.create_vrt([tile_a, tile_b], output_vrt)
-
-    assert result == output_vrt
-    assert calls["options_kwargs"] == {"resampleAlg": "bilinear"}
-    assert calls["output"] == str(output_vrt)
-    assert calls["inputs"] == [str(tile_a), str(tile_b)]
-    assert calls["options"] == {"resampleAlg": "bilinear"}
+    with pytest.raises(FileNotFoundError, match="requires HEC-RAS bundled gdalbuildvrt.exe"):
+        Usgs3depAws.create_vrt([tile_a, tile_b], output_vrt)
 
 
 def test_find_gdalbuildvrt_path_uses_explicit_version(monkeypatch, tmp_path):

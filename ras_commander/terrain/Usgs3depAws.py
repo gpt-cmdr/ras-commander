@@ -857,79 +857,51 @@ class Usgs3depAws:
         try:
             gdalbuildvrt = Usgs3depAws._find_gdalbuildvrt_path(hecras_version)
         except FileNotFoundError as exc:
-            logger.debug(
-                "HEC-RAS gdalbuildvrt.exe not found, falling back to osgeo.gdal: %s",
-                exc,
-            )
-        else:
-            input_list_path = Usgs3depAws._write_gdal_input_file_list(
-                tile_paths,
-                output_vrt.parent,
-            )
-            cmd = [
-                str(gdalbuildvrt),
-                "-overwrite",
-                "-r", "bilinear",
-                "-input_file_list", str(input_list_path),
-                str(output_vrt),
-            ]
-
-            try:
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=600,
-                )
-            except subprocess.TimeoutExpired as exc:
-                raise RuntimeError(
-                    "gdalbuildvrt timed out while creating the VRT mosaic."
-                ) from exc
-            except OSError as exc:
-                raise RuntimeError(
-                    f"Failed to execute gdalbuildvrt: {exc}"
-                ) from exc
-            finally:
-                input_list_path.unlink(missing_ok=True)
-
-            if result.returncode != 0:
-                raise RuntimeError(
-                    f"gdalbuildvrt failed with code {result.returncode}. "
-                    f"STDERR: {result.stderr}"
-                )
-
-            if not output_vrt.exists():
-                raise RuntimeError(
-                    f"gdalbuildvrt completed but VRT was not created: {output_vrt}"
-                )
-
-            logger.info(f"  Created: {output_vrt}")
-            return output_vrt
-
-        try:
-            from osgeo import gdal
-        except ImportError as exc:
-            raise ImportError(
-                "Creating a VRT requires either HEC-RAS bundled "
-                "gdalbuildvrt.exe or the GDAL Python bindings "
-                "(`from osgeo import gdal`)."
+            raise FileNotFoundError(
+                "Creating a VRT requires HEC-RAS bundled gdalbuildvrt.exe. "
+                f"{exc}"
             ) from exc
 
-        vrt_options = gdal.BuildVRTOptions(resampleAlg='bilinear')
-        vrt = gdal.BuildVRT(
-            str(output_vrt),
-            [str(tile_path) for tile_path in tile_paths],
-            options=vrt_options
+        input_list_path = Usgs3depAws._write_gdal_input_file_list(
+            tile_paths,
+            output_vrt.parent,
         )
+        cmd = [
+            str(gdalbuildvrt),
+            "-overwrite",
+            "-r", "bilinear",
+            "-input_file_list", str(input_list_path),
+            str(output_vrt),
+        ]
 
-        if vrt is None:
-            raise RuntimeError("Failed to create VRT")
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=600,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                "gdalbuildvrt timed out while creating the VRT mosaic."
+            ) from exc
+        except OSError as exc:
+            raise RuntimeError(
+                f"Failed to execute gdalbuildvrt: {exc}"
+            ) from exc
+        finally:
+            input_list_path.unlink(missing_ok=True)
 
-        # Close dataset
-        vrt = None
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"gdalbuildvrt failed with code {result.returncode}. "
+                f"STDERR: {result.stderr}"
+            )
 
         if not output_vrt.exists():
-            raise RuntimeError(f"Failed to create VRT: {output_vrt}")
+            raise RuntimeError(
+                f"gdalbuildvrt completed but VRT was not created: {output_vrt}"
+            )
 
         logger.info(f"  Created: {output_vrt}")
         return output_vrt
