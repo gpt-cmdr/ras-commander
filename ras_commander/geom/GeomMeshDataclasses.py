@@ -23,11 +23,15 @@ class MeshResult:
     iterations: int = 0
     fixes_applied: List[str] = field(default_factory=list)
     error_message: str = ""
+    geom_text_path: str = ""
     geom_hdf_path: str = ""
 
     @property
     def ok(self) -> bool:
         return self.status == "complete"
+
+    def __bool__(self) -> bool:
+        return self.ok
 
 
 @dataclass
@@ -47,9 +51,12 @@ class BCFixResult:
     conflicts_found: int = 0
     conflicts_fixed: int = 0
     trims: List[tuple] = field(default_factory=list)
-    unresolveable: List[BCConflict] = field(default_factory=list)
+    unresolvable: List[BCConflict] = field(default_factory=list)
     modified_hdf: bool = False
 
     @property
     def ok(self) -> bool:
-        return len(self.unresolveable) == 0
+        return len(self.unresolvable) == 0
+
+    def __bool__(self) -> bool:
+        return self.ok
