@@ -764,8 +764,13 @@ def _sync_breakline_spacing_text_to_hdf(
         )
 
 
-def _sync_cell_size_to_hdf(hdf_path: Path, cell_size: float) -> None:
-    """Sync cell size into HDF Attributes so RegenerateMeshPoints uses it."""
+def _sync_cell_size_to_hdf(
+    hdf_path: Path, cell_size: float, mesh_name: str | None = None
+) -> None:
+    """Sync cell size into HDF Attributes so RegenerateMeshPoints uses it.
+
+    When mesh_name is given, only the matching row is updated (multi-area safe).
+    """
     try:
         import h5py
         attrs_key = "Geometry/2D Flow Areas/Attributes"
@@ -777,6 +782,10 @@ def _sync_cell_size_to_hdf(hdf_path: Path, cell_size: float) -> None:
                 return
             changed = False
             for i in range(len(data)):
+                if mesh_name is not None and "Name" in data.dtype.names:
+                    row_name = data["Name"][i].decode().strip()
+                    if row_name != mesh_name:
+                        continue
                 if abs(float(data["Spacing dx"][i]) - cell_size) > 0.001:
                     data["Spacing dx"][i] = cell_size
                     changed = True
@@ -790,16 +799,28 @@ def _sync_cell_size_to_hdf(hdf_path: Path, cell_size: float) -> None:
         logger.warning(f"Could not sync cell size to HDF: {exc}")
 
 
-def _set_point_generation_data(geom_text_path: Path, cell_size: float) -> None:
-    """Update Storage Area Point Generation Data in .g## text file."""
+def _set_point_generation_data(
+    geom_text_path: Path, cell_size: float, mesh_name: str | None = None
+) -> None:
+    """Update Storage Area Point Generation Data in .g## text file.
+
+    When mesh_name is given, only the block under the matching ``Storage Area=``
+    header is modified (multi-area safe).
+    """
     text = geom_text_path.read_text(encoding="utf-8", errors="replace")
     prefix = "Storage Area Point Generation Data="
     new_line = f"{prefix},,{cell_size:.6f},{cell_size:.6f}\n"
     lines = text.splitlines(keepends=True)
     modified = []
+    current_area: str | None = None
     for line in lines:
+        if line.startswith("Storage Area="):
+            current_area = line.split("=", 1)[1].split(",")[0].strip()
         if line.startswith(prefix):
-            modified.append(new_line)
+            if mesh_name is None or current_area == mesh_name:
+                modified.append(new_line)
+            else:
+                modified.append(line)
         else:
             modified.append(line)
     geom_text_path.write_text("".join(modified), encoding="utf-8")
@@ -824,8 +845,14 @@ def _looks_like_storage_area_seed_line(line: str) -> bool:
     return True
 
 
-def _patch_text_seeds(geom_text_path: Path, cell_centers) -> None:
-    """Replace 'Storage Area 2D Points= N' block with generated cell centers."""
+def _patch_text_seeds(
+    geom_text_path: Path, cell_centers, mesh_name: str | None = None
+) -> None:
+    """Replace 'Storage Area 2D Points= N' block with generated cell centers.
+
+    When mesh_name is given, only the block under the matching ``Storage Area=``
+    header is replaced (multi-area safe).
+    """
     import numpy as _np
 
     lines = geom_text_path.read_text(encoding="utf-8", errors="replace").splitlines(
@@ -853,12 +880,22 @@ def _patch_text_seeds(geom_text_path: Path, cell_centers) -> None:
 
     modified: list[str] = []
     found_block = False
+    current_area: str | None = None
     idx = 0
     while idx < len(lines):
         line = lines[idx]
+        if line.startswith("Storage Area="):
+            current_area = line.split("=", 1)[1].split(",")[0].strip()
+            modified.append(line)
+            idx += 1
+            continue
         if line.startswith("Storage Area 2D Points="):
-            found_block = True
-            modified.append(f"Storage Area 2D Points= {n} \n")
+            target = mesh_name is None or current_area == mesh_name
+            if target:
+                found_block = True
+                modified.append(f"Storage Area 2D Points= {n} \n")
+            else:
+                modified.append(line)
             old_point_count = None
             try:
                 old_point_count = int(line.split("=", 1)[1].strip())
@@ -877,14 +914,19 @@ def _patch_text_seeds(geom_text_path: Path, cell_centers) -> None:
                     if skipped >= lines_to_skip:
                         break
                     idx += 1
+                    if not target:
+                        modified.append(lines[idx - 1])
                     skipped += 1
                     continue
                 if _looks_like_storage_area_seed_line(lines[idx]):
                     idx += 1
+                    if not target:
+                        modified.append(lines[idx - 1])
                     skipped += 1
                     continue
                 break
-            modified.extend(coord_lines)
+            if target:
+                modified.extend(coord_lines)
         else:
             modified.append(line)
             idx += 1
@@ -1185,7 +1227,7 @@ class GeomMesh:
             # RegenerateMeshPoints reads spacing from the HDF, not from
             # .g01 text.  The HDF may be pre-compiled or stale, so sync
             # cell size and per-breakline values from text into HDF.
-            _sync_cell_size_to_hdf(hdf_path, cell_size)
+            _sync_cell_size_to_hdf(hdf_path, cell_size, mesh_name=mesh_name)
             _sync_breakline_spacing_text_to_hdf(text_path, hdf_path)
 
             # ── Step 2: Load geometry from .NET (same as RASDecomp) ──────
@@ -1345,8 +1387,8 @@ class GeomMesh:
                         )
 
                     # Write to .g01 text — the only persistent output
-                    _set_point_generation_data(text_path, float(cell_size))
-                    _patch_text_seeds(text_path, _new_seeds)
+                    _set_point_generation_data(text_path, float(cell_size), mesh_name=mesh_name)
+                    _patch_text_seeds(text_path, _new_seeds, mesh_name=mesh_name)
 
                     result.status = "complete"
                     result.mesh_state = state_name
