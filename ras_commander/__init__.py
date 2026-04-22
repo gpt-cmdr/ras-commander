@@ -64,7 +64,8 @@ from .geom import (
     GeomParser, GeomPreprocessor, GeomLandCover,
     GeomCrossSection, GeomStorage, GeomLateral,
     GeomInlineWeir, GeomBridge, GeomCulvert,
-    GeomReferenceFeatures,
+    GeomReferenceFeatures, GeomMesh,
+    MeshResult, BCConflict, BCFixResult,
 )
 
 # HDF handling - imported from hdf subpackage

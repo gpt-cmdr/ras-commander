@@ -103,6 +103,15 @@ HDF Data Access & Analysis
 - Land cover and terrain data integration
 - Weighted parameter calculations for hydrologic modeling
 
+Headless 2D Mesh Generation (NEW — `GeomMesh`)
+- **Programmatic mesh generation** without the HEC-RAS GUI — calls RasMapperLib .NET methods via pythonnet
+- Cell size control, breakline spacing (near/far), and automatic mesh quality fixing
+- Text-first architecture: edits `.g##` text, compiles HDF as needed, never accepts HDF as input
+- Multi-tier auto-fix loop: short-segment removal, aspect-ratio escalation, midpoint insertion, perimeter simplification, Douglas-Peucker
+- Breakline-aware seed generation via .NET `RegenerateMeshPoints` (reflection on private method)
+- Mesh sensitivity analysis workflow — see `examples/230_mesh_sensitivity_analysis.ipynb`
+- Requires: HEC-RAS 6.6 installed (for RasMapperLib DLLs), `pip install pythonnet`
+
 RASMapper Data Integration
 - RASMapper configuration parsing (.rasmap files)
 - Terrain, soil, and land cover HDF paths
