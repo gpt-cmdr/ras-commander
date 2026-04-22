@@ -1,6 +1,6 @@
 # ras-commander Roadmap
 
-**Last Updated**: 2026-04-12
+**Last Updated**: 2026-04-21
 
 This document tracks forward-looking work for ras-commander.
 Execution-level task tracking lives in `agent_tasks/.agent/BACKLOG.md`.
@@ -11,6 +11,11 @@ already implemented.
 
 ### Recently Landed and Removed from Future Roadmap
 
+- Headless 2D mesh generation via `GeomMesh.generate()`
+  - Branch: `feat/headless-mesh`, landed 2026-04-22
+  - Text-first architecture, .NET RasMapperLib calls via pythonnet
+  - Cell size control, breakline spacing, multi-tier auto-fix
+  - Example: `230_mesh_sensitivity_analysis.ipynb`
 - UNC mapped-drive path preservation via `RasUtils.safe_resolve()`
   - Implemented on 2026-01-08
 - Storage area polygon extraction from plain text and HDF
@@ -21,7 +26,9 @@ already implemented.
 ### Current Roadmap Tiers
 
 1. **Near-term integration and stabilization**
-   - Reconcile diverged branches and remove documentation/index drift
+   - Reconcile diverged branches, regionalize the land-classification starter
+     values, remove documentation/index drift, and keep a ranked promotion
+     queue from `feature_dev_notes/`
 2. **Medium-term productization**
    - Clarify DataFrame-first execution behavior, strengthen docs, add tests
 3. **Long-horizon feature development**
@@ -121,6 +128,88 @@ already implemented.
 - `.claude` README/manifest indexes match the actual tree
 - Root guidance points only to live files
 - Merged/obsolete branches are cleaned up
+
+### 5. Land Classification v1 Follow-On: Illinois Starter-Value
+Regionalization for Continuous Infiltration Methods
+
+**Status**: Active
+
+**Why it matters**:
+- `RasMap` land-classification work is now aimed at generating working
+  `HDF/TIF` outputs, registering `.rasmap` layers, associating them to
+  geometry, and recomputing preprocess tables without routing through
+  `RasProcess.exe`.
+- All three supported infiltration methods now receive provisional starter
+  values, including first-pass defaults for `deficit_constant` and
+  `green_ampt`.
+- Official HEC-RAS docs provide parameter-estimation guidance, not built-in
+  software defaults, so `ras-commander` needs an explicit starter-value
+  strategy rather than waiting for HEC to populate those fields.
+- For Illinois-first downstream workflows, a runnable model with reasonable
+  initial values is more important than perfect first-pass physics because
+  base overrides, geometry-specific calibration regions, and later
+  calibration/validation are expected to replace those provisional values.
+
+**Open work**:
+- Replace the current heuristic provisional defaults with an Illinois-first
+  starter-value strategy derived from USDA NRCS SSURGO/gSSURGO
+- Use USDA NRCS SSURGO/gSSURGO as the primary numeric source, with Illinois
+  regional/state layers used for QA and regional presets rather than as the
+  primary per-cell assignment
+- Keep the current explicit provisional defaults available as the fallback path
+  when detailed Illinois mappings are unavailable or incomplete
+- Route the starter-value profile through Glenn Heistand review and CHAMP
+  review/input/ongoing coordination
+- Document that these starter values are expected to be overridden later by
+  base overrides, geometry-specific calibration regions, and
+  calibration/validation work
+
+**Exit criteria**:
+- `add_infiltration_layer()` continues to write non-shell starter values for
+  all three supported methods
+- Illinois-specific SSURGO-driven mappings replace the current generic
+  heuristics for `deficit_constant` and `green_ampt`
+- Generated projects can be associated to geometry, recomputed, and run before
+  detailed calibration
+- Documentation clearly distinguishes provisional starter values from
+  calibrated values
+- The review/coordination path with Glenn Heistand and CHAMP is recorded
+
+### 6. Feature Development Portfolio Promotion
+
+**Status**: Active
+
+**Why it matters**:
+- `feature_dev_notes/` now contains a mix of branch-backed work, implementation
+  specs, research corpora, and QA/reference folders.
+- Without an explicit promotion queue, branch-ready work competes equally with
+  scratchpads and historical studies.
+- The immediate need is curation and promotion, not more top-level feature
+  ideation.
+
+**Current promotion queue**:
+- `Calibration_Framework` -> `feat/ras-calibrate` rebase / scope freeze
+- `Monte_Carlo_Uncertainty` -> `feat/ras-montecarlo` rebase / verification
+- `floodway analysis` -> `feat/floodway-analysis` rebase / verification
+- `LandCover_Soils_Pipeline` + `data-downloaders` -> Illinois-first land
+  classification follow-on
+- `HdfResultsQuery` -> next cross-cutting implementation-ready primitive
+- `Issue_38_Geometry_2D_Writer` + `RasDecomp_meshgen` -> 2D geometry / mesh
+  authoring foundation (mesh generation landed on `feat/headless-mesh`
+  2026-04-22; geometry writer remains open)
+
+**Open work**:
+- Keep `feature_dev_notes/README.md` and `feature_dev_notes/ROADMAP.md` as the
+  live local index rather than relying on older snapshot files
+- Convert top local candidates into explicit backlog items with dependencies and
+  effort estimates
+- Demote QA/reference/archive folders from the strategic roadmap surface
+
+**Exit criteria**:
+- The top local feature folders are ranked and mapped to concrete backlog items
+- Root roadmap surfaces active promotion candidates, not legacy portfolio noise
+- Historical/spec-only folders are no longer treated as equal-priority delivery
+  work
 
 ## Medium-Term Productization
 
