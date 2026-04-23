@@ -583,6 +583,72 @@ def _find_error_locations(mesh, cell_size: float, min_ratio: float) -> list:
     return pts
 
 
+def _iter_bc_flow_area_groups(hf):
+    """Yield 2D flow-area groups that contain the BC conflict datasets."""
+    root_key = "Geometry/2D Flow Areas"
+    if root_key not in hf:
+        return
+
+    required = {
+        "BC Lines",
+        "FacePoints Coordinate",
+        "Faces FacePoint Indexes",
+        "Faces Perimeter Info",
+    }
+    for key in hf[root_key].keys():
+        candidate = hf[f"{root_key}/{key}"]
+        if not hasattr(candidate, "keys"):
+            continue
+        if required.issubset(set(candidate.keys())):
+            yield candidate
+
+
+def _read_bc_features(area_group, shapely_line_cls) -> list[dict]:
+    """Read BC geometries for one 2D flow area."""
+    bcs = []
+    for bc_name in area_group["BC Lines"].keys():
+        bc_feature = area_group["BC Lines"][bc_name]
+        if not hasattr(bc_feature, "keys") or "Coordinates" not in bc_feature:
+            continue
+        coords = bc_feature["Coordinates"][:]
+        bc_type_raw = bc_feature.attrs.get("Type", "")
+        if hasattr(bc_type_raw, "decode"):
+            bc_type = bc_type_raw.decode("utf-8", errors="replace").strip("\x00").strip()
+        else:
+            bc_type = str(bc_type_raw)
+        geom = shapely_line_cls(coords[:, :2]) if len(coords) >= 2 else None
+        bcs.append(
+            {
+                "name": bc_name,
+                "type": bc_type,
+                "geom": geom,
+            }
+        )
+    return bcs
+
+
+def _read_bc_face_segments(area_group, shapely_line_cls) -> List[tuple]:
+    """Read perimeter faces for one 2D flow area."""
+    face_segments: List[tuple] = []
+    fp_coords = area_group["FacePoints Coordinate"][:]
+    face_fp_idx = area_group["Faces FacePoint Indexes"][:]
+    perim_info = area_group["Faces Perimeter Info"][:]
+
+    for fid in range(len(face_fp_idx)):
+        row = perim_info[fid]
+        if hasattr(row, "__len__"):
+            if int(row[0]) == 0 and int(row[1]) == 0:
+                continue
+        elif not row:
+            continue
+        fp_a, fp_b = int(face_fp_idx[fid][0]), int(face_fp_idx[fid][1])
+        a = fp_coords[fp_a]
+        b = fp_coords[fp_b]
+        face_segments.append((fid, shapely_line_cls([a, b])))
+
+    return face_segments
+
+
 def _localized_douglas_peucker(perim, error_midpoints, cell_size, tol, ns, buf_multiplier=3.0):
     """Tier 4: simplify perimeter only within buffer zones around error locations.
 
@@ -1507,6 +1573,142 @@ class GeomMesh:
 
     @staticmethod
     @log_call
+    def get_refinement_region_names(
+        geom_number: Union[str, Number, Path],
+        hecras_dir: Optional[Union[str, Path]] = None,
+        ras_object=None,
+    ) -> list[tuple[int, str]]:
+        """
+        Read refinement region names from the compiled HDF.
+
+        HEC-RAS allows duplicate and empty refinement region names.
+        Use this method to inspect the FID-to-name mapping before
+        calling ``set_refinement_region_spacing()`` or
+        ``set_refinement_region_name()`` by name.  When duplicates
+        exist, targeting by *region_fid* is the most reliable approach.
+
+        Refinement regions are stored in HDF, not .g## text.  If the
+        HDF does not exist it is compiled first.
+
+        Returns:
+            List of (fid, name) tuples in HDF order.  *fid* is the
+            0-based index.
+        """
+        import h5py
+
+        geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
+        hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
+        if not hdf_path.exists():
+            hdf_path = GeomMesh.compile_geometry(
+                geom_text_path, hecras_dir=hecras_dir
+            )
+
+        rr_key = "Geometry/2D Flow Area Refinement Regions/Attributes"
+        result = []
+        with h5py.File(str(hdf_path), "r") as hf:
+            if rr_key not in hf:
+                return result
+            data = hf[rr_key][:]
+            for i, row in enumerate(data):
+                name = row["Name"].decode("utf-8", errors="replace").strip()
+                result.append((i, name))
+        return result
+
+    @staticmethod
+    @log_call
+    def set_refinement_region_name(
+        geom_number: Union[str, Number, Path],
+        new_name: str,
+        region_fid: Optional[int] = None,
+        old_name: Optional[str] = None,
+        hecras_dir: Optional[Union[str, Path]] = None,
+        ras_object=None,
+    ) -> None:
+        """
+        Rename a refinement region in the compiled HDF.
+
+        HEC-RAS allows duplicate and empty refinement region names.
+        *region_fid* (0-based index in HDF order) is the most reliable
+        selector.  When using *old_name*, this method raises
+        ``ValueError`` if multiple regions share that name — use
+        ``get_refinement_region_names()`` to inspect duplicates first,
+        then target by FID or assign unique descriptive names.
+
+        Args:
+            geom_number: Geometry number or path to .g## text file.
+            new_name: New name to assign.
+            region_fid: 0-based index of the region in HDF order.
+                Most reliable selector — regions can be unnamed or
+                have duplicate names.
+            old_name: Current name of the region.  Raises if multiple
+                regions share this name.
+            hecras_dir: Override HEC-RAS installation directory.
+            ras_object: Optional RasPrj instance.
+
+        Raises:
+            ValueError: If neither selector is given, both are given,
+                the target is not found, or *old_name* matches multiple
+                regions.
+        """
+        import h5py
+
+        if region_fid is None and old_name is None:
+            raise ValueError("Provide region_fid or old_name.")
+        if region_fid is not None and old_name is not None:
+            raise ValueError("Provide region_fid or old_name, not both.")
+
+        geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
+        hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
+        if not hdf_path.exists():
+            hdf_path = GeomMesh.compile_geometry(
+                geom_text_path, hecras_dir=hecras_dir
+            )
+
+        rr_key = "Geometry/2D Flow Area Refinement Regions/Attributes"
+        with h5py.File(str(hdf_path), "r+") as hf:
+            if rr_key not in hf:
+                raise ValueError("No refinement regions in geometry HDF.")
+            data = hf[rr_key][:]
+
+            found_idx = None
+            for i in range(len(data)):
+                name = data["Name"][i].decode("utf-8", errors="replace").strip()
+                match = False
+                if region_fid is not None:
+                    match = i == region_fid
+                elif old_name is not None:
+                    match = name == old_name
+                if match:
+                    if found_idx is not None:
+                        raise ValueError(
+                            f"Multiple refinement regions match {repr(old_name)}; "
+                            f"use region_fid for disambiguation."
+                        )
+                    found_idx = i
+
+            if found_idx is None:
+                target = (
+                    f"FID {region_fid}" if region_fid is not None
+                    else repr(old_name)
+                )
+                raise ValueError(
+                    f"Refinement region {target} not found in HDF."
+                )
+
+            encoded = new_name.encode("utf-8")
+            name_len = data.dtype["Name"].itemsize
+            if len(encoded) > name_len:
+                encoded = encoded[:name_len]
+            data["Name"][found_idx] = encoded
+            hf[rr_key][:] = data
+
+        logger.info(
+            f"Renamed refinement region FID {found_idx} → '{new_name}' "
+            f"in {hdf_path.name}"
+        )
+
+    @staticmethod
+    @log_call
     def get_refinement_regions(
         geom_number: Union[str, Number, Path],
         hecras_dir: Optional[Union[str, Path]] = None,
@@ -1515,11 +1717,17 @@ class GeomMesh:
         """
         Read refinement region names and spacing from the compiled HDF.
 
+        HEC-RAS allows duplicate and empty refinement region names.
+        The *fid* in each dict is the most reliable identifier — use it
+        with ``set_refinement_region_spacing(region_fid=...)`` or
+        ``set_refinement_region_name(region_fid=...)`` when names are
+        ambiguous.
+
         Refinement regions are stored in HDF, not .g## text.  If the HDF
         does not exist it is compiled first.
 
         Returns:
-            List of dicts with keys: name, spacing_dx, spacing_dy.
+            List of dicts with keys: fid, name, spacing_dx, spacing_dy.
             Empty list if no refinement regions exist.
         """
         import h5py
@@ -1539,11 +1747,14 @@ class GeomMesh:
             data = hf[rr_key][:]
             has_dx = "Spacing dx" in data.dtype.names
             has_dy = "Spacing dy" in data.dtype.names
-            for row in data:
+            for i, row in enumerate(data):
                 name = row["Name"].decode("utf-8", errors="replace").strip()
                 dx = float(row["Spacing dx"]) if has_dx else 0.0
                 dy = float(row["Spacing dy"]) if has_dy else 0.0
-                result.append({"name": name, "spacing_dx": dx, "spacing_dy": dy})
+                result.append({
+                    "fid": i, "name": name,
+                    "spacing_dx": dx, "spacing_dy": dy,
+                })
         return result
 
     @staticmethod
@@ -1553,6 +1764,7 @@ class GeomMesh:
         spacing_dx: Optional[float] = None,
         spacing_dy: Optional[float] = None,
         region_name: Optional[str] = None,
+        region_fid: Optional[int] = None,
         all_regions: bool = False,
         hecras_dir: Optional[Union[str, Path]] = None,
         ras_object=None,
@@ -1561,8 +1773,15 @@ class GeomMesh:
         Set refinement region cell spacing in the compiled HDF.
 
         Refinement regions override the base cell size within their
-        polygon boundaries.  By default targets a single region by
-        name; set ``all_regions=True`` for bulk changes.
+        polygon boundaries.  Target a single region by *region_name*
+        or *region_fid* (0-based index in HDF order).  Set
+        ``all_regions=True`` for bulk changes.
+
+        HEC-RAS allows duplicate and empty refinement region names.
+        When duplicates exist, *region_name* matches the **first**
+        occurrence.  Use *region_fid* for reliable targeting — call
+        ``get_refinement_region_names()`` to inspect the FID-to-name
+        mapping and check for duplicates before editing by name.
 
         Args:
             geom_number: Geometry number or path to .g## text file.
@@ -1572,21 +1791,27 @@ class GeomMesh:
                 None keeps existing value.  Defaults to spacing_dx if
                 spacing_dx is provided and spacing_dy is None.
             region_name: Name of the refinement region to modify.
-                Required unless *all_regions* is True.
+            region_fid: 0-based index of the region in HDF order.
+                Most reliable selector — regions can be unnamed or
+                have duplicate names.
             all_regions: If True, apply spacing to every region.
             hecras_dir: Override HEC-RAS installation directory.
             ras_object: Optional RasPrj instance.
 
         Raises:
-            ValueError: If neither region_name nor all_regions is set,
-                or if region_name is not found.
+            ValueError: If no target is specified, or if the target is
+                not found.
         """
         import h5py
 
-        if not all_regions and region_name is None:
+        if not all_regions and region_name is None and region_fid is None:
             raise ValueError(
-                "Provide region_name for single-region edits, "
+                "Provide region_name or region_fid for single-region edits, "
                 "or set all_regions=True for bulk changes."
+            )
+        if region_name is not None and region_fid is not None:
+            raise ValueError(
+                "Provide region_name or region_fid, not both."
             )
         if spacing_dx is not None and spacing_dy is None:
             spacing_dy = spacing_dx
@@ -1613,7 +1838,13 @@ class GeomMesh:
             found = False
             for i in range(len(data)):
                 name = data["Name"][i].decode("utf-8", errors="replace").strip()
-                if not all_regions and name != region_name:
+                if all_regions:
+                    target_match = True
+                elif region_fid is not None:
+                    target_match = i == region_fid
+                else:
+                    target_match = name == region_name
+                if not target_match:
                     continue
                 found = True
                 if spacing_dx is not None:
@@ -1621,13 +1852,20 @@ class GeomMesh:
                 if spacing_dy is not None:
                     data["Spacing dy"][i] = spacing_dy
 
-            if region_name and not found:
+            if not all_regions and not found:
+                target_desc = (
+                    f"FID {region_fid}" if region_fid is not None
+                    else f"'{region_name}'"
+                )
                 raise ValueError(
-                    f"Refinement region '{region_name}' not found in HDF."
+                    f"Refinement region {target_desc} not found in HDF."
                 )
             hf[rr_key][:] = data
 
-        target = region_name or "ALL"
+        target = (
+            f"FID {region_fid}" if region_fid is not None
+            else region_name or "ALL"
+        )
         logger.info(
             f"Refinement region [{target}]: dx={spacing_dx}, dy={spacing_dy} "
             f"→ {hdf_path.name}"
@@ -2255,67 +2493,33 @@ class GeomMesh:
         buf = 0.01 * cell_size
 
         with h5py.File(str(geom_hdf_path), "r") as hf:
-            fa_group = None
-            for key in hf["Geometry/2D Flow Areas"].keys():
-                if "Face" in str(hf[f"Geometry/2D Flow Areas/{key}"].keys()):
-                    fa_group = f"Geometry/2D Flow Areas/{key}"
-                    break
-            if fa_group is None:
-                return conflicts
-
-            # Read BC line geometries
-            bc_group = f"{fa_group}/BC Lines"
-            if bc_group not in hf:
-                return conflicts
-
-            bc_names = []
-            bc_lines = []
-            bc_types = []
-            for bc_name in hf[bc_group].keys():
-                coords = hf[f"{bc_group}/{bc_name}/Coordinates"][:]
-                line = ShapelyLine(coords)
-                bc_names.append(bc_name)
-                bc_lines.append(line)
-                bc_type_raw = hf[f"{bc_group}/{bc_name}"].attrs.get("Type", "")
-                bc_type = bc_type_raw.decode() if isinstance(bc_type_raw, bytes) else str(bc_type_raw)
-                bc_types.append(bc_type)
-
-            # Read perimeter faces
-            face_coords = hf[f"{fa_group}/FacePoints Coordinate"][:]
-            face_fp_idx = hf[f"{fa_group}/Faces FacePoint Indexes"][:]
-            perim_info = hf[f"{fa_group}/Faces Perimeter Info"][:]
-
-            for face_id in range(len(face_fp_idx)):
-                row = perim_info[face_id]
-                if hasattr(row, '__len__'):
-                    if int(row[0]) == 0 and int(row[1]) == 0:
-                        continue
-                elif not row:
+            for area_group in _iter_bc_flow_area_groups(hf):
+                flow_area_name = area_group.name.rsplit("/", 1)[-1]
+                bcs = _read_bc_features(area_group, ShapelyLine)
+                if not bcs:
                     continue
-                fp_a, fp_b = int(face_fp_idx[face_id][0]), int(face_fp_idx[face_id][1])
-                a = face_coords[fp_a]
-                b = face_coords[fp_b]
-                face_line = ShapelyLine([a, b])
 
-                hitting = []
-                hitting_types = []
-                for i, bc_line in enumerate(bc_lines):
-                    if face_line.distance(bc_line) < buf:
-                        hitting.append(bc_names[i])
-                        hitting_types.append(bc_types[i])
+                for face_id, face_line in _read_bc_face_segments(area_group, ShapelyLine):
+                    hitting = []
+                    hitting_types = []
+                    for bc in bcs:
+                        if bc["geom"] is not None and face_line.distance(bc["geom"]) < buf:
+                            hitting.append(bc["name"])
+                            hitting_types.append(bc["type"])
 
-                if len(hitting) >= 2:
-                    nd_bc = next(
-                        (n for n, t in zip(hitting, hitting_types)
-                         if "normal" in t.lower()),
-                        None,
-                    )
-                    conflicts.append(BCConflict(
-                        face_id=face_id,
-                        bc_names=hitting,
-                        bc_types=hitting_types,
-                        normal_depth_bc=nd_bc,
-                    ))
+                    if len(hitting) >= 2:
+                        nd_bc = next(
+                            (n for n, t in zip(hitting, hitting_types)
+                             if "normal" in t.lower()),
+                            None,
+                        )
+                        conflicts.append(BCConflict(
+                            face_id=face_id,
+                            flow_area_name=flow_area_name,
+                            bc_names=hitting,
+                            bc_types=hitting_types,
+                            normal_depth_bc=nd_bc,
+                        ))
 
         return conflicts
 
@@ -2352,228 +2556,184 @@ class GeomMesh:
 
         cell_size = _normalize_positive_value(cell_size, "cell_size")
         geom_hdf_path = str(geom_hdf_path)
-        area_group_path = None
-
-        # Read the first 7.0-style 2D flow area that has both faces and BC lines.
-        bcs = []
+        area_results = []
         with h5py.File(geom_hdf_path, "r") as hf:
-            if "Geometry/2D Flow Areas" not in hf:
-                return BCFixResult()
-
-            fa_root = hf["Geometry/2D Flow Areas"]
-            area_group = None
-            for key in fa_root.keys():
-                candidate = fa_root[key]
-                if not isinstance(candidate, h5py.Group):
+            for area_group in _iter_bc_flow_area_groups(hf):
+                bcs = _read_bc_features(area_group, ShapelyLine)
+                if not bcs:
                     continue
-                if (
-                    "BC Lines" in candidate
-                    and "FacePoints Coordinate" in candidate
-                    and "Faces FacePoint Indexes" in candidate
-                    and "Faces Perimeter Info" in candidate
-                ):
-                    area_group = candidate
-                    area_group_path = candidate.name
-                    break
-
-            if area_group is None:
-                return BCFixResult()
-
-            bc_group = area_group["BC Lines"]
-            for bc_name in bc_group.keys():
-                bc_feature = bc_group[bc_name]
-                if not isinstance(bc_feature, h5py.Group) or "Coordinates" not in bc_feature:
+                face_segments = _read_bc_face_segments(area_group, ShapelyLine)
+                if not face_segments:
                     continue
-                coords = bc_feature["Coordinates"][:]
-                bc_type_raw = bc_feature.attrs.get("Type", "")
-                if isinstance(bc_type_raw, (bytes, np.bytes_)):
-                    bc_type = bc_type_raw.decode("utf-8", errors="replace").strip(
-                        "\x00"
-                    ).strip()
-                else:
-                    bc_type = str(bc_type_raw)
-                geom = ShapelyLine(coords[:, :2]) if len(coords) >= 2 else None
-                bcs.append(
+                area_results.append(
                     {
-                        "name": bc_name,
-                        "type": bc_type,
-                        "geom": geom,
+                        "flow_area_name": area_group.name.rsplit("/", 1)[-1],
+                        "area_group_path": area_group.name,
+                        "bcs": bcs,
+                        "face_segments": face_segments,
                     }
                 )
 
-        if not bcs:
+        if not area_results:
             return BCFixResult()
 
-        # Read perimeter face geometry from the mesh area group
-        face_segments: List[tuple] = []  # (face_id, ShapelyLine)
-        with h5py.File(geom_hdf_path, "r") as hf:
-            if area_group_path is None:
-                return BCFixResult()
-
-            area_group = hf[area_group_path]
-            fp_coords = area_group["FacePoints Coordinate"][:]
-            face_fp_idx = area_group["Faces FacePoint Indexes"][:]
-            perim_info = area_group["Faces Perimeter Info"][:]
-
-            for fid in range(len(face_fp_idx)):
-                if int(perim_info[fid][0]) == 0 and int(perim_info[fid][1]) == 0:
-                    continue
-                fp_a, fp_b = int(face_fp_idx[fid][0]), int(face_fp_idx[fid][1])
-                a = fp_coords[fp_a]
-                b = fp_coords[fp_b]
-                face_segments.append((fid, ShapelyLine([a, b])))
-
-        if not face_segments:
-            return BCFixResult()
-
-        # Detect conflicts
         buf = max(0.1, cell_size * 0.01)
-        conflicts = []
-        for fid, face_geom in face_segments:
-            face_buf = face_geom.buffer(buf)
-            hitting = [(b["name"], b["type"]) for b in bcs
-                       if b["geom"] is not None and face_buf.intersects(b["geom"])]
-            if len(hitting) >= 2:
-                nd_bc = next((n for n, t in hitting if "normal" in t.lower()), None)
-                conflicts.append(BCConflict(
-                    face_id=fid,
-                    bc_names=[n for n, _ in hitting],
-                    bc_types=[t for _, t in hitting],
-                    normal_depth_bc=nd_bc,
-                ))
+        result = BCFixResult()
+        for area_result in area_results:
+            conflicts = []
+            for fid, face_geom in area_result["face_segments"]:
+                face_buf = face_geom.buffer(buf)
+                hitting = [
+                    (b["name"], b["type"])
+                    for b in area_result["bcs"]
+                    if b["geom"] is not None and face_buf.intersects(b["geom"])
+                ]
+                if len(hitting) >= 2:
+                    nd_bc = next((n for n, t in hitting if "normal" in t.lower()), None)
+                    conflicts.append(BCConflict(
+                        face_id=fid,
+                        flow_area_name=area_result["flow_area_name"],
+                        bc_names=[n for n, _ in hitting],
+                        bc_types=[t for _, t in hitting],
+                        normal_depth_bc=nd_bc,
+                    ))
+            area_result["conflicts"] = conflicts
+            result.conflicts_found += len(conflicts)
 
-        result = BCFixResult(conflicts_found=len(conflicts))
-        if not conflicts or dry_run:
+        if result.conflicts_found == 0 or dry_run:
             if dry_run:
-                result.unresolvable = conflicts
+                for area_result in area_results:
+                    result.unresolvable.extend(area_result["conflicts"])
             return result
 
-        # Build working coords dict
-        bc_coords = {
-            b["name"]: list(b["geom"].coords) if b["geom"] else []
-            for b in bcs
-        }
-
-        # Face midpoints for assignment check
-        face_mids = {
-            fid: ((g.coords[0][0] + g.coords[1][0]) / 2,
-                  (g.coords[0][1] + g.coords[1][1]) / 2)
-            for fid, g in face_segments
-        }
-        face_geoms = {fid: g for fid, g in face_segments}
-
-        for conflict in conflicts:
-            # Select which BC to trim
-            if conflict.normal_depth_bc is not None:
-                trim_name = conflict.normal_depth_bc
-            else:
-                lengths = {}
-                for name in conflict.bc_names:
-                    c = bc_coords.get(name, [])
-                    if len(c) >= 2:
-                        lengths[name] = ShapelyLine(c).length
-                if not lengths:
-                    result.unresolvable.append(conflict)
-                    continue
-                trim_name = max(lengths, key=lengths.get)
-
-            coords = bc_coords.get(trim_name, [])
-            if len(coords) < 2:
-                result.unresolvable.append(conflict)
+        for area_result in area_results:
+            conflicts = area_result["conflicts"]
+            if not conflicts:
                 continue
 
-            face_geom = face_geoms[conflict.face_id]
-            face_mid = face_mids[conflict.face_id]
+            bc_coords = {
+                b["name"]: list(b["geom"].coords) if b["geom"] else []
+                for b in area_result["bcs"]
+            }
+            face_mids = {
+                fid: ((g.coords[0][0] + g.coords[1][0]) / 2,
+                      (g.coords[0][1] + g.coords[1][1]) / 2)
+                for fid, g in area_result["face_segments"]
+            }
+            face_geoms = {fid: g for fid, g in area_result["face_segments"]}
 
-            # Which endpoint is nearest the conflicting face?
-            start_dist = hypot(coords[0][0] - face_mid[0],
-                               coords[0][1] - face_mid[1])
-            end_dist = hypot(coords[-1][0] - face_mid[0],
-                             coords[-1][1] - face_mid[1])
-            trim_from_start = start_dist <= end_dist
-
-            # Walk inward vertex-by-vertex
-            trimmed = list(coords)
-            trimmed_count = 0
-            while len(trimmed) >= 2:
-                if face_geom.buffer(buf).intersects(ShapelyLine(trimmed)):
-                    trimmed = trimmed[1:] if trim_from_start else trimmed[:-1]
-                    trimmed_count += 1
-                    continue
-                ep = trimmed[0] if trim_from_start else trimmed[-1]
-                ep_to_conflict = hypot(ep[0] - face_mid[0], ep[1] - face_mid[1])
-                nearest_other = min(
-                    (hypot(ep[0] - mid[0], ep[1] - mid[1])
-                     for fid, mid in face_mids.items() if fid != conflict.face_id),
-                    default=float("inf"),
-                )
-                if ep_to_conflict <= nearest_other:
-                    trimmed = trimmed[1:] if trim_from_start else trimmed[:-1]
-                    trimmed_count += 1
-                    continue
-                break
-
-            if len(trimmed) < 2:
-                # Fallback: interpolate endpoint
-                line_geom = ShapelyLine(coords)
-                face_mid_pt = ShapelyPoint(*face_mid)
-                proj = line_geom.project(face_mid_pt)
-                pullback = face_geom.length + buf * 2
-                if trim_from_start:
-                    new_dist = proj + pullback
-                    if new_dist >= line_geom.length:
-                        result.unresolvable.append(conflict)
-                        continue
-                    new_pt = line_geom.interpolate(new_dist)
-                    remaining = [c for c in coords
-                                 if line_geom.project(ShapelyPoint(*c)) >= new_dist]
-                    trimmed = [(new_pt.x, new_pt.y)] + remaining
+            for conflict in conflicts:
+                if conflict.normal_depth_bc is not None:
+                    trim_name = conflict.normal_depth_bc
                 else:
-                    new_dist = proj - pullback
-                    if new_dist <= 0:
+                    lengths = {}
+                    for name in conflict.bc_names:
+                        c = bc_coords.get(name, [])
+                        if len(c) >= 2:
+                            lengths[name] = ShapelyLine(c).length
+                    if not lengths:
                         result.unresolvable.append(conflict)
                         continue
-                    new_pt = line_geom.interpolate(new_dist)
-                    remaining = [c for c in coords
-                                 if line_geom.project(ShapelyPoint(*c)) <= new_dist]
-                    trimmed = remaining + [(new_pt.x, new_pt.y)]
-                if len(trimmed) < 2 or face_geom.buffer(buf).intersects(ShapelyLine(trimmed)):
+                    trim_name = max(lengths, key=lengths.get)
+
+                coords = bc_coords.get(trim_name, [])
+                if len(coords) < 2:
                     result.unresolvable.append(conflict)
                     continue
 
-            # Minimum coverage: must still cover at least 1 other face
-            trimmed_line = ShapelyLine(trimmed)
-            covers_other = any(
-                fid != conflict.face_id and g.buffer(buf).intersects(trimmed_line)
-                for fid, g in face_geoms.items()
-            )
-            if not covers_other:
-                result.unresolvable.append(conflict)
-                continue
+                face_geom = face_geoms[conflict.face_id]
+                face_mid = face_mids[conflict.face_id]
 
-            bc_coords[trim_name] = trimmed
-            direction = "start" if trim_from_start else "end"
-            result.trims.append((trim_name, f"trimmed {trimmed_count} pts from {direction}"))
-            result.conflicts_fixed += 1
+                start_dist = hypot(coords[0][0] - face_mid[0], coords[0][1] - face_mid[1])
+                end_dist = hypot(coords[-1][0] - face_mid[0], coords[-1][1] - face_mid[1])
+                trim_from_start = start_dist <= end_dist
+
+                trimmed = list(coords)
+                trimmed_count = 0
+                while len(trimmed) >= 2:
+                    if face_geom.buffer(buf).intersects(ShapelyLine(trimmed)):
+                        trimmed = trimmed[1:] if trim_from_start else trimmed[:-1]
+                        trimmed_count += 1
+                        continue
+                    ep = trimmed[0] if trim_from_start else trimmed[-1]
+                    ep_to_conflict = hypot(ep[0] - face_mid[0], ep[1] - face_mid[1])
+                    nearest_other = min(
+                        (hypot(ep[0] - mid[0], ep[1] - mid[1])
+                         for fid, mid in face_mids.items() if fid != conflict.face_id),
+                        default=float("inf"),
+                    )
+                    if ep_to_conflict <= nearest_other:
+                        trimmed = trimmed[1:] if trim_from_start else trimmed[:-1]
+                        trimmed_count += 1
+                        continue
+                    break
+
+                if len(trimmed) < 2:
+                    line_geom = ShapelyLine(coords)
+                    face_mid_pt = ShapelyPoint(*face_mid)
+                    proj = line_geom.project(face_mid_pt)
+                    pullback = face_geom.length + buf * 2
+                    if trim_from_start:
+                        new_dist = proj + pullback
+                        if new_dist >= line_geom.length:
+                            result.unresolvable.append(conflict)
+                            continue
+                        new_pt = line_geom.interpolate(new_dist)
+                        remaining = [c for c in coords
+                                     if line_geom.project(ShapelyPoint(*c)) >= new_dist]
+                        trimmed = [(new_pt.x, new_pt.y)] + remaining
+                    else:
+                        new_dist = proj - pullback
+                        if new_dist <= 0:
+                            result.unresolvable.append(conflict)
+                            continue
+                        new_pt = line_geom.interpolate(new_dist)
+                        remaining = [c for c in coords
+                                     if line_geom.project(ShapelyPoint(*c)) <= new_dist]
+                        trimmed = remaining + [(new_pt.x, new_pt.y)]
+                    if len(trimmed) < 2 or face_geom.buffer(buf).intersects(ShapelyLine(trimmed)):
+                        result.unresolvable.append(conflict)
+                        continue
+
+                trimmed_line = ShapelyLine(trimmed)
+                covers_other = any(
+                    fid != conflict.face_id and g.buffer(buf).intersects(trimmed_line)
+                    for fid, g in face_geoms.items()
+                )
+                if not covers_other:
+                    result.unresolvable.append(conflict)
+                    continue
+
+                bc_coords[trim_name] = trimmed
+                direction = "start" if trim_from_start else "end"
+                result.trims.append(
+                    (
+                        f"{area_result['flow_area_name']}/{trim_name}",
+                        f"trimmed {trimmed_count} pts from {direction}",
+                    )
+                )
+                result.conflicts_fixed += 1
+
+            area_result["bc_coords"] = bc_coords
 
         if result.conflicts_fixed == 0:
             return result
 
-        # Write trimmed coords back to the per-area 7.0 BC layout.
         with h5py.File(geom_hdf_path, "r+") as hf:
-            if area_group_path is None:
-                return result
-            for b in bcs:
-                bc_feature_path = f"{area_group_path}/BC Lines/{b['name']}"
-                if bc_feature_path not in hf:
+            for area_result in area_results:
+                if "bc_coords" not in area_result:
                     continue
-                bc_feature = hf[bc_feature_path]
-                if "Coordinates" in bc_feature:
-                    del bc_feature["Coordinates"]
-                bc_feature.create_dataset(
-                    "Coordinates",
-                    data=np.array(bc_coords.get(b["name"], []), dtype=np.float64),
-                )
+                for b in area_result["bcs"]:
+                    bc_feature_path = f"{area_result['area_group_path']}/BC Lines/{b['name']}"
+                    if bc_feature_path not in hf:
+                        continue
+                    bc_feature = hf[bc_feature_path]
+                    if "Coordinates" in bc_feature:
+                        del bc_feature["Coordinates"]
+                    bc_feature.create_dataset(
+                        "Coordinates",
+                        data=np.array(area_result["bc_coords"].get(b["name"], []), dtype=np.float64),
+                    )
 
         result.modified_hdf = True
         logger.info(
