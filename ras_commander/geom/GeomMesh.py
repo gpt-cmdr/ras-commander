@@ -781,6 +781,20 @@ def _set_breakline_spacing_impl(
         keepends=True
     )
 
+    if breakline_name is not None:
+        matches = [
+            i for i, l in enumerate(lines)
+            if l.startswith("BreakLine Name=")
+            and l.split("=", 1)[1].strip() == breakline_name
+        ]
+        if len(matches) > 1:
+            raise ValueError(
+                f"Multiple breaklines named '{breakline_name}' "
+                f"(count={len(matches)}). Use breakline_fid for "
+                f"disambiguation — call get_breakline_names() to "
+                f"inspect FID-to-name mapping."
+            )
+
     in_target_block = all_breaklines
     found_target = False
     bl_index = -1
@@ -978,27 +992,23 @@ def _sync_breakline_spacing_text_to_hdf(
             if "Cell Spacing Near" not in data.dtype.names:
                 return
             changed = False
-            hdf_names = [n.decode("utf-8", errors="replace").strip()
-                         for n in data["Name"]]
-            text_map = {name.strip(): (t_near, t_far, t_nr, t_pr)
-                        for _fid, name, t_near, t_far, t_nr, t_pr in bl_spacings}
             has_nr = "Near Repeats" in data.dtype.names
             has_pr = "Protection Radius" in data.dtype.names
-            for i, hdf_name in enumerate(hdf_names):
-                if hdf_name in text_map:
-                    t_near, t_far, t_nr, t_pr = text_map[hdf_name]
-                    if abs(float(data["Cell Spacing Near"][i]) - t_near) > 0.001:
-                        data["Cell Spacing Near"][i] = t_near
-                        changed = True
-                    if abs(float(data["Cell Spacing Far"][i]) - t_far) > 0.001:
-                        data["Cell Spacing Far"][i] = t_far
-                        changed = True
-                    if has_nr and int(data["Near Repeats"][i]) != t_nr:
-                        data["Near Repeats"][i] = t_nr
-                        changed = True
-                    if has_pr and int(data["Protection Radius"][i]) != t_pr:
-                        data["Protection Radius"][i] = t_pr
-                        changed = True
+            for fid, _name, t_near, t_far, t_nr, t_pr in bl_spacings:
+                if fid >= len(data):
+                    break
+                if abs(float(data["Cell Spacing Near"][fid]) - t_near) > 0.001:
+                    data["Cell Spacing Near"][fid] = t_near
+                    changed = True
+                if abs(float(data["Cell Spacing Far"][fid]) - t_far) > 0.001:
+                    data["Cell Spacing Far"][fid] = t_far
+                    changed = True
+                if has_nr and int(data["Near Repeats"][fid]) != t_nr:
+                    data["Near Repeats"][fid] = t_nr
+                    changed = True
+                if has_pr and int(data["Protection Radius"][fid]) != t_pr:
+                    data["Protection Radius"][fid] = t_pr
+                    changed = True
             if changed:
                 hf[bl_key][:] = data
                 logger.info(
@@ -1341,6 +1351,18 @@ def _resolve_geom_text_path(
     )
 
 
+def _ensure_hdf(geom_text_path: Path, hecras_dir=None) -> Path:
+    """Return an up-to-date HDF for *geom_text_path*, recompiling if stale."""
+    hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
+    need_compile = not hdf_path.exists()
+    if not need_compile and geom_text_path.stat().st_mtime > hdf_path.stat().st_mtime:
+        logger.info(f"{geom_text_path.name} is newer than HDF — recompiling")
+        need_compile = True
+    if need_compile:
+        hdf_path = GeomMesh.compile_geometry(geom_text_path, hecras_dir=hecras_dir)
+    return hdf_path
+
+
 class GeomMesh:
     """
     Headless 2D mesh generation, repair, and BC conflict resolution.
@@ -1465,6 +1487,11 @@ class GeomMesh:
             raise ValueError(
                 "Provide breakline_name or breakline_fid for single-breakline "
                 "edits, or set all_breaklines=True for bulk changes."
+            )
+        if all_breaklines and (breakline_name is not None or breakline_fid is not None):
+            raise ValueError(
+                "all_breaklines=True cannot be combined with "
+                "breakline_name or breakline_fid."
             )
         if breakline_name is not None and breakline_fid is not None:
             raise ValueError(
@@ -1597,11 +1624,7 @@ class GeomMesh:
         import h5py
 
         geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
-        hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
-        if not hdf_path.exists():
-            hdf_path = GeomMesh.compile_geometry(
-                geom_text_path, hecras_dir=hecras_dir
-            )
+        hdf_path = _ensure_hdf(geom_text_path, hecras_dir=hecras_dir)
 
         rr_key = "Geometry/2D Flow Area Refinement Regions/Attributes"
         result = []
@@ -1658,11 +1681,7 @@ class GeomMesh:
             raise ValueError("Provide region_fid or old_name, not both.")
 
         geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
-        hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
-        if not hdf_path.exists():
-            hdf_path = GeomMesh.compile_geometry(
-                geom_text_path, hecras_dir=hecras_dir
-            )
+        hdf_path = _ensure_hdf(geom_text_path, hecras_dir=hecras_dir)
 
         rr_key = "Geometry/2D Flow Area Refinement Regions/Attributes"
         with h5py.File(str(hdf_path), "r+") as hf:
@@ -1695,10 +1714,11 @@ class GeomMesh:
                     f"Refinement region {target} not found in HDF."
                 )
 
-            encoded = new_name.encode("utf-8")
             name_len = data.dtype["Name"].itemsize
+            encoded = new_name.encode("utf-8")
             if len(encoded) > name_len:
-                encoded = encoded[:name_len]
+                encoded = new_name.encode("utf-8")[:name_len]
+                encoded = encoded.decode("utf-8", errors="ignore").encode("utf-8")
             data["Name"][found_idx] = encoded
             hf[rr_key][:] = data
 
@@ -1733,11 +1753,7 @@ class GeomMesh:
         import h5py
 
         geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
-        hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
-        if not hdf_path.exists():
-            hdf_path = GeomMesh.compile_geometry(
-                geom_text_path, hecras_dir=hecras_dir
-            )
+        hdf_path = _ensure_hdf(geom_text_path, hecras_dir=hecras_dir)
 
         rr_key = "Geometry/2D Flow Area Refinement Regions/Attributes"
         result = []
@@ -1809,6 +1825,11 @@ class GeomMesh:
                 "Provide region_name or region_fid for single-region edits, "
                 "or set all_regions=True for bulk changes."
             )
+        if all_regions and (region_name is not None or region_fid is not None):
+            raise ValueError(
+                "all_regions=True cannot be combined with "
+                "region_name or region_fid."
+            )
         if region_name is not None and region_fid is not None:
             raise ValueError(
                 "Provide region_name or region_fid, not both."
@@ -1817,11 +1838,7 @@ class GeomMesh:
             spacing_dy = spacing_dx
 
         geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
-        hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
-        if not hdf_path.exists():
-            hdf_path = GeomMesh.compile_geometry(
-                geom_text_path, hecras_dir=hecras_dir
-            )
+        hdf_path = _ensure_hdf(geom_text_path, hecras_dir=hecras_dir)
 
         rr_key = "Geometry/2D Flow Area Refinement Regions/Attributes"
         with h5py.File(str(hdf_path), "r+") as hf:
@@ -1835,14 +1852,34 @@ class GeomMesh:
                     "HDF refinement regions missing Spacing columns."
                 )
 
+            if region_name is not None:
+                has_name_col = "Name" in data.dtype.names
+                if not has_name_col:
+                    raise ValueError(
+                        "HDF refinement regions missing Name column — "
+                        "use region_fid instead."
+                    )
+                matches = [
+                    i for i in range(len(data))
+                    if data["Name"][i].decode("utf-8", errors="replace").strip()
+                    == region_name
+                ]
+                if len(matches) > 1:
+                    raise ValueError(
+                        f"Multiple refinement regions named '{region_name}' "
+                        f"(count={len(matches)}). Use region_fid for "
+                        f"disambiguation — call get_refinement_region_names() "
+                        f"to inspect FID-to-name mapping."
+                    )
+
             found = False
             for i in range(len(data)):
-                name = data["Name"][i].decode("utf-8", errors="replace").strip()
                 if all_regions:
                     target_match = True
                 elif region_fid is not None:
                     target_match = i == region_fid
                 else:
+                    name = data["Name"][i].decode("utf-8", errors="replace").strip()
                     target_match = name == region_name
                 if not target_match:
                     continue
@@ -1953,15 +1990,10 @@ class GeomMesh:
             RuntimeError: If terrain is missing or computation fails.
         """
         geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
-        hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
 
         _load_dlls(hecras_dir)
 
-        need_compile = not hdf_path.exists()
-        if not need_compile and geom_text_path.stat().st_mtime > hdf_path.stat().st_mtime:
-            need_compile = True
-        if need_compile:
-            GeomMesh.compile_geometry(geom_text_path, hecras_dir=hecras_dir)
+        hdf_path = _ensure_hdf(geom_text_path, hecras_dir=hecras_dir)
 
         ns = _imports()
         geom = ns["RASGeometry"](str(hdf_path))
@@ -2119,13 +2151,7 @@ class GeomMesh:
             # ── Step 1: Compile .g01 text → HDF ────────────────────────
             # Always recompile when text is newer than HDF so that
             # perimeter/breakline/structure edits are picked up.
-            hdf_path = text_path.with_suffix(text_path.suffix + ".hdf")
-            need_compile = not hdf_path.exists()
-            if not need_compile and text_path.stat().st_mtime > hdf_path.stat().st_mtime:
-                logger.info(f"{text_path.name} is newer than HDF — recompiling")
-                need_compile = True
-            if need_compile:
-                hdf_path = GeomMesh.compile_geometry(text_path, hecras_dir=hecras_dir)
+            hdf_path = _ensure_hdf(text_path, hecras_dir=hecras_dir)
 
             # ── Step 1b: Sync text → HDF ────────────────────────────────
             # RegenerateMeshPoints reads spacing from the HDF, not from
@@ -2444,9 +2470,7 @@ class GeomMesh:
         text_path = _resolve_geom_text_path(geom_number, ras_object=ras_object)
         _load_dlls(hecras_dir)
         ns = _imports()
-        hdf_path = text_path.with_suffix(text_path.suffix + ".hdf")
-        if not hdf_path.exists():
-            hdf_path = GeomMesh.compile_geometry(text_path, hecras_dir=hecras_dir)
+        hdf_path = _ensure_hdf(text_path, hecras_dir=hecras_dir)
         geom = ns["RASGeometry"](str(hdf_path))
         d2fa = geom.D2FlowArea
         count = d2fa.FeatureCount()
