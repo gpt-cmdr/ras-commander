@@ -1,0 +1,1075 @@
+"""Unit tests for GeomMesh headless mesh generation and BC repair."""
+
+from importlib import import_module
+import os
+import platform
+import shutil
+import sys
+import types
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+repo_root = Path(__file__).parent.parent
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+
+h5py = pytest.importorskip("h5py")
+np = pytest.importorskip("numpy")
+
+geom_mesh_module = import_module("ras_commander.geom.GeomMesh")
+GeomMesh = geom_mesh_module.GeomMesh
+_patch_text_seeds = geom_mesh_module._patch_text_seeds
+_reseed_after_perimeter_fix = geom_mesh_module._reseed_after_perimeter_fix
+_remove_short_perimeter_segments = geom_mesh_module._remove_short_perimeter_segments
+
+HECRAS_INTEGRATION_ENV = "RAS_COMMANDER_RUN_HECRAS_INTEGRATION"
+
+
+class MockPointM:
+    """Mock .NET PointM with X, Y properties."""
+
+    def __init__(self, x, y):
+        self.X = x
+        self.Y = y
+
+
+class MockPolygon:
+    """Mock .NET Polygon with Count and PointM(i)."""
+
+    def __init__(self, coords_or_pointms):
+        if isinstance(coords_or_pointms, MockPointMs):
+            self._coords = [(p.X, p.Y) for p in coords_or_pointms._items]
+        else:
+            self._coords = coords_or_pointms
+
+    @property
+    def Count(self):
+        return len(self._coords)
+
+    def PointM(self, i):
+        x, y = self._coords[i]
+        return MockPointM(x, y)
+
+
+class MockPointMs:
+    """Mock .NET PointMs collection."""
+
+    def __init__(self):
+        self._items = []
+
+    def Add(self, pm):
+        self._items.append(pm)
+
+
+class FakePointCollection:
+    """Small stand-in for seed collections returned from helper functions."""
+
+    def __init__(self, count=2):
+        self.Count = count
+
+    def __getitem__(self, index):
+        return MockPointM(float(index), float(index))
+
+
+class FakeMeshState(int):
+    """Enum-like int that preserves a readable string representation."""
+
+    def __new__(cls, value, name):
+        obj = int.__new__(cls, value)
+        obj._name = name
+        return obj
+
+    def __str__(self):
+        return self._name
+
+
+class FakeCell:
+    """Mesh cell with a point center."""
+
+    def __init__(self, x, y):
+        self.Point = MockPointM(x, y)
+
+
+class FakeMesh:
+    """Mesh object with the subset of properties GeomMesh.generate() uses."""
+
+    def __init__(self):
+        self.MeshCompletionState = FakeMeshState(1, "Complete")
+        self.NonVirtualCellCount = 2
+        self.FaceCount = 5
+        self._cells = [FakeCell(10.0, 10.0), FakeCell(20.0, 20.0)]
+
+    def Cell(self, index):
+        return self._cells[index]
+
+
+@pytest.fixture
+def square_perimeter():
+    """Simple 100x100 square polygon."""
+    return MockPolygon([(0, 0), (100, 0), (100, 100), (0, 100)])
+
+
+@pytest.fixture
+def dense_perimeter():
+    """Square with many closely-spaced points along each edge."""
+    coords = []
+    for i in range(0, 100, 5):
+        coords.append((i, 0))
+    for i in range(0, 100, 5):
+        coords.append((100, i))
+    for i in range(100, 0, -5):
+        coords.append((i, 100))
+    for i in range(100, 0, -5):
+        coords.append((0, i))
+    return MockPolygon(coords)
+
+
+@pytest.fixture
+def bc_conflict_hdf(tmp_path):
+    """Create a synthetic .g01.hdf with per-area 7.0 BC lines."""
+    hdf_path = tmp_path / "test.g01.hdf"
+    with h5py.File(str(hdf_path), "w") as hf:
+        fa_group = hf.create_group("Geometry/2D Flow Areas")
+        area_grp = fa_group.create_group("MainArea")
+
+        bc_grp = area_grp.create_group("BC Lines")
+        nd1 = bc_grp.create_group("NormDepth1")
+        nd1.create_dataset(
+            "Coordinates",
+            data=np.array(
+                [
+                    [0.0, 0.0],
+                    [50.0, 0.0],
+                    [100.0, 0.0],
+                ],
+                dtype=np.float64,
+            ),
+        )
+        nd1.attrs["Type"] = "Normal Depth"
+
+        us1 = bc_grp.create_group("USInflow1")
+        us1.create_dataset(
+            "Coordinates",
+            data=np.array(
+                [
+                    [80.0, 0.0],
+                    [150.0, 0.0],
+                    [200.0, 0.0],
+                ],
+                dtype=np.float64,
+            ),
+        )
+        us1.attrs["Type"] = "Flow Hydrograph"
+
+        area_grp.create_dataset(
+            "FacePoints Coordinate",
+            data=np.array(
+                [
+                    [90.0, 0.0],
+                    [95.0, 0.0],
+                    [20.0, 0.0],
+                    [25.0, 0.0],
+                ],
+                dtype=np.float64,
+            ),
+        )
+        area_grp.create_dataset(
+            "Faces FacePoint Indexes",
+            data=np.array([[0, 1], [2, 3]], dtype=np.int32),
+        )
+        area_grp.create_dataset(
+            "Faces Perimeter Info",
+            data=np.array([[1, 1], [1, 1]], dtype=np.int32),
+        )
+
+    return hdf_path
+
+
+@pytest.fixture
+def multi_area_bc_conflict_hdf(tmp_path):
+    """Create a synthetic HDF where only the second flow area has a BC conflict."""
+    hdf_path = tmp_path / "multi_area.g01.hdf"
+    with h5py.File(str(hdf_path), "w") as hf:
+        fa_group = hf.create_group("Geometry/2D Flow Areas")
+
+        area1 = fa_group.create_group("Area1")
+        area1_bc = area1.create_group("BC Lines")
+        flow1 = area1_bc.create_group("UpstreamOnly")
+        flow1.create_dataset(
+            "Coordinates",
+            data=np.array([[0.0, 0.0], [25.0, 0.0], [50.0, 0.0]], dtype=np.float64),
+        )
+        flow1.attrs["Type"] = "Flow Hydrograph"
+        area1.create_dataset(
+            "FacePoints Coordinate",
+            data=np.array([[0.0, 0.0], [5.0, 0.0]], dtype=np.float64),
+        )
+        area1.create_dataset(
+            "Faces FacePoint Indexes",
+            data=np.array([[0, 1]], dtype=np.int32),
+        )
+        area1.create_dataset(
+            "Faces Perimeter Info",
+            data=np.array([[1, 1]], dtype=np.int32),
+        )
+
+        area2 = fa_group.create_group("Area2")
+        area2_bc = area2.create_group("BC Lines")
+        nd2 = area2_bc.create_group("NormDepth2")
+        nd2.create_dataset(
+            "Coordinates",
+            data=np.array(
+                [[90.0, 0.0], [95.0, 0.0], [100.0, 0.0], [105.0, 0.0], [110.0, 0.0]],
+                dtype=np.float64,
+            ),
+        )
+        nd2.attrs["Type"] = "Normal Depth"
+        us2 = area2_bc.create_group("USInflow2")
+        us2.create_dataset(
+            "Coordinates",
+            data=np.array([[92.0, 0.0], [96.0, 0.0], [99.0, 0.0]], dtype=np.float64),
+        )
+        us2.attrs["Type"] = "Flow Hydrograph"
+        area2.create_dataset(
+            "FacePoints Coordinate",
+            data=np.array(
+                [[90.0, 0.0], [95.0, 0.0], [104.0, 0.0], [108.0, 0.0]],
+                dtype=np.float64,
+            ),
+        )
+        area2.create_dataset(
+            "Faces FacePoint Indexes",
+            data=np.array([[0, 1], [2, 3]], dtype=np.int32),
+        )
+        area2.create_dataset(
+            "Faces Perimeter Info",
+            data=np.array([[1, 1], [1, 1]], dtype=np.int32),
+        )
+
+    return hdf_path
+
+
+@pytest.fixture
+def breakline_geom_text(tmp_path):
+    """Create a minimal .g01 text file with breakline spacing lines."""
+    geom_text = tmp_path / "test.g01"
+    geom_text.write_text(
+        "Geom Title=Test\n"
+        "Storage Area=MainArea\n"
+        "Storage Area Point Generation Data=,,50.000000,50.000000\n"
+        "BreakLine CellSize Min=50.000000\n"
+        "BreakLine CellSize Max=200.000000\n"
+        "Storage Area 2D Points= 0 \n"
+        "LCMann Time=0\n",
+        encoding="utf-8",
+    )
+    return geom_text
+
+
+@pytest.fixture
+def storage_area_geom_text(tmp_path):
+    """Geometry text containing old seed rows with spacing and negative values."""
+    geom_text = tmp_path / "storage_points.g01"
+    geom_text.write_text(
+        "Geom Title=Test\n"
+        "Storage Area=MainArea\n"
+        "Storage Area 2D Points= 3 \n"
+        "      -25.0000000000    10.0000000000    15.0000000000   -40.0000000000\n"
+        "        5.0000000000     8.0000000000\n"
+        "BreakLine CellSize Min=25.000000\n",
+        encoding="utf-8",
+    )
+    return geom_text
+
+
+def _mock_generate_success(monkeypatch, compiled_geom_path: Path, *, has_breaklines: bool):
+    """Patch the heavy .NET entrypoints so generate() can be unit tested.
+
+    Follows the RASDecomp-style architecture: load geometry from .NET,
+    generate seeds via .NET, compute mesh, save via .NET + patch text.
+    """
+    captured = {}
+
+    monkeypatch.setattr(geom_mesh_module, "_load_dlls", lambda hecras_dir=None: None)
+
+    # Build mock .NET geometry chain
+    mock_geom_obj = MagicMock()
+    mock_geom_obj.D2FlowArea.GetFeatureByName.return_value = 0
+    mock_geom_obj.D2FlowArea.GetFeatureName.return_value = "MainArea"
+    mock_geom_obj.D2FlowArea.FeatureCount.return_value = 1
+    mock_geom_obj.D2FlowArea.Geometry.MeshPerimeters.Polygon.return_value = (
+        MockPolygon([(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)])
+    )
+    mock_geom_obj.BreakLines = MagicMock()
+    mock_geom_obj.BreakLines.FeatureCount.return_value = 1 if has_breaklines else 0
+
+    monkeypatch.setattr(
+        geom_mesh_module,
+        "_imports",
+        lambda: {
+            "MeshStatus": type(
+                "MeshStatus",
+                (),
+                {
+                    "Complete": 1,
+                    "MaxFacesPerCellExceeded": 2,
+                    "FacePerimeterConnectionError": 3,
+                    "PerimeterPolygonError": 4,
+                },
+            ),
+            "RASGeometry": lambda path: mock_geom_obj,
+            "PointGenerator": MagicMock(),
+            "Polyline": MagicMock(),
+            "PolylineFeatureLayer": MagicMock(),
+            "Polygon": MockPolygon,
+            "PointMs": MockPointMs,
+            "Point2D": MagicMock(),
+            "List": MagicMock(),
+            "System": MagicMock(),
+            "MeshFV2D": MagicMock(),
+        },
+    )
+
+    monkeypatch.setattr(
+        geom_mesh_module,
+        "_build_breaklines",
+        lambda d2fa, ns: "mock_breaklines" if has_breaklines else None,
+    )
+    monkeypatch.setattr(
+        geom_mesh_module,
+        "_generate_seeds_via_net",
+        lambda hdf_path, ns, fid=0: (_ for _ in ()).throw(
+            RuntimeError("mock: .NET unavailable")
+        ),
+    )
+
+    def fake_generate_seeds_safe(perim, cell_size, ns):
+        captured["cell_size"] = cell_size
+        return FakePointCollection()
+
+    monkeypatch.setattr(
+        geom_mesh_module,
+        "_generate_seeds_safe",
+        fake_generate_seeds_safe,
+    )
+    monkeypatch.setattr(
+        geom_mesh_module,
+        "_compute_mesh",
+        lambda perim, seeds_pm, breaklines, ratio, ns: FakeMesh(),
+    )
+    monkeypatch.setattr(
+        geom_mesh_module,
+        "_save_mesh",
+        lambda geom, d2fa, fid, mesh, ns: None,
+    )
+
+    def fake_compile_geometry(geom_text_path, hecras_dir=None):
+        hdf_path = Path(geom_text_path).with_suffix(Path(geom_text_path).suffix + ".hdf")
+        hdf_path.write_text("compiled", encoding="utf-8")
+        compiled_geom_path.write_text("compiled", encoding="utf-8")
+        return hdf_path
+
+    monkeypatch.setattr(GeomMesh, "compile_geometry", staticmethod(fake_compile_geometry))
+    captured["geom"] = mock_geom_obj
+    return captured
+
+
+def _install_fake_rasmapper_scripting(monkeypatch):
+    """Install a stub RasMapperLib.Scripting module for helper tests."""
+
+    fake_scripting = types.ModuleType("RasMapperLib.Scripting")
+
+    class FakeCompleteGeometryCommand:
+        def __init__(self):
+            self.GeometryFilename = None
+
+        def ExecuteOutOfProcess(self, wait_for_completion):
+            return None
+
+    fake_scripting.CompleteGeometryCommand = FakeCompleteGeometryCommand
+
+    fake_rasmapper = types.ModuleType("RasMapperLib")
+    fake_rasmapper.Scripting = fake_scripting
+
+    monkeypatch.setitem(sys.modules, "RasMapperLib", fake_rasmapper)
+    monkeypatch.setitem(sys.modules, "RasMapperLib.Scripting", fake_scripting)
+
+
+class TestRemoveShortPerimeterSegments:
+    """Test greedy forward pass perimeter simplification."""
+
+    def _call(self, perim, min_length, ns=None):
+        mock_rml = MagicMock()
+        mock_rml.PointMs = MockPointMs
+        mock_rml.Polygon = MockPolygon
+        mock_rml.PointM = MockPointM
+        with patch.dict("sys.modules", {"RasMapperLib": mock_rml}):
+            return _remove_short_perimeter_segments(perim, min_length, ns or {})
+
+    def test_no_removal_well_spaced(self, square_perimeter):
+        result = self._call(square_perimeter, 10.0)
+        assert result.Count == 4
+
+    def test_removes_close_points(self, dense_perimeter):
+        result = self._call(dense_perimeter, 30.0)
+        assert result.Count < dense_perimeter.Count
+
+    def test_degenerate_polygon_unchanged(self):
+        tri = MockPolygon([(0, 0), (1, 0), (0, 1)])
+        result = self._call(tri, 100.0)
+        assert result.Count == 3
+
+    def test_very_small_min_length_no_change(self, square_perimeter):
+        result = self._call(square_perimeter, 0.001)
+        assert result.Count == 4
+
+
+class TestSetBreaklineSpacing:
+    """Test text file editing for breakline spacing."""
+
+    def test_updates_values(self, breakline_geom_text):
+        backup = GeomMesh.set_breakline_spacing(
+            breakline_geom_text, near=33.0, far=100.0, all_breaklines=True
+        )
+        assert backup.exists()
+        text = breakline_geom_text.read_text(encoding="utf-8")
+        assert "BreakLine CellSize Min=33.000000" in text
+        assert "BreakLine CellSize Max=100.000000" in text
+
+    def test_creates_backup(self, breakline_geom_text):
+        backup = GeomMesh.set_breakline_spacing(
+            breakline_geom_text, near=10.0, far=50.0, all_breaklines=True
+        )
+        assert backup.exists()
+        assert backup.suffix == ".bak"
+
+    def test_keeps_existing_values_with_none(self, breakline_geom_text):
+        GeomMesh.set_breakline_spacing(
+            breakline_geom_text, near=None, far=None, all_breaklines=True
+        )
+        text = breakline_geom_text.read_text(encoding="utf-8")
+        assert "BreakLine CellSize Min=50.000000" in text
+        assert "BreakLine CellSize Max=200.000000" in text
+
+    @pytest.mark.parametrize(
+        ("near", "far"),
+        [
+            (0.0, 50.0),
+            (25.0, -1.0),
+        ],
+    )
+    def test_rejects_nonpositive_values(self, breakline_geom_text, near, far):
+        with pytest.raises(ValueError, match="must be greater than 0.0"):
+            GeomMesh.set_breakline_spacing(
+                breakline_geom_text,
+                near=near,
+                far=far,
+                all_breaklines=True,
+            )
+
+
+class TestPatchTextSeeds:
+    """Test robust replacement of packed Storage Area 2D seed rows."""
+
+    def test_replaces_right_justified_and_negative_coordinate_rows(self, storage_area_geom_text):
+        cell_centers = np.array(
+            [
+                [1.0, 2.0],
+                [3.0, 4.0],
+                [5.0, 6.0],
+            ],
+            dtype=np.float64,
+        )
+
+        _patch_text_seeds(storage_area_geom_text, cell_centers)
+
+        text = storage_area_geom_text.read_text(encoding="utf-8")
+        assert "Storage Area 2D Points= 3 " in text
+        assert "-25.0000000000" not in text
+        assert "-40.0000000000" not in text
+        assert "BreakLine CellSize Min=25.000000" in text
+
+
+class TestReseedAfterPerimeterFix:
+    """Test mesh targeting after perimeter mutation recompiles."""
+
+    def test_fallback_uses_selected_flow_area(self, monkeypatch, tmp_path):
+        geom_text_path = tmp_path / "test.g01"
+        geom_text_path.write_text("Geom Title=Test\n", encoding="utf-8")
+        _install_fake_rasmapper_scripting(monkeypatch)
+
+        polygon_calls = []
+        seed_calls = []
+        selected_polygon = MockPolygon(
+            [(200.0, 0.0), (300.0, 0.0), (300.0, 100.0), (200.0, 100.0)]
+        )
+
+        mock_geom_obj = MagicMock()
+        mock_geom_obj.D2FlowArea.GetFeatureByName.side_effect = (
+            lambda name: 1 if name == "SecondaryArea" else -1
+        )
+        mock_geom_obj.D2FlowArea.Geometry.MeshPerimeters.Polygon.side_effect = (
+            lambda fid: polygon_calls.append(fid) or selected_polygon
+        )
+
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_patch_text_perimeter",
+            lambda *args, **kwargs: None,
+        )
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_sync_breakline_spacing_text_to_hdf",
+            lambda *args, **kwargs: None,
+        )
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_sync_cell_size_to_hdf",
+            lambda *args, **kwargs: None,
+        )
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_generate_seeds_via_net",
+            lambda hdf_path, ns, fid=0: seed_calls.append(fid) or (_ for _ in ()).throw(
+                RuntimeError("mock: .NET unavailable")
+            ),
+        )
+
+        def fake_generate_seeds_safe(perim, cell_size, ns):
+            assert perim is selected_polygon
+            return FakePointCollection()
+
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_generate_seeds_safe",
+            fake_generate_seeds_safe,
+        )
+
+        seeds = _reseed_after_perimeter_fix(
+            geom_text_path,
+            geom_text_path.with_suffix(".g01.hdf"),
+            MockPolygon([(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]),
+            100.0,
+            1,
+            "SecondaryArea",
+            {"RASGeometry": lambda path: mock_geom_obj},
+        )
+
+        assert seeds.Count == 2
+        assert seed_calls == [1]
+        assert polygon_calls == [1]
+
+
+class TestDetectBcConflicts:
+    """Test BC conflict detection using synthetic HDF."""
+
+    def test_detects_shared_face(self, bc_conflict_hdf):
+        conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
+        assert len(conflicts) >= 1
+        assert "NormDepth1" in conflicts[0].bc_names
+        assert "USInflow1" in conflicts[0].bc_names
+
+    def test_identifies_normal_depth_bc(self, bc_conflict_hdf):
+        conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
+        assert conflicts[0].normal_depth_bc == "NormDepth1"
+
+    def test_detects_conflicts_in_later_flow_area(self, multi_area_bc_conflict_hdf):
+        conflicts = GeomMesh.detect_bc_conflicts(
+            str(multi_area_bc_conflict_hdf), cell_size=50.0
+        )
+        assert len(conflicts) == 1
+        assert conflicts[0].flow_area_name == "Area2"
+        assert conflicts[0].normal_depth_bc == "NormDepth2"
+        assert "USInflow2" in conflicts[0].bc_names
+
+
+class TestFixBcConflicts:
+    """Test BC conflict repair using synthetic HDF."""
+
+    def test_trims_normal_depth_bc_and_updates_per_area_group(self, bc_conflict_hdf):
+        result = GeomMesh.fix_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
+        assert result.conflicts_found == 1
+        assert result.conflicts_fixed == 1
+        assert result.modified_hdf is True
+
+        with h5py.File(str(bc_conflict_hdf), "r") as hf:
+            coords = hf["Geometry/2D Flow Areas/MainArea/BC Lines/NormDepth1/Coordinates"][:]
+            assert len(coords) < 3
+
+        conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
+        assert conflicts == []
+
+    def test_dry_run_no_modification(self, bc_conflict_hdf):
+        result = GeomMesh.fix_bc_conflicts(
+            str(bc_conflict_hdf), cell_size=50.0, dry_run=True
+        )
+        assert result.modified_hdf is False
+        assert result.conflicts_found == 1
+
+    def test_repairs_only_conflicted_later_flow_area(self, multi_area_bc_conflict_hdf):
+        with h5py.File(str(multi_area_bc_conflict_hdf), "r") as hf:
+            before_area1 = hf["Geometry/2D Flow Areas/Area1/BC Lines/UpstreamOnly/Coordinates"][:]
+            before_area2 = hf["Geometry/2D Flow Areas/Area2/BC Lines/NormDepth2/Coordinates"][:]
+
+        result = GeomMesh.fix_bc_conflicts(
+            str(multi_area_bc_conflict_hdf), cell_size=50.0
+        )
+
+        assert result.conflicts_found == 1
+        assert result.conflicts_fixed == 1
+        assert result.modified_hdf is True
+        assert result.trims[0][0].startswith("Area2/")
+
+        with h5py.File(str(multi_area_bc_conflict_hdf), "r") as hf:
+            after_area1 = hf["Geometry/2D Flow Areas/Area1/BC Lines/UpstreamOnly/Coordinates"][:]
+            after_area2 = hf["Geometry/2D Flow Areas/Area2/BC Lines/NormDepth2/Coordinates"][:]
+
+        assert np.array_equal(before_area1, after_area1)
+        assert len(after_area2) < len(before_area2)
+        assert GeomMesh.detect_bc_conflicts(str(multi_area_bc_conflict_hdf), cell_size=50.0) == []
+
+
+class TestGenerate:
+    """Test generate() normalization and persistence semantics."""
+
+    def test_defaults_persist_geometry_and_compile(self, monkeypatch, breakline_geom_text):
+        compiled_marker = breakline_geom_text.with_suffix(".compiled")
+        captured = _mock_generate_success(
+            monkeypatch,
+            compiled_marker,
+            has_breaklines=True,
+        )
+
+        result = GeomMesh.generate(breakline_geom_text)
+
+        assert result.ok
+        assert result.geom_hdf_path
+        assert Path(result.geom_hdf_path).exists()
+        assert captured["cell_size"] == pytest.approx(100.0)
+
+        text = breakline_geom_text.read_text(encoding="utf-8")
+        assert "Storage Area Point Generation Data=,,100.000000,100.000000" in text
+        assert "BreakLine CellSize Min=50.000000" in text
+        assert "BreakLine CellSize Max=200.000000" in text
+        assert "Storage Area 2D Points= 2 " in text
+
+    def test_accepts_breakline_spacing_override(self, monkeypatch, breakline_geom_text):
+        compiled_marker = breakline_geom_text.with_suffix(".compiled")
+        captured = _mock_generate_success(
+            monkeypatch,
+            compiled_marker,
+            has_breaklines=True,
+        )
+
+        result = GeomMesh.generate(
+            breakline_geom_text,
+            bl_spacing_near=75.0,
+            bl_spacing_far=125.0,
+        )
+
+        assert result.ok
+
+        text = breakline_geom_text.read_text(encoding="utf-8")
+        assert "BreakLine CellSize Min=75.000000" in text
+        assert "BreakLine CellSize Max=125.000000" in text
+
+    def test_reseed_after_perimeter_fix_preserves_selected_mesh(
+        self, monkeypatch, breakline_geom_text
+    ):
+        compiled_marker = breakline_geom_text.with_suffix(".compiled")
+        captured = _mock_generate_success(
+            monkeypatch,
+            compiled_marker,
+            has_breaklines=True,
+        )
+        _install_fake_rasmapper_scripting(monkeypatch)
+
+        feature_names = ["MainArea", "SecondaryArea"]
+        polygons = {
+            0: MockPolygon([(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]),
+            1: MockPolygon([(200.0, 0.0), (300.0, 0.0), (300.0, 100.0), (200.0, 100.0)]),
+        }
+        geom = captured["geom"]
+        geom.D2FlowArea.FeatureCount.return_value = 2
+        geom.D2FlowArea.GetFeatureName.side_effect = lambda fid: feature_names[fid]
+        geom.D2FlowArea.GetFeatureByName.side_effect = (
+            lambda name: feature_names.index(name) if name in feature_names else -1
+        )
+        geom.D2FlowArea.Geometry.MeshPerimeters.Polygon.side_effect = (
+            lambda fid: polygons[fid]
+        )
+
+        seed_calls = []
+
+        def fake_generate_seeds_via_net(hdf_path, ns, fid=0):
+            seed_calls.append(fid)
+            return FakePointCollection()
+
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_generate_seeds_via_net",
+            fake_generate_seeds_via_net,
+        )
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_remove_short_perimeter_segments",
+            lambda perim, min_length, ns: MockPolygon(
+                [(200.0, 0.0), (300.0, 0.0), (300.0, 100.0)]
+            ),
+        )
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_set_point_generation_data",
+            lambda *args, **kwargs: None,
+        )
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_patch_text_seeds",
+            lambda *args, **kwargs: None,
+        )
+
+        result = GeomMesh.generate(breakline_geom_text, mesh_index=1)
+
+        assert result.ok
+        assert seed_calls == [1, 1]
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"bl_spacing_near": 0.0},
+            {"bl_spacing_far": -25.0},
+        ],
+    )
+    def test_rejects_nonpositive_breakline_spacing(self, monkeypatch, breakline_geom_text, kwargs):
+        monkeypatch.setattr(geom_mesh_module, "_load_dlls", lambda hecras_dir=None: None)
+        monkeypatch.setattr(geom_mesh_module, "_imports", lambda: {})
+
+        with pytest.raises(ValueError, match="must be greater than 0.0"):
+            GeomMesh.generate(breakline_geom_text, **kwargs)
+
+    def test_does_not_report_complete_when_compile_fails(self, monkeypatch, breakline_geom_text):
+        _mock_generate_success(monkeypatch, breakline_geom_text.with_suffix(".compiled"), has_breaklines=False)
+
+        def fake_compile_geometry(*args, **kwargs):
+            raise RuntimeError("compile failed")
+
+        monkeypatch.setattr(GeomMesh, "compile_geometry", staticmethod(fake_compile_geometry))
+
+        result = GeomMesh.generate(breakline_geom_text)
+
+        assert result.ok is False
+        assert result.status == "exception"
+        assert "compile failed" in result.error_message
+
+
+@pytest.mark.skipif(
+    platform.system() != "Windows" or os.environ.get(HECRAS_INTEGRATION_ENV) != "1",
+    reason="Requires Windows, HEC-RAS, and explicit opt-in integration execution",
+)
+def test_generate_smoke_persists_real_geometry(tmp_path):
+    source_project = repo_root / "example_projects" / "BaldEagleCrkMulti2D"
+    project_copy = tmp_path / "BaldEagleCrkMulti2D"
+    shutil.copytree(source_project, project_copy)
+
+    geom_text_path = project_copy / "BaldEagleDamBrk.g01"
+    start_text_mtime = geom_text_path.stat().st_mtime
+    start_hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
+    start_hdf_mtime = start_hdf_path.stat().st_mtime if start_hdf_path.exists() else None
+
+    result = GeomMesh.generate(geom_text_path, mesh_index=0)
+
+    assert result.ok
+    assert result.geom_hdf_path
+    compiled_hdf_path = Path(result.geom_hdf_path)
+    assert compiled_hdf_path.exists()
+    assert geom_text_path.stat().st_mtime >= start_text_mtime
+    if start_hdf_mtime is not None:
+        assert compiled_hdf_path.stat().st_mtime >= start_hdf_mtime
+
+
+# ── Fixtures for name management / refinement region tests ──────────
+
+
+@pytest.fixture
+def named_breakline_geom(tmp_path):
+    """Geometry with 3 named breaklines (including a duplicate pair)."""
+    geom_text = tmp_path / "named.g01"
+    geom_text.write_text(
+        "Geom Title=NameTest\n"
+        "Storage Area=MainArea\n"
+        "Storage Area Point Generation Data=,,100.000000,100.000000\n"
+        "BreakLine Name=River\n"
+        "BreakLine CellSize Min=10.000000\n"
+        "BreakLine CellSize Max=50.000000\n"
+        "BreakLine Near Repeats=1\n"
+        "BreakLine Protection Radius=0\n"
+        "BreakLine Polyline= 2 \n"
+        "     0.0  0.0\n"
+        "     100.0  100.0\n"
+        "BreakLine Name=River\n"
+        "BreakLine CellSize Min=20.000000\n"
+        "BreakLine CellSize Max=80.000000\n"
+        "BreakLine Near Repeats=2\n"
+        "BreakLine Protection Radius=1\n"
+        "BreakLine Polyline= 2 \n"
+        "     0.0  50.0\n"
+        "     100.0  150.0\n"
+        "BreakLine Name=\n"
+        "BreakLine CellSize Min=15.000000\n"
+        "BreakLine CellSize Max=60.000000\n"
+        "BreakLine Near Repeats=1\n"
+        "BreakLine Protection Radius=0\n"
+        "BreakLine Polyline= 2 \n"
+        "     0.0  100.0\n"
+        "     100.0  200.0\n"
+        "Storage Area 2D Points= 0 \n"
+        "LCMann Time=0\n",
+        encoding="utf-8",
+    )
+    return geom_text
+
+
+@pytest.fixture
+def refinement_region_hdf(tmp_path):
+    """Synthetic HDF with refinement region Attributes table."""
+    geom_text = tmp_path / "rr_test.g01"
+    geom_text.write_text("Geom Title=RRTest\n", encoding="utf-8")
+    hdf_path = tmp_path / "rr_test.g01.hdf"
+    dt = np.dtype([
+        ("Name", "S32"),
+        ("Spacing dx", "f8"),
+        ("Spacing dy", "f8"),
+    ])
+    data = np.array([
+        (b"North", 50.0, 50.0),
+        (b"North", 75.0, 75.0),
+        (b"", 100.0, 100.0),
+    ], dtype=dt)
+    with h5py.File(str(hdf_path), "w") as hf:
+        hf.create_dataset(
+            "Geometry/2D Flow Area Refinement Regions/Attributes",
+            data=data,
+        )
+    return geom_text, hdf_path
+
+
+# ── Breakline name management tests ─────────────────────────────────
+
+
+class TestBreaklineNameManagement:
+
+    def test_get_breakline_names(self, named_breakline_geom):
+        names = GeomMesh.get_breakline_names(named_breakline_geom)
+        assert len(names) == 3
+        assert names[0] == (0, "River")
+        assert names[1] == (1, "River")
+        assert names[2] == (2, "")
+
+    def test_get_breakline_spacing_returns_all_fields(self, named_breakline_geom):
+        spacings = GeomMesh.get_breakline_spacing(named_breakline_geom)
+        assert len(spacings) == 3
+        fid, name, near, far, nr, pr = spacings[0]
+        assert fid == 0
+        assert name == "River"
+        assert abs(near - 10.0) < 0.01
+        assert abs(far - 50.0) < 0.01
+        assert nr == 1
+        assert pr == 0
+
+    def test_unnamed_breakline_spacing(self, named_breakline_geom):
+        spacings = GeomMesh.get_breakline_spacing(named_breakline_geom)
+        fid, name, near, far, nr, pr = spacings[2]
+        assert fid == 2
+        assert name == ""
+        assert abs(near - 15.0) < 0.01
+
+    def test_set_name_by_fid(self, named_breakline_geom):
+        GeomMesh.set_breakline_name(
+            named_breakline_geom, new_name="Channel", breakline_fid=2,
+        )
+        names = GeomMesh.get_breakline_names(named_breakline_geom)
+        assert names[2] == (2, "Channel")
+
+    def test_set_name_rejects_duplicate_old_name(self, named_breakline_geom):
+        with pytest.raises(ValueError, match="Multiple breaklines"):
+            GeomMesh.set_breakline_name(
+                named_breakline_geom, new_name="X", old_name="River",
+            )
+
+    def test_set_name_by_unique_old_name(self, named_breakline_geom):
+        GeomMesh.set_breakline_name(
+            named_breakline_geom, new_name="Renamed", breakline_fid=0,
+        )
+        GeomMesh.set_breakline_name(
+            named_breakline_geom, new_name="UniqueRiver", old_name="River",
+        )
+        names = GeomMesh.get_breakline_names(named_breakline_geom)
+        assert names[1] == (1, "UniqueRiver")
+
+    def test_set_name_fid_out_of_range(self, named_breakline_geom):
+        with pytest.raises(ValueError, match="not found"):
+            GeomMesh.set_breakline_name(
+                named_breakline_geom, new_name="X", breakline_fid=99,
+            )
+
+    def test_set_spacing_rejects_duplicate_name(self, named_breakline_geom):
+        with pytest.raises(ValueError, match="Multiple breaklines"):
+            GeomMesh.set_breakline_spacing(
+                named_breakline_geom, near=50.0, breakline_name="River",
+            )
+
+    def test_set_spacing_by_fid_isolates_target(self, named_breakline_geom):
+        GeomMesh.set_breakline_spacing(
+            named_breakline_geom, near=99.0, far=199.0, breakline_fid=1,
+        )
+        spacings = GeomMesh.get_breakline_spacing(named_breakline_geom)
+        assert abs(spacings[1][2] - 99.0) < 0.01
+        assert abs(spacings[0][2] - 10.0) < 0.01
+
+    def test_set_spacing_fid_out_of_range(self, named_breakline_geom):
+        with pytest.raises(ValueError, match="not found"):
+            GeomMesh.set_breakline_spacing(
+                named_breakline_geom, near=50.0, breakline_fid=99,
+            )
+
+    def test_set_spacing_negative_fid(self, named_breakline_geom):
+        with pytest.raises(ValueError, match="not found"):
+            GeomMesh.set_breakline_spacing(
+                named_breakline_geom, near=50.0, breakline_fid=-1,
+            )
+
+    def test_conflicting_all_breaklines_and_name(self, named_breakline_geom):
+        with pytest.raises(ValueError, match="cannot be combined"):
+            GeomMesh.set_breakline_spacing(
+                named_breakline_geom, near=50.0,
+                all_breaklines=True, breakline_name="River",
+            )
+
+    def test_conflicting_all_breaklines_and_fid(self, named_breakline_geom):
+        with pytest.raises(ValueError, match="cannot be combined"):
+            GeomMesh.set_breakline_spacing(
+                named_breakline_geom, near=50.0,
+                all_breaklines=True, breakline_fid=0,
+            )
+
+    def test_conflicting_name_and_fid(self, named_breakline_geom):
+        with pytest.raises(ValueError, match="not both"):
+            GeomMesh.set_breakline_spacing(
+                named_breakline_geom, near=50.0,
+                breakline_name="River", breakline_fid=0,
+            )
+
+    def test_no_target_raises(self, named_breakline_geom):
+        with pytest.raises(ValueError):
+            GeomMesh.set_breakline_spacing(
+                named_breakline_geom, near=50.0,
+            )
+
+
+# ── Refinement region tests ─────────────────────────────────────────
+
+
+class TestRefinementRegions:
+
+    def test_get_names(self, refinement_region_hdf):
+        geom_text, _ = refinement_region_hdf
+        names = GeomMesh.get_refinement_region_names(geom_text)
+        assert len(names) == 3
+        assert names[0] == (0, "North")
+        assert names[1] == (1, "North")
+        assert names[2] == (2, "")
+
+    def test_get_regions_returns_spacing(self, refinement_region_hdf):
+        geom_text, _ = refinement_region_hdf
+        regions = GeomMesh.get_refinement_regions(geom_text)
+        assert len(regions) == 3
+        assert regions[0]["fid"] == 0
+        assert abs(regions[0]["spacing_dx"] - 50.0) < 0.01
+        assert abs(regions[1]["spacing_dx"] - 75.0) < 0.01
+
+    def test_set_name_by_fid(self, refinement_region_hdf):
+        geom_text, _ = refinement_region_hdf
+        GeomMesh.set_refinement_region_name(geom_text, "South", region_fid=2)
+        names = GeomMesh.get_refinement_region_names(geom_text)
+        assert names[2] == (2, "South")
+
+    def test_set_name_rejects_duplicate_old_name(self, refinement_region_hdf):
+        geom_text, _ = refinement_region_hdf
+        with pytest.raises(ValueError, match="Multiple"):
+            GeomMesh.set_refinement_region_name(
+                geom_text, "X", old_name="North",
+            )
+
+    def test_set_name_fid_out_of_range(self, refinement_region_hdf):
+        geom_text, _ = refinement_region_hdf
+        with pytest.raises(ValueError, match="not found"):
+            GeomMesh.set_refinement_region_name(
+                geom_text, "X", region_fid=99,
+            )
+
+    def test_set_spacing_by_fid(self, refinement_region_hdf):
+        geom_text, _ = refinement_region_hdf
+        GeomMesh.set_refinement_region_spacing(
+            geom_text, spacing_dx=25.0, region_fid=0,
+        )
+        regions = GeomMesh.get_refinement_regions(geom_text)
+        assert abs(regions[0]["spacing_dx"] - 25.0) < 0.01
+        assert abs(regions[1]["spacing_dx"] - 75.0) < 0.01
+
+    def test_set_spacing_all_regions(self, refinement_region_hdf):
+        geom_text, _ = refinement_region_hdf
+        GeomMesh.set_refinement_region_spacing(
+            geom_text, spacing_dx=33.0, all_regions=True,
+        )
+        regions = GeomMesh.get_refinement_regions(geom_text)
+        for r in regions:
+            assert abs(r["spacing_dx"] - 33.0) < 0.01
+
+    def test_set_spacing_rejects_duplicate_name(self, refinement_region_hdf):
+        geom_text, _ = refinement_region_hdf
+        with pytest.raises(ValueError, match="Multiple refinement regions"):
+            GeomMesh.set_refinement_region_spacing(
+                geom_text, spacing_dx=25.0, region_name="North",
+            )
+
+    def test_set_spacing_fid_out_of_range(self, refinement_region_hdf):
+        geom_text, _ = refinement_region_hdf
+        with pytest.raises(ValueError, match="not found"):
+            GeomMesh.set_refinement_region_spacing(
+                geom_text, spacing_dx=25.0, region_fid=99,
+            )
+
+    def test_conflicting_all_regions_and_name(self, refinement_region_hdf):
+        geom_text, _ = refinement_region_hdf
+        with pytest.raises(ValueError, match="cannot be combined"):
+            GeomMesh.set_refinement_region_spacing(
+                geom_text, spacing_dx=25.0,
+                all_regions=True, region_name="North",
+            )
+
+    def test_conflicting_all_regions_and_fid(self, refinement_region_hdf):
+        geom_text, _ = refinement_region_hdf
+        with pytest.raises(ValueError, match="cannot be combined"):
+            GeomMesh.set_refinement_region_spacing(
+                geom_text, spacing_dx=25.0,
+                all_regions=True, region_fid=0,
+            )
+
+    def test_conflicting_name_and_fid(self, refinement_region_hdf):
+        geom_text, _ = refinement_region_hdf
+        with pytest.raises(ValueError, match="not both"):
+            GeomMesh.set_refinement_region_spacing(
+                geom_text, spacing_dx=25.0,
+                region_name="North", region_fid=0,
+            )
+
+    def test_utf8_truncation_preserves_valid_bytes(self, refinement_region_hdf):
+        geom_text, hdf_path = refinement_region_hdf
+        long_name = "\u00e9" * 20
+        GeomMesh.set_refinement_region_name(geom_text, long_name, region_fid=0)
+        names = GeomMesh.get_refinement_region_names(geom_text)
+        stored = names[0][1]
+        stored.encode("utf-8")
+        assert "\ufffd" not in stored
