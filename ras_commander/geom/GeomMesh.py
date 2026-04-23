@@ -243,28 +243,31 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
     # --- Replicate SA2DLinesAsBreakLines ---
     # The GUI temporarily adds SA2D structures as breaklines and copies
     # their spacing parameters (Near Repeats, Protection Radius).
+    # The try/finally wraps both insertion AND usage so temp breaklines
+    # are always cleaned up, even if spacing column copy fails.
     sa2d = geom.SA2DStructures
     struct_bl_fids: list[int] = []
     sa2d_count = sa2d.FeatureCount() if sa2d else 0
-    if sa2d_count > 0:
-        spacing_cols = [
-            "Near Spacing", "Far Spacing",
-            "Near Repeats", "Enforce 1 Cell Protection Radius",
-        ]
-        for sa2d_fid in sa2d.FilteredFIDS():
-            sa2d_fid = int(sa2d_fid)
-            bl.AddFeature(sa2d.Feature(sa2d_fid))
-            new_fid = bl.FeatureCount() - 1
-            struct_bl_fids.append(new_fid)
-            sa2d_row = sa2d.FeatureRow(sa2d_fid)
-            bl_row = bl.FeatureRow(new_fid)
-            for col in spacing_cols:
-                bl_row[col] = sa2d_row[col]
-        logger.debug(
-            f"Added {len(struct_bl_fids)} SA2D structure(s) as temp breaklines"
-        )
 
     try:
+        if sa2d_count > 0:
+            spacing_cols = [
+                "Near Spacing", "Far Spacing",
+                "Near Repeats", "Enforce 1 Cell Protection Radius",
+            ]
+            for sa2d_fid in sa2d.FilteredFIDS():
+                sa2d_fid = int(sa2d_fid)
+                bl.AddFeature(sa2d.Feature(sa2d_fid))
+                new_fid = bl.FeatureCount() - 1
+                struct_bl_fids.append(new_fid)
+                sa2d_row = sa2d.FeatureRow(sa2d_fid)
+                bl_row = bl.FeatureRow(new_fid)
+                for col in spacing_cols:
+                    bl_row[col] = sa2d_row[col]
+            logger.debug(
+                f"Added {len(struct_bl_fids)} SA2D structure(s) as temp breaklines"
+            )
+
         bl_count = bl.FeatureCount()
         perim_count = d2fa.FeatureCount()
 
@@ -307,7 +310,10 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
         return seeds_pm
     finally:
         for rm_fid in sorted(struct_bl_fids, reverse=True):
-            bl.DeleteFeature(rm_fid)
+            try:
+                bl.DeleteFeature(rm_fid)
+            except Exception:
+                logger.warning(f"Failed to remove temp breakline FID {rm_fid}")
 
 
 def _build_breaklines(d2fa, ns: dict):
@@ -687,57 +693,179 @@ def _normalize_positive_value(
 
 
 def _set_breakline_spacing_impl(
-    geom_text_path: Path, near: Optional[float], far: Optional[float]
+    geom_text_path: Path,
+    near: Optional[float],
+    far: Optional[float],
+    near_repeats: Optional[int] = None,
+    protection_radius: Optional[int] = None,
+    breakline_name: Optional[str] = None,
+    breakline_fid: Optional[int] = None,
+    all_breaklines: bool = False,
 ) -> Path:
-    """Edit BreakLine CellSize Min/Max in .g## text file."""
+    """Edit BreakLine spacing properties in .g## text file.
+
+    Target selection (exactly one):
+    - *breakline_name*: match by name
+    - *breakline_fid*: match by 0-based index in file order
+    - *all_breaklines*: every breakline
+    """
     near = _normalize_positive_value(near, "near", allow_none=True)
     far = _normalize_positive_value(far, "far", allow_none=True)
     lines = geom_text_path.read_text(encoding="utf-8", errors="replace").splitlines(
         keepends=True
     )
+
+    in_target_block = all_breaklines
+    found_target = False
+    bl_index = -1
     modified = []
     for line in lines:
-        if line.startswith("BreakLine CellSize Min="):
-            line = (
-                f"BreakLine CellSize Min={near:.6f}\n"
-                if near else "BreakLine CellSize Min=\n"
-            )
-        elif line.startswith("BreakLine CellSize Max="):
-            line = (
-                f"BreakLine CellSize Max={far:.6f}\n"
-                if far else "BreakLine CellSize Max=\n"
-            )
+        if line.startswith("BreakLine Name="):
+            bl_index += 1
+            name = line.split("=", 1)[1].strip()
+            if all_breaklines:
+                in_target_block = True
+            elif breakline_fid is not None:
+                in_target_block = bl_index == breakline_fid
+                if in_target_block:
+                    found_target = True
+            elif breakline_name is not None:
+                in_target_block = name == breakline_name
+                if in_target_block:
+                    found_target = True
+            else:
+                in_target_block = False
+
+        if in_target_block:
+            if near is not None and line.startswith("BreakLine CellSize Min="):
+                line = f"BreakLine CellSize Min={near:.6f}\n"
+            elif far is not None and line.startswith("BreakLine CellSize Max="):
+                line = f"BreakLine CellSize Max={far:.6f}\n"
+            elif near_repeats is not None and line.startswith("BreakLine Near Repeats="):
+                line = f"BreakLine Near Repeats={int(near_repeats)}\n"
+            elif protection_radius is not None and line.startswith("BreakLine Protection Radius="):
+                line = f"BreakLine Protection Radius={int(protection_radius)}\n"
         modified.append(line)
+
+    if not all_breaklines and not found_target:
+        target_desc = (
+            f"FID {breakline_fid}" if breakline_fid is not None
+            else f"'{breakline_name}'"
+        )
+        raise ValueError(
+            f"Breakline {target_desc} not found in {geom_text_path.name}"
+        )
 
     backup = geom_text_path.with_suffix(geom_text_path.suffix + ".bak")
     shutil.copy2(geom_text_path, backup)
     tmp = geom_text_path.with_suffix(geom_text_path.suffix + ".tmp")
     tmp.write_text("".join(modified), encoding="utf-8")
     tmp.replace(geom_text_path)
-    logger.info(f"Breakline spacing: near={near}, far={far} → {geom_text_path.name}")
+    target = (
+        f"FID {breakline_fid}" if breakline_fid is not None
+        else breakline_name or "ALL"
+    )
+    logger.info(
+        f"Breakline spacing [{target}]: near={near}, far={far} "
+        f"→ {geom_text_path.name}"
+    )
+    return backup
+
+
+def _read_breakline_names_from_text(
+    geom_text_path: Path,
+) -> list[tuple[int, str]]:
+    """Return (fid, name) for every breakline in .g## text, in file order."""
+    text = geom_text_path.read_text(encoding="utf-8", errors="replace")
+    result = []
+    bl_index = -1
+    for line in text.splitlines():
+        if line.startswith("BreakLine Name="):
+            bl_index += 1
+            name = line.split("=", 1)[1].strip()
+            result.append((bl_index, name))
+    return result
+
+
+def _set_breakline_name_impl(
+    geom_text_path: Path,
+    new_name: str,
+    breakline_fid: Optional[int] = None,
+    old_name: Optional[str] = None,
+) -> Path:
+    """Rename a breakline in .g## text by FID or current name."""
+    lines = geom_text_path.read_text(encoding="utf-8", errors="replace").splitlines(
+        keepends=True
+    )
+    bl_index = -1
+    found = False
+    modified = []
+    for line in lines:
+        if line.startswith("BreakLine Name="):
+            bl_index += 1
+            name = line.split("=", 1)[1].strip()
+            match = False
+            if breakline_fid is not None:
+                match = bl_index == breakline_fid
+            elif old_name is not None:
+                match = name == old_name
+            if match:
+                if found:
+                    raise ValueError(
+                        f"Multiple breaklines match {repr(old_name)}; "
+                        f"use breakline_fid for disambiguation."
+                    )
+                found = True
+                line = f"BreakLine Name={new_name}\n"
+        modified.append(line)
+
+    if not found:
+        target = (
+            f"FID {breakline_fid}" if breakline_fid is not None
+            else repr(old_name)
+        )
+        raise ValueError(
+            f"Breakline {target} not found in {geom_text_path.name}"
+        )
+
+    backup = geom_text_path.with_suffix(geom_text_path.suffix + ".bak")
+    shutil.copy2(geom_text_path, backup)
+    tmp = geom_text_path.with_suffix(geom_text_path.suffix + ".tmp")
+    tmp.write_text("".join(modified), encoding="utf-8")
+    tmp.replace(geom_text_path)
+    logger.info(f"Renamed breakline → '{new_name}' in {geom_text_path.name}")
     return backup
 
 
 def _read_breakline_spacing_from_text(
     geom_text_path: Path,
-) -> list[tuple[str, float, float]]:
-    """Read per-breakline CellSize Min/Max from .g## text file.
+) -> list[tuple[int, str, float, float, int, int]]:
+    """Read per-breakline spacing properties from .g## text file.
 
-    Returns list of (name, near, far) tuples in file order.
+    Returns list of (fid, name, near, far, near_repeats, protection_radius)
+    tuples in file order.  *fid* is the 0-based index.
     """
     text = geom_text_path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
     result = []
+    in_block = False
     current_name = ""
     near_val = 0.0
     far_val = 0.0
+    nr_val = 0
+    pr_val = 0
+    bl_index = -1
     for line in lines:
         if line.startswith("BreakLine Name="):
-            if current_name:
-                result.append((current_name, near_val, far_val))
+            if in_block:
+                result.append((bl_index, current_name, near_val, far_val, nr_val, pr_val))
+            bl_index += 1
+            in_block = True
             current_name = line.split("=", 1)[1].strip()
             near_val = 0.0
             far_val = 0.0
+            nr_val = 0
+            pr_val = 0
         elif line.startswith("BreakLine CellSize Min="):
             try:
                 near_val = float(line.split("=", 1)[1].strip())
@@ -748,8 +876,18 @@ def _read_breakline_spacing_from_text(
                 far_val = float(line.split("=", 1)[1].strip())
             except (ValueError, IndexError):
                 pass
-    if current_name:
-        result.append((current_name, near_val, far_val))
+        elif line.startswith("BreakLine Near Repeats="):
+            try:
+                nr_val = int(line.split("=", 1)[1].strip())
+            except (ValueError, IndexError):
+                pass
+        elif line.startswith("BreakLine Protection Radius="):
+            try:
+                pr_val = int(line.split("=", 1)[1].strip())
+            except (ValueError, IndexError):
+                pass
+    if in_block:
+        result.append((bl_index, current_name, near_val, far_val, nr_val, pr_val))
     return result
 
 
@@ -776,16 +914,24 @@ def _sync_breakline_spacing_text_to_hdf(
             changed = False
             hdf_names = [n.decode("utf-8", errors="replace").strip()
                          for n in data["Name"]]
-            text_map = {name.strip(): (near, far)
-                        for name, near, far in bl_spacings}
+            text_map = {name.strip(): (t_near, t_far, t_nr, t_pr)
+                        for _fid, name, t_near, t_far, t_nr, t_pr in bl_spacings}
+            has_nr = "Near Repeats" in data.dtype.names
+            has_pr = "Protection Radius" in data.dtype.names
             for i, hdf_name in enumerate(hdf_names):
                 if hdf_name in text_map:
-                    t_near, t_far = text_map[hdf_name]
+                    t_near, t_far, t_nr, t_pr = text_map[hdf_name]
                     if abs(float(data["Cell Spacing Near"][i]) - t_near) > 0.001:
                         data["Cell Spacing Near"][i] = t_near
                         changed = True
                     if abs(float(data["Cell Spacing Far"][i]) - t_far) > 0.001:
                         data["Cell Spacing Far"][i] = t_far
+                        changed = True
+                    if has_nr and int(data["Near Repeats"][i]) != t_nr:
+                        data["Near Repeats"][i] = t_nr
+                        changed = True
+                    if has_pr and int(data["Protection Radius"][i]) != t_pr:
+                        data["Protection Radius"][i] = t_pr
                         changed = True
             if changed:
                 hf[bl_key][:] = data
@@ -832,6 +978,129 @@ def _sync_cell_size_to_hdf(
                 logger.info(f"Synced cell size {cell_size} → HDF Spacing dx/dy")
     except Exception as exc:
         logger.warning(f"Could not sync cell size to HDF: {exc}")
+
+
+def _patch_text_perimeter(
+    geom_text_path: Path, perim_polygon, mesh_name: str | None = None
+) -> None:
+    """Write a .NET Polygon's vertices to the Storage Area Surface Line block.
+
+    When mesh_name is given, only the block under the matching ``Storage Area=``
+    header is replaced (multi-area safe).
+    """
+    n = perim_polygon.Count
+    if n < 3:
+        raise ValueError(f"Polygon must have >= 3 vertices, got {n}")
+
+    def _fmt(v: float) -> str:
+        int_digits = max(1, len(str(int(abs(v)))))
+        n_dec = max(0, 16 - int_digits - 1)
+        s = f"{v:.{n_dec}f}"
+        if len(s) > 16 and n_dec > 0:
+            s = f"{v:.{n_dec - 1}f}"
+        return s[:16].ljust(16)
+
+    coord_lines: list[str] = []
+    for i in range(n):
+        pt = perim_polygon.PointM(i)
+        coord_lines.append(_fmt(float(pt.X)) + _fmt(float(pt.Y)) + "\n")
+
+    lines = geom_text_path.read_text(encoding="utf-8", errors="replace").splitlines(
+        keepends=True
+    )
+    modified: list[str] = []
+    current_area: str | None = None
+    idx = 0
+    replaced = False
+    while idx < len(lines):
+        line = lines[idx]
+        if line.startswith("Storage Area="):
+            current_area = line.split("=", 1)[1].split(",")[0].strip()
+            modified.append(line)
+            idx += 1
+            continue
+        if line.startswith("Storage Area Surface Line="):
+            target = mesh_name is None or current_area == mesh_name
+            if target:
+                modified.append(f"Storage Area Surface Line= {n} \n")
+                replaced = True
+            else:
+                modified.append(line)
+            old_count = None
+            try:
+                old_count = int(line.split("=", 1)[1].strip())
+            except (IndexError, ValueError):
+                pass
+            idx += 1
+            if old_count is not None:
+                skip = old_count
+                while skip > 0 and idx < len(lines):
+                    idx += 1
+                    skip -= 1
+            if target:
+                modified.extend(coord_lines)
+        else:
+            modified.append(line)
+            idx += 1
+
+    if not replaced:
+        logger.warning(f"Storage Area Surface Line block not found in {geom_text_path.name}")
+        return
+
+    geom_text_path.write_text("".join(modified), encoding="utf-8")
+    logger.info(f"Patched perimeter → {n} vertices in {geom_text_path.name}")
+
+
+def _reseed_after_perimeter_fix(
+    text_path: Path,
+    hdf_path: Path,
+    current_perim,
+    cell_size: float,
+    fid: int,
+    mesh_name: str | None,
+    ns: dict,
+    hecras_dir=None,
+) -> "PointMs":
+    """Text-first reseed: write perimeter to text, recompile, regenerate seeds.
+
+    After a perimeter mutation (vertex removal, Douglas-Peucker), this writes
+    the modified perimeter to .g01 text, recompiles the HDF, syncs spacing,
+    and regenerates breakline-aware seeds via RegenerateMeshPoints.
+    """
+    _patch_text_perimeter(text_path, current_perim, mesh_name=mesh_name)
+
+    from RasMapperLib.Scripting import CompleteGeometryCommand  # type: ignore
+    cmd = CompleteGeometryCommand()
+    cmd.GeometryFilename = str(text_path)
+    cmd.ExecuteOutOfProcess(True)
+    hdf_path = text_path.with_suffix(text_path.suffix + ".hdf")
+
+    _sync_breakline_spacing_text_to_hdf(text_path, hdf_path)
+    _sync_cell_size_to_hdf(hdf_path, cell_size, mesh_name=mesh_name)
+    reseed_geom = ns["RASGeometry"](str(hdf_path))
+    reseed_d2fa = reseed_geom.D2FlowArea
+    reseed_fid = fid
+    if mesh_name is not None:
+        try:
+            resolved_fid = reseed_d2fa.GetFeatureByName(mesh_name)
+            if resolved_fid >= 0:
+                reseed_fid = int(resolved_fid)
+        except Exception:
+            pass
+    try:
+        seeds = _generate_seeds_via_net(str(hdf_path), ns, fid=reseed_fid)
+        logger.info(
+            f"[{mesh_name}] Reseeded via .NET after perimeter fix: "
+            f"{seeds.Count} seeds"
+        )
+        return seeds
+    except Exception as exc:
+        logger.warning(
+            f"[{mesh_name}] .NET reseed failed after perimeter fix: "
+            f"{exc}, falling back"
+        )
+        perim_ns = reseed_d2fa.Geometry.MeshPerimeters.Polygon(reseed_fid)
+        return _generate_seeds_safe(perim_ns, cell_size, ns)
 
 
 def _set_point_generation_data(
@@ -1084,22 +1353,285 @@ class GeomMesh:
         geom_number: Union[str, Number, Path],
         near: Optional[float] = None,
         far: Optional[float] = None,
+        near_repeats: Optional[int] = None,
+        protection_radius: Optional[int] = None,
+        breakline_name: Optional[str] = None,
+        breakline_fid: Optional[int] = None,
+        all_breaklines: bool = False,
         ras_object=None,
     ) -> Path:
         """
-        Edit BreakLine CellSize Min/Max in a .g## text file.
+        Edit BreakLine spacing properties in a .g## text file.
+
+        Target a single breakline by *breakline_name* or *breakline_fid*
+        (0-based index in file order).  Set ``all_breaklines=True`` for
+        bulk changes (model building, sensitivity analysis).
+
+        HEC-RAS allows duplicate breakline names (including empty names).
+        When duplicates exist, *breakline_name* matches the **first**
+        occurrence.  Use *breakline_fid* for reliable targeting — call
+        ``get_breakline_names()`` to inspect the FID-to-name mapping and
+        check for duplicates before editing by name.
 
         Args:
             geom_number: Geometry number ("01", 1) or path to .g## text file.
-            near: BreakLine near-spacing in project units. None clears field.
-            far: BreakLine far-spacing in project units. None clears field.
+            near: BreakLine near-spacing in project units. None keeps existing.
+            far: BreakLine far-spacing in project units. None keeps existing.
+            near_repeats: Number of offset seed rows on each side of breaklines.
+                None keeps existing value.
+            protection_radius: Enable 1-cell protection radius (0 or 1).
+                None keeps existing value.
+            breakline_name: Name of the breakline to modify.
+            breakline_fid: 0-based index of the breakline in file order.
+                Most reliable selector — breaklines can be unnamed or
+                have duplicate names.
+            all_breaklines: If True, apply spacing to every breakline.
             ras_object: Optional RasPrj instance for multi-project support.
 
         Returns:
             Path to .bak backup file created before writing.
+
+        Raises:
+            ValueError: If no target is specified, or if the target is
+                not found in the file.
+        """
+        if not all_breaklines and breakline_name is None and breakline_fid is None:
+            raise ValueError(
+                "Provide breakline_name or breakline_fid for single-breakline "
+                "edits, or set all_breaklines=True for bulk changes."
+            )
+        if breakline_name is not None and breakline_fid is not None:
+            raise ValueError(
+                "Provide breakline_name or breakline_fid, not both."
+            )
+        geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
+        return _set_breakline_spacing_impl(
+            geom_text_path, near, far,
+            near_repeats=near_repeats,
+            protection_radius=protection_radius,
+            breakline_name=breakline_name,
+            breakline_fid=breakline_fid,
+            all_breaklines=all_breaklines,
+        )
+
+    @staticmethod
+    @log_call
+    def get_breakline_names(
+        geom_number: Union[str, Number, Path],
+        ras_object=None,
+    ) -> list[tuple[int, str]]:
+        """
+        Read breakline names from a .g## text file.
+
+        HEC-RAS allows duplicate and empty breakline names.  Use this
+        method to inspect the FID-to-name mapping before calling
+        ``set_breakline_spacing()`` or ``set_breakline_name()`` by name.
+        When duplicates exist, targeting by *breakline_fid* is the most
+        reliable approach.
+
+        Returns:
+            List of (fid, name) tuples in file order.  *fid* is the
+            0-based index.  Unnamed breaklines have ``name=""``.
         """
         geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
-        return _set_breakline_spacing_impl(geom_text_path, near, far)
+        return _read_breakline_names_from_text(geom_text_path)
+
+    @staticmethod
+    @log_call
+    def set_breakline_name(
+        geom_number: Union[str, Number, Path],
+        new_name: str,
+        breakline_fid: Optional[int] = None,
+        old_name: Optional[str] = None,
+        ras_object=None,
+    ) -> Path:
+        """
+        Rename a breakline in a .g## text file.
+
+        HEC-RAS allows duplicate and empty breakline names.
+        *breakline_fid* (0-based index in file order) is the most
+        reliable selector.  When using *old_name*, this method raises
+        ``ValueError`` if multiple breaklines share that name — use
+        ``get_breakline_names()`` to inspect duplicates first, then
+        target by FID or assign unique descriptive names.
+
+        Args:
+            geom_number: Geometry number or path to .g## text file.
+            new_name: New name to assign.
+            breakline_fid: 0-based index of the breakline in file order.
+                Most reliable selector — breaklines can be unnamed or
+                have duplicate names.
+            old_name: Current name of the breakline.  Raises if
+                multiple breaklines share this name.
+            ras_object: Optional RasPrj instance.
+
+        Returns:
+            Path to .bak backup file created before writing.
+
+        Raises:
+            ValueError: If neither selector is given, both are given,
+                the target is not found, or *old_name* matches multiple
+                breaklines.
+        """
+        if breakline_fid is None and old_name is None:
+            raise ValueError("Provide breakline_fid or old_name.")
+        if breakline_fid is not None and old_name is not None:
+            raise ValueError("Provide breakline_fid or old_name, not both.")
+        geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
+        return _set_breakline_name_impl(
+            geom_text_path, new_name,
+            breakline_fid=breakline_fid,
+            old_name=old_name,
+        )
+
+    @staticmethod
+    @log_call
+    def get_breakline_spacing(
+        geom_number: Union[str, Number, Path],
+        ras_object=None,
+    ) -> list[tuple[int, str, float, float, int, int]]:
+        """
+        Read per-breakline spacing from a .g## text file.
+
+        HEC-RAS allows duplicate and empty breakline names.  The *fid*
+        in each tuple is the most reliable identifier — use it with
+        ``set_breakline_spacing(breakline_fid=...)`` when names are
+        ambiguous.
+
+        Returns:
+            List of (fid, name, near, far, near_repeats, protection_radius)
+            tuples in file order.  *fid* is the 0-based index.
+        """
+        geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
+        return _read_breakline_spacing_from_text(geom_text_path)
+
+    @staticmethod
+    @log_call
+    def get_refinement_regions(
+        geom_number: Union[str, Number, Path],
+        hecras_dir: Optional[Union[str, Path]] = None,
+        ras_object=None,
+    ) -> list[dict]:
+        """
+        Read refinement region names and spacing from the compiled HDF.
+
+        Refinement regions are stored in HDF, not .g## text.  If the HDF
+        does not exist it is compiled first.
+
+        Returns:
+            List of dicts with keys: name, spacing_dx, spacing_dy.
+            Empty list if no refinement regions exist.
+        """
+        import h5py
+
+        geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
+        hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
+        if not hdf_path.exists():
+            hdf_path = GeomMesh.compile_geometry(
+                geom_text_path, hecras_dir=hecras_dir
+            )
+
+        rr_key = "Geometry/2D Flow Area Refinement Regions/Attributes"
+        result = []
+        with h5py.File(str(hdf_path), "r") as hf:
+            if rr_key not in hf:
+                return result
+            data = hf[rr_key][:]
+            has_dx = "Spacing dx" in data.dtype.names
+            has_dy = "Spacing dy" in data.dtype.names
+            for row in data:
+                name = row["Name"].decode("utf-8", errors="replace").strip()
+                dx = float(row["Spacing dx"]) if has_dx else 0.0
+                dy = float(row["Spacing dy"]) if has_dy else 0.0
+                result.append({"name": name, "spacing_dx": dx, "spacing_dy": dy})
+        return result
+
+    @staticmethod
+    @log_call
+    def set_refinement_region_spacing(
+        geom_number: Union[str, Number, Path],
+        spacing_dx: Optional[float] = None,
+        spacing_dy: Optional[float] = None,
+        region_name: Optional[str] = None,
+        all_regions: bool = False,
+        hecras_dir: Optional[Union[str, Path]] = None,
+        ras_object=None,
+    ) -> None:
+        """
+        Set refinement region cell spacing in the compiled HDF.
+
+        Refinement regions override the base cell size within their
+        polygon boundaries.  By default targets a single region by
+        name; set ``all_regions=True`` for bulk changes.
+
+        Args:
+            geom_number: Geometry number or path to .g## text file.
+            spacing_dx: Cell spacing in the X direction (project units).
+                None keeps existing value.
+            spacing_dy: Cell spacing in the Y direction (project units).
+                None keeps existing value.  Defaults to spacing_dx if
+                spacing_dx is provided and spacing_dy is None.
+            region_name: Name of the refinement region to modify.
+                Required unless *all_regions* is True.
+            all_regions: If True, apply spacing to every region.
+            hecras_dir: Override HEC-RAS installation directory.
+            ras_object: Optional RasPrj instance.
+
+        Raises:
+            ValueError: If neither region_name nor all_regions is set,
+                or if region_name is not found.
+        """
+        import h5py
+
+        if not all_regions and region_name is None:
+            raise ValueError(
+                "Provide region_name for single-region edits, "
+                "or set all_regions=True for bulk changes."
+            )
+        if spacing_dx is not None and spacing_dy is None:
+            spacing_dy = spacing_dx
+
+        geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
+        hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
+        if not hdf_path.exists():
+            hdf_path = GeomMesh.compile_geometry(
+                geom_text_path, hecras_dir=hecras_dir
+            )
+
+        rr_key = "Geometry/2D Flow Area Refinement Regions/Attributes"
+        with h5py.File(str(hdf_path), "r+") as hf:
+            if rr_key not in hf:
+                raise ValueError("No refinement regions in geometry HDF.")
+            data = hf[rr_key][:]
+            has_dx = "Spacing dx" in data.dtype.names
+            has_dy = "Spacing dy" in data.dtype.names
+            if not has_dx or not has_dy:
+                raise ValueError(
+                    "HDF refinement regions missing Spacing columns."
+                )
+
+            found = False
+            for i in range(len(data)):
+                name = data["Name"][i].decode("utf-8", errors="replace").strip()
+                if not all_regions and name != region_name:
+                    continue
+                found = True
+                if spacing_dx is not None:
+                    data["Spacing dx"][i] = spacing_dx
+                if spacing_dy is not None:
+                    data["Spacing dy"][i] = spacing_dy
+
+            if region_name and not found:
+                raise ValueError(
+                    f"Refinement region '{region_name}' not found in HDF."
+                )
+            hf[rr_key][:] = data
+
+        target = region_name or "ALL"
+        logger.info(
+            f"Refinement region [{target}]: dx={spacing_dx}, dy={spacing_dy} "
+            f"→ {hdf_path.name}"
+        )
 
     @staticmethod
     @log_call
@@ -1152,13 +1684,101 @@ class GeomMesh:
 
     @staticmethod
     @log_call
+    def compute_property_tables(
+        geom_number: Union[str, Number, Path],
+        mesh_name: Optional[str] = None,
+        mesh_index: int = 0,
+        force: bool = True,
+        hecras_dir: Optional[Union[str, Path]] = None,
+        ras_object=None,
+    ) -> bool:
+        """
+        Compute 2D hydraulic property tables for a geometry.
+
+        Triggers RAS Mapper's property table computation: face profiles,
+        Manning's n assignment, face hydraulic tables, and cell properties.
+        Requires a terrain layer associated with the geometry.
+
+        Args:
+            geom_number: Geometry number ("01", 1) or path to .g## text file.
+            mesh_name: 2D flow area name. Auto-detected if only one exists.
+            mesh_index: Index of the 2D flow area (default 0).
+            force: Force recomputation even if tables are up-to-date.
+            hecras_dir: Override HEC-RAS installation directory.
+            ras_object: Optional RasPrj instance for multi-project support.
+
+        Returns:
+            True if property tables were computed successfully.
+
+        Raises:
+            FileNotFoundError: If geometry file cannot be resolved.
+            RuntimeError: If terrain is missing or computation fails.
+        """
+        geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
+        hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
+
+        _load_dlls(hecras_dir)
+
+        need_compile = not hdf_path.exists()
+        if not need_compile and geom_text_path.stat().st_mtime > hdf_path.stat().st_mtime:
+            need_compile = True
+        if need_compile:
+            GeomMesh.compile_geometry(geom_text_path, hecras_dir=hecras_dir)
+
+        ns = _imports()
+        geom = ns["RASGeometry"](str(hdf_path))
+        d2fa = geom.D2FlowArea
+
+        if d2fa.FeatureCount() == 0:
+            raise RuntimeError(f"No 2D flow areas in {geom_text_path.name}")
+
+        if mesh_name is not None:
+            fid = d2fa.GetFeatureByName(mesh_name)
+            if fid == -1:
+                raise RuntimeError(
+                    f"2D flow area '{mesh_name}' not found in "
+                    f"{geom_text_path.name}"
+                )
+        else:
+            fid = mesh_index
+            mesh_name = d2fa.GetFeatureName(fid)
+
+        terrain = geom.Terrain
+        if terrain is None:
+            raise RuntimeError(
+                f"No terrain associated with {geom_text_path.name}. "
+                f"Associate a terrain in RAS Mapper before computing "
+                f"property tables."
+            )
+
+        if force:
+            result = d2fa.CreatePropertyTables(fid, None, False, None)
+        else:
+            result = d2fa.EnsurePropertyTables(False, True, False, None)
+
+        if result:
+            logger.info(
+                f"Property tables computed for '{mesh_name}' "
+                f"in {geom_text_path.name}"
+            )
+        else:
+            logger.warning(
+                f"Property table computation returned False for "
+                f"'{mesh_name}' in {geom_text_path.name}"
+            )
+
+        return bool(result)
+
+    @staticmethod
+    @log_call
     def generate(
         geom_number: Union[str, Number, Path],
         mesh_name: Optional[str] = None,
         mesh_index: int = 0,
         cell_size: float = 100.0,
         bl_spacing: Optional[float] = None,
-        near_repeats: int = 1,
+        near_repeats: Optional[int] = None,
+        protection_radius: Optional[int] = None,
         min_face_length_ratio: float = 0.05,
         max_iterations: int = 8,
         hecras_dir: Optional[Union[str, Path]] = None,
@@ -1195,7 +1815,9 @@ class GeomMesh:
             bl_spacing: Legacy alias that applies the same positive value to both
                 near and far breakline spacing when explicit values are omitted.
             near_repeats: Number of offset seed rows on each side of breaklines.
-                Must be >= 1. Defaults to 1.
+                None preserves existing values from the .g01 text.
+            protection_radius: Enable 1-cell protection radius (0 or 1).
+                None preserves existing values from the .g01 text.
             min_face_length_ratio: Initial ratio (0.05-0.25).
             max_iterations: Maximum fix-and-retry attempts.
             hecras_dir: Override HEC-RAS installation directory.
@@ -1230,8 +1852,7 @@ class GeomMesh:
         bl_spacing_far = _normalize_positive_value(
             bl_spacing_far, "bl_spacing_far", allow_none=True
         )
-        if near_repeats < 1:
-            raise ValueError("near_repeats must be at least 1")
+
 
         if legacy_bl_spacing is not None:
             if bl_spacing_near is None:
@@ -1242,20 +1863,30 @@ class GeomMesh:
         try:
             text_path = geom_path
 
-            # Only modify .g01 text breakline spacing if explicitly provided.
+            # Only modify .g01 text breakline properties if explicitly provided.
             # Otherwise the geometry's existing per-breakline values are
             # the source of truth — don't overwrite them with defaults.
-            if bl_spacing_near is not None or bl_spacing_far is not None:
+            has_spacing = bl_spacing_near is not None or bl_spacing_far is not None
+            has_bl_params = has_spacing or near_repeats is not None or protection_radius is not None
+            if has_bl_params:
                 _set_breakline_spacing_impl(
                     text_path,
-                    bl_spacing_near if bl_spacing_near is not None else cell_size,
-                    bl_spacing_far if bl_spacing_far is not None else cell_size,
+                    bl_spacing_near if bl_spacing_near is not None else (cell_size if has_spacing else None),
+                    bl_spacing_far if bl_spacing_far is not None else (cell_size if has_spacing else None),
+                    near_repeats=near_repeats,
+                    protection_radius=protection_radius,
+                    all_breaklines=True,
                 )
 
-            # ── Step 1: Compile .g01 text → HDF if needed ────────────────
+            # ── Step 1: Compile .g01 text → HDF ────────────────────────
+            # Always recompile when text is newer than HDF so that
+            # perimeter/breakline/structure edits are picked up.
             hdf_path = text_path.with_suffix(text_path.suffix + ".hdf")
-            if not hdf_path.exists():
-                logger.info(f"Compiling {text_path.name} → HDF for .NET loading")
+            need_compile = not hdf_path.exists()
+            if not need_compile and text_path.stat().st_mtime > hdf_path.stat().st_mtime:
+                logger.info(f"{text_path.name} is newer than HDF — recompiling")
+                need_compile = True
+            if need_compile:
                 hdf_path = GeomMesh.compile_geometry(text_path, hecras_dir=hecras_dir)
 
             # ── Step 1b: Sync text → HDF ────────────────────────────────
@@ -1340,8 +1971,9 @@ class GeomMesh:
                 fix_msg = f"Tier0:short_seg_removal(-{pre_n - post_n})"
                 result.fixes_applied.append(fix_msg)
                 logger.info(f"[{mesh_name}] Fix applied: {fix_msg}")
-                current_seeds_pm = _generate_seeds_safe(
-                    current_perim, cell_size, ns
+                current_seeds_pm = _reseed_after_perimeter_fix(
+                    text_path, hdf_path, current_perim,
+                    cell_size, fid, mesh_name, ns, hecras_dir,
                 )
 
             ratio_idx = 0
@@ -1476,8 +2108,9 @@ class GeomMesh:
                         fix_msg = f"Perim:remove(-{len(bad_indices)}pts)"
                         result.fixes_applied.append(fix_msg)
                         logger.info(f"[{mesh_name}] Fix applied: {fix_msg}")
-                        current_seeds_pm = _generate_seeds_safe(
-                            current_perim, cell_size, ns
+                        current_seeds_pm = _reseed_after_perimeter_fix(
+                            text_path, hdf_path, current_perim,
+                            cell_size, fid, mesh_name, ns, hecras_dir,
                         )
                         continue
 
@@ -1511,8 +2144,9 @@ class GeomMesh:
                         fix_msg = f"DP:global(tol={tol:.1f})"
                         result.fixes_applied.append(fix_msg)
                         logger.info(f"[{mesh_name}] Fix applied: {fix_msg}")
-                    current_seeds_pm = _generate_seeds_safe(
-                        current_perim, cell_size, ns
+                    current_seeds_pm = _reseed_after_perimeter_fix(
+                        text_path, hdf_path, current_perim,
+                        cell_size, fid, mesh_name, ns, hecras_dir,
                     )
                 except Exception as exc:
                     result.error_message = f"Douglas-Peucker failed: {exc}"
@@ -1537,6 +2171,11 @@ class GeomMesh:
     def generate_all(
         geom_number: Union[str, Number, Path],
         cell_size: float = 100.0,
+        bl_spacing: Optional[float] = None,
+        bl_spacing_near: Optional[float] = None,
+        bl_spacing_far: Optional[float] = None,
+        near_repeats: Optional[int] = None,
+        protection_radius: Optional[int] = None,
         min_face_length_ratio: float = 0.05,
         max_iterations: int = 8,
         hecras_dir: Optional[Union[str, Path]] = None,
@@ -1551,6 +2190,11 @@ class GeomMesh:
             geom_number: Geometry number (e.g. ``"01"`` or ``1``),
                 or a direct path to a ``.g##`` text file.
             cell_size: Default mesh cell size (metres).
+            bl_spacing: Shorthand — sets both near and far breakline spacing.
+            bl_spacing_near: Breakline near-spacing override.
+            bl_spacing_far: Breakline far-spacing override.
+            near_repeats: Number of offset seed rows along breaklines.
+            protection_radius: Enable 1-cell protection radius (0 or 1).
             min_face_length_ratio: Minimum face-length ratio for mesh quality.
             max_iterations: Maximum fix-loop iterations per mesh area.
             hecras_dir: Override path to the HEC-RAS installation directory.
@@ -1575,6 +2219,11 @@ class GeomMesh:
                 geom_number=text_path,
                 mesh_name=name,
                 cell_size=cell_size,
+                bl_spacing=bl_spacing,
+                bl_spacing_near=bl_spacing_near,
+                bl_spacing_far=bl_spacing_far,
+                near_repeats=near_repeats,
+                protection_radius=protection_radius,
                 min_face_length_ratio=min_face_length_ratio,
                 max_iterations=max_iterations,
                 hecras_dir=hecras_dir,
