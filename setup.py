@@ -34,10 +34,13 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.94.0",
+    version="0.95.0",
     packages=find_packages(),
     include_package_data=True,
     package_data={
+        "ras_commander": [
+            "resources/land_classification/*.hdf",
+        ],
         "ras_commander.native": [
             "RasStoreMapHelper.exe",
             "RasStoreMapHelper.cs",
@@ -113,6 +116,7 @@ setup(
             'rasterio',
             'pyproj',
             'aiohttp',
+            'pythonnet>=3.0.5',
             'pyjnius',
         ],
     })

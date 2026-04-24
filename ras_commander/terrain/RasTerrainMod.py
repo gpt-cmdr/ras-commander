@@ -15,7 +15,7 @@ Summary:
 
 Key Functions:
     setup_gdal_bridge():
-        One-time setup to create GDAL junction for pythonnet loading.
+        Configure HEC-RAS GDAL paths before pythonnet loading.
 
     get_terrain_extent():
         Get terrain layer bounding box (with modifications).
@@ -38,7 +38,7 @@ Platform:
 Requirements:
     - HEC-RAS 6.6+ installed
     - pythonnet (pip install pythonnet)
-    - GDAL junction created (call setup_gdal_bridge() once)
+    - GDAL runtime configured (call setup_gdal_bridge() once)
 
 Example:
     from ras_commander.terrain import RasTerrainMod
@@ -55,11 +55,7 @@ Example:
     )
 """
 
-import logging
-import os
-import sys
 import platform
-import subprocess
 import threading
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
@@ -68,6 +64,10 @@ import numpy as np
 import pandas as pd
 
 from ..Decorators import log_call
+from .._gdal_runtime import (
+    configure_hecras_gdal_runtime,
+    configure_rasmapper_gdal_bridge,
+)
 from ..LoggingConfig import get_logger
 
 logger = get_logger(__name__)
@@ -95,7 +95,7 @@ class RasTerrainMod:
     Prerequisites:
         1. HEC-RAS 6.6+ installed
         2. pythonnet installed (pip install pythonnet)
-        3. GDAL bridge set up (call setup_gdal_bridge() once)
+        3. GDAL runtime configured (call setup_gdal_bridge() once)
 
     Thread Safety:
         NOT thread-safe. The .NET RASMapperCom instance is shared and COM
@@ -123,65 +123,47 @@ class RasTerrainMod:
     @log_call
     def setup_gdal_bridge(
         hecras_version: str = "7.0",
-        python_dir: Optional[Union[str, Path]] = None
+        python_dir: Optional[Union[str, Path]] = None,
+        create_junction: bool = True,
     ) -> bool:
         """
-        One-time setup: create GDAL junction for pythonnet/RasMapperLib.
+        Configure HEC-RAS GDAL runtime for pythonnet/RasMapperLib.
 
-        RasMapperLib.dll expects a GDAL/ subfolder next to the entry assembly.
-        When loaded from Python, this means GDAL/ must exist next to python.exe.
-        This method creates a directory junction to satisfy that requirement.
+        The default path points GDAL_DATA, PROJ_LIB, PATH, and Python DLL search
+        directories at HEC-RAS's bundled GDAL runtime, then verifies the legacy
+        ``python.exe`` sibling GDAL bridge before RasMapperLib is loaded.
 
         Args:
             hecras_version: HEC-RAS version to use (default "7.0")
-            python_dir: Python installation directory (auto-detected if None)
+            python_dir: Python installation directory for legacy junction mode
+            create_junction: Verify/create the legacy python.exe sibling junction
 
         Returns:
-            True if junction exists or was created, False if creation failed
-
-        Note:
-            Only needs to be called once per Python environment.
-            Requires write permission to the Python directory.
+            True if the process runtime was configured successfully.
         """
-        if python_dir is None:
-            python_dir = Path(sys.executable).parent
-        else:
-            python_dir = Path(python_dir)
-
-        gdal_junction = python_dir / "GDAL"
-
-        # Check if junction already exists and works
-        if gdal_junction.exists() and (gdal_junction / "bin64").exists():
-            logger.info(f"GDAL junction already exists at {gdal_junction}")
-            return True
-
-        # Find HEC-RAS GDAL source
         ras_path = RasTerrainMod._find_hecras_path()
-        gdal_source = ras_path / "GDAL"
 
-        if not gdal_source.exists():
-            logger.error(f"GDAL not found in HEC-RAS installation: {gdal_source}")
-            return False
+        if hecras_version:
+            version_text = str(hecras_version)
+            versioned_path = ras_path.parent / version_text
+            if (versioned_path / "RasMapperLib.dll").exists():
+                ras_path = versioned_path
 
-        # Create junction via PowerShell
         try:
-            result = subprocess.run(
-                [
-                    "powershell", "-Command",
-                    f'New-Item -ItemType Junction -Path "{gdal_junction}" '
-                    f'-Target "{gdal_source}" -Force'
-                ],
-                capture_output=True, text=True, timeout=10
-            )
-            if result.returncode == 0:
-                logger.info(f"Created GDAL junction: {gdal_junction} -> {gdal_source}")
-                return True
-            else:
-                logger.error(f"Failed to create junction: {result.stderr}")
-                return False
-        except Exception as e:
-            logger.error(f"Junction creation failed: {e}")
+            configure_hecras_gdal_runtime(ras_path)
+        except FileNotFoundError as exc:
+            logger.error(str(exc))
             return False
+
+        if create_junction:
+            try:
+                configure_rasmapper_gdal_bridge(ras_path, python_dir)
+            except (FileNotFoundError, RuntimeError) as exc:
+                logger.error(str(exc))
+                return False
+
+        logger.info("Configured HEC-RAS GDAL runtime from %s", ras_path / "GDAL")
+        return True
 
     @staticmethod
     def _ensure_initialized():
@@ -203,23 +185,16 @@ class RasTerrainMod:
         ras_path = RasTerrainMod._find_hecras_path()
         RasTerrainMod._ras_path = ras_path
 
-        # Add HEC-RAS to sys.path and PATH for DLL resolution
-        if str(ras_path) not in sys.path:
-            sys.path.append(str(ras_path))
-
-        gdal_bin = str(Path(sys.executable).parent / "GDAL" / "bin64")
-        if os.path.exists(gdal_bin):
-            os.environ['PATH'] = gdal_bin + ';' + str(ras_path) + ';' + os.environ.get('PATH', '')
-        else:
-            os.environ['PATH'] = str(ras_path) + ';' + os.environ.get('PATH', '')
-            logger.warning(
-                f"GDAL junction not found at {gdal_bin}. "
-                "Call RasTerrainMod.setup_gdal_bridge() first."
-            )
+        try:
+            configure_rasmapper_gdal_bridge(ras_path)
+        except (FileNotFoundError, RuntimeError) as exc:
+            raise RuntimeError(
+                f"Failed to initialize HEC-RAS GDAL runtime from {ras_path}: {exc}"
+            ) from exc
 
         # Load RasMapperLib.dll
         try:
-            clr.AddReference('RasMapperLib')
+            clr.AddReference(str(ras_path / "RasMapperLib.dll"))
             logger.info(f"RasMapperLib.dll loaded from {ras_path}")
         except Exception as e:
             raise RuntimeError(

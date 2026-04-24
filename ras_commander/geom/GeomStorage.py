@@ -14,8 +14,7 @@ List of Functions:
 - set_2d_flow_area_perimeter() - Create/update 2D flow area perimeter geometry
 - get_2d_flow_area_settings() - Read 2D flow area cell/face property settings
 - set_2d_flow_area_settings() - Write 2D flow area cell/face property settings
-- get_breakline_spacing() - Read near/far breakline cell spacing for a geometry file
-- set_breakline_spacing() - Write near/far breakline cell spacing to a geometry file
+- set_breaklines() - Write breakline blocks into a 2D flow area geometry file
 
 Example Usage:
     >>> from ras_commander import GeomStorage
@@ -40,7 +39,7 @@ Example Usage:
 
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Union, Optional, List, Dict, Sequence
+from typing import TYPE_CHECKING, Union, Optional, List, Sequence
 import pandas as pd
 
 if TYPE_CHECKING:
@@ -1545,169 +1544,129 @@ class GeomStorage:
         logger.info(f"Updated 2D flow area settings for {flow_area_name}")
         return backup_path if backup_path else geom_file
 
-    @staticmethod
-    @log_call
-    def get_breakline_spacing(geom_file: Union[str, Path]) -> Dict[str, Optional[float]]:
-        """
-        Read near/far breakline cell spacing from a geometry file.
-
-        Searches for the first occurrence of ``BreakLine CellSize Min=`` and
-        ``BreakLine CellSize Max=`` keywords.  An empty field value (keyword
-        present but nothing after ``=``) means "fall back to the mesh cell
-        size" and is returned as ``None``.  A non-empty numeric field is
-        returned as a ``float``.
-
-        Parameters
-        ----------
-        geom_file : Union[str, Path]
-            Path to the .g## geometry text file.
-
-        Returns
-        -------
-        Dict[str, Optional[float]]
-            Dictionary with keys:
-
-            * ``"near"`` – near-side spacing (``BreakLine CellSize Min``),
-              or ``None`` if empty / keyword absent.
-            * ``"far"`` – far-side spacing (``BreakLine CellSize Max``),
-              or ``None`` if empty / keyword absent.
-
-        Raises
-        ------
-        FileNotFoundError
-            If *geom_file* does not exist.
-
-        Examples
-        --------
-        >>> spacing = GeomStorage.get_breakline_spacing("MyProject.g01")
-        >>> print(spacing)
-        {'near': 50.0, 'far': 200.0}
-
-        >>> # Empty field means "use mesh cell size"
-        >>> spacing = GeomStorage.get_breakline_spacing("MyProject.g02")
-        >>> print(spacing)
-        {'near': None, 'far': None}
-        """
-        geom_file = Path(geom_file)
-
-        if not geom_file.exists():
-            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
-
-        result: Dict[str, Optional[float]] = {"near": None, "far": None}
-        found_near = False
-        found_far = False
-
-        with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
-            for line in f:
-                if not found_near and line.startswith("BreakLine CellSize Min="):
-                    val_str = GeomParser.extract_keyword_value(line, "BreakLine CellSize Min")
-                    val_str = val_str.strip()
-                    if val_str:
-                        try:
-                            result["near"] = float(val_str)
-                        except ValueError:
-                            logger.warning(
-                                f"Could not parse BreakLine CellSize Min value: '{val_str}'"
-                            )
-                    found_near = True
-
-                if not found_far and line.startswith("BreakLine CellSize Max="):
-                    val_str = GeomParser.extract_keyword_value(line, "BreakLine CellSize Max")
-                    val_str = val_str.strip()
-                    if val_str:
-                        try:
-                            result["far"] = float(val_str)
-                        except ValueError:
-                            logger.warning(
-                                f"Could not parse BreakLine CellSize Max value: '{val_str}'"
-                            )
-                    found_far = True
-
-                if found_near and found_far:
-                    break
-
-        return result
+    BREAKLINE_VALUES_PER_LINE = 4
 
     @staticmethod
-    @log_call
-    def set_breakline_spacing(
-        geom_file: Union[str, Path],
-        near: Optional[float] = None,
-        far: Optional[float] = None,
-        create_backup: bool = True,
-    ) -> Optional[Path]:
+    def _format_breakline_coord_lines(coords: List[tuple]) -> List[str]:
+        """Format polyline XY pairs for BreakLine Polyline blocks.
+
+        Uses 16-char right-justified fields with 4 values per line
+        (2 coordinate pairs per line), matching HEC-RAS breakline format.
         """
-        Write near/far breakline cell spacing to a geometry file.
+        col_w = GeomStorage.SURFACE_LINE_COLUMN
+        vpl = GeomStorage.BREAKLINE_VALUES_PER_LINE
+        lines = []
+        flat_values = []
+        for x_coord, y_coord in coords:
+            flat_values.extend([x_coord, y_coord])
 
-        Iterates **all** lines and replaces every ``BreakLine CellSize Min=``
-        and ``BreakLine CellSize Max=`` line.  Passing ``None`` for a value
-        writes an empty field (``BreakLine CellSize Min=\\n``), which tells
-        HEC-RAS to fall back to the mesh cell size.  Passing a ``float``
-        writes the formatted value with six decimal places.
+        for i in range(0, len(flat_values), vpl):
+            row_values = flat_values[i:i + vpl]
+            parts = []
+            for val in row_values:
+                prec = GeomStorage._max_precision_for_field(val, col_w)
+                parts.append(f"{val:{col_w}.{prec}f}")
+            lines.append("".join(parts) + "\n")
 
-        Parameters
-        ----------
-        geom_file : Union[str, Path]
-            Path to the .g## geometry text file.
-        near : Optional[float], optional
-            Near-side cell size (``BreakLine CellSize Min``).
-            ``None`` → empty field (default ``None``).
-        far : Optional[float], optional
-            Far-side cell size (``BreakLine CellSize Max``).
-            ``None`` → empty field (default ``None``).
-        create_backup : bool, optional
-            Create a .bak backup before modifying the file (default ``True``).
+        return lines
 
-        Returns
-        -------
-        Optional[Path]
-            Path to the backup file, or ``None`` if *create_backup* is
-            ``False``.
-
-        Raises
-        ------
-        FileNotFoundError
-            If *geom_file* does not exist.
-        IOError
-            If the file cannot be written.
-
-        Examples
-        --------
-        >>> backup = GeomStorage.set_breakline_spacing(
-        ...     "MyProject.g01", near=50.0, far=200.0
-        ... )
-        >>> print(f"Backup created: {backup}")
-        Backup created: MyProject.g01.bak
-
-        >>> # Clear spacing (fall back to mesh cell size)
-        >>> GeomStorage.set_breakline_spacing("MyProject.g01", near=None, far=None)
-        """
-        geom_file = Path(geom_file)
-
-        if not geom_file.exists():
-            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
-
-        near_line = (
-            f"BreakLine CellSize Min={near:.6f}\n"
-            if near is not None
+    @staticmethod
+    def _format_breakline_block(
+        name: str,
+        coords: List[tuple],
+        cell_size_near: Optional[float] = None,
+        cell_size_far: Optional[float] = None,
+    ) -> List[str]:
+        """Build a complete breakline text block as a list of lines."""
+        block = [f"BreakLine Name={name}\n"]
+        block.append(
+            f"BreakLine CellSize Min={cell_size_near}\n"
+            if cell_size_near is not None
             else "BreakLine CellSize Min=\n"
         )
-        far_line = (
-            f"BreakLine CellSize Max={far:.6f}\n"
-            if far is not None
+        block.append(
+            f"BreakLine CellSize Max={cell_size_far}\n"
+            if cell_size_far is not None
             else "BreakLine CellSize Max=\n"
         )
+        block.append("BreakLine Near Repeats=0\n")
+        block.append("BreakLine Protection Radius=0\n")
+        block.append(f"BreakLine Polyline= {len(coords)} \n")
+        block.extend(GeomStorage._format_breakline_coord_lines(coords))
+        return block
+
+    @staticmethod
+    @log_call
+    def set_breaklines(
+        geom_file: Union[str, Path],
+        flow_area_name: str,
+        breaklines: List[dict],
+        create_backup: bool = True,
+    ) -> Path:
+        """Write breakline blocks into a .g## for a 2D flow area.
+
+        Each dict in *breaklines* must have:
+            name (str): breakline display name (unpadded).
+            coords (list[tuple[float,float]]): polyline vertices.
+            cell_size_near (float|None): BreakLine CellSize Min value.
+            cell_size_far (float|None): BreakLine CellSize Max value.
+
+        Breaklines are inserted after the storage-area block for
+        *flow_area_name* and before BC Line / Connection / LCMann blocks.
+        Any existing breakline blocks are preserved (new ones are appended).
+
+        Returns the backup path if *create_backup* is True, else *geom_file*.
+        """
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        GeomStorage._validate_flow_area_name(flow_area_name)
 
         with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
-        modified = []
-        for line in lines:
-            if line.startswith("BreakLine CellSize Min="):
-                modified.append(near_line)
-            elif line.startswith("BreakLine CellSize Max="):
-                modified.append(far_line)
-            else:
-                modified.append(line)
+        existing_block = GeomStorage._find_storage_area_block(lines, flow_area_name)
+        if existing_block is None:
+            raise ValueError(f"Flow area not found: {flow_area_name}")
 
-        return GeomParser.safe_write_geometry(geom_file, modified, create_backup=create_backup)
+        _, end_idx, _ = existing_block
+
+        insert_idx = end_idx
+        for i in range(end_idx, len(lines)):
+            line = lines[i]
+            if any(line.startswith(t) for t in (
+                "BC Line Name=", "Connection=", "LCMann Time=",
+                "Storage Area=", "River Reach=",
+            )):
+                insert_idx = i
+                break
+            if line.startswith("BreakLine Name="):
+                insert_idx = i
+                break
+        else:
+            insert_idx = len(lines)
+
+        new_blocks = []
+        for bl in breaklines:
+            new_blocks.extend(GeomStorage._format_breakline_block(
+                name=bl["name"],
+                coords=bl["coords"],
+                cell_size_near=bl.get("cell_size_near"),
+                cell_size_far=bl.get("cell_size_far"),
+            ))
+
+        backup_path = None
+        if create_backup:
+            backup_path = GeomParser.create_backup(geom_file)
+            logger.info(f"Created backup: {backup_path}")
+
+        new_lines = lines[:insert_idx] + new_blocks + lines[insert_idx:]
+        with open(geom_file, 'w', encoding='utf-8') as f:
+            f.writelines(new_lines)
+
+        logger.info(
+            "Inserted %d breaklines for %s into %s",
+            len(breaklines), flow_area_name, geom_file.name,
+        )
+        return backup_path if backup_path else geom_file

@@ -13,6 +13,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Iterator, Optional, Union
 
+from ._gdal_runtime import resolve_hecras_gdal_paths
 from .LoggingConfig import get_logger
 
 logger = get_logger(__name__)
@@ -105,6 +106,22 @@ def _link_or_copy_gdal_tree(source_dir: Path, dest_dir: Path) -> None:
             )
 
     shutil.copytree(source_dir, dest_dir, dirs_exist_ok=True)
+
+
+def _hecras_gdal_subprocess_env(hecras_dir: Path) -> dict:
+    """Return an environment initialized for HEC-RAS's bundled GDAL runtime."""
+    env = dict(os.environ)
+    try:
+        gdal_paths = resolve_hecras_gdal_paths(hecras_dir)
+    except FileNotFoundError:
+        return env
+
+    path_prefixes = [str(gdal_paths.gdal_bin), str(gdal_paths.hecras_dir)]
+    env["PATH"] = os.pathsep.join(path_prefixes + [env.get("PATH", "")])
+    env["GDAL_DATA"] = str(gdal_paths.gdal_data)
+    env["PROJ_LIB"] = str(gdal_paths.gdal_data)
+    env.setdefault("PROJ_DATA", str(gdal_paths.gdal_data))
+    return env
 
 
 def normalize_store_map_render_mode(
@@ -298,6 +315,7 @@ def _run_store_all_maps_once(
         text=True,
         timeout=timeout,
         cwd=str(working_dir) if working_dir else None,
+        env=_hecras_gdal_subprocess_env(hecras_dir),
     )
     return _filter_helper_stderr(result)
 

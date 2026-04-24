@@ -1,3 +1,8 @@
 [build-system]
 requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta:__legacy__"
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: opt-in real-project or external dependency smoke tests",
+]

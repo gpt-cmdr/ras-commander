@@ -3,10 +3,11 @@ USGS 3DEP AWS Direct Access
 
 Downloads elevation data directly from USGS 3DEP Cloud Optimized GeoTIFFs hosted on AWS S3.
 
-This module provides direct access to all USGS 3DEP elevation datasets:
-- 1m resolution (LiDAR-derived, highest quality)
-- 10m resolution (1/3 arc-second, good CONUS coverage)
-- 30m resolution (1 arc-second, full CONUS coverage)
+This module provides metadata access across USGS 3DEP elevation datasets and
+direct download support for 1m project-based products:
+- 1m resolution downloads (LiDAR-derived, highest quality)
+- 10m resolution metadata/discovery only in this revision
+- 30m resolution metadata/discovery only in this revision
 
 Data is accessed directly from the public S3 bucket (no API rate limits or timeouts).
 
@@ -88,7 +89,9 @@ class Usgs3depAws:
         Download tile index (spatial metadata) for a given resolution.
 
         Args:
-            resolution: DEM resolution in meters (1, 10, or 30)
+            resolution: DEM resolution in meters. Direct downloads currently
+                support only ``1``. Requests for 10m or 30m raise
+                ``NotImplementedError`` until those download paths are added.
             cache_folder: Optional folder to cache the index. If None, downloads to temp.
 
         Returns:
@@ -626,7 +629,12 @@ class Usgs3depAws:
             # Sequential downloads (no concurrency)
             tiles = Usgs3depAws.download_tiles(bbox, 1, "Terrain", max_workers=1)
         """
-        import rasterio
+        if resolution != 1:
+            raise NotImplementedError(
+                "download_tiles() currently supports only 1m USGS 3DEP project "
+                "downloads. 10m and 30m direct download paths are not implemented "
+                "yet."
+            )
 
         output_folder = Path(output_folder)
         output_folder.mkdir(parents=True, exist_ok=True)

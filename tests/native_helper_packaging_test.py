@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -59,6 +60,22 @@ def test_stage_helper_executable_builds_runtime_bundle_with_gdal(tmp_path):
     assert (
         staged.parent / "GDAL" / "common" / "gdal-data.txt"
     ).read_text(encoding="utf-8") == "gdal"
+
+
+def test_hecras_gdal_subprocess_env_points_at_bundled_runtime(monkeypatch, tmp_path):
+    hecras_dir = tmp_path / "hecras"
+    (hecras_dir / "GDAL" / "bin64").mkdir(parents=True)
+    (hecras_dir / "GDAL" / "common" / "data").mkdir(parents=True)
+    monkeypatch.setenv("PATH", "C:\\Existing")
+
+    env = _native_helper._hecras_gdal_subprocess_env(hecras_dir)
+
+    assert env["GDAL_DATA"] == str(hecras_dir / "GDAL" / "common" / "data")
+    assert env["PROJ_LIB"] == env["GDAL_DATA"]
+    assert env["PATH"].split(os.pathsep)[:2] == [
+        str(hecras_dir / "GDAL" / "bin64"),
+        str(hecras_dir),
+    ]
 
 
 def test_run_store_all_maps_helper_honors_disable_flag(monkeypatch):

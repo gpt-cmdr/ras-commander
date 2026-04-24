@@ -285,7 +285,8 @@ class RasTerrain:
         projection_prj: Union[str, Path],
         units: str = "Feet",
         stitch: bool = True,
-        hecras_version: str = "7.0"
+        hecras_version: str = "7.0",
+        timeout_seconds: int = 600,
     ) -> Path:
         """
         Create HEC-RAS terrain HDF from input rasters using RasProcess.exe.
@@ -311,6 +312,9 @@ class RasTerrain:
                    Defaults to True.
             hecras_version: HEC-RAS version to use for RasProcess.exe.
                            Defaults to "7.0".
+            timeout_seconds: Maximum time to wait for RasProcess.exe to
+                            finish terrain creation. Defaults to 600
+                            seconds (10 minutes).
 
         Returns:
             Path: Path to created terrain HDF file.
@@ -329,7 +333,8 @@ class RasTerrain:
             ...     projection_prj=Path("Terrain/Projection.prj"),
             ...     units="Feet",
             ...     stitch=True,
-            ...     hecras_version="7.0"
+            ...     hecras_version="7.0",
+            ...     timeout_seconds=1800,
             ... )
             >>> print(f"Terrain created: {terrain}")
 
@@ -351,6 +356,10 @@ class RasTerrain:
         if units not in ("Feet", "Meters"):
             raise ValueError(
                 f"Units must be 'Feet' or 'Meters', got: '{units}'"
+            )
+        if timeout_seconds <= 0:
+            raise ValueError(
+                f"timeout_seconds must be positive, got: {timeout_seconds}"
             )
 
         # Validate input files exist
@@ -402,7 +411,7 @@ class RasTerrain:
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=600  # 10 minute timeout
+                timeout=timeout_seconds,
             )
 
             logger.debug(f"Return code: {result.returncode}")
@@ -415,7 +424,7 @@ class RasTerrain:
 
         except subprocess.TimeoutExpired:
             raise RuntimeError(
-                "Terrain creation timed out after 10 minutes. "
+                f"Terrain creation timed out after {timeout_seconds} seconds. "
                 "This may indicate very large input files or system issues."
             )
         except Exception as e:

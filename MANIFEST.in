@@ -1,3 +1,4 @@
 include ras_commander/native/RasStoreMapHelper.exe
 include ras_commander/native/RasStoreMapHelper.cs
+include ras_commander/resources/land_classification/*.hdf
 

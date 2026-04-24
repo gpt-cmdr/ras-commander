@@ -833,25 +833,34 @@ def named_breakline_geom(tmp_path):
 
 @pytest.fixture
 def refinement_region_hdf(tmp_path):
-    """Synthetic HDF with refinement region Attributes table."""
+    """Synthetic HDF with 3 refinement regions (full polygon geometry)."""
     geom_text = tmp_path / "rr_test.g01"
     geom_text.write_text("Geom Title=RRTest\n", encoding="utf-8")
     hdf_path = tmp_path / "rr_test.g01.hdf"
+    rr = "Geometry/2D Flow Area Refinement Regions"
     dt = np.dtype([
         ("Name", "S32"),
-        ("Spacing dx", "f8"),
-        ("Spacing dy", "f8"),
+        ("Spacing dx", "<f4"),
+        ("Spacing dy", "<f4"),
     ])
     data = np.array([
         (b"North", 50.0, 50.0),
         (b"North", 75.0, 75.0),
         (b"", 100.0, 100.0),
     ], dtype=dt)
+    # Three simple square polygons (5 pts each, closed rings)
+    pts0 = np.array([[0, 0], [100, 0], [100, 100], [0, 100], [0, 0]], dtype=np.float64)
+    pts1 = np.array([[200, 0], [300, 0], [300, 100], [200, 100], [200, 0]], dtype=np.float64)
+    pts2 = np.array([[400, 0], [500, 0], [500, 100], [400, 100], [400, 0]], dtype=np.float64)
+    all_pts = np.vstack([pts0, pts1, pts2])
+    info = np.array([[0, 5, 0, 1], [5, 5, 1, 1], [10, 5, 2, 1]], dtype=np.int32)
+    parts = np.array([[0, 5], [0, 5], [0, 5]], dtype=np.int32)
+    gzip_kw = dict(compression="gzip", compression_opts=1)
     with h5py.File(str(hdf_path), "w") as hf:
-        hf.create_dataset(
-            "Geometry/2D Flow Area Refinement Regions/Attributes",
-            data=data,
-        )
+        hf.create_dataset(f"{rr}/Attributes", data=data, **gzip_kw)
+        hf.create_dataset(f"{rr}/Polygon Info", data=info, **gzip_kw)
+        hf.create_dataset(f"{rr}/Polygon Parts", data=parts, **gzip_kw)
+        hf.create_dataset(f"{rr}/Polygon Points", data=all_pts, **gzip_kw)
     return geom_text, hdf_path
 
 
@@ -1073,3 +1082,238 @@ class TestRefinementRegions:
         stored = names[0][1]
         stored.encode("utf-8")
         assert "\ufffd" not in stored
+
+
+# ── Add refinement region tests ───────────────────────────────────
+
+
+@pytest.fixture
+def empty_geom_hdf(tmp_path):
+    """Geometry file + compiled HDF with no refinement regions."""
+    geom_text = tmp_path / "empty.g01"
+    geom_text.write_text("Geom Title=EmptyTest\n", encoding="utf-8")
+    hdf_path = tmp_path / "empty.g01.hdf"
+    with h5py.File(str(hdf_path), "w") as hf:
+        hf.create_dataset(
+            "Geometry/2D Flow Areas/Attributes",
+            data=np.array(
+                [(b"MainArea", 0, 0.04, 0, 0, 0.01, 0.01, 0.01, 0.01, 1.0, 0.1, 0.05, 60.96, 60.96, 0.0, 0.0, 0)],
+                dtype=np.dtype([
+                    ("Name", "S16"), ("Locked", "u1"), ("Mann", "<f4"),
+                    ("Multiple Face Mann n", "u1"), ("Composite LC", "u1"),
+                    ("Cell Vol Tol", "<f4"), ("Cell Min Area Fraction", "<f4"),
+                    ("Face Profile Tol", "<f4"), ("Face Area Tol", "<f4"),
+                    ("Face Conv Ratio", "<f4"), ("Laminar Depth", "<f4"),
+                    ("Min Face Length Ratio", "<f4"), ("Spacing dx", "<f4"),
+                    ("Spacing dy", "<f4"), ("Shift dx", "<f4"),
+                    ("Shift dy", "<f4"), ("Cell Count", "<i4"),
+                ]),
+            ),
+            compression="gzip",
+            compression_opts=1,
+        )
+    return geom_text, hdf_path
+
+
+SAMPLE_POLYGON = [
+    (100.0, 100.0),
+    (200.0, 100.0),
+    (200.0, 200.0),
+    (100.0, 200.0),
+    (100.0, 100.0),
+]
+
+
+class TestAddRefinementRegion:
+
+    def test_add_first_region_creates_group(self, empty_geom_hdf):
+        geom_text, hdf_path = empty_geom_hdf
+        fid = GeomMesh.add_refinement_region(
+            geom_text, SAMPLE_POLYGON, spacing_dx=25.0, name="HighRes",
+        )
+        assert fid == 0
+        with h5py.File(str(hdf_path), "r") as hf:
+            rr = "Geometry/2D Flow Area Refinement Regions"
+            assert f"{rr}/Attributes" in hf
+            assert f"{rr}/Polygon Info" in hf
+            assert f"{rr}/Polygon Parts" in hf
+            assert f"{rr}/Polygon Points" in hf
+
+            attrs = hf[f"{rr}/Attributes"][:]
+            assert len(attrs) == 1
+            assert attrs["Name"][0] == b"HighRes"
+            assert abs(float(attrs["Spacing dx"][0]) - 25.0) < 0.01
+            assert abs(float(attrs["Spacing dy"][0]) - 25.0) < 0.01
+
+    def test_add_region_correct_dtypes(self, empty_geom_hdf):
+        geom_text, hdf_path = empty_geom_hdf
+        GeomMesh.add_refinement_region(
+            geom_text, SAMPLE_POLYGON, spacing_dx=30.0,
+        )
+        with h5py.File(str(hdf_path), "r") as hf:
+            rr = "Geometry/2D Flow Area Refinement Regions"
+            assert hf[f"{rr}/Attributes"].dtype["Spacing dx"] == np.dtype("<f4")
+            assert hf[f"{rr}/Attributes"].dtype["Spacing dy"] == np.dtype("<f4")
+            assert hf[f"{rr}/Attributes"].dtype["Name"] == np.dtype("S32")
+            assert hf[f"{rr}/Polygon Info"].dtype == np.dtype("int32")
+            assert hf[f"{rr}/Polygon Parts"].dtype == np.dtype("int32")
+            assert hf[f"{rr}/Polygon Points"].dtype == np.dtype("float64")
+
+    def test_add_region_gzip_compression(self, empty_geom_hdf):
+        geom_text, hdf_path = empty_geom_hdf
+        GeomMesh.add_refinement_region(
+            geom_text, SAMPLE_POLYGON, spacing_dx=30.0,
+        )
+        with h5py.File(str(hdf_path), "r") as hf:
+            rr = "Geometry/2D Flow Area Refinement Regions"
+            for ds_name in ("Attributes", "Polygon Info", "Polygon Parts", "Polygon Points"):
+                ds = hf[f"{rr}/{ds_name}"]
+                assert ds.compression == "gzip", f"{ds_name} missing gzip"
+
+    def test_add_region_polygon_geometry(self, empty_geom_hdf):
+        geom_text, hdf_path = empty_geom_hdf
+        GeomMesh.add_refinement_region(
+            geom_text, SAMPLE_POLYGON, spacing_dx=30.0,
+        )
+        with h5py.File(str(hdf_path), "r") as hf:
+            rr = "Geometry/2D Flow Area Refinement Regions"
+            info = hf[f"{rr}/Polygon Info"][:]
+            points = hf[f"{rr}/Polygon Points"][:]
+            parts = hf[f"{rr}/Polygon Parts"][:]
+            assert info.shape == (1, 4)
+            assert info[0, 0] == 0  # pnt_start
+            assert info[0, 1] == 5  # pnt_count (closed ring)
+            assert info[0, 2] == 0  # part_start
+            assert info[0, 3] == 1  # part_count
+            assert points.shape == (5, 2)
+            assert parts.shape == (1, 2)
+            assert parts[0, 0] == 0
+            assert parts[0, 1] == 5
+
+    def test_add_multiple_regions_appends(self, empty_geom_hdf):
+        geom_text, hdf_path = empty_geom_hdf
+        fid0 = GeomMesh.add_refinement_region(
+            geom_text, SAMPLE_POLYGON, spacing_dx=25.0, name="First",
+        )
+        second_poly = [(300.0, 300.0), (400.0, 300.0), (400.0, 400.0), (300.0, 400.0)]
+        fid1 = GeomMesh.add_refinement_region(
+            geom_text, second_poly, spacing_dx=10.0, name="Second",
+        )
+        assert fid0 == 0
+        assert fid1 == 1
+        with h5py.File(str(hdf_path), "r") as hf:
+            rr = "Geometry/2D Flow Area Refinement Regions"
+            attrs = hf[f"{rr}/Attributes"][:]
+            assert len(attrs) == 2
+            assert attrs["Name"][0] == b"First"
+            assert attrs["Name"][1] == b"Second"
+            info = hf[f"{rr}/Polygon Info"][:]
+            assert info.shape == (2, 4)
+            # Second region points start after first region's 5 points
+            assert info[1, 0] == 5
+            # Second polygon was 4 pts, auto-closed to 5
+            assert info[1, 1] == 5
+            points = hf[f"{rr}/Polygon Points"][:]
+            assert points.shape == (10, 2)
+
+    def test_add_region_to_existing_fixture(self, refinement_region_hdf):
+        geom_text, hdf_path = refinement_region_hdf
+        fid = GeomMesh.add_refinement_region(
+            geom_text, SAMPLE_POLYGON, spacing_dx=15.0, name="NewRegion",
+        )
+        assert fid == 3  # fixture has 3 existing regions
+        regions = GeomMesh.get_refinement_regions(geom_text)
+        assert len(regions) == 4
+        assert regions[3]["name"] == "NewRegion"
+        assert abs(regions[3]["spacing_dx"] - 15.0) < 0.01
+
+    def test_add_region_auto_closes_ring(self, empty_geom_hdf):
+        geom_text, hdf_path = empty_geom_hdf
+        open_poly = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
+        GeomMesh.add_refinement_region(
+            geom_text, open_poly, spacing_dx=5.0,
+        )
+        with h5py.File(str(hdf_path), "r") as hf:
+            pts = hf["Geometry/2D Flow Area Refinement Regions/Polygon Points"][:]
+            assert len(pts) == 5
+            assert np.allclose(pts[0], pts[-1])
+
+    def test_add_region_spacing_dy_defaults_to_dx(self, empty_geom_hdf):
+        geom_text, hdf_path = empty_geom_hdf
+        GeomMesh.add_refinement_region(
+            geom_text, SAMPLE_POLYGON, spacing_dx=42.0,
+        )
+        with h5py.File(str(hdf_path), "r") as hf:
+            attrs = hf["Geometry/2D Flow Area Refinement Regions/Attributes"][:]
+            assert abs(float(attrs["Spacing dx"][0]) - 42.0) < 0.01
+            assert abs(float(attrs["Spacing dy"][0]) - 42.0) < 0.01
+
+    def test_add_region_separate_dx_dy(self, empty_geom_hdf):
+        geom_text, hdf_path = empty_geom_hdf
+        GeomMesh.add_refinement_region(
+            geom_text, SAMPLE_POLYGON, spacing_dx=30.0, spacing_dy=15.0,
+        )
+        with h5py.File(str(hdf_path), "r") as hf:
+            attrs = hf["Geometry/2D Flow Area Refinement Regions/Attributes"][:]
+            assert abs(float(attrs["Spacing dx"][0]) - 30.0) < 0.01
+            assert abs(float(attrs["Spacing dy"][0]) - 15.0) < 0.01
+
+    def test_add_region_rejects_too_few_vertices(self, empty_geom_hdf):
+        geom_text, _ = empty_geom_hdf
+        with pytest.raises(ValueError, match="at least 3 vertices"):
+            GeomMesh.add_refinement_region(
+                geom_text, [(0.0, 0.0), (1.0, 1.0)], spacing_dx=10.0,
+            )
+
+    def test_add_region_rejects_non_positive_spacing(self, empty_geom_hdf):
+        geom_text, _ = empty_geom_hdf
+        with pytest.raises(ValueError, match="positive"):
+            GeomMesh.add_refinement_region(
+                geom_text, SAMPLE_POLYGON, spacing_dx=0.0,
+            )
+        with pytest.raises(ValueError, match="positive"):
+            GeomMesh.add_refinement_region(
+                geom_text, SAMPLE_POLYGON, spacing_dx=-5.0,
+            )
+
+    def test_add_region_name_truncation(self, empty_geom_hdf):
+        geom_text, hdf_path = empty_geom_hdf
+        long_name = "A" * 50
+        GeomMesh.add_refinement_region(
+            geom_text, SAMPLE_POLYGON, spacing_dx=20.0, name=long_name,
+        )
+        with h5py.File(str(hdf_path), "r") as hf:
+            stored = hf["Geometry/2D Flow Area Refinement Regions/Attributes"]["Name"][0]
+            assert len(stored) <= 32
+
+    def test_add_region_readable_by_hdfbndry_pattern(self, empty_geom_hdf):
+        """Verify datasets match the schema HdfBndry.get_refinement_regions() reads."""
+        geom_text, hdf_path = empty_geom_hdf
+        GeomMesh.add_refinement_region(
+            geom_text, SAMPLE_POLYGON, spacing_dx=25.0, name="Test",
+        )
+        with h5py.File(str(hdf_path), "r") as hf:
+            rr = hf["Geometry/2D Flow Area Refinement Regions"]
+            # Read exactly the way HdfBndry does (lines 253-269)
+            attrs = rr["Attributes"][()]
+            assert "Name" in attrs.dtype.names
+            for pnt_start, pnt_cnt, part_start, part_cnt in rr["Polygon Info"][()]:
+                points = rr["Polygon Points"][()][pnt_start:pnt_start + pnt_cnt]
+                assert points.shape == (pnt_cnt, 2)
+                assert part_cnt >= 1
+                if part_cnt > 1:
+                    parts = rr["Polygon Parts"][()][part_start:part_start + part_cnt]
+                    assert parts.shape[1] == 2
+
+    def test_add_region_shapely_polygon(self, empty_geom_hdf):
+        """Accept a Shapely Polygon if available."""
+        pytest.importorskip("shapely")
+        from shapely.geometry import Polygon as ShapelyPolygon
+        geom_text, hdf_path = empty_geom_hdf
+        poly = ShapelyPolygon([(0, 0), (100, 0), (100, 100), (0, 100)])
+        fid = GeomMesh.add_refinement_region(
+            geom_text, poly, spacing_dx=20.0, name="ShapelyRgn",
+        )
+        assert fid == 0
+        regions = GeomMesh.get_refinement_regions(geom_text)
+        assert regions[0]["name"] == "ShapelyRgn"

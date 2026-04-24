@@ -182,3 +182,13 @@ def test_write_gdal_input_file_list_writes_one_tile_per_line(tmp_path):
         ]
     finally:
         path.unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize("resolution", [10, 30])
+def test_download_tiles_rejects_non_1m_resolutions(tmp_path, resolution):
+    with pytest.raises(NotImplementedError, match="currently supports only 1m"):
+        Usgs3depAws.download_tiles(
+            bbox=(-77.1, 40.6, -77.0, 40.7),
+            resolution=resolution,
+            output_folder=tmp_path,
+        )

@@ -170,34 +170,15 @@ class RasMap:
         Returns:
             pd.DataFrame: DataFrame containing extracted information from the .rasmap file.
         """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-        
         rasmap_path = Path(rasmap_path)
+        from . import _land_classification_helper as _lch
+
         if not rasmap_path.exists():
             logger.error(f"RASMapper file not found: {rasmap_path}")
-            # Create a single row DataFrame with all empty values
-            return pd.DataFrame({
-                'projection_path': [None],
-                'profile_lines_path': [[]],
-                'soil_layer_path': [[]],
-                'infiltration_hdf_path': [[]],
-                'landcover_hdf_path': [[]],
-                'terrain_hdf_path': [[]],
-                'current_settings': [{}]
-            })
+            return _lch.empty_rasmap_dataframe()
         
         try:
-            # Initialize data for the DataFrame - just one row with lists
-            data = {
-                'projection_path': [None],
-                'profile_lines_path': [[]],
-                'soil_layer_path': [[]],
-                'infiltration_hdf_path': [[]],
-                'landcover_hdf_path': [[]],
-                'terrain_hdf_path': [[]],
-                'current_settings': [{}]
-            }
+            data = _lch.empty_rasmap_dataframe().to_dict(orient="list")
             
             # Read the file content
             with open(rasmap_path, 'r', encoding='utf-8') as f:
@@ -214,22 +195,19 @@ class RasMap:
                 root = tree.getroot()
             except ET.ParseError as e:
                 logger.error(f"Error parsing XML in {rasmap_path}: {e}")
-                return pd.DataFrame(data)
-            
-            # Helper function to convert relative paths to absolute paths
-            def to_absolute_path(relative_path: str) -> str:
-                if not relative_path:
-                    return None
-                # Remove any leading .\ or ./
-                relative_path = relative_path.lstrip('.\\').lstrip('./')
-                # Convert to absolute path relative to project folder
-                return str(ras_obj.project_folder / relative_path)
+                return _lch.empty_rasmap_dataframe()
             
             # Extract projection path
             try:
                 projection_elem = root.find(".//RASProjectionFilename")
                 if projection_elem is not None and 'Filename' in projection_elem.attrib:
-                    data['projection_path'][0] = to_absolute_path(projection_elem.attrib['Filename'])
+                    projection_path = _lch.resolve_rasmap_relative_path(
+                        rasmap_path.parent,
+                        projection_elem.attrib['Filename'],
+                    )
+                    data['projection_path'][0] = (
+                        str(projection_path) if projection_path is not None else None
+                    )
             except Exception as e:
                 logger.warning(f"Error extracting projection path: {e}")
             
@@ -237,43 +215,48 @@ class RasMap:
             try:
                 profile_lines_elem = root.find(".//Features/Layer[@Name='Profile Lines']")
                 if profile_lines_elem is not None and 'Filename' in profile_lines_elem.attrib:
-                    data['profile_lines_path'][0].append(to_absolute_path(profile_lines_elem.attrib['Filename']))
+                    profile_lines_path = _lch.resolve_rasmap_relative_path(
+                        rasmap_path.parent,
+                        profile_lines_elem.attrib['Filename'],
+                    )
+                    if profile_lines_path is not None:
+                        data['profile_lines_path'][0].append(str(profile_lines_path))
             except Exception as e:
                 logger.warning(f"Error extracting profile lines path: {e}")
             
-            # Extract soil layer paths
             try:
-                soil_layers = root.findall(".//Layer[@Name='Hydrologic Soil Groups']")
-                for layer in soil_layers:
-                    if 'Filename' in layer.attrib:
-                        data['soil_layer_path'][0].append(to_absolute_path(layer.attrib['Filename']))
+                land_layers = RasMap.list_land_classification_layers(
+                    rasmap_path,
+                    ras_object=ras_object,
+                )
+                if not land_layers.empty:
+                    for kind, target_column in (
+                        ("soils", "soil_layer_path"),
+                        ("infiltration", "infiltration_hdf_path"),
+                        ("landcover", "landcover_hdf_path"),
+                    ):
+                        paths = [
+                            str(path)
+                            for path in land_layers.loc[
+                                land_layers["classification_kind"] == kind,
+                                "resolved_path",
+                            ].dropna().tolist()
+                        ]
+                        data[target_column][0] = paths
             except Exception as e:
-                logger.warning(f"Error extracting soil layer paths: {e}")
-            
-            # Extract infiltration HDF paths
-            try:
-                infiltration_layers = root.findall(".//Layer[@Name='Infiltration']")
-                for layer in infiltration_layers:
-                    if 'Filename' in layer.attrib:
-                        data['infiltration_hdf_path'][0].append(to_absolute_path(layer.attrib['Filename']))
-            except Exception as e:
-                logger.warning(f"Error extracting infiltration HDF paths: {e}")
-            
-            # Extract landcover HDF paths
-            try:
-                landcover_layers = root.findall(".//Layer[@Name='LandCover']")
-                for layer in landcover_layers:
-                    if 'Filename' in layer.attrib:
-                        data['landcover_hdf_path'][0].append(to_absolute_path(layer.attrib['Filename']))
-            except Exception as e:
-                logger.warning(f"Error extracting landcover HDF paths: {e}")
+                logger.warning(f"Error extracting land-classification layer paths: {e}")
             
             # Extract terrain HDF paths
             try:
                 terrain_layers = root.findall(".//Terrains/Layer")
                 for layer in terrain_layers:
                     if 'Filename' in layer.attrib:
-                        data['terrain_hdf_path'][0].append(to_absolute_path(layer.attrib['Filename']))
+                        terrain_path = _lch.resolve_rasmap_relative_path(
+                            rasmap_path.parent,
+                            layer.attrib['Filename'],
+                        )
+                        if terrain_path is not None:
+                            data['terrain_hdf_path'][0].append(str(terrain_path))
             except Exception as e:
                 logger.warning(f"Error extracting terrain HDF paths: {e}")
             
@@ -305,16 +288,216 @@ class RasMap:
             
         except Exception as e:
             logger.error(f"Unexpected error processing RASMapper file {rasmap_path}: {e}")
-            # Create a single row DataFrame with all empty values
-            return pd.DataFrame({
-                'projection_path': [None],
-                'profile_lines_path': [[]],
-                'soil_layer_path': [[]],
-                'infiltration_hdf_path': [[]],
-                'landcover_hdf_path': [[]],
-                'terrain_hdf_path': [[]],
-                'current_settings': [{}]
-            })
+            return _lch.empty_rasmap_dataframe()
+
+    @staticmethod
+    @log_call
+    def list_land_classification_layers(
+        ras_project_path: Union[str, Path],
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """
+        List semantic land-classification layers from a project .rasmap file.
+
+        Classifies each ``Type="LandCoverLayer"`` entry as ``landcover``,
+        ``soils``, ``infiltration``, or ``unknown`` using filename and selected
+        parameter semantics rather than exact display names.
+
+        Args:
+            ras_project_path: Project folder, .prj file, or .rasmap file.
+            ras_object: Optional RasPrj object. Present for API consistency.
+
+        Returns:
+            DataFrame with one row per LandCoverLayer entry.
+        """
+        ras_project_path = Path(ras_project_path)
+        from . import _land_classification_helper as _lch
+
+        project_paths = _lch.resolve_project_paths(ras_project_path)
+        rasmap_path = project_paths.rasmap_path
+
+        columns = [
+            "name",
+            "type",
+            "checked",
+            "filename",
+            "resolved_path",
+            "selected_parameter",
+            "classification_kind",
+            "classification_layer_count",
+            "classification_layer_filenames",
+            "classification_layer_paths",
+        ]
+
+        if not rasmap_path.exists():
+            logger.warning(f"RASMapper file not found: {rasmap_path}")
+            return pd.DataFrame(columns=columns)
+
+        try:
+            root = ET.parse(rasmap_path).getroot()
+        except ET.ParseError as e:
+            logger.error(f"Error parsing .rasmap XML: {e}")
+            return pd.DataFrame(columns=columns)
+
+        map_layers = root.find("MapLayers")
+        if map_layers is None:
+            return pd.DataFrame(columns=columns)
+
+        records = []
+        for layer in map_layers.findall("Layer"):
+            if layer.attrib.get("Type") != "LandCoverLayer":
+                continue
+            records.append(
+                _lch.build_land_classification_record(
+                    layer,
+                    project_paths.project_folder,
+                )
+            )
+
+        if not records:
+            return pd.DataFrame(columns=columns)
+
+        return pd.DataFrame(records, columns=columns)
+
+    @staticmethod
+    @log_call
+    def add_landcover_layer(
+        ras_project_path: Union[str, Path],
+        source_path: Union[str, Path],
+        classification_table: Union[pd.DataFrame, str, Path],
+        cell_size: float,
+        source_field: Optional[str] = None,
+        output_hdf_path: Optional[Union[str, Path]] = None,
+        restrict_to_extent: Optional[Any] = None,
+        ras_object=None,
+    ) -> Path:
+        """
+        Create and register a land-cover classification layer for a RAS project.
+        """
+        ras_project_path = Path(ras_project_path)
+        source_path = Path(source_path)
+        output_hdf_path = Path(output_hdf_path) if output_hdf_path is not None else None
+        from . import _land_classification_helper as _lch
+
+        return _lch.add_landcover_layer(
+            ras_project_path=ras_project_path,
+            source_path=source_path,
+            classification_table=classification_table,
+            cell_size=cell_size,
+            source_field=source_field,
+            output_hdf_path=output_hdf_path,
+            restrict_to_extent=restrict_to_extent,
+        )
+
+    @staticmethod
+    @log_call
+    def add_soils_layer(
+        ras_project_path: Union[str, Path],
+        gssurgo_path: Union[str, Path],
+        cell_size: float,
+        output_hdf_path: Optional[Union[str, Path]] = None,
+        restrict_to_extent: Optional[Any] = None,
+        ras_object=None,
+    ) -> Path:
+        """
+        Create and register a soils layer from direct GSSURGO input.
+        """
+        ras_project_path = Path(ras_project_path)
+        gssurgo_path = Path(gssurgo_path)
+        output_hdf_path = Path(output_hdf_path) if output_hdf_path is not None else None
+        from . import _land_classification_helper as _lch
+
+        return _lch.add_soils_layer(
+            ras_project_path=ras_project_path,
+            gssurgo_path=gssurgo_path,
+            cell_size=cell_size,
+            output_hdf_path=output_hdf_path,
+            restrict_to_extent=restrict_to_extent,
+        )
+
+    @staticmethod
+    @log_call
+    def add_infiltration_layer(
+        ras_project_path: Union[str, Path],
+        infiltration_method: str = "scs_curve_number",
+        landcover_hdf_path: Optional[Union[str, Path]] = None,
+        soil_layer_path: Optional[Union[str, Path]] = None,
+        output_hdf_path: Optional[Union[str, Path]] = None,
+        scs_reset_time_hours: Optional[float] = None,
+        ras_object=None,
+    ) -> Path:
+        """
+        Create and register an infiltration classification layer.
+        """
+        ras_project_path = Path(ras_project_path)
+        landcover_hdf_path = (
+            Path(landcover_hdf_path) if landcover_hdf_path is not None else None
+        )
+        soil_layer_path = Path(soil_layer_path) if soil_layer_path is not None else None
+        output_hdf_path = Path(output_hdf_path) if output_hdf_path is not None else None
+        from . import _land_classification_helper as _lch
+
+        return _lch.add_infiltration_layer(
+            ras_project_path=ras_project_path,
+            infiltration_method=infiltration_method,
+            landcover_hdf_path=landcover_hdf_path,
+            soil_layer_path=soil_layer_path,
+            output_hdf_path=output_hdf_path,
+            scs_reset_time_hours=scs_reset_time_hours,
+        )
+
+    @staticmethod
+    @log_call
+    def associate_geometry_layers(
+        ras_project_path: Union[str, Path],
+        geom_file: Union[str, Path],
+        landcover_hdf_path: Optional[Union[str, Path]] = None,
+        soil_layer_path: Optional[Union[str, Path]] = None,
+        infiltration_hdf_path: Optional[Union[str, Path]] = None,
+        ras_object=None,
+    ) -> Path:
+        """
+        Associate generated classification layers to a geometry.
+        """
+        ras_project_path = Path(ras_project_path)
+        geom_file = Path(geom_file)
+        landcover_hdf_path = (
+            Path(landcover_hdf_path) if landcover_hdf_path is not None else None
+        )
+        soil_layer_path = Path(soil_layer_path) if soil_layer_path is not None else None
+        infiltration_hdf_path = (
+            Path(infiltration_hdf_path) if infiltration_hdf_path is not None else None
+        )
+        from . import _land_classification_helper as _lch
+
+        return _lch.associate_geometry_layers(
+            ras_project_path=ras_project_path,
+            geom_file=geom_file,
+            landcover_hdf_path=landcover_hdf_path,
+            soil_layer_path=soil_layer_path,
+            infiltration_hdf_path=infiltration_hdf_path,
+            ras_object=ras_object,
+        )
+
+    @staticmethod
+    @log_call
+    def recompute_property_tables(
+        ras_project_path: Union[str, Path],
+        geom_file: Union[str, Path],
+        ras_object=None,
+    ) -> Path:
+        """
+        Recompute geometry preprocessing and property tables for a compiled geometry.
+        """
+        ras_project_path = Path(ras_project_path)
+        geom_file = Path(geom_file)
+        from . import _land_classification_helper as _lch
+
+        return _lch.recompute_property_tables(
+            ras_project_path,
+            geom_file,
+            ras_object=ras_object,
+        )
     
     @staticmethod
     @log_call
@@ -355,20 +538,12 @@ class RasMap:
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
+        from . import _land_classification_helper as _lch
         
         rasmap_path = RasMap.get_rasmap_path(ras_obj)
         if rasmap_path is None:
             logger.warning("No .rasmap file found for this project. Creating empty rasmap_df.")
-            # Create a single row DataFrame with all empty values
-            return pd.DataFrame({
-                'projection_path': [None],
-                'profile_lines_path': [[]],
-                'soil_layer_path': [[]],
-                'infiltration_hdf_path': [[]],
-                'landcover_hdf_path': [[]],
-                'terrain_hdf_path': [[]],
-                'current_settings': [{}]
-            })
+            return _lch.empty_rasmap_dataframe()
         
         return RasMap.parse_rasmap(rasmap_path, ras_obj)
 

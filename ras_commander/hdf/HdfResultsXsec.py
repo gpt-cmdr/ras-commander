@@ -240,7 +240,10 @@ class HdfResultsXsec:
     
 
     @staticmethod
-    def _reference_timeseries_output(hdf_file: h5py.File, reftype: str = "lines") -> xr.Dataset:
+    def _reference_timeseries_output(
+        hdf_file: Union[h5py.File, Path],
+        reftype: str = "lines"
+    ) -> xr.Dataset:
         """
         Internal method to return timeseries output data for reference lines or points from a HEC-RAS HDF plan file.
 
@@ -272,41 +275,56 @@ class HdfResultsXsec:
         else:
             raise ValueError('reftype must be either "lines" or "points".')
 
+        should_close = not isinstance(hdf_file, h5py.File)
+        if should_close:
+            hdf_file = h5py.File(hdf_file, "r")
+
         try:
-            reference_group = hdf_file[output_path]
-        except KeyError:
-            logger.error(f"Could not find HDF group at path '{output_path}'. "
-                         f"The Plan HDF file may not contain reference {reftype[:-1]} output data.")
-            return xr.Dataset()
+            try:
+                reference_group = hdf_file[output_path]
+            except KeyError:
+                logger.error(
+                    f"Could not find HDF group at path '{output_path}'. "
+                    f"The Plan HDF file may not contain reference {reftype[:-1]} output data."
+                )
+                return xr.Dataset()
 
-        reference_names = reference_group["Name"][:]
-        names = []
-        mesh_areas = []
-        for s in reference_names:
-            name, mesh_area = s.decode("utf-8").split("|")
-            names.append(name)
-            mesh_areas.append(mesh_area)
+            reference_names = reference_group["Name"][:]
+            names = []
+            mesh_areas = []
+            for s in reference_names:
+                name, mesh_area = s.decode("utf-8").split("|")
+                names.append(name)
+                mesh_areas.append(mesh_area)
 
-        times = HdfBase.get_unsteady_timestamps(hdf_file)
+            times = HdfBase.get_unsteady_timestamps(hdf_file)
 
-        das = {}
-        for var in ["Flow", "Velocity", "Water Surface"]:
-            group = reference_group.get(var)
-            if group is None:
-                continue
-            values = group[:]
-            units = group.attrs["Units"].decode("utf-8")
-            da = xr.DataArray(
-                values,
-                name=var,
-                dims=["time", f"{abbrev}_id"],
-                coords={
-                    "time": times,
-                    f"{abbrev}_id": range(values.shape[1]),
-                    f"{abbrev}_name": (f"{abbrev}_id", names),
-                    "mesh_name": (f"{abbrev}_id", mesh_areas),
-                },
-                attrs={"units": units, "hdf_path": f"{output_path}/{var}"},
-            )
-            das[var] = da
-        return xr.Dataset(das)
+            das = {}
+            if reftype == "lines":
+                variables = ["Flow", "Velocity", "Water Surface", "Water Surface Conveyance"]
+            else:
+                variables = ["Flow", "Velocity", "Water Surface"]
+
+            for var in variables:
+                group = reference_group.get(var)
+                if group is None:
+                    continue
+                values = group[:]
+                units = group.attrs["Units"].decode("utf-8")
+                da = xr.DataArray(
+                    values,
+                    name=var,
+                    dims=["time", f"{abbrev}_id"],
+                    coords={
+                        "time": times,
+                        f"{abbrev}_id": range(values.shape[1]),
+                        f"{abbrev}_name": (f"{abbrev}_id", names),
+                        "mesh_name": (f"{abbrev}_id", mesh_areas),
+                    },
+                    attrs={"units": units, "hdf_path": f"{output_path}/{var}"},
+                )
+                das[var] = da
+            return xr.Dataset(das)
+        finally:
+            if should_close:
+                hdf_file.close()

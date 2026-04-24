@@ -7,6 +7,7 @@ List of Functions in HdfPipe:
 Geometry Retrieval Functions:
 - get_pipe_conduits() - Get pipe conduit geometries and attributes
 - get_pipe_nodes() - Get pipe node geometries and attributes
+- get_pipe_inlets() - Get top and side inlet attributes for pipe nodes
 - get_pipe_network() - Get complete pipe network data
 - get_pipe_profile() - Get elevation profile for a specific conduit
 - extract_pipe_network_data() - Extract both nodes and conduits data
@@ -96,28 +97,23 @@ class HdfPipe:
                 else:
                     polyline_geometries.append(LineString(coords))
             
-            # --- Read Terrain Profiles Data ---
-            terrain_info = group['Terrain Profiles Info'][:]
-            terrain_values = group['Terrain Profiles Values'][:]
-            
-            # Create a list of (Station, Elevation) tuples for Terrain Profiles
-            terrain_coords = list(zip(terrain_values[:, 0], terrain_values[:, 1]))
-            
-            terrain_profiles_list: List[List[Tuple[float, float]]] = []
-            
-            for i in range(len(terrain_info)):
-                info = terrain_info[i]
-                start_idx = info[0]
-                count = info[1]
-                
-                # Extract (Station, Elevation) pairs
-                segment = terrain_coords[start_idx : start_idx + count]
-                
-                terrain_profiles_list.append(segment)  # Store the list of (Station, Elevation) tuples
-            
-            # --- Combine Data into GeoDataFrame ---
+            # --- Read Terrain Profiles Data (optional) ---
             attr_df['Polyline'] = polyline_geometries
-            attr_df['Terrain_Profiles'] = terrain_profiles_list
+
+            if 'Terrain Profiles Info' in group and 'Terrain Profiles Values' in group:
+                terrain_info = group['Terrain Profiles Info'][:]
+                terrain_values = group['Terrain Profiles Values'][:]
+                terrain_coords = list(zip(terrain_values[:, 0], terrain_values[:, 1]))
+
+                terrain_profiles_list: List[List[Tuple[float, float]]] = []
+                for i in range(len(terrain_info)):
+                    info = terrain_info[i]
+                    start_idx = info[0]
+                    count = info[1]
+                    segment = terrain_coords[start_idx : start_idx + count]
+                    terrain_profiles_list.append(segment)
+
+                attr_df['Terrain_Profiles'] = terrain_profiles_list
             
             # Initialize GeoDataFrame with Polyline geometries
             gdf = gpd.GeoDataFrame(attr_df, geometry='Polyline', crs=crs)
@@ -128,40 +124,114 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_nodes(hdf_path: Path) -> gpd.GeoDataFrame:
+    def get_pipe_nodes(hdf_path: Path, crs: Optional[str] = "EPSG:4326") -> gpd.GeoDataFrame:
         """
         Creates a GeoDataFrame for Pipe Node points and their attributes from an HDF5 file.
-        
-        Parameters:
-        - hdf_path: Path to the HDF5 file.
-        
+
+        Reads ``Geometry/Pipe Nodes/Attributes`` (compound dtype) and
+        ``Geometry/Pipe Nodes/Points`` (x, y, z coordinates), merging them into a
+        single GeoDataFrame.
+
+        Args:
+            hdf_path (Union[str, Path]): Path to the HDF5 file.
+            crs (Optional[str]): Coordinate Reference System (default: "EPSG:4326").
+
         Returns:
-        - A GeoDataFrame containing pipe node attributes and their geometries.
+            gpd.GeoDataFrame: GeoDataFrame containing pipe node attributes and
+                Point geometries.  Returns an empty GeoDataFrame if the
+                ``Geometry/Pipe Nodes`` group does not exist.
+
+        Raises:
+            KeyError: If the group exists but required datasets are missing.
+
+        Example:
+            >>> nodes_gdf = HdfPipe.get_pipe_nodes("path/to/plan.hdf")
         """
         with h5py.File(hdf_path, 'r') as f:
+            # --- Gracefully handle missing group ---
+            if '/Geometry/Pipe Nodes' not in f:
+                logger.warning("Geometry/Pipe Nodes group not found in HDF file")
+                return gpd.GeoDataFrame()
+
             group = f['/Geometry/Pipe Nodes/']
-            
+
             # --- Read and Process Attributes ---
             attributes = group['Attributes'][:]
             attr_df = pd.DataFrame(attributes)
-            
+
             # Decode byte string fields to UTF-8 strings
-            string_columns = attr_df.select_dtypes([object]).columns  # Changed 'S' to object
+            string_columns = attr_df.select_dtypes([object]).columns
             for col in string_columns:
                 attr_df[col] = attr_df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
-            
+
             # --- Read Points Data ---
             points = group['Points'][:]
             # Create Shapely Point geometries
             geometries = [Point(xy) for xy in points]
-            
+
             # --- Combine Attributes and Geometries into GeoDataFrame ---
-            gdf = gpd.GeoDataFrame(attr_df, geometry=geometries)
-            
+            gdf = gpd.GeoDataFrame(attr_df, geometry=geometries, crs=crs)
+
             return gdf
         
         
 
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_pipe_inlets(hdf_path: Path) -> pd.DataFrame:
+        """
+        Reads top and side inlet attributes from a HEC-RAS geometry HDF file.
+
+        Reads ``Geometry/Pipe Nodes/Top Inlets/Attributes`` and
+        ``Geometry/Pipe Nodes/Side Inlets/Attributes`` and combines them into a
+        single DataFrame with an ``inlet_type`` column indicating ``'top'`` or
+        ``'side'``.
+
+        Args:
+            hdf_path (Union[str, Path]): Path to the HDF5 file.
+
+        Returns:
+            pd.DataFrame: DataFrame containing inlet attributes with an
+                ``inlet_type`` column.  Returns an empty DataFrame if neither
+                inlet group exists in the HDF file.
+
+        Raises:
+            KeyError: If a group exists but its Attributes dataset is missing.
+
+        Example:
+            >>> inlets_df = HdfPipe.get_pipe_inlets("path/to/plan.hdf")
+        """
+        frames = []
+
+        with h5py.File(hdf_path, 'r') as f:
+            for inlet_type, group_path in [
+                ('top', '/Geometry/Pipe Nodes/Top Inlets/Attributes'),
+                ('side', '/Geometry/Pipe Nodes/Side Inlets/Attributes'),
+            ]:
+                if group_path not in f:
+                    logger.info(f"{group_path} not found in HDF file, skipping")
+                    continue
+
+                data = f[group_path][:]
+                df = pd.DataFrame(data)
+
+                # Decode byte string fields to UTF-8 strings
+                string_columns = df.select_dtypes([object]).columns
+                for col in string_columns:
+                    df[col] = df[col].apply(
+                        lambda x: x.decode('utf-8') if isinstance(x, bytes) else x
+                    )
+
+                df['inlet_type'] = inlet_type
+                frames.append(df)
+
+        if not frames:
+            logger.warning("No inlet attribute data found in HDF file")
+            return pd.DataFrame()
+
+        return pd.concat(frames, ignore_index=True)
 
     @staticmethod
     @log_call

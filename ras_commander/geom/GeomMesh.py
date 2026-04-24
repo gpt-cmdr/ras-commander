@@ -41,7 +41,7 @@ Requires:
     - Windows (HEC-RAS / RasMapperLib is Windows-only)
     - pythonnet >= 3.0.5: pip install pythonnet
     - HEC-RAS 6.6 installed (provides RasMapperLib.dll + GDAL)
-    - GDAL junction: call GeomMesh.setup_gdal_bridge() once per environment
+    - HEC-RAS GDAL runtime: call GeomMesh.setup_gdal_bridge() once per process
 
 All methods are static — no instantiation needed.
 
@@ -54,7 +54,6 @@ import logging
 import os
 import platform
 import shutil
-import subprocess
 import sys
 from dataclasses import dataclass, field
 from numbers import Number
@@ -62,6 +61,10 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
 from ..Decorators import log_call
+from .._gdal_runtime import (
+    configure_hecras_gdal_runtime,
+    configure_rasmapper_gdal_bridge,
+)
 from ..LoggingConfig import get_logger
 from .GeomMeshDataclasses import BCConflict, BCFixResult, MeshResult
 
@@ -117,6 +120,12 @@ def _load_dlls(hecras_dir: Optional[str | Path] = None) -> None:
         hecras_dir = _find_hecras_dir()
     hecras_dir = str(hecras_dir)
 
+    if not GeomMesh.setup_gdal_bridge(hecras_dir=hecras_dir, create_junction=True):
+        raise RuntimeError(
+            "Cannot load RasMapperLib.dll because the HEC-RAS GDAL bridge "
+            "could not be initialized."
+        )
+
     if hecras_dir not in sys.path:
         sys.path.insert(0, hecras_dir)
 
@@ -131,8 +140,6 @@ def _load_dlls(hecras_dir: Optional[str | Path] = None) -> None:
 
     _dlls_loaded = True
     logger.debug("RasMapperLib DLLs loaded")
-
-    GeomMesh.setup_gdal_bridge(hecras_dir=hecras_dir)
 
 
 def _imports():
@@ -1363,6 +1370,40 @@ def _ensure_hdf(geom_text_path: Path, hecras_dir=None) -> Path:
     return hdf_path
 
 
+def _normalise_polygon_coords(polygon) -> "numpy.ndarray":
+    """Convert a polygon argument to an (N, 2) float64 NumPy array.
+
+    Accepts: list/tuple of (x, y), NumPy (N, 2) array, or Shapely Polygon.
+    """
+    import numpy as np
+
+    if hasattr(polygon, "exterior"):
+        coords = np.array(polygon.exterior.coords, dtype=np.float64)
+    else:
+        coords = np.asarray(polygon, dtype=np.float64)
+
+    if coords.ndim != 2 or coords.shape[1] != 2:
+        raise ValueError(
+            f"Polygon must be (N, 2) coordinates, got shape {coords.shape}."
+        )
+    return coords
+
+
+def _create_hdf_dataset(hf, key: str, data: "numpy.ndarray") -> None:
+    """Create an HDF5 dataset matching HEC-RAS conventions.
+
+    Uses gzip compression and sets chunk shape equal to the data shape
+    (single-chunk layout), consistent with HEC-RAS compiled geometry.
+    """
+    hf.create_dataset(
+        key,
+        data=data,
+        compression="gzip",
+        compression_opts=1,
+        chunks=data.shape,
+    )
+
+
 class GeomMesh:
     """
     Headless 2D mesh generation, repair, and BC conflict resolution.
@@ -1387,53 +1428,38 @@ class GeomMesh:
     def setup_gdal_bridge(
         hecras_dir: Optional[Union[str, Path]] = None,
         python_dir: Optional[Union[str, Path]] = None,
+        create_junction: bool = True,
     ) -> bool:
         """
-        Create GDAL directory junction for RasMapperLib.
+        Configure HEC-RAS GDAL runtime for RasMapperLib.
 
-        RasMapperLib requires a GDAL/ folder next to the Python executable.
-        This creates a junction from {python_dir}/GDAL → HEC-RAS GDAL.
-        Only needs to be called once per Python environment.
+        The default path points GDAL environment variables and DLL search paths
+        at the GDAL runtime bundled with HEC-RAS, then verifies the legacy
+        ``python.exe`` sibling GDAL bridge before RasMapperLib is loaded.
 
-        Returns True if junction exists or was created successfully.
+        Returns True if the process runtime was configured successfully.
         """
         if platform.system() != "Windows":
             logger.warning("setup_gdal_bridge() is Windows-only")
             return False
 
-        if python_dir is None:
-            python_dir = Path(sys.executable).parent
-        else:
-            python_dir = Path(python_dir)
-
-        gdal_junc = python_dir / "GDAL"
-
-        if gdal_junc.exists() and (gdal_junc / "bin64").exists():
-            return True
-
         if hecras_dir is None:
             hecras_dir = _find_hecras_dir()
-        gdal_src = Path(hecras_dir) / "GDAL"
-
-        if not gdal_src.exists():
-            logger.error(f"GDAL not found in HEC-RAS: {gdal_src}")
-            return False
 
         try:
-            result = subprocess.run(
-                ["powershell", "-Command",
-                 f'New-Item -ItemType Junction -Path "{gdal_junc}" '
-                 f'-Target "{gdal_src}" -Force'],
-                capture_output=True, text=True, timeout=15,
-            )
-            if result.returncode == 0:
-                logger.info(f"Created GDAL junction: {gdal_junc} -> {gdal_src}")
-                return True
-            logger.error(f"Junction creation failed: {result.stderr.strip()}")
+            configure_hecras_gdal_runtime(hecras_dir)
+        except FileNotFoundError as exc:
+            logger.error(str(exc))
             return False
-        except Exception as exc:
-            logger.error(f"setup_gdal_bridge error: {exc}")
-            return False
+
+        if create_junction:
+            try:
+                configure_rasmapper_gdal_bridge(hecras_dir, python_dir)
+            except (FileNotFoundError, RuntimeError) as exc:
+                logger.error(str(exc))
+                return False
+
+        return True
 
     @staticmethod
     @log_call
@@ -1907,6 +1933,160 @@ class GeomMesh:
             f"Refinement region [{target}]: dx={spacing_dx}, dy={spacing_dy} "
             f"→ {hdf_path.name}"
         )
+
+    @staticmethod
+    @log_call
+    def add_refinement_region(
+        geom_number: Union[str, Number, Path],
+        polygon,
+        spacing_dx: float,
+        spacing_dy: Optional[float] = None,
+        name: str = "",
+        hecras_dir: Optional[Union[str, Path]] = None,
+        ras_object=None,
+    ) -> int:
+        """
+        Create a new refinement region in the compiled geometry HDF.
+
+        Refinement regions override the base cell size within their
+        polygon boundaries during mesh generation.  They are stored
+        exclusively in HDF — there is no .g## text representation.
+
+        The polygon, spacing, and name are written into four HDF
+        datasets under ``Geometry/2D Flow Area Refinement Regions/``
+        using the exact schema HEC-RAS expects: gzip-compressed
+        datasets with ``int32`` index arrays, ``float64`` coordinates,
+        and ``float32`` attribute values.
+
+        Args:
+            geom_number: Geometry number or path to .g## text file.
+            polygon: Region boundary as a list of (x, y) tuples,
+                a Shapely Polygon, or any object whose
+                ``exterior.coords`` yields (x, y) pairs.
+                The ring is closed automatically if needed.
+            spacing_dx: Cell spacing in the X direction (project
+                units, e.g. feet or metres).
+            spacing_dy: Cell spacing in the Y direction.  Defaults
+                to *spacing_dx* when ``None``.
+            name: Region name stored in the HDF ``Name`` field
+                (max 32 bytes UTF-8).  Empty string is valid.
+            hecras_dir: Override HEC-RAS installation directory.
+            ras_object: Optional RasPrj instance.
+
+        Returns:
+            The 0-based FID of the newly created region.
+
+        Raises:
+            ValueError: If *polygon* has fewer than 3 vertices or
+                *spacing_dx* is not positive.
+        """
+        import h5py
+        import numpy as np
+
+        if spacing_dy is None:
+            spacing_dy = spacing_dx
+        if spacing_dx <= 0 or spacing_dy <= 0:
+            raise ValueError(
+                f"Spacing must be positive (got dx={spacing_dx}, dy={spacing_dy})."
+            )
+
+        # ── Normalise polygon to (N, 2) float64 array ──────────────
+        coords = _normalise_polygon_coords(polygon)
+        if len(coords) < 3:
+            raise ValueError(
+                f"Polygon must have at least 3 vertices (got {len(coords)})."
+            )
+        # Close the ring if caller didn't
+        if not np.allclose(coords[0], coords[-1]):
+            coords = np.vstack([coords, coords[:1]])
+
+        geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
+        hdf_path = _ensure_hdf(geom_text_path, hecras_dir=hecras_dir)
+
+        rr_group_key = "Geometry/2D Flow Area Refinement Regions"
+        attr_key = f"{rr_group_key}/Attributes"
+        info_key = f"{rr_group_key}/Polygon Info"
+        parts_key = f"{rr_group_key}/Polygon Parts"
+        points_key = f"{rr_group_key}/Polygon Points"
+
+        # ── Encode name ─────────────────────────────────────────────
+        name_bytes = name.encode("utf-8")[:32]
+        # Ensure valid UTF-8 after byte truncation
+        name_bytes = name_bytes.decode("utf-8", errors="ignore").encode("utf-8")
+
+        # ── Attributes dtype matches HEC-RAS convention ─────────────
+        attr_dtype = np.dtype([
+            ("Name", "S32"),
+            ("Spacing dx", "<f4"),
+            ("Spacing dy", "<f4"),
+        ])
+
+        n_pts = len(coords)
+        new_attr_row = np.array(
+            [(name_bytes, np.float32(spacing_dx), np.float32(spacing_dy))],
+            dtype=attr_dtype,
+        )
+
+        with h5py.File(str(hdf_path), "a") as hf:
+            # ── Read existing data (if any) ─────────────────────────
+            if attr_key in hf:
+                old_attrs = hf[attr_key][:]
+                old_info = hf[info_key][:]
+                old_parts = hf[parts_key][:] if parts_key in hf else np.empty((0, 2), dtype=np.int32)
+                old_points = hf[points_key][:]
+
+                # Coerce existing Attributes to canonical dtype if needed
+                if old_attrs.dtype != attr_dtype:
+                    coerced = np.empty(len(old_attrs), dtype=attr_dtype)
+                    for fname in attr_dtype.names:
+                        if fname in old_attrs.dtype.names:
+                            coerced[fname] = old_attrs[fname]
+                    old_attrs = coerced
+
+                existing_n = len(old_attrs)
+                total_old_pts = len(old_points)
+                total_old_parts = len(old_parts)
+            else:
+                old_attrs = np.empty(0, dtype=attr_dtype)
+                old_info = np.empty((0, 4), dtype=np.int32)
+                old_parts = np.empty((0, 2), dtype=np.int32)
+                old_points = np.empty((0, 2), dtype=np.float64)
+                existing_n = 0
+                total_old_pts = 0
+                total_old_parts = 0
+
+            new_fid = existing_n
+
+            # ── Build expanded arrays ───────────────────────────────
+            merged_attrs = np.concatenate([old_attrs, new_attr_row])
+
+            new_info_row = np.array(
+                [[total_old_pts, n_pts, total_old_parts, 1]],
+                dtype=np.int32,
+            )
+            merged_info = np.vstack([old_info, new_info_row]) if existing_n > 0 else new_info_row
+
+            new_parts_row = np.array([[0, n_pts]], dtype=np.int32)
+            merged_parts = np.vstack([old_parts, new_parts_row]) if total_old_parts > 0 else new_parts_row
+
+            merged_points = np.vstack([old_points, coords]) if total_old_pts > 0 else coords
+
+            # ── Delete-and-recreate (matches RASDecomp pattern) ─────
+            for key in (attr_key, info_key, parts_key, points_key):
+                if key in hf:
+                    del hf[key]
+
+            _create_hdf_dataset(hf, attr_key, merged_attrs)
+            _create_hdf_dataset(hf, info_key, merged_info)
+            _create_hdf_dataset(hf, parts_key, merged_parts)
+            _create_hdf_dataset(hf, points_key, merged_points)
+
+        logger.info(
+            f"Added refinement region FID {new_fid} "
+            f"(name='{name}', dx={spacing_dx}, dy={spacing_dy}, "
+            f"vertices={n_pts}) → {hdf_path.name}"
+        )
+        return new_fid
 
     @staticmethod
     @log_call

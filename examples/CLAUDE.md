@@ -254,9 +254,9 @@ How agents should use notebooks
 - Notable cells: sweep cores, record walltime, plot scaling; choose efficient settings.
 
 701_benchmarking_versions_6.1_to_6.6.ipynb
-- Focus: Cross-version performance comparison.
-- Functions: init_ras_project (ras_commander/RasPrj.py) (vary Ras.exe), RasCmdr.compute_plan (ras_commander/RasCmdr.py), HdfResultsPlan.get_runtime_data (ras_commander/HdfResultsPlan.py).
-- Notable cells: control versioned runs, tabulate walltimes per version; keep outputs isolated per version.
+- Focus: Cross-version performance comparison plus per-version core scaling for `6.0`, `6.3.1`, `6.6`, and `7.0`.
+- Functions: RasUtils.discover_ras_versions (ras_commander/RasUtils.py), init_ras_project (ras_commander/RasPrj.py), RasCmdr.compute_plan (ras_commander/RasCmdr.py), RasPlan.set_num_cores (ras_commander/RasPlan.py), RasGeo.clear_geompre_files (ras_commander/RasGeo.py), ResultsSummary.summarize_plan (ras_commander/results/ResultsSummary.py).
+- Notable cells: choose between a clean official benchmark case (`BaldEagleCrkMulti2D` Plan 02) and an optional heavier local eBFE case (North Galveston Bay); copy the project into version-isolated workspaces; run one sweep across versions x core counts; derive both fixed-core version comparison and scaling curves from the same results table.
 
 710_mannings_sensitivity_bulk_analysis.ipynb
 - Focus: Bulk sensitivity analysis for Manning's n values.

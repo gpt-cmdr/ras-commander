@@ -40,6 +40,7 @@ class BCConflict:
 
     face_id: int
     bc_names: List[str]
+    flow_area_name: str = ""
     bc_types: List[str] = field(default_factory=list)
     normal_depth_bc: Optional[str] = None
 
