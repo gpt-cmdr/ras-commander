@@ -105,6 +105,22 @@ class HdfResultsMesh:
 
     Works with HEC-RAS 6.0+ plan HDF files.
     """
+    MESH_CELL_TIME_SERIES_OUTPUT_VARS = [
+        "Water Surface", "Depth", "Velocity", "Velocity X", "Velocity Y",
+        "Froude Number", "Courant Number", "Shear Stress", "Bed Elevation",
+        "Precipitation Rate", "Infiltration Rate", "Evaporation Rate",
+        "Percolation Rate", "Groundwater Elevation", "Groundwater Depth",
+        "Groundwater Flow", "Groundwater Velocity", "Groundwater Velocity X",
+        "Groundwater Velocity Y"
+    ]
+
+    MESH_FACE_TIME_SERIES_OUTPUT_VARS = [
+        "Face Flow", "Face Velocity", "Face Water Surface", "Face Area",
+        "Face Manning's n", "Face Courant", "Face Cumulative Volume",
+        "Face Eddy Viscosity", "Face Flow Period Average",
+        "Face Friction Term", "Face Pressure Gradient Term",
+        "Face Shear Stress", "Face Tangential Velocity"
+    ]
 
     @staticmethod
     @log_call
@@ -177,22 +193,31 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_faces_timeseries(hdf_path: Path, mesh_name: str) -> xr.Dataset:
+    def get_mesh_faces_timeseries(
+        hdf_path: Path,
+        mesh_name: str,
+        truncate: bool = True
+    ) -> xr.Dataset:
         """
         Get timeseries output for all face-based variables of a specific mesh.
 
         Args:
             hdf_path (Path): Path to the HDF file.
             mesh_name (str): Name of the mesh.
+            truncate (bool): Whether to truncate leading/trailing zero-only
+                timesteps for each variable. Defaults to True for backward
+                compatibility with the previous behavior.
 
         Returns:
             xr.Dataset: **Multiple variables for ONE mesh**.
                 Use Dataset when extracting MULTIPLE variables for a SINGLE mesh area.
 
                 Data variables:
-                    - face_velocity: Face velocity time series
-                    - face_flow: Face flow time series
-                    (Each variable shares common dimensions)
+                    Any available face-based HDF time-series outputs listed in
+                    MESH_FACE_TIME_SERIES_OUTPUT_VARS, normalized to lowercase
+                    names such as face_velocity, face_flow,
+                    face_water_surface, face_area, and face_mannings_n.
+                    Each variable shares common dimensions.
 
                 Dimensions:
                     - time: Timestamps
@@ -202,17 +227,27 @@ class HdfResultsMesh:
                 For single variable, use get_mesh_timeseries() → DataArray.
                 For multiple meshes, use get_mesh_cells_timeseries() → Dict[str, Dataset].
         """
-        face_vars = ["Face Velocity", "Face Flow"]
         datasets = []
-        
-        for var in face_vars:
-            try:
-                da = HdfResultsMesh.get_mesh_timeseries(hdf_path, mesh_name, var)
-                # Assign the variable name as the DataArray name
-                da.name = var.lower().replace(' ', '_')
-                datasets.append(da)
-            except Exception as e:
-                logger.warning(f"Failed to process {var} for mesh {mesh_name}: {str(e)}")
+
+        with h5py.File(hdf_path, 'r') as hdf_file:
+            for var in HdfResultsMesh.MESH_FACE_TIME_SERIES_OUTPUT_VARS:
+                path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, var)
+                if path not in hdf_file:
+                    logger.debug(f"Variable '{var}' not found for mesh '{mesh_name}'. Skipping.")
+                    continue
+
+                try:
+                    da = HdfResultsMesh._get_mesh_timeseries_output(
+                        hdf_file,
+                        mesh_name,
+                        var,
+                        truncate=truncate,
+                    )
+                    # Assign the variable name as the DataArray name
+                    da.name = HdfResultsMesh._mesh_data_var_name(var)
+                    datasets.append(da)
+                except Exception as e:
+                    logger.warning(f"Failed to process {var} for mesh {mesh_name}: {str(e)}")
         
         if not datasets:
             logger.error(f"No valid data found for mesh {mesh_name}")
@@ -720,20 +755,8 @@ class HdfResultsMesh:
             ValueError: If there's an error processing the timeseries output data.
         """
         TIME_SERIES_OUTPUT_VARS = {
-            "cell": [
-                "Water Surface", "Depth", "Velocity", "Velocity X", "Velocity Y",
-                "Froude Number", "Courant Number", "Shear Stress", "Bed Elevation",
-                "Precipitation Rate", "Infiltration Rate", "Evaporation Rate",
-                "Percolation Rate", "Groundwater Elevation", "Groundwater Depth",
-                "Groundwater Flow", "Groundwater Velocity", "Groundwater Velocity X",
-                "Groundwater Velocity Y"
-            ],
-            "face": [
-                "Face Velocity", "Face Flow", "Face Water Surface", "Face Courant",
-                "Face Cumulative Volume", "Face Eddy Viscosity", "Face Flow Period Average",
-                "Face Friction Term", "Face Pressure Gradient Term", "Face Shear Stress",
-                "Face Tangential Velocity"
-            ]
+            "cell": HdfResultsMesh.MESH_CELL_TIME_SERIES_OUTPUT_VARS,
+            "face": HdfResultsMesh.MESH_FACE_TIME_SERIES_OUTPUT_VARS
         }
 
         try:
@@ -758,12 +781,23 @@ class HdfResultsMesh:
                         path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, variable)
                         dataset = hdf_path[path]
                         values = dataset[:]
-                        units = dataset.attrs.get("Units", "").decode("utf-8")
+                        units = HdfResultsMesh._decode_hdf_attr(
+                            dataset.attrs.get("Units", "")
+                        )
 
                         if truncate:
-                            last_nonzero = np.max(np.nonzero(values)[1]) + 1 if values.size > 0 else 0
-                            values = values[:, :last_nonzero]
-                            truncated_time_stamps = time_stamps[:last_nonzero]
+                            if values.ndim == 2:
+                                non_zero_time = np.where(np.any(values != 0, axis=1))[0]
+                            else:
+                                non_zero_time = np.nonzero(values)[0]
+
+                            if len(non_zero_time) > 0:
+                                start, end = non_zero_time[0], non_zero_time[-1] + 1
+                                values = values[start:end]
+                                truncated_time_stamps = time_stamps[start:end]
+                            else:
+                                values = values[:0]
+                                truncated_time_stamps = time_stamps[:0]
                         else:
                             truncated_time_stamps = time_stamps
 
@@ -772,7 +806,7 @@ class HdfResultsMesh:
                             continue
 
                         # Determine if this is a face-based or cell-based variable
-                        id_dim = "face_id" if any(face_var in variable for face_var in TIME_SERIES_OUTPUT_VARS["face"]) else "cell_id"
+                        id_dim = "face_id" if variable in TIME_SERIES_OUTPUT_VARS["face"] else "cell_id"
 
                         data_vars[variable] = xr.DataArray(
                             data=values,
@@ -836,7 +870,9 @@ class HdfResultsMesh:
 
             dataset = hdf_path[path]
             values = dataset[:]
-            units = dataset.attrs.get("Units", "").decode("utf-8")
+            units = HdfResultsMesh._decode_hdf_attr(
+                dataset.attrs.get("Units", "")
+            )
             
             # Get start time and timesteps
             start_time = HdfBase.get_simulation_start_time(hdf_path)
@@ -887,10 +923,32 @@ class HdfResultsMesh:
         path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, var)
         group = hdf_path[path]
         values = group[:]
-        units = group.attrs.get("Units")
-        if units is not None:
-            units = units.decode("utf-8")
+        units = HdfResultsMesh._decode_hdf_attr(group.attrs.get("Units"))
         return values, units
+
+    @staticmethod
+    def _decode_hdf_attr(value: object) -> str:
+        """Decode optional HDF string attributes to plain strings."""
+        if value is None:
+            return ""
+        if isinstance(value, (bytes, np.bytes_)):
+            return value.decode("utf-8")
+        if isinstance(value, np.ndarray):
+            if value.size == 0:
+                return ""
+            return HdfResultsMesh._decode_hdf_attr(value.flat[0])
+        return str(value)
+
+    @staticmethod
+    def _mesh_data_var_name(variable: str) -> str:
+        """Normalize HDF output variable names for xarray Dataset keys."""
+        return (
+            variable.lower()
+            .replace("'", "")
+            .replace("/", "_")
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
 
 
     @staticmethod

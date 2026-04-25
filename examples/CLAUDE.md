@@ -62,6 +62,11 @@ How agents should use notebooks
 - Functions: ConsoleCallback (ras_commander/callbacks.py), FileLoggerCallback (ras_commander/callbacks.py), ProgressBarCallback (ras_commander/callbacks.py), SynchronizedCallback (ras_commander/callbacks.py), ExecutionCallback subclass (ras_commander/callbacks.py).
 - Pattern: Pass callback instance to `stream_callback` parameter of any `RasCmdr.compute_*` call; subclass `ExecutionCallback` to build custom handlers.
 
+116_hdf_output_options_benchmark.ipynb
+- Focus: Benchmark HDF5 read/extraction performance for HDF output settings using BaldEagleCrkMulti2D plan 06 clones.
+- Functions: RasExamples.extract_project (ras_commander/RasExamples.py), RasPlan.clone_plan (ras_commander/RasPlan.py), RasPlan.apply_hdf_output_profile (ras_commander/RasPlan.py), RasCmdr.compute_plan (ras_commander/RasCmdr.py), HdfMesh and HdfResultsMesh read methods.
+- Pattern: Clone plan 06 per HDF settings permutation, compute/populate each `.p##.hdf`, then benchmark mesh geometry and mesh result reads after computation.
+
 150_results_dataframe.ipynb
 - Focus: Inspect `ras.results_df` for execution status, error detection, volume accounting, and runtime data across all plans.
 - Functions: RasPrj.update_results_df (ras_commander/RasPrj.py), HdfResultsPlan.get_compute_messages_hdf_only (ras_commander/HdfResultsPlan.py), ResultsParser.parse_compute_messages (ras_commander/results/ResultsParser.py).

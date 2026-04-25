@@ -26,6 +26,10 @@ get_mesh_area_attributes()
     Returns geometry 2D flow area attributes
 get_mesh_face_property_tables()
     Returns Face Property Tables for each Face in all 2D Flow Areas
+get_mesh_face_hydraulic_properties_at_stage()
+    Interpolates 2D face area, wetted perimeter, Manning's n, radius, and conveyance
+get_reference_line_internal_faces()
+    Returns native reference-line internal face connectivity
 get_mesh_cell_property_tables()
     Returns Cell Property Tables for each Cell in all 2D Flow Areas
 
@@ -460,6 +464,459 @@ class HdfMesh:
         except Exception as e:
             logger.error(f"Error extracting face property tables from {hdf_path}: {str(e)}")
             return {}
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_mesh_face_hydraulic_properties_at_stage(
+        hdf_path: Path,
+        mesh_name: str,
+        face_ids,
+        water_surface,
+        unit_system: str = 'us',
+    ):
+        """
+        Interpolate 2D face hydraulic properties at supplied water-surface stages.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file.
+        mesh_name : str
+            2D flow area name.
+        face_ids : scalar or array-like
+            Face IDs to evaluate.
+        water_surface : scalar, 1D array, or 2D array
+            Water-surface elevation(s). Scalars are broadcast to every face.
+            1D arrays must contain one value per face. 2D arrays are interpreted
+            as time-by-face.
+        unit_system : str, default 'us'
+            ``'us'``/``'customary'`` uses 1.486 in Manning's conveyance;
+            ``'metric'``/``'si'`` uses 1.0.
+
+        Returns
+        -------
+        xarray.Dataset
+            Dataset with dimensions ``time`` and ``face_id`` containing:
+            ``area``, ``wetted_perimeter``, ``mannings_n``,
+            ``hydraulic_radius``, and ``conveyance``.
+
+        Notes
+        -----
+        Conveyance is derived from face property tables using:
+        ``K = C * A * (A / P) ** (2 / 3) / n``.
+
+        Stages below the lowest tabulated elevation are treated as dry faces
+        with zero area, wetted perimeter, hydraulic radius, and conveyance.
+        """
+        import xarray as xr
+
+        try:
+            coefficient = HdfMesh._manning_conveyance_coefficient(unit_system)
+            face_id_array = HdfMesh._normalize_face_ids(face_ids)
+            water_surface_array = HdfMesh._normalize_face_water_surface(
+                water_surface, len(face_id_array)
+            )
+
+            face_property_tables = HdfMesh.get_mesh_face_property_tables(hdf_path)
+            if mesh_name not in face_property_tables:
+                raise ValueError(
+                    f"Mesh '{mesh_name}' not found in face property tables. "
+                    f"Available meshes: {list(face_property_tables.keys())}"
+                )
+
+            face_lookup = HdfMesh._build_face_property_lookup(
+                face_property_tables[mesh_name]
+            )
+
+            shape = water_surface_array.shape
+            area = np.full(shape, np.nan, dtype=float)
+            wetted_perimeter = np.full(shape, np.nan, dtype=float)
+            mannings_n = np.full(shape, np.nan, dtype=float)
+
+            for col_idx, face_id in enumerate(face_id_array):
+                face_table = face_lookup.get(int(face_id))
+                if face_table is None or face_table.empty:
+                    logger.warning(
+                        f"No face property table rows found for face {face_id} "
+                        f"in mesh '{mesh_name}'"
+                    )
+                    continue
+
+                interpolated = HdfMesh._interpolate_face_property_table(
+                    face_table, water_surface_array[:, col_idx]
+                )
+                area[:, col_idx] = interpolated['area']
+                wetted_perimeter[:, col_idx] = interpolated['wetted_perimeter']
+                mannings_n[:, col_idx] = interpolated['mannings_n']
+
+            wet_mask = (area > 0) & (wetted_perimeter > 0)
+            hydraulic_radius = np.divide(
+                area,
+                wetted_perimeter,
+                out=np.zeros_like(area, dtype=float),
+                where=wet_mask,
+            )
+            hydraulic_radius[~wet_mask & (np.isnan(area) | np.isnan(wetted_perimeter))] = np.nan
+
+            valid_n = np.isfinite(mannings_n) & (mannings_n > 0)
+            conveyance = np.divide(
+                coefficient * area * np.power(hydraulic_radius, 2.0 / 3.0),
+                mannings_n,
+                out=np.zeros_like(area, dtype=float),
+                where=wet_mask & valid_n,
+            )
+            conveyance[wet_mask & ~valid_n] = np.nan
+            conveyance[np.isnan(area) | np.isnan(wetted_perimeter)] = np.nan
+
+            return xr.Dataset(
+                data_vars={
+                    'area': (('time', 'face_id'), area),
+                    'wetted_perimeter': (('time', 'face_id'), wetted_perimeter),
+                    'mannings_n': (('time', 'face_id'), mannings_n),
+                    'hydraulic_radius': (('time', 'face_id'), hydraulic_radius),
+                    'conveyance': (('time', 'face_id'), conveyance),
+                },
+                coords={
+                    'time': np.arange(water_surface_array.shape[0], dtype=int),
+                    'face_id': face_id_array,
+                },
+                attrs={
+                    'mesh_name': mesh_name,
+                    'unit_system': unit_system,
+                    'manning_conveyance_coefficient': coefficient,
+                    'formula': 'K = C * A * (A / P) ** (2 / 3) / n',
+                    'source': 'Geometry/2D Flow Areas/<mesh>/Faces Area Elevation',
+                    'dry_face_handling': (
+                        'Stages below the first tabulated elevation use zero '
+                        'area, wetted perimeter, hydraulic radius, and conveyance.'
+                    ),
+                },
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Error computing face hydraulic properties from {hdf_path}: {str(e)}"
+            )
+            raise
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_reference_line_internal_faces(
+        hdf_path: Path,
+        mesh_name: Optional[str] = None
+    ) -> pd.DataFrame:
+        """
+        Return internal mesh faces associated with native HEC-RAS reference lines.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file.
+        mesh_name : Optional[str], optional
+            If provided, return only reference-line faces for this 2D flow area.
+
+        Returns
+        -------
+        pd.DataFrame
+            Rows keyed by reference line and face with columns such as
+            ``reference_line_id``, ``profile_name``, ``mesh_name``, ``face_id``,
+            ``fp_start_index``, ``fp_end_index``, ``station_start``,
+            ``station_end``, ``station_length``, ``face_length``, and
+            ``station_fraction`` where source fields are available. Returns an
+            empty DataFrame when reference lines or internal faces are absent.
+        """
+        columns = [
+            'reference_line_id',
+            'profile_name',
+            'mesh_name',
+            'face_id',
+            'fp_start_index',
+            'fp_end_index',
+            'station_start',
+            'station_end',
+            'station_length',
+            'face_length',
+            'station_fraction',
+        ]
+
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                ref_path = "Geometry/Reference Lines"
+                attrs_path = f"{ref_path}/Attributes"
+                internal_faces_path = f"{ref_path}/Internal Faces"
+
+                if attrs_path not in hdf_file or internal_faces_path not in hdf_file:
+                    return pd.DataFrame(columns=columns)
+
+                attributes = hdf_file[attrs_path][()]
+                internal_faces = hdf_file[internal_faces_path][()]
+                if len(attributes) == 0 or len(internal_faces) == 0:
+                    return pd.DataFrame(columns=columns)
+
+                attr_lookup = HdfMesh._reference_line_attribute_lookup(attributes)
+                rows = []
+                for face_row in internal_faces:
+                    reference_line_id = HdfMesh._get_hdf_row_value(
+                        face_row, 'Reference Line ID', default=np.nan
+                    )
+                    if pd.isna(reference_line_id):
+                        continue
+
+                    reference_line_id = int(reference_line_id)
+                    attr = attr_lookup.get(reference_line_id, {})
+                    row_mesh_name = attr.get('mesh_name') or mesh_name
+                    if mesh_name is not None and row_mesh_name != mesh_name:
+                        continue
+
+                    station_start = HdfMesh._get_hdf_row_value(
+                        face_row, 'Station Start', default=np.nan
+                    )
+                    station_end = HdfMesh._get_hdf_row_value(
+                        face_row, 'Station End', default=np.nan
+                    )
+                    face_id = HdfMesh._get_hdf_row_value(
+                        face_row, 'Face Index', default=np.nan
+                    )
+                    face_length = HdfMesh._get_face_length(
+                        hdf_file, row_mesh_name, face_id
+                    )
+
+                    station_length = np.nan
+                    if np.isfinite(station_start) and np.isfinite(station_end):
+                        station_length = float(station_end) - float(station_start)
+
+                    station_fraction = np.nan
+                    if np.isfinite(station_length) and np.isfinite(face_length) and face_length > 0:
+                        station_fraction = station_length / face_length
+
+                    rows.append({
+                        'reference_line_id': reference_line_id,
+                        'profile_name': attr.get('profile_name'),
+                        'mesh_name': row_mesh_name,
+                        'face_id': HdfMesh._safe_int(face_id),
+                        'fp_start_index': HdfMesh._safe_int(HdfMesh._get_hdf_row_value(
+                            face_row, 'FP Start Index', default=np.nan
+                        )),
+                        'fp_end_index': HdfMesh._safe_int(HdfMesh._get_hdf_row_value(
+                            face_row, 'FP End Index', default=np.nan
+                        )),
+                        'station_start': float(station_start) if np.isfinite(station_start) else np.nan,
+                        'station_end': float(station_end) if np.isfinite(station_end) else np.nan,
+                        'station_length': station_length,
+                        'face_length': face_length,
+                        'station_fraction': station_fraction,
+                    })
+
+                return pd.DataFrame(rows, columns=columns)
+
+        except Exception as e:
+            logger.error(
+                f"Error reading reference line internal faces from {hdf_path}: {str(e)}"
+            )
+            return pd.DataFrame(columns=columns)
+
+    @staticmethod
+    def _manning_conveyance_coefficient(unit_system: str) -> float:
+        """Return Manning's conveyance coefficient for a supported unit system."""
+        normalized = str(unit_system).strip().lower()
+        if normalized in {
+            'us',
+            'u.s.',
+            'us customary',
+            'u.s. customary',
+            'english',
+            'customary',
+            'imperial',
+        }:
+            return 1.486
+        if normalized in {'metric', 'si'}:
+            return 1.0
+        raise ValueError(
+            "unit_system must be one of 'us', 'customary', 'english', "
+            "'metric', or 'si'"
+        )
+
+    @staticmethod
+    def _normalize_face_ids(face_ids) -> np.ndarray:
+        """Normalize scalar or array-like face IDs to a 1D integer array."""
+        face_id_array = np.atleast_1d(np.asarray(face_ids))
+        if face_id_array.ndim != 1:
+            raise ValueError("face_ids must be a scalar or 1D array-like")
+        if face_id_array.size == 0:
+            raise ValueError("face_ids must contain at least one face ID")
+        return face_id_array.astype(int)
+
+    @staticmethod
+    def _normalize_face_water_surface(water_surface, face_count: int) -> np.ndarray:
+        """Normalize scalar, per-face, or time-by-face stages to a 2D array."""
+        water_surface_array = np.asarray(water_surface, dtype=float)
+        if water_surface_array.ndim == 0:
+            return np.full((1, face_count), float(water_surface_array), dtype=float)
+        if water_surface_array.ndim == 1:
+            if water_surface_array.size != face_count:
+                raise ValueError(
+                    "1D water_surface inputs must have one value per face ID "
+                    f"({face_count}); got {water_surface_array.size}"
+                )
+            return water_surface_array.reshape(1, face_count)
+        if water_surface_array.ndim == 2:
+            if water_surface_array.shape[1] != face_count:
+                raise ValueError(
+                    "2D water_surface inputs must have shape time-by-face "
+                    f"with {face_count} columns; got {water_surface_array.shape}"
+                )
+            return water_surface_array
+        raise ValueError("water_surface must be scalar, 1D per-face, or 2D time-by-face")
+
+    @staticmethod
+    def _build_face_property_lookup(face_property_table: pd.DataFrame) -> Dict[int, pd.DataFrame]:
+        """Build a per-face lookup with sorted, de-duplicated elevations."""
+        if face_property_table.empty:
+            return {}
+
+        lookup = {}
+        required = ['Face ID', 'Elevation', 'Area', 'Wetted Perimeter', "Manning's n"]
+        missing = [col for col in required if col not in face_property_table.columns]
+        if missing:
+            raise ValueError(f"Face property table is missing columns: {missing}")
+
+        clean_table = face_property_table.dropna(subset=['Face ID', 'Elevation']).copy()
+        for face_id, face_df in clean_table.groupby('Face ID'):
+            face_df = (
+                face_df
+                .sort_values('Elevation')
+                .groupby('Elevation', as_index=False)
+                .last()
+                .reset_index(drop=True)
+            )
+            lookup[int(face_id)] = face_df
+        return lookup
+
+    @staticmethod
+    def _interpolate_face_property_table(
+        face_table: pd.DataFrame,
+        water_surface_values: np.ndarray
+    ) -> Dict[str, np.ndarray]:
+        """Interpolate face area, wetted perimeter, and Manning's n values."""
+        elevations = face_table['Elevation'].to_numpy(dtype=float)
+        if elevations.size == 0:
+            nan_values = np.full_like(water_surface_values, np.nan, dtype=float)
+            return {
+                'area': nan_values.copy(),
+                'wetted_perimeter': nan_values.copy(),
+                'mannings_n': nan_values.copy(),
+            }
+
+        area_values = face_table['Area'].to_numpy(dtype=float)
+        wetted_perimeter_values = face_table['Wetted Perimeter'].to_numpy(dtype=float)
+        mannings_n_values = face_table["Manning's n"].to_numpy(dtype=float)
+
+        area = np.interp(
+            water_surface_values,
+            elevations,
+            area_values,
+            left=0.0,
+            right=area_values[-1],
+        )
+        wetted_perimeter = np.interp(
+            water_surface_values,
+            elevations,
+            wetted_perimeter_values,
+            left=0.0,
+            right=wetted_perimeter_values[-1],
+        )
+        mannings_n = np.interp(
+            water_surface_values,
+            elevations,
+            mannings_n_values,
+            left=mannings_n_values[0],
+            right=mannings_n_values[-1],
+        )
+
+        dry_mask = water_surface_values < elevations[0]
+        area[dry_mask] = 0.0
+        wetted_perimeter[dry_mask] = 0.0
+
+        return {
+            'area': area,
+            'wetted_perimeter': wetted_perimeter,
+            'mannings_n': mannings_n,
+        }
+
+    @staticmethod
+    def _reference_line_attribute_lookup(attributes) -> Dict[int, Dict[str, Any]]:
+        """Return reference-line names and mesh names keyed by reference-line ID."""
+        lookup = {}
+        for idx, attr in enumerate(attributes):
+            profile_name = HdfMesh._decode_hdf_value(
+                HdfMesh._get_hdf_row_value(attr, 'Name', default='')
+            )
+            mesh_value = HdfMesh._get_first_hdf_row_value(
+                attr, ['SA-2D', 'SA/2D', 'mesh_name', 'Mesh Name'], default=None
+            )
+            lookup[idx] = {
+                'profile_name': profile_name,
+                'mesh_name': HdfMesh._decode_hdf_value(mesh_value) if mesh_value is not None else None,
+            }
+        return lookup
+
+    @staticmethod
+    def _get_face_length(hdf_file, mesh_name, face_id) -> float:
+        """Read a face length from Faces NormalUnitVector and Length when available."""
+        if mesh_name is None or not np.isfinite(face_id):
+            return np.nan
+
+        normals_path = f"Geometry/2D Flow Areas/{mesh_name}/Faces NormalUnitVector and Length"
+        if normals_path not in hdf_file:
+            return np.nan
+
+        normals = hdf_file[normals_path]
+        face_index = int(face_id)
+        if face_index < 0 or face_index >= normals.shape[0] or normals.shape[1] < 3:
+            return np.nan
+        return float(normals[face_index, 2])
+
+    @staticmethod
+    def _get_first_hdf_row_value(row, names: List[str], default=None):
+        """Return the first available named field value from a structured HDF row."""
+        for name in names:
+            value = HdfMesh._get_hdf_row_value(row, name, default=None)
+            if value is not None:
+                return value
+        return default
+
+    @staticmethod
+    def _get_hdf_row_value(row, name: str, default=None):
+        """Return a named field from a structured HDF row, or default."""
+        dtype_names = getattr(getattr(row, 'dtype', None), 'names', None)
+        if dtype_names and name in dtype_names:
+            return row[name]
+        return default
+
+    @staticmethod
+    def _decode_hdf_value(value) -> str:
+        """Decode HDF byte/string values with RAS whitespace cleanup."""
+        if value is None:
+            return None
+        try:
+            converted = HdfUtils.convert_ras_string(value)
+            return converted.strip() if isinstance(converted, str) else converted
+        except Exception:
+            if isinstance(value, bytes):
+                return value.decode('utf-8', errors='ignore').strip()
+            return str(value).strip()
+
+    @staticmethod
+    def _safe_int(value):
+        """Return an int for finite values, otherwise pandas NA."""
+        try:
+            if pd.isna(value):
+                return pd.NA
+            return int(value)
+        except Exception:
+            return pd.NA
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')

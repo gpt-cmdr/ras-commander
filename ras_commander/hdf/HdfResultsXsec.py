@@ -28,7 +28,7 @@ Notes:
 """
 
 from pathlib import Path
-from typing import Union, Optional, List, Dict, Tuple
+from typing import Union, Optional, List, Dict, Tuple, Sequence
 
 import h5py
 import numpy as np
@@ -165,7 +165,10 @@ class HdfResultsXsec:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_ref_lines_timeseries(hdf_path: Path) -> xr.Dataset:
+    def get_ref_lines_timeseries(
+        hdf_path: Path,
+        variables: Optional[Union[str, Sequence[str]]] = None
+    ) -> xr.Dataset:
         """
         Extract timeseries output data for reference lines from HEC-RAS HDF file.
 
@@ -173,11 +176,14 @@ class HdfResultsXsec:
         -----------
         hdf_path : Path
             Path to the HEC-RAS results HDF file
+        variables : str or sequence of str, optional
+            HDF dataset names to include. If omitted, all numeric datasets with
+            shape (time, reference_line) are returned.
 
         Returns:
         --------
         xr.Dataset
-            Dataset containing flow, velocity, and water surface data for reference lines.
+            Dataset containing numeric native HDF time-series data for reference lines.
             Returns empty dataset if reference line data not found.
 
         Raises:
@@ -187,12 +193,19 @@ class HdfResultsXsec:
         KeyError
             If required datasets are missing from the HDF file
         """
-        return HdfResultsXsec._reference_timeseries_output(hdf_path, reftype="lines")
+        return HdfResultsXsec._reference_timeseries_output(
+            hdf_path,
+            reftype="lines",
+            variables=variables,
+        )
 
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_ref_points_timeseries(hdf_path: Path) -> xr.Dataset:
+    def get_ref_points_timeseries(
+        hdf_path: Path,
+        variables: Optional[Union[str, Sequence[str]]] = None
+    ) -> xr.Dataset:
         """
         Extract timeseries output data for reference points from HEC-RAS HDF file.
 
@@ -204,14 +217,15 @@ class HdfResultsXsec:
         -----------
         hdf_path : Path
             Path to the HEC-RAS results HDF file
+        variables : str or sequence of str, optional
+            HDF dataset names to include. If omitted, all numeric datasets with
+            shape (time, reference_point) are returned.
 
         Returns:
         --------
         xr.Dataset
-            Dataset containing the following variables for each reference point:
-            - Flow [cfs or m³/s]
-            - Velocity [ft/s or m/s]
-            - Water Surface [ft or m]
+            Dataset containing numeric native HDF time-series variables for each
+            reference point.
             
             The dataset includes coordinates:
             - time: Simulation timesteps
@@ -236,13 +250,18 @@ class HdfResultsXsec:
         >>> # Get all data for a specific reference point by name
         >>> point_data = ds.sel(refpt_name='Point1')
         """
-        return HdfResultsXsec._reference_timeseries_output(hdf_path, reftype="points")
+        return HdfResultsXsec._reference_timeseries_output(
+            hdf_path,
+            reftype="points",
+            variables=variables,
+        )
     
 
     @staticmethod
     def _reference_timeseries_output(
         hdf_file: Union[h5py.File, Path],
-        reftype: str = "lines"
+        reftype: str = "lines",
+        variables: Optional[Union[str, Sequence[str]]] = None
     ) -> xr.Dataset:
         """
         Internal method to return timeseries output data for reference lines or points from a HEC-RAS HDF plan file.
@@ -254,6 +273,9 @@ class HdfResultsXsec:
         reftype : str, optional
             The type of reference data to retrieve. Must be either "lines" or "points".
             (default: "lines")
+        variables : str or sequence of str, optional
+            HDF dataset names to include. If omitted, all matching numeric
+            time-series datasets are returned.
 
         Returns
         -------
@@ -279,6 +301,8 @@ class HdfResultsXsec:
         if should_close:
             hdf_file = h5py.File(hdf_file, "r")
 
+        variable_filter = HdfResultsXsec._normalize_reference_variable_filter(variables)
+
         try:
             try:
                 reference_group = hdf_file[output_path]
@@ -293,24 +317,29 @@ class HdfResultsXsec:
             names = []
             mesh_areas = []
             for s in reference_names:
-                name, mesh_area = s.decode("utf-8").split("|")
+                name, mesh_area = HdfResultsXsec._decode_reference_name_mesh(s)
                 names.append(name)
                 mesh_areas.append(mesh_area)
 
             times = HdfBase.get_unsteady_timestamps(hdf_file)
+            feature_count = len(names)
+            expected_shape = (len(times), feature_count)
 
             das = {}
-            if reftype == "lines":
-                variables = ["Flow", "Velocity", "Water Surface", "Water Surface Conveyance"]
-            else:
-                variables = ["Flow", "Velocity", "Water Surface"]
-
-            for var in variables:
-                group = reference_group.get(var)
-                if group is None:
+            for var, dataset in reference_group.items():
+                if variable_filter is not None and var not in variable_filter:
                     continue
-                values = group[:]
-                units = group.attrs["Units"].decode("utf-8")
+                if not HdfResultsXsec._is_reference_timeseries_dataset(
+                    var,
+                    dataset,
+                    expected_shape,
+                ):
+                    continue
+
+                values = dataset[:]
+                units = HdfResultsXsec._decode_reference_attr(
+                    dataset.attrs.get("Units", "")
+                )
                 da = xr.DataArray(
                     values,
                     name=var,
@@ -328,3 +357,61 @@ class HdfResultsXsec:
         finally:
             if should_close:
                 hdf_file.close()
+
+    @staticmethod
+    def _normalize_reference_variable_filter(
+        variables: Optional[Union[str, Sequence[str]]]
+    ) -> Optional[set]:
+        """Normalize an optional reference output variable filter."""
+        if variables is None:
+            return None
+        if isinstance(variables, str):
+            return {variables}
+        return set(variables)
+
+    @staticmethod
+    def _is_reference_timeseries_dataset(
+        name: str,
+        dataset: h5py.Dataset,
+        expected_shape: Tuple[int, int],
+    ) -> bool:
+        """Return True for numeric reference feature time-series datasets."""
+        if not isinstance(dataset, h5py.Dataset):
+            return False
+
+        lower_name = name.lower()
+        if (
+            lower_name == "name"
+            or "unit" in lower_name
+            or "index" in lower_name
+            or "string" in lower_name
+        ):
+            return False
+
+        if dataset.shape != expected_shape:
+            return False
+
+        try:
+            return np.issubdtype(dataset.dtype, np.number)
+        except TypeError:
+            return False
+
+    @staticmethod
+    def _decode_reference_attr(value: object) -> str:
+        """Decode optional HDF string attributes to plain strings."""
+        if isinstance(value, (bytes, np.bytes_)):
+            return value.decode("utf-8")
+        if isinstance(value, np.ndarray):
+            if value.size == 0:
+                return ""
+            return HdfResultsXsec._decode_reference_attr(value.flat[0])
+        return str(value) if value is not None else ""
+
+    @staticmethod
+    def _decode_reference_name_mesh(value: object) -> Tuple[str, str]:
+        """Decode a reference feature name and optional mesh suffix."""
+        text = HdfResultsXsec._decode_reference_attr(value).strip()
+        if "|" not in text:
+            return text, ""
+        name, mesh_area = text.split("|", 1)
+        return name.strip(), mesh_area.strip()

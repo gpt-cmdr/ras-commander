@@ -1,0 +1,32 @@
+<VRTDataset rasterXSize="6705" rasterYSize="4852">
+  <SRS dataAxisToSRSAxisMapping="1,2">PROJCS["NAD83 / Pennsylvania North (ftUS)",GEOGCS["NAD83",DATUM["North_American_Datum_1983",SPHEROID["GRS 1980",6378137,298.257222101004,AUTHORITY["EPSG","7019"]],AUTHORITY["EPSG","6269"]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4269"]],PROJECTION["Lambert_Conformal_Conic_2SP"],PARAMETER["latitude_of_origin",40.1666666666667],PARAMETER["central_meridian",-77.75],PARAMETER["standard_parallel_1",40.8833333333333],PARAMETER["standard_parallel_2",41.95],PARAMETER["false_easting",1968500],PARAMETER["false_northing",0],UNIT["US survey foot",0.304800609601219,AUTHORITY["EPSG","9003"]],AXIS["Easting",EAST],AXIS["Northing",NORTH]]</SRS>
+  <GeoTransform>  1.9523545353037000e+06,  2.0000000000000000e+01,  0.0000000000000000e+00,  3.7386113502674998e+05,  0.0000000000000000e+00, -2.0000000000000000e+01</GeoTransform>
+  <VRTRasterBand dataType="Float32" band="1">
+    <Metadata>
+      <MDI key="STATISTICS_MAXIMUM">43.77271270752</MDI>
+      <MDI key="STATISTICS_MEAN">0.39143530234974</MDI>
+      <MDI key="STATISTICS_MINIMUM">0</MDI>
+      <MDI key="STATISTICS_STDDEV">0.67780789837933</MDI>
+    </Metadata>
+    <NoDataValue>-9999</NoDataValue>
+    <ColorInterp>Gray</ColorInterp>
+    <Histograms>
+      <HistItem>
+        <HistMin>0</HistMin>
+        <HistMax>43.7727127075195</HistMax>
+        <BucketCount>256</BucketCount>
+        <IncludeOutOfRange>1</IncludeOutOfRange>
+        <Approximate>0</Approximate>
+        <HistCounts>553476|359367|146185|74823|47135|32123|22131|15422|11356|8441|6528|5106|4176|3257|2762|2222|1870|1613|1356|1159|989|885|807|669|553|510|455|407|343|325|294|288|239|233|222|174|157|142|140|128|122|103|114|107|98|79|67|70|74|68|61|55|54|68|49|47|37|28|38|33|26|32|18|32|32|12|16|19|16|17|22|20|16|15|18|11|9|10|12|13|8|11|5|9|11|4|5|7|7|5|5|4|11|6|2|10|2|5|2|2|12|1|5|2|2|2|3|4|1|2|3|2|1|2|3|2|2|4|2|0|0|1|2|1|1|5|1|1|2|2|1|0|1|0|1|2|0|1|1|2|0|1|0|0|2|0|0|1|1|2|0|1|0|1|1|0|0|2|2|0|0|0|0|2|1|0|0|1|0|0|0|0|0|1|1|1|0|0|0|1|0|0|0|0|0|0|0|0|0|0|1|0|0|0|0|1|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|1|1|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|1|1|0|0|0|0|0|0|0|0|0|1|0|0|0|0|1</HistCounts>
+      </HistItem>
+    </Histograms>
+    <ComplexSource>
+      <SourceFilename relativeToVRT="1">Froude (Max).Terrain50.dtm_20ft.tif</SourceFilename>
+      <SourceBand>1</SourceBand>
+      <SourceProperties RasterXSize="6705" RasterYSize="4852" DataType="Float32" BlockXSize="256" BlockYSize="256" />
+      <SrcRect xOff="0" yOff="0" xSize="6705" ySize="4852" />
+      <DstRect xOff="0" yOff="0" xSize="6705" ySize="4852" />
+      <NODATA>-9999</NODATA>
+    </ComplexSource>
+  </VRTRasterBand>
+</VRTDataset>

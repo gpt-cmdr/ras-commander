@@ -1,0 +1,712 @@
+{
+  "schema_version": "2.1",
+  "project": {
+    "name": "BaldEagleDamBrk",
+    "prj_file": "BaldEagleDamBrk.prj",
+    "source_path": "G:\\GH\\ras-commander\\examples\\example_projects\\BaldEagleCrkMulti2D",
+    "archive_path": "G:\\GH\\ras-commander\\examples\\out\\961_cloud_native_results\\archive",
+    "created_at": "2026-04-23T10:32:12.784510+00:00",
+    "crs": "EPSG:2271",
+    "units": "US Survey Feet",
+    "plan_count": 11,
+    "geom_count": 10
+  },
+  "project_parquet": "BaldEagleDamBrk.parquet",
+  "geometry": [
+    {
+      "geom_id": "g06",
+      "source_file": "BaldEagleCrkMulti2D/BaldEagleDamBrk.g06.hdf",
+      "file_type": "hdf+text",
+      "parquet": "BaldEagleDamBrk.g06.parquet",
+      "plans_using": [
+        "p13"
+      ],
+      "layers": [
+        {
+          "layer": "mesh_cells",
+          "filter_value": "mesh_cells",
+          "rows": 4120,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_faces",
+          "filter_value": "mesh_faces",
+          "rows": 4120,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_areas",
+          "filter_value": "mesh_areas",
+          "rows": 3,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "cross_sections",
+          "filter_value": "cross_sections",
+          "rows": 192,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "centerlines",
+          "filter_value": "centerlines",
+          "rows": 1,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "bank_lines",
+          "filter_value": "bank_lines",
+          "rows": 2,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "structures",
+          "filter_value": "structures",
+          "rows": 14,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "cross_sections_text",
+          "filter_value": "cross_sections_text",
+          "rows": 192,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "centerlines_text",
+          "filter_value": "centerlines_text",
+          "rows": 1,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "storage_areas_text",
+          "filter_value": "storage_areas_text",
+          "rows": 3,
+          "geometry_type": null,
+          "crs": "EPSG:2271"
+        }
+      ],
+      "size_bytes": 912962
+    },
+    {
+      "geom_id": "g08",
+      "source_file": "BaldEagleCrkMulti2D/BaldEagleDamBrk.g08.hdf",
+      "file_type": "hdf+text",
+      "parquet": "BaldEagleDamBrk.g08.parquet",
+      "plans_using": [
+        "p15"
+      ],
+      "layers": [
+        {
+          "layer": "mesh_cells",
+          "filter_value": "mesh_cells",
+          "rows": 14206,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_faces",
+          "filter_value": "mesh_faces",
+          "rows": 14206,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_areas",
+          "filter_value": "mesh_areas",
+          "rows": 1,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "cross_sections",
+          "filter_value": "cross_sections",
+          "rows": 89,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "centerlines",
+          "filter_value": "centerlines",
+          "rows": 1,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "bc_lines",
+          "filter_value": "bc_lines",
+          "rows": 2,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "breaklines",
+          "filter_value": "breaklines",
+          "rows": 3,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "structures",
+          "filter_value": "structures",
+          "rows": 2,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "cross_sections_text",
+          "filter_value": "cross_sections_text",
+          "rows": 89,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "centerlines_text",
+          "filter_value": "centerlines_text",
+          "rows": 1,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "storage_areas_text",
+          "filter_value": "storage_areas_text",
+          "rows": 1,
+          "geometry_type": null,
+          "crs": "EPSG:2271"
+        }
+      ],
+      "size_bytes": 1073574
+    },
+    {
+      "geom_id": "g10",
+      "source_file": "BaldEagleCrkMulti2D/BaldEagleDamBrk.g10.hdf",
+      "file_type": "hdf+text",
+      "parquet": "BaldEagleDamBrk.g10.parquet",
+      "plans_using": [
+        "p17"
+      ],
+      "layers": [
+        {
+          "layer": "mesh_cells",
+          "filter_value": "mesh_cells",
+          "rows": 5330,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_faces",
+          "filter_value": "mesh_faces",
+          "rows": 5330,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_areas",
+          "filter_value": "mesh_areas",
+          "rows": 1,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "cross_sections",
+          "filter_value": "cross_sections",
+          "rows": 69,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "centerlines",
+          "filter_value": "centerlines",
+          "rows": 1,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "bc_lines",
+          "filter_value": "bc_lines",
+          "rows": 1,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "structures",
+          "filter_value": "structures",
+          "rows": 6,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "cross_sections_text",
+          "filter_value": "cross_sections_text",
+          "rows": 69,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "centerlines_text",
+          "filter_value": "centerlines_text",
+          "rows": 1,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "storage_areas_text",
+          "filter_value": "storage_areas_text",
+          "rows": 2,
+          "geometry_type": null,
+          "crs": "EPSG:2271"
+        }
+      ],
+      "size_bytes": 504571
+    },
+    {
+      "geom_id": "g11",
+      "source_file": "BaldEagleCrkMulti2D/BaldEagleDamBrk.g11.hdf",
+      "file_type": "hdf",
+      "parquet": "BaldEagleDamBrk.g11.parquet",
+      "plans_using": [
+        "p18"
+      ],
+      "layers": [
+        {
+          "layer": "mesh_cells",
+          "filter_value": "mesh_cells",
+          "rows": 4425,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_faces",
+          "filter_value": "mesh_faces",
+          "rows": 4425,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_areas",
+          "filter_value": "mesh_areas",
+          "rows": 2,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "bc_lines",
+          "filter_value": "bc_lines",
+          "rows": 3,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "breaklines",
+          "filter_value": "breaklines",
+          "rows": 3,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "structures",
+          "filter_value": "structures",
+          "rows": 1,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        }
+      ],
+      "size_bytes": 343434
+    },
+    {
+      "geom_id": "g12",
+      "source_file": "BaldEagleCrkMulti2D/BaldEagleDamBrk.g12.hdf",
+      "file_type": "hdf+text",
+      "parquet": "BaldEagleDamBrk.g12.parquet",
+      "plans_using": [
+        "p19"
+      ],
+      "layers": [
+        {
+          "layer": "mesh_cells",
+          "filter_value": "mesh_cells",
+          "rows": 3439,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_faces",
+          "filter_value": "mesh_faces",
+          "rows": 3439,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_areas",
+          "filter_value": "mesh_areas",
+          "rows": 1,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "bc_lines",
+          "filter_value": "bc_lines",
+          "rows": 2,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "structures",
+          "filter_value": "structures",
+          "rows": 1,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "storage_areas_text",
+          "filter_value": "storage_areas_text",
+          "rows": 1,
+          "geometry_type": null,
+          "crs": "EPSG:2271"
+        }
+      ],
+      "size_bytes": 280122
+    },
+    {
+      "geom_id": "g09",
+      "source_file": "BaldEagleCrkMulti2D/BaldEagleDamBrk.g09.hdf",
+      "file_type": "hdf",
+      "parquet": "BaldEagleDamBrk.g09.parquet",
+      "plans_using": [
+        "p03",
+        "p06"
+      ],
+      "layers": [
+        {
+          "layer": "mesh_cells",
+          "filter_value": "mesh_cells",
+          "rows": 18066,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_faces",
+          "filter_value": "mesh_faces",
+          "rows": 18066,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_areas",
+          "filter_value": "mesh_areas",
+          "rows": 1,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "bc_lines",
+          "filter_value": "bc_lines",
+          "rows": 3,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "breaklines",
+          "filter_value": "breaklines",
+          "rows": 4,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "structures",
+          "filter_value": "structures",
+          "rows": 1,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        }
+      ],
+      "size_bytes": 889555
+    },
+    {
+      "geom_id": "g13",
+      "source_file": "BaldEagleCrkMulti2D/BaldEagleDamBrk.g13.hdf",
+      "file_type": "hdf+text",
+      "parquet": "BaldEagleDamBrk.g13.parquet",
+      "plans_using": [
+        "p04"
+      ],
+      "layers": [
+        {
+          "layer": "mesh_cells",
+          "filter_value": "mesh_cells",
+          "rows": 14364,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_faces",
+          "filter_value": "mesh_faces",
+          "rows": 14364,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_areas",
+          "filter_value": "mesh_areas",
+          "rows": 1,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "bc_lines",
+          "filter_value": "bc_lines",
+          "rows": 2,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "breaklines",
+          "filter_value": "breaklines",
+          "rows": 4,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "structures",
+          "filter_value": "structures",
+          "rows": 4,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "storage_areas_text",
+          "filter_value": "storage_areas_text",
+          "rows": 1,
+          "geometry_type": null,
+          "crs": "EPSG:2271"
+        }
+      ],
+      "size_bytes": 781007
+    },
+    {
+      "geom_id": "g01",
+      "source_file": "BaldEagleCrkMulti2D/BaldEagleDamBrk.g01.hdf",
+      "file_type": "hdf+text",
+      "parquet": "BaldEagleDamBrk.g01.parquet",
+      "plans_using": [
+        "p02",
+        "p01"
+      ],
+      "layers": [
+        {
+          "layer": "mesh_cells",
+          "filter_value": "mesh_cells",
+          "rows": 87039,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_faces",
+          "filter_value": "mesh_faces",
+          "rows": 87039,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_areas",
+          "filter_value": "mesh_areas",
+          "rows": 1,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "bc_lines",
+          "filter_value": "bc_lines",
+          "rows": 2,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "breaklines",
+          "filter_value": "breaklines",
+          "rows": 1,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "structures",
+          "filter_value": "structures",
+          "rows": 4,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "storage_areas_text",
+          "filter_value": "storage_areas_text",
+          "rows": 1,
+          "geometry_type": null,
+          "crs": "EPSG:2271"
+        }
+      ],
+      "size_bytes": 2954445
+    },
+    {
+      "geom_id": "g03",
+      "source_file": "BaldEagleCrkMulti2D/BaldEagleDamBrk.g03.hdf",
+      "file_type": "hdf",
+      "parquet": "BaldEagleDamBrk.g03.parquet",
+      "plans_using": [
+        "p05"
+      ],
+      "layers": [
+        {
+          "layer": "mesh_cells",
+          "filter_value": "mesh_cells",
+          "rows": 24718,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_faces",
+          "filter_value": "mesh_faces",
+          "rows": 24718,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_areas",
+          "filter_value": "mesh_areas",
+          "rows": 1,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "bc_lines",
+          "filter_value": "bc_lines",
+          "rows": 3,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "breaklines",
+          "filter_value": "breaklines",
+          "rows": 3,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "structures",
+          "filter_value": "structures",
+          "rows": 11,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        }
+      ],
+      "size_bytes": 1929066
+    },
+    {
+      "geom_id": "g02",
+      "source_file": "BaldEagleCrkMulti2D/BaldEagleDamBrk.g02.hdf",
+      "file_type": "hdf",
+      "parquet": "BaldEagleDamBrk.g02.parquet",
+      "plans_using": [],
+      "layers": [
+        {
+          "layer": "mesh_cells",
+          "filter_value": "mesh_cells",
+          "rows": 28449,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_faces",
+          "filter_value": "mesh_faces",
+          "rows": 28449,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "mesh_areas",
+          "filter_value": "mesh_areas",
+          "rows": 1,
+          "geometry_type": "Polygon",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "bc_lines",
+          "filter_value": "bc_lines",
+          "rows": 2,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "breaklines",
+          "filter_value": "breaklines",
+          "rows": 7,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        },
+        {
+          "layer": "structures",
+          "filter_value": "structures",
+          "rows": 2,
+          "geometry_type": "LineString",
+          "crs": "EPSG:2271"
+        }
+      ],
+      "size_bytes": 1307880
+    }
+  ],
+  "results": [
+    {
+      "plan_id": "p13",
+      "plan_title": "PMF with Multi 2D Areas",
+      "geom_id": "g06",
+      "flow_id": "u07",
+      "hdf_exists": true,
+      "completed": true,
+      "parquet": "BaldEagleDamBrk.p13.parquet",
+      "variables": [
+        {
+          "variable": "cell_cumulative_iteration",
+          "filter_value": "cell_cumulative_iteration",
+          "rows": 4120
+        },
+        {
+          "variable": "cell_last_iteration",
+          "filter_value": "cell_last_iteration",
+          "rows": 4120
+        },
+        {
+          "variable": "cell_maximum_water_surface_error",
+          "filter_value": "cell_maximum_water_surface_error",
+          "rows": 4120
+        },
+        {
+          "variable": "maximum_face_velocity",
+          "filter_value": "maximum_face_velocity",
+          "rows": 8721
+        },
+        {
+          "variable": "maximum_water_surface",
+          "filter_value": "maximum_water_surface",
+          "rows": 4120
+        },
+        {
+          "variable": "minimum_face_velocity",
+          "filter_value": "minimum_face_velocity",
+          "rows": 8721
+        },
+        {
+          "variable": "minimum_water_surface",
+          "filter_value": "minimum_water_surface",
+          "rows": 4120
+        }
+      ],
+      "size_bytes": 512335
+    }
+  ],
+  "terrain": []
+}

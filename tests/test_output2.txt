@@ -1,0 +1,700 @@
+
+======================================================================
+TEST: Extract Project
+======================================================================
+Project folder: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test
+Exists: True
+
+======================================================================
+TEST: Initialize Project
+======================================================================
+
+Plan DataFrame:
+   plan_number                               Plan Title Geom File
+0           13                  PMF with Multi 2D Areas        06
+1           15              1d-2D Dambreak Refined Grid        08
+2           17                          2D to 1D No Dam        10
+3           18                             2D to 2D Run        11
+4           19                   SA to 2D Dam Break Run        12
+5           03  Single 2D Area - Internal Dam Structure        09
+6           04  SA to 2D Area Conn - 2D Levee Structure        13
+7           02                 SA to Detailed 2D Breach        01
+8           01             SA to Detailed 2D Breach FEQ        01
+9           05          Single 2D area with Bridges FEQ        03
+10          06            Gridded Precip - Infiltration        09
+
+Geometry DataFrame:
+  geom_number geom_file  has_2d_mesh               mesh_area_names                                                                                  hdf_path
+0          06       g06         True         [193, 194, LockHaven]  G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g06.hdf
+1          08       g08         True                 [BaldEagleCr]  G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g08.hdf
+2          10       g10         True                  [Upstream2D]  G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g10.hdf
+3          11       g11         True  [BaldEagleCr, Upper 2D Area]  G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g11.hdf
+4          12       g12         True                 [BaldEagleCr]  G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g12.hdf
+5          09       g09         True                 [BaldEagleCr]  G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+6          13       g13         True                 [BaldEagleCr]  G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g13.hdf
+7          01       g01         True                 [BaldEagleCr]  G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g01.hdf
+8          03       g03         True                 [BaldEagleCr]  G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g03.hdf
+9          02       g02         True                 [BaldEagleCr]  G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g02.hdf
+
+======================================================================
+TEST: Parse RasMap
+======================================================================
+RasMap DataFrame empty: False
+RasMap columns: ['projection_path', 'profile_lines_path', 'soil_layer_path', 'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path', 'current_settings']
+  projection_path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\Terrain\Projection.prj
+  profile_lines_path: []
+  soil_layer_path: ['G:\\GH\\ras-commander\\example_projects\\BaldEagleCrkMulti2D_lc_test\\Soils Data\\Hydrologic Soil Groups.hdf']
+  infiltration_hdf_path: ['G:\\GH\\ras-commander\\example_projects\\BaldEagleCrkMulti2D_lc_test\\Soils Data\\Infiltration.hdf']
+  landcover_hdf_path: ['G:\\GH\\ras-commander\\example_projects\\BaldEagleCrkMulti2D_lc_test\\Land Classification\\LandCover.hdf']
+  terrain_hdf_path: ['G:\\GH\\ras-commander\\example_projects\\BaldEagleCrkMulti2D_lc_test\\Terrain\\Terrain50.hdf']
+  current_settings: {'RiverStationUnits': 'Feet', 'RiverStationDecimalPlaces': '0', 'HorizontalDecimalPlaces': '1', 'VerticalDecimalPlaces': '2', 'XSMaxPoints': '450', 'LSMaxPoints': '1000', 'ShowLegend': 'True', 'ShowNo...
+
+======================================================================
+IDENTIFYING TEST TARGETS
+======================================================================
+Selected plan 06: Gridded Precip - Infiltration
+  Geometry: g09
+  Geom HDF: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+  Geom HDF exists: True
+  Plain text: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09
+  Plain text exists: True
+
+Test target: plan=06, geom=g09
+  HDF path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+
+======================================================================
+TEST: HdfLandCover.get_preprocessed_mannings_n (plan number)
+======================================================================
+Preprocessed Manning's n (via plan 06): 19597 cells
+Columns: ['mesh_name', 'cell_id', 'mannings_n']
+
+Describe:
+            cell_id    mannings_n
+count  19597.000000  19597.000000
+mean    9798.000000      0.067352
+std     5657.310948      0.025607
+min        0.000000      0.030000
+25%     4899.000000      0.045000
+50%     9798.000000      0.060000
+75%    14697.000000      0.080000
+max    19596.000000      0.150000
+
+Unique mesh names: ['BaldEagleCr']
+
+======================================================================
+TEST: HdfLandCover.get_preprocessed_mannings_n (direct path)
+======================================================================
+Preprocessed Manning's n (via direct path): 19597 cells
+Columns: ['mesh_name', 'cell_id', 'mannings_n']
+
+Describe:
+            cell_id    mannings_n
+count  19597.000000  19597.000000
+mean    9798.000000      0.067352
+std     5657.310948      0.025607
+min        0.000000      0.030000
+25%     4899.000000      0.045000
+50%     9798.000000      0.060000
+75%    14697.000000      0.080000
+max    19596.000000      0.150000
+
+Unique mesh names: ['BaldEagleCr']
+
+======================================================================
+TEST: HdfLandCover.get_mannings_calibration_table
+======================================================================
+Calibration table: (17, 3)
+Columns: ['Land Cover Name', "Base Manning's n Value", 'Main Channel']
+                 Land Cover Name  Base Manning's n Value  Main Channel
+0                                                    NaN           NaN
+1                         NoData                   0.060          0.04
+2     Barren Land Rock/Sand/Clay                   0.040          0.04
+3               Cultivated Crops                   0.060          0.04
+4               Deciduous Forest                   0.100          0.04
+5      Developed, High Intensity                   0.150          0.04
+6       Developed, Low Intensity                   0.100          0.04
+7    Developed, Medium Intensity                   0.080          0.04
+8          Developed, Open Space                   0.040          0.04
+9   Emergent Herbaceous Wetlands                   0.080          0.04
+10              Evergreen Forest                   0.120          0.04
+11          Grassland/Herbaceous                   0.045          0.04
+12                  Mixed Forest                   0.080          0.04
+13                    Open Water                   0.035          0.04
+14                   Pasture/Hay                   0.060          0.04
+15                   Shrub/Scrub                   0.080          0.04
+16                Woody Wetlands                   0.120          0.04
+
+======================================================================
+TEST: HdfLandCover.get_mannings_region_polygons
+======================================================================
+Manning's region polygons: 1 regions
+Columns: ['region_id', 'Name', 'geometry']
+CRS: EPSG:2271
+   region_id          Name
+0          0  Main Channel
+
+======================================================================
+TEST: HdfLandCover.get_mannings_region_cell_mapping
+======================================================================
+No cell-region mapping found (may not exist for this geometry)
+
+======================================================================
+TEST: HdfLandCover.get_landcover_association
+======================================================================
+Land cover association path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\Land Classification\LandCover.hdf
+  Exists: True
+  Size: 42.5 KB
+
+======================================================================
+TEST: HdfLandCover.get_landcover_raster_map
+======================================================================
+Reading land cover sidecar: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\Land Classification\LandCover.hdf
+Raster map: 16 classes
+    pixel_value                    class_name  mannings_n
+0             0                        NoData       0.035
+1            43                  Mixed Forest       0.120
+2            41              Deciduous Forest       0.100
+3            21         Developed, Open Space       0.035
+4            42              Evergreen Forest       0.150
+5            11                    Open Water       0.035
+6            52                   Shrub-Scrub       0.050
+7            81                   Pasture-Hay       0.045
+8            71          Grassland-Herbaceous       0.040
+9            82              Cultivated Crops       0.050
+10           22      Developed, Low Intensity       0.080
+11           95  Emergent Herbaceous Wetlands       0.045
+12           90                Woody Wetlands       0.070
+13           23   Developed, Medium Intensity       0.120
+14           24     Developed, High Intensity       0.150
+15           31    Barren Land Rock-Sand-Clay       0.030
+
+======================================================================
+TEST: HdfLandCover.get_preprocessed_mannings_stats
+======================================================================
+Manning's n statistics:
+Columns: ['mesh_name', 'n_cells', 'min_n', 'max_n', 'mean_n', 'median_n', 'std_n']
+     mesh_name  n_cells  min_n  max_n    mean_n  median_n     std_n
+0  BaldEagleCr    19597   0.03   0.15  0.067352      0.06  0.025607
+
+======================================================================
+TEST: HdfLandCover.compare_base_vs_calibrated
+======================================================================
+Base vs calibrated comparison: 14 entries
+Columns: ['land_cover_class', 'base_n', 'region_name', 'calibrated_n', 'delta_n', 'pct_change']
+                land_cover_class  base_n   region_name  calibrated_n  delta_n  pct_change
+0                         NoData   0.060  Main Channel          0.04   -0.020  -33.333333
+1               Cultivated Crops   0.060  Main Channel          0.04   -0.020  -33.333333
+2               Deciduous Forest   0.100  Main Channel          0.04   -0.060  -60.000001
+3      Developed, High Intensity   0.150  Main Channel          0.04   -0.110  -73.333335
+4       Developed, Low Intensity   0.100  Main Channel          0.04   -0.060  -60.000001
+5    Developed, Medium Intensity   0.080  Main Channel          0.04   -0.040  -50.000000
+6   Emergent Herbaceous Wetlands   0.080  Main Channel          0.04   -0.040  -50.000000
+7               Evergreen Forest   0.120  Main Channel          0.04   -0.080  -66.666667
+8           Grassland/Herbaceous   0.045  Main Channel          0.04   -0.005  -11.111117
+9                   Mixed Forest   0.080  Main Channel          0.04   -0.040  -50.000000
+10                    Open Water   0.035  Main Channel          0.04    0.005   14.285711
+11                   Pasture/Hay   0.060  Main Channel          0.04   -0.020  -33.333333
+12                   Shrub/Scrub   0.080  Main Channel          0.04   -0.040  -50.000000
+13                Woody Wetlands   0.120  Main Channel          0.04   -0.080  -66.666667
+
+======================================================================
+TEST: HdfInfiltration.get_infiltration_layer_data
+======================================================================
+Reading infiltration sidecar: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\Soils Data\Infiltration.hdf
+Infiltration layer data: (136, 4)
+Columns: ['Name', 'Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate']
+                         Name  Curve Number  Abstraction Ratio  Minimum Infiltration Rate
+0                      NoData          75.0                0.1                       0.12
+1                  NoData : B          75.0                0.1                       0.12
+2                  NoData : A          75.0                0.1                       0.12
+3                NoData : B-D          75.0                0.1                       0.12
+4                  NoData : D          75.0                0.1                       0.12
+5                  NoData : C          75.0                0.1                       0.12
+6                NoData : C-D          75.0                0.1                       0.12
+7                NoData : A-D          75.0                0.1                       0.12
+8       Mixed Forest : NoData          79.0                0.2                       0.12
+9            Mixed Forest : B          60.0                0.2                       0.12
+10           Mixed Forest : A          36.0                0.2                       0.12
+11         Mixed Forest : B-D          60.0                0.2                       0.12
+12           Mixed Forest : D          79.0                0.2                       0.12
+13           Mixed Forest : C          73.0                0.2                       0.12
+14         Mixed Forest : C-D          79.0                0.2                       0.12
+15         Mixed Forest : A-D          79.0                0.2                       0.12
+16  Deciduous Forest : NoData          70.0                0.2                       0.12
+17       Deciduous Forest : B          66.0                0.2                       0.12
+18       Deciduous Forest : A          45.0                0.2                       0.12
+19     Deciduous Forest : B-D          66.0                0.2                       0.12
+...
+                   Name  Curve Number  Abstraction Ratio  Minimum Infiltration Rate
+131  Main Channel : B-D         100.0                0.0                        0.0
+132    Main Channel : D         100.0                0.0                        0.0
+133    Main Channel : C         100.0                0.0                        0.0
+134  Main Channel : C-D         100.0                0.0                        0.0
+135  Main Channel : A-D         100.0                0.0                        0.0
+
+======================================================================
+TEST: HdfInfiltration.get_infiltration_baseoverrides
+======================================================================
+No infiltration base overrides found (geometry may not have base overrides)
+
+======================================================================
+TEST: HdfInfiltration.get_infiltration_region_names (plan number)
+======================================================================
+No infiltration region names found
+
+======================================================================
+TEST: HdfInfiltration.get_infiltration_region_names (direct path)
+======================================================================
+No infiltration region names found
+
+======================================================================
+TEST: HdfInfiltration.get_infiltration_calibration_regions
+======================================================================
+No infiltration calibration regions found
+
+======================================================================
+TEST: HdfInfiltration.get_preprocessed_infiltration CN (plan)
+======================================================================
+Preprocessed Curve Number (via plan 06): 18066 cells
+Columns: ['mesh_name', 'cell_id', 'value']
+
+Describe:
+            cell_id         value
+count  18066.000000  18066.000000
+mean    9032.500000     73.645190
+std     5215.349317     14.802614
+min        0.000000     36.000000
+25%     4516.250000     66.000000
+50%     9032.500000     73.000000
+75%    13548.750000     81.000000
+max    18065.000000    100.000000
+
+Unique mesh names: ['BaldEagleCr']
+
+======================================================================
+TEST: HdfInfiltration.get_preprocessed_infiltration CN (path)
+======================================================================
+Preprocessed Curve Number (via direct path): 18066 cells
+
+Describe:
+            cell_id         value
+count  18066.000000  18066.000000
+mean    9032.500000     73.645190
+std     5215.349317     14.802614
+min        0.000000     36.000000
+25%     4516.250000     66.000000
+50%     9032.500000     73.000000
+75%    13548.750000     81.000000
+max    18065.000000    100.000000
+
+======================================================================
+TEST: HdfInfiltration.get_preprocessed_infiltration (Abstraction Ratio)
+======================================================================
+Preprocessed Abstraction Ratio: 18066 cells
+
+Describe:
+            cell_id         value
+count  18066.000000  18066.000000
+mean    9032.500000      0.136643
+std     5215.349317      0.070529
+min        0.000000      0.000000
+25%     4516.250000      0.100000
+50%     9032.500000      0.100000
+75%    13548.750000      0.200000
+max    18065.000000      0.200000
+
+======================================================================
+TEST: HdfInfiltration.get_preprocessed_infiltration (Min Infil Rate)
+======================================================================
+Preprocessed Min Infiltration Rate: 18066 cells
+
+Describe:
+            cell_id         value
+count  18066.000000  18066.000000
+mean    9032.500000      0.114899
+std     5215.349317      0.024211
+min        0.000000      0.000000
+25%     4516.250000      0.120000
+50%     9032.500000      0.120000
+75%    13548.750000      0.120000
+max    18065.000000      0.120000
+
+======================================================================
+TEST: HdfInfiltration.get_preprocessed_infiltration_stats
+======================================================================
+Preprocessed Infiltration Stats (Curve Number):
+Columns: ['mesh_name', 'n_cells', 'min_val', 'max_val', 'mean_val', 'median_val', 'std_val', 'variable']
+     mesh_name  n_cells  min_val  max_val  mean_val  median_val    std_val      variable
+0  BaldEagleCr    18066     36.0    100.0  73.64519        73.0  14.802614  Curve Number
+
+======================================================================
+TEST: HdfInfiltration.get_infiltration_region_polygons
+======================================================================
+Infiltration region polygons: 0 regions
+No infiltration region polygons found
+
+======================================================================
+TEST: GeomLandCover.get_base_mannings_n
+======================================================================
+Plain text geometry file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09
+Exists: True
+Base Manning's n table: 16 classes
+Columns: ['Table Number', 'Land Cover Name', 'Base Mannings n Value']
+   Table Number               Land Cover Name  Base Mannings n Value
+0            16                        NoData                  0.060
+1            16    Barren Land Rock/Sand/Clay                  0.040
+2            16              Cultivated Crops                  0.060
+3            16              Deciduous Forest                  0.100
+4            16     Developed, High Intensity                  0.150
+5            16      Developed, Low Intensity                  0.100
+6            16   Developed, Medium Intensity                  0.080
+7            16         Developed, Open Space                  0.040
+8            16  Emergent Herbaceous Wetlands                  0.080
+9            16              Evergreen Forest                  0.120
+10           16          Grassland/Herbaceous                  0.045
+11           16                  Mixed Forest                  0.080
+12           16                    Open Water                  0.035
+13           16                   Pasture/Hay                  0.060
+14           16                   Shrub/Scrub                  0.080
+15           16                Woody Wetlands                  0.120
+
+======================================================================
+TEST: GeomLandCover.get_region_mannings_n
+======================================================================
+Region Manning's n: 16 entries
+Columns: ['Table Number', 'Land Cover Name', 'MainChannel', 'Region Name']
+   Table Number               Land Cover Name  MainChannel   Region Name
+0            16                        NoData         0.04  Main Channel
+1            16    Barren Land Rock/Sand/Clay         0.04  Main Channel
+2            16              Cultivated Crops         0.04  Main Channel
+3            16              Deciduous Forest         0.04  Main Channel
+4            16     Developed, High Intensity         0.04  Main Channel
+5            16      Developed, Low Intensity         0.04  Main Channel
+6            16   Developed, Medium Intensity         0.04  Main Channel
+7            16         Developed, Open Space         0.04  Main Channel
+8            16  Emergent Herbaceous Wetlands         0.04  Main Channel
+9            16              Evergreen Forest         0.04  Main Channel
+10           16          Grassland/Herbaceous         0.04  Main Channel
+11           16                  Mixed Forest         0.04  Main Channel
+12           16                    Open Water         0.04  Main Channel
+13           16                   Pasture/Hay         0.04  Main Channel
+14           16                   Shrub/Scrub         0.04  Main Channel
+15           16                Woody Wetlands         0.04  Main Channel
+
+======================================================================
+TEST: HdfMesh.get_mesh_cell_points (plan number)
+======================================================================
+
+======================================================================
+TEST: HdfMesh.get_mesh_cell_points (direct path)
+======================================================================
+Mesh cell centers (via direct path): 19597 cells
+Columns: ['mesh_name', 'cell_id', 'geometry']
+CRS: EPSG:2271
+
+First 5 cells:
+     mesh_name  cell_id                geometry
+0  BaldEagleCr        0  POINT (2083000 370750)
+1  BaldEagleCr        1  POINT (2083250 370750)
+2  BaldEagleCr        2  POINT (2083500 370750)
+3  BaldEagleCr        3  POINT (2083750 370750)
+4  BaldEagleCr        4  POINT (2084000 370750)
+
+======================================================================
+TEST: Explore HDF Structure
+======================================================================
+Exploring HDF structure: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+
+  Geometry/Land Cover (Manning's n):
+    [DATASET] Attributes: shape=(1,), dtype=[('Name', 'S32')]
+    [DATASET] Calibration Table: shape=(17,), dtype=[('Land Cover Name', 'S32'), ("Base Manning's n Value", '<f4'), ('Main Channel', '<f4')]
+    [DATASET] Polygon Info: shape=(1, 4), dtype=int32
+    [DATASET] Polygon Parts: shape=(1, 2), dtype=int32
+    [DATASET] Polygon Points: shape=(556, 2), dtype=float64
+
+  Geometry/Infiltration: NOT FOUND
+
+  Geometry/2D Flow Areas:
+    [DATASET] Attributes: shape=(1,)
+    [GROUP] BaldEagleCr
+      Cells Center Manning's n: shape=(19597,), range=[0.0300, 0.1500]
+      Infiltration/
+        Abstraction Ratio: shape=(18066,), range=[0.0000, 0.2000]
+        Cell Center Classifications: shape=(18066,), range=[8.0000, 134.0000]
+        Curve Number: shape=(18066,), range=[36.0000, 100.0000]
+        Face Center Classifications: shape=(37594,), range=[8.0000, 134.0000]
+        Minimum Infiltration Rate: shape=(18066,), range=[0.0000, 0.1200]
+        Properties: shape=(1,), dtype=[('Name', 'S27'), ('Value', '<f4')] (compound)
+    [DATASET] Cell Info: shape=(1, 2)
+    [DATASET] Cell Points: shape=(18066, 2)
+    [DATASET] Polygon Info: shape=(1, 4)
+    [DATASET] Polygon Parts: shape=(1, 2)
+    [DATASET] Polygon Points: shape=(537, 2)
+
+  Geometry attrs['Land Cover Filename']: b'.\\Land Classification\\LandCover.hdf'
+
+======================================================================
+QUICK SCAN: ALL GEOMETRIES
+======================================================================
+
+--- g06 (?) has_2d=? mesh=[] ---
+  Manning's n cells: 0
+  Curve Number cells: 0
+  Calibration table: (17, 2)
+  Infil base overrides: not found
+
+--- g08 (?) has_2d=? mesh=[] ---
+  Manning's n cells: 0
+  Curve Number cells: 0
+  Calibration table: (17, 2)
+  Infil base overrides: not found
+
+--- g10 (?) has_2d=? mesh=[] ---
+  Manning's n cells: 0
+  Curve Number cells: 0
+  Calibration table: (17, 2)
+  Infil base overrides: not found
+
+--- g11 (?) has_2d=? mesh=[] ---
+  Manning's n cells: 0
+  Curve Number cells: 0
+  Calibration table: (17, 2)
+  Infil base overrides: not found
+
+--- g12 (?) has_2d=? mesh=[] ---
+  Manning's n cells: 0
+  Curve Number cells: 0
+  Calibration table: (1, 2)
+  Infil base overrides: not found
+
+--- g09 (?) has_2d=? mesh=[] ---
+  Manning's n cells: 19597
+  Curve Number cells: 18066
+  Calibration table: (17, 3)
+  Infil base overrides: not found
+
+--- g13 (?) has_2d=? mesh=[] ---
+  Manning's n cells: 0
+  Curve Number cells: 0
+  Calibration table: (17, 3)
+  Infil base overrides: not found
+
+--- g01 (?) has_2d=? mesh=[] ---
+  Manning's n cells: 0
+  Curve Number cells: 0
+  Calibration table: (17, 3)
+  Infil base overrides: not found
+
+--- g03 (?) has_2d=? mesh=[] ---
+  Manning's n cells: 0
+  Curve Number cells: 0
+  Calibration table: (17, 3)
+  Infil base overrides: not found
+
+--- g02 (?) has_2d=? mesh=[] ---
+  Manning's n cells: 0
+  Curve Number cells: 0
+  Calibration table: (18, 3)
+  Infil base overrides: not found
+
+================================================================================
+TEST SUMMARY
+================================================================================
+Project: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test
+Primary test plan: 06
+Primary test geometry: g09
+Geometry HDF: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+
+Total tests: 28
+Passed: 27
+Failed: 1
+
+  [PASS] Extract Project
+  [PASS] Initialize Project
+  [PASS] Parse RasMap
+  [PASS] HdfLandCover.get_preprocessed_mannings_n (plan number)
+  [PASS] HdfLandCover.get_preprocessed_mannings_n (direct path)
+  [PASS] HdfLandCover.get_mannings_calibration_table
+  [PASS] HdfLandCover.get_mannings_region_polygons
+  [PASS] HdfLandCover.get_mannings_region_cell_mapping
+  [PASS] HdfLandCover.get_landcover_association
+  [PASS] HdfLandCover.get_landcover_raster_map
+  [PASS] HdfLandCover.get_preprocessed_mannings_stats
+  [PASS] HdfLandCover.compare_base_vs_calibrated
+  [PASS] HdfInfiltration.get_infiltration_layer_data
+  [PASS] HdfInfiltration.get_infiltration_baseoverrides
+  [PASS] HdfInfiltration.get_infiltration_region_names (plan number)
+  [PASS] HdfInfiltration.get_infiltration_region_names (direct path)
+  [PASS] HdfInfiltration.get_infiltration_calibration_regions
+  [PASS] HdfInfiltration.get_preprocessed_infiltration CN (plan)
+  [PASS] HdfInfiltration.get_preprocessed_infiltration CN (path)
+  [PASS] HdfInfiltration.get_preprocessed_infiltration (Abstraction Ratio)
+  [PASS] HdfInfiltration.get_preprocessed_infiltration (Min Infil Rate)
+  [PASS] HdfInfiltration.get_preprocessed_infiltration_stats
+  [PASS] HdfInfiltration.get_infiltration_region_polygons
+  [PASS] GeomLandCover.get_base_mannings_n
+  [PASS] GeomLandCover.get_region_mannings_n
+  [FAIL] HdfMesh.get_mesh_cell_points (plan number)
+         FAILED: HDF file not found: 06
+  [PASS] HdfMesh.get_mesh_cell_points (direct path)
+  [PASS] Explore HDF Structure
+
+================================================================================
+1 TEST(S) FAILED
+================================================================================
+2026-04-07 17:40:22 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_6_6.zip
+2026-04-07 17:40:22 - ras_commander.RasExamples - INFO - Loading project data from CSV...
+2026-04-07 17:40:22 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
+2026-04-07 17:40:22 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+2026-04-07 17:40:22 - ras_commander.RasExamples - INFO - Extracting project 'BaldEagleCrkMulti2D' as 'BaldEagleCrkMulti2D_lc_test'
+2026-04-07 17:40:22 - ras_commander.RasExamples - INFO - Folder 'BaldEagleCrkMulti2D_lc_test' already exists. Deleting existing folder...
+2026-04-07 17:40:22 - ras_commander.RasExamples - INFO - Existing folder 'BaldEagleCrkMulti2D_lc_test' has been deleted.
+2026-04-07 17:40:24 - ras_commander.RasExamples - INFO - Successfully extracted project 'BaldEagleCrkMulti2D' to G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test
+2026-04-07 17:40:24 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.rasmap
+2026-04-07 17:40:24 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.RasPrj - INFO - Updated results_df with 11 plan(s)
+2026-04-07 17:40:24 - ras_commander.RasPrj - INFO - ras-commander v0.93.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+2026-04-07 17:40:24 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test
+2026-04-07 17:40:24 - ras_commander.RasPlan - INFO - Found geometry path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Found geometry HDF file for plan 6: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfBase - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - WARNING - No infiltration data found in G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.RasPlan - INFO - Found geometry path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Found geometry HDF file for plan 6: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - WARNING - No infiltration attributes found in G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - WARNING - No infiltration attributes found in G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - WARNING - No infiltration variables or attributes found in G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.RasPlan - INFO - Found geometry path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Found geometry HDF file for plan 6: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfMesh - ERROR - HDF file not found: 06
+Traceback (most recent call last):
+  File "G:\GH\ras-commander\tests\test_hdf_landcover_infiltration.py", line 36, in run_test
+    result = func()
+             ^^^^^^
+  File "G:\GH\ras-commander\tests\test_hdf_landcover_infiltration.py", line 541, in test_mesh_cell_points_plan
+    cells = HdfMesh.get_mesh_cell_points(target_plan, ras_object=ras)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "G:\GH/ras-commander\ras_commander\Decorators.py", line 270, in wrapper
+    raise FileNotFoundError(error_msg)
+FileNotFoundError: HDF file not found: 06
+2026-04-07 17:40:24 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfBase - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2271 from HDF file BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g06.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g06.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g06.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g06.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g06.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g06.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - WARNING - No infiltration data found in G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g06.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g08.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g08.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g08.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g08.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g08.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g08.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - WARNING - No infiltration data found in G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g08.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g10.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g10.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g10.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g10.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g10.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g10.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - WARNING - No infiltration data found in G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g10.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g11.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g11.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g11.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g11.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g11.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g11.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - WARNING - No infiltration data found in G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g11.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g12.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g12.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g12.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g12.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g12.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g12.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - WARNING - No infiltration data found in G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g12.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - WARNING - No infiltration data found in G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g09.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g13.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g13.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g13.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g13.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g13.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g13.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - WARNING - No infiltration data found in G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g13.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g01.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g01.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g01.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g01.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g01.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g01.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - WARNING - No infiltration data found in G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g01.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g03.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g03.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g03.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g03.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g03.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g03.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - WARNING - No infiltration data found in G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g03.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g02.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g02.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g02.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g02.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Using existing Path object HDF file: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g02.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfLandCover - INFO - Final validated file path: G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g02.hdf
+2026-04-07 17:40:24 - ras_commander.hdf.HdfInfiltration - WARNING - No infiltration data found in G:\GH\ras-commander\example_projects\BaldEagleCrkMulti2D_lc_test\BaldEagleDamBrk.g02.hdf
+
+

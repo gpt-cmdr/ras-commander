@@ -211,6 +211,49 @@ Regionalization for Continuous Infiltration Methods
 - Historical/spec-only folders are no longer treated as equal-priority delivery
   work
 
+### 7. HDF Results Parity with RasControl / HECRASController
+
+**Status**: High priority, implementation-ready
+
+**Why it matters**:
+- `RasControl` and the legacy HECRASController surface more result variables than
+  the current `HdfResults*` readers expose.
+- Recent reference-line QAQC work showed that the plan HDF can already contain
+  additional native 2D reference-line variables such as `Area`, `Top Width`,
+  `Friction Slope`, and `Depth Hydraulic`, but the current HDF extractors do not
+  read them consistently.
+- This is a relatively easy win compared to brand-new feature development:
+  most of the work is expanding extractor allow-lists, harmonizing schemas, and
+  adding notebook/test coverage.
+- For 2D workflows, this parity work should be paired with a separate but
+  complementary geometry-side effort to expose stage-dependent cell/face
+  property tables and derived hydraulic properties more directly.
+
+**Open work**:
+- Audit `RasControl` result readers against `HdfResultsPlan`, `HdfResultsMesh`,
+  `HdfResultsXsec`, and related HDF extractors
+- Expand `HdfResultsXsec` to read all native reference-line variables present in
+  the HDF group when available, not just `Flow`, `Velocity`, and
+  `Water Surface`
+- Apply the same parity principle across 1D cross sections, 2D meshes,
+  structures, and reference points/lines so HDF-backed extraction is the
+  default modern path
+- Prefer robust dataset discovery / optional loading over brittle hard-coded
+  minimal variable lists
+- Add tests and notebook coverage proving that HDF extraction returns the same
+  major result families that `RasControl` can already access
+- Document where HDF results now reach parity with `RasControl`, and where
+  geometry-derived enrichments (for example face conveyance from property
+  tables) remain a separate layer
+
+**Immediate acceptance targets**:
+- Native 2D reference-line readers expose `Area`, `Top Width`,
+  `Friction Slope`, `Depth Hydraulic`, and other present variables
+- Native reference-line velocity can be validated directly from HDF outputs
+  such as `Flow / Area` where applicable
+- `HdfResults*` coverage is explicitly tracked against `RasControl` /
+  HECRASController output families rather than grown ad hoc
+
 ## Medium-Term Productization
 
 ### 1. DataFrame-First Execution Clarity

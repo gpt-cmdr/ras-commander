@@ -1,0 +1,32 @@
+<VRTDataset rasterXSize="6705" rasterYSize="4852">
+  <SRS dataAxisToSRSAxisMapping="1,2">PROJCS["NAD83 / Pennsylvania North (ftUS)",GEOGCS["NAD83",DATUM["North_American_Datum_1983",SPHEROID["GRS 1980",6378137,298.257222101004,AUTHORITY["EPSG","7019"]],AUTHORITY["EPSG","6269"]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4269"]],PROJECTION["Lambert_Conformal_Conic_2SP"],PARAMETER["latitude_of_origin",40.1666666666667],PARAMETER["central_meridian",-77.75],PARAMETER["standard_parallel_1",40.8833333333333],PARAMETER["standard_parallel_2",41.95],PARAMETER["false_easting",1968500],PARAMETER["false_northing",0],UNIT["US survey foot",0.304800609601219,AUTHORITY["EPSG","9003"]],AXIS["Easting",EAST],AXIS["Northing",NORTH]]</SRS>
+  <GeoTransform>  1.9523545353037000e+06,  2.0000000000000000e+01,  0.0000000000000000e+00,  3.7386113502674998e+05,  0.0000000000000000e+00, -2.0000000000000000e+01</GeoTransform>
+  <VRTRasterBand dataType="Float32" band="1">
+    <Metadata>
+      <MDI key="STATISTICS_MAXIMUM">686.15673828125</MDI>
+      <MDI key="STATISTICS_MEAN">633.74221222444</MDI>
+      <MDI key="STATISTICS_MINIMUM">559.70001220703</MDI>
+      <MDI key="STATISTICS_STDDEV">35.818466077761</MDI>
+    </Metadata>
+    <NoDataValue>-9999</NoDataValue>
+    <ColorInterp>Gray</ColorInterp>
+    <Histograms>
+      <HistItem>
+        <HistMin>559.700012207031</HistMin>
+        <HistMax>686.15673828125</HistMax>
+        <BucketCount>256</BucketCount>
+        <IncludeOutOfRange>1</IncludeOutOfRange>
+        <Approximate>0</Approximate>
+        <HistCounts>13|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|2134|1106|3143|110|107|107|106|104|127|123|123|212|331|450|656|16302|15531|52374|100954|34029|335|414|766|2761|23308|145207|20718|5014|4565|5558|12680|8829|9775|4815|5890|2894|4033|7138|9839|4508|5335|4845|4488|5125|7346|10525|4701|8159|2082|2250|2936|7202|730|2023|1177|1182|1200|1255|1474|1624|9621|8113|9395|11771|6309|3607|6839|21522|40776|31606|1493|730|602|675|781|787|743|812|900|906|1124|1485|1655|1809|14581|14278|6244|5954|5050|2864|2329|2108|675|403|62|61|62|63|66|72|61|65|64|76|72|61|58|74|75|68|53|71|80|66|65|64|79|70|62|82|65|70|58|83|67|71|61|76|68|56|53|72|52|35|47|30|26|37|35|28|33|43|33|29|46|45|54|64|76|76|98|111|106|100|114|124|108|102|117|122|106|118|130|117|102|126|137|125|106|116|124|104|150|114|123|107|130|150|110|105|129|126|392689|38233|13273|6786|19230|12472|1490|912|4570|1761|1407|4401|726|800|965|1207|1143|698|583</HistCounts>
+      </HistItem>
+    </Histograms>
+    <ComplexSource>
+      <SourceFilename relativeToVRT="1">WSE (Max).Terrain50.dtm_20ft.tif</SourceFilename>
+      <SourceBand>1</SourceBand>
+      <SourceProperties RasterXSize="6705" RasterYSize="4852" DataType="Float32" BlockXSize="256" BlockYSize="256" />
+      <SrcRect xOff="0" yOff="0" xSize="6705" ySize="4852" />
+      <DstRect xOff="0" yOff="0" xSize="6705" ySize="4852" />
+      <NODATA>-9999</NODATA>
+    </ComplexSource>
+  </VRTRasterBand>
+</VRTDataset>

@@ -49,7 +49,7 @@ import logging
 import time
 import queue
 from threading import Thread, Lock
-from typing import Union, List, Optional, Dict
+from typing import Union, List, Optional, Dict, Any
 from pathlib import Path
 import shutil
 import logging
@@ -60,7 +60,7 @@ from ras_commander.RasPrj import RasPrj  # Ensure RasPrj is imported
 from threading import Lock, Thread, current_thread
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import cycle
-from typing import Union, List, Optional, Dict
+from typing import Union, List, Optional, Dict, Any
 from numbers import Number
 from .LoggingConfig import get_logger
 from .Decorators import log_call
@@ -308,7 +308,13 @@ class RasCmdr:
         overwrite_dest=False,
         skip_existing: bool = False,
         verify: bool = False,
-        stream_callback: Optional[Callable] = None
+        stream_callback: Optional[Callable] = None,
+        use_optimal_hdf_settings: bool = False,
+        hdf_settings_profile: str = "balanced",
+        hdf_additional_variables: Optional[List[str]] = None,
+        hdf_output_variables: Optional[List[str]] = None,
+        hdf_output_options: Optional[Dict[str, Any]] = None,
+        hdf_output_profile: Optional[str] = None
     ) -> 'ComputeResult':
         """
         Execute a single HEC-RAS plan in a specified location.
@@ -353,6 +359,20 @@ class RasCmdr:
                 - on_verify_result(plan_number, verified): Called after verification (if verify=True)
                 IMPORTANT: Must be thread-safe when used with compute_parallel().
                 See ras_commander.callbacks for example implementations.
+            use_optimal_hdf_settings (bool, optional): If True, apply ras-commander's
+                recommended HDF write settings to the plan before currency checks and execution.
+                Defaults to False.
+            hdf_settings_profile (str, optional): HDF settings profile to apply when
+                use_optimal_hdf_settings=True. Options are "balanced", "speed", "size",
+                and "nas". Defaults to "balanced".
+            hdf_additional_variables (List[str], optional): Additional HDF output variables
+                to enable when use_optimal_hdf_settings=True.
+            hdf_output_variables (List[str], optional): Additional HDF output variables
+                to enable before execution.
+            hdf_output_options (Dict[str, Any], optional): Explicit HDF output options
+                passed to ``RasPlan.set_hdf_output_options()`` before execution.
+            hdf_output_profile (str, optional): Named HDF output profile to apply before
+                execution. Equivalent to ``use_optimal_hdf_settings=True`` with a profile.
 
         Returns:
             ComputeResult: Result object with ``success`` bool and ``results_df_row`` (pd.Series or None).
@@ -390,6 +410,9 @@ class RasCmdr:
             from ras_commander.callbacks import ConsoleCallback
             callback = ConsoleCallback()
             RasCmdr.compute_plan("01", stream_callback=callback)
+
+            # Run with recommended HDF write parameters
+            RasCmdr.compute_plan("01", use_optimal_hdf_settings=True)
 
             # Run a plan in a specific folder with multiple options
             RasCmdr.compute_plan(
@@ -451,6 +474,43 @@ class RasCmdr:
                 logger.error(f"Could not find project file or plan file for plan {plan_number}")
                 _success = False
                 return ComputeResult(success=False, results_df_row=None)
+
+            if use_optimal_hdf_settings or hdf_output_profile:
+                profile_to_apply = hdf_output_profile or hdf_settings_profile
+                variables_to_apply = hdf_additional_variables or hdf_output_variables
+                hdf_settings_success = RasPlan.use_optimal_hdf_settings(
+                    compute_plan_path,
+                    profile=profile_to_apply,
+                    additional_variables=variables_to_apply,
+                    ras_object=compute_ras
+                )
+                if hdf_settings_success:
+                    logger.info(
+                        f"Applied '{profile_to_apply}' HDF settings profile "
+                        f"to plan: {compute_plan_path.name}"
+                    )
+                else:
+                    logger.warning(
+                        f"Could not apply '{profile_to_apply}' HDF settings profile "
+                        f"to plan: {compute_plan_path.name}"
+                    )
+
+            if hdf_output_options:
+                hdf_options_success = RasPlan.set_hdf_output_options(
+                    compute_plan_path,
+                    ras_object=compute_ras,
+                    **hdf_output_options
+                )
+                if not hdf_options_success:
+                    logger.warning(f"Could not apply explicit HDF output options to {compute_plan_path.name}")
+
+            if hdf_output_variables and not (use_optimal_hdf_settings or hdf_output_profile):
+                RasPlan.set_hdf_output_variables(
+                    compute_plan_path,
+                    hdf_output_variables,
+                    enabled=True,
+                    ras_object=compute_ras
+                )
 
             # Skip existing check - runs regardless of force_rerun (for resume capability)
             if skip_existing:

@@ -75,13 +75,12 @@ import re
 import logging
 from pathlib import Path
 import shutil
-from typing import Union, Optional, List, Dict
+from typing import Union, Optional, List, Dict, Any
 from numbers import Number
 import pandas as pd
 from .RasPrj import RasPrj, ras
 from .RasUtils import RasUtils
 from pathlib import Path
-from typing import Union, Any
 from datetime import datetime
 
 import logging
@@ -95,6 +94,107 @@ class RasPlan:
     """
     A class for operations on HEC-RAS plan files.
     """
+
+    HDF_WRITE_PARAMETER_KEYS = {
+        "write_warmup": "HDF Write Warmup",
+        "write_time_slices": "HDF Write Time Slices",
+        "hdf_flush": "HDF Flush",
+        "compression": "HDF Compression",
+        "chunk_size_mb": "HDF Chunk Size",
+        "spatial_parts": "HDF Spatial Parts",
+        "use_max_rows": "HDF Use Max Rows",
+        "fixed_rows": "HDF Fixed Rows",
+    }
+
+    HDF_OUTPUT_SETTING_PROFILES = {
+        "balanced": {
+            "write_warmup": True,
+            "write_time_slices": False,
+            "hdf_flush": False,
+            "compression": 4,
+            "chunk_size_mb": 4,
+            "spatial_parts": 1,
+            "use_max_rows": True,
+            "fixed_rows": 1,
+        },
+        "speed": {
+            "write_warmup": True,
+            "write_time_slices": False,
+            "hdf_flush": False,
+            "compression": 1,
+            "chunk_size_mb": 4,
+            "spatial_parts": 1,
+            "use_max_rows": True,
+            "fixed_rows": 1,
+        },
+        "size": {
+            "write_warmup": True,
+            "write_time_slices": False,
+            "hdf_flush": False,
+            "compression": 6,
+            "chunk_size_mb": 4,
+            "spatial_parts": 1,
+            "use_max_rows": True,
+            "fixed_rows": 1,
+        },
+        "nas": {
+            "write_warmup": True,
+            "write_time_slices": False,
+            "hdf_flush": False,
+            "compression": 6,
+            "chunk_size_mb": 2,
+            "spatial_parts": 1,
+            "use_max_rows": True,
+            "fixed_rows": 1,
+        },
+    }
+
+    HDF_ADDITIONAL_OUTPUT_VARIABLES = [
+        "Cell Cumulative Excess Depth",
+        "Cell Cumulative Infiltration Depth",
+        "Cell Cumulative Percolation Depth",
+        "Cell Cumulative Precipitation Depth",
+        "Cell Eddy Viscosity",
+        "Cell Cumulative Evapotranspiration Depth",
+        "Cell Evapotranspiration Potential Rate",
+        "Cell Evapotranspiration Rate",
+        "Cell Excess Rate",
+        "Cell Flow Balance (inflows - outflows)",
+        "Cell Hydraulic Depth",
+        "Cell Infiltration Rate",
+        "Cell Invert Depth (WSE - Cell Min Elev)",
+        "Cell Percolation Rate",
+        "Cell Potential Infiltration Rate",
+        "Cell Precipitation Rate",
+        "Cell Saturated Wetting Front Depth",
+        "Cell Soil Moisture Deficit",
+        "Cell Unsaturated Water Content",
+        "Cell Unsaturated Wetting Front Depth",
+        "Cell Velocity",
+        "Cell Volume",
+        "Cell Volume Error",
+        "Cell Water Surface Error",
+        "Cell Courant",
+        "Face Courant",
+        "Face Manning's n",
+        "Face Air Density",
+        "Face Dispersive Stress",
+        "Face Eddy Viscosity",
+        "Face Flow",
+        "Face Period-Average Flow",
+        "Face Cumulative Volume",
+        "Face Area",
+        "Face Mixture Dynamic Viscosity",
+        "Face Point (Node) Velocities*",
+        "Face Shear Stress",
+        "Face Tangential Velocity (Both sides of each face)",
+        "Face Viscous Stress",
+        "Face Water Surface",
+        "Face Wind Shear Stress",
+        "Face Wind Velocity",
+        "Face Yield Stress",
+        "Governing Equation Terms",
+    ]
     
     @staticmethod
     @log_call
@@ -1870,6 +1970,437 @@ class RasPlan:
 
     @staticmethod
     @log_call
+    def list_available_hdf_output_variables() -> List[str]:
+        """
+        List additional 2D HDF output variables known to HEC-RAS plan files.
+
+        Returns:
+            List[str]: Variable names accepted by
+                ``HDF Additional Output Variable=...`` plan-file entries.
+        """
+        return list(RasPlan.HDF_ADDITIONAL_OUTPUT_VARIABLES)
+
+    @staticmethod
+    @log_call
+    def list_hdf_output_setting_profiles() -> Dict[str, Dict[str, Any]]:
+        """
+        List named HDF write-parameter profiles.
+
+        Returns:
+            Dict[str, Dict[str, Any]]: Profile names mapped to write parameters.
+        """
+        return {
+            name: dict(settings)
+            for name, settings in RasPlan.HDF_OUTPUT_SETTING_PROFILES.items()
+        }
+
+    @staticmethod
+    def _resolve_plan_file_path(
+        plan_number_or_path: Union[str, Number, Path],
+        ras_object=None
+    ) -> Optional[Path]:
+        """
+        Resolve a plan number or explicit path to a plan file path.
+        """
+        if isinstance(plan_number_or_path, (str, Path)):
+            plan_file_path = Path(plan_number_or_path)
+            if plan_file_path.is_file():
+                return plan_file_path
+
+        ras_obj = ras_object or ras
+        return RasPlan.get_plan_path(plan_number_or_path, ras_obj)
+
+    @staticmethod
+    def _format_hdf_parameter_value(value: Any) -> str:
+        """
+        Convert Python values to HEC-RAS plan-file HDF parameter values.
+        """
+        if isinstance(value, bool):
+            return "-1" if value else "0"
+        return str(value)
+
+    @staticmethod
+    def _find_hdf_insert_index(lines: List[str]) -> int:
+        """
+        Find a stable insertion point for HDF write parameters.
+        """
+        for i, line in enumerate(lines):
+            if line.startswith("Calibration Method="):
+                return i
+
+        insert_index = None
+        for i, line in enumerate(lines):
+            if line.startswith("HDF "):
+                insert_index = i + 1
+
+        if insert_index is not None:
+            return insert_index
+
+        for i, line in enumerate(lines):
+            if line.startswith("Write HDF5 File="):
+                return i
+            if line.startswith("UNET "):
+                insert_index = i + 1
+
+        return insert_index if insert_index is not None else len(lines)
+
+    @staticmethod
+    @log_call
+    def get_hdf_write_parameters(
+        plan_number_or_path: Union[str, Number, Path],
+        ras_object=None
+    ) -> Dict[str, Optional[Any]]:
+        """
+        Get HDF write parameters configured in a HEC-RAS plan file.
+
+        Args:
+            plan_number_or_path: Plan number or path to the plan file.
+            ras_object: Optional RAS project object. If None, uses global ``ras``.
+
+        Returns:
+            Dict[str, Optional[Any]]: HDF write settings keyed by ras-commander
+                parameter name. Missing settings are returned as None.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        plan_file_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
+        if not plan_file_path or not plan_file_path.exists():
+            logger.error(f"Plan file not found: {plan_number_or_path}")
+            return {key: None for key in RasPlan.HDF_WRITE_PARAMETER_KEYS}
+
+        values = {key: None for key in RasPlan.HDF_WRITE_PARAMETER_KEYS}
+        plan_key_to_api_key = {
+            plan_key: api_key
+            for api_key, plan_key in RasPlan.HDF_WRITE_PARAMETER_KEYS.items()
+        }
+
+        try:
+            with open(plan_file_path, 'r') as file:
+                for line in file:
+                    if "=" not in line:
+                        continue
+                    key, raw_value = line.split("=", 1)
+                    api_key = plan_key_to_api_key.get(key.strip())
+                    if not api_key:
+                        continue
+                    raw_value = raw_value.strip()
+                    if api_key in {"write_warmup", "write_time_slices", "hdf_flush", "use_max_rows"}:
+                        values[api_key] = raw_value == "-1"
+                    else:
+                        try:
+                            values[api_key] = int(raw_value)
+                        except ValueError:
+                            values[api_key] = raw_value
+            return values
+        except IOError as e:
+            logger.error(f"Error reading HDF write parameters from {plan_file_path}: {e}")
+            return values
+
+    @staticmethod
+    @log_call
+    def get_hdf_output_options(
+        plan_number_or_path: Union[str, Number, Path],
+        ras_object=None
+    ) -> Dict[str, Optional[Any]]:
+        """
+        Get HDF output options configured in a HEC-RAS plan file.
+
+        Alias for ``get_hdf_write_parameters()`` using output-control naming.
+        """
+        return RasPlan.get_hdf_write_parameters(
+            plan_number_or_path,
+            ras_object=ras_object
+        )
+
+    @staticmethod
+    @log_call
+    def set_hdf_write_parameters(
+        plan_number_or_path: Union[str, Number, Path],
+        write_warmup: Optional[bool] = None,
+        write_time_slices: Optional[bool] = None,
+        hdf_flush: Optional[bool] = None,
+        compression: Optional[int] = None,
+        chunk_size_mb: Optional[int] = None,
+        spatial_parts: Optional[int] = None,
+        use_max_rows: Optional[bool] = None,
+        fixed_rows: Optional[int] = None,
+        ras_object=None
+    ) -> bool:
+        """
+        Set HEC-RAS HDF5 write parameters in a plan file.
+
+        Args:
+            plan_number_or_path: Plan number or path to the plan file.
+            write_warmup: Write warmup time steps to output file.
+            write_time_slices: Write time-sliced steps in addition to basic time steps.
+            hdf_flush: Commit writes every time step for crash diagnostics.
+            compression: Gzip/deflate compression level, 1 to 9.
+            chunk_size_mb: Maximum chunk size in MB.
+            spatial_parts: Number of spatial column groups.
+            use_max_rows: Use maximum possible time rows per chunk.
+            fixed_rows: Fixed number of time rows when ``use_max_rows`` is False.
+            ras_object: Optional RAS project object. If None, uses global ``ras``.
+
+        Returns:
+            bool: True when the plan file was updated, False on error.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        if compression is not None and not 1 <= compression <= 9:
+            raise ValueError("compression must be between 1 and 9")
+        if chunk_size_mb is not None and chunk_size_mb < 1:
+            raise ValueError("chunk_size_mb must be >= 1")
+        if spatial_parts is not None and spatial_parts < 1:
+            raise ValueError("spatial_parts must be >= 1")
+        if fixed_rows is not None and fixed_rows < 1:
+            raise ValueError("fixed_rows must be >= 1")
+
+        requested = {
+            "write_warmup": write_warmup,
+            "write_time_slices": write_time_slices,
+            "hdf_flush": hdf_flush,
+            "compression": compression,
+            "chunk_size_mb": chunk_size_mb,
+            "spatial_parts": spatial_parts,
+            "use_max_rows": use_max_rows,
+            "fixed_rows": fixed_rows,
+        }
+        requested = {
+            key: value for key, value in requested.items()
+            if value is not None
+        }
+        if not requested:
+            logger.info("No HDF write parameters requested")
+            return True
+
+        plan_file_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
+        if not plan_file_path or not plan_file_path.exists():
+            logger.error(f"Plan file not found: {plan_number_or_path}")
+            return False
+
+        try:
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+            original_lines = list(lines)
+
+            updated_keys = set()
+            for i, line in enumerate(lines):
+                if "=" not in line:
+                    continue
+                line_key = line.split("=", 1)[0].strip()
+                for api_key, plan_key in RasPlan.HDF_WRITE_PARAMETER_KEYS.items():
+                    if line_key == plan_key and api_key in requested:
+                        value = RasPlan._format_hdf_parameter_value(requested[api_key])
+                        lines[i] = f"{plan_key}= {value} \n"
+                        updated_keys.add(api_key)
+
+            missing_keys = [key for key in requested if key not in updated_keys]
+            if missing_keys:
+                insert_index = RasPlan._find_hdf_insert_index(lines)
+                new_lines = []
+                for api_key in RasPlan.HDF_WRITE_PARAMETER_KEYS:
+                    if api_key not in missing_keys:
+                        continue
+                    plan_key = RasPlan.HDF_WRITE_PARAMETER_KEYS[api_key]
+                    value = RasPlan._format_hdf_parameter_value(requested[api_key])
+                    new_lines.append(f"{plan_key}= {value} \n")
+                lines[insert_index:insert_index] = new_lines
+
+            if lines == original_lines:
+                logger.info(f"HDF write parameters already current in plan file: {plan_file_path.name}")
+                return True
+
+            with open(plan_file_path, 'w') as file:
+                file.writelines(lines)
+
+            logger.info(f"Updated HDF write parameters in plan file: {plan_file_path.name}")
+            return True
+
+        except IOError as e:
+            logger.error(f"Error updating HDF write parameters in {plan_file_path}: {e}")
+            return False
+
+    @staticmethod
+    @log_call
+    def set_hdf_output_options(
+        plan_number_or_path: Union[str, Number, Path],
+        write_warmup: Optional[bool] = None,
+        write_time_slices: Optional[bool] = None,
+        hdf_flush: Optional[bool] = None,
+        compression: Optional[int] = None,
+        chunk_size_mb: Optional[int] = None,
+        spatial_parts: Optional[int] = None,
+        use_max_rows: Optional[bool] = None,
+        fixed_rows: Optional[int] = None,
+        ras_object=None
+    ) -> bool:
+        """
+        Set HDF output options in a HEC-RAS plan file.
+
+        Alias for ``set_hdf_write_parameters()`` using output-control naming.
+        """
+        return RasPlan.set_hdf_write_parameters(
+            plan_number_or_path,
+            write_warmup=write_warmup,
+            write_time_slices=write_time_slices,
+            hdf_flush=hdf_flush,
+            compression=compression,
+            chunk_size_mb=chunk_size_mb,
+            spatial_parts=spatial_parts,
+            use_max_rows=use_max_rows,
+            fixed_rows=fixed_rows,
+            ras_object=ras_object
+        )
+
+    @staticmethod
+    @log_call
+    def apply_hdf_output_profile(
+        plan_number_or_path: Union[str, Number, Path],
+        profile: str = "balanced",
+        additional_variables: Optional[List[str]] = None,
+        ras_object=None
+    ) -> bool:
+        """
+        Apply a named HDF write-parameter profile and optional output variables.
+
+        Args:
+            plan_number_or_path: Plan number or path to the plan file.
+            profile: One of ``balanced``, ``speed``, ``size``, or ``nas``.
+            additional_variables: Optional additional HDF output variables to enable.
+            ras_object: Optional RAS project object. If None, uses global ``ras``.
+
+        Returns:
+            bool: True when all requested updates succeeded.
+        """
+        profile_key = profile.lower()
+        if profile_key not in RasPlan.HDF_OUTPUT_SETTING_PROFILES:
+            valid = ", ".join(sorted(RasPlan.HDF_OUTPUT_SETTING_PROFILES))
+            raise ValueError(f"Unknown HDF output profile '{profile}'. Valid profiles: {valid}")
+
+        settings = RasPlan.HDF_OUTPUT_SETTING_PROFILES[profile_key]
+        success = RasPlan.set_hdf_write_parameters(
+            plan_number_or_path,
+            ras_object=ras_object,
+            **settings
+        )
+
+        for variable in additional_variables or []:
+            success = (
+                RasPlan.set_hdf_output_variable(
+                    plan_number_or_path,
+                    variable,
+                    enabled=True,
+                    ras_object=ras_object
+                )
+                and success
+            )
+
+        return success
+
+    @staticmethod
+    @log_call
+    def use_optimal_hdf_settings(
+        plan_number_or_path: Union[str, Number, Path],
+        profile: str = "balanced",
+        additional_variables: Optional[List[str]] = None,
+        ras_object=None
+    ) -> bool:
+        """
+        Apply ras-commander's recommended HDF write settings to a plan file.
+
+        This is an alias for ``apply_hdf_output_profile()`` using the balanced
+        profile by default.
+        """
+        return RasPlan.apply_hdf_output_profile(
+            plan_number_or_path,
+            profile=profile,
+            additional_variables=additional_variables,
+            ras_object=ras_object
+        )
+
+    @staticmethod
+    @log_call
+    def set_hdf_output_variable(
+        plan_number_or_path: Union[str, Number, Path],
+        variable: str,
+        enabled: bool = True,
+        ras_object=None
+    ) -> bool:
+        """
+        Enable or disable one additional HDF output variable in a plan file.
+        """
+        if enabled:
+            return RasPlan.add_hdf_output_variable(
+                plan_number_or_path,
+                variable,
+                ras_object=ras_object
+            )
+        return RasPlan.remove_hdf_output_variable(
+            plan_number_or_path,
+            variable,
+            ras_object=ras_object
+        )
+
+    @staticmethod
+    @log_call
+    def enable_hdf_output_variable(
+        plan_number_or_path: Union[str, Number, Path],
+        variable_name: str,
+        ras_object=None
+    ) -> bool:
+        """
+        Enable one additional HDF output variable in a plan file.
+        """
+        return RasPlan.add_hdf_output_variable(
+            plan_number_or_path,
+            variable_name,
+            ras_object=ras_object
+        )
+
+    @staticmethod
+    @log_call
+    def disable_hdf_output_variable(
+        plan_number_or_path: Union[str, Number, Path],
+        variable_name: str,
+        ras_object=None
+    ) -> bool:
+        """
+        Disable one additional HDF output variable in a plan file.
+        """
+        return RasPlan.remove_hdf_output_variable(
+            plan_number_or_path,
+            variable_name,
+            ras_object=ras_object
+        )
+
+    @staticmethod
+    @log_call
+    def set_hdf_output_variables(
+        plan_number_or_path: Union[str, Number, Path],
+        variables: List[str],
+        enabled: bool = True,
+        ras_object=None
+    ) -> bool:
+        """
+        Enable or disable multiple additional HDF output variables in a plan file.
+        """
+        success = True
+        for variable in variables:
+            success = (
+                RasPlan.set_hdf_output_variable(
+                    plan_number_or_path,
+                    variable,
+                    enabled=enabled,
+                    ras_object=ras_object
+                )
+                and success
+            )
+        return success
+
+    @staticmethod
+    @log_call
     def add_hdf_output_variable(
         plan_number_or_path: Union[str, Number, Path],
         variable: str,
@@ -1905,13 +2436,10 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        # Get the plan file path
-        plan_file_path = Path(plan_number_or_path)
-        if not plan_file_path.is_file():
-            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_obj)
-            if not plan_file_path or not plan_file_path.exists():
-                logger.error(f"Plan file not found: {plan_number_or_path}")
-                return False
+        plan_file_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
+        if not plan_file_path or not plan_file_path.exists():
+            logger.error(f"Plan file not found: {plan_number_or_path}")
+            return False
 
         try:
             # Read the file
@@ -1987,13 +2515,10 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        # Get the plan file path
-        plan_file_path = Path(plan_number_or_path)
-        if not plan_file_path.is_file():
-            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_obj)
-            if not plan_file_path or not plan_file_path.exists():
-                logger.error(f"Plan file not found: {plan_number_or_path}")
-                return []
+        plan_file_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
+        if not plan_file_path or not plan_file_path.exists():
+            logger.error(f"Plan file not found: {plan_number_or_path}")
+            return []
 
         variables = []
         try:
@@ -2098,13 +2623,10 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        # Get the plan file path
-        plan_file_path = Path(plan_number_or_path)
-        if not plan_file_path.is_file():
-            plan_file_path = RasUtils.get_plan_path(plan_number_or_path, ras_obj)
-            if not plan_file_path or not plan_file_path.exists():
-                logger.error(f"Plan file not found: {plan_number_or_path}")
-                return False
+        plan_file_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
+        if not plan_file_path or not plan_file_path.exists():
+            logger.error(f"Plan file not found: {plan_number_or_path}")
+            return False
 
         try:
             # Read the file
