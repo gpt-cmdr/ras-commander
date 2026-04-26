@@ -207,3 +207,41 @@ class PreprocessResult:
         status = 'SUCCESS' if self.success else 'FAILED'
         time_str = f"{self.elapsed_seconds:.1f}s" if self.elapsed_seconds > 0 else "N/A"
         return f"PreprocessResult({status}, plan={self.plan_number}, geom={self.geometry_number}, time={time_str})"
+
+
+@dataclass
+class GeometryPreprocessResult:
+    """
+    Result of GeomPreprocessor.run_geometry_preprocessor().
+
+    This result is for delivery/assembly validation: run the HEC-RAS geometry
+    preprocessor, capture detailed compute messages, and report whether blocking
+    errors were found. It is intentionally separate from ``PreprocessResult``,
+    which is tuned for creating Linux unsteady-compute prerequisite files.
+    """
+    success: bool
+    plan_number: str = ""
+    geometry_number: Optional[str] = None
+    flow_type: str = "Unknown"
+    elapsed_seconds: float = 0.0
+    command: str = ""
+    return_code: Optional[int] = None
+    signal_detected: Optional[str] = None
+    compute_message_paths: List[Path] = field(default_factory=list)
+    artifact_paths: List[Path] = field(default_factory=list)
+    error_count: int = 0
+    warning_count: int = 0
+    first_error_line: Optional[str] = None
+    error: Optional[str] = None
+
+    def __bool__(self) -> bool:
+        return self.success
+
+    def __repr__(self) -> str:
+        status = 'SUCCESS' if self.success else 'FAILED'
+        time_str = f"{self.elapsed_seconds:.1f}s" if self.elapsed_seconds > 0 else "N/A"
+        return (
+            "GeometryPreprocessResult("
+            f"{status}, plan={self.plan_number}, geom={self.geometry_number}, "
+            f"flow_type={self.flow_type}, time={time_str})"
+        )

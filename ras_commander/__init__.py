@@ -33,7 +33,13 @@ from .sources.county import M3Model
 from .RasCmdr import RasCmdr
 from .RasCurrency import RasCurrency
 from .RasControl import RasControl
-from .ComputeResults import ComputeResult, ComputeParallelResult, RasControlResult, PreprocessResult
+from .ComputeResults import (
+    ComputeResult,
+    ComputeParallelResult,
+    RasControlResult,
+    PreprocessResult,
+    GeometryPreprocessResult,
+)
 from .RasPreprocess import RasPreprocess
 from .RasMap import RasMap
 from .RasMapValidation import RasMapValidation
@@ -150,7 +156,8 @@ __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
     'RasPlan', 'RasUnsteady', 'RasUtils',
-    'ComputeResult', 'ComputeParallelResult', 'RasControlResult', 'PreprocessResult',
+    'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
+    'PreprocessResult', 'GeometryPreprocessResult',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasModPuls', 'RasPermutation', 'RangeSpec',

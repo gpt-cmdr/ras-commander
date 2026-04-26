@@ -131,6 +131,7 @@ nav:
     - Workflows & Patterns: user-guide/workflows-and-patterns.md
     - Boundary Conditions: user-guide/boundary-conditions.md
     - Spatial Data & RASMapper: user-guide/spatial-data.md
+    - eBFE Delivery Validation: user-guide/ebfe-delivery-validation.md
     - HDF Data Extraction: user-guide/hdf-data-extraction.md
     - Geometry Operations: user-guide/geometry-operations.md
     - Steady Flow Analysis: user-guide/steady-flow-analysis.md
@@ -206,6 +207,7 @@ nav:
       - Spring Creek eBFE: notebooks/950_ebfe_spring_creek.md
       - North Galveston Bay eBFE: notebooks/951_ebfe_north_galveston_bay.md
       - Upper Guadalupe Cascade: notebooks/952_ebfe_upper_guadalupe_cascade.md
+      - Rio Hondo Steady Collection: notebooks/953_ebfe_rio_hondo_steady_collection.md
     - External Data Integrations (900s):
       - AORC Precipitation: notebooks/900_aorc_precipitation.md
       - AORC Precipitation Catalog: notebooks/901_aorc_precipitation_catalog.md
