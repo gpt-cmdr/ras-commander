@@ -25,7 +25,7 @@
     
     
       
-        <title>AGENTS - RAS Commander Documentation</title>
+        <title>Examples Notebook Contract - RAS Commander Documentation</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#examples-compatibility-wrapper" class="md-skip">
+        <a href="#examples-notebook-contract" class="md-skip">
           Skip to content
         </a>
       
@@ -143,7 +143,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              AGENTS
+              Examples Notebook Contract
             
           </span>
         </div>
@@ -4789,90 +4789,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../cognitive-infrastructure/agents/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Agents
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../cognitive-infrastructure/skills/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Skills
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../cognitive-infrastructure/commands/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Commands
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -4977,6 +4893,34 @@
     
   
     Agent Infrastructure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/multi-harness-agent-contract/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Harness Agent Contract
   
 
     
@@ -5215,6 +5159,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -5223,10 +5169,87 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#examples-compatibility-wrapper" class="md-nav__link">
+  <a href="#scope" class="md-nav__link">
     <span class="md-ellipsis">
       
-        examples Compatibility Wrapper
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notebook-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notebook Workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notebook-families" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notebook Families
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#high-value-reference-notebooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        High-Value Reference Notebooks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#import-cell-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Import Cell Convention
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notebook-only-logic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notebook-Only Logic
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-and-outputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data And Outputs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-go-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where To Go Next
       
     </span>
   </a>
@@ -5253,18 +5276,70 @@
   
 
 
-  <h1>AGENTS</h1>
-
-<h2 id="examples-compatibility-wrapper">examples Compatibility Wrapper<a class="headerlink" href="#examples-compatibility-wrapper" title="Permanent link">&para;</a></h2>
-<p>This <code>AGENTS.md</code> exists for agents that automatically discover that filename.
-The canonical instructions for this directory live in <code>CLAUDE.md</code>.</p>
-<p>Read in this order:
-- <code>./CLAUDE.md</code> - Canonical notebook guidance
-- <code>../CLAUDE.md</code> - Canonical root guidance
-- <code>../.claude/MANIFEST.md</code> - Canonical index for shared framework content</p>
-<p>Notes:
-- Treat <code>CLAUDE.md</code> as the source of truth when both files exist.
-- Treat notebooks as reference and extract logic into scripts when practical.</p>
+<h1 id="examples-notebook-contract">Examples Notebook Contract<a class="headerlink" href="#examples-notebook-contract" title="Permanent link">&para;</a></h1>
+<p>This file is the canonical local instruction file for <code>examples/</code>.</p>
+<h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Parent guidance from the repository root <code>AGENTS.md</code> still applies.</li>
+<li>Notebooks are reference workflows for humans. Extract repeatable logic into scripts or library changes instead of leaving important automation only in notebooks.</li>
+</ul>
+<h2 id="notebook-workflow">Notebook Workflow<a class="headerlink" href="#notebook-workflow" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Read code cells first. Ignore long outputs and images unless the task depends on them.</li>
+<li>Understand the data flow and any environment-specific paths.</li>
+<li>Extract useful logic into a script, CLI, or library change.</li>
+<li>Execute derived scripts in a writable working folder such as <code>working/</code>.</li>
+<li>Keep notebook modifications minimal and restore import cells to the standard committed state before finishing.</li>
+</ol>
+<h2 id="notebook-families">Notebook Families<a class="headerlink" href="#notebook-families" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>100s</code> - project initialization, plan operations, execution, callbacks</li>
+<li><code>200s</code> - plain-text geometry parsing and HTAB workflows</li>
+<li><code>300s</code> - unsteady flow files, DSS boundaries, boundary visualization</li>
+<li><code>400s</code> - HDF geometry and results extraction</li>
+<li><code>700s</code> - Atlas 14, design storms, and precipitation workflows</li>
+<li><code>800s</code> - QA and validation workflows</li>
+<li><code>900s</code> - forecasting, terrain, USGS, and operational workflows</li>
+<li><code>950s</code> - FEMA eBFE model organization</li>
+<li><code>960s</code> - cloud-native export workflows</li>
+</ul>
+<h2 id="high-value-reference-notebooks">High-Value Reference Notebooks<a class="headerlink" href="#high-value-reference-notebooks" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>100_using_ras_examples.ipynb</code> - extracting official example projects</li>
+<li><code>101_project_initialization.ipynb</code> - project metadata and DataFrame patterns</li>
+<li><code>110_single_plan_execution.ipynb</code> and <code>113_parallel_execution.ipynb</code> - execution patterns</li>
+<li><code>201_1d_plaintext_geometry.ipynb</code>, <code>203_htab_parameter_optimization.ipynb</code>, <code>205_extract_xs_xyz_from_geometry.ipynb</code> - geometry parsing and HTAB work</li>
+<li><code>310_validating_dss_paths.ipynb</code> and <code>312_boundary_df_qmult_dss_paths.ipynb</code> - DSS workflows</li>
+<li><code>410_2d_hdf_data_extraction.ipynb</code> and <code>412_2d_detail_face_data_extraction.ipynb</code> - mesh and results extraction</li>
+<li><code>421_usgs_gauge_data_integration.ipynb</code> through <code>424_model_validation_with_usgs.ipynb</code> - USGS integration</li>
+<li><code>720_atlas14_aep_events.ipynb</code>, <code>725_atlas14_spatial_variance.ipynb</code>, <code>726_abm_hyetograph_grid.ipynb</code> - precipitation methods</li>
+<li><code>915_realtime_forecast_workflow.ipynb</code> through <code>919_operational_forecast_cycling.ipynb</code> - operational forecast patterns</li>
+<li><code>930_terrain_modification_analysis.ipynb</code> - terrain modification workflows</li>
+<li><code>960_cloud_native_geometry_export.ipynb</code> through <code>962_cloud_native_cog_results_export.ipynb</code> - <code>ras2cng</code> export patterns</li>
+</ul>
+<h2 id="import-cell-convention">Import Cell Convention<a class="headerlink" href="#import-cell-convention" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Default committed state:</li>
+<li>Cell 0 is active pip-mode import code.</li>
+<li>Cell 1 is markdown containing dev-mode instructions.</li>
+<li>For local development testing, temporarily flip those cells, then restore the committed state before finishing.</li>
+<li>Never leave both cells active as code.</li>
+</ul>
+<h2 id="notebook-only-logic">Notebook-Only Logic<a class="headerlink" href="#notebook-only-logic" title="Permanent link">&para;</a></h2>
+<ul>
+<li>If a notebook contains logic that should become a reusable API, call it out explicitly and extract it instead of duplicating it elsewhere.</li>
+<li>Examples already document some notebook-only patterns such as face aggregation, forecast-cycle loops, and specialized visualization helpers.</li>
+</ul>
+<h2 id="data-and-outputs">Data And Outputs<a class="headerlink" href="#data-and-outputs" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Do not commit extracted example datasets, heavy outputs, or ad hoc images.</li>
+<li>Small reference assets under <code>examples/data/</code> are read-only. Use root-level working folders for generated data.</li>
+</ul>
+<h2 id="where-to-go-next">Where To Go Next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Package code changes belong under <a href="../ras_commander/AGENTS.md">ras_commander/AGENTS.md</a>.</li>
+<li>Online example docs live under <code>docs/examples/</code>.</li>
+</ul>
 
 
 

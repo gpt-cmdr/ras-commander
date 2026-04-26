@@ -15,7 +15,7 @@
         <link rel="canonical" href="https://gpt-cmdr.github.io/ras-commander/development/llm-development/">
       
       
-        <link rel="prev" href="../../cognitive-infrastructure/commands/">
+        <link rel="prev" href="../../cognitive-infrastructure/">
       
       
         <link rel="next" href="../agent-infrastructure/">
@@ -4795,90 +4795,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../cognitive-infrastructure/agents/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Agents
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../cognitive-infrastructure/skills/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Skills
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../cognitive-infrastructure/commands/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Commands
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -5122,10 +5038,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#option-2-cursor-ide-integration" class="md-nav__link">
+  <a href="#other-markdown-aware-tools" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Option 2: Cursor IDE Integration
+        Other Markdown-Aware Tools
       
     </span>
   </a>
@@ -5491,6 +5407,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../multi-harness-agent-contract/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Harness Agent Contract
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../contributing/" class="md-nav__link">
         
   
@@ -5831,10 +5775,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#option-2-cursor-ide-integration" class="md-nav__link">
+  <a href="#other-markdown-aware-tools" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Option 2: Cursor IDE Integration
+        Other Markdown-Aware Tools
       
     </span>
   </a>
@@ -6303,7 +6247,7 @@
 <h3 id="option-1-coding-agents-recommended">Option 1: Coding Agents (Recommended)<a class="headerlink" href="#option-1-coding-agents-recommended" title="Permanent link">&para;</a></h3>
 <p><strong>Best for:</strong> Active development, script creation, debugging, exploring the codebase</p>
 <p>Modern coding agents with filesystem access work exceptionally well with RAS Commander. The repository includes <code>AGENTS.md</code> and <code>CLAUDE.md</code> files that provide context and instructions.</p>
-<p><strong>Supported Agents:</strong></p>
+<p><strong>Production-Supported Agents:</strong></p>
 <table>
 <thead>
 <tr>
@@ -6320,14 +6264,6 @@
 <td><a href="https://github.com/openai/codex">Codex CLI</a></td>
 <td><code>codex</code> in terminal</td>
 </tr>
-<tr>
-<td><a href="https://aider.chat">Aider</a></td>
-<td><code>aider</code> in terminal</td>
-</tr>
-<tr>
-<td><a href="https://github.com/opencode-ai/opencode">Open Code</a></td>
-<td><code>opencode</code> in terminal</td>
-</tr>
 </tbody>
 </table>
 <p><strong>Quick Start:</strong></p>
@@ -6339,12 +6275,11 @@
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>uv<span class="w"> </span>venv<span class="w"> </span>.venv
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># Launch your preferred coding agent</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># Launch a production-supported coding agent</span>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>claude<span class="w">          </span><span class="c1"># Claude Code</span>
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>codex<span class="w">           </span><span class="c1"># OpenAI Codex</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>aider<span class="w">           </span><span class="c1"># Aider</span>
 </span></code></pre></div>
-<p>The agent automatically reads <code>AGENTS.md</code> and understands:</p>
+<p>Codex reads <code>AGENTS.md</code> directly. Claude Code reads <code>CLAUDE.md</code>, which imports <code>AGENTS.md</code>. The shared contract covers:</p>
 <ul>
 <li>Repository structure and coding conventions</li>
 <li>How to initialize projects and execute plans</li>
@@ -6357,20 +6292,9 @@
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>Claude Code: [Reads AGENTS.md, explores examples/, writes script]
 </span></code></pre></div>
-<h3 id="option-2-cursor-ide-integration">Option 2: Cursor IDE Integration<a class="headerlink" href="#option-2-cursor-ide-integration" title="Permanent link">&para;</a></h3>
-<p><strong>Best for:</strong> Interactive development with code completion and inline suggestions</p>
-<p><a href="https://cursor.sh">Cursor</a> provides AI-powered code completion with codebase context:</p>
-<ol>
-<li>Open the <code>ras-commander</code> folder in Cursor</li>
-<li>The IDE indexes the repository automatically</li>
-<li>Use <code>Cmd+K</code> / <code>Ctrl+K</code> for AI commands with full codebase awareness</li>
-</ol>
-<p>Cursor works well for:</p>
-<ul>
-<li>Exploring unfamiliar parts of the library</li>
-<li>Writing scripts with autocomplete suggestions</li>
-<li>Refactoring and documentation</li>
-</ul>
+<h3 id="other-markdown-aware-tools">Other Markdown-Aware Tools<a class="headerlink" href="#other-markdown-aware-tools" title="Permanent link">&para;</a></h3>
+<p>Other coding tools may still read <code>AGENTS.md</code> and repository docs explicitly, but the maintained production harnesses are Claude Code and Codex.
+- Refactoring and documentation</p>
 <h3 id="option-3-web-based-chat-assistants">Option 3: Web-Based Chat Assistants<a class="headerlink" href="#option-3-web-based-chat-assistants" title="Permanent link">&para;</a></h3>
 <p><strong>Best for:</strong> Quick questions, learning the API, users without local development setup</p>
 <p>Many chat assistants (ChatGPT, Claude.ai, Gemini, etc.) have limited context windows or use RAG-based retrieval that struggles with large codebases. <strong>Curated knowledge bases</strong> provide an optimal path for these agents.</p>
@@ -6567,7 +6491,7 @@
 <p><strong>Migration path:</strong></p>
 <ul>
 <li>For chat-based assistance → Upload knowledge bases to Claude.ai or ChatGPT</li>
-<li>For active development → Use Claude Code, Codex, or Cursor</li>
+<li>For active development → Use Claude Code or Codex</li>
 <li>For tool integration → Use the MCP server</li>
 </ul>
 <hr />
@@ -6748,7 +6672,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 7, 2026 02:20:36 UTC">March 7, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 26, 2026 16:22:01 UTC">April 26, 2026</span>
   </span>
 
     

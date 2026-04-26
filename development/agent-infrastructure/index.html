@@ -18,7 +18,7 @@
         <link rel="prev" href="../llm-development/">
       
       
-        <link rel="next" href="../contributing/">
+        <link rel="next" href="../multi-harness-agent-contract/">
       
       
         
@@ -4795,90 +4795,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../cognitive-infrastructure/agents/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Agents
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../cognitive-infrastructure/skills/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Skills
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../cognitive-infrastructure/commands/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Commands
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -5036,6 +4952,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#migration-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration Note
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#overview" class="md-nav__link">
@@ -5580,6 +5507,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../multi-harness-agent-contract/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Harness Agent Contract
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../contributing/" class="md-nav__link">
         
   
@@ -5806,6 +5761,17 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#migration-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration Note
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#overview" class="md-nav__link">
@@ -6355,11 +6321,16 @@
 
 
 <h1 id="agent-infrastructure-hierarchical-knowledge">Agent Infrastructure &amp; Hierarchical Knowledge<a class="headerlink" href="#agent-infrastructure-hierarchical-knowledge" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>Migration note: the repository has moved from a Claude-first instruction model to a shared <code>AGENTS.md</code> contract. <a href="../multi-harness-agent-contract/">Multi-Harness Agent Contract</a> is the authoritative design record.</p>
+</blockquote>
 <p>ras-commander implements a sophisticated <strong>hierarchical knowledge system</strong> that enables AI agents to efficiently work with the codebase. This infrastructure includes specialized subagents, reusable skills, and slash commands for common workflows.</p>
+<h2 id="migration-note">Migration Note<a class="headerlink" href="#migration-note" title="Permanent link">&para;</a></h2>
+<p>The accepted architecture for first-class Claude Code plus Codex support is documented in <a href="../multi-harness-agent-contract/">Multi-Harness Agent Contract</a>. Treat that record as authoritative for source-of-truth boundaries, shared skill placement, and the role of <code>AGENTS.md</code> versus <code>CLAUDE.md</code>.</p>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p>The agent infrastructure is designed around three core concepts:</p>
 <ol>
-<li><strong>Hierarchical Knowledge Organization</strong> - Progressive disclosure of context through CLAUDE.md files</li>
+<li><strong>Hierarchical Knowledge Organization</strong> - Progressive disclosure through shared <code>AGENTS.md</code> contracts and Claude loader files</li>
 <li><strong>Specialist Subagents</strong> - Domain-specific AI assistants for HDF analysis, geometry parsing, etc.</li>
 <li><strong>Reusable Skills</strong> - Common workflow patterns that can be invoked by name</li>
 </ol>
@@ -6372,52 +6343,50 @@
 </ul>
 <h2 id="hierarchical-knowledge-system">Hierarchical Knowledge System<a class="headerlink" href="#hierarchical-knowledge-system" title="Permanent link">&para;</a></h2>
 <h3 id="progressive-disclosure-architecture">Progressive Disclosure Architecture<a class="headerlink" href="#progressive-disclosure-architecture" title="Permanent link">&para;</a></h3>
-<p>The repository uses a <strong>hierarchical CLAUDE.md structure</strong> for progressive disclosure of context:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Root CLAUDE.md (Strategic)
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├─ High-level philosophy and patterns
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├─ Quick reference for common operations
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>└─ Pointers to detailed rules
+<p>The repository uses a shared <strong>hierarchical AGENTS.md structure</strong> with Claude-native loaders:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Root AGENTS.md (Shared Contract)
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├─ Harness loading policy
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├─ Repository-wide working rules
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>└─ Update discipline
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>.claude/rules/ (Tactical)
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>├─ python/ - Language patterns (static classes, decorators, paths)
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>├─ hec-ras/ - Domain knowledge (execution, geometry, HDF)
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>├─ testing/ - Testing approaches (TDD, environments)
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>└─ documentation/ - Doc standards (notebooks, mkdocs)
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>Subpackage CLAUDE.md (Implementation)
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>├─ ras_commander/CLAUDE.md - Library API patterns
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>├─ ras_commander/hdf/CLAUDE.md - HDF workflows
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>├─ ras_commander/remote/CLAUDE.md - Remote execution
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>└─ ras_commander/usgs/CLAUDE.md - USGS integration
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>AGENTS.md (Technical Details)
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>└─ Implementation-specific patterns and edge cases
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>├─ Claude-specific preload helpers
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>└─ Short accelerators that point back to shared contracts
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>Subpackage AGENTS.md (Local Shared Contracts)
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>├─ ras_commander/AGENTS.md - Library package rules
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>├─ ras_commander/hdf/AGENTS.md - HDF package rules
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>├─ ras_commander/remote/AGENTS.md - Remote execution rules
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>└─ ras_commander/usgs/AGENTS.md - USGS integration rules
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>CLAUDE.md files
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>└─ Thin Claude loaders that import sibling AGENTS.md files
 </span></code></pre></div>
 <h3 id="context-inheritance">Context Inheritance<a class="headerlink" href="#context-inheritance" title="Permanent link">&para;</a></h3>
 <p>When a subagent works in a specific directory, it automatically inherits the full context chain:</p>
 <p><strong>Example: Geometry Parser in <code>ras_commander/geom/</code></strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Automatic Context Loading:
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>1. /CLAUDE.md (root)
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>   → &quot;Use static classes, test with HEC-RAS examples&quot;
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Context Loading:
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>1. /AGENTS.md (root shared contract)
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>   -&gt; &quot;Use static classes, test with HEC-RAS examples&quot;
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>2. /ras_commander/CLAUDE.md (library)
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>   → &quot;Module organization, common patterns&quot;
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>2. /ras_commander/AGENTS.md (library)
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>   -&gt; &quot;Module organization, common patterns&quot;
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>3. /ras_commander/geom/AGENTS.md (geometry)
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>   → &quot;Fixed-width parsing, bank station interpolation, 450-point limit&quot;
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>   -&gt; &quot;Fixed-width parsing, bank station interpolation, geometry rules&quot;
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>Result: Full context WITHOUT manual passing!
 </span></code></pre></div>
 <h3 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h3>
 <p>The system follows strict <strong>anti-duplication principles</strong> documented in <code>.claude/rules/documentation/hierarchical-knowledge-best-practices.md</code>:</p>
 <p>✅ <strong>DO:</strong>
-- Point to existing primary sources (CLAUDE.md, AGENTS.md)
+- Point to existing primary sources (<code>AGENTS.md</code>, source code, notebooks)
 - Keep navigators lightweight (200-400 lines)
 - Include critical warnings that MUST be visible
 - Use single source of truth for all information</p>
 <p>❌ <strong>DON'T:</strong>
 - Duplicate API documentation from code docstrings
-- Duplicate workflows from CLAUDE.md files
+- Duplicate workflows from <code>AGENTS.md</code>, source docstrings, or notebooks
 - Create reference/ folders with duplicated content
 - Exceed 400 lines without strong justification</p>
 <p><strong>Exception:</strong> Two subagents (<code>hierarchical-knowledge-agent-skill-memory-curator</code> and <code>claude-code-guide</code>) are permitted to have reference/ folders containing meta-knowledge and cached external documentation.</p>
@@ -6426,12 +6395,12 @@
 <h3 id="three-tier-architecture">Three-Tier Architecture<a class="headerlink" href="#three-tier-architecture" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Main Agent (Claude Opus)
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>├─ High-level planning and delegation
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>├─ Loads: Root CLAUDE.md + .claude/rules/**
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>├─ Loads: Root AGENTS.md through CLAUDE.md + .claude/rules/**
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>└─ Spawns specialist subagents when needed
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>Specialist Subagents (Claude Sonnet)
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>├─ Domain expertise (HDF, geometry, remote, USGS)
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>├─ Inherit: Hierarchical CLAUDE.md chain
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>├─ Inherit: AGENTS.md hierarchy through Claude loader files
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>├─ Use: Library skills + domain skills
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>└─ Spawn task subagents (Haiku) for quick ops
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
@@ -6834,7 +6803,7 @@
 <li><strong>Hard-code model</strong> - Sonnet for specialists, Haiku for tasks</li>
 <li><strong>Minimal tool sets</strong> - Only grant necessary permissions</li>
 <li><strong>Clear triggers</strong> - Help main agent know when to delegate</li>
-<li><strong>Trust context inheritance</strong> - Don't duplicate CLAUDE.md content</li>
+<li><strong>Trust context inheritance</strong> - Don't duplicate <code>AGENTS.md</code>, source docstrings, or notebook workflows</li>
 </ol>
 <h3 id="for-skill-creators">For Skill Creators<a class="headerlink" href="#for-skill-creators" title="Permanent link">&para;</a></h3>
 <ol>
@@ -6913,7 +6882,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 7, 2026 02:20:36 UTC">March 7, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 26, 2026 16:22:01 UTC">April 26, 2026</span>
   </span>
 
     
