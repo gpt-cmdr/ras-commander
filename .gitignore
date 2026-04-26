@@ -82,7 +82,12 @@ examples/flood_polygons.geojson
 ras-commander_logo.png
 # .claude/ framework - ignore user settings but track structure
 .claude/settings.local.json
-.claude/settings.json
+
+# Codex skill bridge - generated from .claude/skills and
+# .agents/native-skills by
+# scripts/agent_framework/sync_codex_skill_bridge.py.
+.agents/skills/*
+!.agents/skills/README.md
 nul
 examples/example_projects.csv
 

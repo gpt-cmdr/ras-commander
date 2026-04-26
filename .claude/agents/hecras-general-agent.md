@@ -594,4 +594,4 @@ For large projects spanning multiple sessions:
 - `hecras_parse_compute-messages` -- Phase 4: execution verification
 
 **Primary sources**:
-- `ras_commander/CLAUDE.md` -- Library architecture overview
+- `ras_commander/AGENTS.md` -- Library architecture overview

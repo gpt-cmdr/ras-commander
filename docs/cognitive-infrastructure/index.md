@@ -54,7 +54,7 @@ graph TB
 
 ## Core Components
 
-### [Agents](agents.md)
+### Agents
 
 **Subagents** are specialized AI assistants that handle specific HEC-RAS domains:
 
@@ -64,11 +64,11 @@ graph TB
 - **Review Agents** - Output auditing, anomaly detection
 
 **Key Features:**
-- Automatic context inheritance via CLAUDE.md chain
+- Shared context through the `AGENTS.md` hierarchy and Claude loader files
 - Model selection optimized for task type
 - Markdown output persistence across sessions
 
-### [Skills](skills.md)
+### Skills
 
 **Skills** are reusable workflow templates that guide common tasks:
 
@@ -82,7 +82,7 @@ graph TB
 - Copy-paste ready code examples
 - Cross-references to example notebooks
 
-### [Commands](commands.md)
+### Commands
 
 **Commands** are slash commands for multi-session task coordination:
 

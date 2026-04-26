@@ -81,7 +81,7 @@ Consult .claude/agents/README.md for the full list. Key agents by domain:
 | USGS integration | usgs-integrator |
 | Quality assurance | quality-assurance |
 | Documentation | documentation-generator, hec-hms-documentation-scout |
-| Dev tooling | code-oracle-codex, code-oracle-gemini |
+| Dev tooling | code-oracle-codex; code-oracle-gemini only on explicit Gemini request |
 | Notebooks | notebook-runner, notebook-output-auditor, notebook-anomaly-spotter |
 
 ## Cross-References

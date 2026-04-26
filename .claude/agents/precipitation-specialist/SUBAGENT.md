@@ -52,7 +52,7 @@ Accept delegation for tasks containing these trigger phrases:
 **DO NOT duplicate workflows here.** Read these primary sources instead:
 
 ### 1. Complete Workflow Reference
-**`ras_commander/precip/CLAUDE.md`** (329 lines)
+**`ras_commander/precip/AGENTS.md`** (329 lines)
 - AORC workflow (Steps 1-4: watershed → retrieval → aggregate → export)
 - Atlas 14 workflow (Steps 1-4: location → query → generate → export)
 - Multi-event workflows (AEP suites)
@@ -127,7 +127,7 @@ Accept delegation for tasks containing these trigger phrases:
 ## Common Workflows
 
 ### Historical Calibration (AORC)
-**See `ras_commander/precip/CLAUDE.md` lines 92-156** for complete 4-step workflow:
+**See `ras_commander/precip/AGENTS.md` lines 92-156** for complete 4-step workflow:
 1. Define Watershed (HUC or shapefile)
 2. Retrieve AORC Data (with spatial average)
 3. Aggregate to HEC-RAS Interval (1HR, 6HR, 1DAY)
@@ -136,7 +136,7 @@ Accept delegation for tasks containing these trigger phrases:
 **Time estimate**: 5-15 minutes per year of data
 
 ### Design Storm Generation (Atlas 14)
-**See `ras_commander/precip/CLAUDE.md` lines 158-221** for complete 4-step workflow:
+**See `ras_commander/precip/AGENTS.md` lines 158-221** for complete 4-step workflow:
 1. Specify Location (lat/lon or station ID)
 2. Query Atlas 14 Values (precipitation frequency)
 3. Generate Design Storm (temporal distribution)
@@ -145,7 +145,7 @@ Accept delegation for tasks containing these trigger phrases:
 **Time estimate**: < 5 minutes per event
 
 ### Multi-Event Suite
-**See `ras_commander/precip/CLAUDE.md` lines 223-251** for loop workflow:
+**See `ras_commander/precip/AGENTS.md` lines 223-251** for loop workflow:
 - Define AEP range (e.g., 10%, 2%, 1%, 0.2%)
 - Generate design storms for each event
 - Batch export to DSS files
@@ -153,7 +153,7 @@ Accept delegation for tasks containing these trigger phrases:
 **Time estimate**: 10-30 minutes for 4-6 events
 
 ### Areal Reduction Factors (ARF)
-**See `ras_commander/precip/CLAUDE.md` lines 253-280** for complete guidance:
+**See `ras_commander/precip/AGENTS.md` lines 253-280** for complete guidance:
 - Small watersheds (< 10 sq mi): ARF ≈ 1.0
 - Medium watersheds (10-100 sq mi): ARF = 0.95-0.98
 - Large watersheds (> 100 sq mi): ARF < 0.95
@@ -202,7 +202,7 @@ pip install xarray rasterio geopandas
 
 When delegated precipitation work:
 
-1. **Read Primary Source First**: Open `ras_commander/precip/CLAUDE.md` and locate relevant workflow section
+1. **Read Primary Source First**: Open `ras_commander/precip/AGENTS.md` and locate relevant workflow section
 2. **Use Exact Workflow**: Follow the documented steps exactly (do NOT improvise)
 3. **Reference Examples**: Point to `examples/900_aorc_precipitation.ipynb` for AORC or `examples/720_atlas14_aep_events.ipynb` / `examples/722_atlas14_multi_project.ipynb` for design storms
 4. **Check Code**: Only read `PrecipAorc.py` or `StormGenerator.py` if API clarification needed
@@ -211,10 +211,10 @@ When delegated precipitation work:
 ## Do NOT Store Here
 
 **Deleted**: `reference/` folder (927 lines of duplicated workflows)
-- `reference/aorc-api.md` - Now in `ras_commander/precip/CLAUDE.md` lines 92-156
-- `reference/atlas14.md` - Now in `ras_commander/precip/CLAUDE.md` lines 158-280
+- `reference/aorc-api.md` - Now in `ras_commander/precip/AGENTS.md` lines 92-156
+- `reference/atlas14.md` - Now in `ras_commander/precip/AGENTS.md` lines 158-280
 
-**Why**: Single source of truth principle. All workflows are maintained in `CLAUDE.md` where users will actually see them.
+**Why**: Single source of truth principle. Shared package rules are maintained in `AGENTS.md`; exact APIs live in source docstrings and runnable workflows live in notebooks.
 
 ## Cross-References
 
@@ -233,4 +233,4 @@ When delegated precipitation work:
 - `dss_read_boundary-data` -- DSS export for precipitation data
 
 **Primary sources**:
-- `ras_commander/CLAUDE.md` -- Precipitation section
+- `ras_commander/AGENTS.md` -- Precipitation section

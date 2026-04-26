@@ -120,4 +120,4 @@ Save to: `.claude/outputs/dual-qaqc/{date}-{topic}-reconciled.md`
 
 ---
 
-*Cross-references*: `code-oracle-codex` agent, `code-oracle-gemini` agent, `/agent-oracle-codex` command
+*Cross-references*: `code-oracle-codex` agent, `/agent-oracle-codex` command

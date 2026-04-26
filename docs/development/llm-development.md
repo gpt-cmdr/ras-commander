@@ -109,14 +109,12 @@ Multiple LLMs contributed: **Claude, GPT-4, Gemini, and Cursor IDE**. The result
 
 Modern coding agents with filesystem access work exceptionally well with RAS Commander. The repository includes `AGENTS.md` and `CLAUDE.md` files that provide context and instructions.
 
-**Supported Agents:**
+**Production-Supported Agents:**
 
 | Agent | Setup |
 |-------|-------|
 | [Claude Code](https://claude.ai/code) | `claude` in terminal |
 | [Codex CLI](https://github.com/openai/codex) | `codex` in terminal |
-| [Aider](https://aider.chat) | `aider` in terminal |
-| [Open Code](https://github.com/opencode-ai/opencode) | `opencode` in terminal |
 
 **Quick Start:**
 
@@ -129,13 +127,12 @@ cd ras-commander
 uv venv .venv
 uv pip install -e .
 
-# Launch your preferred coding agent
+# Launch a production-supported coding agent
 claude          # Claude Code
 codex           # OpenAI Codex
-aider           # Aider
 ```
 
-The agent automatically reads `AGENTS.md` and understands:
+Codex reads `AGENTS.md` directly. Claude Code reads `CLAUDE.md`, which imports `AGENTS.md`. The shared contract covers:
 
 - Repository structure and coding conventions
 - How to initialize projects and execute plans
@@ -151,20 +148,9 @@ You: Create a script that runs Manning's n sensitivity analysis
 Claude Code: [Reads AGENTS.md, explores examples/, writes script]
 ```
 
-### Option 2: Cursor IDE Integration
+### Other Markdown-Aware Tools
 
-**Best for:** Interactive development with code completion and inline suggestions
-
-[Cursor](https://cursor.sh) provides AI-powered code completion with codebase context:
-
-1. Open the `ras-commander` folder in Cursor
-2. The IDE indexes the repository automatically
-3. Use `Cmd+K` / `Ctrl+K` for AI commands with full codebase awareness
-
-Cursor works well for:
-
-- Exploring unfamiliar parts of the library
-- Writing scripts with autocomplete suggestions
+Other coding tools may still read `AGENTS.md` and repository docs explicitly, but the maintained production harnesses are Claude Code and Codex.
 - Refactoring and documentation
 
 ### Option 3: Web-Based Chat Assistants
@@ -339,7 +325,7 @@ The original "RAS Commander Library Assistant" custom GPT has been **deprecated*
 **Migration path:**
 
 - For chat-based assistance → Upload knowledge bases to Claude.ai or ChatGPT
-- For active development → Use Claude Code, Codex, or Cursor
+- For active development → Use Claude Code or Codex
 - For tool integration → Use the MCP server
 
 ---

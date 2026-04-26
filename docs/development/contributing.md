@@ -221,12 +221,9 @@ git clone https://github.com/gpt-cmdr/ras-commander.git
 cd ras-commander
 uv venv .venv && uv pip install -e .
 
-# Launch your preferred coding agent
-claude          # Claude Code -- reads CLAUDE.md and .claude/rules/ automatically
+# Launch a production-supported coding agent
+claude          # Claude Code -- reads CLAUDE.md, which imports AGENTS.md
 codex           # OpenAI Codex CLI
-aider           # Aider
-cursor .        # Cursor IDE
-gemini          # Google Gemini CLI
 ```
 
 ### Step 2: Have Your Agent Read the Style Rules
@@ -239,7 +236,7 @@ The style guide is stored as plain markdown files that any LLM can read:
 "Read AGENTS.md in the root directory for codebase context."
 ```
 
-**Claude Code** reads these automatically via `CLAUDE.md`. Other agents need explicit instructions to read the rule files.
+**Claude Code** reads `CLAUDE.md`, which imports the shared `AGENTS.md` contract. **Codex** reads `AGENTS.md` directly. Other tools can read the markdown files explicitly, but Claude Code and Codex are the maintained production harnesses.
 
 ### Step 3: Write Code Following Patterns
 

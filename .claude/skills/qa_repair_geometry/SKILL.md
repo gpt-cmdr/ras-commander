@@ -1,5 +1,9 @@
 ---
 name: qa_repair_geometry
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Automated geometry repair using RasFixit and quality validation using RasCheck.
   Handles blocked obstructions, generates before/after visualizations, and
@@ -17,14 +21,14 @@ When the user asks to fix geometry errors, repair obstructions, validate a model
 ## Primary Sources (Read These First)
 
 ### Quality Validation (RasCheck)
-**`ras_commander/check/CLAUDE.md`** (262 lines)
-- 5 comprehensive checks (NT, XS, Structure, Floodway, Profiles)
-- FEMA/USACE standards implementation
-- Custom thresholds and state-specific surcharge limits
-- Report generation (HTML, CSV, JSON)
+**`ras_commander/check/AGENTS.md`** - canonical RasCheck package contract
+- Validation scope and package responsibilities
+- Flow-type auto-detection rule
+- Severity, threshold, and reporting expectations
+- Relationship between `check/` validation and `fixit/` repair
 
 ### Automated Repair (RasFixit)
-**`ras_commander/fixit/AGENTS.md`** (119 lines)
+**`ras_commander/fixit/AGENTS.md`** - canonical RasFixit package contract
 - Blocked obstruction repair algorithm
 - 0.02-unit gap insertion requirement
 - Elevation envelope details
@@ -129,7 +133,7 @@ df.to_csv("validation_messages.csv", index=False)
 
 ### Blocked Obstruction Algorithm (Elevation Envelope)
 
-**Source**: `ras_commander/fixit/AGENTS.md` (lines 40-60)
+**Source**: `ras_commander/fixit/AGENTS.md` and `ras_commander/fixit/obstructions.py`
 
 **CRITICAL WARNING - 0.02-Unit Gap Requirement**:
 - HEC-RAS **REQUIRES** minimum 0.02-unit separation between adjacent obstructions
@@ -156,7 +160,7 @@ Fixed (elevation envelope with 0.02 gap):
 
 ### Fixed-Width FORTRAN Parsing
 
-**Source**: `ras_commander/fixit/AGENTS.md` (lines 53-56)
+**Source**: `ras_commander/fixit/AGENTS.md` and `ras_commander/fixit/obstructions.py`
 
 - HEC-RAS geometry files use 8-character fixed-width columns
 - `FIELD_WIDTH = 8` constant must not be changed
@@ -183,7 +187,7 @@ Fixed (elevation envelope with 0.02 gap):
 
 ## RasCheck Validation Categories
 
-**Source**: `ras_commander/check/CLAUDE.md` (lines 13-60)
+**Source**: `ras_commander/check/AGENTS.md` and `ras_commander/check/RasCheck.py`
 
 | Check Type | Function | Validates |
 |------------|----------|-----------|
@@ -269,7 +273,7 @@ check/
 ├── messages.py         # CheckMessage templates (106 KB)
 ├── report.py           # Report generation (23 KB)
 ├── thresholds.py       # CheckThresholds configuration (18 KB)
-└── CLAUDE.md           # Primary source documentation (262 lines)
+└── AGENTS.md           # Canonical local package contract
 ```
 
 ### RasFixit (fixit subpackage)
@@ -281,7 +285,7 @@ fixit/
 ├── results.py          # FixAction enum, FixMessage, FixResults dataclasses
 ├── visualization.py    # Lazy-loaded matplotlib PNG generation
 ├── log_parser.py       # HEC-RAS compute log parsing
-└── AGENTS.md           # Primary source documentation (119 lines)
+└── AGENTS.md           # Canonical local package contract
 ```
 
 ## Common Issues and Solutions
@@ -338,7 +342,7 @@ xs_results = RasCheck.check_xs(geom_hdf, thresholds=custom)
 
 ## Log Parsing for Automated Workflows
 
-**Source**: `ras_commander/fixit/AGENTS.md` (line 18)
+**Source**: `ras_commander/fixit/AGENTS.md` and `ras_commander/fixit/log_parser.py`
 
 ```python
 from ras_commander.fixit import log_parser
@@ -371,7 +375,7 @@ if log_parser.has_obstruction_errors(log_content):
 
 ## Navigation Map
 
-**For validation questions** -- Read `ras_commander/check/CLAUDE.md`
+**For validation questions** -- Read `ras_commander/check/AGENTS.md`
 
 **For repair questions** -- Read `ras_commander/fixit/AGENTS.md`
 
@@ -402,7 +406,7 @@ if log_parser.has_obstruction_errors(log_content):
 
 ## State-Specific Floodway Surcharge Limits
 
-**Source**: `ras_commander/check/CLAUDE.md` (lines 198-220)
+**Source**: `ras_commander/check/AGENTS.md` and `ras_commander/check/thresholds.py`
 
 States with non-standard surcharge limits (vs FEMA default 1.0 ft):
 - **IL**: 0.1 ft

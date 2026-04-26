@@ -11,9 +11,13 @@ description: |
 
   Prerequisites: Codex CLI authenticated (codex login or OPENAI_API_KEY)
   Model: gpt-5.2-codex (default, supports xhigh reasoning effort)
+shared_corpus: false
+harness_scope: claude_only
 ---
 
 # Invoking Codex CLI
+
+> Claude-only orchestration skill. This skill exists to let Claude delegate out to Codex CLI. It is excluded from any future shared multi-harness skill corpus.
 
 Delegate tasks to Codex CLI using markdown files for instruction input and deliverable output. Write instructions to TASK.md, invoke Codex, then read OUTPUT.md for results.
 
@@ -258,6 +262,4 @@ OPENAI_API_KEY=sk-xxx     # Alternative
 - `code-oracle-codex` -- Delegate for deep code analysis with Codex
 
 **Skills** (related workflows):
-- `dev_invoke_gemini-cli` -- Alternative: Gemini CLI for large context analysis
-- `dev_invoke_kimi-cli` -- Alternative: Kimi CLI for test generation
-- `qa_review_triple-model` -- Uses this skill as one of three reviewers
+- `qa_review_triple-model` -- Legacy provider-mixed workflow; explicit user request only

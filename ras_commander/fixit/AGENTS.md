@@ -1,15 +1,30 @@
-## fixit Compatibility Wrapper
+# RasFixit Contract
 
-This `AGENTS.md` exists for agents that automatically discover that filename.
-The canonical instructions for this directory live in `CLAUDE.md`.
+This file is the canonical local instruction file for `ras_commander/fixit/`.
 
-Read in this order:
-- `./CLAUDE.md` - Canonical fixit guidance
-- `../CLAUDE.md` - Canonical core library guidance
-- `../../CLAUDE.md` - Canonical root guidance
-- `../../.claude/MANIFEST.md` - Canonical index for shared framework content
+## Scope
 
-Notes:
-- Treat `CLAUDE.md` as the source of truth when both files exist.
-- Treat `.claude/` as the canonical repository location for shared agent
-  framework materials.
+- Parent guidance from `ras_commander/AGENTS.md` and the repo root still applies.
+- This directory handles automated geometry repair workflows.
+
+## Core Modules
+
+- `RasFixit.py` - main repair entry points
+- `obstructions.py` - blocked-obstruction parsing and envelope logic
+- `results.py` - repair result containers
+- `visualization.py` - optional visual outputs
+- `log_parser.py` - compute-log parsing support
+
+## Critical Rules
+
+- Preserve the blocked-obstruction envelope behavior:
+  - 0.02-unit gap insertion
+  - max-elevation-wins overlap handling
+  - 8-character fixed-width formatting
+- Create backups before destructive writes.
+- Keep result objects audit-friendly, with enough original and repaired context to support review.
+- Make it clear that automated repairs still require engineering review.
+
+## Testing
+
+- Validate repairs against real geometry files and inspect outputs or plots when a repair changes geometry materially.

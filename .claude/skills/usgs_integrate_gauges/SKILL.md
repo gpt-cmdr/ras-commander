@@ -1,5 +1,9 @@
 ---
 name: usgs_integrate_gauges
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Complete USGS gauge data integration workflow from spatial discovery to
   model validation. Handles gauge finding, data retrieval, matching to HEC-RAS
@@ -19,12 +23,11 @@ description: |
 
 ## Primary Documentation Sources
 
-**COMPLETE WORKFLOWS AND API REFERENCE**:
-- `ras_commander/usgs/CLAUDE.md` (367 lines) - **Complete module documentation with workflows**
-  - Module overview and API reference
-  - 7-stage workflow (discovery → validation)
-  - Real-time monitoring patterns
-  - Catalog generation workflow
+**CANONICAL PACKAGE CONTRACT**:
+- `ras_commander/usgs/AGENTS.md` - canonical local contract
+  - Workflow stages from discovery through validation
+  - Core module map
+  - Critical service, matching, boundary, and validation rules
 
 **WORKING EXAMPLES**:
 - `examples/911_usgs_gauge_data_integration.ipynb` - Complete workflow (discovery → validation)
@@ -43,22 +46,22 @@ description: |
 
 | Task | Primary Source | Secondary Source |
 |------|----------------|------------------|
-| **API reference** | `ras_commander/usgs/CLAUDE.md` | Code docstrings |
-| **Complete workflows** | `ras_commander/usgs/CLAUDE.md` | Example notebooks |
-| **Spatial discovery** | `CLAUDE.md` → Spatial Queries section | `421_usgs_*.ipynb` |
-| **Data retrieval** | `CLAUDE.md` → Data Retrieval section | `421_usgs_*.ipynb` |
-| **Gauge matching** | `CLAUDE.md` → Gauge Matching section | `421_usgs_*.ipynb` |
-| **Boundary generation** | `CLAUDE.md` → Boundary Conditions section | `423_bc_*.ipynb` |
-| **Initial conditions** | `CLAUDE.md` → Initial Conditions section | `423_bc_*.ipynb` |
-| **Real-time monitoring** | `CLAUDE.md` → Real-Time Monitoring section | `422_*.ipynb` |
-| **Catalog generation** | `CLAUDE.md` → Catalog Generation section | `420_*.ipynb` |
-| **Model validation** | `CLAUDE.md` → Validation Metrics section | `424_*.ipynb` |
-| **Visualization** | `CLAUDE.md` → Visualization section | `424_*.ipynb` |
+| **API reference** | Code docstrings | `ras_commander/usgs/AGENTS.md` |
+| **Complete workflows** | Example notebooks | `ras_commander/usgs/AGENTS.md` |
+| **Spatial discovery** | `ras_commander/usgs/AGENTS.md` and source docstrings | `421_usgs_*.ipynb` |
+| **Data retrieval** | `ras_commander/usgs/AGENTS.md` and source docstrings | `421_usgs_*.ipynb` |
+| **Gauge matching** | `ras_commander/usgs/AGENTS.md` and source docstrings | `421_usgs_*.ipynb` |
+| **Boundary generation** | `ras_commander/usgs/AGENTS.md` and source docstrings | `423_bc_*.ipynb` |
+| **Initial conditions** | `ras_commander/usgs/AGENTS.md` and source docstrings | `423_bc_*.ipynb` |
+| **Real-time monitoring** | `ras_commander/usgs/AGENTS.md` and source docstrings | `422_*.ipynb` |
+| **Catalog generation** | `ras_commander/usgs/AGENTS.md` and source docstrings | `420_*.ipynb` |
+| **Model validation** | `ras_commander/usgs/AGENTS.md` and source docstrings | `424_*.ipynb` |
+| **Visualization** | `ras_commander/usgs/AGENTS.md` and source docstrings | `424_*.ipynb` |
 | **Troubleshooting** | Example notebooks (see errors/warnings) | Code comments |
 
 ## Module Quick Reference
 
-From `ras_commander/usgs/CLAUDE.md`:
+From `ras_commander/usgs/AGENTS.md` and source docstrings:
 
 **Core Data Retrieval** (`core.py`):
 - `RasUsgsCore.retrieve_flow_data()` - Get flow time series
@@ -114,7 +117,7 @@ From `ras_commander/usgs/CLAUDE.md`:
 
 ## Minimal Quick Start
 
-For complete quick start, see `ras_commander/usgs/CLAUDE.md`.
+For package rules, read `ras_commander/usgs/AGENTS.md`; for runnable workflows, use the notebooks below.
 
 **Basic pattern** (copy-paste starting point):
 
@@ -145,25 +148,25 @@ matches = GaugeMatcher.auto_match_gauges(
     project_folder=r"C:\Projects\MyModel"
 )
 
-# For complete workflow, see ras_commander/usgs/CLAUDE.md
+# For complete workflow, see the USGS example notebooks.
 ```
 
 ## Common Workflow Patterns
 
 ### Pattern 1: Boundary Condition Generation
-**See**: `ras_commander/usgs/CLAUDE.md` → "Complete Workflow" section → Stage 5
+**See**: `ras_commander/usgs/AGENTS.md` plus boundary generation source docstrings.
 **Example**: `examples/913_bc_generation_from_live_gauge.ipynb`
 
 ### Pattern 2: Model Validation
-**See**: `ras_commander/usgs/CLAUDE.md` → "Complete Workflow" section → Stage 6
+**See**: `ras_commander/usgs/AGENTS.md` plus validation source docstrings.
 **Example**: `examples/914_model_validation_with_usgs.ipynb`
 
 ### Pattern 3: Real-Time Monitoring
-**See**: `ras_commander/usgs/CLAUDE.md` → "Real-Time Workflows" section
+**See**: `ras_commander/usgs/AGENTS.md` plus real-time source docstrings.
 **Example**: `examples/912_usgs_real_time_monitoring.ipynb`
 
 ### Pattern 4: Gauge Catalog Generation
-**See**: `ras_commander/usgs/CLAUDE.md` → "Complete Workflow" section → Stage 7
+**See**: `ras_commander/usgs/AGENTS.md` plus catalog source docstrings.
 **Example**: `examples/910_usgs_gauge_catalog.ipynb`
 
 ## Troubleshooting Guide
@@ -187,7 +190,7 @@ ModuleNotFoundError: No module named 'dataretrieval'
 - `RasUsgsTimeSeries.check_data_gaps()` - Detect gaps
 - `RasUsgsTimeSeries.fill_data_gaps()` - Interpolate gaps
 
-**See**: `ras_commander/usgs/CLAUDE.md` → Time Series Processing
+**See**: `ras_commander/usgs/AGENTS.md` plus time-series source docstrings.
 
 ### Invalid Boundary Format
 **Check**:
@@ -225,7 +228,7 @@ print(deps)  # {'pandas': True, 'geopandas': True, 'dataretrieval': True/False}
 
 ## Validation Metric Interpretation
 
-**See**: `ras_commander/usgs/CLAUDE.md` → Validation Metrics section for complete details.
+**See**: validation metric source docstrings and `examples/914_model_validation_with_usgs.ipynb` for complete details.
 
 **Quick reference**:
 - **NSE** (Nash-Sutcliffe): −∞ to 1 (perfect = 1)
@@ -256,7 +259,7 @@ print(deps)  # {'pandas': True, 'geopandas': True, 'dataretrieval': True/False}
 - Data availability checks
 - Resampling validation
 
-**See**: `ras_commander/usgs/CLAUDE.md` → Key Features for details
+**See**: `ras_commander/usgs/AGENTS.md` for critical USGS rules.
 
 ## Cross-References
 
@@ -272,11 +275,11 @@ print(deps)  # {'pandas': True, 'geopandas': True, 'dataretrieval': True/False}
 - `hecras_compute_plans` -- Use downstream after generating boundary conditions
 
 **Primary sources**:
-- `ras_commander/usgs/CLAUDE.md` -- Complete USGS module documentation
+- `ras_commander/usgs/AGENTS.md` -- Canonical USGS package contract
 
 ## Skill Development Philosophy
 
-This skill is intentionally lightweight (~300 lines) and serves as a **navigator to authoritative sources** rather than duplicating content.
+This skill is intentionally lightweight and serves as a **navigator to authoritative sources** rather than duplicating content.
 
 **When to use this skill**:
 - You need quick navigation to USGS integration resources
@@ -284,6 +287,6 @@ This skill is intentionally lightweight (~300 lines) and serves as a **navigator
 - You need a starting point for USGS workflows
 
 **When to read full docs**:
-- You need complete workflow details -- Read `ras_commander/usgs/CLAUDE.md`
+- You need package rules -- Read `ras_commander/usgs/AGENTS.md`
 - You need working code examples -- Open example notebooks
 - You need parameter documentation -- Read code docstrings

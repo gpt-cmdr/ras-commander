@@ -113,7 +113,7 @@ CATEGORIES = {
 
 For each best practice, recommend:
 1. Rule file location (`.claude/rules/`)
-2. CLAUDE.md section to update
+2. AGENTS.md section to update
 3. Example code/usage to include
 4. Anti-pattern to document
 

@@ -3,6 +3,13 @@
 Central registry mapping all skills, agents, rules, and commands by domain.
 Update this file when adding, removing, or renaming any `.claude/` component.
 
+This file is the Claude-side component registry only. Shared repository behavior lives in the `AGENTS.md` hierarchy, not in `.claude/`.
+
+Some provider-invocation entries still exist here during the migration. `dev_invoke_codex-cli`
+is the supported Claude-to-Codex handoff. Gemini, Kimi, and provider-mixed review entries
+are legacy Claude-only compatibility components, explicit-request-only, and not part of the
+long-term shared multi-harness contract.
+
 When looking for a component related to a domain, scan the relevant domain group below.
 When adding a new component, add it to the appropriate domain group AND the relationship map.
 
@@ -168,6 +175,10 @@ When adding a new component, add it to the appropriate domain group AND the rela
 
 ### Dev Tooling
 
+Note: `dev_invoke_codex-cli` is the supported Claude-to-Codex handoff. Gemini/Kimi
+provider invocations are legacy, explicit-request-only Claude helpers and are excluded from
+the shared multi-harness skill corpus.
+
 | Component | Type | Path |
 |-----------|------|------|
 | `dev_invoke_codex-cli` | skill | `.claude/skills/dev_invoke_codex-cli/SKILL.md` |
@@ -215,6 +226,10 @@ When adding a new component, add it to the appropriate domain group AND the rela
 | `agents-close-gitworktree` | command | `.claude/commands/agents-close-gitworktree.md` |
 
 ### Cross-Validation & QAQC
+
+Note: `qa_review_triple-model` and `code-oracle-gemini` are legacy provider-mixed
+Claude-only compatibility components. Generic QAQC should use Claude/Codex production paths;
+use these only when the user explicitly requests the legacy provider-mixed workflow or Gemini.
 
 | Component | Type | Path |
 |-----------|------|------|
@@ -328,7 +343,7 @@ When adding a new component, add it to the appropriate domain group AND the rela
 - Rules: `validation-patterns.md`, `geometry.md`
 - Related skills: `hecras_parse_geometry`
 
-**`qa_review_triple-model`** (skill) -- multi-LLM review
+**`qa_review_triple-model`** (skill) -- legacy explicit-request-only provider-mixed review
 - Agents: `code-oracle-codex`, `code-oracle-gemini`
 - Related skills: `dev_invoke_codex-cli`, `dev_invoke_gemini-cli`, `dev_invoke_kimi-cli`
 
@@ -341,10 +356,10 @@ When adding a new component, add it to the appropriate domain group AND the rela
 **`dev_invoke_codex-cli`** (skill) -- Codex CLI delegation
 - Agents: `code-oracle-codex`
 
-**`dev_invoke_gemini-cli`** (skill) -- Gemini CLI delegation
+**`dev_invoke_gemini-cli`** (skill) -- legacy explicit-request-only Gemini CLI delegation
 - Agents: `code-oracle-gemini`
 
-**`dev_invoke_kimi-cli`** (skill) -- Kimi CLI delegation
+**`dev_invoke_kimi-cli`** (skill) -- legacy explicit-request-only Kimi CLI delegation
 
 **`dev_manage_git-worktrees`** (skill) -- worktree management
 - Agents: `git-operations`

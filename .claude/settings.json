@@ -1,0 +1,40 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"import pathlib,subprocess,runpy,sys; root=subprocess.check_output(['git','rev-parse','--show-toplevel'], text=True).strip(); sys.argv=['hook_dispatch.py']+sys.argv[1:]; runpy.run_path(str(pathlib.Path(root,'scripts','agent_hooks','hook_dispatch.py')), run_name='__main__')\" SessionStart",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"import pathlib,subprocess,runpy,sys; root=subprocess.check_output(['git','rev-parse','--show-toplevel'], text=True).strip(); sys.argv=['hook_dispatch.py']+sys.argv[1:]; runpy.run_path(str(pathlib.Path(root,'scripts','agent_hooks','hook_dispatch.py')), run_name='__main__')\" PreToolUse",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"import pathlib,subprocess,runpy,sys; root=subprocess.check_output(['git','rev-parse','--show-toplevel'], text=True).strip(); sys.argv=['hook_dispatch.py']+sys.argv[1:]; runpy.run_path(str(pathlib.Path(root,'scripts','agent_hooks','hook_dispatch.py')), run_name='__main__')\" PermissionRequest",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

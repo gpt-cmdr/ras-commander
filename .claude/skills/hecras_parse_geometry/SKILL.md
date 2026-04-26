@@ -1,5 +1,9 @@
 ---
 name: hecras_parse_geometry
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Parses and modifies HEC-RAS plain text geometry files (.g##) using fixed-width
   FORTRAN format. Handles cross sections, storage areas, bridges, culverts,

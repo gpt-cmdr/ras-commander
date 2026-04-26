@@ -1,16 +1,80 @@
-# Skills - Library Workflow Skills
+# Skills - Claude Skill Catalog
 
-This directory contains **library workflow skills** - how to use ras-commander for common tasks.
+This directory contains Claude-facing skills for the repository. It is not yet a pure shared multi-harness skill corpus.
+
+## Skill Classes
+
+### 1. Shared Domain Workflow Skills
+
+These skills capture repository workflows that are conceptually shareable across harnesses:
+
+- HEC-RAS execution and results workflows
+- geometry, DSS, USGS, precipitation, and eBFE workflows
+- repo tooling that is not tied to a single provider
+
+These skills are the candidates for any future no-duplication Codex exposure path.
+
+### 2. Claude-Only Orchestration Skills
+
+These skills exist to help Claude orchestrate other tools or providers from within Claude-native workflows.
+
+Current examples:
+
+- `dev_invoke_codex-cli` - supported Claude-to-Codex handoff using OpenAI Codex CLI
+- `dev_invoke_gemini-cli` - legacy/nonstandard; use only when the user explicitly requests Gemini
+- `dev_invoke_kimi-cli` - legacy/nonstandard; use only when the user explicitly requests Kimi or Opencode/Kimi
+- `qa_review_triple-model` - legacy/nonstandard provider-mixed review; use only when explicitly requested
+
+These are intentionally excluded from any future shared skill corpus.
+
+## Metadata Convention
+
+Use frontmatter to mark skills that must not be mirrored into a future shared corpus:
+
+```yaml
+shared_corpus: false
+harness_scope: claude_only
+```
+
+Use explicit allowlist metadata for shared `.claude/skills/` entries that may
+be exposed through the Codex bridge:
+
+```yaml
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
+```
+
+Interpretation:
+
+- `shared_corpus: true` plus `harness_scope: shared` is required for shared `.claude/skills/` Codex bridge exposure.
+- `source_owner` must be `gpt-cmdr`, `anthropic`, or `openai`.
+- `security_review` must be `internal`, `official-upstream`, or `audited-reimplemented`.
+- `shared_corpus: false` means the skill is excluded from shared multi-harness exposure.
+- `harness_scope: claude_only` means the skill exists specifically for Claude orchestration behavior.
+- If these fields are absent, the skill is not eligible for bridge exposure.
+
+Codex-only provider handoff skills do not live in `.claude/skills/`; they live
+under `.agents/native-skills/` and use `harness_scope: codex_only`.
 
 ## Naming Convention
 
-**Pattern**: `category_verb_modifier` or `category_verb-compound_modifier`
+Current folder names are legacy Claude-era names.
 
-- **Underscore (`_`)**: separates segments (category, verb, modifier)
-- **Hyphen (`-`)**: joins compound words within a segment
-- **Verb alignment**: Matches ras-commander API verbs (compute, extract, parse, organize, etc.)
+- Underscores separate major segments.
+- Hyphens may still appear inside compound segments.
+- Do not assume current folder names are the final future shared-skill naming scheme.
+- If the shared corpus is externalized later, normalize names then instead of creating duplicate trees now.
 
-**Categories**:
+## External Skill Supply Chain
+
+- Agent-facing external skills, plugins, and helper tools should be written by `gpt-cmdr` or sourced from official Anthropic or OpenAI repositories.
+- Treat third-party external skills and plugins from outside `gpt-cmdr`, Anthropic, or OpenAI as untrusted until audited.
+- If a third-party skill or plugin is valuable, security-audit it and re-implement the needed behavior in this repository instead of linking to it as an external skill/plugin dependency.
+- Do not make opaque third-party agent plugins, MCP servers, skills, or command wrappers part of the standard workflow.
+
+## Categories
 
 | Prefix | Domain |
 |--------|--------|
@@ -22,140 +86,71 @@ This directory contains **library workflow skills** - how to use ras-commander f
 | `dev` | Development tooling |
 | `qa` | Quality assurance |
 
-## Skills vs ras_skills/
+## Implemented Skills
 
-| Type | Location | Purpose | Example |
-|------|----------|---------|---------|
-| **Library Skills** | `.claude/skills/` | How to use ras-commander APIs | `hecras_compute_plans` |
-| **Domain Skills** | `ras_skills/` | Production automation capabilities | `dss-linker`, `historical-flood-reconstruction` |
+### Shared Domain Workflow Skills
 
-Both use Claude Skills framework - the distinction is **scope and distribution**.
+**HEC-RAS Execution**
+- `hecras_compute_plans`
+- `hecras_compute_remote`
+- `hecras_compute_rascontrol`
+- `hecras_plan_execution`
 
-## Implemented Library Skills
+**HEC-RAS Results, Parsing, And GUI**
+- `hecras_extract_results`
+- `hecras_parse_compute-messages`
+- `hecras_parse_geometry`
+- `hecras_export_cloud-native`
+- `hecras_explore_gui`
+- `hecras_screenshot`
 
-### HEC-RAS Execution (`hecras_compute_*`, `hecras_plan_*`)
-- **hecras_compute_plans** - RasCmdr.compute_plan(), parallel execution, callbacks, mode selection
-- **hecras_compute_remote** - PsExec, Docker, SSH worker setup, distributed execution
-- **hecras_compute_rascontrol** - RasControl COM interface for legacy HEC-RAS 3.x-5.x
-- **hecras_plan_execution** - Decision support for execution strategy, mode selection
+**DSS, USGS, Precipitation, And eBFE**
+- `dss_read_boundary-data`
+- `usgs_integrate_gauges`
+- `precip_analyze_aorc`
+- `precip_analyze_atlas14-variance`
+- `ebfe_crawl_s3-catalog`
+- `ebfe_organize_models`
+- `ebfe_validate_models`
 
-### HEC-RAS Results & Parsing (`hecras_extract_*`, `hecras_parse_*`)
-- **hecras_extract_results** - HdfResultsPlan API, steady vs unsteady workflows
-- **hecras_parse_compute-messages** - HEC-RAS compute message diagnostics, error classification
-- **hecras_parse_geometry** - RasGeometry, RasStruct, fixed-width parsing
-- **hecras_export_cloud-native** - Export geometry/results to GeoParquet, PMTiles, DuckDB, PostGIS via ras2cng
+**Repo Tooling And QA**
+- `qa_repair_geometry`
+- `dev_gate_merge-to-main`
+- `dev_manage_git-worktrees`
 
-### HEC-RAS GUI (`hecras_explore_*`)
-- **hecras_explore_gui** - HEC-RAS GUI exploration and documentation
-- **hecras_screenshot** - Screenshot capture workflow for HEC-RAS GUI documentation/debugging
+### Claude-Only Orchestration Skills
 
-### DSS Operations (`dss_*`)
-- **dss_read_boundary-data** - RasDss API, HEC-DSS V6/V7 files
+- `dev_invoke_codex-cli` - Claude delegates out to Codex CLI
+- `dev_invoke_gemini-cli` - legacy explicit-request-only Gemini CLI delegation
+- `dev_invoke_kimi-cli` - legacy explicit-request-only Kimi via Opencode delegation
+- `qa_review_triple-model` - legacy explicit-request-only provider-mixed review workflow
 
-### Data Integration (`usgs_*`, `precip_*`)
-- **usgs_integrate_gauges** - Complete USGS workflow (discovery -> validation)
-- **precip_analyze_aorc** - AORC grid extraction, time series generation
-- **precip_analyze_atlas14-variance** - Atlas 14 precipitation spatial analysis
+## Structure Guidance
 
-### eBFE/BLE Models (`ebfe_*`)
-- **ebfe_crawl_s3-catalog** - Crawl/cache FEMA public BLE/eBFE catalog availability
-- **ebfe_organize_models** - FEMA eBFE/BLE model organization
-- **ebfe_validate_models** - Validate organized eBFE models
+### Shared Domain Skills
 
-### Quality Assurance (`qa_*`)
-- **qa_repair_geometry** - RasFixit validation loops, geometry repair
-- **qa_review_triple-model** - Multi-LLM code review (Opus, Gemini, Codex)
+Shared-domain skills should stay lightweight navigators:
 
-### Development Tools (`dev_*`)
-- **dev_gate_merge-to-main** - Feature-branch guardrail for merge/push operations targeting `main`
-- **dev_manage_git-worktrees** - Git worktree management for feature isolation
+- prefer a concise `SKILL.md`
+- point to `AGENTS.md`, code, notebooks, and narrowly relevant rules
+- avoid becoming a second documentation tree
 
-### CLI Invocation Skills (`dev_invoke_*`)
-- **dev_invoke_codex-cli** - Delegate implementation tasks to Codex CLI (gpt-5.2-codex) via markdown file handoff
-- **dev_invoke_gemini-cli** - Delegate QAQC/review tasks to Gemini CLI (gemini-3-pro-preview) via markdown file handoff
-- **dev_invoke_kimi-cli** - Delegate testing/QA tasks to Opencode CLI with Kimi K2.5 via markdown file handoff
+### Legacy Claude-Orchestration Skills
 
-## Skill Structure
+Some provider-orchestration skills still include extra reference material. That is tolerated during migration, but those folders are not templates for the future shared corpus.
 
-**CRITICAL: Each skill folder contains ONLY `SKILL.md`**
+Do not copy those extra folders into any future Codex skill exposure path.
 
-```
-.claude/skills/
-├── hecras_compute_plans/
-│   └── SKILL.md                    # ONLY file (200-400 lines)
-├── usgs_integrate_gauges/
-│   └── SKILL.md                    # ONLY file
-└── precip_analyze_aorc/
-    └── SKILL.md                    # ONLY file
-```
+## Design Rules
 
-**Prohibited in skill folders**:
-- NO `README.md` (duplicates SKILL.md)
-- NO `reference/` folders (skills are navigators, not docs)
-- NO `examples/` folders (examples belong in `examples/` root)
-- NO `scripts/` folders (utilities belong in `ras_commander/` or `tools/`)
-- NO task artifacts (COMPLETION_SUMMARY.md, REFACTORING_NOTES.txt)
-
-**Rationale**: Skills are **lightweight navigators** that point to primary sources:
-- Workflows -> `ras_commander/{module}/CLAUDE.md`
-- API reference -> Code docstrings
-- Examples -> `examples/*.ipynb` notebooks
-
-**File size target**: 200-400 lines per SKILL.md
-
-## Creating Library Skills
-
-1. **Identify workflow**: Multi-step process users frequently need
-2. **Choose name**: `category_verb_modifier` matching API verbs
-3. **Create folder**: `.claude/skills/{name}/`
-4. **Write SKILL.md**:
-   ```yaml
-   ---
-   name: hecras_compute_plans
-   description: |
-     Executes HEC-RAS plans using RasCmdr.compute_plan(), handles parallel
-     execution across multiple plans, and manages destination folders. Use when
-     running HEC-RAS simulations, computing plans, executing models, or setting
-     up parallel computation workflows.
-   ---
-
-   # Computing HEC-RAS Plans
-
-   ## Quick Start
-   [50-line basic example]
-
-   ## Detailed References
-   - **compute_plan() API**: See ras_commander/CLAUDE.md
-   ```
-
-5. **Test discovery**: Verify skill activates with natural language queries
-
-## Key Principles
-
-### Progressive Disclosure
-- **Metadata loads first**: ~100 tokens (name + description)
-- **Full content when relevant**: <5k tokens (SKILL.md)
-
-### Discovery Optimization
-Write descriptions that include:
-- **What it does**: "Executes HEC-RAS plans..."
-- **When to use**: "...when running simulations, computing plans..."
-- **Trigger terms**: "HEC-RAS", "compute", "parallel", "execute model"
-
-## Guidelines
-
-- **One workflow per skill**: Don't combine unrelated operations
-- **Clear trigger terms**: Help Claude discover the skill
-- **Minimal main file**: Keep SKILL.md concise, link to details
-- **Test with real projects**: Validate workflows with actual HEC-RAS models
+- One workflow per skill.
+- Shared rules belong in `AGENTS.md`; skills should point to them rather than restating them in full.
+- Provider orchestration belongs in Claude-only skills or agents, not in a shared multi-harness corpus.
+- If a skill needs detailed provider-specific invocation instructions, mark it with `shared_corpus: false`.
+- Generic QAQC, review, testing, or security triggers must route to Claude/Codex production paths, not legacy Gemini/Kimi/provider-mixed skills.
 
 ## Cross-References
 
-**Index files**:
-- `.claude/MANIFEST.md` -- Central registry mapping all skills to related agents, rules, and commands
-- `.claude/agents/README.md` -- Agent registry (agents use skills for workflow patterns)
-- `.claude/rules/README.md` -- Rule organization (rules provide auto-loaded context for skills)
-
-**Governance**:
-- `.claude/rules/documentation/hierarchical-knowledge-best-practices.md` -- Lightweight navigator pattern
-- `.claude/rules/documentation/notebook-to-agent-conversion.md` -- Converting notebooks to skills
+- `.claude/MANIFEST.md` - Claude-side registry mapping skills to related agents, rules, and commands
+- `.claude/rules/agents-md-bridge.md` - shared-vs-Claude contract for instruction files
+- `docs/development/multi-harness-agent-contract.md` - durable architectural record for this migration

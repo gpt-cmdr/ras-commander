@@ -1,5 +1,9 @@
 ---
 name: hecras_compute_plans
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Executes HEC-RAS plans using RasCmdr.compute_plan(), handles parallel
   execution across multiple plans, manages destination folders, and monitors
@@ -16,8 +20,8 @@ When the user asks to run HEC-RAS plans, use `RasCmdr.compute_plan()` for single
 
 ## Primary Sources
 
-### 1. Execution Patterns (CLAUDE.md)
-**Location**: `ras_commander/CLAUDE.md`
+### 1. Execution Patterns (AGENTS.md)
+**Location**: `ras_commander/AGENTS.md`
 
 **Read these sections**:
 - **"Plan Execution"** - Core execution methods and parameters
@@ -400,7 +404,7 @@ print(ras.plan_df)
 - `hecras_parse_compute-messages` -- Use downstream to verify execution status
 
 **Primary sources**:
-- `ras_commander/CLAUDE.md` -- Plan execution section with complete parameter reference
+- `ras_commander/AGENTS.md` -- Plan execution section with complete parameter reference
 - `ras_commander/RasCmdr.py` -- Source code with comprehensive docstrings
 - `examples/110_single_plan_execution.ipynb` -- Single plan workflow
 - `examples/113_parallel_execution.ipynb` -- Parallel execution workflow

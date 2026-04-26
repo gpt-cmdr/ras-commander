@@ -1,5 +1,9 @@
 ---
 name: hecras_parse_compute-messages
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Parse HEC-RAS compute output from HDF files to extract execution status,
   diagnostic messages, and performance metrics. Converts raw computation

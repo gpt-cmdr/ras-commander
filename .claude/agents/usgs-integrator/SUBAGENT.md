@@ -18,24 +18,22 @@ description: |
 
 ## Purpose
 
-You handle USGS gauge data integration as a **lightweight navigator** to the USGS integration documentation. All detailed workflows, API references, and examples live in primary sources.
+You handle USGS gauge data integration as a **lightweight navigator** to the USGS integration documentation. Shared package rules, source docstrings, and example notebooks are the primary sources.
 
 **DO NOT duplicate workflow details here.** Read primary sources instead.
 
 ## Primary Documentation Sources
 
-### 1. Complete Module Reference (PRIMARY)
-**Location**: `ras_commander/usgs/CLAUDE.md` (310 lines)
+### 1. Canonical Package Contract
+**Location**: `ras_commander/usgs/AGENTS.md`
 
 **Contains**:
-- Complete module overview (14 modules)
-- All function signatures and parameters
-- Complete workflows (discovery → validation)
-- Real-time monitoring workflows (v0.87.0+)
-- Catalog generation workflows (v0.89.0+)
-- Code examples for every workflow stage
+- workflow stages from discovery through validation
+- core module map
+- critical service, matching, boundary, and validation rules
+- reference notebooks for working examples
 
-**When to use**: For ANY technical question about USGS integration
+**When to use**: For shared package rules before implementation.
 
 ### 2. Example Notebooks (DEMONSTRATIONS)
 
@@ -89,7 +87,7 @@ You handle USGS gauge data integration as a **lightweight navigator** to the USG
 
 ## Quick Reference: Workflow Stages
 
-Follow these workflow stages (read `usgs/CLAUDE.md` for details):
+Follow these workflow stages (read `usgs/AGENTS.md` for shared package rules):
 
 1. **Spatial Discovery** - Find gauges in project area
 2. **Data Retrieval** - Download flow/stage from USGS NWIS
@@ -101,11 +99,11 @@ Follow these workflow stages (read `usgs/CLAUDE.md` for details):
 8. **Catalog Generation** - Create standardized gauge data folder (v0.89.0+)
 9. **Model Validation** - Calculate metrics and generate plots
 
-See `ras_commander/usgs/CLAUDE.md` for complete workflow documentation.
+See `ras_commander/usgs/AGENTS.md` for shared workflow stages and the notebooks for runnable demonstrations.
 
 ## Module Organization (14 Modules)
 
-Brief overview -- read `usgs/CLAUDE.md` for complete details:
+Brief overview -- read `usgs/AGENTS.md` for the canonical module map:
 
 ### Data Operations
 - **RasUsgsCore** - Primary data retrieval from USGS NWIS
@@ -138,31 +136,31 @@ Brief overview -- read `usgs/CLAUDE.md` for complete details:
 ## Common Questions → Primary Source Routing
 
 **Q: How do I find gauges near my model?**
-- See: `usgs/CLAUDE.md` Section "Complete Workflow → 1. Spatial Discovery"
+- See: `usgs/AGENTS.md`, source docstrings, and `examples/421_usgs_*.ipynb`
 - Example: `examples/421_usgs_gauge_data_integration.ipynb`
 
 **Q: How do I generate boundary conditions from USGS data?**
-- See: `usgs/CLAUDE.md` Section "Complete Workflow → 5. Boundary Generation"
+- See: `usgs/AGENTS.md`, source docstrings, and `examples/423_bc_*.ipynb`
 - Example: `examples/423_bc_generation_from_live_gauge.ipynb`
 
 **Q: How do I validate my model with observed data?**
-- See: `usgs/CLAUDE.md` Section "Complete Workflow → 6. Model Validation"
+- See: `usgs/AGENTS.md`, source docstrings, and `examples/424_*.ipynb`
 - Example: `examples/424_model_validation_with_usgs.ipynb`
 
 **Q: How do I monitor gauges in real-time?**
-- See: `usgs/CLAUDE.md` Section "Real-Time Workflows (v0.87.0+)"
+- See: `usgs/AGENTS.md`, source docstrings, and `examples/422_*.ipynb`
 - Example: `examples/422_usgs_real_time_monitoring.ipynb`
 
 **Q: How do I create a gauge catalog for my project?**
-- See: `usgs/CLAUDE.md` Section "Catalog generation" (catalog.py)
+- See: `usgs/AGENTS.md`, `catalog.py`, and `examples/420_*.ipynb`
 - Example: `examples/420_usgs_gauge_catalog.ipynb`
 
 **Q: What validation metrics are available?**
-- See: `usgs/CLAUDE.md` Section "Validation Metrics (metrics.py)"
+- See: `metrics.py`, source docstrings, and validation notebooks
 - Functions: `nash_sutcliffe_efficiency()`, `kling_gupta_efficiency()`, `calculate_peak_error()`, `calculate_all_metrics()`
 
 **Q: What parameter codes does USGS use?**
-- See: `usgs/CLAUDE.md` Section "Configuration (config.py)"
+- See: `config.py` and source docstrings
 - Common codes: 00060 = flow (cfs), 00065 = stage (ft)
 
 ## Dependencies
@@ -185,7 +183,7 @@ deps = check_dependencies()
 # Returns: {'pandas': True, 'geopandas': True, 'dataretrieval': True/False}
 ```
 
-## Key Features (Brief - see usgs/CLAUDE.md for details)
+## Key Features
 
 ### Multi-Level Verifiability
 - HEC-RAS boundary conditions reviewable in GUI
@@ -233,16 +231,16 @@ USGS data is in UTC. Functions handle timezone conversions automatically when al
 - `dss_read_boundary-data` -- DSS boundary condition handling
 
 **Primary sources**:
-- `ras_commander/usgs/CLAUDE.md` -- Complete USGS module documentation (14 modules)
+- `ras_commander/usgs/AGENTS.md` -- Canonical USGS package contract
 
 ## Subagent Workflow
 
 When delegated a task:
 
-1. **Read the primary source first**: `ras_commander/usgs/CLAUDE.md`
+1. **Read the package contract first**: `ras_commander/usgs/AGENTS.md`
 2. **Check example notebooks** for working demonstrations
 3. **Read code docstrings** for precise API details
-4. **Implement the workflow** based on primary sources
+4. **Implement the workflow** based on package rules, source docstrings, and notebooks
 5. **DO NOT create new workflow documentation** -- read existing sources
 
 ## Maintenance Notes
@@ -251,12 +249,12 @@ When delegated a task:
 
 **If you find yourself duplicating workflows**:
 1. Stop immediately
-2. Check if the workflow exists in `usgs/CLAUDE.md`
+2. Check whether the package rule belongs in `usgs/AGENTS.md`
 3. If yes: Read it instead of duplicating
-4. If no: Add it to `usgs/CLAUDE.md` (primary source), then reference it here
+4. If a shared rule is missing: Add it to `usgs/AGENTS.md`, then reference it here
 
 **Primary source hierarchy**:
-1. `ras_commander/usgs/CLAUDE.md` - COMPLETE workflows and API reference
+1. `ras_commander/usgs/AGENTS.md` - Shared package rules and module map
 2. `examples/420-424_*.ipynb` - Working demonstrations
-3. Code docstrings - Precise function signatures
+3. Code docstrings - Precise function signatures and API details
 4. This file - Lightweight navigator ONLY

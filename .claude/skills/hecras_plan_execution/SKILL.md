@@ -1,5 +1,9 @@
 ---
 name: hecras_plan_execution
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Decision support for HEC-RAS execution strategy. Analyzes project inspector output
   to recommend which plans to run, execution mode, and optimal parameters. Provides
@@ -245,5 +249,5 @@ RasCmdr.compute_plan(
 - `hecras_compute_rascontrol` -- Downstream: legacy COM execution
 
 **Primary sources**:
-- `ras_commander/CLAUDE.md` -- Execution modes overview
+- `ras_commander/AGENTS.md` -- Execution modes overview
 - `ras_commander/RasCmdr.py` -- compute_plan, compute_parallel, compute_test_mode

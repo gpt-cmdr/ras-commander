@@ -1,14 +1,17 @@
 # .claude/ - Claude Framework Configuration
 
-This directory contains Claude Code's memory, skills, agents, and rules configuration.
+This directory contains Claude Code's native rules, skills, agents, commands, and manifests.
+
+Shared repository behavior does not live here anymore. The canonical shared contract now lives in the `AGENTS.md` hierarchy, and Claude reaches it through `CLAUDE.md` loaders.
 
 ## Structure
 
-- **`MANIFEST.md`** - Central registry mapping all components by domain (read this for cross-references)
+- **`MANIFEST.md`** - Claude component registry by domain (read this for Claude-side cross-references)
 - **`rules/`** - Topic-specific guidance (auto-loaded by Claude based on working directory)
 - **`skills/`** - Library workflow skills (discovered dynamically by trigger keywords)
 - **`agents/`** - Specialist agent definitions (delegated to by orchestrator)
 - **`commands/`** - Slash commands for common workflows
+- **`settings.json`** - Claude Code project hook adapter; calls shared hook logic in `scripts/agent_hooks/`
 
 ## Voice Convention
 
@@ -31,9 +34,9 @@ Claude Code automatically loads context based on working directory:
 When working in: ras_commander/remote/
 
 Automatic context loading:
-1. /CLAUDE.md (root - strategic vision)
-2. /ras_commander/CLAUDE.md (library - tactical patterns)
-3. /ras_commander/remote/CLAUDE.md (subpackage - implementation details)
+1. /CLAUDE.md (root loader -> /AGENTS.md)
+2. /ras_commander/CLAUDE.md (library loader -> /ras_commander/AGENTS.md)
+3. /ras_commander/remote/CLAUDE.md (subpackage loader -> /ras_commander/remote/AGENTS.md)
 4. /.claude/rules/** (all relevant rules files, scoped by paths: frontmatter)
 ```
 
@@ -64,8 +67,9 @@ Commands in `.claude/commands/` are slash commands users invoke directly (e.g., 
 
 | Level | Purpose | Size Target | Auto-Loaded? |
 |-------|---------|-------------|--------------|
-| Root CLAUDE.md | Strategic vision | < 200 lines | Always |
-| Subpackage CLAUDE.md | Tactical patterns | < 150 lines | When in directory |
+| Root AGENTS.md | Shared repository contract | < 400 lines | Always through loader |
+| Subpackage AGENTS.md | Shared tactical patterns | < 300 lines | Through local loader |
+| CLAUDE.md files | Claude loaders and Claude-only notes | < 150 lines | By directory |
 | .claude/rules/*.md | Guidance procedures | 50-200 lines | By path relevance |
 | .claude/skills/*/SKILL.md | Workflow navigation | 200-400 lines | When discovered |
 | .claude/agents/*.md | Agent definitions | 200-400 lines | When delegated |

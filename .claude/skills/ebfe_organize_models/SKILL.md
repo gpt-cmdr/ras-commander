@@ -1,6 +1,10 @@
 ---
 name: ebfe_organize_models
 model: sonnet
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Organize downloaded FEMA eBFE/BLE model files into standardized 4-folder structure.
 

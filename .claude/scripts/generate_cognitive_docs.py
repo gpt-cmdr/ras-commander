@@ -314,6 +314,17 @@ description: |
 def generate_skills_page(skills: List[Dict], output_path: Path):
     """Generate the skills documentation page."""
 
+    def is_shared_skill(skill: Dict) -> bool:
+        fm = skill['frontmatter']
+        if fm.get('shared_corpus', True) is False:
+            return False
+        if fm.get('harness_scope') == 'claude_only':
+            return False
+        return True
+
+    shared_skills = [skill for skill in skills if is_shared_skill(skill)]
+    claude_only_skills = [skill for skill in skills if not is_shared_skill(skill)]
+
     content = f"""# Skills Reference
 
 This page provides a comprehensive reference for all available skills in the ras-commander cognitive infrastructure.
@@ -324,22 +335,27 @@ This page provides a comprehensive reference for all available skills in the ras
 
 ## Overview
 
-ras-commander includes **{len(skills)} skills** that provide guided workflows for common HEC-RAS automation tasks.
+ras-commander includes **{len(skills)} skills** that currently fall into two groups:
 
-Skills are **lightweight navigators** that:
+| Group | Count | Meaning |
+|-------|-------|---------|
+| Shared domain workflow skills | {len(shared_skills)} | Candidate shared workflows for future multi-harness exposure |
+| Claude-only orchestration skills | {len(claude_only_skills)} | Claude-native provider orchestration or mixed-review workflows |
 
-- Point to primary documentation sources
-- Provide copy-paste ready code examples
-- Include trigger keywords for auto-discovery
-- Cross-reference example notebooks
+Skills are lightweight navigators that:
+
+- point to primary documentation sources
+- provide copy-paste ready examples
+- include trigger keywords for discovery
+- cross-reference notebooks and local architecture docs
 
 ---
 
-## Available Skills
+## Shared Domain Workflow Skills
 
 """
 
-    for skill in skills:
+    def render_skill(skill: Dict) -> str:
         fm = skill['frontmatter']
         name = skill['name']
         description = fm.get('description', 'No description available.')
@@ -354,7 +370,13 @@ Skills are **lightweight navigators** that:
         else:
             tools_str = str(allowed_tools) if allowed_tools else 'Default'
 
-        content += f"""### {name}
+        scope = 'Shared domain workflow'
+        if fm.get('shared_corpus', True) is False or fm.get('harness_scope') == 'claude_only':
+            scope = 'Claude-only orchestration'
+
+        return f"""### {name}
+
+**Scope**: {scope}
 
 **Tools**: {tools_str}
 
@@ -366,35 +388,26 @@ Skills are **lightweight navigators** that:
 
 """
 
+    for skill in shared_skills:
+        content += render_skill(skill)
+
+    if claude_only_skills:
+        content += """## Claude-Only Orchestration Skills
+
+These skills are intentionally excluded from any future shared multi-harness skill corpus. They exist to let Claude orchestrate provider-specific delegation or mixed external review workflows.
+
+"""
+        for skill in claude_only_skills:
+            content += render_skill(skill)
+
     content += """
 ## Using Skills
 
 ### Automatic Discovery
 
-Skills are automatically invoked based on trigger phrases in your prompts:
+Skills are automatically invoked based on trigger phrases in prompts.
 
-| Phrase | Skill |
-|--------|-------|
-| "Execute HEC-RAS plan" | `hecras_compute_plans` |
-| "Extract HDF results" | `hecras_extract_results` |
-| "Parse geometry file" | `hecras_parse_geometry` |
-| "Integrate USGS data" | `usgs_integrate_gauges` |
-| "Repair geometry issues" | `qa_repair_geometry` |
-
-### Manual Invocation
-
-```python
-# Skills provide workflow guidance
-# Follow the patterns in the skill's SKILL.md file
-
-# Example: Executing HEC-RAS Plans
-from ras_commander import init_ras_project, RasCmdr
-
-init_ras_project(r"C:\\Models\\MyProject", "7.0")
-RasCmdr.compute_plan("01", num_cores=4)
-```
-
-## Creating New Skills
+### Creating New Skills
 
 See [Contributing Guide](../development/contributing.md) for instructions on creating new skills.
 
@@ -411,34 +424,26 @@ allowed-tools:
   - Grep
   - Glob
 ---
-
-# Skill Title
-
-## Primary Sources
-[Point to CLAUDE.md, AGENTS.md, notebooks]
-
-## Quick Reference
-[Copy-paste code examples]
-
-## Common Patterns
-[Workflow steps with references]
 ```
+
+### Excluding A Skill From The Shared Corpus
+
+```yaml
+shared_corpus: false
+harness_scope: claude_only
+```
+
+Use that metadata for provider-orchestration skills that should remain Claude-native.
 
 ## Design Philosophy
 
-Skills follow the **Lightweight Navigator Pattern**:
-
-1. **200-400 lines maximum** - Keep focused
-2. **Point to primary sources** - Don't duplicate
-3. **Include critical warnings** - Surface important info
-4. **Provide examples** - Copy-paste ready code
-5. **Cross-reference notebooks** - Show working demos
+1. Keep shared skills lightweight.
+2. Point to `AGENTS.md`, code, and notebooks instead of duplicating them.
+3. Keep provider orchestration out of the future shared corpus.
 """
 
     output_path.write_text(content, encoding='utf-8')
     print(f"Generated: {output_path}")
-
-
 def generate_commands_page(commands: List[Dict], output_path: Path):
     """Generate the commands documentation page."""
 

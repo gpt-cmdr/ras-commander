@@ -29,13 +29,13 @@ Handle git operations with safety checks and proper formatting.
 
 **Git Worktree Workflow**:
 - `.claude/skills/dev_manage_git-worktrees/` - Complete worktree workflow
-  - Directory selection priority (existing → CLAUDE.md → ask)
+  - Directory selection priority (existing → AGENTS.md → ask)
   - Safety verification (.gitignore checks)
   - Project setup automation
   - Baseline test verification
 
 **Commit Guidelines**:
-- Root `CLAUDE.md` - Git commit protocol (lines about committing changes)
+- Root `AGENTS.md` - Git commit protocol (lines about committing changes)
 - `.claude/rules/` - Python decorators, path handling patterns
 
 **GitHub CLI**:
@@ -113,7 +113,7 @@ EOF
 
 **Quick reference**:
 ```bash
-# Directory priority: .worktrees > worktrees > CLAUDE.md preference > ask user
+# Directory priority: .worktrees > worktrees > AGENTS.md preference > ask user
 
 # Safety: Verify .gitignore for project-local worktrees
 grep -q "^\.worktrees/$" .gitignore || echo ".worktrees/" >> .gitignore

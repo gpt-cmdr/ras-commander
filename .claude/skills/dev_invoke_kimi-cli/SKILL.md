@@ -1,22 +1,25 @@
 ---
 name: dev_invoke_kimi-cli
 description: |
-  Delegate testing, QA, and code review tasks to Opencode CLI using Kimi K2.5 model via markdown file handoff.
+  Legacy Claude-only provider orchestration for Opencode CLI using Kimi K2.5 via markdown file handoff.
   Write test request to TASK.md, Opencode with Kimi K2.5 generates tests/reviews, outputs to OUTPUT.md.
-  Use for test generation, QA verification, edge case detection, code coverage analysis,
-  security reviews, regression testing, integration testing.
+  Use only when the user explicitly requests Kimi or Opencode/Kimi. Do not trigger for
+  generic QAQC, testing, security review, edge case, or coverage requests.
 
-  Triggers: kimi, kimi k2.5, kimi cli, opencode kimi, test generation, QA, quality assurance,
-  code review, unit tests, integration tests, edge cases, test coverage, testing, kimisubagent,
+  Triggers: kimi, kimi k2.5, kimi cli, opencode kimi, kimisubagent,
   togetherai kimi, opencode/kimi-k2.5-free, togetherai/moonshotai/Kimi-K2.5
 
   Prerequisites: Opencode CLI installed, Together.ai API key (if using togetherai provider)
   Models: opencode/kimi-k2.5-free (recommended), togetherai/moonshotai/Kimi-K2.5 (alternative)
+shared_corpus: false
+harness_scope: claude_only
 ---
 
 # Invoking Kimi CLI (via Opencode)
 
-Delegate testing, quality assurance, and code review tasks to Opencode CLI using the Kimi K2.5 model. Write task instructions to TASK.md, invoke Opencode with Kimi K2.5, then read OUTPUT.md for results.
+> Legacy Claude-only orchestration skill. This is not part of the standard production harness policy. It is excluded from the shared multi-harness corpus and should be used only when the user explicitly requests Kimi or Opencode/Kimi.
+
+When the user explicitly requests Kimi or Opencode/Kimi, delegate the requested testing, quality assurance, or code review task to Opencode CLI using the Kimi K2.5 model. Write task instructions to TASK.md, invoke Opencode with Kimi K2.5, then read OUTPUT.md for results.
 
 ## Pattern: Markdown File Handoff
 
@@ -46,20 +49,23 @@ Claude Code                         Opencode CLI + Kimi K2.5
 - Supports both Opencode and Together.ai providers
 - Excels at edge case detection
 
-## Model Selection
+## Legacy Model Selection
 
-### Recommended Models
+Codex is the production-supported second harness for this repository. Use this
+legacy Kimi path only when the user explicitly asks for Kimi or Opencode/Kimi.
+
+### Available Models
 
 | Model | Provider | Use Case | Status |
 |-------|----------|----------|--------|
-| `opencode/kimi-k2.5-free` | Opencode (Moonshot) | **Recommended.** Free tier, 2,000 req/day, excellent for testing/QA | ✅ Verified |
-| `opencode/kimi-k2.5` | Opencode (Moonshot) | Paid tier with higher rate limits | ✅ Available |
-| `togetherai/moonshotai/Kimi-K2.5` | Together.ai | Alternative provider, same model quality | ✅ Verified |
-| `togetherai/moonshotai/Kimi-K2-5` | Together.ai | Alternative naming convention | ✅ Available |
+| `opencode/kimi-k2.5-free` | Opencode (Moonshot) | Legacy explicit-request path; free tier | Verified |
+| `opencode/kimi-k2.5` | Opencode (Moonshot) | Paid tier with higher rate limits | Available |
+| `togetherai/moonshotai/Kimi-K2.5` | Together.ai | Alternative provider | Verified |
+| `togetherai/moonshotai/Kimi-K2-5` | Together.ai | Alternative naming convention | Available |
 
-**Default:** `opencode/kimi-k2.5-free` for testing/QA tasks.
+**Default within this explicit legacy skill:** `opencode/kimi-k2.5-free`.
 
-**Recommendation:** Use `opencode/kimi-k2.5-free` for all testing and QA tasks. Kimi K2.5 excels at:
+Kimi K2.5 is kept here for historical workflows that specifically require it:
 - Identifying edge cases and boundary conditions
 - Generating comprehensive test scenarios
 - Analyzing code for quality issues
@@ -68,20 +74,18 @@ Claude Code                         Opencode CLI + Kimi K2.5
 ## Provider Selection Guide
 
 ### Choose Opencode (`opencode/kimi-k2.5-free`) when:
-- ✅ You want a free tier with generous limits (2,000 req/day)
-- ✅ You're already using Opencode for other tasks
-- ✅ You prefer integrated billing with Opencode
-- ✅ You want simpler setup (no additional API keys)
+- The user explicitly requested Kimi or Opencode/Kimi
+- You want a free tier with generous limits (2,000 req/day)
+- You already have Opencode configured for this legacy workflow
 
 ### Choose Together.ai (`togetherai/moonshotai/Kimi-K2.5`) when:
-- ✅ You have existing Together.ai credits or API keys
-- ✅ You need different rate limits or pricing
-- ✅ You prefer Together.ai's infrastructure
-- ✅ You're already using Together.ai for other models
+- The user explicitly requested Kimi through Together.ai
+- You have existing Together.ai credits or API keys
+- You need different rate limits or pricing
 
 ## Invocation
 
-### Standard Pattern (Recommended)
+### Standard Pattern Within This Legacy Skill
 
 ```bash
 opencode run -m opencode/kimi-k2.5-free \

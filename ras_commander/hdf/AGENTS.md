@@ -1,15 +1,48 @@
-## hdf Compatibility Wrapper
+# HDF Subpackage Contract
 
-This `AGENTS.md` exists for agents that automatically discover that filename.
-The canonical instructions for this directory live in `CLAUDE.md`.
+This file is the canonical local instruction file for `ras_commander/hdf/`.
 
-Read in this order:
-- `./CLAUDE.md` - Canonical HDF guidance
-- `../CLAUDE.md` - Canonical core library guidance
-- `../../CLAUDE.md` - Canonical root guidance
-- `../../.claude/MANIFEST.md` - Canonical index for shared framework content
+## Scope
 
-Notes:
-- Treat `CLAUDE.md` as the source of truth when both files exist.
-- Treat `.claude/` as the canonical repository location for shared agent
-  framework materials.
+- Parent guidance from `ras_commander/AGENTS.md` and the repo root still applies.
+- This directory handles HEC-RAS geometry and results HDF access.
+
+## Module Families
+
+- Core helpers: `HdfBase`, `HdfUtils`, `HdfPlan`
+- Geometry readers: `HdfMesh`, `HdfXsec`, `HdfBndry`, `HdfStruc`, `HdfHydraulicTables`
+- Results readers: `HdfResultsPlan`, `HdfResultsMesh`, `HdfResultsXsec`, `HdfResultsBreach`
+- Infrastructure and land surface: `HdfPipe`, `HdfPump`, `HdfInfiltration`, `HdfLandCover`
+- Plotting and analysis: `HdfPlot`, `HdfResultsPlot`, `HdfBenefitAreas`, `HdfChannelCapacity`, `HdfFluvialPluvial`
+
+## Implementation Rules
+
+- Follow the existing static-class pattern.
+- Public methods should use `@staticmethod`, `@log_call`, and `@standardize_input(...)` when the surrounding module already does.
+- Keep heavy dependencies lazy-loaded inside methods when practical:
+  - `geopandas`
+  - `shapely`
+  - `xarray`
+  - `matplotlib`
+  - `scipy`
+- Use `h5py.File(..., "r")` context managers for direct file access.
+- Distinguish clearly between `plan_hdf` inputs and `geom_hdf` inputs when adding or modifying decorators.
+
+## Input And Output Rules
+
+- Accept the flexible HDF-facing input forms already used in this package: plan numbers, prefixed plan numbers, paths, and open HDF handles where the decorator pattern already allows them.
+- Return pandas or GeoPandas objects in the shapes established by nearby code. Do not invent a new container style for one method unless the surrounding API also changes.
+- Log read failures with enough file context to debug the issue.
+
+## Common Entry Points
+
+- Plan metadata and compute messages: `HdfResultsPlan`
+- 2D cell geometry and face geometry: `HdfMesh`
+- 2D results extraction: `HdfResultsMesh`
+- 1D cross section geometry and results: `HdfXsec`, `HdfResultsXsec`
+- Land cover and infiltration preprocessing: `HdfLandCover`, `HdfInfiltration`
+
+## Testing
+
+- Use real example HDF files when validating behavior.
+- Prefer targeted tests over synthetic HDF fixtures unless a regression cannot be reproduced against real examples.

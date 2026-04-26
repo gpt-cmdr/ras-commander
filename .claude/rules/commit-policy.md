@@ -13,14 +13,14 @@ paths: ras_commander/**, examples/**
 Every commit that adds **new public library functions** to `ras_commander/` MUST include:
 
 1. **Example notebook coverage** in `examples/` exercising the new function with real-world data (RasExamples, eBFE, USGS, or other production sources — never mocks)
-2. **Documentation update** in the relevant subpackage `CLAUDE.md` listing the new method
+2. **Documentation update** in the relevant subpackage `AGENTS.md` listing the new method or changed shared behavior
 3. **Evidence the function was tested** (notebook executed successfully or verified)
 
 All three elements ship in the **same commit** so every commit is self-contained.
 
 ## Exemptions
 
-| Category | Notebook Required? | CLAUDE.md Required? |
+| Category | Notebook Required? | AGENTS.md Required? |
 |----------|--------------------|---------------------|
 | New public library function | Yes | Yes |
 | Bug fix to existing function with existing coverage | No | No |
@@ -39,11 +39,11 @@ Files in `tests/` are **temporary development scaffolding**:
 
 ## Blocking Commits
 
-If notebook coverage or CLAUDE.md docs are missing, the commit is **BLOCKED** until prerequisites are met. Track blocked commits explicitly in the plan with unblocking steps.
+If notebook coverage or AGENTS.md docs are missing, the commit is **BLOCKED** until prerequisites are met. Track blocked commits explicitly in the plan with unblocking steps.
 
 ## Rationale
 
 - Notebooks serve as both documentation and functional tests
 - Real-world data catches integration issues mocks would miss
-- CLAUDE.md updates keep subpackage API docs current
+- AGENTS.md updates keep subpackage API docs current
 - Self-contained commits enable clean git bisect and cherry-pick

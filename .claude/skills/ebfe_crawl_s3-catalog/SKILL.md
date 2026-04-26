@@ -1,5 +1,9 @@
 ---
 name: ebfe_crawl_s3-catalog
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: Crawl FEMA's public BLE/eBFE S3 bucket to build a catalog of available Base Level Engineering datasets by state, HUC, and watershed. Cache results locally. Use when discovering what BLE models are available for a region before download.
 ---
 

@@ -1,5 +1,9 @@
 ---
 name: dev_manage_git-worktrees
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Use when starting feature work that needs isolation from current workspace or
   before executing implementation plans - creates isolated git worktrees with
@@ -46,17 +50,17 @@ ls -d worktrees 2>/dev/null      # Alternative
 
 **If found:** Use that directory. If both exist, prefer `.worktrees`.
 
-### 2. Check CLAUDE.md
+### 2. Check AGENTS.md
 
 ```bash
-grep -i "worktree.*director" CLAUDE.md 2>/dev/null
+grep -i "worktree.*director" AGENTS.md 2>/dev/null
 ```
 
 **If preference specified:** Use it without asking.
 
 ### 3. Ask User
 
-If no directory exists and no CLAUDE.md preference:
+If no directory exists and no AGENTS.md preference:
 
 ```
 No worktree directory found. Where should I create worktrees?
@@ -172,8 +176,8 @@ if [ -d .worktrees ]; then
 elif [ -d worktrees ]; then
   DIR="worktrees"
 else
-  # Check CLAUDE.md for preference
-  PREF=$(grep -i "worktree.*directory" CLAUDE.md 2>/dev/null)
+  # Check AGENTS.md for preference
+  PREF=$(grep -i "worktree.*directory" AGENTS.md 2>/dev/null)
   # If no preference, ask user
   # ... (use AskUserQuestion tool)
 fi
@@ -212,7 +216,7 @@ echo "Ready to implement auth feature"
 | `.worktrees/` exists | Use it (verify .gitignore) |
 | `worktrees/` exists | Use it (verify .gitignore) |
 | Both exist | Use `.worktrees/` |
-| Neither exists | Check CLAUDE.md → Ask user |
+| Neither exists | Check AGENTS.md → Ask user |
 | Directory not in .gitignore | Add it immediately + commit |
 | Tests fail during baseline | Report failures + ask |
 | No package.json/Cargo.toml | Skip dependency install |
@@ -229,7 +233,7 @@ echo "Ready to implement auth feature"
 
 **Problem:** Creates inconsistency, violates project conventions
 
-**Fix:** Follow priority: existing > CLAUDE.md > ask
+**Fix:** Follow priority: existing > AGENTS.md > ask
 
 ### ❌ Proceeding with Failing Tests
 
@@ -281,10 +285,10 @@ git worktree list
 - Skip baseline test verification
 - Proceed with failing tests without asking
 - Assume directory location when ambiguous
-- Skip CLAUDE.md check
+- Skip AGENTS.md check
 
 **Always:**
-- Follow directory priority: existing > CLAUDE.md > ask
+- Follow directory priority: existing > AGENTS.md > ask
 - Verify .gitignore for project-local
 - Auto-detect and run project setup
 - Verify clean test baseline

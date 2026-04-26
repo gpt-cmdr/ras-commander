@@ -4,11 +4,11 @@
 
 ras-commander was **built by LLMs**, is **designed for LLM workflows**, and **welcomes contributions prepared with LLM agent assistance**.
 
-We encourage ALL contributors to use an LLM coding agent when preparing pull requests. The repository contains comprehensive, machine-readable style rules in `.claude/rules/` that any LLM can read and follow. When your agent reads these rules before writing code, your PR becomes trivially easy to review.
+We encourage contributors to use an LLM coding agent when preparing pull requests. Claude Code and Codex are the production-supported harnesses for this repository. The canonical shared rules live in `AGENTS.md` files, with Claude-specific preload helpers in `.claude/rules/`.
 
 **Why this works**: An LLM-reviewed PR that follows the style guide takes 5 minutes to review. A PR that ignores the style guide takes 50 minutes. Help us merge your code fast -- load the rules.
 
-**Any agent works**: [Claude Code](https://claude.ai/code), [Codex CLI](https://github.com/openai/codex), [Aider](https://aider.chat), [Cursor](https://cursor.sh), [Gemini CLI](https://github.com/google-gemini/gemini-cli), or any other LLM coding tool. The rules are plain markdown -- every LLM can read them.
+**Recommended agents**: [Claude Code](https://claude.ai/code) and [Codex CLI](https://github.com/openai/codex). Other tools may read the markdown context, but the repository standard is maintained for Claude and Codex.
 
 ---
 
@@ -22,14 +22,12 @@ cd ras-commander
 # 2. Set up environment
 uv venv .venv && uv pip install -e .
 
-# 3. Launch your preferred coding agent
+# 3. Launch a production-supported coding agent
 claude          # Claude Code
 codex           # OpenAI Codex CLI
-aider           # Aider
-cursor .        # Cursor IDE
 ```
 
-Your agent will find `AGENTS.md` and `CLAUDE.md` files throughout the repo that provide codebase context. Have it read the style rules in `.claude/rules/` before writing code.
+Codex reads `AGENTS.md` directly. Claude Code reads `CLAUDE.md`, which imports the shared `AGENTS.md` contract and loads Claude-specific `.claude/rules/`.
 
 ---
 

@@ -223,7 +223,7 @@ from ras_commander import RasCmdr, init_ras_project
 from ras_commander.hdf import HdfResultsPlan
 ```
 
-**See**: Root CLAUDE.md - Development Environment section for details
+**See**: AGENTS.md - Environment section for details
 
 ## Common Pitfalls
 

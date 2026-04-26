@@ -13,7 +13,7 @@ paths: ras_commander/**
 
 **See**: `ras_commander/terrain/RasTerrain.py` for complete terrain API.
 
-**Future**: `ras_commander/terrain/CLAUDE.md` will provide workflow documentation (to be created).
+**Future**: `ras_commander/terrain/AGENTS.md` should provide shared terrain package rules when that subpackage gets local agent guidance.
 
 ## Overview
 

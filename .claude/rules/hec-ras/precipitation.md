@@ -10,7 +10,7 @@ paths: ras_commander/**
 
 ## Primary Source
 
-**See**: `ras_commander/precip/CLAUDE.md` for complete precipitation documentation.
+**See**: `ras_commander/precip/AGENTS.md` for complete precipitation documentation.
 
 ## Overview
 

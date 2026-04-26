@@ -6,7 +6,7 @@
 
 ## Primary Source
 
-**See**: `ras_commander/usgs/CLAUDE.md` for complete USGS documentation.
+**See**: `ras_commander/usgs/AGENTS.md` for complete USGS documentation.
 
 ## Overview
 
@@ -122,7 +122,7 @@ except requests.ConnectionError:
 - `.claude/rules/hec-ras/dss-files.md` -- Read when generating DSS boundary conditions from gauge data
 
 **Primary sources**:
-- `ras_commander/usgs/CLAUDE.md` -- Complete USGS documentation
+- `ras_commander/usgs/AGENTS.md` -- Complete USGS documentation
 
 ---
 

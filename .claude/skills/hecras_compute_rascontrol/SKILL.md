@@ -1,5 +1,9 @@
 ---
 name: hecras_compute_rascontrol
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Executes HEC-RAS plans using RasControl class via HECRASController COM interface
   for legacy HEC-RAS versions (3.x-5.x). Handles COM lifecycle management, session
@@ -35,7 +39,7 @@ Use `RasControl` to automate HEC-RAS versions 3.x-5.x via the HECRASController C
 
 ### 3. Supporting Documentation
 - `.claude/rules/hec-ras/execution.md` - Execution mode comparison
-- `ras_commander/CLAUDE.md` - Library context and module organization
+- `ras_commander/AGENTS.md` - Library context and module organization
 
 ## When to Use RasControl vs RasCmdr
 

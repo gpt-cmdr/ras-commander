@@ -378,4 +378,4 @@ bc_summary = {
 - `hecras_plan_execution` -- Downstream: uses your output for mode selection
 
 **Primary sources**:
-- `ras_commander/CLAUDE.md` -- Library architecture
+- `ras_commander/AGENTS.md` -- Library architecture

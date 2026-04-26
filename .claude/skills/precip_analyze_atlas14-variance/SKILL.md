@@ -1,26 +1,24 @@
 ---
 name: precip_analyze_atlas14-variance
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Analyze spatial variability of NOAA Atlas 14 precipitation frequency estimates
   within HEC-RAS model domains using intelligent extent-based downloading.
 
-  Helps determine whether uniform rainfall assumptions are appropriate for
-  rain-on-grid modeling by calculating min/max/mean/range statistics within
-  2D flow areas or project extents.
-
-  Uses NOAA CONUS NetCDF with HTTP byte-range requests for 99.9% data reduction
-  compared to traditional state-level ZIP downloads.
-
-  Use before rain-on-grid modeling to assess uniform rainfall validity,
-  for large model domains where spatial variance matters, for multi-event
-  comparison across return periods, or for engineering report generation.
+  Use before rain-on-grid modeling to decide whether uniform rainfall is valid,
+  especially for large domains, multi-event comparisons, and engineering reports.
+  Calculates min/max/mean/range statistics within 2D flow areas or project
+  extents using NOAA CONUS NetCDF with HTTP byte-range requests.
 
   Triggers: atlas 14 variance, atlas14 variance, precipitation variance,
   spatial variance analysis, uniform rainfall, spatially variable rainfall,
-  precipitation spatial variability, rain-on-grid variance, atlas 14 grid,
-  atlas14 grid, noaa atlas 14 conus, precipitation frequency grid,
-  assess uniform rainfall, extent-based precipitation, 2d flow area precipitation,
-  Atlas14Grid, Atlas14Variance, range percentage, CONUS NetCDF.
+  rain-on-grid variance, atlas 14 grid, atlas14 grid, noaa atlas 14 conus,
+  precipitation frequency grid, assess uniform rainfall, extent-based
+  precipitation, 2d flow area precipitation, Atlas14Grid, Atlas14Variance,
+  range percentage, CONUS NetCDF.
 ---
 
 # Atlas 14 Spatial Variance Analysis
@@ -29,11 +27,11 @@ description: |
 
 ## Primary Sources (Read These First)
 
-**Complete Workflows** (lines 540-629):
-- `ras_commander/precip/CLAUDE.md`
-  - Lines 118-197: Module documentation (Atlas14Grid, Atlas14Variance)
-  - Lines 540-629: Complete Atlas 14 Grid Workflow (4 steps)
-  - Lines 522-538: Performance metrics
+**Canonical Contract**:
+- `ras_commander/precip/AGENTS.md`
+  - Method selection for Atlas 14 grid and variance workflows
+  - Critical precipitation rules and validation expectations
+  - Reference notebooks for working examples
 
 **API Reference**:
 - `ras_commander/precip/Atlas14Grid.py` (404 lines)
@@ -55,7 +53,7 @@ description: |
   - Visualization
 
 **Quick Reference**:
-- `.claude/rules/hec-ras/precipitation.md` (lines 104-126)
+- `.claude/rules/hec-ras/precipitation.md`
 
 ---
 
@@ -129,7 +127,7 @@ print(df)
 
 **Purpose**: Rapid check if variance analysis is needed
 
-**See**: `ras_commander/precip/CLAUDE.md` lines 544-564
+**See**: `ras_commander/precip/AGENTS.md` and the Atlas 14 variance source docstrings.
 
 ```python
 from ras_commander.precip import Atlas14Variance
@@ -144,7 +142,7 @@ if stats['range_pct'] > 10:
 
 **Purpose**: Comprehensive variance across multiple events
 
-**See**: `ras_commander/precip/CLAUDE.md` lines 566-585
+**See**: `ras_commander/precip/AGENTS.md` and `Atlas14Variance.analyze()` docstrings.
 
 ```python
 results = Atlas14Variance.analyze(
@@ -161,7 +159,7 @@ results = Atlas14Variance.analyze(
 
 **Purpose**: Engineering documentation
 
-**See**: `ras_commander/precip/CLAUDE.md` lines 587-605
+**See**: `ras_commander/precip/AGENTS.md` and `Atlas14Variance.generate_report()` docstrings.
 
 ```python
 report_dir = Atlas14Variance.generate_report(
@@ -182,7 +180,7 @@ report_dir = Atlas14Variance.generate_report(
 
 **Purpose**: Export for HEC-RAS import or custom processing
 
-**See**: `ras_commander/precip/CLAUDE.md` lines 607-629
+**See**: `ras_commander/precip/AGENTS.md` and `Atlas14Grid.get_pfe_from_project()` docstrings.
 
 ```python
 from ras_commander.precip import Atlas14Grid
@@ -352,7 +350,7 @@ pip install ras-commander  # All required deps included
 
 ## Navigation Map
 
-**For complete workflows**: Read `ras_commander/precip/CLAUDE.md` lines 540-629
+**For package rules**: Read `ras_commander/precip/AGENTS.md`
 
 **For API details**: Read docstrings in:
 - `ras_commander/precip/Atlas14Grid.py`
@@ -360,7 +358,7 @@ pip install ras-commander  # All required deps included
 
 **For working code**: Run `examples/725_atlas14_spatial_variance.ipynb`
 
-**For quick reference**: See `.claude/rules/hec-ras/precipitation.md` lines 104-126
+**For quick reference**: See `.claude/rules/hec-ras/precipitation.md`
 
 **For research background**: See `.claude/outputs/atlas14-variance-research-summary.md`
 
@@ -467,4 +465,4 @@ For use case examples, troubleshooting common errors, and performance tips, read
 - `dss_read_boundary-data` -- Use when exporting design storms to DSS format
 
 **Primary sources**:
-- `ras_commander/CLAUDE.md` -- Precipitation section
+- `ras_commander/AGENTS.md` -- Precipitation section

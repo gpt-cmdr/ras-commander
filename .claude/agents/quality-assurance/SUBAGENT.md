@@ -44,27 +44,27 @@ Trigger phrases for quality assurance tasks:
 
 ## Primary Source Documents
 
-### Complete RasCheck Documentation
-**Location**: `C:\GH\ras-commander\ras_commander\check\CLAUDE.md` (262 lines)
+### RasCheck Package Contract
+**Location**: `ras_commander/check/AGENTS.md`
 
-This is the AUTHORITATIVE source for all RasCheck information:
-- All 5 check types (NT, XS, Structure, Floodway, Profiles)
-- FEMA/USACE standards and thresholds
-- Complete API documentation
-- Usage patterns and examples
+This is the canonical shared source for RasCheck package rules:
+- validation scope and package responsibilities
+- flow-type auto-detection rule
+- severity, threshold, and reporting expectations
+- relationship between `check/` validation and `fixit/` repair
 
-**When working with RasCheck**: Always read check/CLAUDE.md first.
+For exact APIs, read `ras_commander/check/RasCheck.py`, `thresholds.py`, and source docstrings.
 
-### Complete RasFixit Documentation
-**Location**: `C:\GH\ras-commander\ras_commander\fixit\AGENTS.md` (119 lines)
+### RasFixit Package Contract
+**Location**: `ras_commander/fixit/AGENTS.md`
 
-This is the AUTHORITATIVE source for all RasFixit information:
+This is the canonical shared source for RasFixit package rules:
 - Elevation envelope algorithm details
 - Module organization and patterns
 - 0.02-unit gap insertion requirement
 - Engineering review requirements
 
-**When working with RasFixit**: Always read fixit/AGENTS.md first.
+For exact APIs, read `ras_commander/fixit/RasFixit.py` and source docstrings.
 
 ### Example Notebooks
 **RasFixit Workflow**: `examples/210_fixit_blocked_obstructions.ipynb` (203 KB)
@@ -101,7 +101,7 @@ This is the AUTHORITATIVE source for all RasFixit information:
 - Detects: Extreme velocities (>15 ft/s warn, >25 ft/s error), convergence failures
 - Standards: Velocity limits, critical depth transitions, hydraulic jumps
 
-**See check/CLAUDE.md for complete documentation.**
+**See check/AGENTS.md for complete documentation.**
 
 ### RasFixit - Geometry Repair
 
@@ -199,7 +199,7 @@ thresholds.set_custom_thresholds({
 results = RasCheck.run_all_checks("C:/Projects/MyModel", thresholds=thresholds)
 ```
 
-**Complete threshold reference**: See check/CLAUDE.md
+**Complete threshold reference**: See `ras_commander/check/thresholds.py` and source docstrings.
 
 ## Report Generation
 
@@ -276,7 +276,7 @@ RasCheck implements validation from:
 - EM 1110-2-1416 (River Hydraulics)
 - EM 1110-2-1601 (Hydraulic Design)
 
-**Complete standards reference**: See check/CLAUDE.md
+**Complete standards reference**: See `ras_commander/check/AGENTS.md`, `thresholds.py`, and source docstrings.
 
 ## Performance
 
@@ -298,7 +298,7 @@ RasCheck implements validation from:
 - `report.py` - Report generation (23 KB)
 - `thresholds.py` - Configurable thresholds (18 KB)
 - `__init__.py` - Public API
-- `CLAUDE.md` - **Complete documentation (262 lines)**
+- `AGENTS.md` - Canonical local package contract
 
 ### RasFixit Modules (ras_commander/fixit/)
 - `RasFixit.py` - Main interface (fix and detect methods)
@@ -307,7 +307,7 @@ RasCheck implements validation from:
 - `visualization.py` - Before/after PNG (lazy-loaded)
 - `log_parser.py` - HEC-RAS log parsing
 - `__init__.py` - Public API
-- `AGENTS.md` - **Complete documentation (119 lines)**
+- `AGENTS.md` - Canonical local package contract
 
 ## Common Pitfalls
 
@@ -316,14 +316,14 @@ RasCheck implements validation from:
 - **Custom thresholds validation**: Use `CheckThresholds.validate_thresholds()`
 - **Visualization requires matplotlib**: `pip install matplotlib` (optional dependency)
 - **Don't disable backups**: Default `backup=True` is intentional safety feature
-- **Read primary sources**: check/CLAUDE.md and fixit/AGENTS.md have complete details
+- **Read primary sources**: AGENTS.md files define package rules; source docstrings define exact APIs.
 
 ## Workflow Decision Tree
 
 **When user requests quality assurance work:**
 
 1. **Is this a CHECK request?**
-   - Read `ras_commander/check/CLAUDE.md` for complete API
+   - Read `ras_commander/check/AGENTS.md` for package rules
    - Check examples: `examples/800_quality_assurance_rascheck.ipynb`
    - Use `RasCheck.run_all_checks()` or specific check methods
    - Generate appropriate report format
@@ -335,7 +335,7 @@ RasCheck implements validation from:
    - Remember: Professional review required, 0.02-unit gap is CRITICAL
 
 3. **Is this a CHECK→FIX→VERIFY workflow?**
-   - Read both check/CLAUDE.md and fixit/AGENTS.md
+   - Read both check/AGENTS.md and fixit/AGENTS.md
    - Follow integration pattern (see "Integration Pattern" section above)
    - Generate verification reports showing before/after results
 
@@ -361,7 +361,7 @@ RasCheck implements validation from:
 ## Summary
 
 This subagent navigates to primary sources. Read the complete documentation in:
-1. `ras_commander/check/CLAUDE.md` -- All RasCheck details
+1. `ras_commander/check/AGENTS.md` -- All RasCheck details
 2. `ras_commander/fixit/AGENTS.md` -- All RasFixit details
 3. Example notebooks 210 and 800 -- Complete workflows
 

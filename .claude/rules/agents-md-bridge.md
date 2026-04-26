@@ -1,86 +1,91 @@
 ---
-description: Standard pattern for creating thin-wrapper AGENTS.md files that bridge Claude Code .claude/ infrastructure with Codex and other agents
+description: Standard pattern for maintaining AGENTS.md as the canonical shared contract and CLAUDE.md as a Claude-only loader
 paths:
   - "AGENTS.md"
   - "**/AGENTS.md"
+  - "CLAUDE.md"
+  - "**/CLAUDE.md"
 ---
 
-# AGENTS.md Bridge Standard
+# Multi-Harness Instruction Standard
 
-## Purpose
+## Core Rule
 
-- `AGENTS.md` is the compatibility layer for non-Claude agents such as Codex, Gemini CLI, and similar tools.
-- Canonical repository guidance stays in `CLAUDE.md` and the canonical agent framework stays under `.claude/`.
-- Use `AGENTS.md` to help other agents discover the Claude-managed framework quickly, not to create a second framework.
+- `AGENTS.md` is the canonical shared instruction file for this repository.
+- `CLAUDE.md` exists because Claude Code discovers that filename natively.
+- The required duplication is loader duplication, not content duplication.
 
-## Standard Thin-Wrapper Structure
+## Required Structure
 
-1. Start with a one-line purpose statement.
-2. Point to `CLAUDE.md` as the canonical top-level instruction file.
-3. Point to `.claude/MANIFEST.md` as the component registry when it exists.
-4. List the key framework paths: `.claude/rules/`, `.claude/agents/`, `.claude/skills/`, `.claude/commands/`.
-5. Add a short project-specific quick-start: environment setup, key entry points, working directory conventions.
-6. Include a `Cross-Loading Contract` that says: read `AGENTS.md`, then `CLAUDE.md`, then `MANIFEST.md`, then only the relevant `.claude/` files.
+### `AGENTS.md`
 
-## What Not To Put In AGENTS.md
+- Put shared rules here.
+- Keep the file scoped to the directory it lives in.
+- Let parent and child `AGENTS.md` files form the instruction hierarchy.
 
-- Do not duplicate `.claude/rules/` content.
-- Do not create tool-specific parallel frameworks such as separate Codex-only instruction hierarchies unless explicitly requested.
-- Do not turn `AGENTS.md` into a long tutorial or operations manual.
-- Do not maintain competing top-level instructions that can drift away from `CLAUDE.md`.
+### `CLAUDE.md`
 
-## Subdirectory AGENTS.md Files
+- Import the sibling `AGENTS.md`.
+- Add only Claude-specific notes that Codex does not need.
+- Do not rebuild a second full instruction system in `CLAUDE.md`.
 
-- Subdirectory `AGENTS.md` files should also be thin wrappers.
-- They should point to the nearest relevant `CLAUDE.md` file for that subtree.
-- They may add only local entry points, local workflows, or local directory conventions that a sub-agent needs immediately.
+## Shared Vs Claude-Only Content
 
-## Worktree Pattern
+Put content in `AGENTS.md` when:
 
-- Git worktrees inherit the parent repository `AGENTS.md` by default.
-- A worktree may add a small local wrapper if it needs branch-specific paths, outputs, or temporary context.
-- Worktree wrappers should still point back to the parent `CLAUDE.md` and `.claude/` sources rather than copying framework content.
+- Claude and Codex both need it
+- it describes repo norms, coding patterns, or directory-local behavior
+- it should remain true even if `.claude/` is reorganized
 
-## When To Create AGENTS.md
+Put content in `.claude/` when:
 
-- Any project with active Claude Code sessions should also have `AGENTS.md`.
-- Add it when bootstrapping `.claude/` in a new repository.
-- Add it when creating a Claude-managed analysis workspace or sub-workspace that non-Claude agents will also enter.
+- it is Claude preload behavior
+- it is a Claude-native agent definition
+- it is a Claude-native command or registry
 
-## Template: Thin-Wrapper AGENTS.md for CLB Projects
+## `.claude/rules/`
+
+- `.claude/rules/` is a Claude accelerator layer, not the canonical shared source of truth.
+- If a rule matters to Codex too, move it into the `AGENTS.md` hierarchy and keep any `.claude/rules/` copy short and clearly Claude-specific.
+
+## `.claude/MANIFEST.md`
+
+- Treat `.claude/MANIFEST.md` as the Claude component registry.
+- Do not tell other harnesses that `.claude/MANIFEST.md` is the canonical repository contract.
+
+## Subdirectory Pattern
+
+- Subdirectory `AGENTS.md` files should be real local contracts, not wrapper redirects.
+- Subdirectory `CLAUDE.md` files should import the local `AGENTS.md` and stay small.
+
+## Worktrees
+
+- Worktrees should inherit the same shared instruction graph.
+- Do not create a worktree-only instruction hierarchy unless the branch truly needs temporary, local-only context.
+
+## Codex Skills
+
+- Do not create a copied `.agents/skills/` mirror just to satisfy Codex discovery.
+- Use `scripts/agent_framework/sync_codex_skill_bridge.py` for Codex skill exposure.
+- The bridge must be fail-closed. Shared `.claude/skills/` entries are exposed only when explicitly marked `shared_corpus: true`, `harness_scope: shared`, and approved by source/review metadata.
+- Codex-native adapter skills live outside `.claude/` in `.agents/native-skills/`; they require `shared_corpus: false`, `harness_scope: codex_only`, and the same approved source/review metadata before the bridge exposes them.
+- Do not bridge third-party skill or plugin sources unless they have been security-audited and re-implemented in this repository.
+
+## Template
 
 ```markdown
-## Template: Thin-Wrapper AGENTS.md for CLB Projects
+# Directory Contract
 
----
-**Purpose**: Thin compatibility wrapper - canonical guidance lives in `CLAUDE.md` and `.claude/`.
+This file is the canonical local instruction file for this directory.
 
-**Read First**
-- `CLAUDE.md` - canonical top-level instructions
-- `.claude/MANIFEST.md` - component registry (rules, agents, skills, commands)
-
-**Claude Infrastructure** (load only what's relevant to current task)
-- `.claude/rules/` - auto-loaded topic rules
-- `.claude/agents/` - specialist subagent definitions
-- `.claude/skills/` - domain workflow skills
-- `.claude/commands/` - slash command definitions
-
-**[Project-Specific Quick Start]**
-- [Environment setup]
-- [Key entry points]
-- [Working directory conventions]
-
-**Cross-Loading Contract**
-1. Read this AGENTS.md
-2. Read CLAUDE.md
-3. Consult .claude/MANIFEST.md for component discovery
-4. Load only relevant .claude/ files for the current task
----
+- Parent guidance still applies.
+- Shared directory rules live here.
 ```
 
-## Maintenance Rules
+```markdown
+@AGENTS.md
 
-- Keep new project `AGENTS.md` files short; thin wrappers should usually stay under 100 lines.
-- If a project does not yet have `.claude/MANIFEST.md`, point to the existing `.claude/` paths directly and say so explicitly.
-- When framework paths change, update `AGENTS.md` pointers instead of copying content into the wrapper.
-- The compatibility contract is stable: `AGENTS.md` redirects, `CLAUDE.md` instructs, `.claude/` provides the detailed components.
+## Claude Adapter Notes
+
+- Claude-specific preload notes only.
+```

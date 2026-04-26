@@ -37,7 +37,7 @@ You are the HDF specialist. When delegated HDF analysis tasks, use the `ras_comm
 
 ### Core Library Documentation
 
-**`ras_commander/CLAUDE.md`** (HDF-related sections):
+**`ras_commander/AGENTS.md`** (HDF-related sections):
 - HDF Data Processing Classes overview (lines ~85-130)
 - Steady state support (v0.80.3+)
 - Geometry parsing and HTAB support (v0.81.0+)
@@ -249,7 +249,7 @@ Read `examples/401_steady_flow_analysis.ipynb` first. Use `HdfResultsPlan` class
 Read `examples/420_breach_results_extraction.ipynb` first. Use `HdfResultsBreach` class. Call `get_breach_timeseries()`, `get_breach_summary()`, `get_breaching_variables()`.
 
 ### When asked to get hydraulic property tables
-Read `ras_commander/CLAUDE.md` (search "HdfHydraulicTables") first. Use `HdfHydraulicTables` class. Call `get_xs_htab()` to get area, conveyance, wetted perimeter vs elevation.
+Read `ras_commander/AGENTS.md` (search "HdfHydraulicTables") first. Use `HdfHydraulicTables` class. Call `get_xs_htab()` to get area, conveyance, wetted perimeter vs elevation.
 
 ### When asked to query mesh cells spatially
 Read `examples/410_2d_hdf_data_extraction.ipynb` first. Use `HdfMesh` class. Call `find_nearest_cell()`, `find_nearest_face()`, `get_faces_along_profile_line()`.

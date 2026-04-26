@@ -4,8 +4,10 @@ model: opus
 tools: [Read, Grep, Glob, Bash, Write]
 working_directory: .
 description: |
-  Large context code analysis oracle using Google Gemini CLI. Optimized for scanning
-  large codebases, multi-file pattern analysis, and rapid context review.
+  Legacy Claude-only code analysis oracle using Google Gemini CLI. This is not
+  part of the repository's standard production harness policy, which is Claude
+  Code plus Codex. Keep only for historical Claude-only workflows where the user
+  explicitly requests Gemini.
   Supports TWO invocation patterns:
   1. Markdown file handoff (recommended) - Write REVIEW.md, execute, read FINDINGS.md
   2. Direct CLI (quick tasks) - gemini -y "prompt"
@@ -32,6 +34,8 @@ description: |
 ---
 
 # Code Oracle Gemini Subagent
+
+> Legacy Claude-only provider orchestration. Do not use as standard repo QAQC guidance; use Codex review paths unless the user explicitly requests Gemini.
 
 ## Purpose
 

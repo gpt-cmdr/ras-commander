@@ -812,7 +812,7 @@ else:
 - `.claude/rules/python/static-classes.md` -- RasCmdr static pattern
 
 **Primary sources**:
-- `ras_commander/CLAUDE.md` -- Execution modes overview
+- `ras_commander/AGENTS.md` -- Execution modes overview
 - `ras_commander/RasCmdr.py` -- Implementation
 
 ---

@@ -1,425 +1,102 @@
 ---
-paths: .claude/**
+description: AGENTS-first hierarchy and lightweight navigator pattern for repository agent knowledge
+paths:
+  - ".claude/agents/**"
+  - ".claude/skills/**"
+  - ".claude/rules/**"
+  - "AGENTS.md"
+  - "**/AGENTS.md"
+  - "CLAUDE.md"
+  - "**/CLAUDE.md"
 ---
 
-# Hierarchical Knowledge - Best Practices
+# Hierarchical Knowledge Best Practices
 
-**Lesson Learned**: 2025-12-11 Phase 4 Refactoring
+## Current Architecture
 
-## The Anti-Pattern (Do NOT Do This)
+This repository uses an AGENTS-first multi-harness instruction graph.
 
-### ❌ Phase 4 Initial Implementation (Bloated)
+- `AGENTS.md` files are the canonical shared contracts.
+- `CLAUDE.md` files are Claude loaders and Claude-only notes.
+- `.claude/rules/` files are Claude preload accelerators.
+- `.claude/agents/` files are Claude-native delegation roles.
+- `.claude/skills/` files are workflow navigators.
 
-Avoid creating bloated duplicated content like the ~30,000 lines produced initially:
+Use `docs/development/multi-harness-agent-contract.md` as the durable architectural record when changing this system.
 
-```
-.claude/agents/{name}/
-├── SUBAGENT.md (300-800 lines with duplicated API)
-└── reference/
-    ├── api-patterns.md (400-600 lines - duplicates docstrings)
-    ├── workflows.md (500-700 lines - duplicates CLAUDE.md)
-    └── advanced.md (300-500 lines - duplicates AGENTS.md)
+## Single Source Of Truth
 
-.claude/skills/{name}/
-├── SKILL.md (500-800 lines with duplicated workflows)
-├── reference/
-│   ├── api.md (500-700 lines - duplicates CLAUDE.md)
-│   └── advanced.md (400-600 lines - duplicates AGENTS.md)
-└── examples/
-    ├── basic.py (200-300 lines - duplicates notebooks)
-    └── advanced.py (300-400 lines - duplicates notebooks)
-```
+Keep each concept in exactly one durable place:
 
-**Problems**:
-- Maintenance burden (update 5+ files for single change)
-- Version drift (duplicates get out of sync)
-- No single source of truth
-- Hard to find authoritative documentation
-- Wastes context loading time
+| Concept | Durable Home |
+|---------|--------------|
+| Shared repository policy | nearest applicable `AGENTS.md` |
+| Shared package-local coding rules | package or subpackage `AGENTS.md` |
+| Claude-only preload behavior | `.claude/rules/` |
+| Claude-only delegation behavior | `.claude/agents/` |
+| Workflow trigger and navigation | `.claude/skills/*/SKILL.md` |
+| Runnable examples | `examples/*.ipynb` or focused scripts |
+| API signatures and exact parameters | source code and docstrings |
 
-## The Correct Pattern (Lightweight Navigators)
+Do not make `.claude/rules/`, `.claude/agents/`, or `.claude/skills/` the only home of a rule that Codex must also follow.
 
-### ✅ Phase 4 Refactored (Efficient)
+## Lightweight Navigator Pattern
 
-Follow the lightweight navigator pattern (~4,937 lines of primary source navigators):
+Claude-native agents and skills should be lightweight navigators.
 
-```
-.claude/agents/{name}/
-└── SUBAGENT.md (200-400 lines - navigator ONLY)
+They should:
 
-.claude/skills/{name}/
-└── SKILL.md (200-400 lines - navigator ONLY)
-```
+- state when to use the workflow or agent
+- point to the relevant `AGENTS.md`, source files, notebooks, and narrowly relevant rules
+- keep critical warnings local when missing them would be dangerous
+- avoid copied workflow bodies that will diverge
 
-**Benefits**:
-- Single source of truth
-- No version drift
-- Easy maintenance (update once)
-- Faster loading (80% smaller)
-- Clear authoritative sources
+They should not:
 
-## Core Principles
+- call `CLAUDE.md` the shared source of truth
+- cite brittle line-number ranges in `AGENTS.md` files
+- maintain separate API references
+- copy long workflows from notebooks or source modules
+- create hidden reference folders for content that belongs in shared contracts or source docs
 
-### 1. Primary Source Navigation
+## Updating Shared Guidance
 
-**Treat subagents and skills as NAVIGATORS, not documentation repositories.**
+When shared behavior changes:
 
-**DO**:
-- ✅ Point to existing primary sources
-- ✅ Provide minimal orientation (200-400 lines total)
-- ✅ Include quick reference patterns (copy-paste ready)
-- ✅ Preserve critical warnings that MUST be visible
-- ✅ Keep YAML trigger-rich for discovery
+1. Update the nearest relevant `AGENTS.md`.
+2. Keep the matching `CLAUDE.md` as a loader.
+3. Update Claude rules, agents, or skills only when Claude needs a preload, role, trigger, or workflow navigator.
+4. Update `docs/development/multi-harness-agent-contract.md` when the architecture itself changes.
 
-**DON'T**:
-- ❌ Duplicate API documentation from code docstrings
-- ❌ Duplicate workflows from CLAUDE.md files
-- ❌ Duplicate examples from notebooks
-- ❌ Create reference/ folders with authoritative content
-- ❌ Exceed 400 lines without strong justification
+When a workflow changes:
 
-### 2. Single Source of Truth
+1. Update source code and docstrings.
+2. Update runnable examples if behavior changed.
+3. Update the relevant `AGENTS.md` if the workflow changes shared agent behavior.
+4. Update skills and subagents only with routing text or critical warnings.
 
-**Maintain exactly ONE authoritative location for every piece of information:**
+## Codex Skill Exposure
 
-| Content Type | Authoritative Location | Navigator Role |
-|--------------|------------------------|----------------|
-| Workflows | Subpackage CLAUDE.md | Point to CLAUDE.md sections |
-| Implementation details | Subpackage AGENTS.md | Point to AGENTS.md sections |
-| API reference | Code docstrings | Point to source files |
-| Demonstrations | Example notebooks | Point to specific notebooks |
-| Coding patterns | .claude/rules/ | Point to relevant rules |
+Do not copy `.claude/skills/` into `.agents/skills/`.
 
-### 3. Progressive Disclosure via References
-
-**Build the hierarchy with POINTERS, not DUPLICATION:**
-
-```
-Root CLAUDE.md (strategic)
-    ↓ references
-Subpackage CLAUDE.md (tactical workflows) ← AUTHORITATIVE
-    ↓ references
-Subpackage AGENTS.md (technical details) ← AUTHORITATIVE
-    ↓ referenced by
-Subagent/Skill (lightweight navigator) ← POINTS TO ABOVE
-```
-
-### 4. Critical Warnings Exception
-
-**Always include critical configuration warnings directly in navigators** (do not bury them in primary sources):
-
-✅ **Include in navigators**:
-- `session_id=2` requirement (remote execution) - critical configuration
-- `0.02-unit gap` constant (geometry repair) - HEC-RAS requirement
-- ReadTheDocs symlink stripping (documentation) - deployment blocker
-- Fixed-width parsing patterns (geometry) - data corruption risk
-
-**Rationale**: These are too critical to risk agents or users missing them by not reading primary sources.
-
-### 5. Legitimate reference/ Folder Exceptions
-
-**Permit only TWO agents to have reference/ folders with substantial content:**
-
-✅ **Exception 1: hierarchical-knowledge-agent-skill-memory-curator**
-- **File**: `.claude/agents/hierarchical-knowledge-agent-skill-memory-curator.md` (468 lines + 104KB reference/)
-- **Rationale**: Contains meta-knowledge about the hierarchical system itself
-- **Reference content**: Implementation phases, governance rules, research synthesis, memory system architecture
-- **Why justified**: Self-referential system - must contain organizational knowledge that doesn't belong elsewhere
-- **Status**: Documented exception, no action needed
-
-✅ **Exception 2: claude-code-guide**
-- **File**: `.claude/agents/claude-code-guide.md` (331 lines + 46KB reference/)
-- **Rationale**: Caches official Anthropic documentation to prevent repeated web fetches
-- **Reference content**: Official docs from claude.com and code.claude.com (skills creation, memory system)
-- **Why justified**: External authoritative source that should be cached locally for offline access
-- **Status**: Documented exception, no action needed
-
-**All other agents and skills MUST follow the lightweight navigator pattern (200-400 lines, no reference/ folders).**
-
-## Template Structure
-
-### Subagent/Skill YAML Frontmatter
+Use `scripts/agent_framework/sync_codex_skill_bridge.py` to generate the local bridge. A skill is eligible only when its frontmatter explicitly declares:
 
 ```yaml
----
-name: {subagent-name or skill-name}
-model: sonnet  # or haiku for simpler tasks
-tools: [Read, Grep, Glob, Edit, Bash]
-working_directory: {path}  # agents only
-description: |
-  {Trigger-rich description with action verbs, class names, common phrases}
-
-  Primary sources:
-  - ras_commander/{subpackage}/CLAUDE.md - Complete workflows
-  - ras_commander/{subpackage}/AGENTS.md - Implementation details
-  - examples/{notebook}.ipynb - Working demonstrations
----
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 ```
 
-### Content Structure (200-400 lines TOTAL)
+Third-party skills or plugins must be security-audited and re-implemented in this repository before becoming part of the standard workflow.
 
-```markdown
-# {Name}
+## Review Checklist
 
-## Primary Sources (Read These First)
+Before accepting agent-infrastructure changes, verify:
 
-**Complete Workflows**:
-- `ras_commander/{subpackage}/CLAUDE.md` (XXX lines)
-  - Lines XX-XX: {Workflow description}
-  - Lines XX-XX: {Another workflow}
-
-**Implementation Details**:
-- `ras_commander/{subpackage}/AGENTS.md` (XXX lines)
-  - Lines XX-XX: {Technical pattern}
-  - Lines XX-XX: {Algorithm details}
-
-**Working Examples**:
-- `examples/{notebook}.ipynb` - {Description}
-
-**API Reference**:
-- Grep `ras_commander/{subpackage}/*.py` for method signatures
-- Read docstrings for parameter details
-
-## Quick Reference
-
-[Minimal code patterns for common tasks - 50-100 lines]
-
-## Common Workflows
-
-[Brief workflow list with pointers to primary sources - 30-50 lines]
-
-## Critical Warnings
-
-[CRITICAL configuration/patterns that must be visible - 20-40 lines]
-
-## Navigation Map
-
-For complete details, always read the primary sources listed above.
-```
-
-## Real-World Examples
-
-### Before Refactoring: usgs-integrator (Bloated -- Do NOT Replicate)
-
-```
-.claude/agents/usgs-integrator/
-├── SUBAGENT.md (330 lines)
-└── reference/
-    ├── end-to-end.md (423 lines) - DUPLICATES usgs/CLAUDE.md
-    ├── real-time.md (458 lines) - DUPLICATES usgs/CLAUDE.md
-    └── validation.md (439 lines) - DUPLICATES usgs/CLAUDE.md
-
-Total: 1,650 lines (84.5% duplication)
-```
-
-### After Refactoring: usgs-integrator (✅ Lightweight)
-
-```
-.claude/agents/usgs-integrator/
-└── SUBAGENT.md (255 lines - navigator to usgs/CLAUDE.md)
-
-Total: 255 lines (84.5% reduction, 0% duplication)
-```
-
-**SUBAGENT.md content**:
-- YAML frontmatter (trigger-rich description)
-- Primary sources section (points to usgs/CLAUDE.md lines XX-XX)
-- Quick reference (14 modules, one-line descriptions)
-- Common workflows (brief list with "See usgs/CLAUDE.md lines XX-XX")
-- Navigation map (where to find complete details)
-
-## Refactoring Checklist
-
-Follow this checklist when creating or updating agents/skills:
-
-### Planning
-- [ ] Identify all primary sources (CLAUDE.md, AGENTS.md, notebooks, code)
-- [ ] List topics covered by each primary source
-- [ ] Identify critical warnings that MUST be in navigator
-
-### Writing Navigator
-- [ ] YAML frontmatter with trigger-rich description
-- [ ] Primary sources section with specific file/line references
-- [ ] Quick reference patterns (copy-paste ready, no duplication)
-- [ ] Critical warnings section (if applicable)
-- [ ] Navigation map ("See X for complete Y")
-
-### Cleanup
-- [ ] Delete reference/ folder (if exists)
-- [ ] Delete examples/ folder (if duplicates notebooks)
-- [ ] Verify all primary source paths are correct
-- [ ] Check line count (200-400 lines target)
-- [ ] Test that navigator provides orientation without duplication
-
-### Verification
-- [ ] All "See X" links point to existing files
-- [ ] Primary sources contain complete information
-- [ ] No duplicated API docs, workflows, or examples
-- [ ] Critical warnings are prominent
-- [ ] File size within target range
-
-## Metrics from Phase 4 Refactoring
-
-### Subagents (7 total)
-- **Before**: 12,891 lines (avg 1,842 lines/file)
-- **After**: 2,141 lines (avg 306 lines/file)
-- **Reduction**: 83.4% (10,750 lines removed)
-
-### Skills (8 total)
-- **Before**: 17,310 lines (avg 2,164 lines/file)
-- **After**: 2,796 lines (avg 350 lines/file)
-- **Reduction**: 83.8% (14,514 lines removed)
-
-### Overall
-- **Files deleted**: 60 (all reference/ and examples/ folders)
-- **Lines removed**: 25,264 lines (83.6% reduction)
-- **Duplication eliminated**: 100%
-- **Maintenance locations**: Reduced from 75 files to 15 files
-
-## Common Mistakes to Avoid
-
-### Mistake 1: "Complete Reference" in Subagents
-
-❌ **Wrong**: Do not create comprehensive API documentation in subagent reference/ folders
-
-```
-.claude/agents/hdf-analyst/reference/api-patterns.md (389 lines)
-- Complete API for 19 HDF classes
-- Method signatures, parameters, return types
-- Examples for each method
-```
-
-✅ **Right**: Point to authoritative sources
-
-```
-.claude/agents/hdf-analyst/SUBAGENT.md (278 lines)
-Primary Sources:
-- ras_commander/hdf/AGENTS.md (215 lines) - Complete class reference
-- Grep "def " ras_commander/hdf/Hdf*.py - Method signatures
-- Read docstrings for parameter details
-```
-
-### Mistake 2: "Complete Workflow" in Skills
-
-❌ **Wrong**: Do not duplicate step-by-step workflows from CLAUDE.md
-
-```
-.claude/skills/usgs_integrate_gauges/reference/workflow.md (631 lines)
-1. Spatial Discovery
-   - Use UsgsGaugeSpatial.find_gauges_in_project()
-   - Parameters: project_folder, buffer_miles
-   - Returns: GeoDataFrame with gauge locations
-   [... 600+ more lines duplicating usgs/CLAUDE.md]
-```
-
-✅ **Right**: Brief overview with pointer to complete workflow
-
-```
-.claude/skills/usgs_integrate_gauges/SKILL.md (282 lines)
-Common Workflows:
-1. Spatial Discovery → See usgs/CLAUDE.md lines 45-78
-2. Data Retrieval → See usgs/CLAUDE.md lines 80-120
-[... brief list, full details in CLAUDE.md]
-```
-
-### Mistake 3: "Duplicate Examples" in Skills
-
-❌ **Wrong**: Do not create example scripts that duplicate notebook content
-
-```
-.claude/skills/dss_read_boundary-data/examples/read-catalog.py (120 lines)
-# Complete workflow duplicating examples/310_dss_boundary_extraction.ipynb
-from ras_commander import RasDss, RasExamples
-path = RasExamples.extract_project("BaldEagleCrkMulti2D")
-[... 100+ lines duplicating notebook]
-```
-
-✅ **Right**: Point to existing notebook
-
-```
-.claude/skills/dss_read_boundary-data/SKILL.md (322 lines)
-Working Examples:
-- examples/310_dss_boundary_extraction.ipynb - Complete workflow with:
-  - Project extraction
-  - Catalog reading
-  - Boundary extraction
-  - Plotting and analysis
-```
-
-## Maintenance Guidelines
-
-### When Primary Sources Change
-
-**Scenario**: Updating a workflow in `ras_commander/usgs/CLAUDE.md`
-
-✅ **With lightweight navigators** -- update ONE file:
-1. Update `ras_commander/usgs/CLAUDE.md` (1 file)
-2. Navigator still points to CLAUDE.md
-3. No additional updates needed
-
-❌ **With duplicated content** (old approach) -- update FIVE files, risk drift:
-1. Update `ras_commander/usgs/CLAUDE.md`
-2. Update `.claude/agents/usgs-integrator/SUBAGENT.md`
-3. Update `.claude/agents/usgs-integrator/reference/end-to-end.md`
-4. Update `.claude/skills/usgs_integrate_gauges/SKILL.md`
-5. Update `.claude/skills/usgs_integrate_gauges/reference/workflow.md`
-6. Risk: Miss one location and version drift occurs
-
-### When Adding New Functionality
-
-**New feature**: Add gauge catalog generation to `ras_commander/usgs/`
-
-✅ **Update locations**:
-1. Add code to `ras_commander/usgs/catalog.py` with docstrings
-2. Add workflow section to `ras_commander/usgs/CLAUDE.md`
-3. Add example notebook `examples/420_usgs_gauge_catalog.ipynb`
-4. Update navigator: Add one line to usgs-integrator SUBAGENT.md pointing to new CLAUDE.md section
-
-**Total**: 4 updates (all in primary sources + 1 line in navigator)
-
-## Success Criteria
-
-Verify the hierarchical knowledge structure meets all of these conditions:
-
-- ✅ Each concept documented in exactly ONE authoritative location
-- ✅ Subagents/skills are 200-400 lines (navigators, not documentation)
-- ✅ No unauthorized reference/ folders (only 2 documented exceptions allowed - see section 5)
-- ✅ No examples/ folders duplicating notebooks
-- ✅ All "See X" links point to existing files
-- ✅ Updates happen in ONE location (primary source)
-- ✅ Critical warnings prominent in navigators
-- ✅ File count minimal (17 navigators including 2 exceptions, not 75 duplicates)
-- ✅ Exceptions documented with clear rationale (section 5)
-
-## Agent Reference Data Locations
-
-### ras_agents/ vs feature_dev_notes/
-
-**Distinguish between these two locations**:
-
-**ras_agents/** - Use for production-ready, tracked agent reference data:
-- ✅ Tracked in git for version control
-- ✅ Organized following hierarchical knowledge principles
-- ✅ Production-ready for automated agent operation
-- ✅ Agents can safely reference this location
-
-**feature_dev_notes/** - Use for experimental, gitignored development only:
-- ❌ Gitignored (not tracked)
-- ❌ Unorganized experimentation
-- ❌ Agents must NOT reference this location
-- ✅ Used for testing before formalizing in ras_agents/
-
-**Migration Path**: Migrate feature_dev_notes/ agents to ras_agents/ when ready, following hierarchical knowledge principles.
-
-**Example**: Decompilation Agent
-- **Development**: `feature_dev_notes/Decompilation Agent/` (gitignored, local only)
-- **Production**: `ras_agents/decompilation-agent/` (tracked, agents can reference)
-
-## Cross-References
-
-**Rules** (related):
-- `.claude/rules/documentation/notebook-to-agent-conversion.md` -- Converting notebooks to agents/skills
-- `.claude/rules/documentation/notebook-standards.md` -- Notebook conventions
-
-**Agents** (enforce this):
-- `hierarchical-knowledge-agent-skill-memory-curator` -- Manages the hierarchical knowledge system
+- no active `AGENTS.md` file describes itself as a compatibility wrapper
+- no shared rule exists only in `.claude/rules/`
+- `CLAUDE.md` files remain loader-sized
+- skills exposed through `.agents/skills/` are explicitly allowlisted
+- public docs do not recommend generic harness/plugin lists
+- generated files are not required for a clean docs build unless generation is part of the build process

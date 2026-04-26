@@ -1,5 +1,9 @@
 ---
 name: precip_analyze_aorc
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Retrieves and processes AORC precipitation data for HEC-RAS/HMS models.
   Handles spatial averaging over watersheds, temporal aggregation, DSS export,
@@ -20,19 +24,16 @@ description: |
 
 ## Primary Sources (Read These First!)
 
-### 1. Complete API Reference and Workflows
-**`ras_commander/precip/CLAUDE.md`** (329 lines - AUTHORITATIVE SOURCE)
+### 1. Canonical Precipitation Contract
+**`ras_commander/precip/AGENTS.md`** - canonical local contract
 
 Contains:
-- Complete module organization (PrecipAorc, StormGenerator)
-- Full API reference with all methods
-- Step-by-step AORC workflow (retrieval, spatial averaging, temporal aggregation, export)
-- Step-by-step Atlas 14 workflow (query, generate, apply ARF, export)
-- Multi-event workflows
-- Performance characteristics
-- Dependencies and installation
+- Method selection for AORC, Atlas 14, HRRR, and gridded-met workflows
+- Critical precipitation rules
+- Validation expectations
+- Reference notebooks for working examples
 
-**THIS IS THE PRIMARY DOCUMENTATION** - use it for all detailed questions.
+Use source docstrings for method signatures and parameter details.
 
 ### 2. AORC Demonstration Notebook
 **`examples/900_aorc_precipitation.ipynb`**
@@ -150,7 +151,7 @@ StormGenerator.export_to_dss(
 4. Run HEC-RAS/HMS model
 5. Compare modeled vs observed flow/stage
 
-**Details**: See `ras_commander/precip/CLAUDE.md` "AORC Workflow" section
+**Details**: See `ras_commander/precip/AGENTS.md` and `examples/900_aorc_precipitation.ipynb`
 
 ### Design Storm Analysis
 1. Query Atlas 14 for design AEP
@@ -159,7 +160,7 @@ StormGenerator.export_to_dss(
 4. Export to HEC-RAS/HMS
 5. Run model for design event
 
-**Details**: See `ras_commander/precip/CLAUDE.md` "Atlas 14 Workflow" section
+**Details**: See `ras_commander/precip/AGENTS.md` and the Atlas 14 reference notebooks
 
 ### Multi-Event Suite
 1. Define AEP range (50% to 0.2%)
@@ -169,7 +170,7 @@ StormGenerator.export_to_dss(
 
 **Details**: See `examples/104_Atlas14_AEP_Multi_Project.ipynb`
 
-## API Quick Reference (Read CLAUDE.md for Details)
+## API Quick Reference
 
 ### PrecipAorc Methods
 **Data Retrieval**:
@@ -208,7 +209,7 @@ StormGenerator.export_to_dss(
 - `export_to_hms_gage()` - HEC-HMS precipitation gage file
 - `to_csv()` - Tabular hyetograph (CSV)
 
-**Full method signatures and parameters**: See `ras_commander/precip/CLAUDE.md`
+**Full method signatures and parameters**: Read source docstrings in `ras_commander/precip/`.
 
 ## Example Patterns
 
@@ -297,7 +298,7 @@ pip install xarray rasterio geopandas
 **When you need...**
 
 ### API Documentation
-→ Read `ras_commander/precip/CLAUDE.md` (329 lines, complete API reference)
+→ Read `ras_commander/precip/AGENTS.md` for method selection, then source docstrings for signatures
 
 ### AORC Workflow Example
 → Open `examples/900_aorc_precipitation.ipynb` (live working code)
@@ -309,17 +310,17 @@ pip install xarray rasterio geopandas
 → Open `examples/722_atlas14_multi_project.ipynb`
 
 ### Method Signatures and Parameters
-→ Read `ras_commander/precip/CLAUDE.md` "Module Organization" section
+→ Read source docstrings in `ras_commander/precip/`
 
 ### Use Cases and Performance
-→ Read `ras_commander/precip/CLAUDE.md` "Common Use Cases" and "Performance" sections
+→ Read the relevant precipitation source module and reference notebook
 
 ### Data Source Details
-→ Read `ras_commander/precip/CLAUDE.md` "Data Sources" section
+→ Read `ras_commander/precip/AGENTS.md` and the source module for the data provider
 
 ## Key Design Principles
 
-1. **Primary Sources First**: Always refer to `ras_commander/precip/CLAUDE.md` for authoritative API details
+1. **Primary Sources First**: Always refer to `ras_commander/precip/AGENTS.md` for package rules and source docstrings for API details
 2. **Example Notebooks as References**: Use notebooks to understand workflows in practice
 3. **No Duplication**: This skill does NOT duplicate workflows - it NAVIGATES to them
 4. **Multi-Level Verifiability**: All outputs reviewable in HEC-RAS/HMS GUI
@@ -337,7 +338,7 @@ pip install xarray rasterio geopandas
 - Rate Limiting: NOAA PFDS has request limits (respect usage guidelines)
 - Caching: Automatic caching of API responses
 
-**Details**: See `ras_commander/precip/CLAUDE.md` "Performance" section
+**Details**: See the relevant source module and reference notebook.
 
 ## Cross-References
 
@@ -354,11 +355,11 @@ pip install xarray rasterio geopandas
 - `hecras_compute_plans` -- Use downstream after generating rain-on-grid boundaries
 
 **Primary sources**:
-- `ras_commander/CLAUDE.md` -- Precipitation section
+- `ras_commander/AGENTS.md` -- Precipitation section
 
 ## Usage Pattern
 
-1. **Understand the workflow**: Read `ras_commander/precip/CLAUDE.md` for complete details
+1. **Understand the package rules**: Read `ras_commander/precip/AGENTS.md`
 2. **See it in action**: Open relevant example notebook
 3. **Implement**: Copy patterns from notebook, adapt to your project
 4. **Verify**: Check outputs in HEC-RAS/HMS GUI

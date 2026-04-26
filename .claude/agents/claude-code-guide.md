@@ -195,9 +195,10 @@ paths: src/api/**/*.ts
    ```
 
 2. **Recommend organization**:
-   - Root CLAUDE.md: Strategic vision, delegation patterns (<200 lines)
-   - .claude/rules/: Topic-specific guidance (50-200 lines each)
-   - Subpackage CLAUDE.md: Tactical patterns for subfolders (<150 lines)
+   - Official Claude guidance: `CLAUDE.md` files are project memory.
+   - ras-commander standard: shared rules belong in `AGENTS.md`; `CLAUDE.md` imports the matching `AGENTS.md`.
+   - `.claude/rules/`: Claude-specific preload guidance.
+   - Subpackage `CLAUDE.md`: loader plus Claude-only notes.
 
 3. **Implement path-specific rules** (if needed):
    ```markdown
@@ -239,7 +240,7 @@ paths: src/api/**/*.ts
 
 ## Decision Framework
 
-### When to Create a Skill vs Add to CLAUDE.md?
+### When to Create a Skill vs Add to AGENTS.md?
 
 **Create a Skill when**:
 - Multi-step workflow that agents discover
@@ -247,13 +248,13 @@ paths: src/api/**/*.ts
 - Needs examples and execution guidance
 - Should activate automatically based on description
 
-**Add to CLAUDE.md when**:
+**Add to AGENTS.md when**:
 - General coding conventions
 - Strategic project guidance
 - Always-applicable rules
 - Background context (not task-specific)
 
-### When to Use .claude/rules/ vs Root CLAUDE.md?
+### When to Use .claude/rules/ vs AGENTS.md?
 
 **Use .claude/rules/ when**:
 - Topic-specific guidance (testing, security, code style)
@@ -261,10 +262,10 @@ paths: src/api/**/*.ts
 - Content >50 lines for a single topic
 - Organizing large projects with many rules
 
-**Keep in Root CLAUDE.md when**:
-- Strategic vision and delegation patterns
-- Cross-cutting concerns
-- Total root file <200 lines
+**Keep in AGENTS.md when**:
+- Claude and Codex both need the rule
+- The rule is cross-cutting or directory-local shared behavior
+- The rule must remain true if `.claude/` is reorganized
 
 ### When to Fetch Fresh Docs vs Use Cached?
 

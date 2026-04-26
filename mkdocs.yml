@@ -7,6 +7,10 @@ repo_name: gpt-cmdr/ras-commander
 repo_url: https://github.com/gpt-cmdr/ras-commander
 
 docs_dir: docs
+exclude_docs: |
+  cognitive-infrastructure/agents.md
+  cognitive-infrastructure/skills.md
+  cognitive-infrastructure/commands.md
 
 theme:
   name: material
@@ -246,12 +250,10 @@ nav:
     - Quick Reference: reference/quick-reference.md
   - Cognitive Infrastructure:
     - Overview: cognitive-infrastructure/index.md
-    - Agents: cognitive-infrastructure/agents.md
-    - Skills: cognitive-infrastructure/skills.md
-    - Commands: cognitive-infrastructure/commands.md
   - LLM Forward Development:
     - Overview: development/llm-development.md
     - Agent Infrastructure: development/agent-infrastructure.md
+    - Multi-Harness Agent Contract: development/multi-harness-agent-contract.md
     - Contributing: development/contributing.md
     - Architecture: development/architecture.md
     - Release Notes: development/release-notes.md

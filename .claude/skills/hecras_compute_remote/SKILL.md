@@ -1,5 +1,9 @@
 ---
 name: hecras_compute_remote
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Distributed HEC-RAS execution across remote workers (PsExec, Docker, SSH, cloud).
   Handles worker initialization, queue scheduling, and result aggregation. Use when
@@ -88,7 +92,7 @@ query session /server:192.168.1.100
 - **Session 2**: Typical interactive user (MOST COMMON)
 - Session 3+: Additional RDP sessions
 
-Read `ras_commander/remote/AGENTS.md` lines 97-101 for critical implementation notes.
+Read `ras_commander/remote/AGENTS.md` for critical implementation notes.
 
 ## Worker Types
 
@@ -366,7 +370,7 @@ Workers with optional dependencies use `check_*_dependencies()` for lazy loading
 - SSH: `pip install paramiko`
 - AWS: `pip install boto3`
 
-Read `ras_commander/remote/AGENTS.md` lines 58-68 for the lazy loading pattern.
+Read `ras_commander/remote/AGENTS.md` for the lazy loading pattern.
 
 ## Cross-References
 

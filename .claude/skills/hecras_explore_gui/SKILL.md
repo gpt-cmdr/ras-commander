@@ -1,5 +1,9 @@
 ---
 name: hecras_explore_gui
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Explores the HEC-RAS GUI to document menus, dialogs, controls, and workflows
   using win32com automation with screenshot capture. Use when needing to discover

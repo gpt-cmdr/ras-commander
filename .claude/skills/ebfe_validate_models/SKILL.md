@@ -1,5 +1,9 @@
 ---
 name: ebfe_validate_models
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Validate organized eBFE/BLE model using ras-commander dataframes.
 

@@ -1,5 +1,9 @@
 ---
 name: hecras_extract_results
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Extract HEC-RAS hydraulic results from HDF files including water surface elevations (WSE),
   depths, velocities, and flows for both steady and unsteady simulations. Handles cross section
@@ -18,8 +22,8 @@ description: |
 When the user asks to extract HEC-RAS results, use the patterns below. Read the primary sources for complete details -- do not duplicate their content here.
 
 **Primary Sources**:
-- **HDF Class Reference**: `ras_commander/hdf/AGENTS.md` (215 lines) - Complete class hierarchy, lazy loading patterns, decorators
-- **Library Context**: `ras_commander/CLAUDE.md` - HDF architecture overview, subpackage organization
+- **HDF Class Reference**: `ras_commander/hdf/AGENTS.md` - Canonical HDF package contract, module families, lazy loading rules, decorators
+- **Library Context**: `ras_commander/AGENTS.md` - HDF architecture overview, subpackage organization
 - **Example Notebooks**:
   - `examples/400_1d_hdf_data_extraction.ipynb` - 1D cross section results (unsteady)
   - `examples/410_2d_hdf_data_extraction.ipynb` - 2D mesh results (comprehensive)
@@ -68,10 +72,9 @@ Read this first for:
 - Common HDF paths in files
 
 **Key Sections**:
-- Lines 5-45: Module structure and organization
-- Lines 47-114: Class hierarchy and dependencies
-- Lines 116-138: Import patterns
-- Lines 140-215: Adding new methods (decorator patterns, error handling)
+- Module families and common entry points
+- Implementation rules for decorators, lazy loading, and HDF input handling
+- Input and output rules for flexible plan/path/HDF handles
 
 ---
 
@@ -128,7 +131,7 @@ Read this notebook when you need:
 | **HdfStruc** | Structure geometry | SA/2D connections, breach capability info |
 | **HdfHydraulicTables** | HTAB extraction | Rating curves, property tables |
 
-**Read**: `ras_commander/hdf/AGENTS.md` lines 5-45 for complete class list and organization.
+**Read**: `ras_commander/hdf/AGENTS.md` for the class families and package organization.
 
 ---
 

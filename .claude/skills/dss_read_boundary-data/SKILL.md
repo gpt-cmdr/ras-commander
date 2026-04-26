@@ -1,5 +1,9 @@
 ---
 name: dss_read_boundary-data
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Reads HEC-DSS files (V6 and V7) for boundary condition extraction using
   RasDss class. Handles JVM configuration, HEC Monolith download, catalog

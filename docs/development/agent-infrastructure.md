@@ -1,12 +1,18 @@
 # Agent Infrastructure & Hierarchical Knowledge
 
+> Migration note: the repository has moved from a Claude-first instruction model to a shared `AGENTS.md` contract. [Multi-Harness Agent Contract](multi-harness-agent-contract.md) is the authoritative design record.
+
 ras-commander implements a sophisticated **hierarchical knowledge system** that enables AI agents to efficiently work with the codebase. This infrastructure includes specialized subagents, reusable skills, and slash commands for common workflows.
+
+## Migration Note
+
+The accepted architecture for first-class Claude Code plus Codex support is documented in [Multi-Harness Agent Contract](multi-harness-agent-contract.md). Treat that record as authoritative for source-of-truth boundaries, shared skill placement, and the role of `AGENTS.md` versus `CLAUDE.md`.
 
 ## Overview
 
 The agent infrastructure is designed around three core concepts:
 
-1. **Hierarchical Knowledge Organization** - Progressive disclosure of context through CLAUDE.md files
+1. **Hierarchical Knowledge Organization** - Progressive disclosure through shared `AGENTS.md` contracts and Claude loader files
 2. **Specialist Subagents** - Domain-specific AI assistants for HDF analysis, geometry parsing, etc.
 3. **Reusable Skills** - Common workflow patterns that can be invoked by name
 
@@ -21,28 +27,26 @@ This architecture enables:
 
 ### Progressive Disclosure Architecture
 
-The repository uses a **hierarchical CLAUDE.md structure** for progressive disclosure of context:
+The repository uses a shared **hierarchical AGENTS.md structure** with Claude-native loaders:
 
 ```
-Root CLAUDE.md (Strategic)
-├─ High-level philosophy and patterns
-├─ Quick reference for common operations
-└─ Pointers to detailed rules
+Root AGENTS.md (Shared Contract)
+├─ Harness loading policy
+├─ Repository-wide working rules
+└─ Update discipline
 
 .claude/rules/ (Tactical)
-├─ python/ - Language patterns (static classes, decorators, paths)
-├─ hec-ras/ - Domain knowledge (execution, geometry, HDF)
-├─ testing/ - Testing approaches (TDD, environments)
-└─ documentation/ - Doc standards (notebooks, mkdocs)
+├─ Claude-specific preload helpers
+└─ Short accelerators that point back to shared contracts
 
-Subpackage CLAUDE.md (Implementation)
-├─ ras_commander/CLAUDE.md - Library API patterns
-├─ ras_commander/hdf/CLAUDE.md - HDF workflows
-├─ ras_commander/remote/CLAUDE.md - Remote execution
-└─ ras_commander/usgs/CLAUDE.md - USGS integration
+Subpackage AGENTS.md (Local Shared Contracts)
+├─ ras_commander/AGENTS.md - Library package rules
+├─ ras_commander/hdf/AGENTS.md - HDF package rules
+├─ ras_commander/remote/AGENTS.md - Remote execution rules
+└─ ras_commander/usgs/AGENTS.md - USGS integration rules
 
-AGENTS.md (Technical Details)
-└─ Implementation-specific patterns and edge cases
+CLAUDE.md files
+└─ Thin Claude loaders that import sibling AGENTS.md files
 ```
 
 ### Context Inheritance
@@ -52,15 +56,15 @@ When a subagent works in a specific directory, it automatically inherits the ful
 **Example: Geometry Parser in `ras_commander/geom/`**
 
 ```
-Automatic Context Loading:
-1. /CLAUDE.md (root)
-   → "Use static classes, test with HEC-RAS examples"
+Context Loading:
+1. /AGENTS.md (root shared contract)
+   -> "Use static classes, test with HEC-RAS examples"
 
-2. /ras_commander/CLAUDE.md (library)
-   → "Module organization, common patterns"
+2. /ras_commander/AGENTS.md (library)
+   -> "Module organization, common patterns"
 
 3. /ras_commander/geom/AGENTS.md (geometry)
-   → "Fixed-width parsing, bank station interpolation, 450-point limit"
+   -> "Fixed-width parsing, bank station interpolation, geometry rules"
 
 Result: Full context WITHOUT manual passing!
 ```
@@ -70,14 +74,14 @@ Result: Full context WITHOUT manual passing!
 The system follows strict **anti-duplication principles** documented in `.claude/rules/documentation/hierarchical-knowledge-best-practices.md`:
 
 ✅ **DO:**
-- Point to existing primary sources (CLAUDE.md, AGENTS.md)
+- Point to existing primary sources (`AGENTS.md`, source code, notebooks)
 - Keep navigators lightweight (200-400 lines)
 - Include critical warnings that MUST be visible
 - Use single source of truth for all information
 
 ❌ **DON'T:**
 - Duplicate API documentation from code docstrings
-- Duplicate workflows from CLAUDE.md files
+- Duplicate workflows from `AGENTS.md`, source docstrings, or notebooks
 - Create reference/ folders with duplicated content
 - Exceed 400 lines without strong justification
 
@@ -92,12 +96,12 @@ Subagents are AI assistants spawned by the main agent to handle specialized task
 ```
 Main Agent (Claude Opus)
 ├─ High-level planning and delegation
-├─ Loads: Root CLAUDE.md + .claude/rules/**
+├─ Loads: Root AGENTS.md through CLAUDE.md + .claude/rules/**
 └─ Spawns specialist subagents when needed
 
 Specialist Subagents (Claude Sonnet)
 ├─ Domain expertise (HDF, geometry, remote, USGS)
-├─ Inherit: Hierarchical CLAUDE.md chain
+├─ Inherit: AGENTS.md hierarchy through Claude loader files
 ├─ Use: Library skills + domain skills
 └─ Spawn task subagents (Haiku) for quick ops
 
@@ -477,7 +481,7 @@ When coordinating between HEC-RAS and HEC-HMS workflows:
 2. **Hard-code model** - Sonnet for specialists, Haiku for tasks
 3. **Minimal tool sets** - Only grant necessary permissions
 4. **Clear triggers** - Help main agent know when to delegate
-5. **Trust context inheritance** - Don't duplicate CLAUDE.md content
+5. **Trust context inheritance** - Don't duplicate `AGENTS.md`, source docstrings, or notebook workflows
 
 ### For Skill Creators
 

@@ -1,5 +1,9 @@
 ---
 name: dev_gate_merge-to-main
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: Enforce the feature branch workflow — intercept any attempt to merge, push, or commit directly to main and redirect to the correct feature branch process. Triggers on "merge to main", "push to main", "PR to main", or any operation targeting the main branch.
 ---
 

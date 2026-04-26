@@ -983,10 +983,10 @@ If Code Oracle Codex doesn't provide sufficient depth, escalate to:
 
 **Skills** (invoke these):
 - `dev_invoke_codex-cli` -- Codex CLI invocation patterns
-- `qa_review_triple-model` -- Multi-model review orchestration
+- `qa_review_triple-model` -- Legacy provider-mixed review; explicit user request only
 
 **Agents** (collaborate with):
-- `code-oracle-gemini` -- Alternative oracle for large context tasks
+- `code-oracle-gemini` -- Legacy provider oracle; explicit Gemini request only
 
 **Rules** (follow these):
 - `.claude/rules/validation/validation-patterns.md` -- Output format validation

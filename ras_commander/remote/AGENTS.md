@@ -1,15 +1,36 @@
-## remote Compatibility Wrapper
+# Remote Execution Contract
 
-This `AGENTS.md` exists for agents that automatically discover that filename.
-The canonical instructions for this directory live in `CLAUDE.md`.
+This file is the canonical local instruction file for `ras_commander/remote/`.
 
-Read in this order:
-- `./CLAUDE.md` - Canonical remote execution guidance
-- `../CLAUDE.md` - Canonical core library guidance
-- `../../CLAUDE.md` - Canonical root guidance
-- `../../.claude/MANIFEST.md` - Canonical index for shared framework content
+## Scope
 
-Notes:
-- Treat `CLAUDE.md` as the source of truth when both files exist.
-- Treat `.claude/` as the canonical repository location for shared agent
-  framework materials.
+- Parent guidance from `ras_commander/AGENTS.md` and the repo root still applies.
+- This directory handles distributed HEC-RAS execution across local, PsExec, Docker, and future worker backends.
+
+## Worker Structure
+
+- Base worker and factory: `RasWorker.py`
+- Implemented workers: `PsexecWorker.py`, `LocalWorker.py`, `DockerWorker.py`
+- Stub or optional backends: `SshWorker.py`, `WinrmWorker.py`, `SlurmWorker.py`, `AwsEc2Worker.py`, `AzureFrWorker.py`
+- Dispatch and orchestration: `Execution.py`, `Utils.py`
+
+## Critical Rules
+
+- HEC-RAS requires a desktop session on Windows remote hosts.
+- For PsExec execution, use `session_id=2` style desktop access and avoid `system_account=True` for HEC-RAS runs.
+- Keep optional backend dependencies lazy-loaded and guarded with explicit dependency-check functions.
+- Use relative imports inside the subpackage.
+- Keep the worker factory routing centralized in `init_ras_worker()`.
+
+## Adding Or Editing Workers
+
+1. Add or update the worker dataclass.
+2. Add or update the backend-specific `init_*_worker()` helper.
+3. Update dispatch in `RasWorker.py` and execution routing in `Execution.py`.
+4. Export the public surface through `__init__.py`.
+5. Keep dependency errors explicit and actionable.
+
+## Testing
+
+- Validate remote behavior against the real backend that the code targets.
+- Do not claim a stub backend works unless its execution path is actually implemented.

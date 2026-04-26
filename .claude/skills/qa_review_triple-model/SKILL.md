@@ -1,22 +1,25 @@
 ---
 name: qa_review_triple-model
 description: |
-  Launch four independent AI code reviewers (Opus, Gemini, Codex, Kimi K2.5) to QA/QC code or notebooks.
+  Legacy Claude-only provider-mixed review workflow using Opus, Gemini, Codex, and Kimi K2.5.
   Each reviewer writes findings to separate markdown files, then orchestrator synthesizes.
-  Use for critical code review, bug investigation, quality assurance tasks,
-  validation of complex logic, cross-checking findings before major changes,
-  edge case detection, or security reviews requiring thorough analysis.
+  Use only when the user explicitly requests triple review, quad review, multi-model review,
+  Gemini, or Kimi. Do not trigger for generic QAQC, quality assurance, security review,
+  bug investigation, or critical review requests.
 
-  Triggers: triple review, quad review, four model review, independent code review, QAQC,
-  quality assurance, multi-model analysis, cross-validation, bug investigation, critical review,
-  kimi review, togetherai review, complex logic validation, security review, edge case detection
+  Triggers: triple review, quad review, four model review, multi-model analysis,
+  provider-mixed review, kimi review, gemini review, togetherai review
+shared_corpus: false
+harness_scope: claude_only
 ---
 
 # Multi-Model Code Review (4 Models)
 
+> Legacy Claude-only orchestration skill. This workflow coordinates external/provider-specific reviewers from Claude. It is excluded from the shared multi-harness corpus and is not part of the standard production QAQC path.
+
 ## Overview
 
-When the user requests a multi-model code review, QA/QC analysis, or critical bug investigation, invoke this skill. Launch four independent AI subagents (Opus, Gemini, Codex, and **Kimi K2.5**) to perform parallel code review. Each agent writes findings to markdown files in a workspace directory, then the orchestrator synthesizes a final report with consensus findings.
+When the user explicitly requests this legacy provider-mixed workflow, invoke this skill. Launch four independent AI subagents (Opus, Gemini, Codex, and **Kimi K2.5**) to perform parallel code review. Each agent writes findings to markdown files in a workspace directory, then the orchestrator synthesizes a final report with consensus findings.
 
 ## Usage
 

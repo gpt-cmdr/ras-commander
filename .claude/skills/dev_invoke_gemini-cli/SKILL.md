@@ -1,22 +1,25 @@
 ---
 name: dev_invoke_gemini-cli
 description: |
-  Delegate QAQC and review tasks to Google Gemini CLI using markdown file handoff pattern.
+  Legacy Claude-only provider orchestration for Google Gemini CLI using markdown file handoff.
   Write review request to REVIEW.md, Gemini analyzes, outputs findings to FINDINGS.md.
-  Use for code review, security audits, documentation review, large context analysis.
+  Use only when the user explicitly requests Gemini. Do not trigger for generic QAQC,
+  quality assurance, security review, architecture review, or second-opinion requests.
 
-  Triggers: gemini, gemini cli, delegate to gemini, gemini subagent, code review,
-  QAQC, quality check, security audit, documentation review, large context,
-  second opinion, architecture review, design validation, gemini-3-pro-preview,
-  gemini-3-flash-preview
+  Triggers: gemini, gemini cli, delegate to gemini, gemini subagent,
+  gemini-3-pro-preview, gemini-3-flash-preview
 
   Prerequisites: Gemini CLI authenticated (gemini login or GEMINI_API_KEY)
   Models: gemini-3-pro-preview (default), gemini-3-flash-preview (large context)
+shared_corpus: false
+harness_scope: claude_only
 ---
 
 # Invoking Gemini CLI
 
-Delegate QAQC, code review, and analysis tasks to Gemini CLI using markdown files for input and output. Write review criteria to REVIEW.md, invoke Gemini, then read FINDINGS.md for results.
+> Legacy Claude-only orchestration skill. This is not part of the standard production harness policy. It is excluded from the shared multi-harness corpus and should be used only when the user explicitly requests Gemini.
+
+When the user explicitly requests Gemini, delegate the requested review or analysis task to Gemini CLI using markdown files for input and output. Write review criteria to REVIEW.md, invoke Gemini, then read FINDINGS.md for results.
 
 ## Pattern: Markdown File Handoff
 
@@ -58,7 +61,7 @@ Claude Code                         Gemini CLI
 
 ## Invocation
 
-### Standard Pattern (Recommended)
+### Standard Pattern Within This Legacy Skill
 
 ```bash
 cd /path/to/project && gemini -y "Read REVIEW.md in the current directory. Follow the review criteria. Write all findings to FINDINGS.md."
@@ -259,30 +262,21 @@ GOOGLE_API_KEY=xxx         # Alternative (takes precedence)
 4. **Provide context** - Domain, compliance requirements, constraints
 5. **Ask focused questions** - One review type per request gets better results
 
-## Decision Matrix: Gemini vs Codex
+## Legacy Capability Notes
 
-| Task | Gemini | Codex |
-|------|:------:|:-----:|
-| Code review / QAQC | Best | OK |
-| Security audit | Best | OK |
-| Implementation | OK | Best |
-| Refactoring | OK | Best |
-| Large codebase analysis | Best | OK |
-| Documentation review | Best | OK |
-| Extended thinking (20-30 min) | OK | Best |
+Codex is the production-supported second harness for this repository. Use this
+legacy Gemini path only when the user explicitly asks for Gemini.
 
-## When to Escalate
-
-**Use Gemini for**:
-- Quick code reviews
-- Documentation checks
-- Large context analysis
-- Security audits (initial scan)
-
-**Use Codex for**:
+**Use Codex by default for**:
+- QAQC and code review
+- Security review
 - Complex implementation
 - Extended thinking tasks
 - Multi-file refactoring
+
+**Use this Gemini path only for**:
+- explicit Gemini requests
+- reproducing historical Gemini-based review workflows
 
 **Use specialized ras-commander agents for**:
 - HDF analysis -> `hdf-analyst`

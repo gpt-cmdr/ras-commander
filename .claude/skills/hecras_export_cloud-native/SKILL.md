@@ -1,5 +1,9 @@
 ---
 name: hecras_export_cloud-native
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: |
   Export HEC-RAS geometry and simulation results to cloud-native formats:
   GeoParquet, PMTiles (vector and raster), and PostGIS. Uses ras2cng

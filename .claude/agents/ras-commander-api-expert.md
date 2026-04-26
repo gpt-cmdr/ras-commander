@@ -157,7 +157,7 @@ Task(
     subagent_type="Explore",
     model="haiku",
     prompt="""
-    Search docs/ and ras_commander/*/CLAUDE.md for documentation on {topic}.
+    Search docs/ and ras_commander/*/AGENTS.md for shared documentation on {topic}.
 
     Find:
     - Official documentation

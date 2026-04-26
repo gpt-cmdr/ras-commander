@@ -119,4 +119,5 @@ paths: ras_commander/**
 
 **Governance**:
 - `.claude/rules/documentation/hierarchical-knowledge-best-practices.md` -- Lightweight navigator pattern
-- Root CLAUDE.md -- Strategic vision
+- Root `AGENTS.md` -- Shared repository contract
+- Root `CLAUDE.md` -- Claude loader for that shared contract

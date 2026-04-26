@@ -23,9 +23,10 @@ Ask yourself: Does any knowledge from this task belong in the permanent hierarch
 |----------------|-------------------|
 | Coding pattern discovered | `.claude/rules/{category}/` |
 | Workflow learned | `.claude/skills/{skill}/` or update existing |
-| Domain insight (HEC-RAS) | `ras_commander/{subpackage}/CLAUDE.md` |
-| Best practice | `.claude/rules/` or root CLAUDE.md |
-| Troubleshooting solution | Relevant CLAUDE.md or rules file |
+| Domain insight (HEC-RAS) | `ras_commander/{subpackage}/AGENTS.md` |
+| Shared best practice | nearest relevant `AGENTS.md` |
+| Claude-only best practice | `.claude/rules/` |
+| Troubleshooting solution | relevant `AGENTS.md` or Claude-only rule file |
 
 **Action**: If significant, write/update the appropriate file. If minor, note it in your closeout findings for later review.
 

@@ -1,5 +1,9 @@
 ---
 name: hecras_screenshot
+shared_corpus: true
+harness_scope: shared
+source_owner: gpt-cmdr
+security_review: internal
 description: Capture screenshots of HEC-RAS GUI for documentation and debugging.
 ---
 
