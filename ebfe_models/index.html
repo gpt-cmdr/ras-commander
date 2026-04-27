@@ -857,6 +857,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../user-guide/ebfe-delivery-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eBFE Delivery Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../user-guide/hdf-data-extraction/" class="md-nav__link">
         
   
@@ -1124,10 +1152,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_16" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_17" >
         
           
-          <label class="md-nav__link" for="__nav_2_16" id="__nav_2_16_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_17" id="__nav_2_17_label" tabindex="0">
             
   
   
@@ -1145,8 +1173,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_16_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_16">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_17">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3315,6 +3343,90 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notebooks/953_ebfe_rio_hondo_steady_collection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rio Hondo Steady Collection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notebooks/954_ebfe_lake_maurepas_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lake Maurepas Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notebooks/955_ebfe_tickfaw_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tickfaw Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5236,15 +5348,26 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-3-critical-fixes" class="md-nav__link">
+  <a href="#delivery-validation-gate" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The 3 Critical Fixes
+        Delivery Validation Gate
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="The 3 Critical Fixes">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-delivery-fixes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Delivery Fixes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Delivery Fixes">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -5491,6 +5614,39 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#953_ebfe_rio_hondo_steady_collectionipynb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        953_ebfe_rio_hondo_steady_collection.ipynb
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#954_ebfe_lake_maurepas_validationipynb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        954_ebfe_lake_maurepas_validation.ipynb
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#955_ebfe_tickfaw_validationipynb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        955_ebfe_tickfaw_validation.ipynb
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -5570,10 +5726,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#tested-in-hec-ras" class="md-nav__link">
+  <a href="#end-to-end-evidence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Tested in HEC-RAS
+        End-to-End Evidence
       
     </span>
   </a>
@@ -5721,108 +5877,218 @@
 </span></code></pre></div>
 <p><strong>Automation</strong>: Impossible - GUI error popups block automated workflows</p>
 <h2 id="the-solution-rasebfemodels">The Solution: RasEbfeModels<a class="headerlink" href="#the-solution-rasebfemodels" title="Permanent link">&para;</a></h2>
-<p>The <code>RasEbfeModels</code> class solves this problem by applying <strong>3 critical automated fixes</strong> that transform broken eBFE archives into runnable HEC-RAS models.</p>
+<p>The <code>RasEbfeModels</code> class solves this problem by applying delivery-format
+normalization that transforms broken eBFE archives into runnable HEC-RAS models.</p>
 <h3 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1"># Organize broken eBFE model into runnable HEC-RAS project</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_upper_guadalupe</span><span class="p">(</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">Path</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;D:/downloads/12100201_UpperGuadalupe_Models_extracted&quot;</span><span class="p">),</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span>  <span class="c1"># Validates 10,248 DSS pathnames, corrects all paths</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="p">)</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="c1"># Use immediately - no manual fixes needed</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model/UPGU1&quot;</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">)</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1"># ✓ Opens without errors</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="c1"># ✓ No &quot;DSS path needs correction&quot; dialog</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1"># ✓ Terrain loads correctly</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="c1"># ✓ Pre-run results accessible</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="c1"># ✓ Ready for automation</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1"># Download/cache, extract, and organize by model slug</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_model</span><span class="p">(</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="s2">&quot;upper-guadalupe&quot;</span><span class="p">,</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">download_root</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;H:/Testing/eBFE Model Organization/Downloads&quot;</span><span class="p">),</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">output_root</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;H:/Testing/eBFE Model Organization/Organized&quot;</span><span class="p">),</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="p">)</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1"># Use immediately - no manual fixes needed</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model/UPGU1&quot;</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">)</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1"># Opens without errors</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="c1"># No &quot;DSS path needs correction&quot; dialog</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="c1"># Terrain and land cover load from local folders</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># Pre-run results are accessible from project folders</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="c1"># Ready for automation and preprocessor validation</span>
 </span></code></pre></div>
 <p><strong>Time</strong>: 15 minutes vs 60-120 minutes manual fixes</p>
-<h2 id="the-3-critical-fixes">The 3 Critical Fixes<a class="headerlink" href="#the-3-critical-fixes" title="Permanent link">&para;</a></h2>
+<p>To inspect the built-in model catalog:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">available_models</span><span class="p">()</span>
+</span></code></pre></div>
+<p>Current built-in organizers include:</p>
+<table>
+<thead>
+<tr>
+<th>Slug</th>
+<th style="text-align: right;">HUC8</th>
+<th>Delivery Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>spring-creek</code></td>
+<td style="text-align: right;">12040102</td>
+<td>Single 2D model with nested final archive.</td>
+</tr>
+<tr>
+<td><code>north-galveston-bay</code></td>
+<td style="text-align: right;">12040203</td>
+<td>Compound HMS plus nested 2D RAS delivery.</td>
+</tr>
+<tr>
+<td><code>upper-guadalupe</code></td>
+<td style="text-align: right;">12100201</td>
+<td>Four cascaded 2D watershed models.</td>
+</tr>
+<tr>
+<td><code>lower-colorado-cummins</code></td>
+<td style="text-align: right;">12090301</td>
+<td>1D steady BLE reach-model collection.</td>
+</tr>
+<tr>
+<td><code>rio-hondo</code></td>
+<td style="text-align: right;">13060008</td>
+<td>1D steady BLE reach-model collection.</td>
+</tr>
+<tr>
+<td><code>amite</code></td>
+<td style="text-align: right;">08070202</td>
+<td>Louisiana component delivery with terrain rebuild handling for CRS mismatches.</td>
+</tr>
+<tr>
+<td><code>tickfaw</code></td>
+<td style="text-align: right;">08070203</td>
+<td>Large Louisiana 2D model archive.</td>
+</tr>
+<tr>
+<td><code>lake-maurepas</code></td>
+<td style="text-align: right;">08070204</td>
+<td>Louisiana 2D model archive.</td>
+</tr>
+<tr>
+<td><code>lower-brazos</code></td>
+<td style="text-align: right;">12070104</td>
+<td>Very large component delivery; manifest-only by default.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="delivery-validation-gate">Delivery Validation Gate<a class="headerlink" href="#delivery-validation-gate" title="Permanent link">&para;</a></h2>
+<p>An organized eBFE model is not considered fully delivery-ready until it passes
+preprocessor validation. File organization and dataframe path checks confirm
+that the project is self-contained, but the key proof is running the geometry
+preprocessor and reviewing compute messages for missing terrain, land cover,
+projection, DSS, or file path errors.</p>
+<p>Use the reusable checklist in
+<a href="../user-guide/ebfe-delivery-validation/"><code>eBFE Delivery Validation</code></a> for the
+standard readiness gates:</p>
+<ol>
+<li><code>organized</code></li>
+<li><code>hms_validated</code></li>
+<li><code>path_validated</code></li>
+<li><code>preprocessor_validated</code></li>
+<li><code>results_validated</code></li>
+<li><code>notebook_validated</code></li>
+</ol>
+<p>For combined hms-commander plus ras-commander examples, <code>hms_validated</code> means
+that delivered HEC-HMS projects are copied under <code>HMS Model/</code> and their HMS
+file references resolve locally, then hms-commander can load the organized
+project without path repair. RAS-only deliveries should keep a
+<code>HMS Model/README.md</code> explaining whether hydrology is supplied by steady flow
+files, DSS inputs, gridded precipitation, or another documented source.</p>
+<p>Use <code>GeomPreprocessor.run_geometry_preprocessor()</code> as the assembly validation
+hook for both 1D steady and 2D/unsteady models. It enables detailed logging,
+runs the HEC-RAS geometry preprocessor through ras-commander, and reviews
+compute messages without requiring full unsteady calculations or floodplain
+mapping/post-processing as the delivery-format gate. For 1D steady BLE reach
+models, document terrain or land cover checks only when mapper layers exist.</p>
+<p>For repeatable end-to-end checks from the repository, use:</p>
+<div class="language-powershell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">.\.</span><span class="n">venv</span><span class="p">\</span><span class="n">Scripts</span><span class="p">\</span><span class="n">python</span> <span class="n">scripts</span><span class="p">\</span><span class="n">ebfe_end_to_end_validation</span><span class="p">.</span><span class="n">py</span> <span class="p">`</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  <span class="p">-</span><span class="n">-models</span> <span class="n">north-galveston-bay</span> <span class="p">`</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  <span class="p">-</span><span class="n">-download-root</span> <span class="s2">&quot;H:\Testing\eBFE Model Organization\Downloads&quot;</span> <span class="p">`</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  <span class="p">-</span><span class="n">-output-root</span> <span class="s2">&quot;H:\Testing\eBFE Model Organization\Organized&quot;</span> <span class="p">`</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>  <span class="p">-</span><span class="n">-report-root</span> <span class="s2">&quot;H:\Testing\eBFE Model Organization\Validation\ebfe_delivery&quot;</span> <span class="p">`</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>  <span class="p">-</span><span class="n">-run-preprocessor</span> <span class="p">`</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  <span class="p">-</span><span class="n">-max-wait</span> <span class="n">7200</span>
+</span></code></pre></div>
+<p>The script uses <code>RasEbfeModels.organize_model()</code> for download/extraction and
+organization, then uses <code>GeomPreprocessor.run_geometry_preprocessor()</code> through
+the reusable batch validation flow.</p>
+<h2 id="core-delivery-fixes">Core Delivery Fixes<a class="headerlink" href="#core-delivery-fixes" title="Permanent link">&para;</a></h2>
+<p>Early eBFE organizers focused on three recurring breakages: separated outputs,
+terrain paths, and DSS paths. The current delivery format also standardizes
+projection and land-cover assets because those are required for reliable
+geometry-preprocessor validation.</p>
 <h3 id="fix-1-output-folder-integration">Fix #1: Output/ Folder Integration<a class="headerlink" href="#fix-1-output-folder-integration" title="Permanent link">&para;</a></h3>
 <p><strong>Problem</strong>: Pre-run HDF result files separated from project folder</p>
 <p><strong>eBFE delivers</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>UPGU1/
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>├── Input/ (project folder)
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>│   └── UPGU1.prj ✗ Can&#39;t find results
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>└── Output/
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    └── UPGU1.p01.hdf (1.1 GB) ✗ Inaccessible
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>UPGU1/
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>├── Input/ (project folder)
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>│   └── UPGU1.prj ✗ Can&#39;t find results
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>└── Output/
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    └── UPGU1.p01.hdf (1.1 GB) ✗ Inaccessible
 </span></code></pre></div></p>
 <p><strong>RasEbfeModels fixes</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>RAS Model/UPGU1/
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>├── UPGU1.prj ✓ Finds results
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>└── UPGU1.p01.hdf ✓ Accessible
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>RAS Model/UPGU1/
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>├── UPGU1.prj ✓ Finds results
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>└── UPGU1.p01.hdf ✓ Accessible
 </span></code></pre></div></p>
 <p><strong>Implementation</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Move all Output/*.hdf files INTO Input/ folder</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">output_source</span> <span class="o">=</span> <span class="n">model_source</span> <span class="o">/</span> <span class="s2">&quot;Output&quot;</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="k">if</span> <span class="n">output_source</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="k">for</span> <span class="n">output_file</span> <span class="ow">in</span> <span class="n">output_source</span><span class="o">.</span><span class="n">rglob</span><span class="p">(</span><span class="s1">&#39;*&#39;</span><span class="p">):</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>        <span class="k">if</span> <span class="n">output_file</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>            <span class="n">shutil</span><span class="o">.</span><span class="n">copy2</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="n">input_dest</span> <span class="o">/</span> <span class="n">output_file</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Move all Output/*.hdf files INTO Input/ folder</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">output_source</span> <span class="o">=</span> <span class="n">model_source</span> <span class="o">/</span> <span class="s2">&quot;Output&quot;</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">if</span> <span class="n">output_source</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="k">for</span> <span class="n">output_file</span> <span class="ow">in</span> <span class="n">output_source</span><span class="o">.</span><span class="n">rglob</span><span class="p">(</span><span class="s1">&#39;*&#39;</span><span class="p">):</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        <span class="k">if</span> <span class="n">output_file</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>            <span class="n">shutil</span><span class="o">.</span><span class="n">copy2</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="n">input_dest</span> <span class="o">/</span> <span class="n">output_file</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
 </span></code></pre></div></p>
 <p><strong>Result</strong>: Can view expected runtime from pre-computed results</p>
 <h3 id="fix-2-terrain-integration">Fix #2: Terrain/ Integration<a class="headerlink" href="#fix-2-terrain-integration" title="Permanent link">&para;</a></h3>
 <p><strong>Problem</strong>: Terrain folder placed outside project, .rasmap references break</p>
 <p><strong>eBFE delivers</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>UPGU1/
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>├── Input/
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>│   └── UPGU1.rasmap ✗ References &quot;..\Terrain\RAS_Terrain\Terrain.hdf&quot;
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>└── Terrain/
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    └── Terrain.hdf (3.98 GB) ✗ At &quot;..\Terrain\Terrain.hdf&quot;
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>UPGU1/
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>├── Input/
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>│   └── UPGU1.rasmap ✗ References &quot;..\Terrain\RAS_Terrain\Terrain.hdf&quot;
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>└── Terrain/
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    └── Terrain.hdf (3.98 GB) ✗ At &quot;..\Terrain\Terrain.hdf&quot;
 </span></code></pre></div></p>
 <p><strong>RasEbfeModels fixes</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>RAS Model/UPGU1/
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>├── UPGU1.rasmap ✓ References &quot;.\Terrain\Terrain.hdf&quot;
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>└── Terrain/
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    └── Terrain.hdf ✓ Exactly where .rasmap expects
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>RAS Model/UPGU1/
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>├── UPGU1.rasmap ✓ References &quot;.\Terrain\Terrain.hdf&quot;
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>└── Terrain/
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    └── Terrain.hdf ✓ Exactly where .rasmap expects
 </span></code></pre></div></p>
 <p><strong>Implementation</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Move Terrain/ INTO Input/ folder</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">terrain_source</span> <span class="o">=</span> <span class="n">model_source</span> <span class="o">/</span> <span class="s2">&quot;Terrain&quot;</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="k">if</span> <span class="n">terrain_source</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="n">shutil</span><span class="o">.</span><span class="n">copytree</span><span class="p">(</span><span class="n">terrain_source</span><span class="p">,</span> <span class="n">input_dest</span> <span class="o">/</span> <span class="s2">&quot;Terrain&quot;</span><span class="p">,</span> <span class="n">dirs_exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1"># Correct .rasmap terrain path to actual location</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">actual_terrain_hdf</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;Terrain/**/*.hdf&#39;</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">rel_path</span> <span class="o">=</span> <span class="n">actual_terrain_hdf</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="n">project_folder</span><span class="p">)</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># Update &lt;Layer Type=&quot;TerrainLayer&quot; Filename=&quot;...&quot;&gt;</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Move Terrain/ INTO Input/ folder</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">terrain_source</span> <span class="o">=</span> <span class="n">model_source</span> <span class="o">/</span> <span class="s2">&quot;Terrain&quot;</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="k">if</span> <span class="n">terrain_source</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">shutil</span><span class="o">.</span><span class="n">copytree</span><span class="p">(</span><span class="n">terrain_source</span><span class="p">,</span> <span class="n">input_dest</span> <span class="o">/</span> <span class="s2">&quot;Terrain&quot;</span><span class="p">,</span> <span class="n">dirs_exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Correct .rasmap terrain path to actual location</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">actual_terrain_hdf</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;Terrain/**/*.hdf&#39;</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="n">rel_path</span> <span class="o">=</span> <span class="n">actual_terrain_hdf</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="n">project_folder</span><span class="p">)</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1"># Update &lt;Layer Type=&quot;TerrainLayer&quot; Filename=&quot;...&quot;&gt;</span>
 </span></code></pre></div></p>
 <p><strong>Result</strong>: Model runs without terrain errors, RAS Mapper loads terrain</p>
 <h3 id="fix-3-all-paths-to-relative-references">Fix #3: ALL Paths to Relative References<a class="headerlink" href="#fix-3-all-paths-to-relative-references" title="Permanent link">&para;</a></h3>
 <p><strong>Problem</strong>: Absolute and incorrect paths cause GUI error popups</p>
 <p><strong>eBFE delivers</strong> (in UPGU1.u01):
-<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>DSS Filename=.\DSS_Input\UPGU_precip.dss  ✗ Wrong subdirectory
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>DSS Filename=.\DSS_Input\UPGU_precip.dss  ✗ Wrong subdirectory
 </span></code></pre></div></p>
 <p><strong>Also</strong> (in other files):
-<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>DSS File=C:\eBFE\Projects\12100201\UPGU1\Input\UPGU1.dss  ✗ Absolute path
+<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>DSS File=C:\eBFE\Projects\12100201\UPGU1\Input\UPGU1.dss  ✗ Absolute path
 </span></code></pre></div></p>
 <p><strong>RasEbfeModels fixes</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>DSS Filename=UPGU_precip.dss  ✓ Relative, verified exists
+<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>DSS Filename=UPGU_precip.dss  ✓ Relative, verified exists
 </span></code></pre></div></p>
 <p><strong>Implementation</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Find where DSS files ACTUALLY exist</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">dss_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">ras_model_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;**/*.dss&#39;</span><span class="p">))</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">dss_lookup</span> <span class="o">=</span> <span class="p">{</span><span class="n">dss</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">dss</span> <span class="k">for</span> <span class="n">dss</span> <span class="ow">in</span> <span class="n">dss_files</span><span class="p">}</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># For each HEC-RAS file (.u##, .prj, .p##)</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="k">for</span> <span class="n">hecras_file</span> <span class="ow">in</span> <span class="n">hecras_files</span><span class="p">:</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>    <span class="c1"># Find &quot;DSS File=&quot; or &quot;DSS Filename=&quot; references</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>    <span class="k">for</span> <span class="n">match</span> <span class="ow">in</span> <span class="n">dss_pattern</span><span class="o">.</span><span class="n">finditer</span><span class="p">(</span><span class="n">content</span><span class="p">):</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>        <span class="n">old_path</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>        <span class="n">dss_filename</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">old_path</span><span class="p">)</span><span class="o">.</span><span class="n">name</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>        <span class="c1"># Check if DSS file exists in organized structure</span>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>        <span class="k">if</span> <span class="n">dss_filename</span> <span class="ow">in</span> <span class="n">dss_lookup</span> <span class="ow">and</span> <span class="n">dss_lookup</span><span class="p">[</span><span class="n">dss_filename</span><span class="p">]</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>            <span class="c1"># Calculate correct relative path</span>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>            <span class="n">rel_path</span> <span class="o">=</span> <span class="n">dss_lookup</span><span class="p">[</span><span class="n">dss_filename</span><span class="p">]</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="n">hecras_file</span><span class="o">.</span><span class="n">parent</span><span class="p">)</span>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>            <span class="c1"># Replace with verified path</span>
-</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>            <span class="n">content</span> <span class="o">=</span> <span class="n">content</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DSS File=</span><span class="si">{</span><span class="n">old_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;DSS File=</span><span class="si">{</span><span class="n">rel_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Find where DSS files ACTUALLY exist</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">dss_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">ras_model_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;**/*.dss&#39;</span><span class="p">))</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">dss_lookup</span> <span class="o">=</span> <span class="p">{</span><span class="n">dss</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">dss</span> <span class="k">for</span> <span class="n">dss</span> <span class="ow">in</span> <span class="n">dss_files</span><span class="p">}</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1"># For each HEC-RAS file (.u##, .prj, .p##)</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="k">for</span> <span class="n">hecras_file</span> <span class="ow">in</span> <span class="n">hecras_files</span><span class="p">:</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="c1"># Find &quot;DSS File=&quot; or &quot;DSS Filename=&quot; references</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>    <span class="k">for</span> <span class="n">match</span> <span class="ow">in</span> <span class="n">dss_pattern</span><span class="o">.</span><span class="n">finditer</span><span class="p">(</span><span class="n">content</span><span class="p">):</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>        <span class="n">old_path</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>        <span class="n">dss_filename</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">old_path</span><span class="p">)</span><span class="o">.</span><span class="n">name</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>        <span class="c1"># Check if DSS file exists in organized structure</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>        <span class="k">if</span> <span class="n">dss_filename</span> <span class="ow">in</span> <span class="n">dss_lookup</span> <span class="ow">and</span> <span class="n">dss_lookup</span><span class="p">[</span><span class="n">dss_filename</span><span class="p">]</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>            <span class="c1"># Calculate correct relative path</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>            <span class="n">rel_path</span> <span class="o">=</span> <span class="n">dss_lookup</span><span class="p">[</span><span class="n">dss_filename</span><span class="p">]</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="n">hecras_file</span><span class="o">.</span><span class="n">parent</span><span class="p">)</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>            <span class="c1"># Replace with verified path</span>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>            <span class="n">content</span> <span class="o">=</span> <span class="n">content</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DSS File=</span><span class="si">{</span><span class="n">old_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;DSS File=</span><span class="si">{</span><span class="n">rel_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div></p>
 <p><strong>Result</strong>: No GUI error popups, automation works</p>
 <h2 id="available-models">Available Models<a class="headerlink" href="#available-models" title="Permanent link">&para;</a></h2>
@@ -5832,15 +6098,15 @@
 <strong>Plans</strong>: 8 with pre-computed results
 <strong>Terrain</strong>: 504.6 MB self-contained</p>
 <p><strong>Usage</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_spring_creek</span><span class="p">(</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="n">downloaded_folder</span><span class="p">,</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>    <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="p">)</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span><span class="p">,</span> <span class="s2">&quot;5.0.7&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_spring_creek</span><span class="p">(</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>    <span class="n">downloaded_folder</span><span class="p">,</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="p">)</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span><span class="p">,</span> <span class="s2">&quot;5.0.7&quot;</span><span class="p">)</span>
 </span></code></pre></div></p>
 <p><strong>Fixes Applied</strong>:
 - DSS path corrections
@@ -5853,22 +6119,24 @@
 <strong>HMS</strong>: 7 storm frequencies (10yr-500yr) + sensitivity
 <strong>RAS</strong>: 2D coastal model (nested 6.1 GB zip)</p>
 <p><strong>Usage</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_north_galveston_bay</span><span class="p">(</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">downloaded_folder</span><span class="p">,</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="n">extract_ras_nested</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>  <span class="c1"># Manual extraction recommended</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="p">)</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="c1"># HMS model ready immediately</span>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="n">hms_project</span> <span class="o">=</span> <span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;HMS Model/NorthGalvestonBay/NorthGalvestonBay.hms&quot;</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_north_galveston_bay</span><span class="p">(</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    <span class="n">downloaded_folder</span><span class="p">,</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>    <span class="n">extract_ras_nested</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>    <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="p">)</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="c1"># HMS and normalized RAS model folders are ready</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="n">hms_project</span> <span class="o">=</span> <span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;HMS Model/NorthGalvestonBay/NorthGalvestonBay.hms&quot;</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="n">ras_project</span> <span class="o">=</span> <span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span>
 </span></code></pre></div></p>
 <p><strong>Fixes Applied</strong>:
 - HMS/RAS separation
 - DSS path corrections (when RAS extracted)
-- Output/ and Terrain/ integration (when RAS extracted)</p>
-<p><strong>Note</strong>: RAS model in large nested zip may require manual extraction via Windows Explorer</p>
+- Output/, Terrain/, Land Cover/, and Projection/ integration</p>
+<p><strong>Note</strong>: <code>extract_ras_nested=True</code> extracts and normalizes the nested
+RAS_Submittal archive in place.</p>
 <p><strong>Example Notebook</strong>: <code>examples/951_ebfe_north_galveston_bay.ipynb</code></p>
 <h3 id="upper-guadalupe-12100201-pattern-3b">Upper Guadalupe (12100201) - Pattern 3b<a class="headerlink" href="#upper-guadalupe-12100201-pattern-3b" title="Permanent link">&para;</a></h3>
 <p><strong>Model Type</strong>: 4 cascaded 2D watershed models
@@ -5877,37 +6145,41 @@
 <strong>Plans</strong>: 28 total (7 AEP frequencies × 4 models)
 <strong>DSS</strong>: 10,248 pathnames validated</p>
 <p><strong>Usage</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">RasPrj</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Organize (applies all 3 critical fixes × 4 models)</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_upper_guadalupe</span><span class="p">(</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    <span class="n">downloaded_folder</span><span class="p">,</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>    <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span>  <span class="c1"># Validates 10,248 pathnames</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="p">)</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="c1"># Execute cascade (upstream to downstream)</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="k">for</span> <span class="n">model</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;UPGU1&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU2&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU3&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU4&#39;</span><span class="p">]:</span>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>    <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a>    <span class="n">init_ras_project</span><span class="p">(</span><span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span> <span class="o">/</span> <span class="n">model</span> <span class="o">/</span> <span class="s2">&quot;Input&quot;</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_obj</span><span class="p">)</span>
-</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>    <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_obj</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">RasPrj</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Organize (applies delivery normalization across all 4 models)</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_upper_guadalupe</span><span class="p">(</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>    <span class="n">downloaded_folder</span><span class="p">,</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>    <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span>  <span class="c1"># Validates 10,248 pathnames</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="p">)</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="c1"># Execute cascade (upstream to downstream)</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="k">for</span> <span class="n">model</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;UPGU1&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU2&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU3&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU4&#39;</span><span class="p">]:</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>    <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>    <span class="n">init_ras_project</span><span class="p">(</span><span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span> <span class="o">/</span> <span class="n">model</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_obj</span><span class="p">)</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>    <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_obj</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
 </span></code></pre></div></p>
 <p><strong>Fixes Applied</strong>:
 - 56 HDF files (~41 GB) moved into project folders
 - 4 Terrain folders (~15.7 GB) moved into project folders
-- 32 DSS paths corrected (validated existence first)
-- 4 .rasmap terrain paths corrected (verified actual location)</p>
-<p><strong>Validated</strong>: Tested in HEC-RAS, opens without errors ✓</p>
+- DSS assets copied into per-project <code>DSS Inputs/</code> folders and references rewritten
+- Land cover copied into per-project <code>Land Cover/</code> folders
+- Projection copied or generated under per-project <code>Projection/</code> folders
+- <code>.rasmap</code> terrain, land cover, and projection paths rewritten to local folders</p>
+<p><strong>Validated</strong>: UPGU1, UPGU2, and UPGU3 passed geometry-preprocessor validation
+with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
+1-hour cap and remains an explicit long-runtime validation item.</p>
 <p><strong>Example Notebook</strong>: <code>examples/952_ebfe_upper_guadalupe_cascade.ipynb</code></p>
 <h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
 <h3 id="rasebfemodelsorganize_spring_creek">RasEbfeModels.organize_spring_creek()<a class="headerlink" href="#rasebfemodelsorganize_spring_creek" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nd">@staticmethod</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="nd">@log_call</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">organize_spring_creek</span><span class="p">(</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    <span class="n">downloaded_folder</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>    <span class="n">output_folder</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>    <span class="n">validate_dss</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nd">@staticmethod</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="nd">@log_call</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">organize_spring_creek</span><span class="p">(</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="n">downloaded_folder</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="n">output_folder</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>    <span class="n">validate_dss</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span>
 </span></code></pre></div>
 <p><strong>Organizes</strong>: Spring Creek (12040102) - Pattern 3a</p>
 <p><strong>Parameters</strong>:
@@ -5923,53 +6195,54 @@
 5. Validates DSS pathnames
 6. Creates agent/model_log.md</p>
 <p><strong>Output Structure</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>SpringCreek_12040102/
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>├── RAS Model/           # Runnable HEC-RAS project
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>├── Spatial Data/        # Shapefiles, terrain copy
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>├── Documentation/       # Inventory, reports
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>├── HMS Model/           # (empty for Pattern 3a)
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>└── agent/model_log.md   # Documents fixes applied
+<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>SpringCreek_12040102/
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>├── RAS Model/           # Runnable HEC-RAS project
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>├── Spatial Data/        # Shapefiles, terrain copy
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>├── Documentation/       # Inventory, reports
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>├── HMS Model/           # (empty for Pattern 3a)
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>└── agent/model_log.md   # Documents fixes applied
 </span></code></pre></div></p>
 <h3 id="rasebfemodelsorganize_north_galveston_bay">RasEbfeModels.organize_north_galveston_bay()<a class="headerlink" href="#rasebfemodelsorganize_north_galveston_bay" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nd">@staticmethod</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="nd">@log_call</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">organize_north_galveston_bay</span><span class="p">(</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="n">downloaded_folder</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="n">output_folder</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>    <span class="n">extract_ras_nested</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>    <span class="n">validate_dss</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nd">@staticmethod</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nd">@log_call</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">organize_north_galveston_bay</span><span class="p">(</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>    <span class="n">downloaded_folder</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="n">output_folder</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>    <span class="n">extract_ras_nested</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>    <span class="n">validate_dss</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span>
 </span></code></pre></div>
 <p><strong>Organizes</strong>: North Galveston Bay (12040203) - Pattern 4</p>
 <p><strong>Parameters</strong>:
 - <code>downloaded_folder</code>: Path to extracted 12040203_NorthGalvestonBay_Models folder
 - <code>output_folder</code>: Output location (default: ./ebfe_organized/NorthGalvestonBay_12040203/)
-- <code>extract_ras_nested</code>: Attempt auto-extraction of RAS_Submittal.zip (may fail, default: False)
+- <code>extract_ras_nested</code>: Extract and normalize RAS_Submittal.zip when True.
+  <code>RasEbfeModels.organize_model("north-galveston-bay")</code> enables this by default.
 - <code>validate_dss</code>: Run DSS validation checks (default: True)</p>
 <p><strong>Returns</strong>: Path to organized model</p>
 <p><strong>Fixes Applied</strong>:
 1. Separates HMS from RAS content
 2. Organizes 7 storm frequencies + sensitivity analysis
-3. Handles nested 6.1 GB RAS zip (manual or auto)
+3. Handles nested 6.1 GB RAS zip extraction
 4. Corrects DSS paths when RAS extracted
-5. Moves Output/ and Terrain/ when RAS extracted
+5. Moves Output/, Terrain/, Land Cover/, and Projection/ assets into the project
 6. Creates agent/model_log.md</p>
 <p><strong>Output Structure</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>NorthGalvestonBay_12040203/
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>├── HMS Model/           # HEC-HMS with 7 storm frequencies
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>├── RAS Model/           # 2D coastal model (after extraction)
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>├── Spatial Data/        # (pending RAS extraction)
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>├── Documentation/       # BLE reports, metadata
-</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>└── agent/model_log.md
+<div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>NorthGalvestonBay_12040203/
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>├── HMS Model/           # HEC-HMS with 7 storm frequencies
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>├── RAS Model/           # 2D coastal model (after extraction)
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>├── Spatial Data/        # (pending RAS extraction)
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>├── Documentation/       # BLE reports, metadata
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>└── agent/model_log.md
 </span></code></pre></div></p>
 <h3 id="rasebfemodelsorganize_upper_guadalupe">RasEbfeModels.organize_upper_guadalupe()<a class="headerlink" href="#rasebfemodelsorganize_upper_guadalupe" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nd">@staticmethod</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nd">@log_call</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">organize_upper_guadalupe</span><span class="p">(</span>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>    <span class="n">downloaded_folder</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="n">output_folder</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>    <span class="n">validate_dss</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nd">@staticmethod</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="nd">@log_call</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">organize_upper_guadalupe</span><span class="p">(</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>    <span class="n">downloaded_folder</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>    <span class="n">output_folder</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>    <span class="n">validate_dss</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span>
 </span></code></pre></div>
 <p><strong>Organizes</strong>: Upper Guadalupe (12100201) - Pattern 3b</p>
 <p><strong>Parameters</strong>:
@@ -5977,49 +6250,52 @@
 - <code>output_folder</code>: Output location (default: ./ebfe_organized/UpperGuadalupe_12100201/)
 - <code>validate_dss</code>: Run DSS validation (default: True, validates 10,248 pathnames)</p>
 <p><strong>Returns</strong>: Path to organized model with 4 runnable cascaded HEC-RAS projects</p>
-<p><strong>Fixes Applied</strong> (× 4 models):
+<p><strong>Fixes Applied</strong> (x 4 models):
 1. Moves 56 HDF files (~41 GB) INTO project folders
 2. Moves 4 Terrain folders (~15.7 GB) INTO project folders
-3. Corrects 32 DSS paths (validates existence first)
-4. Corrects 4 .rasmap terrain paths (verifies actual location)
-5. Validates 10,248 DSS pathnames (100% success)
-6. Creates comprehensive agent/model_log.md</p>
+3. Copies DSS assets into per-project <code>DSS Inputs/</code> folders and rewrites references
+4. Copies land-cover assets into per-project <code>Land Cover/</code> folders
+5. Copies or creates project CRS files under per-project <code>Projection/</code> folders
+6. Rewrites <code>.rasmap</code> terrain, land cover, and projection references
+7. Creates comprehensive agent/model_log.md</p>
 <p><strong>Output Structure</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>UpperGuadalupe_12100201/
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>└── RAS Model/
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    ├── UPGU1/  # Upstream watershed (runnable)
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    ├── UPGU2/  # Receives UPGU1 flow via DSS (runnable)
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>    ├── UPGU3/  # Receives UPGU2 flow via DSS (runnable)
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>    └── UPGU4/  # Downstream watershed (runnable)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>UpperGuadalupe_12100201/
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>└── RAS Model/
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>    ├── UPGU1/  # Upstream watershed (runnable)
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>    ├── UPGU2/  # Receives UPGU1 flow via DSS (runnable)
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>    ├── UPGU3/  # Receives UPGU2 flow via DSS (runnable)
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>    └── UPGU4/  # Downstream watershed (runnable)
 </span></code></pre></div></p>
 <p><strong>Cascade Execution</strong> (sequential required):
-<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">for</span> <span class="n">model</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;UPGU1&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU2&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU3&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU4&#39;</span><span class="p">]:</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>    <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>    <span class="n">init_ras_project</span><span class="p">(</span><span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span> <span class="o">/</span> <span class="n">model</span> <span class="o">/</span> <span class="s2">&quot;Input&quot;</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_obj</span><span class="p">)</span>
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>    <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_obj</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>    <span class="c1"># Upstream results feed downstream via DSS</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="k">for</span> <span class="n">model</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;UPGU1&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU2&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU3&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU4&#39;</span><span class="p">]:</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>    <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>    <span class="n">init_ras_project</span><span class="p">(</span><span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span> <span class="o">/</span> <span class="n">model</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_obj</span><span class="p">)</span>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>    <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_obj</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>    <span class="c1"># Upstream results feed downstream via DSS</span>
 </span></code></pre></div></p>
 <h2 id="standardized-4-folder-structure">Standardized 4-Folder Structure<a class="headerlink" href="#standardized-4-folder-structure" title="Permanent link">&para;</a></h2>
 <p>All organized models use the same structure:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>{ModelName}_{HUC8}/
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>├── HMS Model/          # HEC-HMS hydrologic models (if present)
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>├── RAS Model/          # HEC-RAS hydraulic models (RUNNABLE)
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>│   └── {Model}/
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>│       ├── *.prj, *.g##, *.p##, *.u##
-</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>│       ├── *.hdf (pre-run results, moved from Output/)
-</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>│       ├── *.dss (DSS paths corrected)
-</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>│       ├── *.rasmap (terrain paths corrected)
-</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>│       └── Terrain/ (moved here, where HEC-RAS expects it)
-</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>├── Spatial Data/       # GIS data, shapefiles
-</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>├── Documentation/      # BLE reports, inventories
-</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a>└── agent/
-</span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a>    └── model_log.md    # REQUIRED - documents all fixes applied
+<div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>{ModelName}_{HUC8}/
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>├── HMS Model/          # HEC-HMS hydrologic models (if present)
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>├── RAS Model/          # HEC-RAS hydraulic models (RUNNABLE)
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>│   └── {Model}/
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>│       ├── *.prj, *.g##, *.p##, *.u##
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>│       ├── *.hdf (pre-run results, moved from Output/)
+</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>│       ├── DSS Inputs/ (DSS paths corrected)
+</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>│       ├── Projection/ (project CRS copied or generated)
+</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>│       ├── *.rasmap (terrain paths corrected)
+</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a>│       ├── Terrain/ (moved here, where HEC-RAS expects it)
+</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a>│       └── Land Cover/ (local land cover and sidecar assets)
+</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a>├── Spatial Data/       # GIS data, shapefiles
+</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a>├── Documentation/      # BLE reports, inventories
+</span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a>└── agent/
+</span><span id="__span-24-15"><a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a>    └── model_log.md    # REQUIRED - documents all fixes applied
 </span></code></pre></div>
 <h2 id="agentmodel_logmd-requirement">agent/model_log.md Requirement<a class="headerlink" href="#agentmodel_logmd-requirement" title="Permanent link">&para;</a></h2>
 <p><strong>Every organized model MUST have</strong> <code>agent/model_log.md</code> documenting:
 - Organization actions taken
 - Files classified and moved (HMS/RAS/Spatial/Docs)
-- <strong>Critical fixes applied</strong> (Output/, Terrain/, DSS paths)
+- <strong>Critical fixes applied</strong> (Output/, DSS Inputs/, Projection/, Terrain/, Land Cover/)
 - Number of corrections made
 - DSS validation results
 - Compute test instructions</p>
@@ -6027,28 +6303,28 @@
 <h2 id="validation-features">Validation Features<a class="headerlink" href="#validation-features" title="Permanent link">&para;</a></h2>
 <h3 id="dss-pathname-validation">DSS Pathname Validation<a class="headerlink" href="#dss-pathname-validation" title="Permanent link">&para;</a></h3>
 <p>All organize methods include comprehensive DSS validation:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># Validates all pathnames in all DSS files</span>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="k">for</span> <span class="n">dss_file</span> <span class="ow">in</span> <span class="n">dss_files</span><span class="p">:</span>
-</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>    <span class="n">catalog</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">get_catalog</span><span class="p">(</span><span class="n">dss_file</span><span class="p">)</span>
-</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>    <span class="k">for</span> <span class="n">pathname</span> <span class="ow">in</span> <span class="n">catalog</span><span class="p">[</span><span class="s1">&#39;pathname&#39;</span><span class="p">]:</span>
-</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">check_pathname</span><span class="p">(</span><span class="n">dss_file</span><span class="p">,</span> <span class="n">pathname</span><span class="p">)</span>
-</span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>        <span class="c1"># Invalid pathnames documented in agent/model_log.md</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="c1"># Validates all pathnames in all DSS files</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="k">for</span> <span class="n">dss_file</span> <span class="ow">in</span> <span class="n">dss_files</span><span class="p">:</span>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>    <span class="n">catalog</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">get_catalog</span><span class="p">(</span><span class="n">dss_file</span><span class="p">)</span>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>    <span class="k">for</span> <span class="n">pathname</span> <span class="ow">in</span> <span class="n">catalog</span><span class="p">[</span><span class="s1">&#39;pathname&#39;</span><span class="p">]:</span>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>        <span class="n">result</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">check_pathname</span><span class="p">(</span><span class="n">dss_file</span><span class="p">,</span> <span class="n">pathname</span><span class="p">)</span>
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>        <span class="c1"># Invalid pathnames documented in agent/model_log.md</span>
 </span></code></pre></div>
 <p><strong>Upper Guadalupe Achievement</strong>: 10,248 pathnames validated, 100% valid ✓</p>
 <h3 id="path-existence-validation">Path Existence Validation<a class="headerlink" href="#path-existence-validation" title="Permanent link">&para;</a></h3>
 <p><strong>Before correcting any path</strong>, we verify the target file actually exists:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="k">if</span> <span class="n">dss_filename</span> <span class="ow">in</span> <span class="n">dss_lookup</span><span class="p">:</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>    <span class="n">actual_dss_path</span> <span class="o">=</span> <span class="n">dss_lookup</span><span class="p">[</span><span class="n">dss_filename</span><span class="p">]</span>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>    <span class="c1"># CRITICAL: Verify file exists</span>
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>    <span class="k">if</span> <span class="n">actual_dss_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>        <span class="c1"># Calculate correct relative path</span>
-</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>        <span class="n">rel_path</span> <span class="o">=</span> <span class="n">actual_dss_path</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="n">hecras_file</span><span class="o">.</span><span class="n">parent</span><span class="p">)</span>
-</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>        <span class="c1"># Replace path</span>
-</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>    <span class="k">else</span><span class="p">:</span>
-</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;WARNING: DSS file not found: </span><span class="si">{</span><span class="n">dss_filename</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">if</span> <span class="n">dss_filename</span> <span class="ow">in</span> <span class="n">dss_lookup</span><span class="p">:</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>    <span class="n">actual_dss_path</span> <span class="o">=</span> <span class="n">dss_lookup</span><span class="p">[</span><span class="n">dss_filename</span><span class="p">]</span>
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>    <span class="c1"># CRITICAL: Verify file exists</span>
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>    <span class="k">if</span> <span class="n">actual_dss_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>        <span class="c1"># Calculate correct relative path</span>
+</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>        <span class="n">rel_path</span> <span class="o">=</span> <span class="n">actual_dss_path</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="n">hecras_file</span><span class="o">.</span><span class="n">parent</span><span class="p">)</span>
+</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>        <span class="c1"># Replace path</span>
+</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;WARNING: DSS file not found: </span><span class="si">{</span><span class="n">dss_filename</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><strong>Result</strong>: Only corrects paths to files that actually exist</p>
 <h2 id="example-notebooks">Example Notebooks<a class="headerlink" href="#example-notebooks" title="Permanent link">&para;</a></h2>
@@ -6090,10 +6366,29 @@
 - All 3 fixes explained with file sizes
 - Cascade structure and execution
 - Emphasis: "This library exists to solve this exact problem"</p>
+<h3 id="953_ebfe_rio_hondo_steady_collectionipynb">953_ebfe_rio_hondo_steady_collection.ipynb<a class="headerlink" href="#953_ebfe_rio_hondo_steady_collectionipynb" title="Permanent link">&para;</a></h3>
+<p><strong>Demonstrates</strong>:
+- Organizing and validating the Rio Hondo 1D steady BLE reach-model collection.
+- Sequential steady-plan validation for 253 projects.
+- Reading generated HDF compute messages after successful steady-plan execution.
+- Distinguishing 1D steady result generation from 2D preprocessor validation.</p>
+<h3 id="954_ebfe_lake_maurepas_validationipynb">954_ebfe_lake_maurepas_validation.ipynb<a class="headerlink" href="#954_ebfe_lake_maurepas_validationipynb" title="Permanent link">&para;</a></h3>
+<p><strong>Demonstrates</strong>:
+- Organizing Pattern 3 single-archive Louisiana 2D model delivery.
+- Validating the delivered Lake Maurepas HEC-HMS project from <code>HMS Model/</code> with hms-commander.
+- Confirming local projection, terrain, land-cover, and RASMapper assets.
+- Reusing saved ras-commander geometry-preprocessor evidence for plan 02.
+- Documenting a preprocessor-valid model where full hydraulic result HDFs are absent from the source archive.</p>
+<h3 id="955_ebfe_tickfaw_validationipynb">955_ebfe_tickfaw_validation.ipynb<a class="headerlink" href="#955_ebfe_tickfaw_validationipynb" title="Permanent link">&para;</a></h3>
+<p><strong>Demonstrates</strong>:
+- Organizing Pattern 3 single-archive Louisiana 2D model delivery with results.
+- Confirming local projection, terrain, land-cover, and RASMapper assets.
+- Reusing saved ras-commander geometry-preprocessor evidence for plan 13.
+- Verifying that all seven plan result HDF paths resolve inside the organized RAS project folder.</p>
 <h2 id="organizing-new-models">Organizing New Models<a class="headerlink" href="#organizing-new-models" title="Permanent link">&para;</a></h2>
 <p>For eBFE models not included in RasEbfeModels, use the <strong>ebfe_organize_models agent skill</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># In Claude Code:</span>
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="s2">&quot;Organize West Fork San Jacinto (12040101) using ebfe_organize_models skill&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># In Claude Code:</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="s2">&quot;Organize West Fork San Jacinto (12040101) using ebfe_organize_models skill&quot;</span>
 </span></code></pre></div>
 <p><strong>Agent produces</strong>:
 1. Organized 4-folder structure with all 3 critical fixes
@@ -6125,7 +6420,7 @@
 <tr>
 <td>North Galveston Bay</td>
 <td>45-90 min</td>
-<td>10-15 min (HMS only)</td>
+<td>10-15 min plus nested zip extraction</td>
 <td>30-75 min</td>
 </tr>
 <tr>
@@ -6139,24 +6434,41 @@
 <p><strong>Additional Benefit</strong>: Enables automation (no GUI popups)</p>
 <h2 id="automation-benefits">Automation Benefits<a class="headerlink" href="#automation-benefits" title="Permanent link">&para;</a></h2>
 <h3 id="without-path-corrections">Without Path Corrections<a class="headerlink" href="#without-path-corrections" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Automation FAILS - GUI popup blocks workflow</span>
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">broken_ebfe_model</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">)</span>
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>  <span class="c1"># Hangs on &quot;DSS path needs correction&quot; dialog</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Automation FAILS - GUI popup blocks workflow</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">broken_ebfe_model</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">)</span>
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>  <span class="c1"># Hangs on &quot;DSS path needs correction&quot; dialog</span>
 </span></code></pre></div>
 <h3 id="with-path-corrections">With Path Corrections<a class="headerlink" href="#with-path-corrections" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Automation WORKS - no GUI interruptions</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_upper_guadalupe</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model/UPGU1&quot;</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">)</span>
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>  <span class="c1"># Runs to completion</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Automation WORKS - no GUI interruptions</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_upper_guadalupe</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model/UPGU1&quot;</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">)</span>
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>  <span class="c1"># Runs to completion</span>
 </span></code></pre></div>
 <h2 id="testing-and-validation">Testing and Validation<a class="headerlink" href="#testing-and-validation" title="Permanent link">&para;</a></h2>
-<h3 id="tested-in-hec-ras">Tested in HEC-RAS<a class="headerlink" href="#tested-in-hec-ras" title="Permanent link">&para;</a></h3>
-<p><strong>Model</strong>: UPGU1 (Upper Guadalupe)
-<strong>Test</strong>: Opened in HEC-RAS 6.5 GUI
-<strong>Result</strong>: ✓ Opens without errors, no "DSS path needs correction" dialog</p>
+<h3 id="end-to-end-evidence">End-to-End Evidence<a class="headerlink" href="#end-to-end-evidence" title="Permanent link">&para;</a></h3>
+<p>Current validation is tracked in the repository-level
+<code>VALIDATION_MATRIX.md</code>, with generated audit reports under the H: workspace:
+<code>H:\Testing\eBFE Model Organization\Validation\ebfe_delivery</code>.</p>
+<ul>
+<li>Lower Colorado-Cummins sample: geometry preprocessor passed.</li>
+<li>Rio Hondo: 253 1D steady reach projects passed sequential geometry preprocessor validation, and 253/253 steady plans computed successfully in <code>steady_plan_validation_20260424_160022.json</code>.</li>
+<li>Spring Creek: 2D geometry preprocessor passed.</li>
+<li>North Galveston Bay: nested download/extract/organize path passed geometry preprocessor validation; delivered HMS project loads through hms-commander.</li>
+<li>Upper Guadalupe: UPGU1, UPGU2, and UPGU3 passed; UPGU4 requires the 7200-second validation record because its geometry preprocessor can exceed one hour.</li>
+<li>Lower Brazos: manifest/inventory shell is organized by default; the three 188-229 GB model components must be explicitly selected before full model validation.</li>
+<li>Amite: full E2E organization completed for five RAS projects. WA1, WA2,
+  WA3, and WA5 passed geometry preprocessor validation; WA4 is blocked by a
+  <code>RasGeomWriter</code> / <code>ERROR: Incorrect Type in ./Projection. (Expected String)</code>
+  failure and requires manual terrain rebuild or repair inside RASMapper.</li>
+<li>Tickfaw: organized, path-audited, preprocessor-valid, and results-ready with seven local hydraulic plan HDFs; see <code>examples/955_ebfe_tickfaw_validation.ipynb</code>.</li>
+<li>Lake Maurepas: organized, HMS-validated through hms-commander, path-audited, and preprocessor-valid; source archive scan found no RAS plan-result HDFs, so it is not yet a results-ready demo; see <code>examples/954_ebfe_lake_maurepas_validation.ipynb</code>.</li>
+</ul>
 <h3 id="notebook-testing">Notebook Testing<a class="headerlink" href="#notebook-testing" title="Permanent link">&para;</a></h3>
-<p><strong>Subagent</strong>: notebook-runner (tested all 3 notebooks)
-<strong>Results</strong>: 2 passing, 1 needs minor fixes (non-blocking)</p>
+<p>Current eBFE notebooks <code>950</code>-<code>955</code> execute against the shared
+<code>H:\Testing\eBFE Model Organization</code> workspace by default, with
+<code>RAS_COMMANDER_EBFE_ROOT</code> available for overrides. Stored notebook outputs were
+refreshed after delivery-format updates, and notebook QA confirmed no error
+outputs in the eBFE notebook set.</p>
 <h3 id="dss-validation-scale">DSS Validation Scale<a class="headerlink" href="#dss-validation-scale" title="Permanent link">&para;</a></h3>
 <p><strong>Largest validation ever</strong>:
 - Model: Upper Guadalupe
@@ -6217,7 +6529,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="February 28, 2026 21:48:47 UTC">February 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 27, 2026 14:57:20 UTC">April 27, 2026</span>
   </span>
 
     
