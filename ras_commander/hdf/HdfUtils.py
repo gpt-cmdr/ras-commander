@@ -150,6 +150,17 @@ class HdfUtils:
 
     @staticmethod
     @log_call
+    def decode_text(value: Any, default: str = "") -> str:
+        """Decode an HDF value and return stripped text."""
+        if value is None:
+            return default
+        decoded = HdfUtils.decode_value(value)
+        if decoded is None:
+            return default
+        return str(decoded).strip()
+
+    @staticmethod
+    @log_call
     def read_attrs(hdf_file: h5py.File, spec: HdfAttributeSpec) -> dict:
         """Read decoded attributes from a group or dataset."""
         node = HdfUtils.resolve_path(hdf_file, spec.path)

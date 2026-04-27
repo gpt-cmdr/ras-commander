@@ -58,6 +58,12 @@ def test_read_compound_table_decodes_byte_columns(tmp_path):
     assert table["Value"].tolist() == [1.5, 2.5]
 
 
+def test_decode_text_strips_hdf_byte_values():
+    assert HdfUtils.decode_text(b"  River A  ") == "River A"
+    assert HdfUtils.decode_text(np.bytes_("  Reach B  ")) == "Reach B"
+    assert HdfUtils.decode_text(None, default="fallback") == "fallback"
+
+
 def test_read_ragged_table_expands_info_values(tmp_path):
     hdf_path = tmp_path / "ragged.hdf"
     with h5py.File(hdf_path, "w") as hdf:

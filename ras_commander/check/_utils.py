@@ -13,6 +13,7 @@ import numpy as np
 import h5py
 
 from ..LoggingConfig import get_logger
+from ..hdf.HdfUtils import HdfUtils
 from .types import Severity, FlowType, CheckMessage, CheckResults
 
 logger = get_logger(__name__)
@@ -138,7 +139,7 @@ def get_available_profiles(plan_hdf: Path) -> List[str]:
             path = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Profile Names'
             if path in hdf:
                 names = hdf[path][:]
-                return [n.decode('utf-8').strip() for n in names]
+                return [HdfUtils.decode_text(name) for name in names]
     except Exception:
         pass
     return []
@@ -176,16 +177,16 @@ def get_structure_locations(geom_hdf: Path) -> Optional[pd.DataFrame]:
                 return None
 
             attrs = hdf['Geometry/Structures/Attributes'][:]
+            attrs_df = HdfUtils.decode_frame(pd.DataFrame(attrs))
 
             records = []
-            for attr in attrs:
-                river = attr['River'].decode('utf-8').strip() if isinstance(attr['River'], bytes) else str(attr['River']).strip()
-                reach = attr['Reach'].decode('utf-8').strip() if isinstance(attr['Reach'], bytes) else str(attr['Reach']).strip()
-                station = attr['RS'].decode('utf-8').strip() if isinstance(attr['RS'], bytes) else str(attr['RS']).strip()
+            for _, attr in attrs_df.iterrows():
+                river = HdfUtils.decode_text(attr.get('River'))
+                reach = HdfUtils.decode_text(attr.get('Reach'))
+                station = HdfUtils.decode_text(attr.get('RS'))
 
-                # Get abutment stations if available
-                abut_l = float(attr['BR US Left Bank']) if 'BR US Left Bank' in attr.dtype.names else 0
-                abut_r = float(attr['BR US Right Bank']) if 'BR US Right Bank' in attr.dtype.names else 0
+                abut_l = float(attr['BR US Left Bank']) if 'BR US Left Bank' in attrs_df.columns else 0
+                abut_r = float(attr['BR US Right Bank']) if 'BR US Right Bank' in attrs_df.columns else 0
 
                 records.append({
                     'river': river,

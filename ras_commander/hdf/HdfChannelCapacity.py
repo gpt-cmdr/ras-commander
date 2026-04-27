@@ -41,6 +41,7 @@ import numpy as np
 import pandas as pd
 
 from ..LoggingConfig import log_call, get_logger
+from .HdfUtils import HdfUtils
 
 logger = get_logger(__name__)
 
@@ -322,7 +323,10 @@ class HdfChannelCapacity:
             names_path = f"{base_steady}/Profile Names"
             if profile_names is None:
                 if names_path in hdf:
-                    hdf_names = [n.decode().strip() for n in hdf[names_path][:]]
+                    hdf_names = [
+                        HdfUtils.decode_text(name)
+                        for name in hdf[names_path][:]
+                    ]
                     profile_names = hdf_names
                 else:
                     profile_names = [f"Profile_{i+1:02d}" for i in range(n_profiles)]
@@ -340,9 +344,10 @@ class HdfChannelCapacity:
                 attrs_path = "Results/Steady/Output/Geometry Info/Cross Section Attributes"
 
             attrs = hdf[attrs_path][:]
-            xs_rivers = [a['River'].decode().strip() for a in attrs]
-            xs_reaches = [a['Reach'].decode().strip() for a in attrs]
-            xs_stations = [a['Station'].decode().strip() for a in attrs]
+            attrs_df = HdfUtils.decode_frame(pd.DataFrame(attrs))
+            xs_rivers = attrs_df['River'].map(HdfUtils.decode_text).tolist()
+            xs_reaches = attrs_df['Reach'].map(HdfUtils.decode_text).tolist()
+            xs_stations = attrs_df['Station'].map(HdfUtils.decode_text).tolist()
 
         # Build DataFrame with one column per profile
         result = {
@@ -435,10 +440,10 @@ class HdfChannelCapacity:
                     max_wse_values = np.max(ws_data, axis=0)
 
                     attrs_ds = hdf[f"{base_unsteady}/Cross Section Attributes"]
-                    attrs = attrs_ds[:]
-                    xs_rivers = [a['River'].decode('utf-8').strip() for a in attrs]
-                    xs_reaches = [a['Reach'].decode('utf-8').strip() for a in attrs]
-                    xs_stations = [a['Station'].decode('utf-8').strip() for a in attrs]
+                    attrs_df = HdfUtils.decode_frame(pd.DataFrame(attrs_ds[:]))
+                    xs_rivers = attrs_df['River'].map(HdfUtils.decode_text).tolist()
+                    xs_reaches = attrs_df['Reach'].map(HdfUtils.decode_text).tolist()
+                    xs_stations = attrs_df['Station'].map(HdfUtils.decode_text).tolist()
 
                     logger.debug(f"  Format: RAS 6.x/5.x unsteady ({len(max_wse_values)} XS)")
                 except KeyError:
@@ -452,10 +457,10 @@ class HdfChannelCapacity:
                         max_wse_values = np.max(ws_data, axis=0)
 
                         attrs_ds = hdf[f"{base_steady}/Cross Section Attributes"]
-                        attrs = attrs_ds[:]
-                        xs_rivers = [a['River'].decode('utf-8').strip() for a in attrs]
-                        xs_reaches = [a['Reach'].decode('utf-8').strip() for a in attrs]
-                        xs_stations = [a['Station'].decode('utf-8').strip() for a in attrs]
+                        attrs_df = HdfUtils.decode_frame(pd.DataFrame(attrs_ds[:]))
+                        xs_rivers = attrs_df['River'].map(HdfUtils.decode_text).tolist()
+                        xs_reaches = attrs_df['Reach'].map(HdfUtils.decode_text).tolist()
+                        xs_stations = attrs_df['Station'].map(HdfUtils.decode_text).tolist()
 
                         logger.debug(f"  Format: Steady-state ({len(max_wse_values)} XS)")
                     except KeyError:

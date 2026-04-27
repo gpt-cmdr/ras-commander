@@ -76,6 +76,7 @@ import numpy as np
 
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call, standardize_input
+from .HdfUtils import HdfUtils
 
 logger = get_logger(__name__)
 
@@ -125,9 +126,9 @@ class HdfHydraulicTables:
 
             # Search for matching cross section
             for i, attr in enumerate(attrs):
-                attr_river = attr['River'].decode('utf-8').strip()
-                attr_reach = attr['Reach'].decode('utf-8').strip()
-                attr_rs = attr['RS'].decode('utf-8').strip()
+                attr_river = HdfUtils.decode_text(attr['River'])
+                attr_reach = HdfUtils.decode_text(attr['Reach'])
+                attr_rs = HdfUtils.decode_text(attr['RS'])
 
                 if attr_river == river and attr_reach == reach and attr_rs == rs:
                     logger.debug(f"Found XS at index {i}: {river}/{reach}/RS {rs}")
@@ -195,7 +196,7 @@ class HdfHydraulicTables:
             if 'Variables' in xsec_value.attrs:
                 variables = xsec_value.attrs['Variables']
                 # Variables is Nx2 array: [name, units]
-                col_names = [var[0].decode('utf-8').strip() for var in variables]
+                col_names = [HdfUtils.decode_text(var[0]) for var in variables]
 
                 # Create friendly column names
                 friendly_names = []
@@ -425,9 +426,9 @@ class HdfHydraulicTables:
 
                 # Extract property table for each cross section
                 for i, attr in enumerate(attrs):
-                    river = attr['River'].decode('utf-8').strip()
-                    reach = attr['Reach'].decode('utf-8').strip()
-                    rs = attr['RS'].decode('utf-8').strip()
+                    river = HdfUtils.decode_text(attr['River'])
+                    reach = HdfUtils.decode_text(attr['Reach'])
+                    rs = HdfUtils.decode_text(attr['RS'])
 
                     # Extract property table
                     df = HdfHydraulicTables._extract_property_table(hdf, i)
