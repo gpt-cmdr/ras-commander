@@ -124,7 +124,7 @@ class HdfChannelCapacity:
         Raises:
             ValueError: If input cannot be resolved
         """
-        from ras_commander.hdf import HdfUtils
+        from ras_commander.RasPrjAssets import RasPrjAssets
 
         input_str = str(hdf_input)
 
@@ -140,28 +140,37 @@ class HdfChannelCapacity:
                 )
             return Path(ras_object.folder) / input_str
 
-        # Case 3: Plan/geometry number
-        plan_number = input_str.lstrip('pgPG')
-
         if ras_object is None:
             raise ValueError(
-                f"Cannot resolve number '{plan_number}' without initialized project."
+                f"Cannot resolve number '{input_str}' without initialized project."
             )
 
         try:
             project_folder = ras_object.folder
-            hdfs = HdfUtils.resolve_hdf_paths(
-                project_folder, plan_number, ras_object=ras_object
-            )
-            # Try plan HDF first, fall back to geometry HDF
-            hdf_path = hdfs.get('plan') or hdfs.get('geom')
+            if label.lower().startswith("geometry"):
+                hdf_path = RasPrjAssets.geometry_hdf(
+                    input_str,
+                    ras_object=ras_object,
+                    selector_kind="geom",
+                    must_exist=False,
+                )
+            else:
+                hdf_path = RasPrjAssets.plan_results_hdf(
+                    input_str,
+                    ras_object=ras_object,
+                    must_exist=False,
+                )
             if hdf_path is not None:
                 return Path(hdf_path)
-            return Path(project_folder) / f"unknown.p{plan_number}.hdf"
+            selector_number = RasPrjAssets.extract_number(input_str)
+            suffix = f".p{selector_number}.hdf" if selector_number else f".{input_str}.hdf"
+            return Path(project_folder) / f"unknown{suffix}"
         except Exception as e:
             logger.warning(f"Could not resolve {label} '{input_str}': {e}")
             if hasattr(ras_object, 'folder') and ras_object.folder:
-                return Path(ras_object.folder) / f"unknown.p{plan_number}.hdf"
+                selector_number = RasPrjAssets.extract_number(input_str)
+                suffix = f".p{selector_number}.hdf" if selector_number else f".{input_str}.hdf"
+                return Path(ras_object.folder) / f"unknown{suffix}"
             raise ValueError(f"Failed to resolve {label} '{input_str}': {e}")
 
     # -----------------------------------------------------------------
@@ -201,17 +210,6 @@ class HdfChannelCapacity:
         geom_path = HdfChannelCapacity._standardize_hdf_input(
             geom_hdf, "geometry", _ras
         )
-
-        # If the input looks like a plan number, try to find the geometry HDF
-        input_str = str(geom_hdf)
-        if not input_str.endswith('.hdf') and '/' not in input_str and '\\' not in input_str:
-            # May be a geometry number — try resolving via geom_df
-            geom_num = input_str.lstrip('gG')
-            if hasattr(_ras, 'geom_df') and _ras.geom_df is not None and len(_ras.geom_df) > 0:
-                matches = _ras.geom_df[_ras.geom_df['geom_number'] == geom_num]
-                if len(matches) > 0:
-                    geom_file = Path(matches.iloc[0]['full_path'])
-                    geom_path = geom_file.with_suffix(geom_file.suffix + '.hdf')
 
         if not geom_path.exists():
             raise FileNotFoundError(f"Geometry HDF not found: {geom_path}")

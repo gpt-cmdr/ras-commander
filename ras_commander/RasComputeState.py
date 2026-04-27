@@ -94,42 +94,17 @@ class RasComputeState:
         Returns:
             Dictionary with keys: 'plan', 'geom', 'flow' (values are Path or None)
         """
-        plan_num = RasComputeState._normalize_plan_number(plan_number)
+        assets = RasPrjAssets.plan_assets(
+            plan_number,
+            ras_object=ras_object,
+            must_exist=False,
+        )
 
-        result = {
-            'plan': None,
-            'geom': None,
-            'flow': None
+        return {
+            'plan': assets.plan_path,
+            'geom': assets.geometry_path,
+            'flow': assets.flow_path,
         }
-
-        # Get plan file path from plan_df
-        if hasattr(ras_object, 'plan_df') and ras_object.plan_df is not None:
-            plan_df = ras_object.plan_df
-
-            # Find matching plan row
-            plan_mask = plan_df['plan_number'].astype(str).str.zfill(2) == plan_num
-            if plan_mask.any():
-                plan_row = plan_df[plan_mask].iloc[0]
-
-                # Get plan file path
-                if 'full_path' in plan_row.index and plan_row['full_path']:
-                    result['plan'] = Path(plan_row['full_path'])
-
-                # Get geometry file path
-                if 'Geom Path' in plan_row.index and plan_row['Geom Path']:
-                    result['geom'] = Path(plan_row['Geom Path'])
-                elif 'geom_file' in plan_row.index and plan_row['geom_file']:
-                    result['geom'] = Path(ras_object.project_folder) / plan_row['geom_file']
-
-                # Get flow file path (unsteady or steady)
-                if 'Flow Path' in plan_row.index and plan_row['Flow Path']:
-                    result['flow'] = Path(plan_row['Flow Path'])
-                elif 'unsteady_file' in plan_row.index and plan_row['unsteady_file']:
-                    result['flow'] = Path(ras_object.project_folder) / plan_row['unsteady_file']
-                elif 'steady_file' in plan_row.index and plan_row['steady_file']:
-                    result['flow'] = Path(ras_object.project_folder) / plan_row['steady_file']
-
-        return result
 
     @staticmethod
     def get_plan_hdf_path(plan_number: Union[str, Number], ras_object) -> Path:
