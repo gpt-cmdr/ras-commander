@@ -12,6 +12,7 @@ workspace, currently `H:\Testing\eBFE Model Organization\Validation`.
 ## Validation Status Levels
 
 - `organized`: Files were copied into the delivery folder structure.
+- `hms_validated`: Delivered HMS projects are present under `HMS Model/`, internal HMS file references resolve, and hms-commander can load the project; RAS-only studies document the absence of HMS instead of receiving this status.
 - `path_validated`: Project dataframes and `.rasmap` references resolve to local files.
 - `preprocessor_validated`: A geometry preprocessor run completed and compute messages were reviewed.
 - `results_validated`: Existing HDF result files are present, loadable, and mapped to the project plans.
@@ -51,8 +52,23 @@ organized folder remains traceable to the original delivery.
 - Terrain files are inside `Terrain/`, and `.rasmap` terrain references point there.
 - Land cover files are inside `Land Cover/`, and `.rasmap` land cover references point there.
 - Terrain and land cover CRS match the project CRS where those layers exist.
+- Delivered HEC-HMS projects are copied into `HMS Model/`, preserving the source project folder.
+- If no HMS project is delivered, `HMS Model/README.md` documents how hydrology is supplied instead.
 - Original source grouping and names are preserved enough for engineering review.
 - `agent/model_log.md` records source paths, organization decisions, fixes, and known limitations.
+
+## HMS Checklist
+
+For combined hms-commander plus ras-commander workflows, treat HMS as a separate
+delivery gate rather than a side effect of RAS organization.
+
+- `HMS Model/` exists in every organized study folder.
+- If `.hms` files are delivered, each HMS project folder is copied intact under `HMS Model/`.
+- `.hms`, `.basin`, `.met`, `.control`, `.grid`, and `.pdata` file references resolve to files inside the organized HMS folder or another approved local delivery subfolder.
+- HMS DSS files referenced by `DSS File Name:`, `Filename:`, or similar HMS project fields are present locally.
+- If hms-commander is available for the workflow, the project can be discovered and loaded without path repair.
+- If no HMS project was delivered, a README explains whether hydrology is supplied by RAS steady flow files, RAS DSS inputs, gridded precipitation, or another documented source.
+- The validation matrix records `✓` only for studies with an actual validated HMS project; RAS-only deliveries use `-` and document the reason in notes.
 
 ## Dataframe Checks
 
@@ -157,6 +173,7 @@ Rio Hondo-style 1D steady batch validation:
 An organized eBFE project is delivery-ready only when:
 
 - It passes the organization checklist.
+- It passes HMS validation when a separate HMS project is delivered, or clearly documents that no HMS project was delivered.
 - It passes dataframe path validation.
 - It passes preprocessor validation with reviewed compute messages.
 - If pre-computed result HDFs were absent but the model is a 1D steady

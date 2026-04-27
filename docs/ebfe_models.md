@@ -110,10 +110,18 @@ Use the reusable checklist in
 standard readiness gates:
 
 1. `organized`
-2. `path_validated`
-3. `preprocessor_validated`
-4. `results_validated`
-5. `notebook_validated`
+2. `hms_validated`
+3. `path_validated`
+4. `preprocessor_validated`
+5. `results_validated`
+6. `notebook_validated`
+
+For combined hms-commander plus ras-commander examples, `hms_validated` means
+that delivered HEC-HMS projects are copied under `HMS Model/` and their HMS
+file references resolve locally, then hms-commander can load the organized
+project without path repair. RAS-only deliveries should keep a
+`HMS Model/README.md` explaining whether hydrology is supplied by steady flow
+files, DSS inputs, gridded precipitation, or another documented source.
 
 Use `GeomPreprocessor.run_geometry_preprocessor()` as the assembly validation
 hook for both 1D steady and 2D/unsteady models. It enables detailed logging,

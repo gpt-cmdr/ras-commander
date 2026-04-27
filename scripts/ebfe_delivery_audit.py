@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import shutil
+import sys
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
@@ -24,6 +25,41 @@ DEFAULT_WORKSPACE = Path(
     os.environ.get("RAS_COMMANDER_EBFE_ROOT", r"H:\Testing\eBFE Model Organization")
 )
 REPORT_ROOT = DEFAULT_WORKSPACE / "Validation" / "ebfe_delivery"
+
+HMS_REFERENCE_EXTENSIONS = {
+    ".basin",
+    ".control",
+    ".dss",
+    ".grid",
+    ".hdf",
+    ".hms",
+    ".met",
+    ".pdata",
+    ".shp",
+    ".sqlite",
+    ".tif",
+    ".tiff",
+}
+HMS_REFERENCE_PATTERN = re.compile(
+    r"^\s*"
+    r"(?P<key>"
+    r"DSS\s+File(?:\s+Name|name)?|"
+    r"DSS\s+Filename|"
+    r"FileName|"
+    r"Filename|"
+    r"Basin\s+File|"
+    r"Control\s+File|"
+    r"Grid\s+File|"
+    r"Met\s+File|"
+    r"Paired\s+Data\s+File|"
+    r"Projection\s+File|"
+    r"Terrain\s+File"
+    r")"
+    r"\s*:\s*"
+    r"(?P<value>.+?)"
+    r"\s*$",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -58,6 +94,13 @@ class StudyAudit:
     status: str
     organized_path: Optional[str] = None
     project_count: int = 0
+    hms_status: str = "not_checked"
+    hms_project_count: int = 0
+    hms_file_count: int = 0
+    hms_projects: list[str] = field(default_factory=list)
+    hms_missing_references: list[str] = field(default_factory=list)
+    hms_commander_status: str = "not_checked"
+    hms_notes: list[str] = field(default_factory=list)
     documentation_files: list[str] = field(default_factory=list)
     preprocessor_report: Optional[str] = None
     preprocessor_validated_count: int = 0
@@ -96,6 +139,199 @@ def existing_files(folder: Path, patterns: list[str]) -> list[Path]:
     for pattern in patterns:
         files.extend(sorted(folder.glob(pattern)))
     return [path for path in files if path.is_file()]
+
+
+def is_hms_placeholder_file(path: Path) -> bool:
+    stem = path.stem.lower()
+    return path.suffix.lower() in {".md", ".txt"} and stem in {
+        "readme",
+        "manifest",
+        "model_log",
+        "validation_report",
+    }
+
+
+def clean_hms_reference(raw_value: str) -> Optional[str]:
+    value = raw_value.strip().strip('"').strip("'")
+    if not value or value.lower() in {"none", "null"}:
+        return None
+    if "://" in value or "*" in value:
+        return None
+    suffix = Path(value).suffix.lower()
+    if suffix not in HMS_REFERENCE_EXTENSIONS:
+        return None
+    return value
+
+
+def resolve_hms_reference(reference_file: Path, value: str) -> Path:
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return candidate
+    return (reference_file.parent / candidate).resolve()
+
+
+def find_hms_missing_references(hms_root: Path) -> list[str]:
+    missing: list[str] = []
+    text_suffixes = {".basin", ".control", ".grid", ".hms", ".met", ".pdata"}
+    for reference_file in sorted(hms_root.rglob("*")):
+        if not reference_file.is_file() or reference_file.suffix.lower() not in text_suffixes:
+            continue
+        try:
+            lines = reference_file.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except OSError as exc:
+            missing.append(f"{rel_path(reference_file)}: unable to read ({exc})")
+            continue
+
+        for line_number, line in enumerate(lines, start=1):
+            match = HMS_REFERENCE_PATTERN.match(line)
+            if not match:
+                continue
+            value = clean_hms_reference(match.group("value"))
+            if value is None:
+                continue
+            resolved = resolve_hms_reference(reference_file, value)
+            if not resolved.exists():
+                missing.append(
+                    f"{rel_path(reference_file)}:{line_number} "
+                    f"{match.group('key').strip()} -> {value}"
+                )
+    return missing
+
+
+def prepare_hms_commander_import() -> None:
+    candidates: list[Path] = []
+    env_repo = os.environ.get("HMS_COMMANDER_REPO")
+    if env_repo:
+        candidates.append(Path(env_repo))
+    candidates.append(ROOT.parent / "hms-commander")
+
+    for candidate in candidates:
+        if (candidate / "hms_commander").is_dir():
+            candidate_text = str(candidate)
+            if candidate_text not in sys.path:
+                sys.path.insert(0, candidate_text)
+            return
+
+
+def validate_hms_projects_with_hms_commander(
+    hms_projects: list[Path],
+) -> tuple[str, list[str]]:
+    prepare_hms_commander_import()
+    try:
+        from hms_commander import HmsPrj
+    except Exception as exc:
+        return "not_available", [f"hms-commander import unavailable: {exc}"]
+
+    notes: list[str] = []
+    failures: list[str] = []
+    for hms_project in hms_projects:
+        try:
+            hms_obj = HmsPrj().initialize(hms_project.parent)
+            missing_frames = []
+            for frame_name in ["basin_df", "met_df", "control_df"]:
+                frame = getattr(hms_obj, frame_name, None)
+                if frame is not None and not frame.empty and "exists" in frame.columns:
+                    if not bool(frame["exists"].all()):
+                        missing_frames.append(frame_name)
+            if missing_frames:
+                failures.append(
+                    f"{rel_path(hms_project)} has unresolved hms-commander "
+                    f"component paths in {', '.join(missing_frames)}."
+                )
+                continue
+            notes.append(
+                f"{rel_path(hms_project)} loaded with hms-commander "
+                f"(basins={len(hms_obj.basin_df)}, met={len(hms_obj.met_df)}, "
+                f"controls={len(hms_obj.control_df)}, runs={len(hms_obj.run_df)})."
+            )
+        except Exception as exc:
+            failures.append(f"{rel_path(hms_project)} failed hms-commander load: {exc}")
+
+    if failures:
+        return "failed", notes + failures
+    return "loaded", notes
+
+
+def audit_hms_folder(study_root: Path) -> dict[str, Any]:
+    hms_root = study_root / "HMS Model"
+    audit: dict[str, Any] = {
+        "hms_status": "missing",
+        "hms_project_count": 0,
+        "hms_file_count": 0,
+        "hms_projects": [],
+        "hms_missing_references": [],
+        "hms_commander_status": "not_checked",
+        "hms_notes": [],
+    }
+
+    if not hms_root.exists():
+        audit["hms_notes"].append("HMS Model/ folder is missing from the delivery shell.")
+        return audit
+
+    files = sorted(path for path in hms_root.rglob("*") if path.is_file())
+    hms_projects = sorted(path for path in hms_root.rglob("*.hms") if path.is_file())
+    audit["hms_file_count"] = len(files)
+    audit["hms_project_count"] = len(hms_projects)
+    audit["hms_projects"] = [rel_path(path) for path in hms_projects]
+
+    if hms_projects:
+        missing = find_hms_missing_references(hms_root)
+        commander_status, commander_notes = validate_hms_projects_with_hms_commander(hms_projects)
+        audit["hms_missing_references"] = missing
+        audit["hms_commander_status"] = commander_status
+        if missing:
+            audit["hms_status"] = "broken_references"
+        elif commander_status == "failed":
+            audit["hms_status"] = "hms_commander_failed"
+        elif commander_status == "not_available":
+            audit["hms_status"] = "hms_commander_unavailable"
+        else:
+            audit["hms_status"] = "validated"
+        audit["hms_notes"].append(
+            f"Discovered {len(hms_projects)} HEC-HMS project file(s) under HMS Model/."
+        )
+        audit["hms_notes"].extend(commander_notes)
+        return audit
+
+    if not files:
+        audit["hms_status"] = "not_delivered"
+        audit["hms_notes"].append(
+            "HMS Model/ exists but is empty; add a README if the source delivery has no HMS project."
+        )
+        return audit
+
+    if all(is_hms_placeholder_file(path) for path in files):
+        audit["hms_status"] = "not_delivered"
+        audit["hms_notes"].append(
+            "No .hms project was delivered; HMS Model/ contains documentation only."
+        )
+        return audit
+
+    audit["hms_status"] = "incomplete"
+    audit["hms_notes"].append(
+        "HMS Model/ contains files but no .hms project; inspect source organization."
+    )
+    return audit
+
+
+def apply_hms_audit(study: StudyAudit, study_root: Path) -> None:
+    hms_audit = audit_hms_folder(study_root)
+    study.hms_status = str(hms_audit["hms_status"])
+    study.hms_project_count = int(hms_audit["hms_project_count"])
+    study.hms_file_count = int(hms_audit["hms_file_count"])
+    study.hms_projects = list(hms_audit["hms_projects"])
+    study.hms_missing_references = list(hms_audit["hms_missing_references"])
+    study.hms_commander_status = str(hms_audit["hms_commander_status"])
+    study.hms_notes = list(hms_audit["hms_notes"])
+
+    if study.hms_status in {
+        "missing",
+        "incomplete",
+        "broken_references",
+        "hms_commander_failed",
+        "hms_commander_unavailable",
+    }:
+        study.issues.append(f"HMS organization status is {study.hms_status}.")
 
 
 def suppress_ras_info_logs() -> None:
@@ -570,6 +806,7 @@ def repair_spring_creek(study_root: Path) -> tuple[StudyAudit, ProjectAudit]:
         organized_path=rel_path(study_root),
         project_count=1,
     )
+    apply_hms_audit(study, study_root)
 
     ras_obj = load_project(project_folder)
     project_audit = audit_loaded_project(project_folder, ras_obj)
@@ -673,6 +910,14 @@ def organize_rio_hondo(raw_models_root: Path, documents_root: Path, output_root:
     for folder in folders.values():
         folder.mkdir(parents=True, exist_ok=True)
 
+    (folders["hms"] / "README.md").write_text(
+        "# No HMS Model\n\n"
+        "Rio Hondo is delivered as 1D steady-state HEC-RAS reach models. "
+        "Flow data is contained in steady flow files (.f##) inside each "
+        "reach project.\n",
+        encoding="utf-8",
+    )
+
     copied_files = 0
     watershed_counts: Counter[str] = Counter()
 
@@ -746,6 +991,7 @@ def organize_rio_hondo(raw_models_root: Path, documents_root: Path, output_root:
         "- Lower-level project names and watershed groupings were preserved to keep the original delivery decipherable.",
     ]
     write_text(folders["agent"] / "model_log.md", "\n".join(log_lines) + "\n")
+    apply_hms_audit(study, output_root)
 
     sample_projects = discover_valid_projects(folders["ras"], max_depth=4)
     for project_info in sample_projects[:5]:
@@ -777,6 +1023,7 @@ def audit_lower_colorado(study_root: Path) -> StudyAudit:
         organized_path=rel_path(study_root),
         project_count=len(projects),
     )
+    apply_hms_audit(study, study_root)
 
     for project_info in projects:
         ras_obj = load_project(project_info["folder"])
@@ -810,6 +1057,7 @@ def audit_organized_study(study_area: str, study_root: Path, max_depth: int = 8)
         organized_path=rel_path(study_root),
         project_count=len(projects),
     )
+    apply_hms_audit(study, study_root)
 
     for doc in existing_files(study_root / "Documentation", ["*"]):
         study.documentation_files.append(rel_path(doc))
@@ -829,6 +1077,8 @@ def audit_organized_study(study_area: str, study_root: Path, max_depth: int = 8)
         "",
         f"- Valid HEC-RAS projects discovered: {len(projects)}.",
         "- Project folders were audited for local DSS, projection, terrain, land cover, and result paths.",
+        f"- HMS status: {study.hms_status} "
+        f"({study.hms_project_count} project file(s), {study.hms_file_count} file(s)).",
         "- Preprocessor validation status is applied from the latest geometry preprocessor reports.",
     ]
     write_text(study_root / "agent" / "delivery_audit_2026-04-24.md", "\n".join(note_lines) + "\n")
@@ -836,7 +1086,16 @@ def audit_organized_study(study_area: str, study_root: Path, max_depth: int = 8)
 
 
 def audit_lower_brazos(url_root: Path) -> StudyAudit:
-    url_file = next(url_root.glob("*_ModelURLs.txt"))
+    if (url_root / "RAS Model").exists():
+        study = audit_organized_study("LowerBrazos_12070104", url_root)
+        if study.project_count == 0:
+            study.status = "blocked_missing_archives"
+            study.issues.append(
+                "No valid RAS project folders are organized yet; component downloads/extraction are still pending."
+            )
+        return study
+
+    url_file = next(url_root.rglob("*_ModelURLs.txt"))
     study = StudyAudit(
         study_area="LowerBrazos_12070104",
         source_path=rel_path(url_root),
@@ -844,6 +1103,7 @@ def audit_lower_brazos(url_root: Path) -> StudyAudit:
         status="blocked_missing_archives",
         project_count=0,
     )
+    apply_hms_audit(study, url_root)
     study.issues.append("Only the eBFE URL manifest exists locally. The 188-229 GB model archives are not downloaded.")
     study.documentation_files.append(rel_path(url_file))
     return study
@@ -852,6 +1112,7 @@ def audit_lower_brazos(url_root: Path) -> StudyAudit:
 def build_common_format_markdown(studies: list[StudyAudit]) -> str:
     validated_count = sum(study.preprocessor_validated_count for study in studies)
     failed_count = sum(study.preprocessor_failed_count for study in studies)
+    hms_validated_count = sum(1 for study in studies if study.hms_status == "validated")
     report_paths = sorted(
         {
             study.preprocessor_report
@@ -873,8 +1134,10 @@ def build_common_format_markdown(studies: list[StudyAudit]) -> str:
             "- Put the project projection in `Projection/` and point `.rasmap` at that local `.prj` file.",
             "- Put terrain assets in `Terrain/` and keep `.rasmap` terrain destination and source references local.",
             "- Put land cover assets in `Land Cover/` and keep `.rasmap` land cover references local.",
+            "- Put delivered HEC-HMS projects in `HMS Model/`; if no HMS project is delivered, keep a README that explains where hydrology is supplied.",
             "- Preserve watershed and project naming from the source delivery so the organized copy is still easy to trace back.",
             "- Treat `preprocessor_validated` as the acceptance gate for project assembly; path validation alone is not enough.",
+            "- Treat `hms_validated` as the hydrology handoff gate for combined hms-commander plus ras-commander workflows.",
             "",
             "## Study-Level Layout",
             "",
@@ -897,14 +1160,15 @@ def build_common_format_markdown(studies: list[StudyAudit]) -> str:
             "## Current Corpus Notes",
             "",
             f"- Studies reviewed this pass: {len(studies)}",
+            f"- HMS project validation passed for {hms_validated_count} study/studies.",
             f"- Geometry preprocessor validation passed for {validated_count} project(s); failures: {failed_count}.",
             f"- Preprocessor reports: {', '.join(f'`{path}`' for path in report_paths)}" if report_paths else "- Preprocessor reports: not available.",
             "- `Spring Creek` drove the 2D rules: it has pre-computed results, a land cover HDF, terrain, and a `.rasmap` file.",
-            "- `North Galveston Bay` confirms nested RAS_Submittal extraction, Output integration, Terrain sidecar repair, and land-cover path rewrites.",
+            "- `North Galveston Bay` confirms HMS project organization, nested RAS_Submittal extraction, Output integration, Terrain sidecar repair, and land-cover path rewrites.",
             "- `Upper Guadalupe` confirms cascaded 2D models with per-project terrain, land cover, upstream DSS copies, and large preprocessor runtimes.",
             "- `Rio Hondo` drove the bulk 1D rules: preserve watershed folders, remove the extra raw `Model/` nesting, and keep project files directly openable.",
             "- `Lower Colorado-Cummins` confirms the 1D reach-model pattern is still understandable inside the same outer delivery shell.",
-            "- `Lower Brazos` remains blocked because only the URL manifest is local.",
+            "- `Lower Brazos` remains pending until component downloads, HMS status, and RAS preprocessor validation are complete.",
             "",
         ]
     ) + "\n"
@@ -927,6 +1191,24 @@ def build_summary_markdown(studies: list[StudyAudit]) -> str:
         if study.organized_path:
             lines.append(f"- Organized Path: `{study.organized_path}`")
         lines.append(f"- Project Count: {study.project_count}")
+        lines.append(
+            f"- HMS Status: {study.hms_status} "
+            f"({study.hms_project_count} project file(s), {study.hms_file_count} file(s))"
+        )
+        if study.hms_commander_status != "not_checked":
+            lines.append(f"- hms-commander Status: {study.hms_commander_status}")
+        if study.hms_projects:
+            lines.append("- HMS Projects:")
+            for item in study.hms_projects:
+                lines.append(f"  - `{item}`")
+        if study.hms_notes:
+            lines.append("- HMS Notes:")
+            for item in study.hms_notes:
+                lines.append(f"  - {item}")
+        if study.hms_missing_references:
+            lines.append("- HMS Missing References:")
+            for item in study.hms_missing_references:
+                lines.append(f"  - {item}")
         if study.documentation_files:
             lines.append(f"- Documentation Files: {len(study.documentation_files)}")
         if study.preprocessor_report:

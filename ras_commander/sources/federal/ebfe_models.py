@@ -339,7 +339,7 @@ class RasEbfeModels:
         Returns:
             Path to organized model with structure:
                 SpringCreek_12040102/
-                ├── HMS Model/        (empty - no HMS for Pattern 3a)
+                ├── HMS Model/        (README - no HMS for Pattern 3a)
                 ├── RAS Model/        (Spring 2D model + terrain)
                 ├── Spatial Data/     (terrain + shapefiles)
                 ├── Documentation/    (inventory spreadsheet)
@@ -468,6 +468,13 @@ class RasEbfeModels:
         if inventory.exists():
             shutil.copy2(inventory, folders['docs'] / inventory.name)
             print(f"  ✓ Copied inventory")
+
+        (folders['hms'] / "README.md").write_text(
+            "# No HMS Model\n\n"
+            "Spring Creek is delivered as a HEC-RAS model archive. No separate "
+            "HEC-HMS project is included in the eBFE source delivery.\n",
+            encoding='utf-8',
+        )
 
         # CRITICAL: Correct ALL file paths in HEC-RAS files
         print("\n[5/6] Correcting all file paths to relative references...")
@@ -4204,7 +4211,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 **Files Organized**: {files_count}
 
 ### Structure Created
-- HMS Model/ (empty - no HMS for Pattern 3a)
+- HMS Model/ (README - no HMS for Pattern 3a)
 - RAS Model/ ({files_count} files, ~9.3 GB)
 - Spatial Data/ (terrain + shapefiles, ~515 MB)
 - Documentation/ (1 file, 58 KB)
