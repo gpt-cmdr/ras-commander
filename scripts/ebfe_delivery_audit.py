@@ -1165,6 +1165,7 @@ def build_common_format_markdown(studies: list[StudyAudit]) -> str:
             f"- Preprocessor reports: {', '.join(f'`{path}`' for path in report_paths)}" if report_paths else "- Preprocessor reports: not available.",
             "- `Spring Creek` drove the 2D rules: it has pre-computed results, a land cover HDF, terrain, and a `.rasmap` file.",
             "- `North Galveston Bay` confirms HMS project organization, nested RAS_Submittal extraction, Output integration, Terrain sidecar repair, and land-cover path rewrites.",
+            "- `Lake Maurepas` confirms HMS project promotion from a single-archive hydrology folder into the canonical `HMS Model/` folder.",
             "- `Upper Guadalupe` confirms cascaded 2D models with per-project terrain, land cover, upstream DSS copies, and large preprocessor runtimes.",
             "- `Rio Hondo` drove the bulk 1D rules: preserve watershed folders, remove the extra raw `Model/` nesting, and keep project files directly openable.",
             "- `Lower Colorado-Cummins` confirms the 1D reach-model pattern is still understandable inside the same outer delivery shell.",

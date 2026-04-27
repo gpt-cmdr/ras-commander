@@ -630,6 +630,7 @@ Complete working examples demonstrating each model:
 
 **Demonstrates**:
 - Organizing Pattern 3 single-archive Louisiana 2D model delivery.
+- Validating the delivered Lake Maurepas HEC-HMS project from `HMS Model/` with hms-commander.
 - Confirming local projection, terrain, land-cover, and RASMapper assets.
 - Reusing saved ras-commander geometry-preprocessor evidence for plan 02.
 - Documenting a preprocessor-valid model where full hydraulic result HDFs are absent from the source archive.
@@ -704,7 +705,7 @@ Current validation is tracked in the repository-level
 - Lower Colorado-Cummins sample: geometry preprocessor passed.
 - Rio Hondo: 253 1D steady reach projects passed sequential geometry preprocessor validation, and 253/253 steady plans computed successfully in `steady_plan_validation_20260424_160022.json`.
 - Spring Creek: 2D geometry preprocessor passed.
-- North Galveston Bay: nested download/extract/organize path passed geometry preprocessor validation.
+- North Galveston Bay: nested download/extract/organize path passed geometry preprocessor validation; delivered HMS project loads through hms-commander.
 - Upper Guadalupe: UPGU1, UPGU2, and UPGU3 passed; UPGU4 requires the 7200-second validation record because its geometry preprocessor can exceed one hour.
 - Lower Brazos: manifest/inventory shell is organized by default; the three 188-229 GB model components must be explicitly selected before full model validation.
 - Amite: full E2E organization completed for five RAS projects. WA1, WA2,
@@ -712,7 +713,7 @@ Current validation is tracked in the repository-level
   `RasGeomWriter` / `ERROR: Incorrect Type in ./Projection. (Expected String)`
   failure and requires manual terrain rebuild or repair inside RASMapper.
 - Tickfaw: organized, path-audited, preprocessor-valid, and results-ready with seven local hydraulic plan HDFs; see `examples/955_ebfe_tickfaw_validation.ipynb`.
-- Lake Maurepas: organized, path-audited, and preprocessor-valid; source archive scan found no RAS plan-result HDFs, so it is not yet a results-ready demo; see `examples/954_ebfe_lake_maurepas_validation.ipynb`.
+- Lake Maurepas: organized, HMS-validated through hms-commander, path-audited, and preprocessor-valid; source archive scan found no RAS plan-result HDFs, so it is not yet a results-ready demo; see `examples/954_ebfe_lake_maurepas_validation.ipynb`.
 
 ### Notebook Testing
 

@@ -2416,6 +2416,77 @@ HEC-RAS version: 5.0.1 / 5.0.3
         return copied
 
     @staticmethod
+    def _organize_delivered_hms_projects(
+        source_root: Path,
+        hms_folder: Path,
+        display_name: str,
+        huc8: str,
+    ) -> Dict[str, Any]:
+        """Copy delivered HEC-HMS projects into ``HMS Model/`` when present."""
+        source_root = Path(source_root)
+        hms_folder = Path(hms_folder)
+        hms_folder.mkdir(parents=True, exist_ok=True)
+
+        hms_files = sorted(
+            path for path in source_root.rglob("*.hms") if path.is_file()
+        )
+        if not hms_files:
+            (hms_folder / "README.md").write_text(
+                "# No HMS Model Organized\n\n"
+                f"{display_name} ({huc8}) was delivered as a RAS model archive. "
+                "No separate HMS project was found in the source delivery.\n",
+                encoding='utf-8',
+            )
+            return {"projects": [], "files_copied": 0}
+
+        readme = hms_folder / "README.md"
+        if readme.exists():
+            readme.unlink()
+
+        projects = []
+        files_copied = 0
+        copied_roots: set[Path] = set()
+        generic_hms_names = {"hms", "hec-hms", "hec_hms", "hms_model"}
+
+        for hms_file in hms_files:
+            project_root = hms_file.parent
+            if project_root in copied_roots:
+                continue
+
+            sibling_hms_files = sorted(project_root.glob("*.hms"))
+            if (
+                project_root.name.lower() in generic_hms_names
+                and len(sibling_hms_files) == 1
+            ):
+                destination_name = hms_file.stem
+            else:
+                destination_name = project_root.name
+
+            destination = hms_folder / destination_name
+            files_copied += RasEbfeModels._copy_tree_contents(
+                project_root,
+                destination,
+                skip_suffixes={".zip"},
+            )
+            copied_roots.add(project_root)
+            for copied_hms in sorted(destination.glob("*.hms")):
+                projects.append(str(copied_hms.relative_to(hms_folder)))
+
+        project_lines = "\n".join(f"- `{project}`" for project in projects)
+        (hms_folder / "README.md").write_text(
+            "# HMS Model\n\n"
+            f"{display_name} ({huc8}) includes delivered HEC-HMS project "
+            "content. The project folder(s) below were copied from the source "
+            "archive into this canonical delivery folder for hms-commander "
+            "workflows.\n\n"
+            "## Projects\n\n"
+            f"{project_lines}\n",
+            encoding='utf-8',
+        )
+
+        return {"projects": projects, "files_copied": files_copied}
+
+    @staticmethod
     def _organize_single_archive_model(
         display_name: str,
         huc8: str,
@@ -2465,18 +2536,23 @@ HEC-RAS version: 5.0.1 / 5.0.3
         print(f"  Copied {ras_files} file(s)")
         print(f"  Discovered {len(projects)} RAS project folder(s)")
 
-        print("\n[2/4] Organizing documentation and HMS placeholder...")
+        print("\n[2/4] Organizing documentation and HMS content...")
         docs_copied = RasEbfeModels._copy_documentation_assets(
             source_root,
             folders['docs'],
         )
-        (folders['hms'] / "README.md").write_text(
-            "# No HMS Model Organized\n\n"
-            f"{display_name} ({huc8}) was delivered as a RAS model archive. "
-            "No separate HMS project is organized by this eBFE helper.\n",
-            encoding='utf-8',
+        hms_summary = RasEbfeModels._organize_delivered_hms_projects(
+            source_root,
+            folders['hms'],
+            display_name,
+            huc8,
         )
         print(f"  Copied {docs_copied} documentation file(s)")
+        print(
+            "  HMS projects organized: "
+            f"{len(hms_summary.get('projects', []))} "
+            f"({hms_summary.get('files_copied', 0)} file(s))"
+        )
 
         print("\n[3/4] Applying common delivery standardization...")
         dss_corrections = RasEbfeModels._correct_dss_paths(folders['ras'])
@@ -2513,6 +2589,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             terrain_corrections=terrain_corrections,
             standardization=standardization,
             dss_results=dss_results,
+            hms_summary=hms_summary,
         )
 
         print(f"\n{display_name} organized to: {output_folder}")
@@ -4623,13 +4700,19 @@ time.
         terrain_corrections: int,
         standardization: Dict,
         dss_results: List[Dict],
+        hms_summary: Optional[Dict[str, Any]] = None,
     ):
         """Create agent/model_log.md for single-archive eBFE deliveries."""
         agent_folder.mkdir(parents=True, exist_ok=True)
+        hms_summary = hms_summary or {"projects": [], "files_copied": 0}
         project_lines = "\n".join(
             f"- {project.relative_to(dest / 'RAS Model')}"
             for project in projects
         ) or "- No valid RAS project folders discovered"
+        hms_lines = "\n".join(
+            f"- {project}"
+            for project in hms_summary.get("projects", [])
+        ) or "- No delivered HEC-HMS project found"
 
         dss_section = ""
         if dss_results:
@@ -4655,10 +4738,15 @@ time.
 **Output**: {dest}
 **RAS Files Copied**: {ras_files}
 **Documentation Files Copied**: {docs_copied}
+**HMS Files Copied**: {hms_summary.get('files_copied', 0)}
 
 ## RAS Project Folders
 
 {project_lines}
+
+## HMS Project Folders
+
+{hms_lines}
 
 ## Delivery Standardization
 
