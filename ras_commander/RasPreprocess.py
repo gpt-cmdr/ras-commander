@@ -18,7 +18,6 @@ Classes:
     RasPreprocess - Static class for Windows preprocessing operations.
 """
 
-import re
 import shutil
 import subprocess
 import time
@@ -113,20 +112,12 @@ class RasPreprocess:
         project_folder = Path(ras_obj.project_folder)
         project_name = ras_obj.project_name
 
-        # Get geometry number from plan_df (DataFrame-first), fallback to file parsing
-        geometry_number = None
-        try:
-            plan_row = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan_num]
-            if not plan_row.empty and 'Geom File' in plan_row.columns:
-                geom_ref = str(plan_row['Geom File'].iloc[0])
-                m = re.search(r'(\d+)', geom_ref)
-                if m:
-                    geometry_number = m.group(1)
-        except Exception:
-            pass
+        # Get geometry number from project metadata, fallback to plan file parsing.
+        assets = RasPrjAssets.plan_assets(plan_num, ras_object=ras_obj, must_exist=False)
+        geometry_number = assets.geometry_number
 
         if geometry_number is None:
-            plan_path = RasPlan.get_plan_path(plan_num, ras_obj)
+            plan_path = assets.plan_path or RasPlan.get_plan_path(plan_num, ras_obj)
             if plan_path:
                 geometry_number = RasPreprocess._extract_geometry_number(Path(plan_path))
             if geometry_number is None:
@@ -298,20 +289,11 @@ class RasPreprocess:
         project_folder = Path(ras_obj.project_folder)
         project_name = ras_obj.project_name
 
-        # Determine geometry number
-        geometry_number = None
-        try:
-            plan_row = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan_num]
-            if not plan_row.empty and 'Geom File' in plan_row.columns:
-                geom_ref = str(plan_row['Geom File'].iloc[0])
-                m = re.search(r'(\d+)', geom_ref)
-                if m:
-                    geometry_number = m.group(1)
-        except Exception:
-            pass
+        assets = RasPrjAssets.plan_assets(plan_num, ras_object=ras_obj, must_exist=False)
+        geometry_number = assets.geometry_number
 
         if geometry_number is None:
-            plan_path = RasPlan.get_plan_path(plan_num, ras_obj)
+            plan_path = assets.plan_path or RasPlan.get_plan_path(plan_num, ras_obj)
             if plan_path:
                 geometry_number = RasPreprocess._extract_geometry_number(Path(plan_path))
             if geometry_number is None:
@@ -347,9 +329,7 @@ class RasPreprocess:
             for line in content.splitlines():
                 if line.strip().startswith("Geom File="):
                     geom_ref = line.split('=', 1)[1].strip()
-                    m = re.search(r'(\d+)', geom_ref)
-                    if m:
-                        return m.group(1)
+                    return RasPrjAssets.extract_number(geom_ref, prefix="g")
         except Exception as e:
             logger.debug(f"Could not read geometry number from {plan_path}: {e}")
         return None

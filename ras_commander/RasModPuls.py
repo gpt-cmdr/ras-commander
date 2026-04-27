@@ -593,15 +593,17 @@ class RasModPuls:
         """Resolve plan HDF path from plan number via ras_object."""
         try:
             from . import ras as global_ras
+            from .RasPrjAssets import RasPrjAssets
+
             _ras = ras_object if ras_object is not None else global_ras
-            plan_num = plan_number.lstrip('p')
-            plan_row = _ras.plan_df[_ras.plan_df['plan_number'] == plan_num]
-            if len(plan_row) == 0:
-                raise ValueError(f"Plan {plan_number} not found in project")
-            hdf_path = plan_row['HDF_Results_Path'].iloc[0]
-            if hdf_path is None or (hasattr(hdf_path, '__class__') and hdf_path != hdf_path):
+            hdf_path = RasPrjAssets.plan_results_hdf(
+                plan_number,
+                ras_object=_ras,
+                must_exist=False,
+            )
+            if hdf_path is None:
                 raise ValueError(f"Plan {plan_number} has not been executed (no HDF file)")
-            return Path(str(hdf_path))
+            return Path(hdf_path)
         except Exception as e:
             raise ValueError(f"Cannot resolve HDF path for plan {plan_number}: {e}") from e
 
@@ -617,18 +619,26 @@ class RasModPuls:
         """
         try:
             from . import ras as global_ras
+            from .RasPrjAssets import RasPrjAssets
+
             _ras = ras_object if ras_object is not None else global_ras
-            plan_num = plan_number.lstrip('p') if plan_number else None
-            if plan_num:
-                plan_row = _ras.plan_df[_ras.plan_df['plan_number'] == plan_num]
-                if len(plan_row) > 0:
-                    geom_num = plan_row['Geom File'].iloc[0]
-                    geom_row = _ras.geom_df[_ras.geom_df['geom_number'] == geom_num]
-                    if len(geom_row) > 0:
-                        geom_file = Path(str(geom_row['full_path'].iloc[0]))
-                        geom_hdf = Path(str(geom_file) + '.hdf')
-                        if geom_hdf.exists():
-                            return geom_hdf
+            if plan_number:
+                geom_hdf = RasPrjAssets.geometry_hdf(
+                    plan_number,
+                    ras_object=_ras,
+                    selector_kind="plan",
+                    must_exist=True,
+                )
+                if geom_hdf is not None:
+                    return geom_hdf
+            geom_hdf = RasPrjAssets.geometry_hdf(
+                plan_hdf_path,
+                ras_object=_ras,
+                selector_kind="plan_hdf",
+                must_exist=True,
+            )
+            if geom_hdf is not None:
+                return geom_hdf
         except Exception:
             pass
         return None
