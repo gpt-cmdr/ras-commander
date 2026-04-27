@@ -24,6 +24,30 @@ logger = get_logger(__name__)
 # =============================================================================
 
 @dataclass
+class WorkerExecutionRequest:
+    """Request for executing one plan on a worker."""
+
+    plan_number: str
+    ras_object: Any
+    num_cores: int = 4
+    clear_geompre: bool = False
+    force_geompre: bool = False
+    force_rerun: bool = False
+    sub_worker_id: int = 1
+    autoclean: bool = True
+
+
+@dataclass
+class WorkerExecutionOutcome:
+    """Worker-owned execution outcome before public result wrapping."""
+
+    success: bool
+    hdf_path: Optional[str] = None
+    error_message: Optional[str] = None
+    artifacts: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class RasWorker:
     """
     Base class for remote execution workers.
@@ -51,6 +75,11 @@ class RasWorker:
         if not self.worker_type:
             raise ValueError("worker_type is required")
         # Note: ras_exe_path is optional - will be obtained from ras object during execution
+
+    @log_call
+    def execute_plan(self, request: WorkerExecutionRequest) -> WorkerExecutionOutcome:
+        """Execute one plan on this worker."""
+        raise NotImplementedError(f"{self.worker_type} worker execution is not implemented")
 
 
 # =============================================================================

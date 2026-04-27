@@ -56,10 +56,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Optional, Any
 
-from .RasWorker import RasWorker
+from .RasWorker import RasWorker, WorkerExecutionRequest, WorkerExecutionOutcome
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 from ..RasUtils import RasUtils
+from ..RasPrjAssets import RasPrjAssets
 
 logger = get_logger(__name__)
 
@@ -185,6 +186,36 @@ class DockerWorker(RasWorker):
         logger.debug(f"DockerWorker initialized: image={self.docker_image}, "
                     f"host={self.docker_host or 'local'}, remote={self._is_remote}, "
                     f"max_parallel={self.max_parallel_plans}")
+
+    @log_call
+    def execute_plan(self, request: WorkerExecutionRequest) -> WorkerExecutionOutcome:
+        """Execute one plan through the existing Docker worker function."""
+        success = execute_docker_plan(
+            worker=self,
+            plan_number=request.plan_number,
+            ras_obj=request.ras_object,
+            num_cores=request.num_cores,
+            clear_geompre=request.clear_geompre,
+            force_geompre=request.force_geompre,
+            force_rerun=request.force_rerun,
+            sub_worker_id=request.sub_worker_id,
+            autoclean=request.autoclean,
+        )
+        hdf_path = RasPrjAssets.plan_results_hdf(
+            request.plan_number,
+            ras_object=request.ras_object,
+            must_exist=True,
+        )
+        if hdf_path is None:
+            hdf_path = Path(request.ras_object.project_folder) / (
+                f"{request.ras_object.project_name}.p{request.plan_number}.tmp.hdf"
+            )
+            if not hdf_path.exists():
+                hdf_path = None
+        return WorkerExecutionOutcome(
+            success=success,
+            hdf_path=str(hdf_path) if success and hdf_path is not None else None,
+        )
 
 
 @log_call
@@ -367,6 +398,8 @@ def execute_docker_plan(
     ras_obj,
     num_cores: int,
     clear_geompre: bool,
+    force_geompre: bool = False,
+    force_rerun: bool = False,
     sub_worker_id: int = 1,
     autoclean: bool = True
 ) -> bool:
@@ -383,14 +416,14 @@ def execute_docker_plan(
         ras_obj: RasPrj object with project information
         num_cores: Number of cores for simulation
         clear_geompre: Whether to clear geometry preprocessor files
+        force_geompre: Force full geometry reprocessing before staging
+        force_rerun: Force execution even if results are current
         sub_worker_id: Sub-worker identifier for parallel execution
         autoclean: Remove staging files after completion
 
     Returns:
         bool: True if execution succeeded, False otherwise
     """
-    docker = check_docker_dependencies()
-
     # CRITICAL: Capture project info at the START of execution
     # This prevents issues if another thread modifies ras_obj during execution
     # (e.g., via init_ras_project calls in preprocessing)
@@ -403,6 +436,21 @@ def execute_docker_plan(
         logger.error(f"Project folder does not exist: {project_folder}")
         logger.error("This may indicate a thread-safety issue with ras_obj modification")
         return False
+
+    if not force_rerun:
+        from ..RasComputeState import RasComputeState
+        is_current, reason = RasComputeState.are_plan_results_current(plan_number, ras_obj)
+        if is_current:
+            logger.info(f"Skipping Docker execution of plan {plan_number}: {reason}")
+            return True
+        logger.debug(f"Plan {plan_number} needs Docker execution: {reason}")
+
+    if force_geompre:
+        from ..RasComputeState import RasComputeState
+        RasComputeState.clear_geom_hdf(plan_number, ras_obj)
+        logger.info(f"Cleared geometry HDF for plan {plan_number} before Docker execution")
+
+    docker = check_docker_dependencies()
 
     logger.info(f"Starting Docker execution: plan {plan_number}, sub-worker {sub_worker_id}")
 

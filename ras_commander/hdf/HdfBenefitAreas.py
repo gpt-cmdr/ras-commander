@@ -296,6 +296,7 @@ class HdfBenefitAreas:
             ValueError: If input cannot be resolved to HDF path
         """
         from ras_commander.hdf import HdfUtils
+        from ras_commander.RasPrjAssets import RasPrjAssets
 
         # Convert to string for pattern matching
         input_str = str(hdf_input)
@@ -314,8 +315,7 @@ class HdfBenefitAreas:
             return Path(ras_object.folder) / input_str
 
         # Case 3: Plan number (assume anything else is a plan number)
-        # Remove 'p' prefix if present (e.g., "p01" -> "01")
-        plan_number = input_str.lstrip('p')
+        plan_number = RasPrjAssets.normalize_number(input_str, prefix="p")
 
         if ras_object is None:
             raise ValueError(

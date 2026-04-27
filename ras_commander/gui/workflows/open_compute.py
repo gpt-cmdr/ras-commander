@@ -210,8 +210,8 @@ class OpenAndComputeWorkflow:
                 # Only check HDF if it was modified since we started
                 try:
                     if hdf_path.exists() and hdf_path.stat().st_mtime > hdf_mtime_before:
-                        from ...RasCurrency import RasCurrency
-                        if RasCurrency.check_plan_hdf_complete(hdf_path):
+                        from ...RasComputeState import RasComputeState
+                        if RasComputeState.check_plan_hdf_complete(hdf_path):
                             logger.info("Detected 'Complete Process' in HDF — computation complete")
                             completion_detected = True
                             break
