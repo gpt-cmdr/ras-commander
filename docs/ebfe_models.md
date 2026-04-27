@@ -91,6 +91,7 @@ Current built-in organizers include:
 | `north-galveston-bay` | 12040203 | Compound HMS plus nested 2D RAS delivery. |
 | `upper-guadalupe` | 12100201 | Four cascaded 2D watershed models. |
 | `eleven-point` | 11010011 | Small split-delivery 2D model archive; organized, path-audited, results-ready, and geometry-preprocessor validated with HEC-RAS 6.6. |
+| `spring-river` | 11010010 | Distinct Spring HUC model archive using `SpringRiver_11010010` naming to avoid confusion with `spring-creek` / `SpringCreek_12040102`. |
 | `lower-colorado-cummins` | 12090301 | 1D steady BLE reach-model collection. |
 | `rio-hondo` | 13060008 | 1D steady BLE reach-model collection. |
 | `amite` | 08070202 | Louisiana component delivery with terrain rebuild handling for CRS mismatches. |
@@ -709,6 +710,7 @@ Current validation is tracked in the repository-level
 - North Galveston Bay: nested download/extract/organize path passed geometry preprocessor validation; delivered HMS project loads through hms-commander.
 - Upper Guadalupe: UPGU1, UPGU2, and UPGU3 passed; UPGU4 requires the 7200-second validation record because its geometry preprocessor can exceed one hour.
 - Eleven Point: organized from the split `Input.zip`, `Terrain.zip`, and `Land_Cover.zip` delivery; path-audited with zero issues, seven local plan HDFs, and a passing ras-commander geometry-preprocessor run using HEC-RAS 6.6.
+- Spring River: cataloged separately from Spring Creek as `spring-river` / `SpringRiver_11010010`; download, organization, path audit, and geometry-preprocessor validation are pending.
 - Lower Brazos: manifest/inventory shell is organized by default; the three 188-229 GB model components must be explicitly selected before full model validation.
 - Amite: full E2E organization completed for five RAS projects. WA1, WA2,
   WA3, and WA5 passed geometry preprocessor validation; WA4 is blocked by a

@@ -35,6 +35,7 @@ DEFAULT_MODELS = [
     "north-galveston-bay",
     "upper-guadalupe",
     "eleven-point",
+    "spring-river",
     "amite",
     "tickfaw",
     "lake-maurepas",
@@ -74,6 +75,7 @@ def organizer_kwargs(model_key: str, args: argparse.Namespace) -> dict[str, Any]
         "north-galveston-bay",
         "upper-guadalupe",
         "eleven-point",
+        "spring-river",
         "lower-brazos",
         "amite",
         "tickfaw",
@@ -280,7 +282,7 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Models to process. Use slugs such as spring-creek, "
             "north-galveston-bay, upper-guadalupe, rio-hondo, "
-            "lower-colorado-cummins, eleven-point, lower-brazos, "
+            "lower-colorado-cummins, eleven-point, spring-river, lower-brazos, "
             "amite, tickfaw, lake-maurepas, or all."
         ),
     )
