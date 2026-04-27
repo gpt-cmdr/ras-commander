@@ -1596,16 +1596,29 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         if processed_components:
             for component_root in processed_components:
                 component_name = component_root.name.replace("_extracted", "")
-                projects = RasEbfeModels._discover_valid_ras_projects(component_root)
+                component_source = RasEbfeModels._select_split_delivery_source_root(
+                    component_root
+                )
+                component_destination = folders['ras'] / component_name
+                copied_files += RasEbfeModels._copy_tree_contents(
+                    component_source,
+                    component_destination,
+                    skip_suffixes={".zip"},
+                )
+                RasEbfeModels._normalize_split_delivery_ras_folder(
+                    component_destination
+                )
+                projects = RasEbfeModels._discover_valid_ras_projects(
+                    component_destination
+                )
                 if not projects:
-                    print(f"  No valid RAS projects found in {component_root}")
+                    print(f"  No valid RAS projects found in {component_source}")
                     continue
-                for project_folder in projects:
-                    destination = folders['ras'] / component_name / project_folder.name
-                    copied_files += RasEbfeModels._copy_tree_contents(
-                        project_folder,
-                        destination,
-                    )
+                print(
+                    "  Staged "
+                    f"{component_name} from {component_source.name}: "
+                    f"{len(projects)} RAS project folder(s)"
+                )
 
             standardization = RasEbfeModels._standardize_ras_model_tree(folders['ras'])
             if validate_dss:
@@ -2300,6 +2313,72 @@ HEC-RAS version: 5.0.1 / 5.0.3
         if candidate.exists() and candidate.is_dir():
             return candidate
         return downloaded_folder
+
+    @staticmethod
+    def _select_split_delivery_source_root(component_root: Path) -> Path:
+        """Find the parent folder for an extracted split eBFE component.
+
+        Pattern 2 archives commonly contain sibling ``Input/``, ``Terrain/``,
+        ``LandCover/``, and ``Output/`` folders. The best source root is the
+        folder that contains those siblings, not the nested project folder.
+        """
+        component_root = Path(component_root)
+        if not component_root.exists():
+            return component_root
+
+        candidate_roots = {component_root}
+        split_names = {
+            "input",
+            "terrain",
+            "output",
+            "outputs",
+            "landcover",
+            "land cover",
+            "landuse",
+            "dss",
+            "dss input",
+            "dss inputs",
+        }
+        for path in component_root.rglob("*"):
+            if path.is_dir() and path.name.lower() in split_names:
+                candidate_roots.add(path.parent)
+
+        def score(candidate: Path) -> tuple[int, int]:
+            names = {
+                child.name.lower()
+                for child in candidate.iterdir()
+                if child.is_dir()
+            }
+            split_score = sum(1 for name in names if name in split_names)
+            input_root = next(
+                (
+                    candidate / name
+                    for name in ("Input", "input")
+                    if (candidate / name).exists()
+                ),
+                candidate,
+            )
+            try:
+                project_count = len(
+                    RasEbfeModels._discover_valid_ras_projects(input_root)
+                )
+            except Exception:
+                project_count = 0
+            try:
+                depth = len(candidate.relative_to(component_root).parts)
+            except ValueError:
+                depth = 999
+            return (split_score * 100 + project_count * 10 - depth, -depth)
+
+        best = max(candidate_roots, key=score)
+        if score(best)[0] <= 0:
+            return RasEbfeModels._select_archive_source_root(component_root)
+        return best
+
+    @staticmethod
+    def _normalize_split_delivery_ras_folder(ras_folder: Path) -> Dict[str, int]:
+        """Normalize common split-delivery Input/Terrain/LandCover/Output folders."""
+        return RasEbfeModels._normalize_north_galveston_ras_submission(ras_folder)
 
     @staticmethod
     def _copy_documentation_assets(source_root: Path, docs_folder: Path) -> int:
