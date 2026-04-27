@@ -610,6 +610,30 @@ Complete working examples demonstrating each model:
 - Cascade structure and execution
 - Emphasis: "This library exists to solve this exact problem"
 
+### 953_ebfe_rio_hondo_steady_collection.ipynb
+
+**Demonstrates**:
+- Organizing and validating the Rio Hondo 1D steady BLE reach-model collection.
+- Sequential steady-plan validation for 253 projects.
+- Reading generated HDF compute messages after successful steady-plan execution.
+- Distinguishing 1D steady result generation from 2D preprocessor validation.
+
+### 954_ebfe_lake_maurepas_validation.ipynb
+
+**Demonstrates**:
+- Organizing Pattern 3 single-archive Louisiana 2D model delivery.
+- Confirming local projection, terrain, land-cover, and RASMapper assets.
+- Reusing saved ras-commander geometry-preprocessor evidence for plan 02.
+- Documenting a preprocessor-valid model where full hydraulic result HDFs are absent from the source archive.
+
+### 955_ebfe_tickfaw_validation.ipynb
+
+**Demonstrates**:
+- Organizing Pattern 3 single-archive Louisiana 2D model delivery with results.
+- Confirming local projection, terrain, land-cover, and RASMapper assets.
+- Reusing saved ras-commander geometry-preprocessor evidence for plan 13.
+- Verifying that all seven plan result HDF paths resolve inside the organized RAS project folder.
+
 ## Organizing New Models
 
 For eBFE models not included in RasEbfeModels, use the **ebfe_organize_models agent skill**:
@@ -677,14 +701,18 @@ Current validation is tracked in the repository-level
 - Lower Brazos: manifest/inventory shell is organized by default; the three 188-229 GB model components must be explicitly selected before full model validation.
 - Amite: full E2E organization completed for five RAS projects. WA1, WA2,
   WA3, and WA5 passed geometry preprocessor validation; WA4 is blocked by a
-  terrain coverage/face-table failure after land-cover and nonstandard plan
-  numbering fixes.
-- Tickfaw and Lake Maurepas: registered in `RasEbfeModels.available_models()` and queued after Amite.
+  `RasGeomWriter` / `ERROR: Incorrect Type in ./Projection. (Expected String)`
+  failure and requires manual terrain rebuild or repair inside RASMapper.
+- Tickfaw: organized, path-audited, preprocessor-valid, and results-ready with seven local hydraulic plan HDFs; see `examples/955_ebfe_tickfaw_validation.ipynb`.
+- Lake Maurepas: organized, path-audited, and preprocessor-valid; source archive scan found no RAS plan-result HDFs, so it is not yet a results-ready demo; see `examples/954_ebfe_lake_maurepas_validation.ipynb`.
 
 ### Notebook Testing
 
-**Subagent**: notebook-runner (tested all 3 notebooks)
-**Results**: 2 passing, 1 needs minor fixes (non-blocking)
+Current eBFE notebooks `950`-`955` execute against the shared
+`H:\Testing\eBFE Model Organization` workspace by default, with
+`RAS_COMMANDER_EBFE_ROOT` available for overrides. Stored notebook outputs were
+refreshed after delivery-format updates, and notebook QA confirmed no error
+outputs in the eBFE notebook set.
 
 ### DSS Validation Scale
 

@@ -208,6 +208,8 @@ nav:
       - North Galveston Bay eBFE: notebooks/951_ebfe_north_galveston_bay.md
       - Upper Guadalupe Cascade: notebooks/952_ebfe_upper_guadalupe_cascade.md
       - Rio Hondo Steady Collection: notebooks/953_ebfe_rio_hondo_steady_collection.md
+      - Lake Maurepas Validation: notebooks/954_ebfe_lake_maurepas_validation.md
+      - Tickfaw Validation: notebooks/955_ebfe_tickfaw_validation.md
     - External Data Integrations (900s):
       - AORC Precipitation: notebooks/900_aorc_precipitation.md
       - AORC Precipitation Catalog: notebooks/901_aorc_precipitation_catalog.md
