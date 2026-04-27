@@ -1809,18 +1809,22 @@ class RasPrj:
         """
         self.check_initialized()
 
-        matching = self.plan_df[self.plan_df['plan_number'] == plan_number]
+        from .RasPrjAssets import RasPrjAssets
+
+        normalized_plan_number = RasPrjAssets.normalize_number(plan_number, prefix="p")
+        matching = self.plan_df[self.plan_df['plan_number'] == normalized_plan_number]
         if matching.empty:
             raise ValueError(f"Plan '{plan_number}' not found. Available: {self.plan_df['plan_number'].tolist()}")
 
-        row = matching.iloc[0]
-
-        results_path = row.get('HDF_Results_Path')
-        geom_path = row.get('Geom Path')
+        assets = RasPrjAssets.plan_assets(
+            normalized_plan_number,
+            ras_object=self,
+            must_exist=False,
+        )
 
         return {
-            'results': Path(results_path) if pd.notna(results_path) else None,
-            'geometry': Path(str(geom_path) + '.hdf') if pd.notna(geom_path) else None,
+            'results': assets.results_hdf_path,
+            'geometry': assets.geometry_hdf_path,
         }
 
     # =========================================================================

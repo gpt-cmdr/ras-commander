@@ -24,6 +24,7 @@ from .HdfResultsMesh import HdfResultsMesh
 from .HdfResultsPlan import HdfResultsPlan
 from ..Decorators import standardize_input, log_call
 from ..RasPrj import ras
+from ..RasPrjAssets import RasPrjAssets
 
 logger = logging.getLogger(__name__)
 
@@ -77,29 +78,7 @@ def _normalize_variable(variable: str) -> str:
 
 def _extract_geometry_number(raw_value: Any) -> Optional[str]:
     """Extract a 2-digit geometry number from common plan metadata formats."""
-    if raw_value is None:
-        return None
-
-    try:
-        if pd.isna(raw_value):
-            return None
-    except Exception:
-        pass
-
-    text = str(raw_value).strip()
-    if not text or text.lower() == "none":
-        return None
-
-    candidates = [text, Path(text).stem, Path(text).name]
-    patterns = [r"\.g(\d{1,2})$", r"^g(\d{1,2})$", r"^(\d{1,2})$"]
-
-    for candidate in candidates:
-        for pattern in patterns:
-            match = re.search(pattern, candidate, flags=re.IGNORECASE)
-            if match:
-                return match.group(1).zfill(2)
-
-    return None
+    return RasPrjAssets.extract_number(raw_value, prefix="g")
 
 
 def _project_name_from_plan_hdf(plan_hdf_path: Path) -> str:
@@ -136,102 +115,18 @@ def _resolve_geometry_hdf(
     Returns:
         Path to the geometry HDF file (.g##.hdf)
     """
-    plan_hdf_path = Path(plan_hdf_path)
-    project_folder = plan_hdf_path.parent
-    project_name = _project_name_from_plan_hdf(plan_hdf_path)
-
-    try:
-        plan_info = HdfPlan.get_plan_information(plan_hdf_path)
-        for key in ("Geometry File", "Geom File"):
-            geom_number = _extract_geometry_number(plan_info.get(key))
-            if geom_number:
-                geom_hdf_path = (
-                    project_folder / f"{project_name}.g{geom_number}.hdf"
-                )
-                if geom_hdf_path.exists():
-                    return geom_hdf_path
-                raise FileNotFoundError(
-                    f"Geometry HDF not found: {geom_hdf_path}"
-                )
-    except Exception:
-        pass
+    from ..RasPrjAssets import RasPrjAssets
 
     _ras = ras_object if ras_object is not None else _get_global_ras()
-    plan_df = getattr(_ras, "plan_df", None)
-    geom_df = getattr(_ras, "geom_df", None)
+    geom_hdf_path = RasPrjAssets.geometry_hdf(
+        plan_hdf_path,
+        ras_object=_ras,
+        selector_kind="plan_hdf",
+        must_exist=True,
+    )
 
-    if plan_df is not None and len(plan_df) > 0:
-        plan_row = pd.DataFrame()
-
-        if "HDF_Results_Path" in plan_df.columns:
-            mask = plan_df["HDF_Results_Path"].notna() & plan_df[
-                "HDF_Results_Path"
-            ].map(lambda value: _paths_match(value, plan_hdf_path))
-            plan_row = plan_df[mask]
-
-        if plan_row.empty:
-            plan_match = re.search(
-                r"\.p(\d{2})$",
-                plan_hdf_path.stem,
-                flags=re.IGNORECASE,
-            )
-            if plan_match and "plan_number" in plan_df.columns:
-                plan_number = plan_match.group(1)
-                mask = (
-                    plan_df["plan_number"]
-                    .astype(str)
-                    .str.zfill(2)
-                    .eq(plan_number)
-                )
-                plan_row = plan_df[mask]
-
-        if not plan_row.empty:
-            row = plan_row.iloc[0]
-
-            geom_path_value = row.get("Geom Path")
-            if pd.notna(geom_path_value):
-                geom_base = Path(str(geom_path_value))
-                geom_hdf_path = geom_base.parent / f"{geom_base.name}.hdf"
-                if geom_hdf_path.exists():
-                    return geom_hdf_path
-
-            geom_number = _extract_geometry_number(row.get("Geom File"))
-            if geom_number is None:
-                geom_number = _extract_geometry_number(
-                    row.get("geometry_number")
-                )
-
-            if geom_number:
-                if getattr(_ras, "project_folder", None) is not None:
-                    project_folder = Path(_ras.project_folder)
-                if getattr(_ras, "project_name", None):
-                    project_name = str(_ras.project_name)
-
-                if geom_df is not None and len(geom_df) > 0:
-                    geom_mask = (
-                        geom_df["geom_number"]
-                        .astype(str)
-                        .str.zfill(2)
-                        .eq(geom_number)
-                    )
-                    geom_rows = geom_df[geom_mask]
-                    if (
-                        not geom_rows.empty
-                        and "hdf_path" in geom_rows.columns
-                        and pd.notna(geom_rows.iloc[0]["hdf_path"])
-                    ):
-                        geom_hdf_path = Path(str(geom_rows.iloc[0]["hdf_path"]))
-                        if geom_hdf_path.exists():
-                            return geom_hdf_path
-
-                geom_hdf_path = (
-                    project_folder / f"{project_name}.g{geom_number}.hdf"
-                )
-                if geom_hdf_path.exists():
-                    return geom_hdf_path
-                raise FileNotFoundError(
-                    f"Geometry HDF not found: {geom_hdf_path}"
-                )
+    if geom_hdf_path is not None:
+        return geom_hdf_path
 
     raise FileNotFoundError(
         "Could not resolve geometry HDF from plan HDF. "

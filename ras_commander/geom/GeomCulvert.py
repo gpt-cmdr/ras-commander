@@ -35,6 +35,7 @@ import pandas as pd
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 from .GeomParser import GeomParser
+from .GeomIndex import GeomIndex
 
 logger = get_logger(__name__)
 
@@ -66,30 +67,15 @@ class GeomCulvert:
     @staticmethod
     def _find_bridge(lines: List[str], river: str, reach: str, rs: str) -> Optional[int]:
         """Find bridge/culvert section and return line index."""
-        current_river = None
-        current_reach = None
-        last_rs = None
-
-        for i, line in enumerate(lines):
-            if line.startswith("River Reach="):
-                values = GeomParser.extract_comma_list(line, "River Reach")
-                if len(values) >= 2:
-                    current_river = values[0]
-                    current_reach = values[1]
-
-            elif line.startswith("Type RM Length L Ch R ="):
-                value_str = GeomParser.extract_keyword_value(line, "Type RM Length L Ch R")
-                values = [v.strip() for v in value_str.split(',')]
-                if len(values) > 1:
-                    last_rs = values[1]
-
-            elif line.startswith("Bridge Culvert-"):
-                if (current_river == river and
-                    current_reach == reach and
-                    last_rs == rs):
-                    return i
-
-        return None
+        index = GeomIndex.from_lines(lines)
+        record = GeomIndex.find(
+            index,
+            "bridge_culvert",
+            river=river,
+            reach=reach,
+            rs=rs,
+        )
+        return record.marker_idx if record is not None else None
 
     @staticmethod
     @log_call

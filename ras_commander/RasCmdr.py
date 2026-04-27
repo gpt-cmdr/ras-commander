@@ -66,6 +66,7 @@ from .LoggingConfig import get_logger
 from .Decorators import log_call
 from .RasBco import BcoMonitor
 from .ComputeResults import ComputeResult, ComputeParallelResult
+from .RasPrjAssets import RasPrjAssets
 import pandas as pd
 from typing import Callable
 
@@ -99,13 +100,11 @@ class RasCmdr:
         Returns:
             Path to the expected HDF file
         """
-        # Normalize plan number to 2-digit string
-        if isinstance(plan_number, Number):
-            plan_num_str = f"{int(plan_number):02d}"
-        else:
-            plan_num_str = str(plan_number).zfill(2)
-
-        return Path(ras_object.project_folder) / f"{ras_object.project_name}.p{plan_num_str}.hdf"
+        return RasPrjAssets.plan_results_hdf(
+            plan_number,
+            ras_object=ras_object,
+            must_exist=False,
+        )
 
     @staticmethod
     def _normalize_requested_plan_numbers(
@@ -184,9 +183,9 @@ class RasCmdr:
             if pd.isna(value):
                 continue
 
-            digits = "".join(ch for ch in str(value) if ch.isdigit())
-            if digits:
-                return digits.zfill(2)
+            geometry_number = RasPrjAssets.extract_number(value, prefix="g")
+            if geometry_number is not None:
+                return geometry_number
 
         return None
 
@@ -523,8 +522,8 @@ class RasCmdr:
             # Smart skip: check file modification times (unless force_rerun or skip_existing)
             # Note: Smart skip is bypassed when skip_existing=True since that provides explicit skip logic
             if not force_rerun and not skip_existing:
-                from .RasCurrency import RasCurrency
-                is_current, reason = RasCurrency.are_plan_results_current(plan_number, compute_ras)
+                from .RasComputeState import RasComputeState
+                is_current, reason = RasComputeState.are_plan_results_current(plan_number, compute_ras)
                 if is_current:
                     logger.info(f"Skipping plan {plan_number}: {reason}")
                     _success = True
@@ -543,7 +542,7 @@ class RasCmdr:
                 # Create monitor with callback wrapper
                 bco_monitor = BcoMonitor(
                     project_path=Path(compute_ras.project_folder),
-                    plan_number=str(plan_number).zfill(2) if isinstance(plan_number, (int, Number)) else str(plan_number),
+                    plan_number=RasPrjAssets.normalize_number(plan_number, prefix="p"),
                     project_name=compute_ras.project_name,
                     message_callback=lambda msg: (
                         stream_callback.on_exec_message(str(plan_number), msg)
@@ -559,9 +558,9 @@ class RasCmdr:
             # Handle geometry preprocessor clearing
             if force_geompre:
                 # Force full geometry reprocessing (clears both .g##.hdf AND .c## files)
-                from .RasCurrency import RasCurrency
+                from .RasComputeState import RasComputeState
                 try:
-                    RasCurrency.clear_geom_hdf(plan_number, compute_ras)
+                    RasComputeState.clear_geom_hdf(plan_number, compute_ras)
                     RasGeo.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
                     logger.info(f"Force-cleared all geometry preprocessor files for plan: {plan_number}")
                 except Exception as e:
@@ -663,7 +662,7 @@ class RasCmdr:
                 logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
 
                 # Read compute message files (.bco## for 5.x, .computeMsgs.txt/.comp_msgs.txt for 6.x+)
-                plan_num_str = f"{int(plan_number):02d}" if isinstance(plan_number, Number) else str(plan_number).zfill(2)
+                plan_num_str = RasPrjAssets.normalize_number(plan_number, prefix="p")
                 try:
                     bco_path = Path(compute_ras.project_folder) / f"{compute_ras.project_name}.bco{plan_num_str}"
                     if bco_path.exists():
@@ -1416,7 +1415,7 @@ class RasCmdr:
         ras_obj = ras_object if ras_object is not None else ras
         ras_obj.check_initialized()
 
-        plan_num_str = str(plan_number).zfill(2) if isinstance(plan_number, Number) else str(plan_number).zfill(2)
+        plan_num_str = RasPrjAssets.normalize_number(plan_number, prefix="p")
 
         ras_exe_dir = Path(ras_exe_dir)
         ras_exe = ras_exe_dir / "RasUnsteady"

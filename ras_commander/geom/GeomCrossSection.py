@@ -54,6 +54,7 @@ import math
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 from .GeomParser import GeomParser
+from .GeomIndex import GeomIndex
 
 logger = get_logger(__name__)
 
@@ -90,32 +91,17 @@ class GeomCrossSection:
             Line index where "Type RM Length L Ch R =" for matching XS starts,
             or None if not found
         """
-        current_river = None
-        current_reach = None
-
-        for i, line in enumerate(lines):
-            # Track current river/reach
-            if line.startswith("River Reach="):
-                values = GeomParser.extract_comma_list(line, "River Reach")
-                if len(values) >= 2:
-                    current_river = values[0]
-                    current_reach = values[1]
-
-            # Find matching cross section
-            elif line.startswith("Type RM Length L Ch R ="):
-                value_str = GeomParser.extract_keyword_value(line, "Type RM Length L Ch R")
-                values = [v.strip() for v in value_str.split(',')]
-
-                if len(values) > 1:
-                    # Format: Type, RS, Length_L, Length_Ch, Length_R
-                    xs_rs = values[1]  # RS is second value
-
-                    if (current_river == river and
-                        current_reach == reach and
-                        xs_rs == rs):
-                        logger.debug(f"Found XS at line {i}: {river}/{reach}/RS {rs}")
-                        return i
-
+        index = GeomIndex.from_lines(lines)
+        record = GeomIndex.find(
+            index,
+            "cross_section",
+            river=river,
+            reach=reach,
+            rs=rs,
+        )
+        if record is not None:
+            logger.debug(f"Found XS at line {record.start_idx}: {river}/{reach}/RS {rs}")
+            return record.start_idx
         logger.debug(f"XS not found: {river}/{reach}/RS {rs}")
         return None
 
@@ -137,13 +123,9 @@ class GeomCrossSection:
             Line index of the first line PAST the current XS section
             (i.e., the start of the next section, or len(lines) if at end)
         """
-        for i in range(xs_idx + 1, len(lines)):
-            line = lines[i]
-            if line.startswith("Type RM Length L Ch R ="):
-                return i
-            if line.startswith("River Reach="):
-                return i
-        return len(lines)
+        index = GeomIndex.from_lines(lines)
+        record = GeomIndex.record_at(index, kind="cross_section", start_idx=xs_idx)
+        return record.end_idx if record is not None else len(lines)
 
     @staticmethod
     def _read_bank_stations(lines: List[str], start_idx: int) -> Optional[Tuple[float, float]]:

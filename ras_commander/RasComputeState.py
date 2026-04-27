@@ -1,12 +1,12 @@
 """
-RasCurrency - Execution currency checking for HEC-RAS simulations
+RasComputeState - execution state checks for HEC-RAS simulations
 
 This module provides utilities for determining whether HEC-RAS plan results
-are current (up-to-date) based on file modification times. This enables
-smart execution skip - avoiding unnecessary re-runs when results already
-exist and input files haven't changed.
+are current based on file modification times and completion messages. This
+enables smart execution skip, avoiding unnecessary re-runs when results
+already exist and input files haven't changed.
 
-Currency Logic:
+State Logic:
 - Results are CURRENT if plan HDF exists AND is newer than all input files
 - Input files checked: plan file (.p##), geometry file (.g##), flow file (.u##/.f##)
 - For older HEC-RAS versions (no HDF): uses .O output file instead
@@ -22,13 +22,14 @@ from numbers import Number
 
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from .RasPrjAssets import RasPrjAssets
 
 logger = get_logger(__name__)
 
 
-class RasCurrency:
+class RasComputeState:
     """
-    Static class for HEC-RAS execution currency checking.
+    Static class for HEC-RAS execution state checking.
 
     Determines whether plan results are current based on file modification times,
     enabling smart execution skip to avoid unnecessary re-runs.
@@ -78,19 +79,7 @@ class RasCurrency:
         Returns:
             Two-digit string (e.g., "01", "02")
         """
-        if isinstance(plan_number, Path):
-            # Extract plan number from path like "project.p01"
-            stem = plan_number.stem
-            if '.p' in stem:
-                plan_num = stem.split('.p')[-1]
-            else:
-                plan_num = stem[-2:] if len(stem) >= 2 else stem
-        elif isinstance(plan_number, Number):
-            plan_num = f"{int(plan_number):02d}"
-        else:
-            plan_num = str(plan_number).lstrip('p').zfill(2)
-
-        return plan_num
+        return RasPrjAssets.normalize_number(plan_number, prefix="p")
 
     @staticmethod
     @log_call
@@ -105,7 +94,7 @@ class RasCurrency:
         Returns:
             Dictionary with keys: 'plan', 'geom', 'flow' (values are Path or None)
         """
-        plan_num = RasCurrency._normalize_plan_number(plan_number)
+        plan_num = RasComputeState._normalize_plan_number(plan_number)
 
         result = {
             'plan': None,
@@ -154,8 +143,11 @@ class RasCurrency:
         Returns:
             Path to the expected HDF file
         """
-        plan_num = RasCurrency._normalize_plan_number(plan_number)
-        return Path(ras_object.project_folder) / f"{ras_object.project_name}.p{plan_num}.hdf"
+        return RasPrjAssets.plan_results_hdf(
+            plan_number,
+            ras_object=ras_object,
+            must_exist=False,
+        )
 
     @staticmethod
     def get_geom_hdf_path(plan_number: Union[str, Number], ras_object) -> Optional[Path]:
@@ -169,31 +161,12 @@ class RasCurrency:
         Returns:
             Path to geometry HDF file or None if not found
         """
-        plan_num = RasCurrency._normalize_plan_number(plan_number)
-
-        # Get geometry number from plan
-        if hasattr(ras_object, 'plan_df') and ras_object.plan_df is not None:
-            plan_df = ras_object.plan_df
-            plan_mask = plan_df['plan_number'].astype(str).str.zfill(2) == plan_num
-
-            if plan_mask.any():
-                plan_row = plan_df[plan_mask].iloc[0]
-
-                # Get geometry number
-                geom_num = None
-                if 'geometry_number' in plan_row.index:
-                    geom_num = str(plan_row['geometry_number']).zfill(2)
-                elif 'geom_file' in plan_row.index and plan_row['geom_file']:
-                    # Extract from filename like "project.g01"
-                    geom_file = str(plan_row['geom_file'])
-                    if '.g' in geom_file:
-                        geom_num = geom_file.split('.g')[-1].split('.')[0].zfill(2)
-
-                if geom_num:
-                    geom_hdf = Path(ras_object.project_folder) / f"{ras_object.project_name}.g{geom_num}.hdf"
-                    return geom_hdf
-
-        return None
+        return RasPrjAssets.geometry_hdf(
+            plan_number,
+            ras_object=ras_object,
+            selector_kind="plan",
+            must_exist=False,
+        )
 
     @staticmethod
     def get_output_file_path(plan_number: Union[str, Number], ras_object) -> Optional[Path]:
@@ -207,7 +180,7 @@ class RasCurrency:
         Returns:
             Path to .O output file or None if not found
         """
-        plan_num = RasCurrency._normalize_plan_number(plan_number)
+        plan_num = RasComputeState._normalize_plan_number(plan_number)
         output_file = Path(ras_object.project_folder) / f"{ras_object.project_name}.O{plan_num}"
 
         if output_file.exists():
@@ -267,25 +240,25 @@ class RasCurrency:
             - is_current: True if results are current, False if execution needed
             - reason: Human-readable explanation
         """
-        plan_num = RasCurrency._normalize_plan_number(plan_number)
+        plan_num = RasComputeState._normalize_plan_number(plan_number)
 
         # Check for HDF file first
-        hdf_path = RasCurrency.get_plan_hdf_path(plan_number, ras_object)
+        hdf_path = RasComputeState.get_plan_hdf_path(plan_number, ras_object)
         output_path = None
         result_mtime = None
 
         if hdf_path.exists():
-            result_mtime = RasCurrency.get_file_mtime(hdf_path)
+            result_mtime = RasComputeState.get_file_mtime(hdf_path)
             result_file = hdf_path
 
             # Check for Complete Process
-            if check_complete and not RasCurrency.check_plan_hdf_complete(hdf_path):
+            if check_complete and not RasComputeState.check_plan_hdf_complete(hdf_path):
                 return (False, f"Plan {plan_num} HDF exists but incomplete (no 'Complete Process')")
         else:
             # Try .O file for older versions
-            output_path = RasCurrency.get_output_file_path(plan_number, ras_object)
+            output_path = RasComputeState.get_output_file_path(plan_number, ras_object)
             if output_path and output_path.exists():
-                result_mtime = RasCurrency.get_file_mtime(output_path)
+                result_mtime = RasComputeState.get_file_mtime(output_path)
                 result_file = output_path
             else:
                 return (False, f"Plan {plan_num} has no results (HDF or .O file not found)")
@@ -294,7 +267,7 @@ class RasCurrency:
             return (False, f"Plan {plan_num} cannot determine results file modification time")
 
         # Get input files
-        input_files = RasCurrency.get_plan_input_files(plan_number, ras_object)
+        input_files = RasComputeState.get_plan_input_files(plan_number, ras_object)
 
         # Check each input file modification time
         stale_files = []
@@ -307,7 +280,7 @@ class RasCurrency:
                 logger.debug(f"Input file not found: {file_path}")
                 continue
 
-            input_mtime = RasCurrency.get_file_mtime(file_path)
+            input_mtime = RasComputeState.get_file_mtime(file_path)
             if input_mtime is None:
                 logger.warning(f"Cannot get mtime for {file_path}, assuming stale")
                 stale_files.append(file_path.name)
@@ -340,10 +313,10 @@ class RasCurrency:
         Returns:
             Tuple of (is_current: bool, reason: str)
         """
-        plan_num = RasCurrency._normalize_plan_number(plan_number)
+        plan_num = RasComputeState._normalize_plan_number(plan_number)
 
         # Get geometry HDF path
-        geom_hdf_path = RasCurrency.get_geom_hdf_path(plan_number, ras_object)
+        geom_hdf_path = RasComputeState.get_geom_hdf_path(plan_number, ras_object)
 
         if geom_hdf_path is None:
             return (False, f"Plan {plan_num} geometry HDF path cannot be determined")
@@ -351,19 +324,19 @@ class RasCurrency:
         if not geom_hdf_path.exists():
             return (False, f"Plan {plan_num} geometry HDF does not exist: {geom_hdf_path.name}")
 
-        geom_hdf_mtime = RasCurrency.get_file_mtime(geom_hdf_path)
+        geom_hdf_mtime = RasComputeState.get_file_mtime(geom_hdf_path)
         if geom_hdf_mtime is None:
             return (False, f"Plan {plan_num} cannot determine geometry HDF modification time")
 
         # Get geometry text file path
-        input_files = RasCurrency.get_plan_input_files(plan_number, ras_object)
+        input_files = RasComputeState.get_plan_input_files(plan_number, ras_object)
         geom_path = input_files.get('geom')
 
         if geom_path is None or not geom_path.exists():
             # If we can't find geometry file, assume preprocessing is OK
             return (True, f"Plan {plan_num} geometry preprocessing assumed current (geometry file not found)")
 
-        geom_mtime = RasCurrency.get_file_mtime(geom_path)
+        geom_mtime = RasComputeState.get_file_mtime(geom_path)
         if geom_mtime is None:
             return (False, f"Plan {plan_num} cannot determine geometry file modification time")
 
@@ -385,7 +358,7 @@ class RasCurrency:
         Returns:
             True if file was deleted or didn't exist, False on error
         """
-        geom_hdf_path = RasCurrency.get_geom_hdf_path(plan_number, ras_object)
+        geom_hdf_path = RasComputeState.get_geom_hdf_path(plan_number, ras_object)
 
         if geom_hdf_path is None:
             logger.debug(f"No geometry HDF path found for plan {plan_number}")

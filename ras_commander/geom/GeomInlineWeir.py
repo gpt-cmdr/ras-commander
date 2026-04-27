@@ -38,6 +38,7 @@ import pandas as pd
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 from .GeomParser import GeomParser
+from .GeomIndex import GeomIndex
 
 logger = get_logger(__name__)
 
@@ -69,33 +70,17 @@ class GeomInlineWeir:
             Line index where "IW Pilot Flow=" appears for matching inline weir,
             or None if not found
         """
-        current_river = None
-        current_reach = None
-        last_rs = None
-
-        for i, line in enumerate(lines):
-            # Track current river/reach
-            if line.startswith("River Reach="):
-                values = GeomParser.extract_comma_list(line, "River Reach")
-                if len(values) >= 2:
-                    current_river = values[0]
-                    current_reach = values[1]
-
-            # Track most recent Type RM Length line (contains RS)
-            elif line.startswith("Type RM Length L Ch R ="):
-                value_str = GeomParser.extract_keyword_value(line, "Type RM Length L Ch R")
-                values = [v.strip() for v in value_str.split(',')]
-                if len(values) > 1:
-                    last_rs = values[1]  # RS is second value
-
-            # Find IW Pilot Flow marker (start of inline weir)
-            elif line.startswith("IW Pilot Flow="):
-                if (current_river == river and
-                    current_reach == reach and
-                    last_rs == rs):
-                    logger.debug(f"Found inline weir at line {i}: {river}/{reach}/RS {rs}")
-                    return i
-
+        index = GeomIndex.from_lines(lines)
+        record = GeomIndex.find(
+            index,
+            "inline_weir",
+            river=river,
+            reach=reach,
+            rs=rs,
+        )
+        if record is not None:
+            logger.debug(f"Found inline weir at line {record.marker_idx}: {river}/{reach}/RS {rs}")
+            return record.marker_idx
         logger.debug(f"Inline weir not found: {river}/{reach}/RS {rs}")
         return None
 

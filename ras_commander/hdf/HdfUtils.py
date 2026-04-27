@@ -43,12 +43,13 @@ Usage Notes:
 - Supports various RAS datetime formats and conversions
 """
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import Union, Optional, Dict, List, Tuple, Any
+from typing import Union, Optional, Dict, List, Tuple, Any, Callable
 from scipy.spatial import KDTree
 import re
 from shapely.geometry import LineString  # Import LineString to avoid NameError
@@ -57,6 +58,52 @@ from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class HdfPathSpec:
+    path: str
+    aliases: tuple[str, ...] = ()
+    required: bool = True
+
+
+@dataclass(frozen=True)
+class HdfFieldSpec:
+    source: str
+    column: Optional[str] = None
+    decoder: Optional[Callable[[Any], Any]] = None
+    default: Any = None
+
+
+@dataclass(frozen=True)
+class HdfAttributeSpec:
+    path: HdfPathSpec
+    fields: tuple[HdfFieldSpec, ...] = ()
+
+
+@dataclass(frozen=True)
+class HdfTableSpec:
+    path: HdfPathSpec
+    fields: tuple[HdfFieldSpec, ...] = ()
+
+
+@dataclass(frozen=True)
+class HdfRaggedTableSpec:
+    info_path: HdfPathSpec
+    values_path: HdfPathSpec
+    id_column: str
+    value_columns: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class HdfTimeAxisSpec:
+    timestamp_path: Optional[HdfPathSpec] = None
+    numeric_time_path: Optional[HdfPathSpec] = None
+    start_time_attr_path: Optional[HdfPathSpec] = None
+    start_time_attr: str = "Simulation Start Time"
+    unit: str = "D"
+    round_to: Optional[str] = None
+
 
 class HdfUtils:
     """
@@ -71,6 +118,156 @@ class HdfUtils:
     - Use this class for general HDF utility functions that are not specific to plan or geometry files.
     - All methods in this class are static and can be called without instantiating the class.
     """
+
+    @staticmethod
+    @log_call
+    def resolve_path(hdf_file: h5py.File, spec: HdfPathSpec):
+        """Resolve a path spec to an HDF object, respecting aliases."""
+        for path in (spec.path, *spec.aliases):
+            if path in hdf_file:
+                return hdf_file[path]
+        if spec.required:
+            raise KeyError(f"HDF path not found: {spec.path}")
+        return None
+
+    @staticmethod
+    @log_call
+    def decode_value(value: Any) -> Any:
+        """Decode common HDF scalar and array values into Python objects."""
+        if isinstance(value, bytes):
+            return value.decode("utf-8")
+        if isinstance(value, np.bytes_):
+            return bytes(value).decode("utf-8")
+        if isinstance(value, np.generic):
+            return HdfUtils.decode_value(value.item())
+        if isinstance(value, np.ndarray):
+            if value.shape == ():
+                return HdfUtils.decode_value(value.item())
+            return [HdfUtils.decode_value(item) for item in value.tolist()]
+        if isinstance(value, (list, tuple)):
+            return [HdfUtils.decode_value(item) for item in value]
+        return value
+
+    @staticmethod
+    @log_call
+    def read_attrs(hdf_file: h5py.File, spec: HdfAttributeSpec) -> dict:
+        """Read decoded attributes from a group or dataset."""
+        node = HdfUtils.resolve_path(hdf_file, spec.path)
+        if node is None:
+            return {}
+
+        raw_attrs = {
+            key: HdfUtils.decode_value(value)
+            for key, value in dict(node.attrs).items()
+        }
+
+        if not spec.fields:
+            return raw_attrs
+
+        mapped = {}
+        for field in spec.fields:
+            output_name = field.column or field.source
+            value = raw_attrs.get(field.source, field.default)
+            if field.decoder is not None and value is not None:
+                value = field.decoder(value)
+            mapped[output_name] = value
+        return mapped
+
+    @staticmethod
+    @log_call
+    def read_attrs_as_frame(hdf_file: h5py.File, spec: HdfAttributeSpec) -> pd.DataFrame:
+        """Read decoded attributes as a one-row DataFrame."""
+        attrs = HdfUtils.read_attrs(hdf_file, spec)
+        return pd.DataFrame(attrs, index=[0]) if attrs else pd.DataFrame()
+
+    @staticmethod
+    @log_call
+    def read_compound_table(hdf_file: h5py.File, spec: HdfTableSpec) -> pd.DataFrame:
+        """Read a compound or array dataset into a decoded DataFrame."""
+        node = HdfUtils.resolve_path(hdf_file, spec.path)
+        if node is None:
+            return pd.DataFrame()
+
+        data = node[()]
+        if getattr(data.dtype, "names", None):
+            frame = pd.DataFrame(data)
+        else:
+            frame = pd.DataFrame(data)
+
+        frame = HdfUtils.decode_frame(frame)
+        if not spec.fields:
+            return frame
+
+        output = {}
+        for field in spec.fields:
+            output_name = field.column or field.source
+            if field.source in frame.columns:
+                series = frame[field.source]
+                if field.decoder is not None:
+                    series = series.map(field.decoder)
+                output[output_name] = series
+            else:
+                output[output_name] = field.default
+        return pd.DataFrame(output)
+
+    @staticmethod
+    @log_call
+    def read_ragged_table(hdf_file: h5py.File, spec: HdfRaggedTableSpec) -> pd.DataFrame:
+        """Read an Info/Values ragged table into one row per value record."""
+        info_node = HdfUtils.resolve_path(hdf_file, spec.info_path)
+        values_node = HdfUtils.resolve_path(hdf_file, spec.values_path)
+        if info_node is None or values_node is None:
+            return pd.DataFrame()
+
+        info = np.asarray(info_node[()])
+        values = np.asarray(values_node[()])
+        rows = []
+
+        for info_idx, row in enumerate(info):
+            start = int(row[0])
+            count = int(row[1])
+            for value in values[start:start + count]:
+                value_array = np.atleast_1d(value)
+                output = {spec.id_column: info_idx}
+                for col_idx, column in enumerate(spec.value_columns):
+                    output[column] = HdfUtils.decode_value(value_array[col_idx])
+                rows.append(output)
+
+        return pd.DataFrame(rows)
+
+    @staticmethod
+    @log_call
+    def read_time_axis(hdf_file: h5py.File, spec: HdfTimeAxisSpec) -> pd.DatetimeIndex:
+        """Read a timestamp or numeric-offset time axis."""
+        if spec.timestamp_path is not None:
+            node = HdfUtils.resolve_path(hdf_file, spec.timestamp_path)
+            if node is not None:
+                values = HdfUtils.decode_value(node[()])
+                index = pd.to_datetime(values)
+                if spec.round_to:
+                    return pd.DatetimeIndex(index).round(spec.round_to)
+                return pd.DatetimeIndex(index)
+
+        if spec.numeric_time_path is None or spec.start_time_attr_path is None:
+            raise KeyError("Time axis requires timestamp path or numeric time plus start time attr path")
+
+        time_node = HdfUtils.resolve_path(hdf_file, spec.numeric_time_path)
+        start_node = HdfUtils.resolve_path(hdf_file, spec.start_time_attr_path)
+        start_time = HdfUtils.decode_value(start_node.attrs[spec.start_time_attr])
+        index = pd.to_datetime(start_time) + pd.to_timedelta(time_node[()], unit=spec.unit)
+        if spec.round_to:
+            return pd.DatetimeIndex(index).round(spec.round_to)
+        return pd.DatetimeIndex(index)
+
+    @staticmethod
+    @log_call
+    def decode_frame(frame: pd.DataFrame) -> pd.DataFrame:
+        """Decode byte-like values in a DataFrame without changing column names."""
+        decoded = frame.copy()
+        for column in decoded.columns:
+            if decoded[column].dtype.kind in {"S", "O"}:
+                decoded[column] = decoded[column].map(HdfUtils.decode_value)
+        return decoded
 
 
 
@@ -301,28 +498,40 @@ class HdfUtils:
             >>> geom_hdf = hdfs['geometry']
         """
         from ..RasPrj import ras as default_ras
+        from ..RasPrjAssets import RasPrjAssets
+
         ras_obj = ras_object or default_ras
         ras_obj.check_initialized()
 
-        plan_num = str(plan_number).zfill(2)
-        result = {'plan': None, 'geometry': None}
+        plan_hdf = RasPrjAssets.plan_results_hdf(
+            plan_number,
+            ras_object=ras_obj,
+            must_exist=True,
+        )
+        geom_hdf = RasPrjAssets.geometry_hdf(
+            plan_number,
+            ras_object=ras_obj,
+            selector_kind="plan",
+            must_exist=True,
+        )
 
-        # Scan for HDF files
-        hdf_files = HdfUtils.scan_hdf_files(ras_folder)
+        result = {'plan': plan_hdf, 'geometry': geom_hdf, 'geom': geom_hdf}
 
-        # Get plan HDF
-        plan_key = f"plan_{plan_num}"
-        if plan_key in hdf_files:
-            result['plan'] = hdf_files[plan_key]
+        if result['plan'] is None or result['geometry'] is None:
+            plan_num = RasPrjAssets.normalize_number(plan_number, prefix="p")
+            hdf_files = HdfUtils.scan_hdf_files(Path(ras_folder))
+            result['plan'] = result['plan'] or hdf_files.get(f"plan_{plan_num}")
 
-        # Get geometry HDF if we know the geometry number
-        plan_row = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan_num]
-        if not plan_row.empty:
-            geom_num = plan_row.iloc[0].get('geometry_number')
-            if geom_num is not None:
-                geom_key = f"geom_{str(geom_num).zfill(2)}"
-                if geom_key in hdf_files:
-                    result['geometry'] = hdf_files[geom_key]
+            assets = RasPrjAssets.plan_assets(
+                plan_num,
+                ras_object=ras_obj,
+                must_exist=False,
+            )
+            if assets.geometry_number:
+                result['geometry'] = result['geometry'] or hdf_files.get(
+                    f"geom_{assets.geometry_number}"
+                )
+                result['geom'] = result['geometry']
 
         return result
 
@@ -511,5 +720,4 @@ class HdfUtils:
         microseconds = milliseconds * 1000
         parsed_dt = HdfUtils.parse_ras_datetime(datetime_str[:-4]).replace(microsecond=microseconds)
         return parsed_dt
-    
     

@@ -31,7 +31,7 @@ from .RasExamples import RasExamples
 from .sources.federal import RasEbfeModels
 from .sources.county import M3Model
 from .RasCmdr import RasCmdr
-from .RasCurrency import RasCurrency
+from .RasComputeState import RasComputeState
 from .RasControl import RasControl
 from .ComputeResults import ComputeResult, ComputeParallelResult, RasControlResult, PreprocessResult
 from .RasPreprocess import RasPreprocess
@@ -152,7 +152,7 @@ __all__ = [
     'RasPlan', 'RasUnsteady', 'RasUtils',
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult', 'PreprocessResult',
     'RasPreprocess',
-    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
+    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasComputeState', 'RasControl', 'RasMap', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasModPuls', 'RasPermutation', 'RangeSpec',
     'CalibrationPoint', 'RasCalibrate',
 

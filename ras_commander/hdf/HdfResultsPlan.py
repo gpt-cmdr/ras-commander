@@ -37,7 +37,7 @@ import h5py
 import pandas as pd
 import xarray as xr
 from ..Decorators import standardize_input, log_call
-from .HdfUtils import HdfUtils
+from .HdfUtils import HdfAttributeSpec, HdfPathSpec, HdfUtils
 from .HdfResultsXsec import HdfResultsXsec
 from ..LoggingConfig import get_logger
 import numpy as np
@@ -89,16 +89,10 @@ class HdfResultsPlan:
                 if "Results/Unsteady" not in hdf_file:
                     raise KeyError("Results/Unsteady group not found in the HDF file.")
                 
-                # Create dictionary from attributes and decode byte strings
-                attrs_dict = {}
-                for key, value in dict(hdf_file["Results/Unsteady"].attrs).items():
-                    if isinstance(value, bytes):
-                        attrs_dict[key] = value.decode('utf-8')
-                    else:
-                        attrs_dict[key] = value
-                
-                # Create DataFrame with a single row index
-                return pd.DataFrame(attrs_dict, index=[0])
+                return HdfUtils.read_attrs_as_frame(
+                    hdf_file,
+                    HdfAttributeSpec(HdfPathSpec("Results/Unsteady")),
+                )
                 
         except FileNotFoundError:
             raise FileNotFoundError(f"HDF file not found: {hdf_path}")
@@ -128,16 +122,10 @@ class HdfResultsPlan:
                 if "Results/Unsteady/Summary" not in hdf_file:
                     raise KeyError("Results/Unsteady/Summary group not found in the HDF file.")
                 
-                # Create dictionary from attributes and decode byte strings
-                attrs_dict = {}
-                for key, value in dict(hdf_file["Results/Unsteady/Summary"].attrs).items():
-                    if isinstance(value, bytes):
-                        attrs_dict[key] = value.decode('utf-8')
-                    else:
-                        attrs_dict[key] = value
-                
-                # Create DataFrame with a single row index
-                return pd.DataFrame(attrs_dict, index=[0])
+                return HdfUtils.read_attrs_as_frame(
+                    hdf_file,
+                    HdfAttributeSpec(HdfPathSpec("Results/Unsteady/Summary")),
+                )
                 
         except FileNotFoundError:
             raise FileNotFoundError(f"HDF file not found: {hdf_path}")
@@ -167,15 +155,10 @@ class HdfResultsPlan:
                 if "Results/Unsteady/Summary/Volume Accounting" not in hdf_file:
                     return None
                 
-                # Get attributes and decode byte strings
-                attrs_dict = {}
-                for key, value in dict(hdf_file["Results/Unsteady/Summary/Volume Accounting"].attrs).items():
-                    if isinstance(value, bytes):
-                        attrs_dict[key] = value.decode('utf-8')
-                    else:
-                        attrs_dict[key] = value
-                
-                return pd.DataFrame(attrs_dict, index=[0])
+                return HdfUtils.read_attrs_as_frame(
+                    hdf_file,
+                    HdfAttributeSpec(HdfPathSpec("Results/Unsteady/Summary/Volume Accounting")),
+                )
                 
         except FileNotFoundError:
             raise FileNotFoundError(f"HDF file not found: {hdf_path}")
@@ -667,38 +650,23 @@ class HdfResultsPlan:
                     raise ValueError(f"HDF file does not contain steady state results: {hdf_path.name}")
 
                 attrs_dict = {}
+                for path in ("Results/Steady/Output", "Results/Steady/Summary"):
+                    if path in hdf_file:
+                        attrs_dict.update(
+                            HdfUtils.read_attrs(
+                                hdf_file,
+                                HdfAttributeSpec(HdfPathSpec(path)),
+                            )
+                        )
 
-                # Get attributes from Results/Steady/Output
-                output_path = "Results/Steady/Output"
-                if output_path in hdf_file:
-                    output_group = hdf_file[output_path]
-                    for key, value in output_group.attrs.items():
-                        if isinstance(value, bytes):
-                            attrs_dict[key] = value.decode('utf-8')
-                        else:
-                            attrs_dict[key] = value
-
-                # Get attributes from Results/Steady/Summary
-                summary_path = "Results/Steady/Summary"
-                if summary_path in hdf_file:
-                    summary_group = hdf_file[summary_path]
-                    for key, value in summary_group.attrs.items():
-                        if isinstance(value, bytes):
-                            attrs_dict[key] = value.decode('utf-8')
-                        else:
-                            attrs_dict[key] = value
-
-                # Add flow file information from Plan Data
-                plan_info_path = "Plan Data/Plan Information"
-                if plan_info_path in hdf_file:
-                    plan_info = hdf_file[plan_info_path]
+                if "Plan Data/Plan Information" in hdf_file:
+                    plan_attrs = HdfUtils.read_attrs(
+                        hdf_file,
+                        HdfAttributeSpec(HdfPathSpec("Plan Data/Plan Information")),
+                    )
                     for key in ['Flow Filename', 'Flow Title']:
-                        if key in plan_info.attrs:
-                            value = plan_info.attrs[key]
-                            if isinstance(value, bytes):
-                                attrs_dict[key] = value.decode('utf-8')
-                            else:
-                                attrs_dict[key] = value
+                        if key in plan_attrs:
+                            attrs_dict[key] = plan_attrs[key]
 
                 if not attrs_dict:
                     logger.warning("No steady state attributes found in HDF file")

@@ -87,6 +87,7 @@ import logging
 import re
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from .RasPrjAssets import RasPrjAssets
 
 logger = get_logger(__name__)
 
@@ -570,18 +571,11 @@ class RasPlan:
         # Update the plan dataframe in the ras instance to ensure it is current
         ras_obj.plan_df = ras_obj.get_plan_entries()
 
-        # Normalize plan number to two-digit format
-        plan_number = RasUtils.normalize_ras_number(plan_number)
-        
-        plan_entry = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan_number]
-        if not plan_entry.empty:
-            results_path = plan_entry['HDF_Results_Path'].iloc[0]
-            if results_path and Path(results_path).exists():
-                return Path(results_path)
-            else:
-                return None
-        else:
-            return None
+        return RasPrjAssets.plan_results_hdf(
+            plan_number,
+            ras_object=ras_obj,
+            must_exist=True,
+        )
 
     @staticmethod
     @log_call
@@ -615,20 +609,12 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        # Normalize plan number to two-digit format
-        plan_number = RasUtils.normalize_ras_number(plan_number)
-        
-        plan_df = ras_obj.get_plan_entries()
-        
-        plan_path = plan_df[plan_df['plan_number'] == plan_number]
-
-        if not plan_path.empty:
-            if 'full_path' in plan_path.columns and not pd.isna(plan_path['full_path'].iloc[0]):
-                return Path(plan_path['full_path'].iloc[0])
-            else:
-                # Fallback to constructing path
-                return ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_number}"
-        return None
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        return RasPrjAssets.plan_path(
+            plan_number,
+            ras_object=ras_obj,
+            must_exist=False,
+        )
 
     @staticmethod
     @log_call
@@ -733,13 +719,13 @@ class RasPlan:
             return None
 
         try:
-            result = RasPlan._get_component_path(
-                component_number=geom_number,
-                df_attr='geom_df',
-                number_column='geom_number',
-                prj_entry_type='Geom',
-                file_prefix='g',
-                ras_object=ras_object,
+            ras_obj = ras_object or ras
+            ras_obj.check_initialized()
+            ras_obj.geom_df = ras_obj.get_prj_entries('Geom')
+            result = RasPrjAssets.geometry_path(
+                geom_number,
+                ras_object=ras_obj,
+                must_exist=False,
             )
             if result is not None:
                 _logger.info(f"Found geometry path: {result}")

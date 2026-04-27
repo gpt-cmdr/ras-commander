@@ -32,6 +32,7 @@ from .Decorators import log_call
 from .LoggingConfig import get_logger
 from .RasBco import BcoMonitor
 from .RasPlan import RasPlan
+from .RasPrjAssets import RasPrjAssets
 from .RasPrj import ras
 
 logger = get_logger(__name__)
@@ -98,11 +99,7 @@ class RasPreprocess:
         start_time = time.time()
         ras_obj = ras_object if ras_object is not None else ras
 
-        # Normalize plan number
-        if isinstance(plan_number, Number):
-            plan_num = f"{int(plan_number):02d}"
-        else:
-            plan_num = str(plan_number).zfill(2)
+        plan_num = RasPrjAssets.normalize_number(plan_number, prefix="p")
 
         try:
             ras_obj.check_initialized()
@@ -291,10 +288,7 @@ class RasPreprocess:
         """
         ras_obj = ras_object if ras_object is not None else ras
 
-        if isinstance(plan_number, Number):
-            plan_num = f"{int(plan_number):02d}"
-        else:
-            plan_num = str(plan_number).zfill(2)
+        plan_num = RasPrjAssets.normalize_number(plan_number, prefix="p")
 
         try:
             ras_obj.check_initialized()
