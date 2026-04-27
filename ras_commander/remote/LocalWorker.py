@@ -12,9 +12,11 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from .RasWorker import RasWorker
+from .RasWorker import RasWorker, WorkerExecutionRequest, WorkerExecutionOutcome
 from ..LoggingConfig import get_logger
+from ..Decorators import log_call
 from ..RasUtils import RasUtils
+from ..RasPrjAssets import RasPrjAssets
 
 logger = get_logger(__name__)
 
@@ -85,6 +87,30 @@ class LocalWorker(RasWorker):
                 self.max_parallel_plans = 1
         else:
             self.max_parallel_plans = 1
+
+    @log_call
+    def execute_plan(self, request: WorkerExecutionRequest) -> WorkerExecutionOutcome:
+        """Execute one plan through the existing local worker function."""
+        success = execute_local_plan(
+            worker=self,
+            plan_number=request.plan_number,
+            ras_obj=request.ras_object,
+            num_cores=request.num_cores,
+            clear_geompre=request.clear_geompre,
+            force_geompre=request.force_geompre,
+            force_rerun=request.force_rerun,
+            sub_worker_id=request.sub_worker_id,
+            autoclean=request.autoclean,
+        )
+        hdf_path = RasPrjAssets.plan_results_hdf(
+            request.plan_number,
+            ras_object=request.ras_object,
+            must_exist=True,
+        )
+        return WorkerExecutionOutcome(
+            success=success,
+            hdf_path=str(hdf_path) if success and hdf_path is not None else None,
+        )
 
 
 def init_local_worker(**kwargs) -> LocalWorker:

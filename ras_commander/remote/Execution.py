@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Union
 from pathlib import Path
 
-from .RasWorker import RasWorker
+from .RasWorker import RasWorker, WorkerExecutionRequest
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 
@@ -221,8 +221,8 @@ def _execute_single_plan(
     """
     Execute a single plan on a specific worker.
 
-    This internal function routes to the appropriate worker-specific execution
-    function based on worker_type.
+    This internal function builds a worker execution request and lets the worker
+    adapter own execution behavior.
 
     Args:
         worker: Worker instance
@@ -246,90 +246,20 @@ def _execute_single_plan(
     )
 
     try:
-        # Route to worker-specific execution
-        if worker.worker_type == "psexec":
-            from .PsexecWorker import execute_psexec_plan
-            success = execute_psexec_plan(
-                worker=worker,
-                plan_number=plan_number,
-                ras_obj=ras_object,
-                num_cores=num_cores,
-                clear_geompre=clear_geompre,
-                force_geompre=force_geompre,
-                force_rerun=force_rerun,
-                sub_worker_id=sub_worker_id,
-                autoclean=autoclean
-            )
-            result.success = success
-
-            if success:
-                project_name = ras_object.project_name
-                hdf_file = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.hdf"
-                if hdf_file.exists():
-                    result.hdf_path = str(hdf_file)
-
-        elif worker.worker_type == "local":
-            from .LocalWorker import execute_local_plan
-            success = execute_local_plan(
-                worker=worker,
-                plan_number=plan_number,
-                ras_obj=ras_object,
-                num_cores=num_cores,
-                clear_geompre=clear_geompre,
-                force_geompre=force_geompre,
-                force_rerun=force_rerun,
-                sub_worker_id=sub_worker_id,
-                autoclean=autoclean
-            )
-            result.success = success
-
-            if success:
-                project_name = ras_object.project_name
-                hdf_file = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.hdf"
-                if hdf_file.exists():
-                    result.hdf_path = str(hdf_file)
-
-        elif worker.worker_type == "ssh":
-            result.error_message = "SSH worker not yet implemented"
-
-        elif worker.worker_type == "winrm":
-            result.error_message = "WinRM worker not yet implemented"
-
-        elif worker.worker_type == "docker":
-            from .DockerWorker import execute_docker_plan
-            success = execute_docker_plan(
-                worker=worker,
-                plan_number=plan_number,
-                ras_obj=ras_object,
-                num_cores=num_cores,
-                clear_geompre=clear_geompre,
-                sub_worker_id=sub_worker_id,
-                autoclean=autoclean
-            )
-            result.success = success
-
-            if success:
-                project_name = ras_object.project_name
-                hdf_file = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.hdf"
-                if hdf_file.exists():
-                    result.hdf_path = str(hdf_file)
-                else:
-                    # Check for .tmp.hdf (Linux container output)
-                    tmp_hdf = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.tmp.hdf"
-                    if tmp_hdf.exists():
-                        result.hdf_path = str(tmp_hdf)
-
-        elif worker.worker_type == "slurm":
-            result.error_message = "Slurm worker not yet implemented"
-
-        elif worker.worker_type == "aws_ec2":
-            result.error_message = "AWS EC2 worker not yet implemented"
-
-        elif worker.worker_type == "azure_fr":
-            result.error_message = "Azure worker not yet implemented"
-
-        else:
-            result.error_message = f"Unknown worker type: {worker.worker_type}"
+        request = WorkerExecutionRequest(
+            plan_number=plan_number,
+            ras_object=ras_object,
+            num_cores=num_cores,
+            clear_geompre=clear_geompre,
+            force_geompre=force_geompre,
+            force_rerun=force_rerun,
+            sub_worker_id=sub_worker_id,
+            autoclean=autoclean,
+        )
+        outcome = worker.execute_plan(request)
+        result.success = outcome.success
+        result.hdf_path = outcome.hdf_path
+        result.error_message = outcome.error_message
 
     except NotImplementedError as e:
         result.error_message = str(e)

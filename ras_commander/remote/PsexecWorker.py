@@ -17,10 +17,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Optional
 
-from .RasWorker import RasWorker
+from .RasWorker import RasWorker, WorkerExecutionRequest, WorkerExecutionOutcome
 from .Utils import convert_unc_to_local_path, authenticate_network_share
 from ..LoggingConfig import get_logger
+from ..Decorators import log_call
 from ..RasUtils import RasUtils
+from ..RasPrjAssets import RasPrjAssets
 
 logger = get_logger(__name__)
 
@@ -160,6 +162,30 @@ class PsexecWorker(RasWorker):
                 self.max_parallel_plans = 1
         else:
             self.max_parallel_plans = 1
+
+    @log_call
+    def execute_plan(self, request: WorkerExecutionRequest) -> WorkerExecutionOutcome:
+        """Execute one plan through the existing PsExec worker function."""
+        success = execute_psexec_plan(
+            worker=self,
+            plan_number=request.plan_number,
+            ras_obj=request.ras_object,
+            num_cores=request.num_cores,
+            clear_geompre=request.clear_geompre,
+            force_geompre=request.force_geompre,
+            force_rerun=request.force_rerun,
+            sub_worker_id=request.sub_worker_id,
+            autoclean=request.autoclean,
+        )
+        hdf_path = RasPrjAssets.plan_results_hdf(
+            request.plan_number,
+            ras_object=request.ras_object,
+            must_exist=True,
+        )
+        return WorkerExecutionOutcome(
+            success=success,
+            hdf_path=str(hdf_path) if success and hdf_path is not None else None,
+        )
 
 
 # =============================================================================
@@ -369,8 +395,8 @@ def execute_psexec_plan(
 
     # Step 0a: Check if results are current (skip if so, unless force_rerun=True)
     if not force_rerun:
-        from ..RasCurrency import RasCurrency
-        is_current, reason = RasCurrency.are_plan_results_current(plan_number, ras_obj)
+        from ..RasComputeState import RasComputeState
+        is_current, reason = RasComputeState.are_plan_results_current(plan_number, ras_obj)
         if is_current:
             logger.info(f"Skipping remote execution of plan {plan_number}: {reason}")
             return True
@@ -379,8 +405,8 @@ def execute_psexec_plan(
 
     # Step 0b: Handle force_geompre (before copying to remote)
     if force_geompre:
-        from ..RasCurrency import RasCurrency
-        RasCurrency.clear_geom_hdf(plan_number, ras_obj)
+        from ..RasComputeState import RasComputeState
+        RasComputeState.clear_geom_hdf(plan_number, ras_obj)
         logger.info(f"Cleared geometry HDF for plan {plan_number} before remote execution")
 
     # Step 1: Authenticate to network share
