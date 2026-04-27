@@ -35,6 +35,10 @@ STUDY_ROOTS = {
     / "Organized"
     / "UpperGuadalupe_12100201"
     / "RAS Model",
+    "eleven-point": DEFAULT_WORKSPACE
+    / "Organized"
+    / "ElevenPoint_11010011"
+    / "RAS Model",
     "north-galveston-bay": DEFAULT_WORKSPACE
     / "Organized"
     / "NorthGalvestonBay_12040203"
@@ -51,6 +55,7 @@ STUDY_RAS_VERSIONS = {
     "rio-hondo": "6.6",
     "spring-creek": "5.0.7",
     "upper-guadalupe": "6.3.1",
+    "eleven-point": "6.6",
     "north-galveston-bay": "5.0.7",
     "lower-brazos": "6.6",
     "amite": "5.0.7",
@@ -67,6 +72,7 @@ def study_label_from_root(root_path: Path) -> str:
         "riohondo_13060008": "rio-hondo",
         "springcreek_12040102": "spring-creek",
         "upperguadalupe_12100201": "upper-guadalupe",
+        "elevenpoint_11010011": "eleven-point",
         "northgalvestonbay_12040203": "north-galveston-bay",
         "lowerbrazos_12070104": "lower-brazos",
         "amite_08070202": "amite",
@@ -123,6 +129,7 @@ def get_requested_roots(args: argparse.Namespace) -> dict[str, Path]:
                 "rio-hondo",
                 "spring-creek",
                 "upper-guadalupe",
+                "eleven-point",
                 "north-galveston-bay",
                 "lower-brazos",
                 "amite",
@@ -432,8 +439,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Study slug(s) to run: lower-colorado, rio-hondo, spring-creek, "
-            "upper-guadalupe, north-galveston-bay, lower-brazos, amite, "
-            "tickfaw, lake-maurepas, all."
+            "upper-guadalupe, eleven-point, north-galveston-bay, "
+            "lower-brazos, amite, tickfaw, lake-maurepas, all."
             " If omitted with --root, only the custom root(s) are scanned."
         ),
     )

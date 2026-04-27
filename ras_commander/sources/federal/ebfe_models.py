@@ -128,8 +128,8 @@ class RasEbfeModels:
             "organizer": "organize_eleven_point",
             "download_subdir": "11010011_Models_extracted",
             "output_name": "ElevenPoint_11010011",
-            "ras_version": ">6.2",
-            "notes": "Small 2D eBFE model archive for lightweight HEC-RAS 6.x demonstrations.",
+            "ras_version": "6.6",
+            "notes": "Small 2D eBFE model archive delivered in HEC-RAS >6.2 format.",
         },
         "lower-colorado-cummins": {
             "study_area": "LowerColoradoCummins_12090301",
@@ -1726,7 +1726,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             output_folder=Path(output_folder),
             description="Eleven Point Models (3.7 GB)",
             validate_dss=validate_dss,
-            ras_version=">6.2",
+            ras_version="6.6",
         )
 
     @staticmethod
@@ -2381,8 +2381,10 @@ HEC-RAS version: 5.0.1 / 5.0.3
             "output",
             "outputs",
             "landcover",
+            "land_cover",
             "land cover",
             "landuse",
+            "land_use",
             "dss",
             "dss input",
             "dss inputs",
@@ -2422,6 +2424,78 @@ HEC-RAS version: 5.0.1 / 5.0.3
         if score(best)[0] <= 0:
             return RasEbfeModels._select_archive_source_root(component_root)
         return best
+
+    @staticmethod
+    def _is_split_delivery_root(candidate: Path) -> bool:
+        """Return True when a folder contains split eBFE delivery components."""
+        candidate = Path(candidate)
+        if not candidate.exists() or not candidate.is_dir():
+            return False
+        sibling_component_names = {
+            "terrain",
+            "output",
+            "outputs",
+            "landcover",
+            "land_cover",
+            "land cover",
+            "landuse",
+            "land_use",
+            "dss",
+            "dss input",
+            "dss inputs",
+        }
+        child_names = {
+            child.name.lower()
+            for child in candidate.iterdir()
+            if child.is_dir()
+        }
+        return "input" in child_names and bool(child_names & sibling_component_names)
+
+    @staticmethod
+    def _extract_nested_split_component_archives(source_root: Path) -> int:
+        """Extract nested Input/Terrain/LandCover component zips in-place."""
+        source_root = Path(source_root)
+        component_stems = {
+            "input",
+            "terrain",
+            "output",
+            "outputs",
+            "landcover",
+            "land_cover",
+            "landuse",
+            "land_use",
+            "dss",
+            "dss_inputs",
+            "dss_input",
+        }
+        extracted = 0
+        for zip_path in sorted(source_root.rglob("*.zip")):
+            stem_key = (
+                zip_path.stem.lower()
+                .replace(" ", "_")
+                .replace("-", "_")
+            )
+            if stem_key not in component_stems:
+                continue
+            try:
+                with zipfile.ZipFile(zip_path, "r") as zf:
+                    top_names = {
+                        Path(name).parts[0]
+                        for name in zf.namelist()
+                        if Path(name).parts
+                    }
+                    if len(top_names) == 1:
+                        expected_root = zip_path.parent / next(iter(top_names))
+                    else:
+                        expected_root = zip_path.parent / zip_path.stem
+                    if expected_root.exists() and any(expected_root.iterdir()):
+                        continue
+                    print(f"  Extracting nested {zip_path.name}...")
+                    zf.extractall(zip_path.parent)
+                    extracted += 1
+            except zipfile.BadZipFile:
+                continue
+        return extracted
 
     @staticmethod
     def _normalize_split_delivery_ras_folder(ras_folder: Path) -> Dict[str, int]:
@@ -2565,7 +2639,17 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 description=description,
             )
 
-        source_root = RasEbfeModels._select_archive_source_root(downloaded_folder)
+        nested_components = RasEbfeModels._extract_nested_split_component_archives(
+            downloaded_folder
+        )
+        if nested_components:
+            print(f"  Extracted {nested_components} nested component archive(s)")
+
+        split_root = RasEbfeModels._select_split_delivery_source_root(downloaded_folder)
+        if RasEbfeModels._is_split_delivery_root(split_root):
+            source_root = split_root
+        else:
+            source_root = RasEbfeModels._select_archive_source_root(downloaded_folder)
 
         print("[1/4] Organizing RAS model files...")
         ras_files = RasEbfeModels._copy_tree_contents(
@@ -2574,16 +2658,33 @@ HEC-RAS version: 5.0.1 / 5.0.3
             skip_suffixes={".zip"},
         )
         projects = RasEbfeModels._discover_valid_ras_projects(folders['ras'])
+        split_normalization = {'projects_normalized': 0, 'files_copied': 0}
+        if RasEbfeModels._is_split_delivery_root(folders['ras']) or not projects:
+            split_normalization = RasEbfeModels._normalize_split_delivery_ras_folder(
+                folders['ras']
+            )
+            if split_normalization.get('projects_normalized', 0):
+                projects = RasEbfeModels._discover_valid_ras_projects(folders['ras'])
         print(f"  Copied {ras_files} file(s)")
+        if split_normalization.get('projects_normalized', 0):
+            print(
+                "  Split delivery projects normalized: "
+                f"{split_normalization.get('projects_normalized', 0)}"
+            )
         print(f"  Discovered {len(projects)} RAS project folder(s)")
 
         print("\n[2/4] Organizing documentation and HMS content...")
+        aux_source_root = (
+            source_root.parent
+            if RasEbfeModels._is_split_delivery_root(source_root)
+            else source_root
+        )
         docs_copied = RasEbfeModels._copy_documentation_assets(
-            source_root,
+            aux_source_root,
             folders['docs'],
         )
         hms_summary = RasEbfeModels._organize_delivered_hms_projects(
-            source_root,
+            aux_source_root,
             folders['hms'],
             display_name,
             huc8,
@@ -2601,6 +2702,13 @@ HEC-RAS version: 5.0.1 / 5.0.3
             folders['ras']
         )
         standardization = RasEbfeModels._standardize_ras_model_tree(folders['ras'])
+        standardization.update({
+            'split_projects_normalized': split_normalization.get(
+                'projects_normalized',
+                0,
+            ),
+            'split_files_copied': split_normalization.get('files_copied', 0),
+        })
         print(f"  DSS path corrections: {dss_corrections}")
         print(f"  Terrain path corrections: {terrain_corrections}")
         print(
@@ -2840,6 +2948,11 @@ HEC-RAS version: 5.0.1 / 5.0.3
 
         references_updated = 0
         if dss_lookup:
+            unique_dss_files = {
+                str(path.resolve()).lower(): path
+                for path in dss_lookup.values()
+                if path.suffix.lower() == ".dss"
+            }
             pattern = re.compile(
                 r"(?P<prefix>(?:DSS (?:File|Filename)|Gridded DSS Filename)=)"
                 r"(?P<value>[^|\r\n]+)",
@@ -2883,6 +2996,12 @@ HEC-RAS version: 5.0.1 / 5.0.3
                             destination = local_destination
                             dss_lookup[dss_name] = destination
                             break
+                    if (
+                        destination is None
+                        and dss_name.endswith(".dss")
+                        and len(unique_dss_files) == 1
+                    ):
+                        destination = next(iter(unique_dss_files.values()))
                     if destination is None:
                         return match.group(0)
                     new_value = RasEbfeModels._format_windows_relative(
@@ -3911,8 +4030,10 @@ HEC-RAS version: 5.0.1 / 5.0.3
             (
                 candidate for candidate in [
                     component_root / "LandCover",
+                    component_root / "Land_Cover",
                     component_root / "Land Cover",
                     ras_folder / "LandCover",
+                    ras_folder / "Land_Cover",
                     ras_folder / "Land Cover",
                 ]
                 if candidate.exists()
@@ -4128,7 +4249,11 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         # Build DSS file lookup by name (for matching)
         dss_lookup = {}
         for dss_path in dss_files:
-            dss_lookup[dss_path.name] = dss_path
+            dss_lookup[dss_path.name.lower()] = dss_path
+        unique_dss_files = {
+            str(path.resolve()).lower(): path
+            for path in dss_lookup.values()
+        }
 
         # Find all HEC-RAS files that might reference DSS
         hecras_files = []
@@ -4155,39 +4280,45 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
                 for match in dss_file_pattern.finditer(content):
                     old_path = match.group(1).strip()
+                    if not old_path or old_path.lower() in {"dss", "none", "null"}:
+                        continue
 
                     # Extract DSS filename from the path
                     dss_filename = Path(old_path).name
+                    dss_key = dss_filename.lower()
 
                     # Check if this DSS file exists in our organized structure
-                    if dss_filename in dss_lookup:
-                        actual_dss_path = dss_lookup[dss_filename]
+                    actual_dss_path = dss_lookup.get(dss_key)
+                    if (
+                        actual_dss_path is None
+                        and dss_key.endswith(".dss")
+                        and len(unique_dss_files) == 1
+                    ):
+                        actual_dss_path = next(iter(unique_dss_files.values()))
+
+                    if actual_dss_path is not None:
 
                         # Verify the DSS file actually exists
                         if actual_dss_path.exists():
-                            # Calculate correct relative path from HEC-RAS file to DSS file
-                            try:
-                                rel_path = actual_dss_path.relative_to(hecras_file.parent)
-                                rel_path_str = str(rel_path).replace('\\', '/')
+                            rel_path_str = RasEbfeModels._format_windows_relative(
+                                actual_dss_path,
+                                hecras_file.parent,
+                            )
 
-                                # Only replace if the path is wrong
-                                if old_path != rel_path_str:
-                                    # Replace both "DSS File=" and "DSS Filename=" patterns
-                                    # Preserve the original keyword
-                                    for keyword in ['DSS File', 'DSS Filename']:
-                                        old_full = f"{keyword}={old_path}"
-                                        new_full = f"{keyword}={rel_path_str}"
-                                        if old_full in content:
-                                            content = content.replace(old_full, new_full)
-                                            modified = True
-                                            print(f"    Corrected: {hecras_file.name}")
-                                            print(f"      Old: {keyword}={old_path}")
-                                            print(f"      New: {keyword}={rel_path_str}")
-                                            print(f"      Verified: File exists at {actual_dss_path}")
-
-                            except ValueError:
-                                # Can't make relative path (different drives)
-                                print(f"    ⚠️ Can't create relative path for {dss_filename} (different drives?)")
+                            # Only replace if the path is wrong
+                            if old_path != rel_path_str:
+                                # Replace both "DSS File=" and "DSS Filename=" patterns
+                                # Preserve the original keyword
+                                for keyword in ['DSS File', 'DSS Filename']:
+                                    old_full = f"{keyword}={old_path}"
+                                    new_full = f"{keyword}={rel_path_str}"
+                                    if old_full in content:
+                                        content = content.replace(old_full, new_full)
+                                        modified = True
+                                        print(f"    Corrected: {hecras_file.name}")
+                                        print(f"      Old: {keyword}={old_path}")
+                                        print(f"      New: {keyword}={rel_path_str}")
+                                        print(f"      Verified: File exists at {actual_dss_path}")
                         else:
                             print(f"    ⚠️ DSS file not found: {actual_dss_path}")
                     else:
