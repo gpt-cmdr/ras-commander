@@ -90,6 +90,7 @@ Current built-in organizers include:
 | `spring-creek` | 12040102 | Single 2D model with nested final archive. |
 | `north-galveston-bay` | 12040203 | Compound HMS plus nested 2D RAS delivery. |
 | `upper-guadalupe` | 12100201 | Four cascaded 2D watershed models. |
+| `eleven-point` | 11010011 | Small 2D HEC-RAS >6.2 model archive for lightweight demonstrations. |
 | `lower-colorado-cummins` | 12090301 | 1D steady BLE reach-model collection. |
 | `rio-hondo` | 13060008 | 1D steady BLE reach-model collection. |
 | `amite` | 08070202 | Louisiana component delivery with terrain rebuild handling for CRS mismatches. |
@@ -707,6 +708,7 @@ Current validation is tracked in the repository-level
 - Spring Creek: 2D geometry preprocessor passed.
 - North Galveston Bay: nested download/extract/organize path passed geometry preprocessor validation; delivered HMS project loads through hms-commander.
 - Upper Guadalupe: UPGU1, UPGU2, and UPGU3 passed; UPGU4 requires the 7200-second validation record because its geometry preprocessor can exceed one hour.
+- Eleven Point: cataloged as the smallest known 2D eBFE model with HEC-RAS version >6.2; download, organization, path audit, and geometry-preprocessor validation are pending.
 - Lower Brazos: manifest/inventory shell is organized by default; the three 188-229 GB model components must be explicitly selected before full model validation.
 - Amite: full E2E organization completed for five RAS projects. WA1, WA2,
   WA3, and WA5 passed geometry preprocessor validation; WA4 is blocked by a

@@ -7,6 +7,7 @@ These functions provide tested, deterministic organization for:
 - Spring Creek (12040102) - Pattern 3a: Single 2D model with nested zip
 - North Galveston Bay (12040203) - Pattern 4: Compound HMS + RAS
 - Upper Guadalupe (12100201) - Pattern 3b: Cascaded watershed models
+- Eleven Point (11010011) - Pattern 3: Small 2D model archive, HEC-RAS >6.2
 - Lower Colorado-Cummins (12090301) - Pattern 1D-BLE: Multiple 1D steady-state reach models
 - Rio Hondo (13060008) - Pattern 1D-BLE: Multiple 1D steady-state reach models
 - Lower Brazos (12070104) - Pattern 2: URL links file with very large component zips
@@ -69,6 +70,10 @@ class RasEbfeModels:
         "upper-guadalupe": "upper-guadalupe",
         "upgu": "upper-guadalupe",
         "12100201": "upper-guadalupe",
+        "eleven-point": "eleven-point",
+        "elevenpoint": "eleven-point",
+        "eleven-point-river": "eleven-point",
+        "11010011": "eleven-point",
         "lower-colorado": "lower-colorado-cummins",
         "lower-colorado-cummins": "lower-colorado-cummins",
         "cummins": "lower-colorado-cummins",
@@ -116,6 +121,15 @@ class RasEbfeModels:
             "output_name": "UpperGuadalupe_12100201",
             "ras_version": "6.3.1",
             "notes": "Four cascaded 2D watershed models.",
+        },
+        "eleven-point": {
+            "study_area": "ElevenPoint_11010011",
+            "huc8": "11010011",
+            "organizer": "organize_eleven_point",
+            "download_subdir": "11010011_Models_extracted",
+            "output_name": "ElevenPoint_11010011",
+            "ras_version": ">6.2",
+            "notes": "Small 2D eBFE model archive for lightweight HEC-RAS 6.x demonstrations.",
         },
         "lower-colorado-cummins": {
             "study_area": "LowerColoradoCummins_12090301",
@@ -1493,6 +1507,10 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         'models': 'https://ebfedata.s3.amazonaws.com/08070204_LakeMaurepas/08070204_Models.zip',
     }
 
+    _ELEVEN_POINT_URLS = {
+        'models': 'https://ebfedata.s3.amazonaws.com/11010011_ElevenPoint/11010011_Models.zip',
+    }
+
     _LOWER_BRAZOS_URLS = {
         'inventory': 'https://ebfedata.s3-us-west-2.amazonaws.com/12070104_LowerBrazos/Models/2D_Model_Inventory_Lower_Brazos.xlsx',
         'lb_ma01': 'https://ebfedata.s3-us-west-2.amazonaws.com/12070104_LowerBrazos/Models/LB_MA01.zip',
@@ -1686,6 +1704,29 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             description="Tickfaw Models (13.5 GB)",
             validate_dss=validate_dss,
             ras_version="5.0.7",
+        )
+
+    @staticmethod
+    @log_call
+    def organize_eleven_point(
+        downloaded_folder: Optional[Path] = None,
+        output_folder: Optional[Path] = None,
+        validate_dss: bool = True
+    ) -> Path:
+        """Organize Eleven Point (11010011) eBFE model with automatic download."""
+        if downloaded_folder is None:
+            downloaded_folder = Path("./ebfe_downloads/11010011_Models_extracted")
+        if output_folder is None:
+            output_folder = Path("./ebfe_organized/ElevenPoint_11010011")
+        return RasEbfeModels._organize_single_archive_model(
+            display_name="Eleven Point",
+            huc8="11010011",
+            url=RasEbfeModels._ELEVEN_POINT_URLS['models'],
+            downloaded_folder=Path(downloaded_folder),
+            output_folder=Path(output_folder),
+            description="Eleven Point Models (3.7 GB)",
+            validate_dss=validate_dss,
+            ras_version=">6.2",
         )
 
     @staticmethod

@@ -1275,6 +1275,10 @@ def run() -> None:
     if upper_guadalupe_root.exists():
         studies.append(audit_organized_study("UpperGuadalupe_12100201", upper_guadalupe_root))
 
+    eleven_point_root = organized_root / "ElevenPoint_11010011"
+    if eleven_point_root.exists():
+        studies.append(audit_organized_study("ElevenPoint_11010011", eleven_point_root))
+
     rio_hondo_root = organized_root / "RioHondo_13060008"
     if rio_hondo_root.exists():
         studies.append(audit_organized_study("RioHondo_13060008", rio_hondo_root))
