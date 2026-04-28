@@ -361,6 +361,114 @@ class RasMap:
 
     @staticmethod
     @log_call
+    def list_terrain_layers(
+        ras_project_path: Union[str, Path],
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """
+        List terrain layers registered in a project .rasmap file.
+
+        Args:
+            ras_project_path: Project folder, .prj file, or .rasmap file.
+            ras_object: Optional RasPrj object. Present for API consistency.
+
+        Returns:
+            DataFrame with one row per ``Terrains/Layer`` entry.
+        """
+        ras_project_path = Path(ras_project_path)
+        from . import _land_classification_helper as _lch
+
+        project_paths = _lch.resolve_project_paths(ras_project_path)
+        rasmap_path = project_paths.rasmap_path
+        columns = [
+            "name",
+            "filename",
+            "resolved_path",
+            "checked",
+            "type",
+            "resample_method",
+            "surface_on",
+        ]
+
+        if not rasmap_path.exists():
+            logger.warning(f"RASMapper file not found: {rasmap_path}")
+            return pd.DataFrame(columns=columns)
+
+        try:
+            root = ET.parse(rasmap_path).getroot()
+        except ET.ParseError as e:
+            logger.error(f"Error parsing .rasmap XML: {e}")
+            return pd.DataFrame(columns=columns)
+
+        records = []
+        for layer in root.findall(".//Terrains/Layer"):
+            filename = layer.attrib.get("Filename")
+            resolved_path = _lch.resolve_rasmap_relative_path(
+                project_paths.project_folder,
+                filename,
+            )
+            surface = layer.find("Surface")
+            records.append(
+                {
+                    "name": layer.attrib.get("Name", ""),
+                    "filename": filename,
+                    "resolved_path": (
+                        str(resolved_path) if resolved_path is not None else None
+                    ),
+                    "checked": layer.attrib.get("Checked", "True").lower() == "true",
+                    "type": layer.attrib.get("Type", ""),
+                    "resample_method": layer.findtext("ResampleMethod"),
+                    "surface_on": (
+                        surface.attrib.get("On", "False").lower() == "true"
+                        if surface is not None
+                        else None
+                    ),
+                }
+            )
+
+        return pd.DataFrame(records, columns=columns)
+
+    @staticmethod
+    @log_call
+    def list_landcover_layers(
+        ras_project_path: Union[str, Path],
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """List land-cover layers registered in a project .rasmap file."""
+        layers = RasMap.list_land_classification_layers(
+            ras_project_path,
+            ras_object=ras_object,
+        )
+        return layers.loc[layers["classification_kind"] == "landcover"].copy()
+
+    @staticmethod
+    @log_call
+    def list_soils_layers(
+        ras_project_path: Union[str, Path],
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """List hydrologic soils layers registered in a project .rasmap file."""
+        layers = RasMap.list_land_classification_layers(
+            ras_project_path,
+            ras_object=ras_object,
+        )
+        return layers.loc[layers["classification_kind"] == "soils"].copy()
+
+    @staticmethod
+    @log_call
+    def list_infiltration_layers(
+        ras_project_path: Union[str, Path],
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """List infiltration layers registered in a project .rasmap file."""
+        layers = RasMap.list_land_classification_layers(
+            ras_project_path,
+            ras_object=ras_object,
+        )
+        return layers.loc[layers["classification_kind"] == "infiltration"].copy()
+
+    @staticmethod
+    @log_call
     def add_landcover_layer(
         ras_project_path: Union[str, Path],
         source_path: Union[str, Path],
@@ -454,10 +562,21 @@ class RasMap:
         landcover_hdf_path: Optional[Union[str, Path]] = None,
         soil_layer_path: Optional[Union[str, Path]] = None,
         infiltration_hdf_path: Optional[Union[str, Path]] = None,
+        terrain_hdf_path: Optional[Union[str, Path]] = None,
+        sediment_soils_hdf_path: Optional[Union[str, Path]] = None,
         ras_object=None,
     ) -> Path:
         """
-        Associate generated classification layers to a geometry.
+        Associate terrain / classification layers to a compiled geometry HDF.
+
+        This public workflow writes HEC-RAS ``/Geometry`` association
+        attributes directly with h5py. Use
+        ``RasProcess.validate_geometry_association_cli()`` only as an optional
+        native-reference validator on disposable or intentionally mutated HDFs.
+
+        ``soil_layer_path`` is retained for compatibility with the
+        land-classification workflow. Use ``sediment_soils_hdf_path`` for the
+        HEC-RAS ``SedimentSoilsFilename`` geometry association.
         """
         ras_project_path = Path(ras_project_path)
         geom_file = Path(geom_file)
@@ -468,6 +587,14 @@ class RasMap:
         infiltration_hdf_path = (
             Path(infiltration_hdf_path) if infiltration_hdf_path is not None else None
         )
+        terrain_hdf_path = (
+            Path(terrain_hdf_path) if terrain_hdf_path is not None else None
+        )
+        sediment_soils_hdf_path = (
+            Path(sediment_soils_hdf_path)
+            if sediment_soils_hdf_path is not None
+            else None
+        )
         from . import _land_classification_helper as _lch
 
         return _lch.associate_geometry_layers(
@@ -476,7 +603,80 @@ class RasMap:
             landcover_hdf_path=landcover_hdf_path,
             soil_layer_path=soil_layer_path,
             infiltration_hdf_path=infiltration_hdf_path,
+            terrain_hdf_path=terrain_hdf_path,
+            sediment_soils_hdf_path=sediment_soils_hdf_path,
             ras_object=ras_object,
+        )
+
+    @staticmethod
+    @log_call
+    def set_geometry_association(
+        geom_number: Union[str, Path],
+        terrain_hdf_path: Optional[Union[str, Path]] = None,
+        landcover_hdf_path: Optional[Union[str, Path]] = None,
+        infiltration_hdf_path: Optional[Union[str, Path]] = None,
+        sediment_soils_hdf_path: Optional[Union[str, Path]] = None,
+        hecras_dir: Optional[Union[str, Path]] = None,
+        ras_object=None,
+        validate: bool = True,
+    ) -> Path:
+        """
+        Associate terrain / classification layers directly on a geometry HDF.
+        """
+        from .geom.GeomMesh import GeomMesh
+
+        return GeomMesh.set_geometry_association(
+            geom_number,
+            terrain_hdf_path=terrain_hdf_path,
+            landcover_hdf_path=landcover_hdf_path,
+            infiltration_hdf_path=infiltration_hdf_path,
+            sediment_soils_hdf_path=sediment_soils_hdf_path,
+            hecras_dir=hecras_dir,
+            ras_object=ras_object,
+            validate=validate,
+        )
+
+    @staticmethod
+    @log_call
+    def get_geometry_association(
+        geom_number: Union[str, Path],
+        hecras_dir: Optional[Union[str, Path]] = None,
+        ras_object=None,
+        resolve_paths: bool = True,
+    ) -> dict:
+        """
+        Read terrain / classification associations from a geometry HDF.
+        """
+        from .geom.GeomMesh import GeomMesh
+
+        return GeomMesh.get_geometry_association(
+            geom_number,
+            hecras_dir=hecras_dir,
+            ras_object=ras_object,
+            resolve_paths=resolve_paths,
+        )
+
+    @staticmethod
+    @log_call
+    def get_hdf_geometry_association(
+        hdf_path: Union[str, Path],
+        resolve_paths: bool = True,
+        include_2d_area_attrs: bool = True,
+        ras_object=None,
+    ) -> dict:
+        """
+        Read ``/Geometry`` association attrs from a geometry, plan, or result HDF.
+
+        This is read-only and intended for QA/QC workflows that need to audit
+        terrain, land-cover, infiltration, or sediment bed-material links
+        already stored in HEC-RAS HDF artifacts.
+        """
+        from ._geometry_association import read_geometry_association
+
+        return read_geometry_association(
+            hdf_path,
+            resolve_paths=resolve_paths,
+            include_2d_area_attrs=include_2d_area_attrs,
         )
 
     @staticmethod

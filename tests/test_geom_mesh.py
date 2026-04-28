@@ -23,6 +23,7 @@ GeomMesh = geom_mesh_module.GeomMesh
 _patch_text_seeds = geom_mesh_module._patch_text_seeds
 _reseed_after_perimeter_fix = geom_mesh_module._reseed_after_perimeter_fix
 _remove_short_perimeter_segments = geom_mesh_module._remove_short_perimeter_segments
+_ensure_hdf = geom_mesh_module._ensure_hdf
 
 HECRAS_INTEGRATION_ENV = "RAS_COMMANDER_RUN_HECRAS_INTEGRATION"
 
@@ -284,13 +285,17 @@ def storage_area_geom_text(tmp_path):
     return geom_text
 
 
-def _mock_generate_success(monkeypatch, compiled_geom_path: Path, *, has_breaklines: bool):
+def _mock_generate_success(monkeypatch, geom_text_path: Path, *, has_breaklines: bool):
     """Patch the heavy .NET entrypoints so generate() can be unit tested.
 
     Follows the RASDecomp-style architecture: load geometry from .NET,
     generate seeds via .NET, compute mesh, save via .NET + patch text.
     """
     captured = {}
+    hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
+    hdf_path.write_text("compiled", encoding="utf-8")
+    hdf_mtime = geom_text_path.stat().st_mtime + 1.0
+    os.utime(hdf_path, (hdf_mtime, hdf_mtime))
 
     monkeypatch.setattr(geom_mesh_module, "_load_dlls", lambda hecras_dir=None: None)
 
@@ -364,14 +369,16 @@ def _mock_generate_success(monkeypatch, compiled_geom_path: Path, *, has_breakli
         "_save_mesh",
         lambda geom, d2fa, fid, mesh, ns: None,
     )
-
-    def fake_compile_geometry(geom_text_path, hecras_dir=None):
-        hdf_path = Path(geom_text_path).with_suffix(Path(geom_text_path).suffix + ".hdf")
-        hdf_path.write_text("compiled", encoding="utf-8")
-        compiled_geom_path.write_text("compiled", encoding="utf-8")
-        return hdf_path
-
-    monkeypatch.setattr(GeomMesh, "compile_geometry", staticmethod(fake_compile_geometry))
+    monkeypatch.setattr(
+        geom_mesh_module,
+        "_sync_cell_size_to_hdf",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        geom_mesh_module,
+        "_sync_breakline_spacing_text_to_hdf",
+        lambda *args, **kwargs: None,
+    )
     captured["geom"] = mock_geom_obj
     return captured
 
@@ -381,14 +388,41 @@ def _install_fake_rasmapper_scripting(monkeypatch):
 
     fake_scripting = types.ModuleType("RasMapperLib.Scripting")
 
-    class FakeCompleteGeometryCommand:
+    class FakeSetGeometryAssociationCommand:
         def __init__(self):
             self.GeometryFilename = None
+            self.TerrainFilename = None
+            self.NValueFilename = None
+            self.InfiltrationFilename = None
+            self.SedimentSoilsFilename = None
 
-        def ExecuteOutOfProcess(self, wait_for_completion):
-            return None
+        def Execute(self, progress):
+            field_map = {
+                "TerrainFilename": ("Terrain Filename", "Terrain Layername"),
+                "NValueFilename": ("Land Cover Filename", "Land Cover Layername"),
+                "InfiltrationFilename": (
+                    "Infiltration Filename",
+                    "Infiltration Layername",
+                ),
+                "SedimentSoilsFilename": (
+                    "Sediment Bed Material Filename",
+                    "Sediment Bed Material Layername",
+                ),
+            }
+            geom_hdf_path = Path(self.GeometryFilename)
+            with h5py.File(str(geom_hdf_path), "r+") as hf:
+                geom_group = hf.require_group("Geometry")
+                for prop_name, (filename_attr, layer_attr) in field_map.items():
+                    value = getattr(self, prop_name)
+                    if not value:
+                        continue
+                    value_path = Path(value)
+                    relative = os.path.relpath(value_path, geom_hdf_path.parent)
+                    geom_group.attrs[filename_attr] = relative.encode("utf-8")
+                    geom_group.attrs[layer_attr] = value_path.stem.encode("utf-8")
+                geom_group.attrs["SI Units"] = b"False"
 
-    fake_scripting.CompleteGeometryCommand = FakeCompleteGeometryCommand
+    fake_scripting.SetGeometryAssociationCommand = FakeSetGeometryAssociationCommand
 
     fake_rasmapper = types.ModuleType("RasMapperLib")
     fake_rasmapper.Scripting = fake_scripting
@@ -493,73 +527,120 @@ class TestPatchTextSeeds:
 
 
 class TestReseedAfterPerimeterFix:
-    """Test mesh targeting after perimeter mutation recompiles."""
+    """Test perimeter mutation refuses unavailable text-to-HDF regeneration."""
 
-    def test_fallback_uses_selected_flow_area(self, monkeypatch, tmp_path):
+    def test_requires_external_geometry_hdf_regeneration(self, monkeypatch, tmp_path):
         geom_text_path = tmp_path / "test.g01"
         geom_text_path.write_text("Geom Title=Test\n", encoding="utf-8")
-        _install_fake_rasmapper_scripting(monkeypatch)
-
-        polygon_calls = []
-        seed_calls = []
-        selected_polygon = MockPolygon(
-            [(200.0, 0.0), (300.0, 0.0), (300.0, 100.0), (200.0, 100.0)]
-        )
-
-        mock_geom_obj = MagicMock()
-        mock_geom_obj.D2FlowArea.GetFeatureByName.side_effect = (
-            lambda name: 1 if name == "SecondaryArea" else -1
-        )
-        mock_geom_obj.D2FlowArea.Geometry.MeshPerimeters.Polygon.side_effect = (
-            lambda fid: polygon_calls.append(fid) or selected_polygon
-        )
-
         monkeypatch.setattr(
             geom_mesh_module,
             "_patch_text_perimeter",
-            lambda *args, **kwargs: None,
-        )
-        monkeypatch.setattr(
-            geom_mesh_module,
-            "_sync_breakline_spacing_text_to_hdf",
-            lambda *args, **kwargs: None,
-        )
-        monkeypatch.setattr(
-            geom_mesh_module,
-            "_sync_cell_size_to_hdf",
-            lambda *args, **kwargs: None,
-        )
-        monkeypatch.setattr(
-            geom_mesh_module,
-            "_generate_seeds_via_net",
-            lambda hdf_path, ns, fid=0: seed_calls.append(fid) or (_ for _ in ()).throw(
-                RuntimeError("mock: .NET unavailable")
-            ),
+            lambda *args, **kwargs: pytest.fail("perimeter text was patched"),
         )
 
-        def fake_generate_seeds_safe(perim, cell_size, ns):
-            assert perim is selected_polygon
-            return FakePointCollection()
+        with pytest.raises(RuntimeError, match="cannot generate .g##.hdf"):
+            _reseed_after_perimeter_fix(
+                geom_text_path,
+                geom_text_path.with_suffix(".g01.hdf"),
+                MockPolygon(
+                    [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]
+                ),
+                100.0,
+                1,
+                "SecondaryArea",
+                {"RASGeometry": lambda path: MagicMock()},
+            )
 
-        monkeypatch.setattr(
-            geom_mesh_module,
-            "_generate_seeds_safe",
-            fake_generate_seeds_safe,
+
+class TestGeometryHdfAvailability:
+    """Test the explicit boundary around unavailable text-to-HDF generation."""
+
+    def test_compile_geometry_is_disabled(self, breakline_geom_text):
+        with pytest.raises(RuntimeError, match="not a text-geometry compiler"):
+            GeomMesh.compile_geometry(breakline_geom_text)
+
+    def test_ensure_hdf_rejects_missing_compiled_geometry(self, breakline_geom_text):
+        with pytest.raises(RuntimeError, match="Compiled geometry HDF is missing"):
+            _ensure_hdf(breakline_geom_text)
+
+    def test_ensure_hdf_rejects_stale_compiled_geometry(self, breakline_geom_text):
+        hdf_path = breakline_geom_text.with_suffix(breakline_geom_text.suffix + ".hdf")
+        hdf_path.write_text("compiled", encoding="utf-8")
+        text_mtime = breakline_geom_text.stat().st_mtime + 10.0
+        os.utime(hdf_path, (text_mtime - 5.0, text_mtime - 5.0))
+        os.utime(breakline_geom_text, (text_mtime, text_mtime))
+
+        with pytest.raises(RuntimeError, match="is newer than"):
+            _ensure_hdf(breakline_geom_text)
+
+
+class TestGeometryAssociation:
+    """Test geometry HDF association API."""
+
+    def _make_geometry_hdf(self, tmp_path):
+        hdf_path = tmp_path / "test.g01.hdf"
+        with h5py.File(str(hdf_path), "w") as hf:
+            hf.create_group("Geometry")
+        return hdf_path
+
+    def _make_artifact(self, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("artifact", encoding="utf-8")
+        return path
+
+    def test_sets_and_reads_all_association_paths(self, monkeypatch, tmp_path):
+        geom_hdf_path = self._make_geometry_hdf(tmp_path)
+        terrain = self._make_artifact(tmp_path / "Terrain" / "Terrain50.hdf")
+        landcover = self._make_artifact(
+            tmp_path / "Land Classification" / "LandCover.hdf"
+        )
+        infiltration = self._make_artifact(tmp_path / "Soils" / "Infiltration.hdf")
+        sediment_soils = self._make_artifact(
+            tmp_path / "Soils" / "Hydrologic Soil Groups.hdf"
         )
 
-        seeds = _reseed_after_perimeter_fix(
-            geom_text_path,
-            geom_text_path.with_suffix(".g01.hdf"),
-            MockPolygon([(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]),
-            100.0,
-            1,
-            "SecondaryArea",
-            {"RASGeometry": lambda path: mock_geom_obj},
+        _install_fake_rasmapper_scripting(monkeypatch)
+        monkeypatch.setattr(geom_mesh_module, "_load_dlls", lambda hecras_dir=None: None)
+
+        result = GeomMesh.set_geometry_association(
+            geom_hdf_path,
+            terrain_hdf_path=terrain,
+            landcover_hdf_path=landcover,
+            infiltration_hdf_path=infiltration,
+            sediment_soils_hdf_path=sediment_soils,
         )
 
-        assert seeds.Count == 2
-        assert seed_calls == [1]
-        assert polygon_calls == [1]
+        assert result == geom_hdf_path
+        association = GeomMesh.get_geometry_association(geom_hdf_path)
+        assert Path(association["terrain_hdf_path"]).resolve() == terrain.resolve()
+        assert Path(association["landcover_hdf_path"]).resolve() == landcover.resolve()
+        assert Path(association["infiltration_hdf_path"]).resolve() == infiltration.resolve()
+        assert (
+            Path(association["sediment_soils_hdf_path"]).resolve()
+            == sediment_soils.resolve()
+        )
+        assert association["terrain_layer_name"] == "Terrain50"
+        assert association["landcover_layer_name"] == "LandCover"
+        assert association["infiltration_layer_name"] == "Infiltration"
+        assert association["sediment_soils_layer_name"] == "Hydrologic Soil Groups"
+        assert association["si_units"] == "False"
+
+    def test_requires_at_least_one_association_path(self, tmp_path):
+        geom_hdf_path = self._make_geometry_hdf(tmp_path)
+
+        with pytest.raises(ValueError, match="at least one"):
+            GeomMesh.set_geometry_association(geom_hdf_path)
+
+    def test_rejects_missing_association_artifact(self, monkeypatch, tmp_path):
+        geom_hdf_path = self._make_geometry_hdf(tmp_path)
+        missing_terrain = tmp_path / "Terrain" / "Missing.hdf"
+        monkeypatch.setattr(geom_mesh_module, "_load_dlls", lambda hecras_dir=None: None)
+
+        with pytest.raises(FileNotFoundError, match="terrain_hdf_path"):
+            GeomMesh.set_geometry_association(
+                geom_hdf_path,
+                terrain_hdf_path=missing_terrain,
+            )
 
 
 class TestDetectBcConflicts:
@@ -634,11 +715,10 @@ class TestFixBcConflicts:
 class TestGenerate:
     """Test generate() normalization and persistence semantics."""
 
-    def test_defaults_persist_geometry_and_compile(self, monkeypatch, breakline_geom_text):
-        compiled_marker = breakline_geom_text.with_suffix(".compiled")
+    def test_defaults_persist_geometry_with_existing_hdf(self, monkeypatch, breakline_geom_text):
         captured = _mock_generate_success(
             monkeypatch,
-            compiled_marker,
+            breakline_geom_text,
             has_breaklines=True,
         )
 
@@ -656,10 +736,9 @@ class TestGenerate:
         assert "Storage Area 2D Points= 2 " in text
 
     def test_accepts_breakline_spacing_override(self, monkeypatch, breakline_geom_text):
-        compiled_marker = breakline_geom_text.with_suffix(".compiled")
         captured = _mock_generate_success(
             monkeypatch,
-            compiled_marker,
+            breakline_geom_text,
             has_breaklines=True,
         )
 
@@ -675,16 +754,14 @@ class TestGenerate:
         assert "BreakLine CellSize Min=75.000000" in text
         assert "BreakLine CellSize Max=125.000000" in text
 
-    def test_reseed_after_perimeter_fix_preserves_selected_mesh(
+    def test_perimeter_fix_reports_external_hdf_requirement(
         self, monkeypatch, breakline_geom_text
     ):
-        compiled_marker = breakline_geom_text.with_suffix(".compiled")
         captured = _mock_generate_success(
             monkeypatch,
-            compiled_marker,
+            breakline_geom_text,
             has_breaklines=True,
         )
-        _install_fake_rasmapper_scripting(monkeypatch)
 
         feature_names = ["MainArea", "SecondaryArea"]
         polygons = {
@@ -732,8 +809,10 @@ class TestGenerate:
 
         result = GeomMesh.generate(breakline_geom_text, mesh_index=1)
 
-        assert result.ok
-        assert seed_calls == [1, 1]
+        assert result.ok is False
+        assert result.status == "exception"
+        assert "cannot generate .g##.hdf" in result.error_message
+        assert seed_calls == [1]
 
     @pytest.mark.parametrize(
         "kwargs",
@@ -749,19 +828,17 @@ class TestGenerate:
         with pytest.raises(ValueError, match="must be greater than 0.0"):
             GeomMesh.generate(breakline_geom_text, **kwargs)
 
-    def test_does_not_report_complete_when_compile_fails(self, monkeypatch, breakline_geom_text):
-        _mock_generate_success(monkeypatch, breakline_geom_text.with_suffix(".compiled"), has_breaklines=False)
-
-        def fake_compile_geometry(*args, **kwargs):
-            raise RuntimeError("compile failed")
-
-        monkeypatch.setattr(GeomMesh, "compile_geometry", staticmethod(fake_compile_geometry))
+    def test_does_not_report_complete_when_geometry_hdf_missing(
+        self, monkeypatch, breakline_geom_text
+    ):
+        monkeypatch.setattr(geom_mesh_module, "_load_dlls", lambda hecras_dir=None: None)
+        monkeypatch.setattr(geom_mesh_module, "_imports", lambda: {})
 
         result = GeomMesh.generate(breakline_geom_text)
 
         assert result.ok is False
         assert result.status == "exception"
-        assert "compile failed" in result.error_message
+        assert "Compiled geometry HDF is missing" in result.error_message
 
 
 @pytest.mark.skipif(

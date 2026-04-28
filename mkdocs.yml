@@ -60,7 +60,7 @@ plugins:
             heading_level: 2
             separate_signature: true
             show_signature_annotations: true
-  # DISABLED for pre-rendered notebooks: # DISABLED for pre-rendered notebooks: # DISABLED for pre-rendered notebooks: - mkdocs-jupyter:
+  # DISABLED for pre-rendered notebooks: - mkdocs-jupyter:
   # include_source: true
   # execute: false
   # include: ["notebooks/*.md"]
@@ -68,11 +68,13 @@ plugins:
   # ignore_h1_titles: true
   - git-revision-date-localized:
       enable_creation_date: true
+      enable_git_follow: false
       type: date
 
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
+      auto_title: true
       line_spans: __span
       pygments_lang_class: true
   - pymdownx.inlinehilite
@@ -170,6 +172,7 @@ nav:
       - 2D Plaintext Geometry: notebooks/202_2d_plaintext_geometry.md
       - Extract XYZ from Geometry: notebooks/205_extract_xs_xyz_from_geometry.md
       - Fixit Blocked Obstructions: notebooks/210_fixit_blocked_obstructions.md
+      - Land Cover Manning's n Write: notebooks/212_landcover_mannings_n_write.md
     - Boundary Conditions (300s):
       - Unsteady Flow Operations: notebooks/300_unsteady_flow_operations.md
       - DSS Boundary Extraction: notebooks/310_dss_boundary_extraction.md
@@ -218,6 +221,7 @@ nav:
       - USGS Real-Time Monitoring: notebooks/912_usgs_real_time_monitoring.md
       - BC from Live Gauge: notebooks/913_bc_generation_from_live_gauge.md
       - Model Validation with USGS: notebooks/914_model_validation_with_usgs.md
+      - Terrain Creation: notebooks/920_terrain_creation.md
     - Real-Time Forecast Workflows (915-919):
       - Forecast Workflow Overview: notebooks/915_realtime_forecast_workflow.md
       - HRRR Precipitation Forecast: notebooks/916_hrrr_precipitation_forecast.md

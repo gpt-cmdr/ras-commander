@@ -103,9 +103,9 @@ pip install pyjnius
 !!! note "Java Required"
     DSS operations require Java 8+ (JRE or JDK) installed on your system.
 
-### Linux/Wine (Headless Map Generation)
+### Linux/Wine (Headless RasProcess Workflows)
 
-On Linux, `RasProcess.exe` can run under Wine to generate stored maps (WSE, Depth, Velocity TIFs) without a display. This enables headless CI/CD pipelines and cloud-based map generation.
+On Linux, `RasProcess.exe` can run under Wine for documented RasProcess workflows such as stored map generation (WSE, Depth, Velocity TIFs) and native reference validation of geometry associations. This enables headless CI/CD pipelines and cloud-based map or QA/QC workflows.
 
 **Requirements**:
 
@@ -139,7 +139,7 @@ winetricks -q corefonts     # Arial, Times New Roman, etc.
     Verified on the CLB07 Proxmox container `ras2cng-wine` (Debian 13, Wine 11.0). Custom `wine_executable` paths or wrappers are supported; helper tools such as `winepath` are resolved automatically.
 
 !!! note "Scope"
-    Wine support covers `RasProcess.exe` (stored map generation) only. Full HEC-RAS simulation (`Ras.exe`) still requires Windows. HDF analysis works natively on Linux without Wine.
+    Wine support covers wrapped `RasProcess.exe` workflows. Full HEC-RAS simulation (`Ras.exe`) still requires Windows. HDF analysis and Python-native geometry association writes work on Linux without Wine.
 
 **Verify installation**:
 
@@ -158,6 +158,17 @@ from ras_commander import RasProcess
 
 # Same API as Windows -- Wine wrapping is automatic
 results = RasProcess.store_maps(plan_number="01", wse=True, depth=True)
+```
+
+```python
+# Optional native reference validator. This mutates the supplied HDF in place,
+# so use it on a disposable copy or intentional validation target.
+validation = RasProcess.validate_geometry_association_cli(
+    "MyModel.g01.hdf",
+    terrain_hdf_path="Terrain/ExistingTerrain.hdf",
+    ras_version="7.0",
+)
+print(validation["passed"])
 ```
 
 ### Remote Execution

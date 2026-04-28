@@ -428,13 +428,55 @@ indices = RasUtils.perform_kdtree_query(
       heading_level: 3
       members:
         - parse_rasmap
+        - list_terrain_layers
+        - list_land_classification_layers
+        - list_landcover_layers
+        - list_soils_layers
+        - list_infiltration_layers
         - get_terrain_path
         - get_landcover_path
+        - associate_geometry_layers
+        - get_hdf_geometry_association
         - list_results_plans
         - list_calculated_layers
         - add_calculated_layer
         - remove_calculated_layer
         - add_wse_comparison_layers
+
+#### RASMapper Layer Discovery
+
+The layer-list methods read the `.rasmap` file and return one dataframe row per layer. Use these when a workflow needs discoverable layer names and resolved paths instead of the compact, list-valued `ras.rasmap_df` project summary.
+
+```python
+from ras_commander import RasMap
+
+terrain_layers = RasMap.list_terrain_layers(project_path)
+landcover_layers = RasMap.list_landcover_layers(project_path)
+soils_layers = RasMap.list_soils_layers(project_path)
+infiltration_layers = RasMap.list_infiltration_layers(project_path)
+```
+
+`list_land_classification_layers()` is the broad parser for RASMapper `Type="LandCoverLayer"` entries. The land-cover, soils, and infiltration methods are filtered convenience wrappers around that catalog.
+
+#### Geometry HDF Layer Associations
+
+`RasMap.get_hdf_geometry_association()` reads `/Geometry` association attributes from geometry HDFs and plan/result HDFs without mutation. `RasMap.associate_geometry_layers()` writes the geometry HDF attributes through Python-native `h5py`.
+
+```python
+association = RasMap.get_hdf_geometry_association("MyModel.g01.hdf")
+print(association["terrain_hdf_path"])
+
+RasMap.associate_geometry_layers(
+    project_path,
+    "MyModel.g01.hdf",
+    terrain_hdf_path="Terrain/ExistingTerrain.hdf",
+    landcover_hdf_path="Land Classification/LandCover.hdf",
+    infiltration_hdf_path="Land Classification/Infiltration.hdf",
+)
+```
+
+!!! warning "Compiled HDF only"
+    `associate_geometry_layers()` updates an existing `.g##.hdf`. It does not compile plain-text `.g##` geometry into HDF or create missing geometry datasets.
 
 ### RasProcess
 
@@ -447,12 +489,37 @@ indices = RasUtils.perform_kdtree_query(
         - get_plan_timestamps
         - store_maps
         - store_all_maps
+        - validate_geometry_association_cli
         - run_command
 
 #### RasProcess Details
 
 !!! info "RasProcess.exe CLI"
     RasProcess.exe is an undocumented command-line interface bundled with HEC-RAS that enables headless automation of RASMapper operations. The `RasProcess` class wraps this CLI for programmatic access.
+
+##### Geometry Association Validator
+
+`validate_geometry_association_cli()` runs the native `RasProcess.exe SetGeometryAssociation` command and compares the resulting `/Geometry` attributes against ras-commander's expected HEC-RAS-style attributes.
+
+```python
+from ras_commander import RasProcess
+
+result = RasProcess.validate_geometry_association_cli(
+    "MyModel.g01.hdf",
+    terrain_hdf_path="Terrain/ExistingTerrain.hdf",
+    landcover_hdf_path="Land Classification/LandCover.hdf",
+    ras_version="7.0",
+)
+
+print(result["passed"])
+print(result["return_code"])
+print(result["mismatches"])
+```
+
+The returned dictionary includes the native command arguments, return code, stdout/stderr, before/after attributes, expected attributes, mismatch list, and `passed`.
+
+!!! danger "In-place mutation"
+    This method mutates the supplied HDF. It exists as a native reference validator for disposable copies or intentional validation runs. Normal workflows should call `RasMap.associate_geometry_layers()`.
 
 ##### Supported Map Types
 

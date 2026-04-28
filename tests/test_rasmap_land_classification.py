@@ -102,6 +102,11 @@ class TestPublicAPISurface:
             "associate_geometry_layers",
             "recompute_property_tables",
             "list_land_classification_layers",
+            "list_terrain_layers",
+            "list_landcover_layers",
+            "list_soils_layers",
+            "list_infiltration_layers",
+            "get_hdf_geometry_association",
         ],
     )
     def test_method_exists_and_is_static_style(self, method_name):
@@ -195,6 +200,26 @@ class TestRealRasmapParsing:
         assert parsed.at[0, "infiltration_hdf_path"] == [
             str(project_path / "Soils Data" / "Infiltration.hdf")
         ]
+
+        terrain_layers = RasMap.list_terrain_layers(project_path)
+        assert len(terrain_layers) == 1
+        assert terrain_layers.iloc[0]["name"] == "Terrain50"
+        assert terrain_layers.iloc[0]["filename"] == ".\\Terrain\\Terrain50.hdf"
+        assert terrain_layers.iloc[0]["resolved_path"] == str(
+            project_path / "Terrain" / "Terrain50.hdf"
+        )
+        assert terrain_layers.iloc[0]["resample_method"] == "near"
+        assert bool(terrain_layers.iloc[0]["surface_on"]) is True
+        assert parsed.at[0, "terrain_hdf_path"] == [
+            terrain_layers.iloc[0]["resolved_path"]
+        ]
+
+        landcover_layers = RasMap.list_landcover_layers(project_path)
+        soils_layers = RasMap.list_soils_layers(project_path)
+        infiltration_layers = RasMap.list_infiltration_layers(project_path)
+        assert list(landcover_layers["name"]) == ["LandCover"]
+        assert list(soils_layers["name"]) == ["Hydrologic Soil Groups"]
+        assert list(infiltration_layers["name"]) == ["Infiltration"]
 
     def test_muncie_nonstandard_names_still_classify_as_landcover(self):
         project_path = REPO_ROOT / "example_projects" / "Muncie_test_export"
