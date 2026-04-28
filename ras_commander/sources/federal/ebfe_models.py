@@ -31,6 +31,7 @@ import shutil
 import subprocess
 import sys
 import zipfile
+import xml.etree.ElementTree as ET
 from datetime import datetime
 import requests
 from tqdm import tqdm
@@ -1709,23 +1710,93 @@ Flow data is contained in steady flow files (.f##) within each reach model.
     def organize_tickfaw(
         downloaded_folder: Optional[Path] = None,
         output_folder: Optional[Path] = None,
-        validate_dss: bool = True
+        include_ble_surfaces: bool = True,
+        validate_dss: bool = False,
+        ras_version: Optional[str] = None,
     ) -> Path:
-        """Organize Tickfaw (08070203) eBFE model with automatic download."""
+        """Organize Tickfaw (08070203) into the standard four-folder layout."""
         if downloaded_folder is None:
-            downloaded_folder = Path("./ebfe_downloads/08070203_Models_extracted")
+            downloaded_folder = Path("./ebfe_downloads/08070203_Tickfaw")
+        else:
+            downloaded_folder = Path(downloaded_folder)
+
         if output_folder is None:
             output_folder = Path("./ebfe_organized/Tickfaw_08070203")
-        return RasEbfeModels._organize_single_archive_model(
-            display_name="Tickfaw",
-            huc8="08070203",
-            url=RasEbfeModels._TICKFAW_URLS['models'],
-            downloaded_folder=Path(downloaded_folder),
-            output_folder=Path(output_folder),
-            description="Tickfaw Models (13.5 GB)",
-            validate_dss=validate_dss,
-            ras_version="5.0.7",
+        else:
+            output_folder = Path(output_folder)
+
+        folders = {
+            'hms': output_folder / "HMS Model",
+            'ras': output_folder / "RAS Model",
+            'spatial': output_folder / "Spatial Data",
+            'docs': output_folder / "Documentation",
+            'agent': output_folder / "agent",
+        }
+        for folder in folders.values():
+            folder.mkdir(parents=True, exist_ok=True)
+
+        components = {
+            "models": ("08070203_Models.zip", downloaded_folder / "08070203_Models_extracted", "Models"),
+            "vector_data": ("08070203_VectorData.zip", downloaded_folder / "08070203_VectorData_extracted", "Vector Data"),
+            "documents": ("08070203_Documents.zip", downloaded_folder / "08070203_Documents_extracted", "Documents"),
+            "depth_01": ("08070203_Depth01.zip", downloaded_folder / "08070203_Depth01_extracted", "Depth01"),
+            "depth_002": ("08070203_Depth002.zip", downloaded_folder / "08070203_Depth002_extracted", "Depth002"),
+            "elev_01": ("08070203_Elev01.zip", downloaded_folder / "08070203_Elev01_extracted", "Elev01"),
+            "elev_002": ("08070203_Elev002.zip", downloaded_folder / "08070203_Elev002_extracted", "Elev002"),
+        }
+
+        for zip_name, extract_dir, description in components.values():
+            RasEbfeModels._download_component("", downloaded_folder / zip_name, description)
+            RasEbfeModels._extract_component(downloaded_folder / zip_name, extract_dir, description)
+
+        model_prj = next(components["models"][1].rglob("*.prj"), None)
+        if model_prj is None:
+            raise FileNotFoundError("No Tickfaw HEC-RAS project file found in extracted models")
+        project_dest = folders['ras'] / "Tickfaw"
+        shutil.copytree(model_prj.parent, project_dest, dirs_exist_ok=True)
+
+        for doc_file in components["documents"][1].rglob("*"):
+            if doc_file.is_file():
+                shutil.copy2(doc_file, folders['docs'] / doc_file.name)
+
+        vector_dest = folders['spatial'] / "VectorData"
+        vector_dest.mkdir(parents=True, exist_ok=True)
+        for vector_dir in components["vector_data"][1].rglob("*"):
+            if vector_dir.is_dir() and vector_dir.suffix.lower() == ".gdb":
+                shutil.copytree(vector_dir, vector_dest / vector_dir.name, dirs_exist_ok=True)
+
+        if include_ble_surfaces:
+            surface_manifest = ["# BLE Surfaces", ""]
+            for key in ("depth_01", "depth_002", "elev_01", "elev_002"):
+                _, extract_dir, description = components[key]
+                surface_dest = folders['spatial'] / description
+                shutil.copytree(extract_dir, surface_dest, dirs_exist_ok=True)
+                surface_manifest.append(f"- {description}: {surface_dest}")
+            (folders['spatial'] / "BLE_SURFACES.md").write_text(
+                "\n".join(surface_manifest) + "\n",
+                encoding='utf-8',
+            )
+
+        (folders['hms'] / "README.md").write_text(
+            "# No HMS Model\n\nNo separate HEC-HMS project is included with this eBFE delivery.\n",
+            encoding='utf-8',
         )
+        folders['agent'].mkdir(parents=True, exist_ok=True)
+        (folders['agent'] / "model_log.md").write_text(
+            f"# Agent Work Log - Tickfaw\n\nOrganized: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n",
+            encoding='utf-8',
+        )
+
+        RasEbfeModels.repair_project_paths(
+            project_dest,
+            search_roots=[folders['spatial'], folders['docs']],
+            ras_version=ras_version,
+        )
+
+        if validate_dss:
+            RasEbfeModels._validate_dss_files(project_dest)
+
+        return output_folder
 
     @staticmethod
     @log_call
@@ -1807,6 +1878,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         terrain_create_ras_version: str = "6.6",
         terrain_rebuild_gdal_version: str = "6.6",
         terrain_rebuild_timeout: int = 7200,
+        ras_version: Optional[str] = None
     ) -> Path:
         """
         Organize Amite (08070202) eBFE model with automatic download.
@@ -1946,29 +2018,27 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         if inv_file.exists():
             shutil.copy2(inv_file, folders['ras'] / inv_file.name)
 
-        # Find Terrain.hdf inside extracted archive
-        terrain_source = None
+        # Find Terrain.hdf candidates inside extracted archive
+        terrain_sources = []
         for candidate in [terrain_dir / 'Terrain', terrain_dir]:
-            hdf_files = list(candidate.rglob('Terrain.hdf'))
-            if hdf_files:
-                terrain_source = hdf_files[0].parent
-                break
+            terrain_sources.extend(path.parent for path in candidate.rglob('Terrain.hdf'))
+        terrain_sources = sorted(set(terrain_sources), key=lambda path: str(path))
+        terrain_source = terrain_sources[0] if terrain_sources else None
 
-        # Find LandCover.tif inside extracted archive
-        landuse_source = None
+        # Find LandCover.tif candidates inside extracted archive
+        landuse_sources = []
         for candidate in [landuse_dir / 'Landcover', landuse_dir / 'LandCover', landuse_dir]:
-            tif_files = list(candidate.rglob('LandCover.tif'))
-            if tif_files:
-                landuse_source = tif_files[0].parent
-                break
+            landuse_sources.extend(path.parent for path in candidate.rglob('LandCover.tif'))
+        landuse_sources = sorted(set(landuse_sources), key=lambda path: str(path))
+        landuse_source = landuse_sources[0] if landuse_sources else None
 
         if terrain_source:
-            print(f"  Terrain source: {terrain_source}")
+            print(f"  Terrain source(s): {len(terrain_sources)}")
         else:
             print("  WARNING: Terrain.hdf not found in extracted Terrain.zip")
 
         if landuse_source:
-            print(f"  LandUse source: {landuse_source}")
+            print(f"  LandUse source(s): {len(landuse_sources)}")
         else:
             print("  WARNING: LandCover.tif not found in extracted LandUse.zip")
 
@@ -1992,17 +2062,35 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             file_count = len(list(wa_dest.rglob('*')))
             print(f"    Copied {file_count} input files")
 
-            # Copy shared terrain INTO project folder
-            terrain_dest = wa_dest / "Terrain"
-            if terrain_source and not terrain_dest.exists():
-                shutil.copytree(terrain_source, terrain_dest, dirs_exist_ok=True)
+            project_crs = RasEbfeModels._read_spatial_reference(
+                next(iter(wa_dest.glob('*.g*.hdf')), None)
+            )
+            selected_terrain = RasEbfeModels._select_matching_spatial_source(
+                terrain_sources,
+                project_crs,
+                fallback=terrain_source,
+            )
+            selected_landuse = RasEbfeModels._select_matching_spatial_source(
+                landuse_sources,
+                project_crs,
+                fallback=landuse_source,
+            )
+
+            # Copy terrain INTO project folder, preserving source folder identity
+            if selected_terrain:
+                terrain_dest = wa_dest / selected_terrain.name
+                shutil.copytree(selected_terrain, terrain_dest, dirs_exist_ok=True)
                 print(f"    Terrain/ copied into project folder")
 
-            # Copy shared landcover INTO project folder
-            landcover_dest = wa_dest / "Landcover"
-            if landuse_source and not landcover_dest.exists():
-                shutil.copytree(landuse_source, landcover_dest, dirs_exist_ok=True)
+            # Copy landcover INTO project folder, preserving source folder identity
+            if selected_landuse:
+                landcover_dest = wa_dest / selected_landuse.name
+                shutil.copytree(selected_landuse, landcover_dest, dirs_exist_ok=True)
                 print(f"    Landcover/ copied into project folder")
+
+            projection_file = wa_dest / "projection_file.prj"
+            if project_crs and not projection_file.exists():
+                projection_file.write_text(str(project_crs), encoding='utf-8')
 
             # Move Output HDF files INTO project folder
             if wa_key in output_dirs:
@@ -2105,6 +2193,15 @@ Flow data is contained in steady flow files (.f##) within each reach model.
                 print(f"  Terrain rebuild records: {status_counts}")
             else:
                 print("  No terrain CRS rebuilds required")
+
+        for wa_key in RasEbfeModels._AMITE_WATERSHEDS:
+            wa_dest = folders['ras'] / wa_key
+            if wa_dest.exists():
+                RasEbfeModels.repair_project_paths(
+                    wa_dest,
+                    search_roots=[folders['spatial'], folders['docs']],
+                    ras_version=ras_version,
+                )
 
         # Validate DSS files
         dss_results = []
@@ -2296,6 +2393,220 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 for member in zf.filelist:
                     zf.extract(member, dest)
                     pbar.update(member.file_size)
+
+    @staticmethod
+    def _read_spatial_reference(path: Optional[Path]) -> Optional[str]:
+        """Best-effort spatial reference reader for HDF/TIF/PRJ assets."""
+        if path is None:
+            return None
+        path = Path(path)
+        if not path.exists():
+            return None
+
+        if path.suffix.lower() == ".prj":
+            return path.read_text(encoding='utf-8', errors='ignore').strip() or None
+
+        try:
+            from ras_commander.hdf import HdfBase
+            projection = HdfBase.get_projection(path)
+            if projection:
+                return str(projection)
+        except Exception:
+            pass
+
+        try:
+            import rasterio
+            with rasterio.open(path) as dataset:
+                return dataset.crs.to_string() if dataset.crs else None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _select_matching_spatial_source(
+        sources: List[Path],
+        target_crs: Optional[str],
+        fallback: Optional[Path] = None,
+    ) -> Optional[Path]:
+        """Select the first source whose contained spatial asset matches target CRS."""
+        if not sources:
+            return fallback
+        if target_crs:
+            for source in sources:
+                spatial_asset = (
+                    next(iter(source.glob("*.hdf")), None)
+                    or next(iter(source.glob("*.tif")), None)
+                    or next(iter(source.glob("*.prj")), None)
+                )
+                if RasEbfeModels._read_spatial_reference(spatial_asset) == target_crs:
+                    return source
+        return fallback or sources[0]
+
+    @staticmethod
+    @log_call
+    def repair_project_paths(
+        project_folder: Path,
+        search_roots: Optional[List[Path]] = None,
+        ras_version: Optional[str] = None,
+    ) -> Dict[str, int]:
+        """Repair common absolute DSS and RASMapper paths in an organized project."""
+        project_folder = Path(project_folder)
+        search_roots = [Path(root) for root in (search_roots or []) if Path(root).exists()]
+        roots = [project_folder, *search_roots]
+
+        stats = {
+            "dss_corrections": 0,
+            "rasmap_corrections": 0,
+            "folder_corrections": 0,
+            "unresolved_paths": 0,
+        }
+
+        try:
+            import ras_commander
+            ras_obj = ras_commander.RasPrj()
+            ras_commander.init_ras_project(
+                project_folder,
+                ras_version,
+                ras_object=ras_obj,
+                load_results_summary=False,
+            )
+        except Exception:
+            ras_obj = None
+
+        dss_lookup = RasEbfeModels._file_lookup(roots, "*.dss")
+        hecras_files = list(project_folder.glob("*.prj"))
+        if ras_obj is not None:
+            for frame_name in ("plan_df", "unsteady_df", "flow_df"):
+                frame = getattr(ras_obj, frame_name, None)
+                if frame is not None and "full_path" in frame.columns:
+                    hecras_files.extend(Path(path) for path in frame["full_path"].dropna())
+        hecras_files.extend(project_folder.glob("*.p[0-9][0-9]"))
+        hecras_files.extend(project_folder.glob("*.u[0-9][0-9]"))
+        hecras_files.extend(project_folder.glob("*.f[0-9][0-9]"))
+
+        seen_files = []
+        for hecras_file in hecras_files:
+            hecras_file = Path(hecras_file)
+            if hecras_file.exists() and hecras_file not in seen_files:
+                seen_files.append(hecras_file)
+
+        for hecras_file in seen_files:
+            stats["dss_corrections"] += RasEbfeModels._repair_dss_references(
+                hecras_file,
+                dss_lookup,
+            )
+
+        for rasmap_file in project_folder.glob("*.rasmap"):
+            rasmap_stats = RasEbfeModels._repair_rasmap_file(
+                rasmap_file,
+                project_folder,
+                roots,
+                search_roots,
+            )
+            for key, value in rasmap_stats.items():
+                stats[key] += value
+
+        return stats
+
+    @staticmethod
+    def _file_lookup(roots: List[Path], pattern: str) -> Dict[str, Path]:
+        lookup = {}
+        for root in roots:
+            for path in root.rglob(pattern):
+                if path.is_file():
+                    lookup.setdefault(path.name, path)
+        return lookup
+
+    @staticmethod
+    def _relative_ras_path(target: Path, base_folder: Path) -> str:
+        rel = os.path.relpath(target, base_folder)
+        rel = rel.replace("/", "\\")
+        if not rel.startswith(".."):
+            rel = f".\\{rel}"
+        return rel
+
+    @staticmethod
+    def _repair_dss_references(hecras_file: Path, dss_lookup: Dict[str, Path]) -> int:
+        content = hecras_file.read_text(encoding='utf-8', errors='ignore')
+        lines = content.splitlines(keepends=True)
+        corrections = 0
+        updated_lines = []
+
+        for line in lines:
+            stripped = line.rstrip("\r\n")
+            newline = line[len(stripped):]
+            replacement = None
+            for keyword in ("DSS File", "DSS Filename"):
+                prefix = f"{keyword}="
+                if stripped.startswith(prefix):
+                    old_path = stripped[len(prefix):].strip()
+                    dss_name = Path(old_path).name
+                    actual = dss_lookup.get(dss_name)
+                    if actual is not None:
+                        new_path = RasEbfeModels._relative_ras_path(actual, hecras_file.parent)
+                        replacement = f"{prefix}{new_path}{newline}"
+                        if replacement != line:
+                            corrections += 1
+                    break
+            updated_lines.append(replacement if replacement is not None else line)
+
+        if corrections:
+            hecras_file.write_text("".join(updated_lines), encoding='utf-8')
+        return corrections
+
+    @staticmethod
+    def _repair_rasmap_file(
+        rasmap_file: Path,
+        project_folder: Path,
+        roots: List[Path],
+        search_roots: List[Path],
+    ) -> Dict[str, int]:
+        stats = {"rasmap_corrections": 0, "folder_corrections": 0, "unresolved_paths": 0}
+        tree = ET.parse(rasmap_file)
+        root = tree.getroot()
+
+        filename_lookup = {}
+        for pattern in ("*.prj", "*.hdf", "*.tif", "*.shp"):
+            filename_lookup.update(RasEbfeModels._file_lookup(roots, pattern))
+
+        for element in root.iter():
+            old_path = element.attrib.get("Filename")
+            if not old_path:
+                continue
+            filename = Path(old_path).name
+            actual = filename_lookup.get(filename)
+            if actual is None:
+                stats["unresolved_paths"] += 1
+                continue
+            new_path = RasEbfeModels._relative_ras_path(actual, project_folder)
+            if old_path != new_path:
+                element.attrib["Filename"] = new_path
+                stats["rasmap_corrections"] += 1
+
+        vector_folder = next(
+            (root_path / "VectorData" for root_path in search_roots if (root_path / "VectorData").exists()),
+            None,
+        )
+        folder_updates = {
+            "TerrainDestinationFolder": ".\\Terrain",
+            "TerrainSourceFolder": ".\\Terrain",
+            "LandCoverDestinationFolder": ".\\LandCover",
+        }
+        if vector_folder is not None:
+            folder_updates["AddDataFolder"] = RasEbfeModels._relative_ras_path(
+                vector_folder,
+                project_folder,
+            )
+
+        folders = root.find(".//CurrentSettings/Folders")
+        if folders is not None:
+            for child in folders:
+                if child.tag in folder_updates and child.text != folder_updates[child.tag]:
+                    child.text = folder_updates[child.tag]
+                    stats["folder_corrections"] += 1
+
+        if stats["rasmap_corrections"] or stats["folder_corrections"]:
+            tree.write(rasmap_file, encoding='utf-8', xml_declaration=False)
+        return stats
 
     @staticmethod
     def _download_and_extract(
@@ -5087,6 +5398,11 @@ the Louisiana South delivery.
 ## Watershed Models
 
 {wa_summary}
+## CRS Inventory
+
+- CRS-aware terrain and landcover selection was applied where project and source CRS metadata could be read.
+- WA4 and WA5 use matching terrain/landcover candidates when multiple extracted spatial sources are present.
+
 ## Critical Fixes Applied
 
 1. **Terrain Integration**: Shared Terrain.zip extracted and copied INTO each project folder
@@ -5107,6 +5423,7 @@ the Louisiana South delivery.
 - WA4 has non-standard plan numbering (p08-p13 instead of p01-p07)
 - WA5 originally referenced WA4's Terrain and LandCover (cross-model refs corrected)
 - All DSS boundary conditions use relative paths (./Input_DSS/...)
+- Manual Terrain Follow-Up Required: verify any AECOM submittal terrain source paths such as Terrain/SOURCE/DEM_10ft.tif against the delivered project metadata.
 
 ## Usage
 
