@@ -2075,6 +2075,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3678,6 +3706,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -6522,7 +6578,7 @@
 <h2 id="localworker">LocalWorker<a class="headerlink" href="#localworker" title="Permanent link">&para;</a></h2>
 <p>Executes HEC-RAS plans on the local machine using worker folders.</p>
 <h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.remote</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_worker</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.remote</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_worker</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">worker</span> <span class="o">=</span> <span class="n">init_ras_worker</span><span class="p">(</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="s2">&quot;local&quot;</span><span class="p">,</span>
@@ -6578,7 +6634,7 @@
 <h2 id="psexecworker">PsexecWorker<a class="headerlink" href="#psexecworker" title="Permanent link">&para;</a></h2>
 <p>Executes HEC-RAS on remote Windows machines using PsExec.</p>
 <h3 id="configuration_1">Configuration<a class="headerlink" href="#configuration_1" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.remote</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_worker</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.remote</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_worker</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">worker</span> <span class="o">=</span> <span class="n">init_ras_worker</span><span class="p">(</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="s2">&quot;psexec&quot;</span><span class="p">,</span>
@@ -6643,7 +6699,7 @@
 <h4 id="1-install-psexec-on-control-machine">1. Install PsExec on Control Machine<a class="headerlink" href="#1-install-psexec-on-control-machine" title="Permanent link">&para;</a></h4>
 <p>Download from <a href="https://docs.microsoft.com/en-us/sysinternals/downloads/psexec">Sysinternals</a> and add to PATH.</p>
 <h4 id="2-configure-remote-machine">2. Configure Remote Machine<a class="headerlink" href="#2-configure-remote-machine" title="Permanent link">&para;</a></h4>
-<div class="language-powershell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c"># Enable Remote Registry</span>
+<div class="language-powershell highlight"><span class="filename">PowerShell</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c"># Enable Remote Registry</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nb">Set-Service</span> <span class="n">RemoteRegistry</span> <span class="n">-StartupType</span> <span class="n">Automatic</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nb">Start-Service</span> <span class="n">RemoteRegistry</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
@@ -6658,7 +6714,7 @@
 </span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">netsh</span> <span class="n">advfirewall</span> <span class="n">firewall</span> <span class="n">add</span> <span class="n">rule</span> <span class="n">name</span><span class="p">=</span><span class="s2">&quot;PsExec&quot;</span> <span class="n">dir</span><span class="p">=</span><span class="k">in</span> <span class="n">action</span><span class="p">=</span><span class="n">allow</span> <span class="n">protocol</span><span class="p">=</span><span class="n">tcp</span> <span class="n">localport</span><span class="p">=</span><span class="n">445</span>
 </span></code></pre></div>
 <h4 id="3-find-session-id">3. Find Session ID<a class="headerlink" href="#3-find-session-id" title="Permanent link">&para;</a></h4>
-<div class="language-powershell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c"># On remote machine</span>
+<div class="language-powershell highlight"><span class="filename">PowerShell</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c"># On remote machine</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">query</span> <span class="n">session</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c"># Output:</span>
@@ -6779,12 +6835,12 @@
 <ul>
 <li>Cause: PsExec installing PSEXESVC service on first run</li>
 <li>Solution: Pre-install service on remote machine:
-  <div class="language-powershell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">sc </span><span class="n">create</span> <span class="n">PSEXESVC</span> <span class="n">binPath</span><span class="p">=</span> <span class="s2">&quot;C:\Windows\PSEXESVC.exe&quot;</span> <span class="n">start</span><span class="p">=</span> <span class="n">demand</span>
+  <div class="language-powershell highlight"><span class="filename">PowerShell</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">sc </span><span class="n">create</span> <span class="n">PSEXESVC</span> <span class="n">binPath</span><span class="p">=</span> <span class="s2">&quot;C:\Windows\PSEXESVC.exe&quot;</span> <span class="n">start</span><span class="p">=</span> <span class="n">demand</span>
 </span></code></pre></div></li>
 </ul>
 </details>
 <h3 id="quick-setup-script">Quick Setup Script<a class="headerlink" href="#quick-setup-script" title="Permanent link">&para;</a></h3>
-<div class="language-powershell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c"># Run on REMOTE machine as Administrator</span>
+<div class="language-powershell highlight"><span class="filename">PowerShell</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c"># Run on REMOTE machine as Administrator</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c"># Creates share, sets registry, enables services</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c"># 1. Create shared folder</span>
@@ -6808,7 +6864,7 @@
 <h2 id="dockerworker">DockerWorker<a class="headerlink" href="#dockerworker" title="Permanent link">&para;</a></h2>
 <p>Executes HEC-RAS in Docker containers on remote Linux or Windows hosts.</p>
 <h3 id="configuration_2">Configuration<a class="headerlink" href="#configuration_2" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.remote</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_worker</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.remote</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_worker</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">worker</span> <span class="o">=</span> <span class="n">init_ras_worker</span><span class="p">(</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="s2">&quot;docker&quot;</span><span class="p">,</span>
@@ -6949,7 +7005,7 @@
 </table>
 <h4 id="preprocess_on_host-explained">preprocess_on_host Explained<a class="headerlink" href="#preprocess_on_host-explained" title="Permanent link">&para;</a></h4>
 <p>HEC-RAS geometry preprocessing (<code>GeomPreprocess.exe</code>) requires Windows. When using Docker on Linux:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">worker</span> <span class="o">=</span> <span class="n">init_ras_worker</span><span class="p">(</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">worker</span> <span class="o">=</span> <span class="n">init_ras_worker</span><span class="p">(</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="s2">&quot;docker&quot;</span><span class="p">,</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="n">host</span><span class="o">=</span><span class="s2">&quot;linux-server&quot;</span><span class="p">,</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="n">image</span><span class="o">=</span><span class="s2">&quot;hec-ras:6.6-linux&quot;</span><span class="p">,</span>
@@ -6972,7 +7028,7 @@
 </ul>
 <h4 id="resource-limits">Resource Limits<a class="headerlink" href="#resource-limits" title="Permanent link">&para;</a></h4>
 <p>Control container resources to prevent oversubscription:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">worker</span> <span class="o">=</span> <span class="n">init_ras_worker</span><span class="p">(</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">worker</span> <span class="o">=</span> <span class="n">init_ras_worker</span><span class="p">(</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="s2">&quot;docker&quot;</span><span class="p">,</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="n">host</span><span class="o">=</span><span class="s2">&quot;docker-host&quot;</span><span class="p">,</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="n">image</span><span class="o">=</span><span class="s2">&quot;hec-ras:6.6&quot;</span><span class="p">,</span>
@@ -6992,7 +7048,7 @@
 </div>
 <h4 id="remote-docker-daemon">Remote Docker Daemon<a class="headerlink" href="#remote-docker-daemon" title="Permanent link">&para;</a></h4>
 <p>Connect to Docker on a remote machine:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">worker</span> <span class="o">=</span> <span class="n">init_ras_worker</span><span class="p">(</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">worker</span> <span class="o">=</span> <span class="n">init_ras_worker</span><span class="p">(</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="s2">&quot;docker&quot;</span><span class="p">,</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">docker_host</span><span class="o">=</span><span class="s2">&quot;tcp://192.168.1.100:2375&quot;</span><span class="p">,</span>  <span class="c1"># Remote daemon</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">image</span><span class="o">=</span><span class="s2">&quot;hec-ras:6.6&quot;</span><span class="p">,</span>
@@ -7002,13 +7058,13 @@
 <div class="admonition warning">
 <p class="admonition-title">Security</p>
 <p>Remote Docker without TLS is insecure. For production:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">docker_host</span><span class="o">=</span><span class="s2">&quot;tcp://192.168.1.100:2376&quot;</span>  <span class="c1"># TLS port</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">docker_host</span><span class="o">=</span><span class="s2">&quot;tcp://192.168.1.100:2376&quot;</span>  <span class="c1"># TLS port</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># Configure TLS certificates via environment or docker config</span>
 </span></code></pre></div></p>
 </div>
 <h4 id="custom-volume-mounts">Custom Volume Mounts<a class="headerlink" href="#custom-volume-mounts" title="Permanent link">&para;</a></h4>
 <p>Mount additional directories into the container:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">worker</span> <span class="o">=</span> <span class="n">init_ras_worker</span><span class="p">(</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">worker</span> <span class="o">=</span> <span class="n">init_ras_worker</span><span class="p">(</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>    <span class="s2">&quot;docker&quot;</span><span class="p">,</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    <span class="n">host</span><span class="o">=</span><span class="s2">&quot;docker-host&quot;</span><span class="p">,</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    <span class="n">image</span><span class="o">=</span><span class="s2">&quot;hec-ras:6.6&quot;</span><span class="p">,</span>
@@ -7021,7 +7077,7 @@
 </span></code></pre></div>
 <h3 id="docker-host-setup">Docker Host Setup<a class="headerlink" href="#docker-host-setup" title="Permanent link">&para;</a></h3>
 <h4 id="1-install-docker">1. Install Docker<a class="headerlink" href="#1-install-docker" title="Permanent link">&para;</a></h4>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Ubuntu/Debian</span>
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Ubuntu/Debian</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://get.docker.com<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>sudo<span class="w"> </span>usermod<span class="w"> </span>-aG<span class="w"> </span>docker<span class="w"> </span><span class="nv">$USER</span>
 </span></code></pre></div>
@@ -7059,7 +7115,7 @@
 </tbody>
 </table>
 <p><strong>Zip File Structures:</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a># 6.6 / 6.5:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a># 6.6 / 6.5:
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>Linux_RAS_v6X/
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>├── RAS_v6X/Release/    # Binaries (RasUnsteady, RasGeomPreprocess, RasSteady)
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>├── libs/               # Intel MKL and runtime libraries
@@ -7078,7 +7134,7 @@
 </span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>    └── lib*.so        # MKL libraries
 </span></code></pre></div>
 <h4 id="3-build-docker-images">3. Build Docker Images<a class="headerlink" href="#3-build-docker-images" title="Permanent link">&para;</a></h4>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nb">cd</span><span class="w"> </span>/path/to/docker-builds
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nb">cd</span><span class="w"> </span>/path/to/docker-builds
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># Build HEC-RAS 6.6</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>docker<span class="w"> </span>build<span class="w"> </span>-f<span class="w"> </span>Dockerfile.6.6<span class="w"> </span>-t<span class="w"> </span>hecras:6.6<span class="w"> </span>.
@@ -7117,14 +7173,14 @@
 </tbody>
 </table>
 <h4 id="4-test-docker-execution">4. Test Docker Execution<a class="headerlink" href="#4-test-docker-execution" title="Permanent link">&para;</a></h4>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Test that HEC-RAS binaries are present</span>
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Test that HEC-RAS binaries are present</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>hecras:6.6<span class="w"> </span>ls<span class="w"> </span>-la<span class="w"> </span>/app/bin/
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># Test RasUnsteady can execute</span>
 </span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>hecras:6.6<span class="w"> </span>/app/bin/RasUnsteady<span class="w"> </span>--help
 </span></code></pre></div>
 <h4 id="5-configure-ssh-access">5. Configure SSH Access<a class="headerlink" href="#5-configure-ssh-access" title="Permanent link">&para;</a></h4>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Generate key pair (on control machine)</span>
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Generate key pair (on control machine)</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>ssh-keygen<span class="w"> </span>-t<span class="w"> </span>ed25519<span class="w"> </span>-f<span class="w"> </span>~/.ssh/docker_worker
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Copy public key to Docker host</span>
@@ -7141,7 +7197,7 @@
 <li>Sufficient storage for container volumes</li>
 </ul>
 <h3 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pip<span class="w"> </span>install<span class="w"> </span>ras-commander<span class="o">[</span>remote-ssh<span class="o">]</span>
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pip<span class="w"> </span>install<span class="w"> </span>ras-commander<span class="o">[</span>remote-ssh<span class="o">]</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># Or</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>pip<span class="w"> </span>install<span class="w"> </span>paramiko<span class="w"> </span>docker
 </span></code></pre></div>
@@ -7180,7 +7236,7 @@
 <h3 id="docker-troubleshooting">Docker Troubleshooting<a class="headerlink" href="#docker-troubleshooting" title="Permanent link">&para;</a></h3>
 <details class="tip">
 <summary>Docker Image Not Found</summary>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Check available images</span>
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Check available images</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>docker<span class="w"> </span>images<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>hec-ras
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Pull or build image</span>
@@ -7191,7 +7247,7 @@
 </details>
 <details class="tip">
 <summary>Docker Daemon Unreachable</summary>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Check Docker is running</span>
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Check Docker is running</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>docker<span class="w"> </span>info
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
 </span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Check daemon socket</span>
@@ -7203,7 +7259,7 @@
 </details>
 <details class="tip">
 <summary>Container Exits Immediately</summary>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Check container logs</span>
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Check container logs</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>docker<span class="w"> </span>logs<span class="w"> </span>&lt;container_id&gt;
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># Common causes:</span>
@@ -7215,13 +7271,13 @@
 <details class="tip">
 <summary>CRLF Line Ending Errors</summary>
 <p>HEC-RAS files created on Windows have CRLF line endings. If running in Linux container:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Convert to Unix line endings</span>
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Convert to Unix line endings</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>dos2unix<span class="w"> </span>*.p*<span class="w"> </span>*.g*<span class="w"> </span>*.u*
 </span></code></pre></div></p>
 </details>
 <h3 id="remote-docker-host-setup">Remote Docker Host Setup<a class="headerlink" href="#remote-docker-host-setup" title="Permanent link">&para;</a></h3>
 <p>To enable remote Docker connections:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># On Docker host, edit /etc/docker/daemon.json</span>
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># On Docker host, edit /etc/docker/daemon.json</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="o">{</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">  </span><span class="s2">&quot;hosts&quot;</span>:<span class="w"> </span><span class="o">[</span><span class="s2">&quot;unix:///var/run/docker.sock&quot;</span>,<span class="w"> </span><span class="s2">&quot;tcp://0.0.0.0:2375&quot;</span><span class="o">]</span>
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="o">}</span>
@@ -7240,14 +7296,14 @@
 <h2 id="creating-worker-pools">Creating Worker Pools<a class="headerlink" href="#creating-worker-pools" title="Permanent link">&para;</a></h2>
 <h3 id="homogeneous-pool">Homogeneous Pool<a class="headerlink" href="#homogeneous-pool" title="Permanent link">&para;</a></h3>
 <p>All workers same type and configuration:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="n">workers</span> <span class="o">=</span> <span class="p">[</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="n">workers</span> <span class="o">=</span> <span class="p">[</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>    <span class="n">init_ras_worker</span><span class="p">(</span><span class="s2">&quot;local&quot;</span><span class="p">,</span> <span class="n">ras_version</span><span class="o">=</span><span class="s2">&quot;6.5&quot;</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
 </span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="p">]</span>
 </span></code></pre></div>
 <h3 id="heterogeneous-pool">Heterogeneous Pool<a class="headerlink" href="#heterogeneous-pool" title="Permanent link">&para;</a></h3>
 <p>Mixed worker types and capabilities:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="n">workers</span> <span class="o">=</span> <span class="p">[</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="n">workers</span> <span class="o">=</span> <span class="p">[</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>    <span class="c1"># Local workers</span>
 </span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>    <span class="n">init_ras_worker</span><span class="p">(</span><span class="s2">&quot;local&quot;</span><span class="p">,</span> <span class="n">ras_version</span><span class="o">=</span><span class="s2">&quot;6.5&quot;</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">8</span><span class="p">),</span>
 </span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>
@@ -7265,7 +7321,7 @@
 </span></code></pre></div>
 <h3 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h3>
 <p>Always validate workers before use:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="n">valid_workers</span> <span class="o">=</span> <span class="p">[]</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="n">valid_workers</span> <span class="o">=</span> <span class="p">[]</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="k">for</span> <span class="n">worker</span> <span class="ow">in</span> <span class="n">workers</span><span class="p">:</span>
 </span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>    <span class="k">try</span><span class="p">:</span>
 </span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>        <span class="k">if</span> <span class="n">worker</span><span class="o">.</span><span class="n">validate</span><span class="p">():</span>
@@ -7284,7 +7340,7 @@
 <hr />
 <h2 id="worker-interface">Worker Interface<a class="headerlink" href="#worker-interface" title="Permanent link">&para;</a></h2>
 <p>All workers implement the same interface:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">BaseWorker</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">BaseWorker</span><span class="p">:</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Test connectivity and HEC-RAS availability.&quot;&quot;&quot;</span>
 </span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>        <span class="o">...</span>
@@ -7299,7 +7355,7 @@
 </span></code></pre></div>
 <h3 id="custom-workers">Custom Workers<a class="headerlink" href="#custom-workers" title="Permanent link">&para;</a></h3>
 <p>Implement the interface to create custom workers:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.remote</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseWorker</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.remote</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseWorker</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="k">class</span><span class="w"> </span><span class="nc">CloudWorker</span><span class="p">(</span><span class="n">BaseWorker</span><span class="p">):</span>
 </span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Custom worker for cloud VM execution.&quot;&quot;&quot;</span>

@@ -2084,6 +2084,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3942,6 +3970,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5753,7 +5809,7 @@
 - <strong>Time</strong>: ~10-20 minutes depending on connection speed
 - <strong>Disk Space</strong>: ~20 GB required (zip + extracted files)</p>
 <p><strong>Important</strong>: Do not manually reorganize the eBFE files for this example; let <code>RasEbfeModels.organize_model("spring-creek")</code> apply the standardized delivery layout.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
@@ -5767,7 +5823,7 @@
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:55:11 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:11 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
 </code></pre></div>
 <h2 id="step-1-organize-ebfe-model-into-a-standard-ras-project">Step 1: Organize eBFE Model into a Standard RAS Project<a class="headerlink" href="#step-1-organize-ebfe-model-into-a-standard-ras-project" title="Permanent link">&para;</a></h2>
 <p><strong>Automatic Download</strong>: If source data is not present, <code>RasEbfeModels.organize_model("spring-creek")</code> downloads 9.7 GB from the eBFE S3 bucket.</p>
@@ -5778,7 +5834,7 @@
 <li><strong>Path corrections</strong>: Converts terrain, DSS, and related references to portable local paths when source files are available.</li>
 </ol>
 <p>The saved notebook run reuses an already organized workspace when present and does not rerun the geometry preprocessor unless explicitly enabled.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Import eBFE model organization function</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Import eBFE model organization function</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Shared eBFE workspace. Override RAS_COMMANDER_EBFE_ROOT to use a different local cache.</span>
@@ -5812,7 +5868,7 @@
 </span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Validation root: </span><span class="si">{</span><span class="n">VALIDATION_ROOT</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Validation matrix: </span><span class="si">{</span><span class="n">VALIDATION_MATRIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Model already organized at: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Model already organized at: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102
 
 Organized model location: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102
 Download/cache root: H:\Testing\eBFE Model Organization\Downloads
@@ -5824,7 +5880,7 @@ Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
 <p>Raw eBFE deliveries often require nested extraction, terrain/DSS path repair, and result-HDF colocation before they are automation-ready.</p>
 <h3 id="after-rasebfemodels">After RasEbfeModels<a class="headerlink" href="#after-rasebfemodels" title="Permanent link">&para;</a></h3>
 <p><strong>Target structure</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>SpringCreek_12040102/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>SpringCreek_12040102/
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>├── RAS Model/
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>│   ├── Spring.prj
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>│   ├── Spring.u01
@@ -5837,13 +5893,13 @@ Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>└── agent/model_log.md
 </span></code></pre></div></p>
 <p><strong>User experience</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_model</span><span class="p">(</span><span class="s2">&quot;spring-creek&quot;</span><span class="p">,</span> <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_model</span><span class="p">(</span><span class="s2">&quot;spring-creek&quot;</span><span class="p">,</span> <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span><span class="p">,</span> <span class="s2">&quot;5.0.7&quot;</span><span class="p">)</span>
 </span></code></pre></div></p>
 <p>The agent log records what was found, moved, rewritten, or skipped.</p>
 <h2 id="step-2-verify-organization">Step 2: Verify Organization<a class="headerlink" href="#step-2-verify-organization" title="Permanent link">&para;</a></h2>
 <p>Check the standardized 4-folder structure and agent work log.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Verify 4-folder structure</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Verify 4-folder structure</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">folders</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;HMS Model&#39;</span><span class="p">,</span> <span class="s1">&#39;RAS Model&#39;</span><span class="p">,</span> <span class="s1">&#39;Spatial Data&#39;</span><span class="p">,</span> <span class="s1">&#39;Documentation&#39;</span><span class="p">,</span> <span class="s1">&#39;agent&#39;</span><span class="p">]</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Folder Structure:&quot;</span><span class="p">)</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">for</span> <span class="n">folder</span> <span class="ow">in</span> <span class="n">folders</span><span class="p">:</span>
@@ -5875,7 +5931,7 @@ Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
 </span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">preview</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)[:</span><span class="mi">20</span><span class="p">]))</span>
 </span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">80</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Folder Structure:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Folder Structure:
   ✓ HMS Model/ (0 items)
   ✓ RAS Model/ (97 items)
   ✓ Spatial Data/ (14 items)
@@ -5910,7 +5966,7 @@ Work log preview (first 20 lines, normalized for current API labels):
 </code></pre></div>
 <h2 id="step-3-initialize-project-with-ras-commander">Step 3: Initialize Project with ras-commander<a class="headerlink" href="#step-3-initialize-project-with-ras-commander" title="Permanent link">&para;</a></h2>
 <p>Initialize the Spring Creek HEC-RAS project using ras-commander.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Initialize project</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Initialize project</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">project_folder</span> <span class="o">=</span> <span class="n">organized_folder</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">ras</span> <span class="o">=</span> <span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_folder</span><span class="p">,</span> <span class="s2">&quot;5.0.7&quot;</span><span class="p">)</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
@@ -5918,7 +5974,7 @@ Work log preview (first 20 lines, normalized for current API labels):
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Plans found: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;Plan Title&#39;</span><span class="p">,</span> <span class="s1">&#39;full_path&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">to_string</span><span class="p">())</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.rasmap
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.rasmap
 
 
 2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
@@ -6189,7 +6245,7 @@ this step will emit a warning and skip gracefully. The notebook's primary purpos
 (organizing the eBFE model and extracting pre-computed results) does <strong>not</strong> require
 DSS files to be present.</p>
 </blockquote>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Step 4a: Find correct DSS + patch unsteady file references</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Step 4a: Find correct DSS + patch unsteady file references</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1">#</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># Goal:</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># - Put required DSS file(s) inside the HEC-RAS project folder (portable)</span>
@@ -6529,7 +6585,7 @@ DSS files to be present.</p>
 </span><span id="__span-6-338"><a id="__codelineno-6-338" name="__codelineno-6-338" href="#__codelineno-6-338"></a>        <span class="s2">&quot;To troubleshoot, ensure DSS files are accessible via downloaded_folder or organized_folder.&quot;</span>
 </span><span id="__span-6-339"><a id="__codelineno-6-339" name="__codelineno-6-339" href="#__codelineno-6-339"></a>    <span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u01
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u01
 
 
 2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u02
@@ -6564,7 +6620,7 @@ Patched 0 unsteady file(s)
 
 DSS localization complete.
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasUnsteady</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
@@ -6698,7 +6754,7 @@ DSS localization complete.
 </span><span id="__span-7-132"><a id="__codelineno-7-132" name="__codelineno-7-132" href="#__codelineno-7-132"></a>    <span class="k">else</span><span class="p">:</span>
 </span><span id="__span-7-133"><a id="__codelineno-7-133" name="__codelineno-7-133" href="#__codelineno-7-133"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;DSS references resolved and no unavailable pathnames were detected.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u01
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u01
 
 
 2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u02
@@ -6784,7 +6840,7 @@ DSS catalog access requires Java/JVM; referenced pathnames were not fully valida
 </code></pre></div>
 <h2 id="step-5-extract-pre-computed-results">Step 5: Extract Pre-Computed Results<a class="headerlink" href="#step-5-extract-pre-computed-results" title="Permanent link">&para;</a></h2>
 <p>Spring Creek includes pre-computed results for all 8 plans. Extract water surface elevations without re-running.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfResultsMesh</span><span class="p">,</span> <span class="n">HdfMesh</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfResultsMesh</span><span class="p">,</span> <span class="n">HdfMesh</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">h5py</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Extract results from Plan 01 only if the delivered HDF contains full summary-output metadata.</span>
@@ -6817,7 +6873,7 @@ DSS catalog access requires Java/JVM; referenced pathnames were not fully valida
 </span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Attributes:&quot;</span><span class="p">)</span>
 </span><span id="__span-8-32"><a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a>        <span class="nb">print</span><span class="p">(</span><span class="n">max_ws_gdf</span><span class="o">.</span><span class="n">attrs</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Inspecting HDF artifact: Spring.p01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Inspecting HDF artifact: Spring.p01.hdf
 
 Plan HDF is present, but it does not contain full 2D summary-output datasets.
 Top-level groups: [&#39;Results&#39;]
@@ -6825,7 +6881,7 @@ This artifact is useful for compute-message inspection, but WSE/depth/velocity p
 </code></pre></div>
 <h2 id="step-6-get-2d-mesh-cell-locations">Step 6: Get 2D Mesh Cell Locations<a class="headerlink" href="#step-6-get-2d-mesh-cell-locations" title="Permanent link">&para;</a></h2>
 <p>Extract the 2D mesh cell locations for spatial analysis.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Get mesh cell centers</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Get mesh cell centers</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">mesh_cells</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_cell_points</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">)</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;2D Mesh Cells:&quot;</span><span class="p">)</span>
@@ -6833,7 +6889,7 @@ This artifact is useful for compute-message inspection, but WSE/depth/velocity p
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">First 5 cells:&quot;</span><span class="p">)</span>
 </span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">mesh_cells</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
 
 
 2026-04-26 22:55:13 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
@@ -6853,7 +6909,7 @@ Index: []
 <h2 id="step-7-visualize-water-surface-elevations">Step 7: Visualize Water Surface Elevations<a class="headerlink" href="#step-7-visualize-water-surface-elevations" title="Permanent link">&para;</a></h2>
 <p>Plot the water surface elevation spatial distribution.
 Also shows 2D perimeter and breaklines</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># Plot max water surface using the GeoDataFrame returned by ras-commander</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">max_ws_gdf</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
@@ -6909,11 +6965,11 @@ Also shows 2D perimeter and breaklines</p>
 </span><span id="__span-10-54"><a id="__codelineno-10-54" name="__codelineno-10-54" href="#__codelineno-10-54"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-10-55"><a id="__codelineno-10-55" name="__codelineno-10-55" href="#__codelineno-10-55"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No maximum water surface data found in the plan HDF.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>No maximum water surface data found in the plan HDF.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>No maximum water surface data found in the plan HDF.
 </code></pre></div>
 <h2 id="step-8-check-terrain-configuration">Step 8: Check Terrain Configuration<a class="headerlink" href="#step-8-check-terrain-configuration" title="Permanent link">&para;</a></h2>
 <p>Verify terrain is properly configured (Pattern 3a includes self-contained terrain).</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasMap</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasMap</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># Check for .rasmap file</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">rasmap_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;*.rasmap&#39;</span><span class="p">))</span>
@@ -6941,7 +6997,7 @@ Also shows 2D perimeter and breaklines</p>
 </span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-11-27"><a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;⚠️ No .rasmap file found&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.RasMap - INFO - Extracted terrain names: [&#39;Terrain(BurnDEMv2)&#39;]
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.RasMap - INFO - Extracted terrain names: [&#39;Terrain(BurnDEMv2)&#39;]
 
 
 2026-04-26 22:55:13 - ras_commander.RasMap - INFO - Extracted terrain names: [&#39;Terrain(BurnDEMv2)&#39;]
@@ -6958,7 +7014,7 @@ Terrain GeoTIFFs found: 1
 <h2 id="optional-geometry-preprocessor-validation">Optional: Geometry Preprocessor Validation<a class="headerlink" href="#optional-geometry-preprocessor-validation" title="Permanent link">&para;</a></h2>
 <p>Spring Creek includes plan/HDF artifacts, but the delivery-format validation gate is <strong>not</strong> a full unsteady compute. Use ras-commander to run the HEC-RAS geometry preprocessor only, with detailed compute-message logging enabled.</p>
 <p>For 2D models, this validates the pieces most likely to break during organization: projection, terrain, land cover, geometry preprocessing, and DSS file references. Large 2D preprocessors can run longer than 1 hour, so this example uses a 2-hour timeout.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">GeomPreprocessor</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">GeomPreprocessor</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">RUN_GEOMETRY_PREPROCESSOR</span> <span class="o">=</span> <span class="kc">False</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">PREPROCESSOR_TIMEOUT_SECONDS</span> <span class="o">=</span> <span class="mi">7200</span>
@@ -6999,7 +7055,7 @@ Terrain GeoTIFFs found: 1
 </span><span id="__span-12-39"><a id="__codelineno-12-39" name="__codelineno-12-39" href="#__codelineno-12-39"></a>    <span class="k">if</span> <span class="n">validation_report</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
 </span><span id="__span-12-40"><a id="__codelineno-12-40" name="__codelineno-12-40" href="#__codelineno-12-40"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Existing validation report: </span><span class="si">{</span><span class="n">validation_report</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Geometry preprocessor validation skipped in this notebook run.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Geometry preprocessor validation skipped in this notebook run.
 Set RUN_GEOMETRY_PREPROCESSOR = True to validate the organized delivery.
 Existing validation report: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\agent\validation_report.md
 </code></pre></div>
@@ -7038,7 +7094,7 @@ Existing validation report: H:\Testing\eBFE Model Organization\Organized\SpringC
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:45 UTC">April 28, 2026</span>
   </span>
 
     
@@ -7048,7 +7104,7 @@ Existing validation report: H:\Testing\eBFE Model Organization\Organized\SpringC
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:45 UTC">April 28, 2026</span>
   </span>
 
     

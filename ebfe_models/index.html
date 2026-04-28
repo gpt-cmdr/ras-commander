@@ -2069,6 +2069,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notebooks/212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3672,6 +3700,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notebooks/920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -5863,7 +5919,7 @@
 <li><strong>Manual fix required</strong>: Click through 30+ GUI dialogs or edit .u## files manually</li>
 </ol>
 <h3 id="user-experience-without-this-library">User Experience Without This Library<a class="headerlink" href="#user-experience-without-this-library" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>1. Download eBFE model (hours for large models)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>1. Download eBFE model (hours for large models)
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>2. Extract nested archives (complex structure)
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>3. Open in HEC-RAS → ERROR: &quot;Terrain not found&quot;
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>4. Manually move Terrain/ folder (15+ GB)
@@ -5880,7 +5936,7 @@
 <p>The <code>RasEbfeModels</code> class solves this problem by applying delivery-format
 normalization that transforms broken eBFE archives into runnable HEC-RAS models.</p>
 <h3 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
@@ -5903,7 +5959,7 @@ normalization that transforms broken eBFE archives into runnable HEC-RAS models.
 </span></code></pre></div>
 <p><strong>Time</strong>: 15 minutes vs 60-120 minutes manual fixes</p>
 <p>To inspect the built-in model catalog:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">available_models</span><span class="p">()</span>
 </span></code></pre></div>
@@ -6004,7 +6060,7 @@ compute messages without requiring full unsteady calculations or floodplain
 mapping/post-processing as the delivery-format gate. For 1D steady BLE reach
 models, document terrain or land cover checks only when mapper layers exist.</p>
 <p>For repeatable end-to-end checks from the repository, use:</p>
-<div class="language-powershell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">.\.</span><span class="n">venv</span><span class="p">\</span><span class="n">Scripts</span><span class="p">\</span><span class="n">python</span> <span class="n">scripts</span><span class="p">\</span><span class="n">ebfe_end_to_end_validation</span><span class="p">.</span><span class="n">py</span> <span class="p">`</span>
+<div class="language-powershell highlight"><span class="filename">PowerShell</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">.\.</span><span class="n">venv</span><span class="p">\</span><span class="n">Scripts</span><span class="p">\</span><span class="n">python</span> <span class="n">scripts</span><span class="p">\</span><span class="n">ebfe_end_to_end_validation</span><span class="p">.</span><span class="n">py</span> <span class="p">`</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  <span class="p">-</span><span class="n">-models</span> <span class="n">north-galveston-bay</span> <span class="p">`</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  <span class="p">-</span><span class="n">-download-root</span> <span class="s2">&quot;H:\Testing\eBFE Model Organization\Downloads&quot;</span> <span class="p">`</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  <span class="p">-</span><span class="n">-output-root</span> <span class="s2">&quot;H:\Testing\eBFE Model Organization\Organized&quot;</span> <span class="p">`</span>
@@ -6023,19 +6079,19 @@ geometry-preprocessor validation.</p>
 <h3 id="fix-1-output-folder-integration">Fix #1: Output/ Folder Integration<a class="headerlink" href="#fix-1-output-folder-integration" title="Permanent link">&para;</a></h3>
 <p><strong>Problem</strong>: Pre-run HDF result files separated from project folder</p>
 <p><strong>eBFE delivers</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>UPGU1/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>UPGU1/
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>├── Input/ (project folder)
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>│   └── UPGU1.prj ✗ Can&#39;t find results
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>└── Output/
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    └── UPGU1.p01.hdf (1.1 GB) ✗ Inaccessible
 </span></code></pre></div></p>
 <p><strong>RasEbfeModels fixes</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>RAS Model/UPGU1/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>RAS Model/UPGU1/
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>├── UPGU1.prj ✓ Finds results
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>└── UPGU1.p01.hdf ✓ Accessible
 </span></code></pre></div></p>
 <p><strong>Implementation</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Move all Output/*.hdf files INTO Input/ folder</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Move all Output/*.hdf files INTO Input/ folder</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">output_source</span> <span class="o">=</span> <span class="n">model_source</span> <span class="o">/</span> <span class="s2">&quot;Output&quot;</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">if</span> <span class="n">output_source</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="k">for</span> <span class="n">output_file</span> <span class="ow">in</span> <span class="n">output_source</span><span class="o">.</span><span class="n">rglob</span><span class="p">(</span><span class="s1">&#39;*&#39;</span><span class="p">):</span>
@@ -6046,20 +6102,20 @@ geometry-preprocessor validation.</p>
 <h3 id="fix-2-terrain-integration">Fix #2: Terrain/ Integration<a class="headerlink" href="#fix-2-terrain-integration" title="Permanent link">&para;</a></h3>
 <p><strong>Problem</strong>: Terrain folder placed outside project, .rasmap references break</p>
 <p><strong>eBFE delivers</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>UPGU1/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>UPGU1/
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>├── Input/
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>│   └── UPGU1.rasmap ✗ References &quot;..\Terrain\RAS_Terrain\Terrain.hdf&quot;
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>└── Terrain/
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    └── Terrain.hdf (3.98 GB) ✗ At &quot;..\Terrain\Terrain.hdf&quot;
 </span></code></pre></div></p>
 <p><strong>RasEbfeModels fixes</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>RAS Model/UPGU1/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>RAS Model/UPGU1/
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>├── UPGU1.rasmap ✓ References &quot;.\Terrain\Terrain.hdf&quot;
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>└── Terrain/
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    └── Terrain.hdf ✓ Exactly where .rasmap expects
 </span></code></pre></div></p>
 <p><strong>Implementation</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Move Terrain/ INTO Input/ folder</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Move Terrain/ INTO Input/ folder</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">terrain_source</span> <span class="o">=</span> <span class="n">model_source</span> <span class="o">/</span> <span class="s2">&quot;Terrain&quot;</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="k">if</span> <span class="n">terrain_source</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">shutil</span><span class="o">.</span><span class="n">copytree</span><span class="p">(</span><span class="n">terrain_source</span><span class="p">,</span> <span class="n">input_dest</span> <span class="o">/</span> <span class="s2">&quot;Terrain&quot;</span><span class="p">,</span> <span class="n">dirs_exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -6073,16 +6129,16 @@ geometry-preprocessor validation.</p>
 <h3 id="fix-3-all-paths-to-relative-references">Fix #3: ALL Paths to Relative References<a class="headerlink" href="#fix-3-all-paths-to-relative-references" title="Permanent link">&para;</a></h3>
 <p><strong>Problem</strong>: Absolute and incorrect paths cause GUI error popups</p>
 <p><strong>eBFE delivers</strong> (in UPGU1.u01):
-<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>DSS Filename=.\DSS_Input\UPGU_precip.dss  ✗ Wrong subdirectory
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>DSS Filename=.\DSS_Input\UPGU_precip.dss  ✗ Wrong subdirectory
 </span></code></pre></div></p>
 <p><strong>Also</strong> (in other files):
-<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>DSS File=C:\eBFE\Projects\12100201\UPGU1\Input\UPGU1.dss  ✗ Absolute path
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>DSS File=C:\eBFE\Projects\12100201\UPGU1\Input\UPGU1.dss  ✗ Absolute path
 </span></code></pre></div></p>
 <p><strong>RasEbfeModels fixes</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>DSS Filename=UPGU_precip.dss  ✓ Relative, verified exists
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>DSS Filename=UPGU_precip.dss  ✓ Relative, verified exists
 </span></code></pre></div></p>
 <p><strong>Implementation</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Find where DSS files ACTUALLY exist</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Find where DSS files ACTUALLY exist</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">dss_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">ras_model_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;**/*.dss&#39;</span><span class="p">))</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">dss_lookup</span> <span class="o">=</span> <span class="p">{</span><span class="n">dss</span><span class="o">.</span><span class="n">name</span><span class="p">:</span> <span class="n">dss</span> <span class="k">for</span> <span class="n">dss</span> <span class="ow">in</span> <span class="n">dss_files</span><span class="p">}</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
@@ -6108,7 +6164,7 @@ geometry-preprocessor validation.</p>
 <strong>Plans</strong>: 8 with pre-computed results
 <strong>Terrain</strong>: 504.6 MB self-contained</p>
 <p><strong>Usage</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_spring_creek</span><span class="p">(</span>
@@ -6129,7 +6185,7 @@ geometry-preprocessor validation.</p>
 <strong>HMS</strong>: 7 storm frequencies (10yr-500yr) + sensitivity
 <strong>RAS</strong>: 2D coastal model (nested 6.1 GB zip)</p>
 <p><strong>Usage</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_north_galveston_bay</span><span class="p">(</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    <span class="n">downloaded_folder</span><span class="p">,</span>
@@ -6155,7 +6211,7 @@ RAS_Submittal archive in place.</p>
 <strong>Plans</strong>: 28 total (7 AEP frequencies × 4 models)
 <strong>DSS</strong>: 10,248 pathnames validated</p>
 <p><strong>Usage</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">RasPrj</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Organize (applies delivery normalization across all 4 models)</span>
@@ -6183,7 +6239,7 @@ with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
 <p><strong>Example Notebook</strong>: <code>examples/952_ebfe_upper_guadalupe_cascade.ipynb</code></p>
 <h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
 <h3 id="rasebfemodelsorganize_spring_creek">RasEbfeModels.organize_spring_creek()<a class="headerlink" href="#rasebfemodelsorganize_spring_creek" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nd">@staticmethod</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nd">@staticmethod</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="nd">@log_call</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">organize_spring_creek</span><span class="p">(</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="n">downloaded_folder</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
@@ -6205,7 +6261,7 @@ with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
 5. Validates DSS pathnames
 6. Creates agent/model_log.md</p>
 <p><strong>Output Structure</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>SpringCreek_12040102/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>SpringCreek_12040102/
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>├── RAS Model/           # Runnable HEC-RAS project
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>├── Spatial Data/        # Shapefiles, terrain copy
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>├── Documentation/       # Inventory, reports
@@ -6213,7 +6269,7 @@ with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
 </span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>└── agent/model_log.md   # Documents fixes applied
 </span></code></pre></div></p>
 <h3 id="rasebfemodelsorganize_north_galveston_bay">RasEbfeModels.organize_north_galveston_bay()<a class="headerlink" href="#rasebfemodelsorganize_north_galveston_bay" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nd">@staticmethod</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nd">@staticmethod</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nd">@log_call</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">organize_north_galveston_bay</span><span class="p">(</span>
 </span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>    <span class="n">downloaded_folder</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
@@ -6238,7 +6294,7 @@ with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
 5. Moves Output/, Terrain/, Land Cover/, and Projection/ assets into the project
 6. Creates agent/model_log.md</p>
 <p><strong>Output Structure</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>NorthGalvestonBay_12040203/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>NorthGalvestonBay_12040203/
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>├── HMS Model/           # HEC-HMS with 7 storm frequencies
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>├── RAS Model/           # 2D coastal model (after extraction)
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>├── Spatial Data/        # (pending RAS extraction)
@@ -6246,7 +6302,7 @@ with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
 </span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>└── agent/model_log.md
 </span></code></pre></div></p>
 <h3 id="rasebfemodelsorganize_upper_guadalupe">RasEbfeModels.organize_upper_guadalupe()<a class="headerlink" href="#rasebfemodelsorganize_upper_guadalupe" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nd">@staticmethod</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nd">@staticmethod</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="nd">@log_call</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">organize_upper_guadalupe</span><span class="p">(</span>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>    <span class="n">downloaded_folder</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
@@ -6269,7 +6325,7 @@ with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
 6. Rewrites <code>.rasmap</code> terrain, land cover, and projection references
 7. Creates comprehensive agent/model_log.md</p>
 <p><strong>Output Structure</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>UpperGuadalupe_12100201/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>UpperGuadalupe_12100201/
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>└── RAS Model/
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>    ├── UPGU1/  # Upstream watershed (runnable)
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>    ├── UPGU2/  # Receives UPGU1 flow via DSS (runnable)
@@ -6277,7 +6333,7 @@ with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
 </span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>    └── UPGU4/  # Downstream watershed (runnable)
 </span></code></pre></div></p>
 <p><strong>Cascade Execution</strong> (sequential required):
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="k">for</span> <span class="n">model</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;UPGU1&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU2&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU3&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU4&#39;</span><span class="p">]:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="k">for</span> <span class="n">model</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;UPGU1&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU2&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU3&#39;</span><span class="p">,</span> <span class="s1">&#39;UPGU4&#39;</span><span class="p">]:</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>    <span class="n">ras_obj</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>    <span class="n">init_ras_project</span><span class="p">(</span><span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span> <span class="o">/</span> <span class="n">model</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_obj</span><span class="p">)</span>
 </span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>    <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_obj</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
@@ -6285,7 +6341,7 @@ with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
 </span></code></pre></div></p>
 <h2 id="standardized-4-folder-structure">Standardized 4-Folder Structure<a class="headerlink" href="#standardized-4-folder-structure" title="Permanent link">&para;</a></h2>
 <p>All organized models use the same structure:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>{ModelName}_{HUC8}/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>{ModelName}_{HUC8}/
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>├── HMS Model/          # HEC-HMS hydrologic models (if present)
 </span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>├── RAS Model/          # HEC-RAS hydraulic models (RUNNABLE)
 </span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>│   └── {Model}/
@@ -6313,7 +6369,7 @@ with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
 <h2 id="validation-features">Validation Features<a class="headerlink" href="#validation-features" title="Permanent link">&para;</a></h2>
 <h3 id="dss-pathname-validation">DSS Pathname Validation<a class="headerlink" href="#dss-pathname-validation" title="Permanent link">&para;</a></h3>
 <p>All organize methods include comprehensive DSS validation:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>
 </span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="c1"># Validates all pathnames in all DSS files</span>
 </span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="k">for</span> <span class="n">dss_file</span> <span class="ow">in</span> <span class="n">dss_files</span><span class="p">:</span>
@@ -6325,7 +6381,7 @@ with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
 <p><strong>Upper Guadalupe Achievement</strong>: 10,248 pathnames validated, 100% valid ✓</p>
 <h3 id="path-existence-validation">Path Existence Validation<a class="headerlink" href="#path-existence-validation" title="Permanent link">&para;</a></h3>
 <p><strong>Before correcting any path</strong>, we verify the target file actually exists:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">if</span> <span class="n">dss_filename</span> <span class="ow">in</span> <span class="n">dss_lookup</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">if</span> <span class="n">dss_filename</span> <span class="ow">in</span> <span class="n">dss_lookup</span><span class="p">:</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>    <span class="n">actual_dss_path</span> <span class="o">=</span> <span class="n">dss_lookup</span><span class="p">[</span><span class="n">dss_filename</span><span class="p">]</span>
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
 </span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>    <span class="c1"># CRITICAL: Verify file exists</span>
@@ -6397,7 +6453,7 @@ with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
 - Verifying that all seven plan result HDF paths resolve inside the organized RAS project folder.</p>
 <h2 id="organizing-new-models">Organizing New Models<a class="headerlink" href="#organizing-new-models" title="Permanent link">&para;</a></h2>
 <p>For eBFE models not included in RasEbfeModels, use the <strong>ebfe_organize_models agent skill</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># In Claude Code:</span>
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># In Claude Code:</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="s2">&quot;Organize West Fork San Jacinto (12040101) using ebfe_organize_models skill&quot;</span>
 </span></code></pre></div>
 <p><strong>Agent produces</strong>:
@@ -6444,12 +6500,12 @@ with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
 <p><strong>Additional Benefit</strong>: Enables automation (no GUI popups)</p>
 <h2 id="automation-benefits">Automation Benefits<a class="headerlink" href="#automation-benefits" title="Permanent link">&para;</a></h2>
 <h3 id="without-path-corrections">Without Path Corrections<a class="headerlink" href="#without-path-corrections" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Automation FAILS - GUI popup blocks workflow</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Automation FAILS - GUI popup blocks workflow</span>
 </span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">broken_ebfe_model</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">)</span>
 </span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>  <span class="c1"># Hangs on &quot;DSS path needs correction&quot; dialog</span>
 </span></code></pre></div>
 <h3 id="with-path-corrections">With Path Corrections<a class="headerlink" href="#with-path-corrections" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Automation WORKS - no GUI interruptions</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Automation WORKS - no GUI interruptions</span>
 </span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_upper_guadalupe</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model/UPGU1&quot;</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">)</span>
 </span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>  <span class="c1"># Runs to completion</span>

@@ -2084,6 +2084,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4079,6 +4107,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -6121,7 +6177,7 @@
 </tbody>
 </table>
 <h2 id="method-selection-decision-tree">Method Selection Decision Tree<a class="headerlink" href="#method-selection-decision-tree" title="Permanent link">&para;</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Need precipitation hyetograph for HEC-RAS?
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Need precipitation hyetograph for HEC-RAS?
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>|
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>+-- Need HMS-equivalent results? (regulatory, HMS-RAS coordination)
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>|   |
@@ -6190,7 +6246,7 @@
 </ul>
 <hr />
 <h2 id="setup-and-imports">Setup and Imports<a class="headerlink" href="#setup-and-imports" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># Set to True for local development, False for pip package</span>
@@ -6242,7 +6298,7 @@
 </span><span id="__span-1-50"><a id="__codelineno-1-50" name="__codelineno-1-50" href="#__codelineno-1-50"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">  Install hms-commander for HMS-equivalent methods:&quot;</span><span class="p">)</span>
 </span><span id="__span-1-51"><a id="__codelineno-1-51" name="__codelineno-1-51" href="#__codelineno-1-51"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  pip install hms-commander&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>LOCAL SOURCE MODE: Loading from c:\GH\ras-commander/ras_commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>LOCAL SOURCE MODE: Loading from c:\GH\ras-commander/ras_commander
 Loaded ras_commander: c:\GH\ras-commander\ras_commander\__init__.py
 
 HMS-Equivalent Methods:
@@ -6250,7 +6306,7 @@ HMS-Equivalent Methods:
   [OK] FrequencyStorm available (TP-40 temporal pattern)
   [OK] ScsTypeStorm available (SCS Type I/IA/II/III)
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
@@ -6282,7 +6338,7 @@ HMS-Equivalent Methods:
 </span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Atlas 14 Total Depth: </span><span class="si">{</span><span class="n">TOTAL_DEPTH_INCHES</span><span class="si">}</span><span class="s2"> inches&quot;</span><span class="p">)</span>
 </span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Verify at: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html?lat=</span><span class="si">{</span><span class="n">LATITUDE</span><span class="si">}</span><span class="s2">&amp;lon=</span><span class="si">{</span><span class="n">LONGITUDE</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Test Location: (29.76, -95.37) - Houston, TX
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Test Location: (29.76, -95.37) - Houston, TX
 Storm Parameters: 24-hour, 100-year (1.0% AEP)
 Atlas 14 Total Depth: 17.0 inches
 Verify at: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html?lat=29.76&amp;lon=-95.37
@@ -6299,7 +6355,7 @@ Verify at: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html?lat=29.76&amp;lon=-
 - User-specified total depth (exact conservation)
 - DDF data used only for temporal pattern, NOT depth values
 - <strong>NOT HMS-equivalent</strong> (different algorithm than HMS "Frequency Storm")</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># 1.1 Download Atlas 14 Data for StormGenerator</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Downloading Atlas 14 data from NOAA for StormGenerator...&quot;</span><span class="p">)</span>
@@ -6338,7 +6394,7 @@ Verify at: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html?lat=29.76&amp;lon=-
 </span><span id="__span-3-37"><a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;NOAA API may be unavailable.&quot;</span><span class="p">)</span>
 </span><span id="__span-3-38"><a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a>    <span class="n">STORM_GEN_AVAILABLE</span> <span class="o">=</span> <span class="kc">False</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-23 22:10:52 - ras_commander.precip.StormGenerator - INFO - Downloading Atlas 14 data for (29.76, -95.37)...
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-23 22:10:52 - ras_commander.precip.StormGenerator - INFO - Downloading Atlas 14 data for (29.76, -95.37)...
 2026-01-23 22:10:52 - ras_commander.precip.StormGenerator - INFO - Downloading Atlas 14 data for (29.76, -95.37)...
 
 
@@ -6354,7 +6410,7 @@ Downloading Atlas 14 data from NOAA for StormGenerator...
 [!!] Error downloading: &#39;DataFrame&#39; object has no attribute &#39;ari_columns&#39;
 NOAA API may be unavailable.
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># 1.2 Generate Hyetograph using Alternating Block Method</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">if</span> <span class="n">STORM_GEN_AVAILABLE</span><span class="p">:</span>
@@ -6386,7 +6442,7 @@ NOAA API may be unavailable.
 </span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>
 </span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>    <span class="n">display</span><span class="p">(</span><span class="n">hyeto_ab</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># 1.3 Flexible Peak Positioning Demo</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">if</span> <span class="n">STORM_GEN_AVAILABLE</span><span class="p">:</span>
@@ -6440,7 +6496,7 @@ NOAA API may be unavailable.
 - Supports multiple durations: 6h, 12h, 24h, 96h (48h NOT available - use FrequencyStorm)
 - <strong>Validated against HEC-HMS ground truth</strong> (6 comprehensive proofs)</p>
 <p><strong>Validation Documentation</strong>: <code>hms-commander/examples/08_atlas14_hyetograph_generation.ipynb</code></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># 2.1 Generate HMS-Equivalent Hyetograph (24-hour)</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">if</span> <span class="n">ATLAS14_AVAILABLE</span><span class="p">:</span>
@@ -6477,7 +6533,7 @@ NOAA API may be unavailable.
 </span><span id="__span-6-35"><a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[!!] Atlas14Storm not available - install hms-commander&quot;</span><span class="p">)</span>
 </span><span id="__span-6-36"><a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   pip install hms-commander&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: C:\Users\bill\.hms-commander\atlas14\tx_3_24h_temporal.csv
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: C:\Users\bill\.hms-commander\atlas14\tx_3_24h_temporal.csv
 2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: C:\Users\bill\.hms-commander\atlas14\tx_3_24h_temporal.csv
 2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Parsed 5 quartile tables with 49 time steps each
 2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Parsed 5 quartile tables with 49 time steps each
@@ -6498,7 +6554,7 @@ Generating HMS-equivalent 100-year, 24-hour hyetograph...
   Depth conservation error: 0.000000000 inches
   HMS EQUIVALENCE: VERIFIED (&lt; 10^-6 inch)
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># 2.2 All 5 Quartiles Demo</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">if</span> <span class="n">ATLAS14_AVAILABLE</span><span class="p">:</span>
@@ -6550,7 +6606,7 @@ Generating HMS-equivalent 100-year, 24-hour hyetograph...
 </span><span id="__span-7-50"><a id="__codelineno-7-50" name="__codelineno-7-50" href="#__codelineno-7-50"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-7-51"><a id="__codelineno-7-51" name="__codelineno-7-51" href="#__codelineno-7-51"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
 2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: tx_3_24h
 2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
 2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Generated hyetograph: 49 intervals, 17.000 inches total
@@ -6589,7 +6645,7 @@ Quartile Selection Guide:
   All Cases       -&gt; Median pattern (standard design)
 </code></pre></div>
 <p><img alt="png" src="../720_precipitation_methods_comprehensive_files/720_precipitation_methods_comprehensive_10_2.png" /></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># 2.3 Multi-Duration Demo (6h, 12h, 24h, 96h)</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">if</span> <span class="n">ATLAS14_AVAILABLE</span><span class="p">:</span>
@@ -6663,7 +6719,7 @@ Quartile Selection Guide:
 </span><span id="__span-8-72"><a id="__codelineno-8-72" name="__codelineno-8-72" href="#__codelineno-8-72"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-8-73"><a id="__codelineno-8-73" name="__codelineno-8-73" href="#__codelineno-8-73"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: C:\Users\bill\.hms-commander\atlas14\tx_3_6h_temporal.csv
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: C:\Users\bill\.hms-commander\atlas14\tx_3_6h_temporal.csv
 2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Using cached temporal distribution: C:\Users\bill\.hms-commander\atlas14\tx_3_6h_temporal.csv
 2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Parsed 5 quartile tables with 13 time steps each
 2026-01-23 22:10:54 - hms_commander.Atlas14Storm - INFO - Parsed 5 quartile tables with 13 time steps each
@@ -6718,7 +6774,7 @@ Note: 48h duration NOT available in Atlas14Storm (NOAA limitation)
 - HMS "User Specified Pattern" equivalence proven
 - <strong>Fills the 48-hour gap</strong> that Atlas14Storm cannot cover</p>
 <p><strong>Validation</strong>: RMSE &lt; 10^-6 inches vs HCFCD M3 Model D HMS output</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># 3.1 Generate TP-40 Hyetograph</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="k">if</span> <span class="n">FREQUENCY_STORM_AVAILABLE</span><span class="p">:</span>
@@ -6759,7 +6815,7 @@ Note: 48h duration NOT available in Atlas14Storm (NOAA limitation)
 </span><span id="__span-9-39"><a id="__codelineno-9-39" name="__codelineno-9-39" href="#__codelineno-9-39"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[!!] FrequencyStorm not available - install hms-commander&quot;</span><span class="p">)</span>
 </span><span id="__span-9-40"><a id="__codelineno-9-40" name="__codelineno-9-40" href="#__codelineno-9-40"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   pip install hms-commander&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Generating TP-40 hyetograph...
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Generating TP-40 hyetograph...
   Total depth: 17.0 inches (Atlas 14)
   Duration: 24 hours (1440 minutes)
   Interval: 5 minutes (TP-40 default)
@@ -6776,7 +6832,7 @@ Note: 48h duration NOT available in Atlas14Storm (NOAA limitation)
 Note: Uses TP-40/Hydro-35 pattern (Houston area)
       Pattern validated to match HMS &#39;User Specified Pattern&#39; at 10^-6 precision
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># 3.2 Variable Duration Demo (6h, 12h, 24h, 48h)</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="k">if</span> <span class="n">FREQUENCY_STORM_AVAILABLE</span><span class="p">:</span>
@@ -6848,7 +6904,7 @@ Note: Uses TP-40/Hydro-35 pattern (Houston area)
 </span><span id="__span-10-70"><a id="__codelineno-10-70" name="__codelineno-10-70" href="#__codelineno-10-70"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-10-71"><a id="__codelineno-10-71" name="__codelineno-10-71" href="#__codelineno-10-71"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Using fallback Atlas 14 depths (NOAA API not available)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Using fallback Atlas 14 depths (NOAA API not available)
 
 FrequencyStorm Multi-Duration Demo
 ======================================================================
@@ -6910,7 +6966,7 @@ Duration        Steps     Total Depth     Depth Error    HMS Equiv
 </tbody>
 </table>
 <p><strong>Validation Source</strong>: <code>hms-commander/examples/10_scs_type_validation.ipynb</code></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># 4.1 Generate SCS Type II Storm (Most Common)</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="k">if</span> <span class="n">SCS_TYPE_AVAILABLE</span><span class="p">:</span>
@@ -6950,7 +7006,7 @@ Duration        Steps     Total Depth     Depth Error    HMS Equiv
 </span><span id="__span-11-38"><a id="__codelineno-11-38" name="__codelineno-11-38" href="#__codelineno-11-38"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[!!] ScsTypeStorm not available - install hms-commander&quot;</span><span class="p">)</span>
 </span><span id="__span-11-39"><a id="__codelineno-11-39" name="__codelineno-11-39" href="#__codelineno-11-39"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   pip install hms-commander&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type II hyetograph: 25 intervals, 17.000000 inches total, peak 7.276 inches
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type II hyetograph: 25 intervals, 17.000000 inches total, peak 7.276 inches
 2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type II hyetograph: 25 intervals, 17.000000 inches total, peak 7.276 inches
 
 
@@ -6971,7 +7027,7 @@ Generating SCS Type II storm (most common in CONUS)...
 Note: SCS Type II is the standard design storm for most of CONUS.
       Peak position (~50%) matches TR-55 specifications.
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># 4.2 Generate All 4 SCS Types</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="k">if</span> <span class="n">SCS_TYPE_AVAILABLE</span><span class="p">:</span>
@@ -7033,7 +7089,7 @@ Note: SCS Type II is the standard design storm for most of CONUS.
 </span><span id="__span-12-60"><a id="__codelineno-12-60" name="__codelineno-12-60" href="#__codelineno-12-60"></a>
 </span><span id="__span-12-61"><a id="__codelineno-12-61" name="__codelineno-12-61" href="#__codelineno-12-61"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Note: SCS types are 24-hour ONLY (HMS constraint - cannot be customized).&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type I hyetograph: 25 intervals, 17.000000 inches total, peak 4.437 inches
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type I hyetograph: 25 intervals, 17.000000 inches total, peak 4.437 inches
 2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type I hyetograph: 25 intervals, 17.000000 inches total, peak 4.437 inches
 2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type IA hyetograph: 25 intervals, 17.000000 inches total, peak 2.669 inches
 2026-01-23 22:10:56 - hms_commander.ScsTypeStorm - INFO - Generated SCS Type IA hyetograph: 25 intervals, 17.000000 inches total, peak 2.669 inches
@@ -7062,12 +7118,12 @@ SCS Type Selection Guide:
   Type III -&gt; Gulf Coast, Florida, intense storms
 </code></pre></div>
 <p><img alt="png" src="../720_precipitation_methods_comprehensive_files/720_precipitation_methods_comprehensive_17_2.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Note: SCS types are 24-hour ONLY (HMS constraint - cannot be customized).
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Note: SCS types are 24-hour ONLY (HMS constraint - cannot be customized).
 </code></pre></div>
 <hr />
 <h2 id="part-5-comprehensive-method-comparison">Part 5: Comprehensive Method Comparison<a class="headerlink" href="#part-5-comprehensive-method-comparison" title="Permanent link">&para;</a></h2>
 <p>This section compares all four hyetograph generation methods side-by-side.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># 5.1 Depth Conservation Comparison</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">90</span><span class="p">)</span>
@@ -7150,7 +7206,7 @@ SCS Type Selection Guide:
 </span><span id="__span-13-81"><a id="__codelineno-13-81" name="__codelineno-13-81" href="#__codelineno-13-81"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   - 96h: Atlas14Storm&quot;</span><span class="p">)</span>
 </span><span id="__span-13-82"><a id="__codelineno-13-82" name="__codelineno-13-82" href="#__codelineno-13-82"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   - Any duration: StormGenerator (not HMS-equiv)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>==========================================================================================
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>==========================================================================================
 COMPREHENSIVE METHOD COMPARISON
 ==========================================================================================
 </code></pre></div>
@@ -7216,7 +7272,7 @@ COMPREHENSIVE METHOD COMPARISON
 </table>
 </div>
 
-<div class="language-text highlight"><pre><span></span><code>==========================================================================================
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>==========================================================================================
 KEY OBSERVATIONS
 ==========================================================================================
 
@@ -7240,7 +7296,7 @@ KEY OBSERVATIONS
    - 96h: Atlas14Storm
    - Any duration: StormGenerator (not HMS-equiv)
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># 5.2 Side-by-Side Visual Comparison (24-hour storms)</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">methods_available</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">([</span><span class="n">STORM_GEN_AVAILABLE</span><span class="p">,</span> <span class="n">ATLAS14_AVAILABLE</span><span class="p">,</span> <span class="n">FREQUENCY_STORM_AVAILABLE</span><span class="p">,</span> <span class="n">SCS_TYPE_AVAILABLE</span><span class="p">])</span>
@@ -7312,7 +7368,7 @@ KEY OBSERVATIONS
 </span><span id="__span-14-70"><a id="__codelineno-14-70" name="__codelineno-14-70" href="#__codelineno-14-70"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
 <p><img alt="png" src="../720_precipitation_methods_comprehensive_files/720_precipitation_methods_comprehensive_20_0.png" /></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># 5.3 Cumulative Depth Comparison</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="k">if</span> <span class="n">methods_available</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
@@ -7356,7 +7412,7 @@ KEY OBSERVATIONS
 </span><span id="__span-15-42"><a id="__codelineno-15-42" name="__codelineno-15-42" href="#__codelineno-15-42"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;All curves converge to </span><span class="si">{</span><span class="n">TOTAL_DEPTH_INCHES</span><span class="si">}</span><span class="s2"> inches at 24 hours.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../720_precipitation_methods_comprehensive_files/720_precipitation_methods_comprehensive_21_0.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>All methods now conserve the user-specified depth exactly (&lt; 10^-6 inch error).
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>All methods now conserve the user-specified depth exactly (&lt; 10^-6 inch error).
 All curves converge to 17.0 inches at 24 hours.
 </code></pre></div>
 <hr />
@@ -7377,7 +7433,7 @@ All curves converge to 17.0 inches at 24 hours.
 <li><strong>Decision Support</strong>: Range &gt; 10% suggests spatially variable rainfall needed</li>
 </ul>
 <h3 id="example-usage">Example Usage<a class="headerlink" href="#example-usage" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">Atlas14Grid</span><span class="p">,</span> <span class="n">Atlas14Variance</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">Atlas14Grid</span><span class="p">,</span> <span class="n">Atlas14Variance</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># Quick variance check (100-yr, 24-hr)</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">stats</span> <span class="o">=</span> <span class="n">Atlas14Variance</span><span class="o">.</span><span class="n">analyze_quick</span><span class="p">(</span><span class="s2">&quot;MyProject.g01.hdf&quot;</span><span class="p">)</span>
@@ -7455,7 +7511,7 @@ All curves converge to 17.0 inches at 24 hours.
 </tbody>
 </table>
 <h3 id="method-selection-decision-tree_1">Method Selection Decision Tree<a class="headerlink" href="#method-selection-decision-tree_1" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>Need HMS-equivalent results? (regulatory, HMS-RAS coordination)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>Need HMS-equivalent results? (regulatory, HMS-RAS coordination)
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>|
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>+-- Modern Atlas 14 (6h, 12h, 24h, 96h)?
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>|   +-- Use Atlas14Storm
@@ -7474,7 +7530,7 @@ All curves converge to 17.0 inches at 24 hours.
 </span></code></pre></div>
 <h3 id="key-api-change">Key API Change<a class="headerlink" href="#key-api-change" title="Permanent link">&para;</a></h3>
 <p>All methods now use <code>total_depth_inches</code> as an input parameter:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># StormGenerator (Alternating Block)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># StormGenerator (Alternating Block)</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">hyeto</span> <span class="o">=</span> <span class="n">gen</span><span class="o">.</span><span class="n">generate_hyetograph</span><span class="p">(</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>    <span class="n">total_depth_inches</span><span class="o">=</span><span class="mf">17.0</span><span class="p">,</span>  <span class="c1"># User-specified depth</span>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>    <span class="n">duration_hours</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span>
@@ -7549,7 +7605,7 @@ All curves converge to 17.0 inches at 24 hours.
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
@@ -7559,7 +7615,7 @@ All curves converge to 17.0 inches at 24 hours.
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     

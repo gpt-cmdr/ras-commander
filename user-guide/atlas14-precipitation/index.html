@@ -2377,6 +2377,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3980,6 +4008,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -5866,7 +5922,7 @@
 <p>Verify Atlas 14 depths at: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html</p>
 <h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
 <p>Generate a 24-hour, 1% AEP (100-year) design storm using the Alternating Block Method:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">StormGenerator</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">StormGenerator</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Step 1: Download DDF data for the temporal pattern (returns DataFrame)</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># This queries the NOAA DDF tables used for temporal shape only</span>
@@ -5885,7 +5941,7 @@
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total: </span><span class="si">{</span><span class="n">hyeto</span><span class="p">[</span><span class="s1">&#39;cumulative_depth&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2"> inches&quot;</span><span class="p">)</span>  <span class="c1"># Exact: 17.000000</span>
 </span></code></pre></div>
 <p>For HMS-equivalent results, use <code>Atlas14Storm</code> from hms-commander:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">Atlas14Storm</span><span class="p">,</span> <span class="n">ATLAS14_AVAILABLE</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">Atlas14Storm</span><span class="p">,</span> <span class="n">ATLAS14_AVAILABLE</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="k">if</span> <span class="n">ATLAS14_AVAILABLE</span><span class="p">:</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">hyeto</span> <span class="o">=</span> <span class="n">Atlas14Storm</span><span class="o">.</span><span class="n">generate_hyetograph</span><span class="p">(</span>
@@ -5941,7 +5997,7 @@
 </tbody>
 </table>
 <h3 id="decision-tree">Decision Tree<a class="headerlink" href="#decision-tree" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Need precipitation hyetograph for HEC-RAS?
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Need precipitation hyetograph for HEC-RAS?
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>|
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>+- Need HMS-equivalent results?
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>|  |
@@ -6026,7 +6082,7 @@
 - NOT HMS-equivalent (different temporal algorithm)
 - Exact depth conservation via scaling
 - Any duration supported</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">StormGenerator</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">StormGenerator</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Download DDF data (used for temporal pattern shape)</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">ddf_data</span> <span class="o">=</span> <span class="n">StormGenerator</span><span class="o">.</span><span class="n">download_from_coordinates</span><span class="p">(</span>
@@ -6062,7 +6118,7 @@
 <h3 id="atlas14storm-hms-equivalent">Atlas14Storm (HMS-Equivalent)<a class="headerlink" href="#atlas14storm-hms-equivalent" title="Permanent link">&para;</a></h3>
 <p>Imported from <code>hms-commander</code>. Matches HEC-RAS/HMS "Specified Pattern" at 10^-6 precision using official NOAA Atlas 14 temporal distributions.</p>
 <p><strong>Requires</strong>: <code>hms-commander&gt;=0.1.0</code> (installed automatically with ras-commander).</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">Atlas14Storm</span><span class="p">,</span> <span class="n">ATLAS14_AVAILABLE</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">Atlas14Storm</span><span class="p">,</span> <span class="n">ATLAS14_AVAILABLE</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="k">if</span> <span class="n">ATLAS14_AVAILABLE</span><span class="p">:</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="c1"># Generate HMS-equivalent hyetograph</span>
@@ -6087,7 +6143,7 @@
 <p><strong>Supported durations</strong>: 6h, 12h, 24h, 96h (no 48h - use FrequencyStorm instead)</p>
 <h3 id="frequencystorm-hms-equivalent-tp-40">FrequencyStorm (HMS-Equivalent, TP-40)<a class="headerlink" href="#frequencystorm-hms-equivalent-tp-40" title="Permanent link">&para;</a></h3>
 <p>Imported from <code>hms-commander</code>. TP-40/Hydro-35 pattern, HMS-equivalent for variable durations from 6 to 48 hours. Fill the 48-hour gap left by Atlas14Storm.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">FrequencyStorm</span><span class="p">,</span> <span class="n">FREQUENCY_STORM_AVAILABLE</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">FrequencyStorm</span><span class="p">,</span> <span class="n">FREQUENCY_STORM_AVAILABLE</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="k">if</span> <span class="n">FREQUENCY_STORM_AVAILABLE</span><span class="p">:</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="c1"># 24-hour storm (TP-40 defaults: 5-min interval, 67% peak position)</span>
@@ -6123,7 +6179,7 @@
 - <strong>Type IA</strong>: Coastal areas, Atlantic/Gulf (early peak ~33%)
 - <strong>Type II</strong>: Most of US, central and eastern states (peak ~50%)
 - <strong>Type III</strong>: Gulf Coast, Florida, tropical/subtropical (late peak ~50%)</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">ScsTypeStorm</span><span class="p">,</span> <span class="n">SCS_TYPE_AVAILABLE</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">ScsTypeStorm</span><span class="p">,</span> <span class="n">SCS_TYPE_AVAILABLE</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">if</span> <span class="n">SCS_TYPE_AVAILABLE</span><span class="p">:</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="c1"># SCS Type II (most common for central/eastern US)</span>
@@ -6161,7 +6217,7 @@
 - Durations: 1, 2, 3, 6, 12, 24, 48, 72, 96, 168 hours
 - Return periods: 2, 5, 10, 25, 50, 100, 200, 500, 1000 years
 - Performance: ~5-15 seconds for a typical project extent</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">Atlas14Grid</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">Atlas14Grid</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># Get PFE data for HEC-RAS project extent</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">pfe</span> <span class="o">=</span> <span class="n">Atlas14Grid</span><span class="o">.</span><span class="n">get_pfe_from_project</span><span class="p">(</span>
@@ -6190,7 +6246,7 @@
 <p><strong>Important</strong>: Always use dynamic indexing to find return period array indices. Never hardcode array indices (index 0 is the 2-year period, not the first period you requested).</p>
 <h3 id="atlas14variance-spatial-variance-analysis">Atlas14Variance - Spatial Variance Analysis<a class="headerlink" href="#atlas14variance-spatial-variance-analysis" title="Permanent link">&para;</a></h3>
 <p>Assesses whether uniform rainfall assumptions are appropriate for rain-on-grid modeling. A range percentage greater than 10% suggests spatially variable rainfall should be considered.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">Atlas14Variance</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">Atlas14Variance</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># Quick check for representative event (100-yr, 24-hr)</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">stats</span> <span class="o">=</span> <span class="n">Atlas14Variance</span><span class="o">.</span><span class="n">analyze_quick</span><span class="p">(</span>
@@ -6207,7 +6263,7 @@
 </span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Uniform rainfall likely appropriate&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p>Full multi-event analysis:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Full analysis across durations and return periods</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Full analysis across durations and return periods</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">results</span> <span class="o">=</span> <span class="n">Atlas14Variance</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">geom_hdf</span><span class="o">=</span><span class="s2">&quot;MyProject.g01.hdf&quot;</span><span class="p">,</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">durations</span><span class="o">=</span><span class="p">[</span><span class="mi">6</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">24</span><span class="p">,</span> <span class="mi">48</span><span class="p">],</span>
@@ -6232,7 +6288,7 @@
 </span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="p">)</span>
 </span></code></pre></div>
 <p><strong>HUC12 watershed option</strong>: Analyze within the full HUC12 watershed instead of the 2D flow area:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">results</span> <span class="o">=</span> <span class="n">Atlas14Variance</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">results</span> <span class="o">=</span> <span class="n">Atlas14Variance</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    <span class="n">geom_hdf</span><span class="o">=</span><span class="s2">&quot;MyProject.g01.hdf&quot;</span><span class="p">,</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="n">use_huc12_boundary</span><span class="o">=</span><span class="kc">True</span>   <span class="c1"># Finds HUC12 containing 2D flow area center</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="p">)</span>
@@ -6240,7 +6296,7 @@
 <h2 id="integration-with-hec-ras">Integration with HEC-RAS<a class="headerlink" href="#integration-with-hec-ras" title="Permanent link">&para;</a></h2>
 <h3 id="writing-hyetographs-to-unsteady-files">Writing Hyetographs to Unsteady Files<a class="headerlink" href="#writing-hyetographs-to-unsteady-files" title="Permanent link">&para;</a></h3>
 <p>Use <code>RasUnsteady.set_precipitation_hyetograph()</code> to write any hyetograph DataFrame directly to a HEC-RAS unsteady file:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasUnsteady</span><span class="p">,</span> <span class="n">RasCmdr</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasUnsteady</span><span class="p">,</span> <span class="n">RasCmdr</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">Atlas14Storm</span><span class="p">,</span> <span class="n">ATLAS14_AVAILABLE</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Initialize project</span>
@@ -6267,7 +6323,7 @@
 <p><code>RasUnsteady.set_precipitation_hyetograph()</code> validates that the DataFrame has the required columns (<code>hour</code>, <code>incremental_depth</code>, <code>cumulative_depth</code>), finds the "Precipitation Hydrograph=" section, detects the time interval automatically, and formats values in HEC-RAS fixed-width format.</p>
 <h3 id="multi-aep-batch-workflow">Multi-AEP Batch Workflow<a class="headerlink" href="#multi-aep-batch-workflow" title="Permanent link">&para;</a></h3>
 <p>Generate and execute a suite of AEP design storms:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">RasPlan</span><span class="p">,</span> <span class="n">RasUnsteady</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">RasPlan</span><span class="p">,</span> <span class="n">RasUnsteady</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">StormGenerator</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="s2">&quot;C:/Projects/FloodStudy&quot;</span><span class="p">,</span> <span class="s2">&quot;7.0&quot;</span><span class="p">)</span>

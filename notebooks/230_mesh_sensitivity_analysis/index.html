@@ -2069,6 +2069,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3672,6 +3700,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -5672,7 +5728,7 @@ For any 2D HEC-RAS model, mesh resolution is a critical modeling choice that dir
 <li><a href="https://www.hec.usace.army.mil/publications/">Brunner (2016) Combined 1D and 2D Modeling with HEC-RAS</a></li>
 </ul>
 <h2 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
@@ -5702,7 +5758,7 @@ For any 2D HEC-RAS model, mesh resolution is a critical modeling choice that dir
 </span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>LOCAL SOURCE MODE: Loading from G:\GH\ras-commander/ras_commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>LOCAL SOURCE MODE: Loading from G:\GH\ras-commander/ras_commander
 
 
 Loaded: G:\GH\ras-commander\ras_commander\__init__.py
@@ -5710,7 +5766,7 @@ Loaded: G:\GH\ras-commander\ras_commander\__init__.py
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values for your project. The defaults use BaldEagleCrkMulti2D Plan 06
 ("Gridded Precip - Infiltration") with Geometry 09 ("Single 2D Area - Internal Dam Structure").</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># PARAMETERS</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
@@ -5779,7 +5835,7 @@ Loaded: G:\GH\ras-commander\ras_commander\__init__.py
 </span><span id="__span-1-67"><a id="__codelineno-1-67" name="__codelineno-1-67" href="#__codelineno-1-67"></a><span class="n">POINT_OF_INTEREST</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2081544</span><span class="p">,</span> <span class="mi">365715</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="extract-project-and-initialize">Extract Project and Initialize<a class="headerlink" href="#extract-project-and-initialize" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">project_folder</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="n">SUFFIX</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">project_folder</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="n">SUFFIX</span><span class="p">)</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">ras</span> <span class="o">=</span> <span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_folder</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project: </span><span class="si">{</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -5788,7 +5844,7 @@ Loaded: G:\GH\ras-commander\ras_commander\__init__.py
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Geometries:&quot;</span><span class="p">)</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nb">print</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">[[</span><span class="s1">&#39;geom_number&#39;</span><span class="p">,</span> <span class="s1">&#39;geom_title&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">to_string</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-22 16:51:48 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_7_0.zip
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-22 16:51:48 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_7_0.zip
 
 
 2026-04-22 16:51:48 - ras_commander.RasExamples - INFO - Loading project data from CSV...
@@ -5918,7 +5974,7 @@ geom_number                               geom_title
 </code></pre></div>
 <h2 id="inspect-baseline-geometry">Inspect Baseline Geometry<a class="headerlink" href="#inspect-baseline-geometry" title="Permanent link">&para;</a></h2>
 <p>Read the breakline configuration from the template geometry (g09) before cloning.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Get the geometry number from the template plan</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Get the geometry number from the template plan</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">template_geom</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">TEMPLATE_PLAN</span><span class="p">,</span> <span class="s1">&#39;geometry_number&#39;</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -5992,7 +6048,7 @@ HEC-RAS allows duplicate and empty breakline names, so FID is the most reliable 
 <li><strong>By FID</strong>: <code>set_breakline_spacing(geom, near=50, breakline_fid=0)</code> — preferred for unnamed breaklines</li>
 <li><strong>Bulk</strong>: <code>set_breakline_spacing(geom, near=50, all_breaklines=True)</code> — model building &amp; sensitivity</li>
 </ul>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># ── Example: Rename a breakline by FID ──</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># ── Example: Rename a breakline by FID ──</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># Clone the geometry so we don&#39;t modify the template</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">demo_geom</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">clone_geom</span><span class="p">(</span><span class="n">template_geom</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">)</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">demo_geom_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span>
@@ -6083,7 +6139,7 @@ in the compiled HDF (not .g## text), so the API operates on the HDF directly.</p
 use FID for reliable targeting.</p>
 <p><strong>Note</strong>: The BaldEagleCrkMulti2D example does not contain refinement regions,
 so the API calls below will return empty results. The pattern is shown for reference.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># ── Refinement region inspection ──</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># ── Refinement region inspection ──</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># These methods read from the compiled HDF. If the HDF doesn&#39;t exist,</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># it will be compiled automatically from the .g## text file.</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
@@ -6123,7 +6179,7 @@ so the API calls below will return empty results. The pattern is shown for refer
 <h2 id="clone-geometries-and-generate-meshes">Clone Geometries and Generate Meshes<a class="headerlink" href="#clone-geometries-and-generate-meshes" title="Permanent link">&para;</a></h2>
 <p>For each scenario, clone the template geometry, apply breakline spacing via the API,
 generate the mesh, and clone a plan pointing to the new geometry.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">scenario_results</span> <span class="o">=</span> <span class="p">[]</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">scenario_results</span> <span class="o">=</span> <span class="p">[]</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">for</span> <span class="n">scenario</span> <span class="ow">in</span> <span class="n">SCENARIOS</span><span class="p">:</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">name</span> <span class="o">=</span> <span class="n">scenario</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
@@ -6210,7 +6266,7 @@ generate the mesh, and clone a plan pointing to the new geometry.</p>
 <p>Before executing plans, verify the baseline scenario reproduces the original mesh exactly.
 RegenerateMeshPoints uses the same grid origin as RAS Mapper: same HEC-RAS version and
 cell size produces identical cell centers to machine precision.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">h5py</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">h5py</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scipy.spatial</span><span class="w"> </span><span class="kn">import</span> <span class="n">cKDTree</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">baseline</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">scenario_results</span> <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;baseline_250&quot;</span><span class="p">)</span>
@@ -6251,7 +6307,7 @@ cell size produces identical cell centers to machine precision.</p>
 </span><span id="__span-7-39"><a id="__codelineno-7-39" name="__codelineno-7-39" href="#__codelineno-7-39"></a>    <span class="nb">print</span><span class="p">()</span>
 </span><span id="__span-7-40"><a id="__codelineno-7-40" name="__codelineno-7-40" href="#__codelineno-7-40"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cell count mismatch: </span><span class="si">{</span><span class="n">orig_cc</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> vs </span><span class="si">{</span><span class="n">regen_cc</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Original g09 HDF cells: 19,597
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Original g09 HDF cells: 19,597
 Regenerated baseline:       19,434
 
 Cell center distances (regen vs original):
@@ -6262,7 +6318,7 @@ Cell center distances (regen vs original):
 
 Cell count mismatch: 19,597 vs 19,434
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">fig</span><span class="p">,</span> <span class="p">(</span><span class="n">ax1</span><span class="p">,</span> <span class="n">ax2</span><span class="p">)</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">18</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">fig</span><span class="p">,</span> <span class="p">(</span><span class="n">ax1</span><span class="p">,</span> <span class="n">ax2</span><span class="p">)</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">18</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">ax1</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">orig_cc</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">orig_cc</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">s</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="s2">&quot;steelblue&quot;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">ax1</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Original g</span><span class="si">{</span><span class="n">template_geom</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">orig_cc</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> cells)&quot;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">11</span><span class="p">)</span>
@@ -6289,7 +6345,7 @@ Cell count mismatch: 19,597 vs 19,434
 </span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
 <p><img alt="png" src="../230_mesh_sensitivity_analysis_files/230_mesh_sensitivity_analysis_17_0.png" /></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Mesh Generation Summary&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Mesh Generation Summary&quot;</span><span class="p">)</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">70</span><span class="p">)</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">scenario_results</span><span class="p">:</span>
@@ -6319,7 +6375,7 @@ Cell count mismatch: 19,597 vs 19,434
 </span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Text seed count matches cell count: PASSED&quot;</span><span class="p">)</span>
 </span><span id="__span-9-29"><a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a>        <span class="k">break</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Mesh Generation Summary
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Mesh Generation Summary
 ======================================================================
 Scenario                Cells    Faces   Status     Fixes
 ----------------------------------------------------------------------
@@ -6336,7 +6392,7 @@ Text seed count matches cell count: PASSED
 </code></pre></div>
 <h2 id="execute-plans">Execute Plans<a class="headerlink" href="#execute-plans" title="Permanent link">&para;</a></h2>
 <p>Run all sensitivity scenarios. Plans are independent so we use parallel execution.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">plan_numbers</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">])</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">scenario_results</span><span class="p">]</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">plan_numbers</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">])</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">scenario_results</span><span class="p">]</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Executing </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">plan_numbers</span><span class="p">)</span><span class="si">}</span><span class="s2"> plans: </span><span class="si">{</span><span class="n">plan_numbers</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">exec_results</span> <span class="o">=</span> <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_parallel</span><span class="p">(</span>
@@ -6377,7 +6433,7 @@ Text seed count matches cell count: PASSED
 </span><span id="__span-10-39"><a id="__codelineno-10-39" name="__codelineno-10-39" href="#__codelineno-10-39"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;When mesh resolution changes, cell elevations near structures shift,&quot;</span><span class="p">)</span>
 </span><span id="__span-10-40"><a id="__codelineno-10-40" name="__codelineno-10-40" href="#__codelineno-10-40"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;which can invalidate gate/weir connections that require cell_elev &lt; gate_elev.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-22 16:52:13 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;07&#39;, &#39;08&#39;, &#39;09&#39;, &#39;10&#39;, &#39;11&#39;, &#39;12&#39;]
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-22 16:52:13 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;07&#39;, &#39;08&#39;, &#39;09&#39;, &#39;10&#39;, &#39;11&#39;, &#39;12&#39;]
 
 
 2026-04-22 16:52:13 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 2 based on the number of plans to compute: 6
@@ -7133,7 +7189,7 @@ which can invalidate gate/weir connections that require cell_elev &lt; gate_elev
 When mesh resolution changes, the cell nearest the gate connection has a different terrain-averaged
 elevation. For finer meshes, this cell elevation can exceed the gate elevation, causing HEC-RAS
 to reject the connection:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>ERROR with Connection(s)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>ERROR with Connection(s)
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>gate Gate #1  gate elev   593.00
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>cell    17615  cell elev   598.96
 </span></code></pre></div>
@@ -7145,7 +7201,7 @@ not just hydraulic results but also model validity. In production, you would eit
 <p>The analysis below proceeds with whichever scenarios completed successfully.</p>
 <h2 id="generate-stored-maps-wse">Generate Stored Maps (WSE)<a class="headerlink" href="#generate-stored-maps-wse" title="Permanent link">&para;</a></h2>
 <p>Set the render mode and generate maximum WSE TIFs for each plan.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Set consistent render mode for all stored maps</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Set consistent render mode for all stored maps</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">RasMap</span><span class="o">.</span><span class="n">set_water_surface_render_mode</span><span class="p">(</span><span class="s2">&quot;horizontal&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">)</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">wse_tifs</span> <span class="o">=</span> <span class="p">{}</span>
@@ -7179,7 +7235,7 @@ not just hydraulic results but also model validity. In production, you would eit
 </span><span id="__span-12-32"><a id="__codelineno-12-32" name="__codelineno-12-32" href="#__codelineno-12-32"></a>
 </span><span id="__span-12-33"><a id="__codelineno-12-33" name="__codelineno-12-33" href="#__codelineno-12-33"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Generated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">wse_tifs</span><span class="p">)</span><span class="si">}</span><span class="s2"> WSE TIFs&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-22 16:54:00 - ras_commander.RasMap - INFO - Set water surface render mode to &#39;horizontal&#39;
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-22 16:54:00 - ras_commander.RasMap - INFO - Set water surface render mode to &#39;horizontal&#39;
 
 
 2026-04-22 16:54:00 - ras_commander.RasMap - INFO - Updated RASMapper configuration: G:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_230_mesh_sens\BaldEagleDamBrk.rasmap
@@ -7222,7 +7278,7 @@ Generated 1 WSE TIFs
 <h2 id="compare-wse-maps">Compare WSE Maps<a class="headerlink" href="#compare-wse-maps" title="Permanent link">&para;</a></h2>
 <p>Load the WSE GeoTIFFs with rasterio and create side-by-side comparison figures
 plus difference maps against the baseline.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">rasterio</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">rasterio</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rasterio.plot</span><span class="w"> </span><span class="kn">import</span> <span class="n">show</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
@@ -7247,9 +7303,9 @@ plus difference maps against the baseline.</p>
 </span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: shape=</span><span class="si">{</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">, valid_cells=</span><span class="si">{</span><span class="n">valid</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">, &quot;</span>
 </span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a>          <span class="sa">f</span><span class="s2">&quot;WSE range=[</span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">nanmin</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">nanmax</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>coarse_500: shape=(4852, 6705), valid_cells=949,554, WSE range=[535.8, 780.0]
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>coarse_500: shape=(4852, 6705), valid_cells=949,554, WSE range=[535.8, 780.0]
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># â”€â”€ Side-by-side WSE maps â”€â”€</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># â”€â”€ Side-by-side WSE maps â”€â”€</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">wse_data</span><span class="p">)</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="k">if</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No WSE data to plot.&quot;</span><span class="p">)</span>
@@ -7299,16 +7355,16 @@ plus difference maps against the baseline.</p>
 </span><span id="__span-14-48"><a id="__codelineno-14-48" name="__codelineno-14-48" href="#__codelineno-14-48"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span><span id="__span-14-49"><a id="__codelineno-14-49" name="__codelineno-14-49" href="#__codelineno-14-49"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Saved: </span><span class="si">{</span><span class="n">Path</span><span class="p">(</span><span class="n">project_folder</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="s1">&#39;wse_comparison.png&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>C:\Users\bill\AppData\Local\Temp\ipykernel_22940\371487922.py:46: UserWarning: This figure includes Axes that are not compatible with tight_layout, so results might be incorrect.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>C:\Users\bill\AppData\Local\Temp\ipykernel_22940\371487922.py:46: UserWarning: This figure includes Axes that are not compatible with tight_layout, so results might be incorrect.
   plt.tight_layout()
 </code></pre></div>
 <p><img alt="png" src="../230_mesh_sensitivity_analysis_files/230_mesh_sensitivity_analysis_26_1.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Saved: G:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_230_mesh_sens\wse_comparison.png
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Saved: G:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_230_mesh_sens\wse_comparison.png
 </code></pre></div>
 <h2 id="difference-maps">Difference Maps<a class="headerlink" href="#difference-maps" title="Permanent link">&para;</a></h2>
 <p>Compute WSE differences relative to the baseline (250ft) scenario.
 Positive values = scenario WSE is higher than baseline.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">BASELINE_NAME</span> <span class="o">=</span> <span class="s2">&quot;baseline_250&quot;</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">BASELINE_NAME</span> <span class="o">=</span> <span class="s2">&quot;baseline_250&quot;</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="c1"># Fall back to the first available scenario if baseline isn&#39;t in results</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="k">if</span> <span class="n">BASELINE_NAME</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">wse_data</span> <span class="ow">and</span> <span class="n">wse_data</span><span class="p">:</span>
@@ -7396,12 +7452,12 @@ Positive values = scenario WSE is higher than baseline.</p>
 </span><span id="__span-15-86"><a id="__codelineno-15-86" name="__codelineno-15-86" href="#__codelineno-15-86"></a>        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span><span id="__span-15-87"><a id="__codelineno-15-87" name="__codelineno-15-87" href="#__codelineno-15-87"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Saved: </span><span class="si">{</span><span class="n">Path</span><span class="p">(</span><span class="n">project_folder</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="s1">&#39;wse_diff_maps.png&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Baseline scenario &#39;baseline_250&#39; not available. Using &#39;coarse_500&#39; as reference.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Baseline scenario &#39;baseline_250&#39; not available. Using &#39;coarse_500&#39; as reference.
 Only one scenario available, no diffs to compute.
 </code></pre></div>
 <h2 id="mesh-resolution-vs-cell-count">Mesh Resolution vs. Cell Count<a class="headerlink" href="#mesh-resolution-vs-cell-count" title="Permanent link">&para;</a></h2>
 <p>Visualize how cell size affects mesh density and compare across scenarios.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">fig</span><span class="p">,</span> <span class="p">(</span><span class="n">ax1</span><span class="p">,</span> <span class="n">ax2</span><span class="p">)</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">fig</span><span class="p">,</span> <span class="p">(</span><span class="n">ax1</span><span class="p">,</span> <span class="n">ax2</span><span class="p">)</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># Bar chart: cell count by scenario</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;title&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">scenario_results</span><span class="p">]</span>
@@ -7454,7 +7510,7 @@ Only one scenario available, no diffs to compute.
 </span></code></pre></div>
 <p><img alt="png" src="../230_mesh_sensitivity_analysis_files/230_mesh_sensitivity_analysis_30_0.png" /></p>
 <h2 id="results-summary-table">Results Summary Table<a class="headerlink" href="#results-summary-table" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Add WSE statistics and solver status to scenario results</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Add WSE statistics and solver status to scenario results</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">summary_rows</span> <span class="o">=</span> <span class="p">[]</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">scenario_results</span><span class="p">:</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="n">row</span> <span class="o">=</span> <span class="p">{</span>
@@ -7484,7 +7540,7 @@ Only one scenario available, no diffs to compute.
 </span><span id="__span-17-28"><a id="__codelineno-17-28" name="__codelineno-17-28" href="#__codelineno-17-28"></a><span class="n">summary_df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">csv_path</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </span><span id="__span-17-29"><a id="__codelineno-17-29" name="__codelineno-17-29" href="#__codelineno-17-29"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Saved: </span><span class="si">{</span><span class="n">csv_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>              Scenario Plan Geom  Cell Size  BL Near  BL Far  Cells   Faces     Mesh Solver Max WSE Mean WSE
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>              Scenario Plan Geom  Cell Size  BL Near  BL Far  Cells   Faces     Mesh Solver Max WSE Mean WSE
           Coarse 500ft  p07  g04      500.0      NaN     NaN  4,362   9,475 complete     OK   780.0    604.7
         Baseline 250ft  p08  g05      250.0      NaN     NaN 17,905  37,319 complete FAILED     NaN      NaN
             Fine 150ft  p09  g07      150.0      NaN     NaN 50,281 103,048 complete FAILED     NaN      NaN
@@ -7524,7 +7580,7 @@ Saved: G:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_230_mes
 <p>The following cells verify that the breakline name/spacing APIs handle edge cases correctly:
 duplicate names, unnamed breaklines, out-of-range FIDs, and conflicting selectors.
 Each test uses a fresh geometry clone so it cannot affect the sensitivity analysis above.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="n">passed</span> <span class="o">=</span> <span class="mi">0</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="n">passed</span> <span class="o">=</span> <span class="mi">0</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">failed</span> <span class="o">=</span> <span class="mi">0</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">check</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">condition</span><span class="p">):</span>
@@ -7723,7 +7779,7 @@ Each test uses a fresh geometry clone so it cannot affect the sensitivity analys
 - <strong>Attributes</strong>: <code>Name|S32</code>, <code>Spacing dx|float32</code>, <code>Spacing dy|float32</code> — gzip compressed
 - <strong>Polygon Info/Parts/Points</strong>: <code>int32</code> index arrays + <code>float64</code> coordinates — gzip compressed</p>
 <p>This matches the Storage Areas, Break Lines, and Land Cover polygon storage patterns.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">h5py</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">h5py</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1"># Clone a fresh geometry for refinement region demonstration</span>
 </span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="n">rr_geom</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">clone_geom</span><span class="p">(</span><span class="n">template_geom</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">)</span>
@@ -7790,7 +7846,7 @@ Each test uses a fresh geometry clone so it cannot affect the sensitivity analys
 </span><span id="__span-19-65"><a id="__codelineno-19-65" name="__codelineno-19-65" href="#__codelineno-19-65"></a><span class="k">for</span> <span class="n">fid</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
 </span><span id="__span-19-66"><a id="__codelineno-19-66" name="__codelineno-19-66" href="#__codelineno-19-66"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  FID </span><span class="si">{</span><span class="n">fid</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># -- Verify HDF schema matches HEC-RAS conventions --</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># -- Verify HDF schema matches HEC-RAS conventions --</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">rr_hdf</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">rr_path</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.hdf&quot;</span><span class="p">)</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="n">rr_group</span> <span class="o">=</span> <span class="s2">&quot;Geometry/2D Flow Area Refinement Regions&quot;</span>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>
@@ -7826,7 +7882,7 @@ Each test uses a fresh geometry clone so it cannot affect the sensitivity analys
 <h3 id="refinement-region-edge-cases">Refinement Region Edge Cases<a class="headerlink" href="#refinement-region-edge-cases" title="Permanent link">&para;</a></h3>
 <p>Verify the same safety checks work for <code>add_refinement_region()</code>:
 input validation, append-to-existing, and round-trip through the read APIs.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">rr_passed</span> <span class="o">=</span> <span class="mi">0</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">rr_passed</span> <span class="o">=</span> <span class="mi">0</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">rr_failed</span> <span class="o">=</span> <span class="mi">0</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">rr_check</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">condition</span><span class="p">):</span>
@@ -7940,7 +7996,7 @@ input validation, append-to-existing, and round-trip through the read APIs.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
@@ -7950,7 +8006,7 @@ input validation, append-to-existing, and round-trip through the read APIs.</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     

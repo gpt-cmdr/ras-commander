@@ -2084,6 +2084,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3986,6 +4014,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5845,7 +5901,7 @@
 - HEC-RAS 6.3.1 or later
 - 16+ GB RAM recommended for 2D models
 - Multi-core CPU (cascade execution is CPU-intensive)</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
@@ -5861,11 +5917,11 @@
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:51:42 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:51:42 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
 </code></pre></div>
 <h2 id="step-1-organize-downloaded-model">Step 1: Organize Downloaded Model<a class="headerlink" href="#step-1-organize-downloaded-model" title="Permanent link">&para;</a></h2>
 <p>Use <code>RasEbfeModels.organize_model("upper-guadalupe")</code> to download/cache, extract, organize, and normalize the cascaded model collection.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Shared eBFE workspace. Override RAS_COMMANDER_EBFE_ROOT to use a different local cache.</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Shared eBFE workspace. Override RAS_COMMANDER_EBFE_ROOT to use a different local cache.</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">EBFE_WORKSPACE</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;RAS_COMMANDER_EBFE_ROOT&quot;</span><span class="p">,</span> <span class="sa">r</span><span class="s2">&quot;H:\Testing\eBFE Model Organization&quot;</span><span class="p">))</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">DOWNLOAD_ROOT</span> <span class="o">=</span> <span class="n">EBFE_WORKSPACE</span> <span class="o">/</span> <span class="s2">&quot;Downloads&quot;</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">ORGANIZED_ROOT</span> <span class="o">=</span> <span class="n">EBFE_WORKSPACE</span> <span class="o">/</span> <span class="s2">&quot;Organized&quot;</span>
@@ -5902,7 +5958,7 @@
 </span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Validation root: </span><span class="si">{</span><span class="n">VALIDATION_ROOT</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Validation matrix: </span><span class="si">{</span><span class="n">VALIDATION_MATRIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Model already organized at: H:\Testing\eBFE Model Organization\Organized\UpperGuadalupe_12100201
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Model already organized at: H:\Testing\eBFE Model Organization\Organized\UpperGuadalupe_12100201
 
 Organized model location: H:\Testing\eBFE Model Organization\Organized\UpperGuadalupe_12100201
 Download/cache root: H:\Testing\eBFE Model Organization\Downloads
@@ -5914,7 +5970,7 @@ Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
 <p>Raw Upper Guadalupe deliveries may keep RAS inputs, outputs, terrain, land cover, and DSS assets in separate locations. That makes GUI review and automation fragile until the assets are copied into each RAS project folder and paths are rewritten.</p>
 <h3 id="after-rasebfemodels">After RasEbfeModels<a class="headerlink" href="#after-rasebfemodels" title="Permanent link">&para;</a></h3>
 <p><strong>Target structure</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>UpperGuadalupe_12100201/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>UpperGuadalupe_12100201/
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>└── RAS Model/
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    ├── UPGU1/
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    │   ├── UPGU1.prj
@@ -5929,13 +5985,13 @@ Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
 </span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    └── UPGU4/
 </span></code></pre></div></p>
 <p><strong>User experience</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_model</span><span class="p">(</span><span class="s2">&quot;upper-guadalupe&quot;</span><span class="p">,</span> <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_model</span><span class="p">(</span><span class="s2">&quot;upper-guadalupe&quot;</span><span class="p">,</span> <span class="n">validate_dss</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span> <span class="o">/</span> <span class="s2">&quot;UPGU1&quot;</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">)</span>
 </span></code></pre></div></p>
 <p>The saved notebook run verifies the organized folders can be discovered and initialized. Full geometry preprocessor validation is available through the opt-in validation cell and external audit scripts.</p>
 <h2 id="step-2-understand-cascade-structure">Step 2: Understand Cascade Structure<a class="headerlink" href="#step-2-understand-cascade-structure" title="Permanent link">&para;</a></h2>
 <p>Upper Guadalupe consists of 4 watershed models in hydraulic cascade.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">ras_model_folder</span> <span class="o">=</span> <span class="n">organized_folder</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">ras_model_folder</span> <span class="o">=</span> <span class="n">organized_folder</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># List watershed models</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">models</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;UPGU1&quot;</span><span class="p">,</span> <span class="s2">&quot;UPGU2&quot;</span><span class="p">,</span> <span class="s2">&quot;UPGU3&quot;</span><span class="p">,</span> <span class="s2">&quot;UPGU4&quot;</span><span class="p">]</span>
@@ -5980,7 +6036,7 @@ Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
 </span><span id="__span-4-43"><a id="__codelineno-4-43" name="__codelineno-4-43" href="#__codelineno-4-43"></a>
 </span><span id="__span-4-44"><a id="__codelineno-4-44" name="__codelineno-4-44" href="#__codelineno-4-44"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">80</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Cascaded Watershed Models:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Cascaded Watershed Models:
 ================================================================================
 Flow Direction: UPGU1 -&gt; UPGU2 -&gt; UPGU3 -&gt; UPGU4
 
@@ -6022,7 +6078,7 @@ UPGU4:
 </code></pre></div>
 <h2 id="step-3-review-dss-validation-results">Step 3: Review DSS Validation Results<a class="headerlink" href="#step-3-review-dss-validation-results" title="Permanent link">&para;</a></h2>
 <p>The organization function validated 10,248 DSS pathnames. Check the results.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Check DSS validation output</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Check DSS validation output</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">dss_validation</span> <span class="o">=</span> <span class="n">organized_folder</span> <span class="o">/</span> <span class="s2">&quot;agent&quot;</span> <span class="o">/</span> <span class="s2">&quot;dss_validation_output.txt&quot;</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">if</span> <span class="n">dss_validation</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
@@ -6041,13 +6097,13 @@ UPGU4:
 </span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;⚠️ DSS validation output not found&quot;</span><span class="p">)</span>
 </span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Re-run organization with validate_dss=True&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>⚠️ DSS validation output not found
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>⚠️ DSS validation output not found
 
 Re-run organization with validate_dss=True
 </code></pre></div>
 <h2 id="step-4-examine-gridded-precipitation-dss">Step 4: Examine Gridded Precipitation DSS<a class="headerlink" href="#step-4-examine-gridded-precipitation-dss" title="Permanent link">&para;</a></h2>
 <p>Upper Guadalupe uses gridded precipitation DSS files (1,680 pathnames × 4 files = 6,720 total).</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># Find precipitation DSS files. DSS catalog access requires Java/pyjnius;</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># skip gracefully in notebook validation environments without JAVA_HOME.</span>
@@ -6078,7 +6134,7 @@ Re-run organization with validate_dss=True
 </span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;⚠️ No precipitation DSS files found&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Gridded Precipitation DSS Files: 8
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Gridded Precipitation DSS Files: 8
 
 Examining: UPGU_precip.dss
 Size: 57.9 MB
@@ -6090,7 +6146,7 @@ Download from: https://www.oracle.com/java/technologies/downloads/
 </code></pre></div>
 <h2 id="step-5-initialize-first-watershed-model-upgu1">Step 5: Initialize First Watershed Model (UPGU1)<a class="headerlink" href="#step-5-initialize-first-watershed-model-upgu1" title="Permanent link">&para;</a></h2>
 <p>Initialize the upstream model - this provides boundary conditions for UPGU2.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Initialize UPGU1 (upstream model)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Initialize UPGU1 (upstream model)</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">upgu1_folder</span> <span class="o">=</span> <span class="n">resolve_ras_project_folder</span><span class="p">(</span><span class="s2">&quot;UPGU1&quot;</span><span class="p">)</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">if</span> <span class="n">upgu1_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
@@ -6118,7 +6174,7 @@ Download from: https://www.oracle.com/java/technologies/downloads/
 </span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;UPGU1 folder not found&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Initializing UPGU1...
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Initializing UPGU1...
 
 
 2026-04-26 22:51:45 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: H:\Testing\eBFE Model Organization\Organized\UpperGuadalupe_12100201\RAS Model\UPGU1\UPGU1.rasmap
@@ -6375,7 +6431,7 @@ Terrain: Terrain.UPGU_WA1_DEM_1m_NAD83_2011.tif (3.98 GB)
 </code></pre></div>
 <h2 id="step-6-validate-upgu1-dss-files">Step 6: Validate UPGU1 DSS Files<a class="headerlink" href="#step-6-validate-upgu1-dss-files" title="Permanent link">&para;</a></h2>
 <p>UPGU1 has precipitation + upstream boundary conditions. Validate all pathnames.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Find DSS files for UPGU1 in the common delivery folder.</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Find DSS files for UPGU1 in the common delivery folder.</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">dss_search_roots</span> <span class="o">=</span> <span class="p">[</span><span class="n">upgu1_folder</span><span class="p">,</span> <span class="n">upgu1_folder</span> <span class="o">/</span> <span class="s2">&quot;DSS Inputs&quot;</span><span class="p">]</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="k">if</span> <span class="n">upgu1_folder</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;input&quot;</span><span class="p">:</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="n">dss_search_roots</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">upgu1_folder</span><span class="o">.</span><span class="n">parent</span><span class="p">)</span>
@@ -6429,7 +6485,7 @@ Terrain: Terrain.UPGU_WA1_DEM_1m_NAD83_2011.tif (3.98 GB)
 </span><span id="__span-8-52"><a id="__codelineno-8-52" name="__codelineno-8-52" href="#__codelineno-8-52"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-8-53"><a id="__codelineno-8-53" name="__codelineno-8-53" href="#__codelineno-8-53"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">DSS catalogs were not read in this environment; pathnames were not validated.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>UPGU1 DSS Files: 4
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>UPGU1 DSS Files: 4
 
 Validating: UPGU1.dss
 Configuring Java VM for DSS operations...
@@ -6459,7 +6515,7 @@ DSS catalogs were not read in this environment; pathnames were not validated.
 <h2 id="step-7-understanding-the-cascade">Step 7: Understanding the Cascade<a class="headerlink" href="#step-7-understanding-the-cascade" title="Permanent link">&para;</a></h2>
 <p>Each downstream model receives flow from upstream via DSS files.</p>
 <p><strong>Cascade Flow</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>UPGU1 (upstream)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>UPGU1 (upstream)
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>  ↓ results → UPGU1.dss
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>UPGU2 (receives UPGU1 flow + local inflow)
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>  ↓ results → UPGU2.dss  
@@ -6468,7 +6524,7 @@ DSS catalogs were not read in this environment; pathnames were not validated.
 </span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>UPGU4 (downstream - receives UPGU3 flow + local inflow)
 </span></code></pre></div></p>
 <p><strong>Execution Requirement</strong>: Must run sequentially (UPGU1 → UPGU2 → UPGU3 → UPGU4)</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Examine cascade DSS structure in the common delivery layout.</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Examine cascade DSS structure in the common delivery layout.</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Cascade DSS Structure:</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="k">for</span> <span class="n">model_name</span> <span class="ow">in</span> <span class="n">models</span><span class="p">:</span>
@@ -6499,7 +6555,7 @@ DSS catalogs were not read in this environment; pathnames were not validated.
 </span><span id="__span-10-29"><a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a>
 </span><span id="__span-10-30"><a id="__codelineno-10-30" name="__codelineno-10-30" href="#__codelineno-10-30"></a>        <span class="nb">print</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Cascade DSS Structure:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Cascade DSS Structure:
 
 UPGU1:
   RAS project folder: H:\Testing\eBFE Model Organization\Organized\UpperGuadalupe_12100201\RAS Model\UPGU1
@@ -6551,7 +6607,7 @@ Configuring Java VM for DSS operations...
 </code></pre></div>
 <h2 id="step-8-initialize-all-watershed-models">Step 8: Initialize All Watershed Models<a class="headerlink" href="#step-8-initialize-all-watershed-models" title="Permanent link">&para;</a></h2>
 <p>Initialize all 4 models to examine their structure.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Initialize all 4 models with separate RasPrj objects.</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Initialize all 4 models with separate RasPrj objects.</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">watershed_models</span> <span class="o">=</span> <span class="p">{}</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="k">for</span> <span class="n">model_name</span> <span class="ow">in</span> <span class="n">models</span><span class="p">:</span>
@@ -6568,7 +6624,7 @@ Configuring Java VM for DSS operations...
 </span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>
 </span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Initialized </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">watershed_models</span><span class="p">)</span><span class="si">}</span><span class="s2"> watershed models&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Initializing UPGU1...
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Initializing UPGU1...
 
 
 2026-04-26 22:51:47 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: H:\Testing\eBFE Model Organization\Organized\UpperGuadalupe_12100201\RAS Model\UPGU1\UPGU1.rasmap
@@ -7511,7 +7567,7 @@ Initialized 4 watershed models
 </code></pre></div>
 <h2 id="step-9-check-plan-structure">Step 9: Check Plan Structure<a class="headerlink" href="#step-9-check-plan-structure" title="Permanent link">&para;</a></h2>
 <p>Each model has 7 plans for different AEP (Annual Exceedance Probability) frequencies.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Show plan structure for first model</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Show plan structure for first model</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="k">if</span> <span class="s1">&#39;UPGU1&#39;</span> <span class="ow">in</span> <span class="n">watershed_models</span><span class="p">:</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="n">upgu1</span> <span class="o">=</span> <span class="n">watershed_models</span><span class="p">[</span><span class="s1">&#39;UPGU1&#39;</span><span class="p">]</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
@@ -7529,7 +7585,7 @@ Initialized 4 watershed models
 </span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  Plan 06: 1MIN% AEP - UPGU1_1MINpct&quot;</span><span class="p">)</span>
 </span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  Plan 07: 1PLU% AEP - UPGU1_1PLUpct&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>UPGU1 Plan Structure:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>UPGU1 Plan Structure:
 ================================================================================
   plan_number     Plan Title Short Identifier
 0          01     UPGU1_1pct             1pct
@@ -7553,7 +7609,7 @@ AEP Frequencies:
 <h2 id="optional-geometry-preprocessor-validation-for-the-cascade">Optional: Geometry Preprocessor Validation for the Cascade<a class="headerlink" href="#optional-geometry-preprocessor-validation-for-the-cascade" title="Permanent link">&para;</a></h2>
 <p>The delivery-format validation gate is the HEC-RAS geometry preprocessor, not a full cascade compute. Run the preprocessor sequentially for each initialized watershed model and review the detailed compute messages for errors.</p>
 <p>Large 2D models can take more than 1 hour to preprocess, so this example uses a 2-hour timeout per model. Full unsteady cascade execution remains a separate engineering validation step.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">GeomPreprocessor</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">GeomPreprocessor</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">RUN_PREPROCESSOR_VALIDATION</span> <span class="o">=</span> <span class="kc">False</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="n">PREPROCESSOR_TIMEOUT_SECONDS</span> <span class="o">=</span> <span class="mi">7200</span>
@@ -7588,11 +7644,11 @@ AEP Frequencies:
 </span><span id="__span-13-33"><a id="__codelineno-13-33" name="__codelineno-13-33" href="#__codelineno-13-33"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Set RUN_PREPROCESSOR_VALIDATION = True to validate the organized delivery.&quot;</span><span class="p">)</span>
 </span><span id="__span-13-34"><a id="__codelineno-13-34" name="__codelineno-13-34" href="#__codelineno-13-34"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Full cascade execution remains optional engineering validation, not the delivery-format gate.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Preprocessor validation skipped in this notebook run.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Preprocessor validation skipped in this notebook run.
 Set RUN_PREPROCESSOR_VALIDATION = True to validate the organized delivery.
 Full cascade execution remains optional engineering validation, not the delivery-format gate.
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Display geometry preprocessor validation summary.</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Display geometry preprocessor validation summary.</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">validation_results</span> <span class="o">=</span> <span class="nb">globals</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;validation_results&quot;</span><span class="p">,</span> <span class="p">{})</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="k">if</span> <span class="n">validation_results</span><span class="p">:</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    <span class="n">validation_summary</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">([</span>
@@ -7612,11 +7668,11 @@ Full cascade execution remains optional engineering validation, not the delivery
 </span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Run the geometry preprocessor validation cell above to populate validation_results.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Run the geometry preprocessor validation cell above to populate validation_results.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Run the geometry preprocessor validation cell above to populate validation_results.
 </code></pre></div>
 <h2 id="optional-check-existing-results">Optional: Check Existing Results<a class="headerlink" href="#optional-check-existing-results" title="Permanent link">&para;</a></h2>
 <p>After organizing the delivery, check for <code>.p##.hdf</code> result files loaded in each RAS project folder and scan their compute messages for obvious errors.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Check whether result HDF files are present in each organized RAS project.</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Check whether result HDF files are present in each organized RAS project.</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfResultsPlan</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.results.ResultsParser</span><span class="w"> </span><span class="kn">import</span> <span class="n">ResultsParser</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>
@@ -7653,7 +7709,7 @@ Full cascade execution remains optional engineering validation, not the delivery
 </span><span id="__span-15-35"><a id="__codelineno-15-35" name="__codelineno-15-35" href="#__codelineno-15-35"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No Plan 01 result HDF files found in the organized RAS project folders.&quot;</span><span class="p">)</span>
 </span><span id="__span-15-36"><a id="__codelineno-15-36" name="__codelineno-15-36" href="#__codelineno-15-36"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Use geometry preprocessor validation to verify assembly; run full plans only when new results are required.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:51:54 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\UpperGuadalupe_12100201\RAS Model\UPGU1\UPGU1.p01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:51:54 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\UpperGuadalupe_12100201\RAS Model\UPGU1\UPGU1.p01.hdf
 
 
 2026-04-26 22:51:54 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\UpperGuadalupe_12100201\RAS Model\UPGU1\UPGU1.p01.hdf
@@ -7714,7 +7770,7 @@ UPGU3:
 </code></pre></div>
 <h2 id="step-10-extract-results-if-hdf-results-exist">Step 10: Extract Results (If HDF Results Exist)<a class="headerlink" href="#step-10-extract-results-if-hdf-results-exist" title="Permanent link">&para;</a></h2>
 <p>Extract water surface elevations from delivered or newly computed result HDF files.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">executed_models</span> <span class="o">=</span> <span class="nb">globals</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;executed_models&quot;</span><span class="p">,</span> <span class="p">[])</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">executed_models</span> <span class="o">=</span> <span class="nb">globals</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;executed_models&quot;</span><span class="p">,</span> <span class="p">[])</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="k">if</span> <span class="n">executed_models</span><span class="p">:</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Plan 01 HDF files available for downstream results analysis:</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>
@@ -7729,7 +7785,7 @@ UPGU3:
 </span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No results to extract from Plan 01 HDF files.&quot;</span><span class="p">)</span>
 </span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;If results are required, run the full HEC-RAS plans outside the delivery-format validation gate.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Plan 01 HDF files available for downstream results analysis:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Plan 01 HDF files available for downstream results analysis:
 
 UPGU1:
   HDF: H:\Testing\eBFE Model Organization\Organized\UpperGuadalupe_12100201\RAS Model\UPGU1\UPGU1.p01.hdf
@@ -7779,7 +7835,7 @@ Detailed 2D result extraction can be done with HdfResultsMesh on a selected plan
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:45 UTC">April 28, 2026</span>
   </span>
 
     
@@ -7789,7 +7845,7 @@ Detailed 2D result extraction can be done with HdfResultsMesh on a selected plan
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:45 UTC">April 28, 2026</span>
   </span>
 
     

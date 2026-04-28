@@ -2075,6 +2075,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3678,6 +3706,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -6456,7 +6512,7 @@
 <h2 id="hierarchical-knowledge-system">Hierarchical Knowledge System<a class="headerlink" href="#hierarchical-knowledge-system" title="Permanent link">&para;</a></h2>
 <h3 id="progressive-disclosure-architecture">Progressive Disclosure Architecture<a class="headerlink" href="#progressive-disclosure-architecture" title="Permanent link">&para;</a></h3>
 <p>The repository uses a shared <strong>hierarchical AGENTS.md structure</strong> with Claude-native loaders:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Root AGENTS.md (Shared Contract)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Root AGENTS.md (Shared Contract)
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├─ Harness loading policy
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├─ Repository-wide working rules
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>└─ Update discipline
@@ -6477,7 +6533,7 @@
 <h3 id="context-inheritance">Context Inheritance<a class="headerlink" href="#context-inheritance" title="Permanent link">&para;</a></h3>
 <p>When a subagent works in a specific directory, it automatically inherits the full context chain:</p>
 <p><strong>Example: Geometry Parser in <code>ras_commander/geom/</code></strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Context Loading:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Context Loading:
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>1. /AGENTS.md (root shared contract)
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>   -&gt; &quot;Use static classes, test with HEC-RAS examples&quot;
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
@@ -6505,7 +6561,7 @@
 <h2 id="specialist-subagents">Specialist Subagents<a class="headerlink" href="#specialist-subagents" title="Permanent link">&para;</a></h2>
 <p>Subagents are AI assistants spawned by the main agent to handle specialized tasks.</p>
 <h3 id="three-tier-architecture">Three-Tier Architecture<a class="headerlink" href="#three-tier-architecture" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Main Agent (Claude Opus)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Main Agent (Claude Opus)
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>├─ High-level planning and delegation
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>├─ Loads: Root AGENTS.md through CLAUDE.md + .claude/rules/**
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>└─ Spawns specialist subagents when needed
@@ -6596,7 +6652,7 @@
 </table>
 <h3 id="subagent-definition-format">Subagent Definition Format<a class="headerlink" href="#subagent-definition-format" title="Permanent link">&para;</a></h3>
 <p>Subagents are defined in <code>.claude/subagents/{name}.md</code> with YAML frontmatter:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nn">---</span>
+<div class="language-yaml highlight"><span class="filename">YAML</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nn">---</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hdf-analyst</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="no">Expert in HEC-RAS HDF file analysis. Extracts results, handles both steady</span>
@@ -6615,7 +6671,7 @@
 </span></code></pre></div>
 <h3 id="delegation-decision-tree">Delegation Decision Tree<a class="headerlink" href="#delegation-decision-tree" title="Permanent link">&para;</a></h3>
 <p>The main agent uses this logic to spawn subagents:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>User Request
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>User Request
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>├─ HDF result extraction? → hdf-analyst (Sonnet)
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>│   └─ Uses: hecras_extract_results skill
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>├─ Geometry file parsing? → geometry-parser (Sonnet)
@@ -6669,7 +6725,7 @@
 9. <strong>dev_manage_git-worktrees</strong> - Isolated development environments</p>
 <h3 id="skill-structure">Skill Structure<a class="headerlink" href="#skill-structure" title="Permanent link">&para;</a></h3>
 <p>Each skill uses progressive disclosure:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>hecras_compute_plans/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>hecras_compute_plans/
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>├── SKILL.md              # Main instructions (&lt; 500 lines)
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>├── reference/            # Detailed docs (loaded on-demand)
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>│   ├── compute_plan.md
@@ -6684,7 +6740,7 @@
 </span></code></pre></div>
 <h3 id="skill-discovery">Skill Discovery<a class="headerlink" href="#skill-discovery" title="Permanent link">&para;</a></h3>
 <p>Skills are discovered through <strong>trigger-rich descriptions</strong> in YAML frontmatter:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nn">---</span>
+<div class="language-yaml highlight"><span class="filename">YAML</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nn">---</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hecras_compute_plans</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="no">Executes HEC-RAS plans using RasCmdr.compute_plan(), handles parallel</span>
@@ -6703,7 +6759,7 @@
 - Moves outdated/unneeded outputs to <code>.old</code>
 - Lists temporary files for user approval
 - Consults organizational plan for recommendations</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Usage in Claude Code</span>
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Usage in Claude Code</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>/agent-cleanfiles
 </span></code></pre></div>
 <h4 id="agent-taskupdate"><code>/agent-taskupdate</code><a class="headerlink" href="#agent-taskupdate" title="Permanent link">&para;</a></h4>
@@ -6711,40 +6767,40 @@
 - Assesses current progress against task list
 - Creates detailed continuation plan
 - Reviews memory system state</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>/agent-taskupdate
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>/agent-taskupdate
 </span></code></pre></div>
 <h4 id="agent-taskclose"><code>/agent-taskclose</code><a class="headerlink" href="#agent-taskclose" title="Permanent link">&para;</a></h4>
 <p>End conversation with proper closeout:
 - Documents all information for future sessions
 - Performs closeout actions
 - Cleans up files before ending</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>/agent-taskclose
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>/agent-taskclose
 </span></code></pre></div>
 <h4 id="agent-engagesubagents"><code>/agent-engagesubagents</code><a class="headerlink" href="#agent-engagesubagents" title="Permanent link">&para;</a></h4>
 <p>Multi-agent coordination workflow:
 - Lists relevant subagents for user approval
 - Creates detailed execution plan
 - Uses <code>agent_tasks/</code> for shared memory</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>/agent-engagesubagents
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>/agent-engagesubagents
 </span></code></pre></div>
 <h4 id="agent-crossrepo"><code>/agent-crossrepo</code><a class="headerlink" href="#agent-crossrepo" title="Permanent link">&para;</a></h4>
 <p>Cross-repository coordination workflow:
 - Creates request files for sibling repositories
 - Guides proper handoff documentation
 - Enforces human-in-the-loop protocol</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>/agent-crossrepo
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>/agent-crossrepo
 </span></code></pre></div>
 <p>See <a href="#cross-repository-coordination">Cross-Repository Coordination</a> for details.</p>
 <h3 id="creating-custom-slash-commands">Creating Custom Slash Commands<a class="headerlink" href="#creating-custom-slash-commands" title="Permanent link">&para;</a></h3>
 <p>Add new commands in <code>.claude/commands/{name}.md</code>:</p>
-<div class="language-markdown highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>Brief description of what this command does and when to use it.
+<div class="language-markdown highlight"><span class="filename">Markdown</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>Brief description of what this command does and when to use it.
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>Can include detailed instructions that expand when invoked.
 </span></code></pre></div>
 <p>Commands are automatically discovered by Claude Code based on the filename.</p>
 <h2 id="memory-system">Memory System<a class="headerlink" href="#memory-system" title="Permanent link">&para;</a></h2>
 <p>For complex tasks spanning multiple sessions, ras-commander uses an <strong><code>agent_tasks/</code> memory system</strong>.</p>
 <h3 id="memory-structure">Memory Structure<a class="headerlink" href="#memory-structure" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>agent_tasks/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>agent_tasks/
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>├── .agent/
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>│   ├── STATE.md       # Current session state
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>│   ├── PROGRESS.md    # Historical progress log
@@ -6786,7 +6842,7 @@
 <h2 id="cross-repository-coordination">Cross-Repository Coordination<a class="headerlink" href="#cross-repository-coordination" title="Permanent link">&para;</a></h2>
 <p>ras-commander can coordinate with sibling repositories (e.g., hms-commander) through a <strong>human-in-the-loop markdown-based protocol</strong>.</p>
 <h3 id="architecture-principle-agent-layer-only">Architecture Principle: Agent-Layer Only<a class="headerlink" href="#architecture-principle-agent-layer-only" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>┌─────────────────────────────────────────────────────────────────┐
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>┌─────────────────────────────────────────────────────────────────┐
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>│                    AGENT COORDINATION LAYER                      │
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>│  ┌──────────────────┐         ┌──────────────────┐              │
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>│  │  ras-commander   │◄───────►│  hms-commander   │              │
@@ -6845,7 +6901,7 @@
 </tbody>
 </table>
 <h3 id="handoff-workflow">Handoff Workflow<a class="headerlink" href="#handoff-workflow" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>1. Agent A (ras-commander) identifies need involving sibling repo
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>1. Agent A (ras-commander) identifies need involving sibling repo
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>                    │
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>                    ▼
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>2. Agent A writes markdown request file
@@ -6875,7 +6931,7 @@
 </span></code></pre></div>
 <h3 id="slash-command">Slash Command<a class="headerlink" href="#slash-command" title="Permanent link">&para;</a></h3>
 <p>Use <code>/agent-crossrepo</code> to initiate cross-repo coordination:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>/agent-crossrepo
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>/agent-crossrepo
 </span></code></pre></div>
 <p>This guides the agent through creating properly formatted request files.</p>
 <h3 id="sibling-repositories">Sibling Repositories<a class="headerlink" href="#sibling-repositories" title="Permanent link">&para;</a></h3>

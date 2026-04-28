@@ -2410,6 +2410,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4013,6 +4041,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -5941,7 +5997,7 @@
 <li><strong>ValidationReport</strong> - Aggregated results from multiple checks</li>
 </ul>
 <h2 id="validation-severity-levels">Validation Severity Levels<a class="headerlink" href="#validation-severity-levels" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.RasValidation</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationSeverity</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.RasValidation</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationSeverity</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># INFO: Informational (doesn&#39;t affect operation)</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">ValidationSeverity</span><span class="o">.</span><span class="n">INFO</span>      <span class="c1"># e.g., &quot;File size: 2.5 GB&quot;</span>
@@ -5956,13 +6012,13 @@
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">ValidationSeverity</span><span class="o">.</span><span class="n">CRITICAL</span>  <span class="c1"># e.g., &quot;File not found&quot;</span>
 </span></code></pre></div>
 <p><strong>Severity comparison</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">if</span> <span class="n">severity</span> <span class="o">&gt;=</span> <span class="n">ValidationSeverity</span><span class="o">.</span><span class="n">WARNING</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">if</span> <span class="n">severity</span> <span class="o">&gt;=</span> <span class="n">ValidationSeverity</span><span class="o">.</span><span class="n">WARNING</span><span class="p">:</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Action required&quot;</span><span class="p">)</span>
 </span></code></pre></div></p>
 <h2 id="dss-boundary-condition-validation">DSS Boundary Condition Validation<a class="headerlink" href="#dss-boundary-condition-validation" title="Permanent link">&para;</a></h2>
 <p>Validate DSS boundary conditions before running HEC-RAS:</p>
 <h3 id="quick-boolean-check">Quick Boolean Check<a class="headerlink" href="#quick-boolean-check" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># Simple pass/fail check</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">is_valid</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">is_valid_pathname</span><span class="p">(</span>
@@ -5976,7 +6032,7 @@
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✗ Boundary condition invalid&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="detailed-validation">Detailed Validation<a class="headerlink" href="#detailed-validation" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Comprehensive validation with diagnostics</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Comprehensive validation with diagnostics</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">report</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">check_pathname</span><span class="p">(</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">dss_file</span><span class="o">=</span><span class="s2">&quot;boundaries.dss&quot;</span><span class="p">,</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">pathname</span><span class="o">=</span><span class="s2">&quot;//BASIN/LOCATION/FLOW/01JAN2020/1HOUR/OBS/&quot;</span>
@@ -5990,7 +6046,7 @@
 </span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="n">report</span><span class="o">.</span><span class="n">print_report</span><span class="p">(</span><span class="n">show_passed</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># Show only failures</span>
 </span></code></pre></div>
 <h3 id="validation-report-properties">Validation Report Properties<a class="headerlink" href="#validation-report-properties" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Access report properties</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Access report properties</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">report</span><span class="o">.</span><span class="n">summary</span><span class="p">)</span>  <span class="c1"># &quot;2 info, 1 warnings, 0 errors, 0 critical&quot;</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Valid: </span><span class="si">{</span><span class="n">report</span><span class="o">.</span><span class="n">is_valid</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># True if no ERROR/CRITICAL</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Has warnings: </span><span class="si">{</span><span class="n">report</span><span class="o">.</span><span class="n">has_warnings</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># True if any WARNING</span>
@@ -6005,7 +6061,7 @@
 </span></code></pre></div>
 <h3 id="individual-validation-checks">Individual Validation Checks<a class="headerlink" href="#individual-validation-checks" title="Permanent link">&para;</a></h3>
 <p>Run specific checks for targeted diagnostics:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Check pathname format only</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Check pathname format only</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">format_result</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">check_pathname_format</span><span class="p">(</span><span class="n">pathname</span><span class="p">)</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">format_result</span><span class="o">.</span><span class="n">passed</span><span class="p">:</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Format error: </span><span class="si">{</span><span class="n">format_result</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -6028,7 +6084,7 @@
 <h2 id="ras-mapper-layer-validation">RAS Mapper Layer Validation<a class="headerlink" href="#ras-mapper-layer-validation" title="Permanent link">&para;</a></h2>
 <p>Validate terrain and land cover layers:</p>
 <h3 id="terrain-layer-validation">Terrain Layer Validation<a class="headerlink" href="#terrain-layer-validation" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasMap</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasMap</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># Quick check</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">is_valid</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">is_valid_layer</span><span class="p">(</span>
@@ -6054,7 +6110,7 @@
 <li>✓ <strong>NoData value</strong> configured properly</li>
 <li>⚠ <strong>Resolution</strong> suitable for model domain</li>
 </ul>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Check specific aspects</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Check specific aspects</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">crs_result</span> <span class="o">=</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">check_layer_crs</span><span class="p">(</span><span class="n">terrain_file</span><span class="p">)</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">crs_result</span><span class="o">.</span><span class="n">passed</span><span class="p">:</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CRS issue: </span><span class="si">{</span><span class="n">crs_result</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -6066,7 +6122,7 @@
 </span></code></pre></div>
 <h2 id="pre-flight-check-pattern">Pre-Flight Check Pattern<a class="headerlink" href="#pre-flight-check-pattern" title="Permanent link">&para;</a></h2>
 <p>Validate all inputs before expensive HEC-RAS computation:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasMap</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
@@ -6124,13 +6180,13 @@ did not cross-link or overwrite projects:</p>
 <li>Any HDF comparisons are like-for-like and coordinate-aligned</li>
 </ul>
 <p>For notebook-based workflows, use:</p>
-<div class="language-bat highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>python scripts\notebooks\read_notebook_source.py examples\<span class="p">&lt;</span>notebook<span class="p">&gt;</span>.ipynb <span class="se">^</span>
+<div class="language-bat highlight"><span class="filename">Batchfile</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>python scripts\notebooks\read_notebook_source.py examples\<span class="p">&lt;</span>notebook<span class="p">&gt;</span>.ipynb <span class="se">^</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="se"> </span> --out working\notebook_runs\manual_run_01\source.md
 </span></code></pre></div>
 <p>Then run a linkage QA/QC review (agent workflow): <code>hecras-notebook-qaqc</code>.</p>
 <h2 id="validation-result-details">Validation Result Details<a class="headerlink" href="#validation-result-details" title="Permanent link">&para;</a></h2>
 <p>Access detailed diagnostic information:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Run validation</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Run validation</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">result</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">check_pathname_format</span><span class="p">(</span><span class="n">pathname</span><span class="p">)</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Access properties</span>
@@ -6146,7 +6202,7 @@ did not cross-link or overwrite projects:</p>
 </span></code></pre></div>
 <h2 id="graceful-degradation">Graceful Degradation<a class="headerlink" href="#graceful-degradation" title="Permanent link">&para;</a></h2>
 <p>Use validation to enable graceful fallback:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Attempt to use high-quality terrain</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Attempt to use high-quality terrain</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">terrain_file</span> <span class="o">=</span> <span class="s2">&quot;C:/Projects/MyModel/Terrain/lidar_1m.tif&quot;</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="k">if</span> <span class="n">RasMap</span><span class="o">.</span><span class="n">is_valid_layer</span><span class="p">(</span><span class="n">terrain_file</span><span class="p">):</span>
@@ -6161,7 +6217,7 @@ did not cross-link or overwrite projects:</p>
 </span></code></pre></div>
 <h2 id="custom-validation">Custom Validation<a class="headerlink" href="#custom-validation" title="Permanent link">&para;</a></h2>
 <p>Build custom validation reports:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.RasValidation</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.RasValidation</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>    <span class="n">ValidationResult</span><span class="p">,</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="n">ValidationReport</span><span class="p">,</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="n">ValidationSeverity</span>
@@ -6227,7 +6283,7 @@ did not cross-link or overwrite projects:</p>
 <p>Two method types for different needs:</p>
 <h3 id="detailed-methods-check_">Detailed Methods (<code>check_*</code>)<a class="headerlink" href="#detailed-methods-check_" title="Permanent link">&para;</a></h3>
 <p>Return <code>ValidationResult</code> or <code>ValidationReport</code> with diagnostics:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Returns ValidationReport with details</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Returns ValidationReport with details</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">report</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">check_pathname</span><span class="p">(</span><span class="n">dss_file</span><span class="p">,</span> <span class="n">pathname</span><span class="p">)</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Access diagnostic information</span>
@@ -6240,7 +6296,7 @@ did not cross-link or overwrite projects:</p>
 <p><strong>Use when</strong>: Need diagnostic information for failures, building UI, generating reports.</p>
 <h3 id="boolean-methods-is_valid_">Boolean Methods (<code>is_valid_*</code>)<a class="headerlink" href="#boolean-methods-is_valid_" title="Permanent link">&para;</a></h3>
 <p>Return simple <code>True</code>/<code>False</code>:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Returns boolean</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Returns boolean</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="k">if</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">is_valid_pathname</span><span class="p">(</span><span class="n">dss_file</span><span class="p">,</span> <span class="n">pathname</span><span class="p">):</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>    <span class="n">proceed</span><span class="p">()</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="k">else</span><span class="p">:</span>

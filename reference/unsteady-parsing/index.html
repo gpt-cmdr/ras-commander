@@ -2075,6 +2075,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3678,6 +3706,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -6111,12 +6167,12 @@
 <li>Rating curves</li>
 </ul>
 <h2 id="file-location">File Location<a class="headerlink" href="#file-location" title="Permanent link">&para;</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>{project_folder}/{project_name}.u{number}
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>{project_folder}/{project_name}.u{number}
 </span></code></pre></div>
 <p>Example: <code>C:\Projects\Muncie\Muncie.u01</code></p>
 <h2 id="file-structure">File Structure<a class="headerlink" href="#file-structure" title="Permanent link">&para;</a></h2>
 <h3 id="header-section">Header Section<a class="headerlink" href="#header-section" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Flow Title=100-Year Storm Event
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Flow Title=100-Year Storm Event
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>Program Version=6.50
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>Use Restart=-1
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>Restart Filename=Muncie.p01.rst
@@ -6154,7 +6210,7 @@
 </table>
 <h3 id="boundary-location-block">Boundary Location Block<a class="headerlink" href="#boundary-location-block" title="Permanent link">&para;</a></h3>
 <p>Each boundary condition starts with a location definition:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Boundary Location=Big Creek,Upper Reach,1000,         ,                ,                ,                ,
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Boundary Location=Big Creek,Upper Reach,1000,         ,                ,                ,                ,
 </span></code></pre></div>
 <p><strong>Format:</strong> 9 comma-separated fields (some may be empty):</p>
 <table>
@@ -6200,19 +6256,19 @@
 </tbody>
 </table>
 <h3 id="interval-specification">Interval Specification<a class="headerlink" href="#interval-specification" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Interval=15MIN
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Interval=15MIN
 </span></code></pre></div>
 <p>Defines the time interval for the following table data. Common values:
 - <code>1MIN</code>, <code>5MIN</code>, <code>15MIN</code>, <code>30MIN</code>, <code>1HOUR</code>, <code>6HOUR</code>, <code>1DAY</code></p>
 <h3 id="dss-references">DSS References<a class="headerlink" href="#dss-references" title="Permanent link">&para;</a></h3>
 <p>External time series can be referenced from DSS files:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>DSS File=..\Hydrology\boundary_data.dss
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>DSS File=..\Hydrology\boundary_data.dss
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>DSS Path=/BIG CREEK/UPPER REACH/FLOW/01JAN2020/15MIN/COMPUTED/
 </span></code></pre></div>
 <h2 id="table-types">Table Types<a class="headerlink" href="#table-types" title="Permanent link">&para;</a></h2>
 <h3 id="flow-hydrograph">Flow Hydrograph<a class="headerlink" href="#flow-hydrograph" title="Permanent link">&para;</a></h3>
 <p>Inflow boundary condition (Q vs time):</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Flow Hydrograph= 48
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Flow Hydrograph= 48
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>     100     150     200     300     450     600     800    1000    1200    1400
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    1600    1800    2000    2200    2400    2600    2800    3000    2800    2600
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    2400    2200    2000    1800    1600    1400    1200    1000     800     600
@@ -6227,7 +6283,7 @@
 </ul>
 <h3 id="stage-hydrograph">Stage Hydrograph<a class="headerlink" href="#stage-hydrograph" title="Permanent link">&para;</a></h3>
 <p>Downstream stage boundary:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Stage Hydrograph= 24
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Stage Hydrograph= 24
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>       0    10.5     0.5    10.8       1    11.2     1.5    11.8       2    12.5
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>     2.5    13.2       3    13.8     3.5    14.2       4    14.0     4.5    13.5
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>       5    13.0     5.5    12.5       6    12.0     6.5    11.5
@@ -6235,40 +6291,40 @@
 <p>Paired values: (time, stage elevation)</p>
 <h3 id="gate-openings">Gate Openings<a class="headerlink" href="#gate-openings" title="Permanent link">&para;</a></h3>
 <p>Gate operation schedule:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Gate Openings= 6
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Gate Openings= 6
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>       0       0     0.5     0.5       1       1       2       1       4     0.5
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>       6       0
 </span></code></pre></div>
 <p>Paired values: (time, gate opening fraction or height)</p>
 <h3 id="lateral-inflow-hydrograph">Lateral Inflow Hydrograph<a class="headerlink" href="#lateral-inflow-hydrograph" title="Permanent link">&para;</a></h3>
 <p>Lateral inflow along a reach:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Lateral Inflow Hydrograph= 20
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Lateral Inflow Hydrograph= 20
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>       0      50     0.5     100       1     200     1.5     350       2     500
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>     2.5     450       3     400     3.5     300       4     200       5     100
 </span></code></pre></div>
 <h3 id="uniform-lateral-inflow">Uniform Lateral Inflow<a class="headerlink" href="#uniform-lateral-inflow" title="Permanent link">&para;</a></h3>
 <p>Constant lateral inflow rate:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>Uniform Lateral Inflow= 2
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>Uniform Lateral Inflow= 2
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>       0    0.05
 </span></code></pre></div>
 <p>Values: (time, inflow rate per unit length)</p>
 <h3 id="precipitation-hydrograph">Precipitation Hydrograph<a class="headerlink" href="#precipitation-hydrograph" title="Permanent link">&para;</a></h3>
 <p>Rainfall for rain-on-grid (when not using gridded meteorology):</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>Precipitation Hydrograph= 12
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>Precipitation Hydrograph= 12
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>       0       0     0.5     0.1       1     0.25     1.5     0.5       2     0.8
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>     2.5       1       3     0.8     3.5     0.5       4     0.2     4.5       0
 </span></code></pre></div>
 <p>Paired values: (time, precipitation rate in in/hr or mm/hr)</p>
 <h3 id="rating-curve">Rating Curve<a class="headerlink" href="#rating-curve" title="Permanent link">&para;</a></h3>
 <p>Stage-discharge relationship for boundaries:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>Rating Curve= 10
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>Rating Curve= 10
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>    10.0     100    11.0     500    12.0    1500    13.0    3000    14.0    5000
 </span></code></pre></div>
 <p>Paired values: (stage, discharge)</p>
 <h2 id="fixed-width-format-details">Fixed-Width Format Details<a class="headerlink" href="#fixed-width-format-details" title="Permanent link">&para;</a></h2>
 <h3 id="8-character-fields">8-Character Fields<a class="headerlink" href="#8-character-fields" title="Permanent link">&para;</a></h3>
 <p>All numeric tables use FORTRAN-style fixed-width formatting:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>Columns:  0-7      8-15     16-23    24-31    32-39    40-47    48-55    56-63    64-71    72-79
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>Columns:  0-7      8-15     16-23    24-31    32-39    40-47    48-55    56-63    64-71    72-79
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>Values:   val1     val2     val3     val4     val5     val6     val7     val8     val9     val10
 </span></code></pre></div>
 <ul>
@@ -6278,7 +6334,7 @@
 <li><strong>Last line</strong>: May have fewer values</li>
 </ul>
 <h3 id="parsing-fixed-width-tables">Parsing Fixed-Width Tables<a class="headerlink" href="#parsing-fixed-width-tables" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">parse_fixed_width_table</span><span class="p">(</span><span class="n">lines</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">num_values</span><span class="p">):</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">parse_fixed_width_table</span><span class="p">(</span><span class="n">lines</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">num_values</span><span class="p">):</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Parse fixed-width table from unsteady file.&quot;&quot;&quot;</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">values</span> <span class="o">=</span> <span class="p">[]</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">line_idx</span> <span class="o">=</span> <span class="n">start</span>
@@ -6305,7 +6361,7 @@
 <p>Fixed-width data must be parsed by column position, not by whitespace splitting. Values may touch without separators when they fill their columns.</p>
 </div>
 <h2 id="complete-example-file">Complete Example File<a class="headerlink" href="#complete-example-file" title="Permanent link">&para;</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>Flow Title=Hurricane Event
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>Flow Title=Hurricane Event
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>Program Version=6.50
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>Use Restart=0
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>Boundary Location=Main River,Upper,5280,         ,                ,                ,                ,
@@ -6381,7 +6437,7 @@
 </tbody>
 </table>
 <h3 id="extracting-boundaries">Extracting Boundaries<a class="headerlink" href="#extracting-boundaries" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasUnsteady</span><span class="p">,</span> <span class="n">RasPlan</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasUnsteady</span><span class="p">,</span> <span class="n">RasPlan</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="c1"># Get path to unsteady file</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="n">unsteady_path</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_unsteady_path</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
@@ -6450,7 +6506,7 @@
 </tbody>
 </table>
 <h3 id="modifying-tables">Modifying Tables<a class="headerlink" href="#modifying-tables" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasUnsteady</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasUnsteady</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Read current tables</span>
@@ -6512,7 +6568,7 @@
 <p>All hydrograph/curve types store <strong>paired values</strong> (time, value), so the actual number of numeric values is <code>count × 2</code>.</p>
 <h2 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h2>
 <h3 id="check-boundary-completeness">Check Boundary Completeness<a class="headerlink" href="#check-boundary-completeness" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">validate_unsteady_file</span><span class="p">(</span><span class="n">unsteady_path</span><span class="p">):</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">validate_unsteady_file</span><span class="p">(</span><span class="n">unsteady_path</span><span class="p">):</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate unsteady file structure.&quot;&quot;&quot;</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="n">boundaries_df</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">extract_boundary_and_tables</span><span class="p">(</span><span class="n">unsteady_path</span><span class="p">)</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>
@@ -6529,7 +6585,7 @@
 </span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a>    <span class="k">return</span> <span class="n">issues</span>
 </span></code></pre></div>
 <h3 id="verify-table-lengths">Verify Table Lengths<a class="headerlink" href="#verify-table-lengths" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">verify_table_counts</span><span class="p">(</span><span class="n">boundaries_df</span><span class="p">):</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">verify_table_counts</span><span class="p">(</span><span class="n">boundaries_df</span><span class="p">):</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Verify table data matches declared counts.&quot;&quot;&quot;</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">boundaries_df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>        <span class="k">for</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">table_df</span> <span class="ow">in</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;Tables&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>

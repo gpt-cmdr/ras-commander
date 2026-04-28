@@ -2084,6 +2084,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4015,6 +4043,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5894,7 +5950,7 @@
 <p><strong>Target Event:</strong>
 - Tropical Storm Lee (September 6-12, 2011) - Major flooding event</p>
 <h2 id="1-setup-and-imports">1. Setup and Imports<a class="headerlink" href="#1-setup-and-imports" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
@@ -5930,7 +5986,7 @@
 </span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
 ✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
 </code></pre></div>
 <h3 id="usgs-data-integration-verification">USGS Data Integration Verification<a class="headerlink" href="#usgs-data-integration-verification" title="Permanent link">&para;</a></h3>
@@ -5952,7 +6008,7 @@
 - <a href="https://help.waterdata.usgs.gov/codes-and-parameters">USGS Data Quality Codes</a></p>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># PARAMETERS - Edit these to customize the notebook</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
@@ -5969,19 +6025,19 @@
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Outputs will be saved to project folder after extraction.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Outputs will be saved to project folder after extraction.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Outputs will be saved to project folder after extraction.
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Install dataretrieval if not available (uncomment to install)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Install dataretrieval if not available (uncomment to install)</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># !pip install dataretrieval</span>
 </span></code></pre></div>
 <h2 id="2-extract-example-projects">2. Extract Example Projects<a class="headerlink" href="#2-extract-example-projects" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">SUFFIX</span> <span class="o">=</span> <span class="s2">&quot;911&quot;</span>  <span class="c1"># Notebook identifier</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">SUFFIX</span> <span class="o">=</span> <span class="s2">&quot;911&quot;</span>  <span class="c1"># Notebook identifier</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># Extract the Bald Eagle Creek example projects</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">bald_eagle_2d_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">([</span><span class="s2">&quot;BaldEagleCrkMulti2D&quot;</span><span class="p">],</span> <span class="n">suffix</span><span class="o">=</span><span class="n">SUFFIX</span><span class="p">)</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;2D Model path: </span><span class="si">{</span><span class="n">bald_eagle_2d_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:54:44 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-29 06:54:44 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
 2025-12-29 06:54:44 - ras_commander.RasExamples - INFO - Loading project data from CSV...
 2025-12-29 06:54:45 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
 2025-12-29 06:54:45 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
@@ -5993,7 +6049,7 @@
 
 2D Model path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Initialize the 1D project</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Initialize the 1D project</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">bald_eagle_2d_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -6001,7 +6057,7 @@
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsteady files: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">unsteady_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:54:46 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.rasmap
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-29 06:54:46 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.rasmap
 
 
 Project: BaldEagleDamBrk
@@ -6009,7 +6065,7 @@ Plans: 11
 Geometries: 10
 Unsteady files: 10
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># View plan information</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># View plan information</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;Plan Title&#39;</span><span class="p">,</span> <span class="s1">&#39;Simulation Date&#39;</span><span class="p">,</span> <span class="s1">&#39;Computation Interval&#39;</span><span class="p">]]</span>
 </span></code></pre></div>
 <div>
@@ -6118,7 +6174,7 @@ Unsteady files: 10
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># View boundary conditions</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># View boundary conditions</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">[[</span><span class="s1">&#39;river_reach_name&#39;</span><span class="p">,</span> <span class="s1">&#39;river_station&#39;</span><span class="p">,</span> <span class="s1">&#39;bc_type&#39;</span><span class="p">,</span> <span class="s1">&#39;Interval&#39;</span><span class="p">]]</span>
 </span></code></pre></div>
 <div>
@@ -6509,7 +6565,7 @@ Unsteady files: 10
 
 <h2 id="3-discover-usgs-gauges-in-project-area">3. Discover USGS Gauges in Project Area<a class="headerlink" href="#3-discover-usgs-gauges-in-project-area" title="Permanent link">&para;</a></h2>
 <p>We'll use the project's geographic bounds to find nearby USGS stream gauges.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Find the geometry HDF file to get project bounds</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Find the geometry HDF file to get project bounds</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">geom_hdf_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">bald_eagle_2d_path</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.g*.hdf&quot;</span><span class="p">))</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found geometry HDF files: </span><span class="si">{</span><span class="n">geom_hdf_files</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
@@ -6517,10 +6573,10 @@ Unsteady files: 10
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">geom_hdf</span> <span class="o">=</span> <span class="n">geom_hdf_files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Using: </span><span class="si">{</span><span class="n">geom_hdf</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Found geometry HDF files: [WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g01.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g02.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g03.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g06.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g08.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g09.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g10.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g11.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g12.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g13.hdf&#39;)]
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Found geometry HDF files: [WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g01.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g02.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g03.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g06.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g08.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g09.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g10.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g11.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g12.hdf&#39;), WindowsPath(&#39;C:/Users/billk_clb/anaconda3/envs/rascmdr_piptest/Lib/site-packages/examples/example_projects/BaldEagleCrkMulti2D_911/BaldEagleDamBrk.g13.hdf&#39;)]
 Using: BaldEagleDamBrk.g01.hdf
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Get project bounds in lat/lon (WGS84)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Get project bounds in lat/lon (WGS84)</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Note: The Bald Eagle Creek example project doesn&#39;t have a CRS defined in the geometry HDF,</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># so we use known approximate bounds for the Lock Haven, PA area.</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
@@ -6547,7 +6603,7 @@ Using: BaldEagleDamBrk.g01.hdf
 </span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  East:  </span><span class="si">{</span><span class="n">east</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  North: </span><span class="si">{</span><span class="n">north</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:54:46 - ras_commander.hdf.HdfProject - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-29 06:54:46 - ras_commander.hdf.HdfProject - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
 2025-12-29 06:54:46 - ras_commander.hdf.HdfProject - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
 2025-12-29 06:54:46 - ras_commander.hdf.HdfProject - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
 2025-12-29 06:54:46 - ras_commander.hdf.HdfProject - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.g01.hdf
@@ -6575,7 +6631,7 @@ Project Bounds (WGS84):
   East:  -77.251087
   North: 41.219666
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Query USGS for stream gauges in the project area</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Query USGS for stream gauges in the project area</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataretrieval</span><span class="w"> </span><span class="kn">import</span> <span class="n">waterdata</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Query monitoring locations in the bounding box</span>
@@ -6586,12 +6642,12 @@ Project Bounds (WGS84):
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
 </span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">gauges_df</span><span class="p">)</span><span class="si">}</span><span class="s2"> USGS stream gauges in the project area&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:54:46 - dataretrieval.waterdata.utils - INFO - Requesting: https://api.waterdata.usgs.gov/ogcapi/v0/collections/monitoring-locations/items?site_type_code=ST&amp;skipGeometry=False&amp;limit=10000&amp;bbox=-77.70845429969587%2C41.010213686900734%2C-77.25108651903035%2C41.219666334258264
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-29 06:54:46 - dataretrieval.waterdata.utils - INFO - Requesting: https://api.waterdata.usgs.gov/ogcapi/v0/collections/monitoring-locations/items?site_type_code=ST&amp;skipGeometry=False&amp;limit=10000&amp;bbox=-77.70845429969587%2C41.010213686900734%2C-77.25108651903035%2C41.219666334258264
 
 
 Found 25 USGS stream gauges in the project area
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Display gauge information</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Display gauge information</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">gauges_df</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="c1"># Select relevant columns</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    <span class="n">display_cols</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;monitoring_location_id&#39;</span><span class="p">,</span> <span class="s1">&#39;monitoring_location_name&#39;</span><span class="p">]</span>
@@ -6607,7 +6663,7 @@ Found 25 USGS stream gauges in the project area
 </span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  USGS-01548005: Bald Eagle Creek near Beech Creek Station, PA&quot;</span><span class="p">)</span>
 </span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  USGS-01548010: Bald Eagle Creek near Mill Hall, PA&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Available USGS Stream Gauges:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Available USGS Stream Gauges:
 </code></pre></div>
 <div>
 <style scoped>
@@ -6793,7 +6849,7 @@ Found 25 USGS stream gauges in the project area
 </tr>
 </tbody>
 </table>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Define the key gauges for our analysis</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Define the key gauges for our analysis</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">target_gauges</span> <span class="o">=</span> <span class="p">{</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    <span class="s1">&#39;upstream&#39;</span><span class="p">:</span> <span class="p">{</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>        <span class="s1">&#39;site_id&#39;</span><span class="p">:</span> <span class="s1">&#39;01547200&#39;</span><span class="p">,</span>
@@ -6819,7 +6875,7 @@ Found 25 USGS stream gauges in the project area
 </span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Use: </span><span class="si">{</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;use&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a>    <span class="nb">print</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>UPSTREAM:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>UPSTREAM:
   Site: USGS-01547200
   Name: Bald Eagle Creek below Spring Creek at Milesburg, PA
   Use: Upstream boundary condition
@@ -6839,7 +6895,7 @@ DOWNSTREAM:
 <p><strong>Note on data availability:</strong> USGS instantaneous (15-min) data may not be available for historic events. 
 In such cases, we'll use daily values for historic analysis, or recent instantaneous data to demonstrate 
 the workflow for operational use.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Define the historic event</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Define the historic event</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">event_name</span> <span class="o">=</span> <span class="s2">&quot;Tropical_Storm_Lee_2011&quot;</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">event_start</span> <span class="o">=</span> <span class="n">datetime</span><span class="p">(</span><span class="mi">2011</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">event_end</span> <span class="o">=</span> <span class="n">datetime</span><span class="p">(</span><span class="mi">2011</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">13</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
@@ -6848,11 +6904,11 @@ the workflow for operational use.</p>
 </span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Period: </span><span class="si">{</span><span class="n">event_start</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">event_end</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Duration: </span><span class="si">{</span><span class="p">(</span><span class="n">event_end</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">event_start</span><span class="p">)</span><span class="o">.</span><span class="n">days</span><span class="si">}</span><span class="s2"> days&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Event: Tropical_Storm_Lee_2011
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Event: Tropical_Storm_Lee_2011
 Period: 2011-09-05 00:00:00 to 2011-09-13 00:00:00
 Duration: 8 days
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Check data availability for the upstream gauge</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Check data availability for the upstream gauge</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">upstream_site</span> <span class="o">=</span> <span class="n">target_gauges</span><span class="p">[</span><span class="s1">&#39;upstream&#39;</span><span class="p">][</span><span class="s1">&#39;site_id&#39;</span><span class="p">]</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Format time range for dataretrieval</span>
@@ -6860,10 +6916,10 @@ Duration: 8 days
 </span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Checking data availability for USGS-</span><span class="si">{</span><span class="n">upstream_site</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Time range: </span><span class="si">{</span><span class="n">time_range</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Checking data availability for USGS-01547200
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Checking data availability for USGS-01547200
 Time range: 2011-09-05/2011-09-13
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Retrieve instantaneous flow data from upstream gauge</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Retrieve instantaneous flow data from upstream gauge</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataretrieval</span><span class="w"> </span><span class="kn">import</span> <span class="n">nwis</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">upstream_flow_df</span><span class="p">,</span> <span class="n">upstream_metadata</span> <span class="o">=</span> <span class="n">nwis</span><span class="o">.</span><span class="n">get_iv</span><span class="p">(</span>
@@ -6897,12 +6953,12 @@ Time range: 2011-09-05/2011-09-13
 </span><span id="__span-14-32"><a id="__codelineno-14-32" name="__codelineno-14-32" href="#__codelineno-14-32"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Peak flow: </span><span class="si">{</span><span class="n">upstream_flow_df</span><span class="p">[</span><span class="n">flow_col</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> cfs&quot;</span><span class="p">)</span>
 </span><span id="__span-14-33"><a id="__codelineno-14-33" name="__codelineno-14-33" href="#__codelineno-14-33"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Min flow: </span><span class="si">{</span><span class="n">upstream_flow_df</span><span class="p">[</span><span class="n">flow_col</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> cfs&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Retrieved 864 instantaneous observations from upstream gauge
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Retrieved 864 instantaneous observations from upstream gauge
 Time range: 2011-09-05 04:00:00+00:00 to 2011-09-14 03:45:00+00:00
 Peak flow: 8570 cfs
 Min flow: 378 cfs
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># View the data structure</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># View the data structure</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">upstream_flow_df</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
 </span></code></pre></div>
 <div>
@@ -6999,7 +7055,7 @@ Min flow: 378 cfs
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Extract the flow values into a clean DataFrame</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Extract the flow values into a clean DataFrame</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">flow_col</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">upstream_flow_df</span><span class="o">.</span><span class="n">columns</span> <span class="k">if</span> <span class="s1">&#39;00060&#39;</span> <span class="ow">in</span> <span class="n">c</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Create standardized DataFrame</span>
@@ -7014,7 +7070,7 @@ Min flow: 378 cfs
 </span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Clean flow data: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">upstream_flow</span><span class="p">)</span><span class="si">}</span><span class="s2"> records&quot;</span><span class="p">)</span>
 </span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="n">upstream_flow</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Clean flow data: 864 records
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Clean flow data: 864 records
 </code></pre></div>
 <div>
 <style scoped>
@@ -7068,7 +7124,7 @@ Min flow: 378 cfs
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Plot the upstream flow hydrograph</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Plot the upstream flow hydrograph</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">upstream_flow</span><span class="p">[</span><span class="s1">&#39;datetime&#39;</span><span class="p">],</span> <span class="n">upstream_flow</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">],</span> <span class="s1">&#39;b-&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
@@ -7097,7 +7153,7 @@ Min flow: 378 cfs
 </span><span id="__span-17-27"><a id="__codelineno-17-27" name="__codelineno-17-27" href="#__codelineno-17-27"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
 <p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_25_0.png" /></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Now retrieve data from the downstream gauge for validation</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Now retrieve data from the downstream gauge for validation</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">downstream_site</span> <span class="o">=</span> <span class="n">target_gauges</span><span class="p">[</span><span class="s1">&#39;downstream&#39;</span><span class="p">][</span><span class="s1">&#39;site_id&#39;</span><span class="p">]</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Try instantaneous first, fall back to daily</span>
@@ -7137,11 +7193,11 @@ Min flow: 378 cfs
 </span><span id="__span-18-38"><a id="__codelineno-18-38" name="__codelineno-18-38" href="#__codelineno-18-38"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No downstream flow data available for this period&quot;</span><span class="p">)</span>
 </span><span id="__span-18-39"><a id="__codelineno-18-39" name="__codelineno-18-39" href="#__codelineno-18-39"></a>    <span class="n">downstream_flow</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span> <span class="s1">&#39;value&#39;</span><span class="p">])</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>No instantaneous data for downstream gauge. Trying daily values...
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>No instantaneous data for downstream gauge. Trying daily values...
 Retrieved 0 daily observations from downstream gauge
 No downstream flow data available for this period
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Plot both gauges for comparison (if data available)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Plot both gauges for comparison (if data available)</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">upstream_flow</span><span class="o">.</span><span class="n">empty</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">downstream_flow</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>    <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
 </span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>
@@ -7180,7 +7236,7 @@ No downstream flow data available for this period
 <p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_27_0.png" /></p>
 <h2 id="5-retrieve-stage-data">5. Retrieve Stage Data<a class="headerlink" href="#5-retrieve-stage-data" title="Permanent link">&para;</a></h2>
 <p>Stage (gage height) data is useful for setting initial water surface elevations.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Retrieve stage data from upstream gauge</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Retrieve stage data from upstream gauge</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># Try instantaneous first, fall back to daily</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="n">upstream_stage_df</span><span class="p">,</span> <span class="n">stage_metadata</span> <span class="o">=</span> <span class="n">nwis</span><span class="o">.</span><span class="n">get_iv</span><span class="p">(</span>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    <span class="n">sites</span><span class="o">=</span><span class="n">upstream_site</span><span class="p">,</span>
@@ -7218,11 +7274,11 @@ No downstream flow data available for this period
 </span><span id="__span-20-36"><a id="__codelineno-20-36" name="__codelineno-20-36" href="#__codelineno-20-36"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No stage data available&quot;</span><span class="p">)</span>
 </span><span id="__span-20-37"><a id="__codelineno-20-37" name="__codelineno-20-37" href="#__codelineno-20-37"></a>    <span class="n">upstream_stage</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span> <span class="s1">&#39;value&#39;</span><span class="p">])</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Retrieved 864 instantaneous stage observations
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Retrieved 864 instantaneous stage observations
 Clean stage data: 864 records
 Stage range: 0.48 to 8.07 ft
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Plot flow and stage together (if both available)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Plot flow and stage together (if both available)</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">upstream_flow</span><span class="o">.</span><span class="n">empty</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">upstream_stage</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>    <span class="n">fig</span><span class="p">,</span> <span class="p">(</span><span class="n">ax1</span><span class="p">,</span> <span class="n">ax2</span><span class="p">)</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">sharex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>
@@ -7262,14 +7318,14 @@ Stage range: 0.48 to 8.07 ft
 <p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_30_0.png" /></p>
 <h2 id="6-initial-conditions-from-usgs-data">6. Initial Conditions from USGS Data<a class="headerlink" href="#6-initial-conditions-from-usgs-data" title="Permanent link">&para;</a></h2>
 <p>Now we'll use the USGS gauge data to set initial conditions for a HEC-RAS simulation.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Define simulation start time (when we want initial conditions)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Define simulation start time (when we want initial conditions)</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">simulation_start</span> <span class="o">=</span> <span class="n">datetime</span><span class="p">(</span><span class="mi">2011</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># Start at midnight on Sept 6</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Simulation start time: </span><span class="si">{</span><span class="n">simulation_start</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Simulation start time: 2011-09-06 00:00:00
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Simulation start time: 2011-09-06 00:00:00
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Find the flow value closest to simulation start</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Find the flow value closest to simulation start</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">upstream_flow</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>    <span class="c1"># Convert simulation_start to timezone-aware if needed</span>
 </span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>    <span class="n">upstream_flow</span><span class="p">[</span><span class="s1">&#39;datetime&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_datetime</span><span class="p">(</span><span class="n">upstream_flow</span><span class="p">[</span><span class="s1">&#39;datetime&#39;</span><span class="p">])</span>
@@ -7293,13 +7349,13 @@ Stage range: 0.48 to 8.07 ft
 </span><span id="__span-23-22"><a id="__codelineno-23-22" name="__codelineno-23-22" href="#__codelineno-23-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No flow data available to determine initial conditions&quot;</span><span class="p">)</span>
 </span><span id="__span-23-23"><a id="__codelineno-23-23" name="__codelineno-23-23" href="#__codelineno-23-23"></a>    <span class="n">initial_flow</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Initial condition for upstream gauge:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Initial condition for upstream gauge:
   Target time: 2011-09-06 00:00:00
   Nearest observation: 2011-09-06 00:00:00+00:00
   Time offset: 0 days 00:00:00
   Initial flow: 870 cfs
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Also get initial stage</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Also get initial stage</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">upstream_stage</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
 </span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>    <span class="n">upstream_stage</span><span class="p">[</span><span class="s1">&#39;datetime&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_datetime</span><span class="p">(</span><span class="n">upstream_stage</span><span class="p">[</span><span class="s1">&#39;datetime&#39;</span><span class="p">])</span>
 </span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>
@@ -7314,24 +7370,24 @@ Stage range: 0.48 to 8.07 ft
 </span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No stage data available for initial conditions&quot;</span><span class="p">)</span>
 </span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a>    <span class="n">initial_stage</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Initial stage: 1.54 ft at 2011-09-06 00:00:00+00:00
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Initial stage: 1.54 ft at 2011-09-06 00:00:00+00:00
 </code></pre></div>
 <h3 id="61-parse-existing-initial-conditions">6.1 Parse Existing Initial Conditions<a class="headerlink" href="#61-parse-existing-initial-conditions" title="Permanent link">&para;</a></h3>
 <p>Let's look at the existing initial conditions in the model's unsteady flow file.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Switch to the Multi2D project which has more IC examples</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Switch to the Multi2D project which has more IC examples</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="n">multi_2d_project</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
 </span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">bald_eagle_2d_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">multi_2d_project</span><span class="p">)</span>
 </span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>
 </span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project: </span><span class="si">{</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsteady files: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">unsteady_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:54:49 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.rasmap
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-29 06:54:49 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.rasmap
 
 
 Project: BaldEagleDamBrk
 Unsteady files: 10
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># List available unsteady files</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># List available unsteady files</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="n">multi_2d_project</span><span class="o">.</span><span class="n">unsteady_df</span><span class="p">[[</span><span class="s1">&#39;unsteady_number&#39;</span><span class="p">,</span> <span class="s1">&#39;Flow Title&#39;</span><span class="p">]]</span>
 </span></code></pre></div>
 <div>
@@ -7411,7 +7467,7 @@ Unsteady files: 10
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Parse initial conditions from an unsteady file</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Parse initial conditions from an unsteady file</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.usgs</span><span class="w"> </span><span class="kn">import</span> <span class="n">InitialConditions</span>
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>
 </span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># Find an unsteady file to parse (u07 has IC examples based on the plan doc)</span>
@@ -7429,7 +7485,7 @@ Unsteady files: 10
 </span><span id="__span-27-16"><a id="__codelineno-27-16" name="__codelineno-27-16" href="#__codelineno-27-16"></a>        <span class="k">if</span> <span class="n">uf</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;.u&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">uf</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.hdf&#39;</span><span class="p">):</span>
 </span><span id="__span-27-17"><a id="__codelineno-27-17" name="__codelineno-27-17" href="#__codelineno-27-17"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">uf</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:54:49 - ras_commander.usgs.initial_conditions - INFO - Parsed 7 initial condition entries from BaldEagleDamBrk.u07
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-29 06:54:49 - ras_commander.usgs.initial_conditions - INFO - Parsed 7 initial condition entries from BaldEagleDamBrk.u07
 
 
 Found 7 initial conditions in BaldEagleDamBrk.u07
@@ -7528,7 +7584,7 @@ Found 7 initial conditions in BaldEagleDamBrk.u07
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Try parsing from u01 which is more common</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Try parsing from u01 which is more common</span>
 </span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="n">unsteady_file_u01</span> <span class="o">=</span> <span class="n">bald_eagle_2d_path</span> <span class="o">/</span> <span class="s2">&quot;BaldEagleDamBrk.u01&quot;</span>
 </span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>
 </span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="k">if</span> <span class="n">unsteady_file_u01</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
@@ -7539,7 +7595,7 @@ Found 7 initial conditions in BaldEagleDamBrk.u07
 </span><span id="__span-28-9"><a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a>    <span class="k">else</span><span class="p">:</span>
 </span><span id="__span-28-10"><a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No initial conditions defined in this file.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:54:49 - ras_commander.usgs.initial_conditions - INFO - Parsed 1 initial condition entries from BaldEagleDamBrk.u01
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-29 06:54:49 - ras_commander.usgs.initial_conditions - INFO - Parsed 1 initial condition entries from BaldEagleDamBrk.u01
 
 
 Found 1 initial conditions in BaldEagleDamBrk.u01
@@ -7586,7 +7642,7 @@ Found 1 initial conditions in BaldEagleDamBrk.u01
 
 <h3 id="62-create-initial-condition-lines-from-usgs-data">6.2 Create Initial Condition Lines from USGS Data<a class="headerlink" href="#62-create-initial-condition-lines-from-usgs-data" title="Permanent link">&para;</a></h3>
 <p>Now we'll create IC lines using the USGS data we retrieved.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Define the gauge-to-model mapping for this project</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Define the gauge-to-model mapping for this project</span>
 </span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="c1"># Based on example_notebook_plan.md</span>
 </span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="k">if</span> <span class="n">initial_flow</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>    <span class="n">gauge_model_mapping</span> <span class="o">=</span> <span class="p">[</span>
@@ -7610,12 +7666,12 @@ Found 1 initial conditions in BaldEagleDamBrk.u01
 </span><span id="__span-29-22"><a id="__codelineno-29-22" name="__codelineno-29-22" href="#__codelineno-29-22"></a>    <span class="n">gauge_model_mapping</span> <span class="o">=</span> <span class="p">[]</span>
 </span><span id="__span-29-23"><a id="__codelineno-29-23" name="__codelineno-29-23" href="#__codelineno-29-23"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Cannot create gauge mapping - no initial flow data available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Gauge-to-Model Mapping:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Gauge-to-Model Mapping:
   USGS-01547200 (Milesburg)
     -&gt; Bald Eagle Cr./Lock Haven/Station 137520
     Flow: 870 cfs
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># Create IC line using the InitialConditions class</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># Create IC line using the InitialConditions class</span>
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="k">if</span> <span class="n">gauge_model_mapping</span><span class="p">:</span>
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>    <span class="k">for</span> <span class="n">mapping</span> <span class="ow">in</span> <span class="n">gauge_model_mapping</span><span class="p">:</span>
 </span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>        <span class="n">ic_line</span> <span class="o">=</span> <span class="n">InitialConditions</span><span class="o">.</span><span class="n">create_ic_line</span><span class="p">(</span>
@@ -7630,12 +7686,12 @@ Found 1 initial conditions in BaldEagleDamBrk.u01
 </span><span id="__span-30-13"><a id="__codelineno-30-13" name="__codelineno-30-13" href="#__codelineno-30-13"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-30-14"><a id="__codelineno-30-14" name="__codelineno-30-14" href="#__codelineno-30-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No gauge mapping available to create IC lines&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Generated IC line:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Generated IC line:
   Initial Flow Loc=Bald Eagle Cr.   ,Lock Haven       ,137520  ,870.0
 </code></pre></div>
 <h2 id="7-summary-and-data-cache">7. Summary and Data Cache<a class="headerlink" href="#7-summary-and-data-cache" title="Permanent link">&para;</a></h2>
 <p>Let's summarize what we've retrieved and cache the data for future use.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Create gauge_data directory</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Create gauge_data directory</span>
 </span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="n">gauge_data_dir</span> <span class="o">=</span> <span class="n">bald_eagle_2d_path</span> <span class="o">/</span> <span class="s1">&#39;gauge_data&#39;</span>
 </span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="n">gauge_data_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>
@@ -7644,9 +7700,9 @@ Found 1 initial conditions in BaldEagleDamBrk.u01
 </span><span id="__span-31-7"><a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a>
 </span><span id="__span-31-8"><a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Gauge data directory: </span><span class="si">{</span><span class="n">gauge_data_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Gauge data directory: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Gauge data directory: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="c1"># Save the retrieved data (if available)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="c1"># Save the retrieved data (if available)</span>
 </span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="n">start_str</span> <span class="o">=</span> <span class="n">event_start</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y%m</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">)</span>
 </span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="n">end_str</span> <span class="o">=</span> <span class="n">event_end</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y%m</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">)</span>
 </span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a>
@@ -7676,10 +7732,10 @@ Found 1 initial conditions in BaldEagleDamBrk.u01
 </span><span id="__span-32-28"><a id="__codelineno-32-28" name="__codelineno-32-28" href="#__codelineno-32-28"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">saved_files</span><span class="p">:</span>
 </span><span id="__span-32-29"><a id="__codelineno-32-29" name="__codelineno-32-29" href="#__codelineno-32-29"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No data files were saved&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Saved: USGS-01547200_20110905_20110913_flow.csv
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Saved: USGS-01547200_20110905_20110913_flow.csv
 Saved: USGS-01547200_20110905_20110913_stage.csv
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># Summary</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># Summary</span>
 </span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">70</span><span class="p">)</span>
 </span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;USGS GAUGE DATA INTEGRATION - SUMMARY&quot;</span><span class="p">)</span>
 </span><span id="__span-33-4"><a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">70</span><span class="p">)</span>
@@ -7711,7 +7767,7 @@ Saved: USGS-01547200_20110905_20110913_stage.csv
 </span><span id="__span-33-30"><a id="__codelineno-33-30" name="__codelineno-33-30" href="#__codelineno-33-30"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Data saved to: </span><span class="si">{</span><span class="n">gauge_data_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-33-31"><a id="__codelineno-33-31" name="__codelineno-33-31" href="#__codelineno-33-31"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">70</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>======================================================================
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>======================================================================
 USGS GAUGE DATA INTEGRATION - SUMMARY
 ======================================================================
 
@@ -7735,14 +7791,14 @@ Data saved to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packag
 </code></pre></div>
 <h2 id="8-view-plan-simulation-dates">8. View Plan Simulation Dates<a class="headerlink" href="#8-view-plan-simulation-dates" title="Permanent link">&para;</a></h2>
 <p>Let's check the existing plan simulation dates to understand how to align USGS data with the simulation window.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="c1"># Switch back to 1D project</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="c1"># Switch back to 1D project</span>
 </span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">bald_eagle_2d_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
 </span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>
 </span><span id="__span-34-4"><a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="c1"># View plan simulation dates</span>
 </span><span id="__span-34-5"><a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Plan Simulation Dates:&quot;</span><span class="p">)</span>
 </span><span id="__span-34-6"><a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;Plan Title&#39;</span><span class="p">,</span> <span class="s1">&#39;Simulation Date&#39;</span><span class="p">,</span> <span class="s1">&#39;Computation Interval&#39;</span><span class="p">]]</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:55:18 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.rasmap
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-29 06:55:18 - ras_commander.rasmap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\BaldEagleDamBrk.rasmap
 
 
 Plan Simulation Dates:
@@ -7853,20 +7909,20 @@ Plan Simulation Dates:
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Parse the simulation date from the existing plan</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Parse the simulation date from the existing plan</span>
 </span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="n">sim_date_str</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;Simulation Date&#39;</span><span class="p">]</span>
 </span><span id="__span-35-3"><a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Current simulation date string: </span><span class="si">{</span><span class="n">sim_date_str</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-35-4"><a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a>
 </span><span id="__span-35-5"><a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a><span class="c1"># HEC-RAS format: DDMONYYYY,HHMM,DDMONYYYY,HHMM</span>
 </span><span id="__span-35-6"><a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a><span class="c1"># Example: 18FEB1999,0000,24FEB1999,0500</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Current simulation date string: 01JAN1999,1200,04JAN1999,1200
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Current simulation date string: 01JAN1999,1200,04JAN1999,1200
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="c1"># Check boundary condition intervals</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="c1"># Check boundary condition intervals</span>
 </span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Boundary Condition Intervals:&quot;</span><span class="p">)</span>
 </span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">[[</span><span class="s1">&#39;river_reach_name&#39;</span><span class="p">,</span> <span class="s1">&#39;bc_type&#39;</span><span class="p">,</span> <span class="s1">&#39;Interval&#39;</span><span class="p">]]</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Boundary Condition Intervals:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Boundary Condition Intervals:
 </code></pre></div>
 <div>
 <style scoped>
@@ -8202,7 +8258,7 @@ Plan Simulation Dates:
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="c1"># Calculate how many values we need for our event period at different intervals</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="c1"># Calculate how many values we need for our event period at different intervals</span>
 </span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="n">event_duration</span> <span class="o">=</span> <span class="n">event_end</span> <span class="o">-</span> <span class="n">event_start</span>
 </span><span id="__span-37-3"><a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="n">duration_hours</span> <span class="o">=</span> <span class="n">event_duration</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">()</span> <span class="o">/</span> <span class="mi">3600</span>
 </span><span id="__span-37-4"><a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a>
@@ -8220,7 +8276,7 @@ Plan Simulation Dates:
 </span><span id="__span-37-16"><a id="__codelineno-37-16" name="__codelineno-37-16" href="#__codelineno-37-16"></a>    <span class="n">num_values</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">duration_hours</span> <span class="o">/</span> <span class="n">hours</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
 </span><span id="__span-37-17"><a id="__codelineno-37-17" name="__codelineno-37-17" href="#__codelineno-37-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">interval</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">num_values</span><span class="si">}</span><span class="s2"> values&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Event duration: 192 hours (8 days)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Event duration: 192 hours (8 days)
 
 Values needed for each interval:
   15MIN: 769 values
@@ -8229,14 +8285,14 @@ Values needed for each interval:
   2HOUR: 97 values
   6HOUR: 33 values
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="c1"># Check USGS data interval</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="c1"># Check USGS data interval</span>
 </span><span id="__span-38-2"><a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="n">time_diffs</span> <span class="o">=</span> <span class="n">upstream_flow</span><span class="p">[</span><span class="s1">&#39;datetime&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">diff</span><span class="p">()</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span>
 </span><span id="__span-38-3"><a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="n">median_interval</span> <span class="o">=</span> <span class="n">time_diffs</span><span class="o">.</span><span class="n">median</span><span class="p">()</span>
 </span><span id="__span-38-4"><a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;USGS data median interval: </span><span class="si">{</span><span class="n">median_interval</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-38-5"><a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">We have </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">upstream_flow</span><span class="p">)</span><span class="si">}</span><span class="s2"> observations over </span><span class="si">{</span><span class="n">duration_hours</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> hours&quot;</span><span class="p">)</span>
 </span><span id="__span-38-6"><a id="__codelineno-38-6" name="__codelineno-38-6" href="#__codelineno-38-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;This is approximately </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">upstream_flow</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">duration_hours</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> observations per hour&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>USGS data median interval: 0 days 00:15:00
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>USGS data median interval: 0 days 00:15:00
 
 We have 864 observations over 192 hours
 This is approximately 4.5 observations per hour
@@ -8259,7 +8315,7 @@ This is approximately 4.5 observations per hour
 <li><strong>Stage-Discharge Rating Curve</strong>: Rating curve analysis with power law fit</li>
 <li><strong>Summary Statistics Dashboard</strong>: Single-page comprehensive data summary for reports</li>
 </ul>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="c1"># PROFESSIONAL QAQC VISUALIZATION SETUP</span>
 </span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-39-4"><a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a>
@@ -8332,7 +8388,7 @@ This is approximately 4.5 observations per hour
 </span><span id="__span-39-71"><a id="__codelineno-39-71" name="__codelineno-39-71" href="#__codelineno-39-71"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - Color palette: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">COLORS</span><span class="p">)</span><span class="si">}</span><span class="s2"> colors defined&quot;</span><span class="p">)</span>
 </span><span id="__span-39-72"><a id="__codelineno-39-72" name="__codelineno-39-72" href="#__codelineno-39-72"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - Output directory: </span><span class="si">{</span><span class="n">plots_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>QAQC Visualization configuration loaded
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>QAQC Visualization configuration loaded
   - Figure DPI: 150.0
   - Color palette: 10 colors defined
   - Output directory: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data\plots
@@ -8343,7 +8399,7 @@ This is approximately 4.5 observations per hour
 - Data completeness by parameter
 - Distribution of observation intervals
 - Data presence timeline</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="c1"># FIGURE A1: DATA QUALITY DASHBOARD (4-PANEL)</span>
 </span><span id="__span-40-3"><a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-40-4"><a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a>
@@ -8487,7 +8543,7 @@ This is approximately 4.5 observations per hour
 </span><span id="__span-40-142"><a id="__codelineno-40-142" name="__codelineno-40-142" href="#__codelineno-40-142"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Saved: </span><span class="si">{</span><span class="n">plots_dir</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">event_name</span><span class="si">}</span><span class="s1">_data_quality_dashboard.png&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-40-143"><a id="__codelineno-40-143" name="__codelineno-40-143" href="#__codelineno-40-143"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>C:\Users\billk_clb\AppData\Local\Temp\ipykernel_298804\2916896244.py:109: FutureWarning: &#39;H&#39; is deprecated and will be removed in a future version, please use &#39;h&#39; instead.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>C:\Users\billk_clb\AppData\Local\Temp\ipykernel_298804\2916896244.py:109: FutureWarning: &#39;H&#39; is deprecated and will be removed in a future version, please use &#39;h&#39; instead.
   date_range = pd.date_range(upstream_flow[&#39;datetime&#39;].min(),
 
 
@@ -8496,7 +8552,7 @@ Saved: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examp
 <p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_57_2.png" /></p>
 <h3 id="92-publication-quality-event-hydrograph">9.2 Publication-Quality Event Hydrograph<a class="headerlink" href="#92-publication-quality-event-hydrograph" title="Permanent link">&para;</a></h3>
 <p>Professional hydrograph with dual axes (flow and stage), peak annotations, initial condition marker, and comprehensive event statistics.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-41-2"><a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a><span class="c1"># FIGURE B1: PUBLICATION-QUALITY EVENT HYDROGRAPH</span>
 </span><span id="__span-41-3"><a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-41-4"><a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a>
@@ -8622,12 +8678,12 @@ Saved: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examp
 </span><span id="__span-41-124"><a id="__codelineno-41-124" name="__codelineno-41-124" href="#__codelineno-41-124"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Saved: </span><span class="si">{</span><span class="n">plots_dir</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">event_name</span><span class="si">}</span><span class="s1">_hydrograph.png&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-41-125"><a id="__codelineno-41-125" name="__codelineno-41-125" href="#__codelineno-41-125"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Saved: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data\plots\Tropical_Storm_Lee_2011_hydrograph.png
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Saved: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data\plots\Tropical_Storm_Lee_2011_hydrograph.png
 </code></pre></div>
 <p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_59_1.png" /></p>
 <h3 id="93-stage-discharge-rating-curve">9.3 Stage-Discharge Rating Curve<a class="headerlink" href="#93-stage-discharge-rating-curve" title="Permanent link">&para;</a></h3>
 <p>Rating curve analysis showing the stage-discharge relationship with power law fit and time-colored scatter points to identify hysteresis effects.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="c1"># FIGURE D1: STAGE-DISCHARGE RATING CURVE</span>
 </span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-42-4"><a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a>
@@ -8725,12 +8781,12 @@ Saved: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examp
 </span><span id="__span-42-96"><a id="__codelineno-42-96" name="__codelineno-42-96" href="#__codelineno-42-96"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-42-97"><a id="__codelineno-42-97" name="__codelineno-42-97" href="#__codelineno-42-97"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Stage data not available for rating curve analysis&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Saved: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data\plots\Tropical_Storm_Lee_2011_rating_curve.png
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Saved: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_911\gauge_data\plots\Tropical_Storm_Lee_2011_rating_curve.png
 </code></pre></div>
 <p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_61_1.png" /></p>
 <h3 id="94-summary-statistics-dashboard">9.4 Summary Statistics Dashboard<a class="headerlink" href="#94-summary-statistics-dashboard" title="Permanent link">&para;</a></h3>
 <p>Comprehensive single-page summary suitable for engineering reports, including statistics tables, mini hydrograph, distribution plots, and data quality metrics.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="c1"># FIGURE E1: COMPREHENSIVE SUMMARY STATISTICS DASHBOARD</span>
 </span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-43-4"><a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a>
@@ -8913,7 +8969,7 @@ Saved: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examp
 </span><span id="__span-43-181"><a id="__codelineno-43-181" name="__codelineno-43-181" href="#__codelineno-43-181"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Saved: </span><span class="si">{</span><span class="n">plots_dir</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">event_name</span><span class="si">}</span><span class="s1">_summary_dashboard.png&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-43-182"><a id="__codelineno-43-182" name="__codelineno-43-182" href="#__codelineno-43-182"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>C:\Users\billk_clb\AppData\Local\Temp\ipykernel_298804\1197353514.py:120: MatplotlibDeprecationWarning: The &#39;labels&#39; parameter of boxplot() has been renamed &#39;tick_labels&#39; since Matplotlib 3.9; support for the old name will be dropped in 3.11.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>C:\Users\billk_clb\AppData\Local\Temp\ipykernel_298804\1197353514.py:120: MatplotlibDeprecationWarning: The &#39;labels&#39; parameter of boxplot() has been renamed &#39;tick_labels&#39; since Matplotlib 3.9; support for the old name will be dropped in 3.11.
   bp = ax_box.boxplot(box_data, labels=labels, patch_artist=True)
 
 
@@ -8921,7 +8977,7 @@ Saved: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examp
 </code></pre></div>
 <p><img alt="png" src="../911_usgs_gauge_data_integration_files/911_usgs_gauge_data_integration_63_2.png" /></p>
 <h3 id="95-qaqc-visualization-summary">9.5 QAQC Visualization Summary<a class="headerlink" href="#95-qaqc-visualization-summary" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="c1"># QAQC VISUALIZATION SUMMARY</span>
 </span><span id="__span-44-3"><a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-44-4"><a id="__codelineno-44-4" name="__codelineno-44-4" href="#__codelineno-44-4"></a>
@@ -8948,7 +9004,7 @@ Saved: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examp
 </span><span id="__span-44-25"><a id="__codelineno-44-25" name="__codelineno-44-25" href="#__codelineno-44-25"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;QAQC Visualization Complete - Figures ready for engineering reports&quot;</span><span class="p">)</span>
 </span><span id="__span-44-26"><a id="__codelineno-44-26" name="__codelineno-44-26" href="#__codelineno-44-26"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">70</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>======================================================================
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>======================================================================
 USGS GAUGE DATA QAQC VISUALIZATION - SUMMARY
 ======================================================================
 
@@ -8996,7 +9052,7 @@ QAQC Visualization Complete - Figures ready for engineering reports
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
@@ -9006,7 +9062,7 @@ QAQC Visualization Complete - Figures ready for engineering reports
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     

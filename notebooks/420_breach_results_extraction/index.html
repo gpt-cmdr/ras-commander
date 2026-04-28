@@ -2084,6 +2084,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3843,6 +3871,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5545,7 +5601,7 @@
 - <strong>Downstream Propagation</strong>: Flood wave routing downstream
 - <strong>Reservoir Drawdown</strong>: Water surface in reservoir during breach</p>
 <h3 id="hdf5-structure-for-breach-results">HDF5 Structure for Breach Results<a class="headerlink" href="#hdf5-structure-for-breach-results" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>/Results/Unsteady/Output/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>/Results/Unsteady/Output/
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── Output Blocks/
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│   └── Base Output/
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│       └── Unsteady Time Series/
@@ -5572,7 +5628,7 @@
 - <strong>Earthquake</strong>: Instantaneous breach
 - <strong>Programmed</strong>: User-defined breach progression</p>
 <p><strong>Flow Equations</strong>:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Qweir = Cw * Ltop * H^1.5           (Weir flow - unsubmerged)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Qweir = Cw * Ltop * H^1.5           (Weir flow - unsubmerged)
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>Qorifice = Co * Abottom * sqrt(H)   (Orifice flow - submerged)
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>Qtotal = Qweir + Qorifice            (Combined)
 </span></code></pre></div></p>
@@ -5594,7 +5650,7 @@
 - <strong>Emergency Action Plans (EAP)</strong>: Inundation mapping for evacuation planning
 - <strong>Dam Safety Inspections</strong>: Assess consequences of failure
 - <strong>FEMA Flood Maps</strong>: Breach scenarios for floodplain mapping</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
@@ -5622,12 +5678,12 @@
 </span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
 ✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># PARAMETERS - Edit these to customize the notebook</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
@@ -5643,7 +5699,7 @@
 </span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
 </span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Configuration: </span><span class="si">{</span><span class="n">PROJECT_NAME</span><span class="si">}</span><span class="s2"> project, Plan </span><span class="si">{</span><span class="n">PLAN</span><span class="si">}</span><span class="s2">, RAS </span><span class="si">{</span><span class="n">RAS_VERSION</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Configuration: BaldEagleCrkMulti2D project, Plan 19, RAS 6.6
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Configuration: BaldEagleCrkMulti2D project, Plan 19, RAS 6.6
 </code></pre></div>
 <h1 id="dam-breach-results-extraction-and-sensitivity-analysis">Dam Breach Results Extraction and Sensitivity Analysis<a class="headerlink" href="#dam-breach-results-extraction-and-sensitivity-analysis" title="Permanent link">&para;</a></h1>
 <p>This notebook demonstrates:
@@ -5662,7 +5718,7 @@
 - Repeat for multiple parameters
 - Plot all scenarios together</p>
 <h2 id="setup-and-imports">Setup and Imports<a class="headerlink" href="#setup-and-imports" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Standard imports</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Standard imports</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
@@ -5671,7 +5727,7 @@
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
 </span></code></pre></div>
 <h2 id="1-extract-and-initialize-project">1. Extract and Initialize Project<a class="headerlink" href="#1-extract-and-initialize-project" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Extract the BaldEagleCrkMulti2D example project using static method</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Extract the BaldEagleCrkMulti2D example project using static method</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">example_project_folder</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;16&quot;</span><span class="p">)</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Extracted project to: </span><span class="si">{</span><span class="n">example_project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
@@ -5681,7 +5737,7 @@
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># Set project_path variable for compatibility with rest of notebook</span>
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">example_project_folder</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:08:00 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:08:00 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
 2026-01-13 13:08:00 - ras_commander.RasExamples - INFO - Loading project data from CSV...
 2026-01-13 13:08:00 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
 2026-01-13 13:08:00 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
@@ -5694,7 +5750,7 @@
 Extracted project to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16
 BaldEagleCrkMulti2D project exists: True
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Extract the BaldEagleCrkMulti2D example project using static method</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Extract the BaldEagleCrkMulti2D example project using static method</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">example_project_folder</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;16&quot;</span><span class="p">)</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Extracted project to: </span><span class="si">{</span><span class="n">example_project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
@@ -5704,7 +5760,7 @@ BaldEagleCrkMulti2D project exists: True
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1"># Set project_path variable for compatibility with rest of notebook</span>
 </span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">example_project_folder</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:08:02 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:08:02 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
 2026-01-13 13:08:02 - ras_commander.RasExamples - INFO - Extracting project &#39;BaldEagleCrkMulti2D&#39; as &#39;BaldEagleCrkMulti2D_16&#39;
 2026-01-13 13:08:02 - ras_commander.RasExamples - INFO - Folder &#39;BaldEagleCrkMulti2D_16&#39; already exists. Deleting existing folder...
 2026-01-13 13:08:02 - ras_commander.RasExamples - INFO - Existing folder &#39;BaldEagleCrkMulti2D_16&#39; has been deleted.
@@ -5714,7 +5770,7 @@ BaldEagleCrkMulti2D project exists: True
 Extracted project to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16
 BaldEagleCrkMulti2D project exists: True
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Initialize the project</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Initialize the project</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Initialized project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Available plans:&quot;</span><span class="p">)</span>
@@ -5723,7 +5779,7 @@ BaldEagleCrkMulti2D project exists: True
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># This is the SA to 2D Dam Break Run</span>
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">template_plan</span> <span class="o">=</span> <span class="n">PLAN</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:08:03 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.rasmap
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:08:03 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.rasmap
 2026-01-13 13:08:03 - ras_commander.RasPrj - INFO - Updated results_df with 11 plan(s)
 
 
@@ -5732,7 +5788,7 @@ Initialized project: BaldEagleDamBrk
 
 Available plans:
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span>
 </span></code></pre></div>
 <div>
 <style scoped>
@@ -6054,7 +6110,7 @@ Available plans:
 2. Option B: Use the RasCmdr class to run simulation from Python (see cell below)
 3. Option C: Use a different project with existing results (e.g., Scott County)</p>
 <p><strong>The notebook will gracefully handle missing results and still demonstrate parameter modification.</strong></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Initialize variables to None (prevents NameError in later cells)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Initialize variables to None (prevents NameError in later cells)</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">target_structure</span> <span class="o">=</span> <span class="kc">None</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">baseline_ts</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">baseline_summary</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
@@ -6064,7 +6120,7 @@ Available plans:
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="n">summaries</span> <span class="o">=</span> <span class="p">{}</span>
 </span></code></pre></div>
 <h3 id="21-identify-breach-structures">2.1 Identify Breach Structures<a class="headerlink" href="#21-identify-breach-structures" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># List breach structures from PLAN FILE (for parameter operations)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># List breach structures from PLAN FILE (for parameter operations)</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># This ensures structure names match between listing and read_breach_block()</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">breach_structures_list</span> <span class="o">=</span> <span class="n">RasBreach</span><span class="o">.</span><span class="n">list_breach_structures_plan</span><span class="p">(</span><span class="n">template_plan</span><span class="p">)</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
@@ -6087,7 +6143,7 @@ Available plans:
 </span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">WARNING: No active breach structures found!&quot;</span><span class="p">)</span>
 </span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a>    <span class="n">target_structure</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:08:03 - ras_commander.RasBreach - INFO - Found 2 breach structures in BaldEagleDamBrk.p19
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:08:03 - ras_commander.RasBreach - INFO - Found 2 breach structures in BaldEagleDamBrk.p19
 
 
 Breach Structures in Plan File:
@@ -6100,7 +6156,7 @@ Target structure for analysis: Dam
     try:
         # Extract complete breach time series from HDF results
         baseline_ts = HdfResultsBreach.get_breach_timeseries("02", target_structure)</p>
-<div class="language-text highlight"><pre><span></span><code>    print(f&quot;Baseline Time Series Extracted: {baseline_ts.shape}&quot;)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>    print(f&quot;Baseline Time Series Extracted: {baseline_ts.shape}&quot;)
     print(f&quot;\nColumns: {list(baseline_ts.columns)}&quot;)
     print(f&quot;\nFirst few timesteps:&quot;)
     print(baseline_ts.head())
@@ -6129,11 +6185,11 @@ except (FileNotFoundError, OSError) as e:
     print("Skipping baseline extraction - no breach structure available")
     scenarios = {}
     summaries = {}</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">template_plan</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">template_plan</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>&#39;19&#39;
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>&#39;19&#39;
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Read current parameters</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Read current parameters</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">params</span> <span class="o">=</span> <span class="n">RasBreach</span><span class="o">.</span><span class="n">read_breach_block</span><span class="p">(</span><span class="n">template_plan</span><span class="p">,</span> <span class="s2">&quot;Dam&quot;</span><span class="p">)</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">geom</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;values&#39;</span><span class="p">][</span><span class="s1">&#39;Breach Geom&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)]</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
@@ -6143,7 +6199,7 @@ except (FileNotFoundError, OSError) as e:
 </span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Write back</span>
 </span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="n">RasBreach</span><span class="o">.</span><span class="n">update_breach_block</span><span class="p">(</span><span class="n">template_plan</span><span class="p">,</span> <span class="s2">&quot;Dam&quot;</span><span class="p">,</span> <span class="n">geom_values</span><span class="o">=</span><span class="n">geom</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:08:03 - ras_commander.RasBreach - INFO - Read breach block for Dam from BaldEagleDamBrk.p19
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:08:03 - ras_commander.RasBreach - INFO - Read breach block for Dam from BaldEagleDamBrk.p19
 2026-01-13 13:08:03 - ras_commander.RasBreach - INFO - Created backup: BaldEagleDamBrk_backup_20260113_130803.p19
 2026-01-13 13:08:04 - ras_commander.RasBreach - INFO - Updated breach block for Dam in BaldEagleDamBrk.p19
 
@@ -6175,7 +6231,7 @@ except (FileNotFoundError, OSError) as e:
   &#39;Simplified Physical Breach Downcutting&#39;: [[0.0, 0.0, 1.0, 1.0]],
   &#39;Simplified Physical Breach Widening&#39;: [[0.0, 0.0, 1.0, 1.0]]}}
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">if</span> <span class="n">target_structure</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">if</span> <span class="n">target_structure</span><span class="p">:</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>    <span class="c1"># Read breach parameters from plan file</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">baseline_params</span> <span class="o">=</span> <span class="n">RasBreach</span><span class="o">.</span><span class="n">read_breach_block</span><span class="p">(</span><span class="s2">&quot;02&quot;</span><span class="p">,</span> <span class="n">target_structure</span><span class="p">)</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
@@ -6218,7 +6274,7 @@ except (FileNotFoundError, OSError) as e:
 </span><span id="__span-13-41"><a id="__codelineno-13-41" name="__codelineno-13-41" href="#__codelineno-13-41"></a>    <span class="n">baseline_params</span> <span class="o">=</span> <span class="kc">None</span>
 </span><span id="__span-13-42"><a id="__codelineno-13-42" name="__codelineno-13-42" href="#__codelineno-13-42"></a>    <span class="n">baseline_geom</span> <span class="o">=</span> <span class="p">[]</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:08:04 - ras_commander.RasBreach - INFO - Read breach block for Dam from BaldEagleDamBrk.p02
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:08:04 - ras_commander.RasBreach - INFO - Read breach block for Dam from BaldEagleDamBrk.p02
 
 
 Baseline Parameters for Dam:
@@ -6253,7 +6309,7 @@ To change to 605 ft:
   new_geom[2] = 605
   RasBreach.update_breach_block(&quot;template_plan&quot;, &quot;Dam&quot;, geom_values=new_geom)
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># First, compute the template plan to generate HDF results</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># First, compute the template plan to generate HDF results</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Computing plan </span><span class="si">{</span><span class="n">template_plan</span><span class="si">}</span><span class="s2"> to generate HDF results...&quot;</span><span class="p">)</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;(This may take 1-2 minutes)&quot;</span><span class="p">)</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="n">template_plan</span><span class="p">,</span> <span class="n">skip_existing</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
@@ -6288,7 +6344,7 @@ To change to 605 ft:
 </span><span id="__span-14-33"><a id="__codelineno-14-33" name="__codelineno-14-33" href="#__codelineno-14-33"></a>    <span class="n">scenarios</span> <span class="o">=</span> <span class="p">{}</span>
 </span><span id="__span-14-34"><a id="__codelineno-14-34" name="__codelineno-14-34" href="#__codelineno-14-34"></a>    <span class="n">summaries</span> <span class="o">=</span> <span class="p">{}</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:08:04 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:08:04 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16
 2026-01-13 13:08:04 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.p19
 2026-01-13 13:08:04 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.p19
 2026-01-13 13:08:04 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 19
@@ -6383,11 +6439,11 @@ Baseline Summary Statistics:
 structure  breach_initiated  breach_at_time     breach_at_date  max_total_flow max_total_flow_time  max_breach_flow max_breach_flow_time  final_breach_width  final_breach_depth     max_hw    max_tw
       Dam              True        1.274074 02JAN1999 18:34:40    244167.78125 1999-01-02 20:40:00        238721.25  1999-01-02 20:40:00               200.0           23.746826 661.506348 615.28833
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Baseline extraction already performed above.</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Baseline extraction already performed above.</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># Re-run the previous cell if you need to refresh baseline_ts/summaries.</span>
 </span></code></pre></div>
 <h3 id="23-read-baseline-parameters">2.3 Read Baseline Parameters<a class="headerlink" href="#23-read-baseline-parameters" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># List breach structures from plan file (for parameter operations)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># List breach structures from plan file (for parameter operations)</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">breach_structures_list</span> <span class="o">=</span> <span class="n">RasBreach</span><span class="o">.</span><span class="n">list_breach_structures_plan</span><span class="p">(</span><span class="n">template_plan</span><span class="p">)</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Breach Structures in Plan File:&quot;</span><span class="p">)</span>
@@ -6406,7 +6462,7 @@ structure  breach_initiated  breach_at_time     breach_at_date  max_total_flow m
 </span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a>    <span class="n">target_structure</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:08:35 - ras_commander.RasBreach - INFO - Found 2 breach structures in BaldEagleDamBrk.p19
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:08:35 - ras_commander.RasBreach - INFO - Found 2 breach structures in BaldEagleDamBrk.p19
 
 
 Breach Structures in Plan File:
@@ -6416,7 +6472,7 @@ Target structure for analysis: Dam
 </code></pre></div>
 <h3 id="easy-parameter-modification-with-set_breach_geom">Easy Parameter Modification with set_breach_geom()<a class="headerlink" href="#easy-parameter-modification-with-set_breach_geom" title="Permanent link">&para;</a></h3>
 <p><strong>NEW FUNCTION:</strong> <code>RasBreach.set_breach_geom()</code> provides a clean interface for modifying individual breach parameters without manually parsing/reconstructing the CSV.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Example: Update just Final Bottom Elevation (most common modification)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Example: Update just Final Bottom Elevation (most common modification)</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="k">if</span> <span class="n">target_structure</span><span class="p">:</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Example: Update Final Bottom Elevation to 605 ft&quot;</span><span class="p">)</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">60</span><span class="p">)</span>
@@ -6447,7 +6503,7 @@ Target structure for analysis: Dam
 </span><span id="__span-17-29"><a id="__codelineno-17-29" name="__codelineno-17-29" href="#__codelineno-17-29"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-17-30"><a id="__codelineno-17-30" name="__codelineno-17-30" href="#__codelineno-17-30"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No target structure available for examples&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Example: Update Final Bottom Elevation to 605 ft
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Example: Update Final Bottom Elevation to 605 ft
 ============================================================
 
 Simple approach using set_breach_geom():
@@ -6478,7 +6534,7 @@ Other common modifications:
                             initial_width=250,
                             formation_time=3.0)
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">if</span> <span class="n">target_structure</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">if</span> <span class="n">target_structure</span><span class="p">:</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>    <span class="c1"># Read breach parameters from plan file</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>    <span class="n">baseline_params</span> <span class="o">=</span> <span class="n">RasBreach</span><span class="o">.</span><span class="n">read_breach_block</span><span class="p">(</span><span class="n">template_plan</span><span class="p">,</span> <span class="n">target_structure</span><span class="p">)</span>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>
@@ -6499,7 +6555,7 @@ Other common modifications:
 </span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a>    <span class="n">baseline_params</span> <span class="o">=</span> <span class="kc">None</span>
 </span><span id="__span-18-20"><a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a>    <span class="n">baseline_geom</span> <span class="o">=</span> <span class="p">[]</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:08:35 - ras_commander.RasBreach - INFO - Read breach block for Dam from BaldEagleDamBrk.p19
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:08:35 - ras_commander.RasBreach - INFO - Read breach block for Dam from BaldEagleDamBrk.p19
 
 
 Baseline Parameters for Dam:
@@ -6526,7 +6582,7 @@ Baseline Geometry (parsed): [&#39;5700&#39;, &#39;200&#39;, &#39;605&#39;, &#39;
 <p><strong>Note:</strong> This notebook demonstrates steps 1-2 and 4-5. You must run HEC-RAS (step 3) separately.</p>
 <hr />
 <h3 id="scenario-1-increase-breach-width-by-50">Scenario 1: Increase Breach Width by 50%<a class="headerlink" href="#scenario-1-increase-breach-width-by-50" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="k">if</span> <span class="n">target_structure</span> <span class="ow">and</span> <span class="n">baseline_geom</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">baseline_geom</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="k">if</span> <span class="n">target_structure</span> <span class="ow">and</span> <span class="n">baseline_geom</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">baseline_geom</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>    <span class="c1"># Clone plan</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>    <span class="n">scenario_1_plan</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">clone_plan</span><span class="p">(</span><span class="n">template_plan</span><span class="p">,</span> <span class="s2">&quot;Scenario 1: +50% Width&quot;</span><span class="p">)</span>
 </span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>
@@ -6552,7 +6608,7 @@ Baseline Geometry (parsed): [&#39;5700&#39;, &#39;200&#39;, &#39;605&#39;, &#39;
 </span><span id="__span-19-24"><a id="__codelineno-19-24" name="__codelineno-19-24" href="#__codelineno-19-24"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-19-25"><a id="__codelineno-19-25" name="__codelineno-19-25" href="#__codelineno-19-25"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipping Scenario 1 - insufficient baseline data&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:08:35 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.p19 to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.p07
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:08:35 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.p19 to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.p07
 2026-01-13 13:08:35 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.p07
 2026-01-13 13:08:35 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 07
 2026-01-13 13:08:36 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.rasmap
@@ -6591,7 +6647,7 @@ Modifying breach width:
         'Scenario 2: -50% Formation Time': '04',
         'Scenario 3: Different Method': '05'
     }</p>
-<div class="language-text highlight"><pre><span></span><code># Try to extract results for each scenario from HDF files
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code># Try to extract results for each scenario from HDF files
 for scenario_name, plan_num in scenario_plans.items():
     try:
         # Extract breach results from HDF using HdfResultsBreach
@@ -6614,7 +6670,7 @@ print(f&quot;\nTotal scenarios with results: {len(scenarios)}&quot;)
 <p>else:
     print("Skipping scenario extraction - no breach structure available")</p>
 <h3 id="scenario-2-decrease-breach-formation-time-by-50">Scenario 2: Decrease Breach Formation Time by 50%<a class="headerlink" href="#scenario-2-decrease-breach-formation-time-by-50" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">if</span> <span class="n">target_structure</span> <span class="ow">and</span> <span class="n">baseline_geom</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">baseline_geom</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">7</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">if</span> <span class="n">target_structure</span> <span class="ow">and</span> <span class="n">baseline_geom</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">baseline_geom</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">7</span><span class="p">:</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>    <span class="c1"># Clone plan</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="n">scenario_2_plan</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">clone_plan</span><span class="p">(</span><span class="n">template_plan</span><span class="p">,</span> <span class="s2">&quot;Scenario 2: -50</span><span class="si">% F</span><span class="s2">ormation Time&quot;</span><span class="p">)</span>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>
@@ -6640,7 +6696,7 @@ print(f&quot;\nTotal scenarios with results: {len(scenarios)}&quot;)
 </span><span id="__span-20-24"><a id="__codelineno-20-24" name="__codelineno-20-24" href="#__codelineno-20-24"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-20-25"><a id="__codelineno-20-25" name="__codelineno-20-25" href="#__codelineno-20-25"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipping Scenario 2 - insufficient baseline data&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:08:36 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.p19 to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.p08
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:08:36 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.p19 to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.p08
 2026-01-13 13:08:36 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.p08
 2026-01-13 13:08:36 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 08
 2026-01-13 13:08:36 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\BaldEagleDamBrk.rasmap
@@ -6668,12 +6724,12 @@ Modifying breach formation time:
 ✓ Scenario 2 plan created: 08
   Next step: Run HEC-RAS simulation for plan 08
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">parallel_computed_folder</span> <span class="o">=</span> <span class="n">example_project_folder</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">example_project_folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_parallelcomputed&quot;</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">parallel_computed_folder</span> <span class="o">=</span> <span class="n">example_project_folder</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">example_project_folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_parallelcomputed&quot;</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_parallel</span><span class="p">([</span><span class="n">template_plan</span><span class="p">,</span> <span class="n">scenario_1_plan</span><span class="p">,</span> <span class="n">scenario_2_plan</span><span class="p">],</span> <span class="n">max_workers</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">dest_folder</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="n">parallel_computed_folder</span><span class="p">),</span> <span class="n">overwrite_dest</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="c1"># Re-initialize in new folder where results are present</span>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">parallel_computed_folder</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:08:36 - ras_commander.RasCmdr - INFO - Destination folder &#39;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed&#39; exists. Overwriting as per overwrite_dest=True.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:08:36 - ras_commander.RasCmdr - INFO - Destination folder &#39;C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed&#39; exists. Overwriting as per overwrite_dest=True.
 2026-01-13 13:08:36 - ras_commander.RasCmdr - INFO - Copied project folder to destination: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed
 2026-01-13 13:08:36 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;19&#39;, &#39;07&#39;, &#39;08&#39;]
 2026-01-13 13:08:36 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 3 based on the number of plans to compute: 3
@@ -6901,7 +6957,7 @@ Execution Results:
 
 &lt;ras_commander.RasPrj.RasPrj at 0x169b15ac980&gt;
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Display results summary from results_df after parallel execution</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Display results summary from results_df after parallel execution</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># This shows execution status, timing, and any errors/warnings for each plan</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;plan_title&#39;</span><span class="p">,</span> <span class="s1">&#39;completed&#39;</span><span class="p">,</span> <span class="s1">&#39;has_errors&#39;</span><span class="p">,</span> <span class="s1">&#39;has_warnings&#39;</span><span class="p">,</span> <span class="s1">&#39;runtime_complete_process_hours&#39;</span><span class="p">]]</span>
 </span></code></pre></div>
@@ -7053,13 +7109,13 @@ Execution Results:
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Scenario definitions</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Scenario definitions</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="n">scenario_plans</span> <span class="o">=</span> <span class="p">{</span>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>    <span class="s1">&#39;Scenario 1: +50% Width&#39;</span><span class="p">:</span> <span class="n">scenario_1_plan</span><span class="p">,</span>
 </span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>    <span class="s1">&#39;Scenario 2: -50</span><span class="si">% F</span><span class="s1">ormation Time&#39;</span><span class="p">:</span> <span class="n">scenario_2_plan</span><span class="p">,</span>
 </span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="p">}</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Extract results for each scenario from HDF files</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Extract results for each scenario from HDF files</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="k">for</span> <span class="n">scenario_name</span><span class="p">,</span> <span class="n">plan_num</span> <span class="ow">in</span> <span class="n">scenario_plans</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 </span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>    <span class="c1"># Extract breach results from HDF using HdfResultsBreach</span>
 </span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>    <span class="n">ts</span> <span class="o">=</span> <span class="n">HdfResultsBreach</span><span class="o">.</span><span class="n">get_breach_timeseries</span><span class="p">(</span><span class="n">plan_num</span><span class="p">,</span> <span class="n">target_structure</span><span class="p">)</span>
@@ -7074,7 +7130,7 @@ Execution Results:
 </span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a>
 </span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Total scenarios with results: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">scenarios</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:09:21 - ras_commander.hdf.HdfResultsBreach - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p07.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:09:21 - ras_commander.hdf.HdfResultsBreach - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p07.hdf
 2026-01-13 13:09:21 - ras_commander.hdf.HdfResultsBreach - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p07.hdf
 2026-01-13 13:09:21 - ras_commander.hdf.HdfResultsBreach - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p07.hdf
 2026-01-13 13:09:21 - ras_commander.hdf.HdfResultsBreach - INFO - Extracted 433 timesteps for 1 structure(s)
@@ -7149,7 +7205,7 @@ Execution Results:
 
 Total scenarios with results: 3
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="n">ts</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="n">ts</span>
 </span></code></pre></div>
 <div>
 <style scoped>
@@ -7354,7 +7410,7 @@ Total scenarios with results: 3
 <p>433 rows × 12 columns</p>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="n">summary</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="n">summary</span>
 </span></code></pre></div>
 <div>
 <style scoped>
@@ -7411,7 +7467,7 @@ Total scenarios with results: 3
 <h2 id="4-extract-results-from-all-scenarios">4. Extract Results from All Scenarios<a class="headerlink" href="#4-extract-results-from-all-scenarios" title="Permanent link">&para;</a></h2>
 <p><strong>⚠️ IMPORTANT:</strong> You must run HEC-RAS simulations for plans 03, 04, and 05 before this section will work.</p>
 <p>This section attempts to extract results from all scenarios. If HDF files don't exist, it will skip gracefully.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">textwrap</span>
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>
 </span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
@@ -7459,7 +7515,7 @@ Total scenarios with results: 3
 </span><span id="__span-27-46"><a id="__codelineno-27-46" name="__codelineno-27-46" href="#__codelineno-27-46"></a>
 </span><span id="__span-27-47"><a id="__codelineno-27-47" name="__codelineno-27-47" href="#__codelineno-27-47"></a><span class="n">pretty_print_compute_messages</span><span class="p">(</span><span class="n">comp_msgs</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:09:22 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p07.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:09:22 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p07.hdf
 2026-01-13 13:09:22 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagleDamBrk.p07.hdf
 2026-01-13 13:09:22 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1394 characters from HDF
 
@@ -7514,7 +7570,7 @@ Computation Speed   Simulation/Runtime
 Unsteady Flow Computations  8472x
 Complete Process    7456x
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># List SA/2D connection structures in HDF results</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># List SA/2D connection structures in HDF results</span>
 </span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="n">hdf_structures</span> <span class="o">=</span> <span class="n">HdfStruc</span><span class="o">.</span><span class="n">list_sa2d_connections</span><span class="p">(</span><span class="n">template_plan</span><span class="p">)</span>
 </span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;SA/2D Connection Structures in HDF:&quot;</span><span class="p">)</span>
 </span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="k">for</span> <span class="n">struct</span> <span class="ow">in</span> <span class="n">hdf_structures</span><span class="p">:</span>
@@ -7537,7 +7593,7 @@ Complete Process    7456x
 </span><span id="__span-28-21"><a id="__codelineno-28-21" name="__codelineno-28-21" href="#__codelineno-28-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">WARNING: No breach structures found! Cannot proceed with analysis.&quot;</span><span class="p">)</span>
 </span><span id="__span-28-22"><a id="__codelineno-28-22" name="__codelineno-28-22" href="#__codelineno-28-22"></a>    <span class="n">target_structure</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:09:22 - ras_commander.hdf.HdfStruc - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p19.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:09:22 - ras_commander.hdf.HdfStruc - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p19.hdf
 2026-01-13 13:09:22 - ras_commander.hdf.HdfStruc - INFO - Found 1 SA/2D connection structures: [&#39;Dam&#39;]
 2026-01-13 13:09:22 - ras_commander.hdf.HdfStruc - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p19.hdf
 2026-01-13 13:09:22 - ras_commander.hdf.HdfStruc - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p19.hdf
@@ -7556,11 +7612,11 @@ Structures with breach capability: [&#39;Dam&#39;]
 
 Target structure for analysis: Dam
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Get breach-specific variables (width, depth, slopes over time)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Get breach-specific variables (width, depth, slopes over time)</span>
 </span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">breach_vars</span> <span class="o">=</span> <span class="n">HdfResultsBreach</span><span class="o">.</span><span class="n">get_breaching_variables</span><span class="p">(</span><span class="n">template_plan</span><span class="p">,</span> <span class="s2">&quot;Dam&quot;</span><span class="p">)</span>
 </span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="n">breach_vars</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:09:22 - ras_commander.hdf.HdfResultsBreach - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p19.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:09:22 - ras_commander.hdf.HdfResultsBreach - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p19.hdf
 2026-01-13 13:09:22 - ras_commander.hdf.HdfStruc - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p19.hdf
 2026-01-13 13:09:22 - ras_commander.hdf.HdfStruc - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p19.hdf
 2026-01-13 13:09:22 - ras_commander.hdf.HdfStruc - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p19.hdf
@@ -7747,7 +7803,7 @@ Target structure for analysis: Dam
 <p>433 rows × 10 columns</p>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># OPTIONAL: Also check HDF for breach capability (requires HDF file to exist)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># OPTIONAL: Also check HDF for breach capability (requires HDF file to exist)</span>
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">--- HDF Breach Capability Check (optional) ---&quot;</span><span class="p">)</span>
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>
 </span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="n">hdf_structures</span> <span class="o">=</span> <span class="n">HdfStruc</span><span class="o">.</span><span class="n">list_sa2d_connections</span><span class="p">(</span><span class="n">template_plan</span><span class="p">)</span>
@@ -7761,7 +7817,7 @@ Target structure for analysis: Dam
 </span><span id="__span-30-12"><a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Plan file: &#39;</span><span class="si">{</span><span class="n">target_structure</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
 </span><span id="__span-30-13"><a id="__codelineno-30-13" name="__codelineno-30-13" href="#__codelineno-30-13"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  HDF may show: &#39;AreaName </span><span class="si">{</span><span class="n">target_structure</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:09:22 - ras_commander.hdf.HdfStruc - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p19.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:09:22 - ras_commander.hdf.HdfStruc - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p19.hdf
 2026-01-13 13:09:22 - ras_commander.hdf.HdfStruc - INFO - Found 1 SA/2D connection structures: [&#39;Dam&#39;]
 2026-01-13 13:09:22 - ras_commander.hdf.HdfStruc - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p19.hdf
 2026-01-13 13:09:22 - ras_commander.hdf.HdfStruc - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p19.hdf
@@ -7827,7 +7883,7 @@ NOTE: HDF names may differ from plan file names!
 <li>Flood impact assessment downstream</li>
 </ol>
 <h3 id="key-functions-used">Key Functions Used:<a class="headerlink" href="#key-functions-used" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># HDF Results Extraction (use HdfResultsBreach and HdfStruc)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># HDF Results Extraction (use HdfResultsBreach and HdfStruc)</span>
 </span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="n">HdfStruc</span><span class="o">.</span><span class="n">list_sa2d_connections</span><span class="p">(</span><span class="n">plan</span><span class="p">)</span>           <span class="c1"># List structures in HDF</span>
 </span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="n">HdfStruc</span><span class="o">.</span><span class="n">get_sa2d_breach_info</span><span class="p">(</span><span class="n">plan</span><span class="p">)</span>            <span class="c1"># Get breach capability info</span>
 </span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="n">HdfResultsBreach</span><span class="o">.</span><span class="n">get_breach_timeseries</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">structure</span><span class="p">)</span>  <span class="c1"># Extract time series</span>
@@ -7844,7 +7900,7 @@ NOTE: HDF names may differ from plan file names!
 - <strong>HdfResultsBreach</strong> → Breach RESULTS from HDF files (.p##.hdf)
 - <strong>HdfStruc</strong> → Structure listings and metadata from HDF</p>
 <p>Use plan file methods for parameter operations to ensure structure names match!</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="k">if</span> <span class="n">target_structure</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="k">if</span> <span class="n">target_structure</span><span class="p">:</span>
 </span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>    <span class="c1"># Scenario definitions</span>
 </span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>    <span class="n">scenario_plans</span> <span class="o">=</span> <span class="p">{</span>
 </span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a>        <span class="s1">&#39;Scenario 1: +50% Width&#39;</span><span class="p">:</span> <span class="n">scenario_1_plan</span><span class="p">,</span>
@@ -7867,7 +7923,7 @@ NOTE: HDF names may differ from plan file names!
 </span><span id="__span-32-21"><a id="__codelineno-32-21" name="__codelineno-32-21" href="#__codelineno-32-21"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-32-22"><a id="__codelineno-32-22" name="__codelineno-32-22" href="#__codelineno-32-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipping scenario extraction - no breach structure available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:09:22 - ras_commander.hdf.HdfResultsBreach - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p07.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:09:22 - ras_commander.hdf.HdfResultsBreach - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p07.hdf
 2026-01-13 13:09:22 - ras_commander.hdf.HdfResultsBreach - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p07.hdf
 2026-01-13 13:09:22 - ras_commander.hdf.HdfResultsBreach - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16_parallelcomputed\BaldEagleDamBrk.p07.hdf
 2026-01-13 13:09:22 - ras_commander.hdf.HdfResultsBreach - INFO - Extracted 433 timesteps for 1 structure(s)
@@ -7945,7 +8001,7 @@ Total scenarios with results: 3
 <h2 id="5-compare-results-across-all-scenarios">5. Compare Results Across All Scenarios<a class="headerlink" href="#5-compare-results-across-all-scenarios" title="Permanent link">&para;</a></h2>
 <p>Visualize all scenarios together to understand parameter sensitivity.</p>
 <h3 id="51-flow-hydrograph-comparison">5.1 Flow Hydrograph Comparison<a class="headerlink" href="#51-flow-hydrograph-comparison" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="k">if</span> <span class="n">scenarios</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="k">if</span> <span class="n">scenarios</span><span class="p">:</span>
 </span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>    <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
 </span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a>
 </span><span id="__span-33-4"><a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a>    <span class="n">colors</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;blue&#39;</span><span class="p">,</span> <span class="s1">&#39;red&#39;</span><span class="p">,</span> <span class="s1">&#39;green&#39;</span><span class="p">,</span> <span class="s1">&#39;orange&#39;</span><span class="p">,</span> <span class="s1">&#39;purple&#39;</span><span class="p">]</span>
@@ -7972,7 +8028,7 @@ Total scenarios with results: 3
 </span></code></pre></div>
 <p><img alt="png" src="../420_breach_results_extraction_files/420_breach_results_extraction_52_0.png" /></p>
 <h3 id="52-peak-flow-comparison-bar-chart">5.2 Peak Flow Comparison (Bar Chart)<a class="headerlink" href="#52-peak-flow-comparison-bar-chart" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="k">if</span> <span class="n">summaries</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="k">if</span> <span class="n">summaries</span><span class="p">:</span>
 </span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>    <span class="c1"># Extract peak flows</span>
 </span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>    <span class="n">scenario_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">summaries</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
 </span><span id="__span-34-4"><a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a>    <span class="n">peak_flows</span> <span class="o">=</span> <span class="p">[</span><span class="n">summaries</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;max_total_flow&#39;</span><span class="p">]</span> 
@@ -8015,14 +8071,14 @@ Total scenarios with results: 3
 </span><span id="__span-34-41"><a id="__codelineno-34-41" name="__codelineno-34-41" href="#__codelineno-34-41"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No summary data available for comparison&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../420_breach_results_extraction_files/420_breach_results_extraction_54_0.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Peak Flow Differences from Baseline:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Peak Flow Differences from Baseline:
 ============================================================
 Baseline (Plan 19): 244168 cfs (baseline)
 Scenario 1: +50% Width: 322181 cfs (+32.0%)
 Scenario 2: -50% Formation Time: 244943 cfs (+0.3%)
 </code></pre></div>
 <h3 id="53-breach-width-evolution-comparison">5.3 Breach Width Evolution Comparison<a class="headerlink" href="#53-breach-width-evolution-comparison" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="k">if</span> <span class="n">scenarios</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="k">if</span> <span class="n">scenarios</span><span class="p">:</span>
 </span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>    <span class="c1"># Check if any scenario has breach width data</span>
 </span><span id="__span-35-3"><a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>    <span class="n">has_width_data</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="n">ts</span><span class="p">[</span><span class="s1">&#39;bottom_width&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="k">for</span> <span class="n">ts</span> <span class="ow">in</span> <span class="n">scenarios</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
 </span><span id="__span-35-4"><a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a>
@@ -8054,7 +8110,7 @@ Scenario 2: -50% Formation Time: 244943 cfs (+0.3%)
 </span></code></pre></div>
 <p><img alt="png" src="../420_breach_results_extraction_files/420_breach_results_extraction_56_0.png" /></p>
 <h3 id="54-summary-table-comparison">5.4 Summary Table Comparison<a class="headerlink" href="#54-summary-table-comparison" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="k">if</span> <span class="n">summaries</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="k">if</span> <span class="n">summaries</span><span class="p">:</span>
 </span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>    <span class="c1"># Combine all summaries into a comparison table</span>
 </span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>    <span class="n">comparison_data</span> <span class="o">=</span> <span class="p">[]</span>
 </span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a>    <span class="k">for</span> <span class="n">scenario_name</span><span class="p">,</span> <span class="n">summary_df</span> <span class="ow">in</span> <span class="n">summaries</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -8083,7 +8139,7 @@ Scenario 2: -50% Formation Time: 244943 cfs (+0.3%)
 </span><span id="__span-36-27"><a id="__codelineno-36-27" name="__codelineno-36-27" href="#__codelineno-36-27"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-36-28"><a id="__codelineno-36-28" name="__codelineno-36-28" href="#__codelineno-36-28"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No summary data available for comparison table&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Scenario Comparison Summary:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Scenario Comparison Summary:
 ====================================================================================================
                        Scenario  max_total_flow  max_breach_flow  final_breach_width  final_breach_depth     max_hw     max_tw
              Baseline (Plan 19)   244167.781250    238721.250000               200.0           23.746826 661.506348 615.288330
@@ -8093,7 +8149,7 @@ Scenario 2: -50% Formation Time   244943.171875    239246.484375               2
 Comparison table exported to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\BaldEagleCrkMulti2D_16\breach_scenario_comparison.csv
 </code></pre></div>
 <h3 id="55-comprehensive-multi-panel-comparison">5.5 Comprehensive Multi-Panel Comparison<a class="headerlink" href="#55-comprehensive-multi-panel-comparison" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="k">if</span> <span class="n">scenarios</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">scenarios</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="k">if</span> <span class="n">scenarios</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">scenarios</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
 </span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>    <span class="c1"># Create 2x2 subplot grid</span>
 </span><span id="__span-37-3"><a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a>    <span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">12</span><span class="p">))</span>
 </span><span id="__span-37-4"><a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a>
@@ -8159,7 +8215,7 @@ Comparison table exported to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\
 </span></code></pre></div>
 <p><img alt="png" src="../420_breach_results_extraction_files/420_breach_results_extraction_60_0.png" /></p>
 <h2 id="6-export-all-results">6. Export All Results<a class="headerlink" href="#6-export-all-results" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="k">if</span> <span class="n">scenarios</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="k">if</span> <span class="n">scenarios</span><span class="p">:</span>
 </span><span id="__span-38-2"><a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a>    <span class="c1"># Export each scenario&#39;s time series</span>
 </span><span id="__span-38-3"><a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a>    <span class="k">for</span> <span class="n">scenario_name</span><span class="p">,</span> <span class="n">ts_data</span> <span class="ow">in</span> <span class="n">scenarios</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 </span><span id="__span-38-4"><a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a>        <span class="c1"># Create safe filename</span>
@@ -8172,7 +8228,7 @@ Comparison table exported to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\
 </span><span id="__span-38-11"><a id="__codelineno-38-11" name="__codelineno-38-11" href="#__codelineno-38-11"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-38-12"><a id="__codelineno-38-12" name="__codelineno-38-12" href="#__codelineno-38-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No scenario data to export&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Exported: breach_Baseline_(Plan_19).csv
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Exported: breach_Baseline_(Plan_19).csv
 Exported: breach_Scenario_1_plus50%_Width.csv
 Exported: breach_Scenario_2_-50%_Formation_Time.csv
 
@@ -8199,7 +8255,7 @@ All scenario data exported to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest
 - Exported time series for all scenarios
 - Exported comparison summary table</p>
 <h3 id="key-functions-used_1">Key Functions Used:<a class="headerlink" href="#key-functions-used_1" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="c1"># HDF Results Extraction (use HdfResultsBreach and HdfStruc)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="c1"># HDF Results Extraction (use HdfResultsBreach and HdfStruc)</span>
 </span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="n">HdfStruc</span><span class="o">.</span><span class="n">list_sa2d_connections</span><span class="p">(</span><span class="n">plan</span><span class="p">)</span>              <span class="c1"># List structures in HDF</span>
 </span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a><span class="n">HdfStruc</span><span class="o">.</span><span class="n">get_sa2d_breach_info</span><span class="p">(</span><span class="n">plan</span><span class="p">)</span>               <span class="c1"># Get breach capability info</span>
 </span><span id="__span-39-4"><a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a><span class="n">HdfResultsBreach</span><span class="o">.</span><span class="n">get_breach_timeseries</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">structure</span><span class="p">)</span>   <span class="c1"># Extract time series</span>
@@ -8219,7 +8275,7 @@ All scenario data exported to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest
 - <strong>HdfStruc</strong> → Structure listings and metadata from HDF</p>
 <p><strong>Important:</strong> Use plan file methods for parameter operations to ensure structure names match!</p>
 <h3 id="breach-geom-field-structure">Breach Geom Field Structure:<a class="headerlink" href="#breach-geom-field-structure" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="c1"># Breach Geom CSV format (10 fields):</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="c1"># Breach Geom CSV format (10 fields):</span>
 </span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="n">Centerline</span><span class="o">/</span><span class="n">Station</span>     <span class="c1"># ft</span>
 </span><span id="__span-40-3"><a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="n">Initial</span> <span class="n">Bottom</span> <span class="n">Width</span>   <span class="c1"># ft</span>
 </span><span id="__span-40-4"><a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="n">Final</span> <span class="n">Bottom</span> <span class="n">Elevation</span> <span class="c1"># ft  &lt;-- Example: change this to 605</span>
@@ -8253,7 +8309,7 @@ All scenario data exported to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest
 - <code>dlb_breach_direction</code>: Breach direction (0=downstream, 1=upstream, 2=both)</p>
 <h3 id="71-creating-new-breach-blocks">7.1 Creating New Breach Blocks<a class="headerlink" href="#71-creating-new-breach-blocks" title="Permanent link">&para;</a></h3>
 <p>Use <code>RasBreach.create_breach_block()</code> to add breach capability to structures that don't already have it.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="c1"># Demonstrate create_breach_block() - creates new breach for a structure</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="c1"># Demonstrate create_breach_block() - creates new breach for a structure</span>
 </span><span id="__span-41-2"><a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a><span class="c1"># NOTE: This is demonstration code only - requires a structure without existing breach</span>
 </span><span id="__span-41-3"><a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a>
 </span><span id="__span-41-4"><a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;create_breach_block() - Add breach capability to a structure&quot;</span><span class="p">)</span>
@@ -8288,7 +8344,7 @@ All scenario data exported to: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest
 </span><span id="__span-41-33"><a id="__codelineno-41-33" name="__codelineno-41-33" href="#__codelineno-41-33"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Created blocks start with Method 0 (Overtopping) defaults.&quot;</span><span class="p">)</span>
 </span><span id="__span-41-34"><a id="__codelineno-41-34" name="__codelineno-41-34" href="#__codelineno-41-34"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Use update_breach_block() to configure specific breach parameters.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>create_breach_block() - Add breach capability to a structure
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>create_breach_block() - Add breach capability to a structure
 ======================================================================
 
 # Syntax:
@@ -8341,7 +8397,7 @@ Use update_breach_block() to configure specific breach parameters.
 5. Unit weight (N/m³)
 6. Cohesion (Pa)
 7. Friction angle (degrees)</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="c1"># Configure DLBreach (Method 9) for physics-based erosion</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="c1"># Configure DLBreach (Method 9) for physics-based erosion</span>
 </span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;DLBreach Configuration Example&quot;</span><span class="p">)</span>
 </span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">70</span><span class="p">)</span>
 </span><span id="__span-42-4"><a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
@@ -8375,7 +8431,7 @@ Use update_breach_block() to configure specific breach parameters.
 </span><span id="__span-42-32"><a id="__codelineno-42-32" name="__codelineno-42-32" href="#__codelineno-42-32"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;DLBreach models breach erosion using soil mechanics principles.&quot;</span><span class="p">)</span>
 </span><span id="__span-42-33"><a id="__codelineno-42-33" name="__codelineno-42-33" href="#__codelineno-42-33"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;More realistic than parametric methods for detailed dam safety studies.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>DLBreach Configuration Example
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>DLBreach Configuration Example
 ======================================================================
 
 # Configure existing breach block for DLBreach (Method 9)
@@ -8416,7 +8472,7 @@ More realistic than parametric methods for detailed dam safety studies.
 - <code>get_dlb_breach_direction()</code> - Returns breach direction (0=down, 1=up, 2=both)
 - <code>get_mass_wasting_options()</code> - Returns mass wasting configuration
 - <code>get_user_growth_ratio()</code> - Returns user-defined breach growth ratio</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="c1"># Demonstrate reading breach parameters including DLBreach settings</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="c1"># Demonstrate reading breach parameters including DLBreach settings</span>
 </span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="k">if</span> <span class="n">target_structure</span><span class="p">:</span>
 </span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a>    <span class="c1"># Read the breach block</span>
 </span><span id="__span-43-4"><a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a>    <span class="n">block</span> <span class="o">=</span> <span class="n">RasBreach</span><span class="o">.</span><span class="n">read_breach_block</span><span class="p">(</span><span class="n">template_plan</span><span class="p">,</span> <span class="n">target_structure</span><span class="p">)</span>
@@ -8452,7 +8508,7 @@ More realistic than parametric methods for detailed dam safety studies.
 </span><span id="__span-43-34"><a id="__codelineno-43-34" name="__codelineno-43-34" href="#__codelineno-43-34"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-43-35"><a id="__codelineno-43-35" name="__codelineno-43-35" href="#__codelineno-43-35"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No breach structure available for demonstration&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-13 13:09:23 - ras_commander.RasBreach - INFO - Read breach block for Dam from BaldEagleDamBrk.p19
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-13 13:09:23 - ras_commander.RasBreach - INFO - Read breach block for Dam from BaldEagleDamBrk.p19
 
 
 Breach Block for &#39;Dam&#39;:
@@ -8473,7 +8529,7 @@ Advanced Parameters (if configured):
 </code></pre></div>
 <h3 id="74-advanced-features-summary">7.4 Advanced Features Summary<a class="headerlink" href="#74-advanced-features-summary" title="Permanent link">&para;</a></h3>
 <p><strong>New RasBreach Methods:</strong>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="c1"># Create new breach block</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="c1"># Create new breach block</span>
 </span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="n">RasBreach</span><span class="o">.</span><span class="n">create_breach_block</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">structure_name</span><span class="p">,</span> <span class="n">river</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">reach</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">station</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
 </span><span id="__span-44-3"><a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a>
 </span><span id="__span-44-4"><a id="__codelineno-44-4" name="__codelineno-44-4" href="#__codelineno-44-4"></a><span class="c1"># Update with DLBreach (Method 9)</span>
@@ -8518,7 +8574,7 @@ Advanced Parameters (if configured):
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
@@ -8528,7 +8584,7 @@ Advanced Parameters (if configured):
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     

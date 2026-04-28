@@ -2069,6 +2069,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3672,6 +3700,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -5742,7 +5798,7 @@ Adjust increment if anticipated depths exceed 50 ft (e.g., 0.2 ft x 500 = 100 ft
 </table>
 <p>These optimal values provide the best interpolation resolution for structure rating curves at no significant performance cost. The  function uses these as defaults.</p>
 <h2 id="setup-and-imports">Setup and Imports<a class="headerlink" href="#setup-and-imports" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
@@ -5788,13 +5844,13 @@ Adjust increment if anticipated depths exceed 50 ft (e.g., 0.2 ft x 500 = 100 ft
 </span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-0-45"><a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working directory: </span><span class="si">{</span><span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>LOCAL SOURCE MODE: Loading from c:\GH\ras-commander/ras_commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>LOCAL SOURCE MODE: Loading from c:\GH\ras-commander/ras_commander
 Loaded: c:\GH\ras-commander\ras_commander\__init__.py
 Working directory: c:\GH\ras-commander\examples
 </code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># PARAMETERS - Edit these to customize the notebook</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
@@ -5816,14 +5872,14 @@ Working directory: c:\GH\ras-commander\examples
 </span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  XS Safety Factor: </span><span class="si">{</span><span class="n">XS_SAFETY_FACTOR</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="p">(</span><span class="n">XS_SAFETY_FACTOR</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="mi">100</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">% safety margin)&quot;</span><span class="p">)</span>
 </span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Structure Safety: </span><span class="si">{</span><span class="n">STRUCTURE_HW_SAFETY</span><span class="si">}</span><span class="s2">x HW, </span><span class="si">{</span><span class="n">STRUCTURE_FLOW_SAFETY</span><span class="si">}</span><span class="s2">x Flow&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Configuration:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Configuration:
   Project: Muncie
   Plan: 01
   XS Safety Factor: 1.3 (30% safety margin)
   Structure Safety: 2.0x HW, 2.0x Flow
 </code></pre></div>
 <h2 id="section-1-extract-project-and-initialize">Section 1: Extract Project and Initialize<a class="headerlink" href="#section-1-extract-project-and-initialize" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Extract example project</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Extract example project</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;203_htab&quot;</span><span class="p">)</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project extracted to: </span><span class="si">{</span><span class="n">project_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
@@ -5839,7 +5895,7 @@ Working directory: c:\GH\ras-commander\examples
 </span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="n">geom_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">geom_row</span><span class="p">[</span><span class="s1">&#39;full_path&#39;</span><span class="p">])</span>
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Geometry file: </span><span class="si">{</span><span class="n">geom_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:33:41 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:33:41 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
 2026-01-14 10:33:41 - ras_commander.RasExamples - INFO - Loading project data from CSV...
 2026-01-14 10:33:41 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
 2026-01-14 10:33:41 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
@@ -5860,7 +5916,7 @@ Geometry file: Muncie.g01
 </code></pre></div>
 <h2 id="section-2-inspect-original-htab-parameters">Section 2: Inspect Original HTAB Parameters<a class="headerlink" href="#section-2-inspect-original-htab-parameters" title="Permanent link">&para;</a></h2>
 <p>Before optimizing, let's examine the current HTAB parameters for cross sections.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Get all cross sections</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Get all cross sections</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasGeometry</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">xs_df</span> <span class="o">=</span> <span class="n">RasGeometry</span><span class="o">.</span><span class="n">get_cross_sections</span><span class="p">(</span><span class="n">geom_file</span><span class="p">)</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total cross sections: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">xs_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -5889,7 +5945,7 @@ Geometry file: Muncie.g01
 </span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Original HTAB Parameters (first 10 cross sections):&quot;</span><span class="p">)</span>
 </span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">original_htab_df</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:33:42 - ras_commander.geom.GeomCrossSection - INFO - Extracted 63 cross sections from Muncie.g01
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:33:42 - ras_commander.geom.GeomCrossSection - INFO - Extracted 63 cross sections from Muncie.g01
 2026-01-14 10:33:42 - ras_commander.geom.GeomCrossSection - INFO - Extracted 134 station/elevation pairs for White/Muncie/RS 15696.24
 2026-01-14 10:33:42 - ras_commander.geom.GeomCrossSection - INFO - Extracted HTAB params for White/Muncie/RS 15696.24: has_htab_lines=True, starting_el=937.99, increment=0.5, num_points=100
 2026-01-14 10:33:42 - ras_commander.geom.GeomCrossSection - INFO - Extracted 93 station/elevation pairs for White/Muncie/RS 15485.51
@@ -6037,7 +6093,7 @@ Original HTAB Parameters (first 10 cross sections):
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Visualize original HTAB parameters</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Visualize original HTAB parameters</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Filter out None values for plotting</span>
@@ -6089,7 +6145,7 @@ Original HTAB Parameters (first 10 cross sections):
 <p><img alt="png" src="../203_htab_parameter_optimization_files/203_htab_parameter_optimization_11_0.png" /></p>
 <h2 id="section-3-baseline-run-and-compute-messages">Section 3: Baseline Run and Compute Messages<a class="headerlink" href="#section-3-baseline-run-and-compute-messages" title="Permanent link">&para;</a></h2>
 <p>Execute the plan with default HTAB parameters and check for extrapolation warnings.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Execute baseline plan</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Execute baseline plan</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Running baseline simulation...&quot;</span><span class="p">)</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;(This may take 1-2 minutes)</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
@@ -6105,7 +6161,7 @@ Original HTAB Parameters (first 10 cross sections):
 </span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;ERROR: Baseline simulation failed&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:33:42 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:33:42 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab
 2026-01-14 10:33:42 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p01
 2026-01-14 10:33:42 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p01
 2026-01-14 10:33:42 - ras_commander.RasCmdr - INFO - Set number of cores to 4 for plan: 01
@@ -6137,7 +6193,7 @@ Running baseline simulation...
 Baseline simulation completed successfully
 HDF results: Muncie.p01.hdf
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Parse compute messages to check for extrapolation warnings</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Parse compute messages to check for extrapolation warnings</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">ResultsParser</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfResultsPlan</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
@@ -6171,7 +6227,7 @@ HDF results: Muncie.p01.hdf
 </span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-6-33"><a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">No extrapolation warnings found in baseline run.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:33:58 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:33:58 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p01.hdf
 2026-01-14 10:33:58 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p01.hdf
 2026-01-14 10:33:58 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Muncie.p01.hdf
 2026-01-14 10:33:58 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2579 characters from HDF
@@ -6188,7 +6244,7 @@ No extrapolation warnings found in baseline run.
 </code></pre></div>
 <h2 id="section-4-extract-maximum-wse-from-results">Section 4: Extract Maximum WSE from Results<a class="headerlink" href="#section-4-extract-maximum-wse-from-results" title="Permanent link">&para;</a></h2>
 <p>Analyze the simulation results to understand the required HTAB coverage.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Extract cross section timeseries to get maximum WSE values</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Extract cross section timeseries to get maximum WSE values</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">try</span><span class="p">:</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="n">xs_results</span> <span class="o">=</span> <span class="n">HdfResultsXsec</span><span class="o">.</span><span class="n">get_xsec_timeseries</span><span class="p">(</span><span class="n">hdf_path</span><span class="p">)</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
@@ -6226,7 +6282,7 @@ No extrapolation warnings found in baseline run.
 </span><span id="__span-7-36"><a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a>    <span class="n">max_wse_df</span> <span class="o">=</span> <span class="kc">None</span>
 </span><span id="__span-7-37"><a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a>    <span class="n">baseline_max_wse_df</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:33:58 - ras_commander.hdf.HdfResultsXsec - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:33:58 - ras_commander.hdf.HdfResultsXsec - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p01.hdf
 2026-01-14 10:33:58 - ras_commander.hdf.HdfResultsXsec - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p01.hdf
 
 
@@ -6349,7 +6405,7 @@ First 10 cross sections:
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Visualize HTAB coverage vs observed WSE</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Visualize HTAB coverage vs observed WSE</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">if</span> <span class="n">max_wse_df</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">original_htab_df</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
@@ -6404,7 +6460,7 @@ First 10 cross sections:
 </span><span id="__span-8-53"><a id="__codelineno-8-53" name="__codelineno-8-53" href="#__codelineno-8-53"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">If red dots approach or exceed the blue bars, HTAB optimization is needed.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../203_htab_parameter_optimization_files/203_htab_parameter_optimization_17_0.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Coverage Analysis:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Coverage Analysis:
 - Blue bars: Current HTAB elevation range
 - Red dots: Maximum observed water surface elevation
 - Green triangles: Target WSE with safety factor
@@ -6420,7 +6476,7 @@ If red dots approach or exceed the blue bars, HTAB optimization is needed.
 - Clone the geometry file → Apply HTAB optimization to the clone
 - Clone the plan file → Associate it with the optimized geometry
 - Run both plans and compare results</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Generate optimization report (preview without modifying)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Generate optimization report (preview without modifying)</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Generating HTAB optimization report...</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">report</span> <span class="o">=</span> <span class="n">GeomHtab</span><span class="o">.</span><span class="n">get_optimization_report</span><span class="p">(</span>
@@ -6436,7 +6492,7 @@ If red dots approach or exceed the blue bars, HTAB optimization is needed.
 </span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">report_lines</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">60</span><span class="p">:</span>
 </span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">... (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">report_lines</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">60</span><span class="si">}</span><span class="s2"> more lines)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:33:58 - ras_commander.hdf.HdfResultsXsec - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:33:58 - ras_commander.hdf.HdfResultsXsec - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p01.hdf
 2026-01-14 10:33:58 - ras_commander.hdf.HdfResultsXsec - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p01.hdf
 2026-01-14 10:33:58 - ras_commander.geom.GeomCrossSection - INFO - Extracted 134 station/elevation pairs for White/Muncie/RS 15696.24
 2026-01-14 10:33:58 - ras_commander.geom.GeomCrossSection - INFO - Extracted HTAB params for White/Muncie/RS 15696.24: has_htab_lines=True, starting_el=937.99, increment=0.5, num_points=100
@@ -6563,7 +6619,7 @@ Found 61 cross sections with results.
 
 *Report generated by ras-commander GeomHtab*
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># Step 1: Clone geometry for HTAB optimization</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Step 1: Clone geometry file...&quot;</span><span class="p">)</span>
@@ -6636,7 +6692,7 @@ Found 61 cross sections with results.
 </span><span id="__span-10-71"><a id="__codelineno-10-71" name="__codelineno-10-71" href="#__codelineno-10-71"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Baseline Plan: </span><span class="si">{</span><span class="n">PLAN_NUMBER</span><span class="si">}</span><span class="s2"> → Geometry: 01 (original HTAB)&quot;</span><span class="p">)</span>
 </span><span id="__span-10-72"><a id="__codelineno-10-72" name="__codelineno-10-72" href="#__codelineno-10-72"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Optimized Plan: </span><span class="si">{</span><span class="n">optimized_plan_number</span><span class="si">}</span><span class="s2"> → Geometry: </span><span class="si">{</span><span class="n">new_geom_number</span><span class="si">}</span><span class="s2"> (optimized HTAB)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:33:58 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.g01 to C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.g03
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:33:58 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.g01 to C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.g03
 2026-01-14 10:33:58 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.g01.hdf to C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.g03.hdf
 2026-01-14 10:33:58 - ras_commander.RasUtils - INFO - Project file updated with new Geom entry: 03
 2026-01-14 10:33:58 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p01 to C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p02
@@ -7216,7 +7272,7 @@ SUMMARY: Plan/Geometry Configuration
 2. Corrects starting elevations to be at or above the invert
 3. Creates a timestamped backup of the original geometry file
 4. Returns detailed results showing what was fixed</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># Detect HTAB Starting Elevation Issues (Dry-Run)</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Import RasFixit for geometry repair</span>
@@ -7243,7 +7299,7 @@ SUMMARY: Plan/Geometry Configuration
 </span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">No HTAB starting elevation issues detected.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:34:00 - ras_commander.geom.GeomCrossSection - INFO - Extracted 63 cross sections from Muncie.g03
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:34:00 - ras_commander.geom.GeomCrossSection - INFO - Extracted 63 cross sections from Muncie.g03
 2026-01-14 10:34:00 - ras_commander.fixit.RasFixit - INFO - Checking HTAB starting elevations for 63 cross sections
 2026-01-14 10:34:00 - ras_commander.geom.GeomCrossSection - INFO - Extracted 134 station/elevation pairs for White/Muncie/RS 15696.24
 2026-01-14 10:34:00 - ras_commander.geom.GeomCrossSection - INFO - Extracted HTAB params for White/Muncie/RS 15696.24: has_htab_lines=True, starting_el=936.99, increment=0.1, num_points=500
@@ -7384,7 +7440,7 @@ Issues found: 0
 
 No HTAB starting elevation issues detected.
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># Fix HTAB Starting Elevation Issues</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Only run this if issues were detected above</span>
@@ -7416,9 +7472,9 @@ No HTAB starting elevation issues detected.
 </span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No HTAB starting elevation issues to fix.&quot;</span><span class="p">)</span>
 </span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a>    <span class="n">fix_results</span> <span class="o">=</span> <span class="n">issues</span>  <span class="c1"># Use detection results for later cells</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>No HTAB starting elevation issues to fix.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>No HTAB starting elevation issues to fix.
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># View Fix Results as DataFrame</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Convert results to DataFrame for detailed analysis</span>
@@ -7441,11 +7497,11 @@ No HTAB starting elevation issues detected.
 </span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No fixes applied - HTAB parameters are valid.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>No fixes applied - HTAB parameters are valid.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>No fixes applied - HTAB parameters are valid.
 </code></pre></div>
 <h2 id="section-6-inspect-optimized-parameters">Section 6: Inspect Optimized Parameters<a class="headerlink" href="#section-6-inspect-optimized-parameters" title="Permanent link">&para;</a></h2>
 <p>Compare the original and optimized HTAB parameters.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Extract optimized HTAB parameters from the CLONED geometry</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Extract optimized HTAB parameters from the CLONED geometry</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">optimized_htab_list</span> <span class="o">=</span> <span class="p">[]</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">xs</span> <span class="ow">in</span> <span class="n">xs_df</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    <span class="k">try</span><span class="p">:</span>
@@ -7470,7 +7526,7 @@ No HTAB starting elevation issues detected.
 </span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;(first 10 cross sections)&quot;</span><span class="p">)</span>
 </span><span id="__span-14-24"><a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">optimized_htab_df</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:34:00 - ras_commander.geom.GeomCrossSection - INFO - Extracted 134 station/elevation pairs for White/Muncie/RS 15696.24
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:34:00 - ras_commander.geom.GeomCrossSection - INFO - Extracted 134 station/elevation pairs for White/Muncie/RS 15696.24
 2026-01-14 10:34:00 - ras_commander.geom.GeomCrossSection - INFO - Extracted HTAB params for White/Muncie/RS 15696.24: has_htab_lines=True, starting_el=936.99, increment=0.1, num_points=500
 2026-01-14 10:34:00 - ras_commander.geom.GeomCrossSection - INFO - Extracted 93 station/elevation pairs for White/Muncie/RS 15485.51
 2026-01-14 10:34:00 - ras_commander.geom.GeomCrossSection - INFO - Extracted HTAB params for White/Muncie/RS 15485.51: has_htab_lines=True, starting_el=937.78, increment=0.1, num_points=500
@@ -7616,7 +7672,7 @@ Optimized HTAB Parameters from cloned geometry (g03):
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Create before/after comparison</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Create before/after comparison</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">comparison_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>    <span class="n">original_htab_df</span><span class="o">.</span><span class="n">add_suffix</span><span class="p">(</span><span class="s1">&#39;_Original&#39;</span><span class="p">),</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    <span class="n">optimized_htab_df</span><span class="o">.</span><span class="n">add_suffix</span><span class="p">(</span><span class="s1">&#39;_Optimized&#39;</span><span class="p">),</span>
@@ -7637,7 +7693,7 @@ Optimized HTAB Parameters from cloned geometry (g03):
 </span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a>                      <span class="s1">&#39;Pts_Before&#39;</span><span class="p">,</span> <span class="s1">&#39;Pts_After&#39;</span><span class="p">,</span> <span class="s1">&#39;Pts_Change&#39;</span><span class="p">]</span>
 </span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">summary_df</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Before/After Comparison:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Before/After Comparison:
 </code></pre></div>
 <div>
 <style scoped>
@@ -7771,7 +7827,7 @@ Optimized HTAB Parameters from cloned geometry (g03):
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Visualize before/after comparison</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Visualize before/after comparison</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">comparison_df</span><span class="p">))</span>
@@ -7829,7 +7885,7 @@ Optimized HTAB Parameters from cloned geometry (g03):
 <p><img alt="png" src="../203_htab_parameter_optimization_files/203_htab_parameter_optimization_28_0.png" /></p>
 <h2 id="section-7-run-optimized-plan">Section 7: Run Optimized Plan<a class="headerlink" href="#section-7-run-optimized-plan" title="Permanent link">&para;</a></h2>
 <p>Execute the cloned plan with optimized HTAB parameters. The original baseline plan remains unchanged for comparison.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Run the CLONED plan with optimized HTAB parameters</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Run the CLONED plan with optimized HTAB parameters</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Running optimized plan (p</span><span class="si">{</span><span class="n">optimized_plan_number</span><span class="si">}</span><span class="s2">) with optimized HTAB parameters...&quot;</span><span class="p">)</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;(Using force_geompre=True to rebuild hydraulic tables)</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>
@@ -7845,7 +7901,7 @@ Optimized HTAB Parameters from cloned geometry (g03):
 </span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ERROR: Optimized simulation (plan </span><span class="si">{</span><span class="n">optimized_plan_number</span><span class="si">}</span><span class="s2">) failed&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:34:01 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:34:01 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab
 2026-01-14 10:34:01 - ras_commander.RasCurrency - INFO - Deleted geometry HDF: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.g03.hdf
 2026-01-14 10:34:01 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p02
 2026-01-14 10:34:01 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p02
@@ -7881,7 +7937,7 @@ Running optimized plan (p02) with optimized HTAB parameters...
 
 Optimized simulation (plan 02) completed successfully
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Parse optimized compute messages</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Parse optimized compute messages</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># Refresh plan_df to get updated HDF path for the OPTIMIZED plan</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">get_plan_entries</span><span class="p">()</span>  <span class="c1"># Refresh to get updated HDF paths</span>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="n">optimized_plan_row</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">optimized_plan_number</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -7910,7 +7966,7 @@ Optimized simulation (plan 02) completed successfully
 </span><span id="__span-18-27"><a id="__codelineno-18-27" name="__codelineno-18-27" href="#__codelineno-18-27"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-18-28"><a id="__codelineno-18-28" name="__codelineno-18-28" href="#__codelineno-18-28"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">  Note: Additional optimization may be needed&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:34:16 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:34:16 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p02.hdf
 2026-01-14 10:34:16 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p02.hdf
 2026-01-14 10:34:16 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Muncie.p02.hdf
 2026-01-14 10:34:16 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 2829 characters from HDF
@@ -7924,7 +7980,7 @@ Compute Messages Comparison:
 
   Note: Additional optimization may be needed
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Create summary table</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Create summary table</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;HTAB OPTIMIZATION SUMMARY&quot;</span><span class="p">)</span>
 </span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
@@ -7961,7 +8017,7 @@ Compute Messages Comparison:
 </span><span id="__span-19-35"><a id="__codelineno-19-35" name="__codelineno-19-35" href="#__codelineno-19-35"></a><span class="n">summary_table</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">summary_data</span><span class="p">)</span>
 </span><span id="__span-19-36"><a id="__codelineno-19-36" name="__codelineno-19-36" href="#__codelineno-19-36"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">summary_table</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>============================================================
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>============================================================
 HTAB OPTIMIZATION SUMMARY
 ============================================================
 </code></pre></div>
@@ -8051,7 +8107,7 @@ HTAB OPTIMIZATION SUMMARY
 <p>Now that we have both baseline and optimized plans executed, we can compare their results using:
 1. <strong>results_df</strong>: Compare execution metadata, runtime, and volume accounting
 2. <strong>Max WSEL comparison</strong>: Assess computational differences between HTAB configurations</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Compare results using results_df</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Compare results using results_df</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;RESULTS COMPARISON: results_df&quot;</span><span class="p">)</span>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
@@ -8096,7 +8152,7 @@ HTAB OPTIMIZATION SUMMARY
 </span><span id="__span-20-43"><a id="__codelineno-20-43" name="__codelineno-20-43" href="#__codelineno-20-43"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Baseline (p</span><span class="si">{</span><span class="n">PLAN_NUMBER</span><span class="si">}</span><span class="s2">):  </span><span class="si">{</span><span class="s1">&#39;✓ Completed&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">baseline_completed</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;✗ Failed&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-20-44"><a id="__codelineno-20-44" name="__codelineno-20-44" href="#__codelineno-20-44"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Optimized (p</span><span class="si">{</span><span class="n">optimized_plan_number</span><span class="si">}</span><span class="s2">): </span><span class="si">{</span><span class="s1">&#39;✓ Completed&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">optimized_completed</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;✗ Failed&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>============================================================
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>============================================================
 RESULTS COMPARISON: results_df
 ============================================================
 
@@ -8313,7 +8369,7 @@ Execution Summary (results_df transposed for readability):
 </table>
 </div>
 
-<div class="language-text highlight"><pre><span></span><code>------------------------------------------------------------
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>------------------------------------------------------------
 KEY METRICS COMPARISON
 ------------------------------------------------------------
 
@@ -8330,7 +8386,7 @@ Completion Status:
   Baseline (p01):  ✓ Completed
   Optimized (p02): ✓ Completed
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Extract max WSEL from optimized plan and compare with baseline</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Extract max WSEL from optimized plan and compare with baseline</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;MAX WSEL COMPARISON: Baseline vs Optimized&quot;</span><span class="p">)</span>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
@@ -8390,7 +8446,7 @@ Completion Status:
 </span><span id="__span-21-58"><a id="__codelineno-21-58" name="__codelineno-21-58" href="#__codelineno-21-58"></a><span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
 </span><span id="__span-21-59"><a id="__codelineno-21-59" name="__codelineno-21-59" href="#__codelineno-21-59"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error comparing max WSE: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:34:16 - ras_commander.hdf.HdfResultsXsec - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:34:16 - ras_commander.hdf.HdfResultsXsec - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p02.hdf
 2026-01-14 10:34:16 - ras_commander.hdf.HdfResultsXsec - INFO - Final validated file path: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.p02.hdf
 
 
@@ -8543,7 +8599,7 @@ Detailed Comparison (first 15 cross sections):
 </table>
 </div>
 
-<div class="language-text highlight"><pre><span></span><code>Cross sections with |WSEL diff| &gt; 0.01 ft: 4
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Cross sections with |WSEL diff| &gt; 0.01 ft: 4
 </code></pre></div>
 <div>
 <style scoped>
@@ -8602,7 +8658,7 @@ Detailed Comparison (first 15 cross sections):
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Visualize max WSEL comparison</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Visualize max WSEL comparison</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="k">if</span> <span class="s1">&#39;comparison_wse_df&#39;</span> <span class="ow">in</span> <span class="nb">dir</span><span class="p">()</span> <span class="ow">and</span> <span class="n">comparison_wse_df</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">comparison_wse_df</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>    <span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>
@@ -8676,7 +8732,7 @@ Detailed Comparison (first 15 cross sections):
 </span><span id="__span-22-72"><a id="__codelineno-22-72" name="__codelineno-22-72" href="#__codelineno-22-72"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;WSEL comparison data not available for visualization.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../203_htab_parameter_optimization_files/203_htab_parameter_optimization_36_0.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Interpretation:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Interpretation:
 - Top-left: Points on the 1:1 line indicate identical results
 - Top-right: Histogram shows distribution of differences (centered at 0 = no impact)
 - Bottom-left: Profile view shows where differences occur along the river
@@ -8684,7 +8740,7 @@ Detailed Comparison (first 15 cross sections):
 </code></pre></div>
 <h2 id="section-9-advanced-examples">Section 9: Advanced Examples<a class="headerlink" href="#section-9-advanced-examples" title="Permanent link">&para;</a></h2>
 <p>Demonstrate additional HTAB optimization scenarios.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Example 1: XS-only optimization with custom safety factor</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Example 1: XS-only optimization with custom safety factor</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Example 1: XS-Only Optimization&quot;</span><span class="p">)</span>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">40</span><span class="p">)</span>
 </span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>
@@ -8712,7 +8768,7 @@ Detailed Comparison (first 15 cross sections):
 </span><span id="__span-23-26"><a id="__codelineno-23-26" name="__codelineno-23-26" href="#__codelineno-23-26"></a>              <span class="sa">f</span><span class="s2">&quot;Points=</span><span class="si">{</span><span class="n">optimal</span><span class="p">[</span><span class="s1">&#39;num_points&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">, &quot;</span>
 </span><span id="__span-23-27"><a id="__codelineno-23-27" name="__codelineno-23-27" href="#__codelineno-23-27"></a>              <span class="sa">f</span><span class="s2">&quot;Max El=</span><span class="si">{</span><span class="n">optimal</span><span class="p">[</span><span class="s1">&#39;actual_max_el&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:34:17 - ras_commander.geom.GeomCrossSection - INFO - Extracted 134 station/elevation pairs for White/Muncie/RS 15696.24
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:34:17 - ras_commander.geom.GeomCrossSection - INFO - Extracted 134 station/elevation pairs for White/Muncie/RS 15696.24
 2026-01-14 10:34:17 - ras_commander.geom.GeomCrossSection - INFO - Extracted HTAB params for White/Muncie/RS 15696.24: has_htab_lines=True, starting_el=937.99, increment=0.5, num_points=100
 2026-01-14 10:34:17 - ras_commander.geom.GeomHtabUtils - INFO - Optimal XS HTAB: starting_el=936.99, increment=0.1, num_points=500, actual_max_el=986.89
 2026-01-14 10:34:17 - ras_commander.geom.GeomHtabUtils - INFO - Optimal XS HTAB: starting_el=936.99, increment=0.1, num_points=500, actual_max_el=986.89
@@ -8727,12 +8783,12 @@ Example 1: XS-Only Optimization
   Safety 1.5x: Inc=0.100, Points=500, Max El=986.9
   Safety 2.0x: Inc=0.100, Points=500, Max El=986.9
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Quick reference: View results_df for all plans</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Quick reference: View results_df for all plans</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># (Detailed comparison is in Section 8 above)</span>
 </span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># Uncomment to display:</span>
 </span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># ras.results_df.T</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Example 2: Structure HTAB calculation</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Example 2: Structure HTAB calculation</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Example 2: Structure HTAB Calculation&quot;</span><span class="p">)</span>
 </span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">40</span><span class="p">)</span>
 </span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>
@@ -8760,7 +8816,7 @@ Example 1: XS-Only Optimization
 </span><span id="__span-25-26"><a id="__codelineno-25-26" name="__codelineno-25-26" href="#__codelineno-25-26"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    Free Flow Points: </span><span class="si">{</span><span class="n">struct_optimal</span><span class="p">[</span><span class="s1">&#39;free_flow_points&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-25-27"><a id="__codelineno-25-27" name="__codelineno-25-27" href="#__codelineno-25-27"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    Submerged Curves: </span><span class="si">{</span><span class="n">struct_optimal</span><span class="p">[</span><span class="s1">&#39;submerged_curves&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:34:17 - ras_commander.geom.GeomHtabUtils - INFO - Optimal structure HTAB: hw_max=630.00, tw_max=620.00, max_flow=50000.00, free_flow_points=20, submerged_curves=30
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:34:17 - ras_commander.geom.GeomHtabUtils - INFO - Optimal structure HTAB: hw_max=630.00, tw_max=620.00, max_flow=50000.00, free_flow_points=20, submerged_curves=30
 
 
 
@@ -8774,7 +8830,7 @@ Example 2: Structure HTAB Calculation
     Free Flow Points: 20
     Submerged Curves: 30
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Example 3: HTAB defaults reference</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Example 3: HTAB defaults reference</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Example 3: HTAB Parameter Defaults&quot;</span><span class="p">)</span>
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">40</span><span class="p">)</span>
 </span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>
@@ -8788,7 +8844,7 @@ Example 2: Structure HTAB Calculation
 </span><span id="__span-26-12"><a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a><span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">struct_defaults</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 </span><span id="__span-26-13"><a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Example 3: HTAB Parameter Defaults
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Example 3: HTAB Parameter Defaults
 ----------------------------------------
 
 Cross Section HTAB Defaults:
@@ -8813,7 +8869,7 @@ Structure HTAB Defaults:
   max_submerged_curves: 30
 </code></pre></div>
 <h2 id="cleanup">Cleanup<a class="headerlink" href="#cleanup" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Optional: Remove extracted project</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Optional: Remove extracted project</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="c1"># Uncomment to clean up</span>
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>
 </span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># import shutil</span>
@@ -8826,7 +8882,7 @@ Structure HTAB Defaults:
 </span><span id="__span-27-11"><a id="__codelineno-27-11" name="__codelineno-27-11" href="#__codelineno-27-11"></a><span class="k">if</span> <span class="n">optimization_result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;backup&#39;</span><span class="p">):</span>
 </span><span id="__span-27-12"><a id="__codelineno-27-12" name="__codelineno-27-12" href="#__codelineno-27-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Backup file: </span><span class="si">{</span><span class="n">optimization_result</span><span class="p">[</span><span class="s1">&#39;backup&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Notebook complete. Project files retained for inspection.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Notebook complete. Project files retained for inspection.
 
 Project location: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab
 Backup file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Muncie.g03.bak
@@ -8888,7 +8944,7 @@ Backup file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Munci
 </table>
 <h3 id="plan-cloning-pattern">Plan Cloning Pattern<a class="headerlink" href="#plan-cloning-pattern" title="Permanent link">&para;</a></h3>
 <p><strong>Why Clone?</strong>: Cloning allows side-by-side comparison without modifying the original baseline:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Clone geometry and apply modifications</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Clone geometry and apply modifications</span>
 </span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="n">new_geom</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">clone_geom</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
 </span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="n">GeomHtab</span><span class="o">.</span><span class="n">optimize_all_htab_from_results</span><span class="p">(</span><span class="n">cloned_geom_file</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
 </span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>
@@ -8949,7 +9005,7 @@ Backup file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Munci
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
@@ -8959,7 +9015,7 @@ Backup file: C:\GH\ras-commander\examples\example_projects\Muncie_203_htab\Munci
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     

@@ -2469,6 +2469,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4096,6 +4124,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -6069,7 +6125,7 @@
 
 
 <h1 id="multiple-project-operations">Multiple Project Operations<a class="headerlink" href="#multiple-project-operations" title="Permanent link">&para;</a></h1>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
@@ -6103,7 +6159,7 @@
 </span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
 ✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
@@ -6133,7 +6189,7 @@
 <p><strong>THE MOST IMPORTANT CONCEPT IN THIS NOTEBOOK</strong>:</p>
 <p>When creating local <code>ras</code> objects (e.g., <code>bald_eagle_ras = RasPrj()</code>), you MUST pass them to ALL downstream function calls via the <code>ras_object</code> parameter.</p>
 <p><strong>Why?</strong> Most ras-commander functions accept optional <code>ras_object</code> parameter. If not provided, they fall back to the global <code>ras</code> object - causing file path resolution errors when working with multiple projects.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># ✅ CORRECT: Pass ras_object to every call</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># ✅ CORRECT: Pass ras_object to every call</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">RasPlan</span><span class="o">.</span><span class="n">clone_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">new_plan_shortid</span><span class="o">=</span><span class="s2">&quot;demo&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">bald_eagle_ras</span><span class="p">)</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;demo&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">bald_eagle_ras</span><span class="p">)</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
@@ -6143,7 +6199,7 @@
 <p>See <code>.claude/rules/python/ras-commander-patterns.md</code> for complete details.</p>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># PARAMETERS - Edit these to customize the notebook</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
@@ -6152,7 +6208,7 @@
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;Muncie&quot;</span>           <span class="c1"># Example project to extract</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">RAS_VERSION</span> <span class="o">=</span> <span class="s2">&quot;7.0&quot;</span>               <span class="c1"># HEC-RAS version (6.3, 6.5, 6.6, etc.)</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check system resources</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check system resources</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">cpu_count</span> <span class="o">=</span> <span class="n">psutil</span><span class="o">.</span><span class="n">cpu_count</span><span class="p">(</span><span class="n">logical</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">physical_cpu_count</span> <span class="o">=</span> <span class="n">psutil</span><span class="o">.</span><span class="n">cpu_count</span><span class="p">(</span><span class="n">logical</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">available_memory_gb</span> <span class="o">=</span> <span class="n">psutil</span><span class="o">.</span><span class="n">virtual_memory</span><span class="p">()</span><span class="o">.</span><span class="n">available</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span>
@@ -6165,7 +6221,7 @@
 </span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- Allocate at least 2-4 GB of RAM per project&quot;</span><span class="p">)</span>
 </span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Based on your system, you could reasonably run </span><span class="si">{</span><span class="nb">min</span><span class="p">(</span><span class="n">physical_cpu_count</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">available_memory_gb</span><span class="o">//</span><span class="mi">3</span><span class="p">))</span><span class="si">}</span><span class="s2"> projects simultaneously.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>System Resources:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>System Resources:
 - 8 physical CPU cores (8 logical cores)
 - 18.7 GB available memory
 For multiple HEC-RAS projects, a good rule of thumb is:
@@ -6193,7 +6249,7 @@ Based on your system, you could reasonably run 4 projects simultaneously.
 </ul>
 <h2 id="downloading-and-extracting-example-hec-ras-projects">Downloading and Extracting Example HEC-RAS Projects<a class="headerlink" href="#downloading-and-extracting-example-hec-ras-projects" title="Permanent link">&para;</a></h2>
 <p>We'll use the <code>RasExamples</code> class to download and extract two example HEC-RAS projects: "Balde Eagle Creek" and "Muncie".</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Extract the example projects using suffix parameter</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Extract the example projects using suffix parameter</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">extracted_paths</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="p">[</span><span class="s2">&quot;Balde Eagle Creek&quot;</span><span class="p">,</span> <span class="s2">&quot;Muncie&quot;</span><span class="p">],</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;04&quot;</span>  <span class="c1"># Uses standardized suffix parameter</span>
@@ -6218,7 +6274,7 @@ Based on your system, you could reasonably run 4 projects simultaneously.
 </span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- </span><span class="si">{</span><span class="n">bald_eagle_compute_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- </span><span class="si">{</span><span class="n">muncie_compute_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-11 20:43:55 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-11 20:43:55 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
 2026-01-11 20:43:55 - ras_commander.RasExamples - INFO - Loading project data from CSV...
 2026-01-11 20:43:55 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
 2026-01-11 20:43:55 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
@@ -6245,7 +6301,7 @@ Computation folders will be created at:
 </code></pre></div>
 <h2 id="step-1-initialize-multiple-projects">Step 1: Initialize Multiple Projects<a class="headerlink" href="#step-1-initialize-multiple-projects" title="Permanent link">&para;</a></h2>
 <p>Let's initialize both HEC-RAS projects. Instead of using the global <code>ras</code> object, we'll create separate RAS objects for each project.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Initialize both projects with their own RAS objects</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Initialize both projects with their own RAS objects</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">bald_eagle_ras</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">bald_eagle_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">bald_eagle_ras</span><span class="p">)</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Initialized Bald Eagle Creek project: </span><span class="si">{</span><span class="n">bald_eagle_ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -6261,7 +6317,7 @@ Computation folders will be created at:
 </span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Available plans in Muncie project:&quot;</span><span class="p">)</span>
 </span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">muncie_ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-11 20:43:56 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.rasmap
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-11 20:43:56 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.rasmap
 2026-01-11 20:43:56 - ras_commander.RasPrj - INFO - Updated results_df with 2 plan(s)
 2026-01-11 20:43:56 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie_04\Muncie.rasmap
 2026-01-11 20:43:56 - ras_commander.RasPrj - INFO - Updated results_df with 3 plan(s)
@@ -6367,7 +6423,7 @@ Available plans in Bald Eagle Creek project:
 <p>2 rows × 27 columns</p>
 </div>
 
-<div class="language-text highlight"><pre><span></span><code>Available plans in Muncie project:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Available plans in Muncie project:
 </code></pre></div>
 <div>
 <style scoped>
@@ -6490,7 +6546,7 @@ Available plans in Bald Eagle Creek project:
 
 <h2 id="step-2-clone-plans-in-each-project">Step 2: Clone Plans in Each Project<a class="headerlink" href="#step-2-clone-plans-in-each-project" title="Permanent link">&para;</a></h2>
 <p>Now, let's clone a plan in each project, giving them custom short identifiers. This demonstrates how to perform operations on multiple projects independently.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Clone plans with custom short identifiers</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Clone plans with custom short identifiers</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">new_bald_eagle_plan</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">clone_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">new_plan_shortid</span><span class="o">=</span><span class="s2">&quot;MultiProjDemo&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">bald_eagle_ras</span><span class="p">)</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Created new plan </span><span class="si">{</span><span class="n">new_bald_eagle_plan</span><span class="si">}</span><span class="s2"> in Bald Eagle Creek project&quot;</span><span class="p">)</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
@@ -6506,7 +6562,7 @@ Available plans in Bald Eagle Creek project:
 </span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">muncie_ras</span><span class="o">.</span><span class="n">plan_df</span> <span class="o">=</span> <span class="n">muncie_ras</span><span class="o">.</span><span class="n">get_plan_entries</span><span class="p">()</span>  <span class="c1"># Refresh the plan dataframe</span>
 </span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">muncie_ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-11 20:43:56 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.p01 to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.p03
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-11 20:43:56 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.p01 to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.p03
 2026-01-11 20:43:56 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.p03
 2026-01-11 20:43:56 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 03
 2026-01-11 20:43:56 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04\BaldEagle.rasmap
@@ -6642,7 +6698,7 @@ Updated plans in Bald Eagle Creek project:
 <p>3 rows × 26 columns</p>
 </div>
 
-<div class="language-text highlight"><pre><span></span><code>Updated plans in Muncie project:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Updated plans in Muncie project:
 </code></pre></div>
 <div>
 <style scoped>
@@ -6789,7 +6845,7 @@ Updated plans in Bald Eagle Creek project:
 
 <h2 id="step-3-configure-plans-for-both-projects">Step 3: Configure Plans for Both Projects<a class="headerlink" href="#step-3-configure-plans-for-both-projects" title="Permanent link">&para;</a></h2>
 <p>Let's configure the plans for both projects, setting geometry, number of cores, and other parameters. This demonstrates how to customize plans for different projects using the same code structure.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Configure the Bald Eagle Creek plan</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Configure the Bald Eagle Creek plan</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Configuring Bald Eagle Creek plan:&quot;</span><span class="p">)</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">RasPlan</span><span class="o">.</span><span class="n">set_geom</span><span class="p">(</span><span class="n">new_bald_eagle_plan</span><span class="p">,</span> <span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">bald_eagle_ras</span><span class="p">)</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">RasPlan</span><span class="o">.</span><span class="n">set_num_cores</span><span class="p">(</span><span class="n">new_bald_eagle_plan</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">bald_eagle_ras</span><span class="p">)</span>
@@ -6821,7 +6877,7 @@ Updated plans in Bald Eagle Creek project:
 </span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="p">)</span>
 </span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Successfully configured Muncie plan&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Configuring Bald Eagle Creek plan:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Configuring Bald Eagle Creek plan:
 
 
 2026-01-11 20:43:56 - ras_commander.RasPlan - INFO - Updated Geom File in plan file to g01 for plan 03
@@ -6843,7 +6899,7 @@ Successfully configured Muncie plan
 </code></pre></div>
 <h2 id="step-4-create-compute-folders-for-both-projects">Step 4: Create Compute Folders for Both Projects<a class="headerlink" href="#step-4-create-compute-folders-for-both-projects" title="Permanent link">&para;</a></h2>
 <p>Now, let's create separate compute folders for each project. This allows us to run the computations separately and in parallel.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Create compute folders or clean them if they already exist</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Create compute folders or clean them if they already exist</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Note: Only cleaning compute folders, not the source projects</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="k">for</span> <span class="n">folder</span> <span class="ow">in</span> <span class="p">[</span><span class="n">bald_eagle_compute_folder</span><span class="p">,</span> <span class="n">muncie_compute_folder</span><span class="p">]:</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="c1"># Safety check: only delete folders that are within examples_dir</span>
@@ -6853,14 +6909,14 @@ Successfully configured Muncie plan
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="n">folder</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Created compute folder: </span><span class="si">{</span><span class="n">folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Removed existing compute folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_bald_eagle
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Removed existing compute folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_bald_eagle
 Created compute folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_bald_eagle
 Removed existing compute folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_muncie
 Created compute folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\compute_muncie
 </code></pre></div>
 <h2 id="step-5-define-project-execution-function">Step 5: Define Project Execution Function<a class="headerlink" href="#step-5-define-project-execution-function" title="Permanent link">&para;</a></h2>
 <p>Let's define a function to execute plans for each project, which we can run in parallel. This function will handle plan execution, timing, and provide detailed status updates.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">execute_plan</span><span class="p">(</span><span class="n">plan_number</span><span class="p">,</span> <span class="n">ras_object</span><span class="p">,</span> <span class="n">compute_folder</span><span class="p">,</span> <span class="n">project_name</span><span class="p">):</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">execute_plan</span><span class="p">(</span><span class="n">plan_number</span><span class="p">,</span> <span class="n">ras_object</span><span class="p">,</span> <span class="n">compute_folder</span><span class="p">,</span> <span class="n">project_name</span><span class="p">):</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="sd">    Execute a HEC-RAS plan and return detailed information about the execution.</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
@@ -6928,7 +6984,7 @@ Created compute folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\si
 - ✓ Execution times logged for performance comparison
 - ✓ <code>results</code> list contains two dictionaries with project metadata</p>
 <p><strong>What to Check</strong>:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Verify both executions succeeded</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Verify both executions succeeded</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;Expected 2 project results&quot;</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
@@ -6946,7 +7002,7 @@ The parallel execution should complete in approximately the time of the longest 
 - Parallel: <code>max(time_project1, time_project2)</code></p>
 <h3 id="audit-trail">Audit Trail<a class="headerlink" href="#audit-trail" title="Permanent link">&para;</a></h3>
 <p>Export execution metadata for documentation:
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">audit_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">audit_df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="s1">&#39;multiple_project_execution_audit.csv&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -6959,7 +7015,7 @@ The parallel execution should complete in approximately the time of the longest 
 - Where results are stored</p>
 <h2 id="step-6-execute-plans-for-both-projects-in-parallel">Step 6: Execute Plans for Both Projects in Parallel<a class="headerlink" href="#step-6-execute-plans-for-both-projects-in-parallel" title="Permanent link">&para;</a></h2>
 <p>Now, let's run both projects in parallel using a <code>ThreadPoolExecutor</code>. This allows us to utilize our system resources efficiently.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Executing plans for both projects in parallel...&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Executing plans for both projects in parallel...&quot;</span><span class="p">)</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;This may take several minutes...&quot;</span><span class="p">)</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Define the execution tasks</span>
@@ -6987,7 +7043,7 @@ The parallel execution should complete in approximately the time of the longest 
 </span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a>
 </span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">All executions complete!&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-11 20:43:56 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-11 20:43:56 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_04
 2026-01-11 20:43:56 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Muncie_04
 
 
@@ -7062,14 +7118,14 @@ All executions complete!
 </code></pre></div>
 <h2 id="viewing-execution-summary-with-results_df">Viewing Execution Summary with results_df<a class="headerlink" href="#viewing-execution-summary-with-results_df" title="Permanent link">&para;</a></h2>
 <p>For multi-project operations, each RAS object has its own <code>results_df</code>. Note that the global <code>ras</code> object shows the last initialized project (Muncie in this case).</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Display results for both projects</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Display results for both projects</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Bald Eagle Creek Results:&quot;</span><span class="p">)</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">bald_eagle_ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[[</span><span class="s2">&quot;plan_number&quot;</span><span class="p">,</span> <span class="s2">&quot;plan_title&quot;</span><span class="p">,</span> <span class="s2">&quot;completed&quot;</span><span class="p">,</span> <span class="s2">&quot;has_errors&quot;</span><span class="p">]])</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
 </span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Muncie Results:&quot;</span><span class="p">)</span>
 </span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">muncie_ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[[</span><span class="s2">&quot;plan_number&quot;</span><span class="p">,</span> <span class="s2">&quot;plan_title&quot;</span><span class="p">,</span> <span class="s2">&quot;completed&quot;</span><span class="p">,</span> <span class="s2">&quot;has_errors&quot;</span><span class="p">]])</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Bald Eagle Creek Results:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Bald Eagle Creek Results:
 </code></pre></div>
 <div>
 <style scoped>
@@ -7121,7 +7177,7 @@ All executions complete!
 </table>
 </div>
 
-<div class="language-text highlight"><pre><span></span><code>Muncie Results:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Muncie Results:
 </code></pre></div>
 <div>
 <style scoped>
@@ -7182,7 +7238,7 @@ All executions complete!
 
 <h2 id="step-7-analyze-results">Step 7: Analyze Results<a class="headerlink" href="#step-7-analyze-results" title="Permanent link">&para;</a></h2>
 <p>Let's analyze the results from both project executions, comparing execution times, result sizes, etc.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Create a DataFrame from the results</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Create a DataFrame from the results</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">results_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Display the results table</span>
@@ -7221,7 +7277,7 @@ All executions complete!
 </span><span id="__span-14-37"><a id="__codelineno-14-37" name="__codelineno-14-37" href="#__codelineno-14-37"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-14-38"><a id="__codelineno-14-38" name="__codelineno-14-38" href="#__codelineno-14-38"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Execution Results Summary:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Execution Results Summary:
 </code></pre></div>
 <div>
 <style scoped>
@@ -7273,7 +7329,7 @@ All executions complete!
 <p><img alt="png" src="../102_multiple_project_operations_files/102_multiple_project_operations_25_3.png" /></p>
 <h2 id="step-9-compare-two-hec-ras-projects">Step 9: Compare Two HEC-RAS Projects<a class="headerlink" href="#step-9-compare-two-hec-ras-projects" title="Permanent link">&para;</a></h2>
 <p>Let's create a utility function to compare the structures of the two HEC-RAS projects. This helps us understand the differences between the projects we're working with.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">compare_project_structures</span><span class="p">(</span><span class="n">ras_object1</span><span class="p">,</span> <span class="n">name1</span><span class="p">,</span> <span class="n">ras_object2</span><span class="p">,</span> <span class="n">name2</span><span class="p">):</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">compare_project_structures</span><span class="p">(</span><span class="n">ras_object1</span><span class="p">,</span> <span class="n">name1</span><span class="p">,</span> <span class="n">ras_object2</span><span class="p">,</span> <span class="n">name2</span><span class="p">):</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="sd">    Compare the structures of two HEC-RAS projects and display differences.</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="sd">    &quot;&quot;&quot;</span>
@@ -7329,7 +7385,7 @@ All executions complete!
 </span><span id="__span-15-54"><a id="__codelineno-15-54" name="__codelineno-15-54" href="#__codelineno-15-54"></a>    <span class="n">muncie_ras</span><span class="p">,</span> <span class="s2">&quot;Muncie&quot;</span>
 </span><span id="__span-15-55"><a id="__codelineno-15-55" name="__codelineno-15-55" href="#__codelineno-15-55"></a><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Project Structure Comparison:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Project Structure Comparison:
 </code></pre></div>
 <div>
 <style scoped>
@@ -7398,7 +7454,7 @@ All executions complete!
 - Evaluate bridge/culvert alternatives</p>
 <h3 id="critical-gotchas">Critical Gotchas<a class="headerlink" href="#critical-gotchas" title="Permanent link">&para;</a></h3>
 <p><strong>❌ Common Mistake: Missing ras_object Parameter</strong></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Initialize two projects</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Initialize two projects</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">project1_ras</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">project1_path</span><span class="p">,</span> <span class="s2">&quot;6.6&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">project1_ras</span><span class="p">)</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>
@@ -7424,7 +7480,7 @@ All executions complete!
 </ul>
 <h3 id="llm-forward-multi-project-review">LLM Forward: Multi-Project Review<a class="headerlink" href="#llm-forward-multi-project-review" title="Permanent link">&para;</a></h3>
 <p>Multiple project workflows benefit from structured comparison:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate_project_comparison_report</span><span class="p">(</span><span class="n">ras_objects</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">output_file</span><span class="p">):</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate_project_comparison_report</span><span class="p">(</span><span class="n">ras_objects</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">output_file</span><span class="p">):</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>    <span class="c1"># Generate comparative analysis report</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="n">report</span> <span class="o">=</span> <span class="p">[]</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>
@@ -7504,7 +7560,7 @@ All executions complete!
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
@@ -7514,7 +7570,7 @@ All executions complete!
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     

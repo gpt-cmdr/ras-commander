@@ -2236,6 +2236,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3863,6 +3891,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -5603,7 +5659,7 @@
 
 
 <h1 id="hecrascontroller-profiles">HECRASController Profiles<a class="headerlink" href="#hecrascontroller-profiles" title="Permanent link">&para;</a></h1>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
@@ -5634,7 +5690,7 @@
 </span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>PIP PACKAGE MODE: Loading installed ras-commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>PIP PACKAGE MODE: Loading installed ras-commander
 Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
@@ -5679,11 +5735,11 @@ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_
 4. HDF-based results preferred</p>
 <h3 id="migration-path-legacy-modern">Migration Path: Legacy → Modern<a class="headerlink" href="#migration-path-legacy-modern" title="Permanent link">&para;</a></h3>
 <p><strong>Step 1</strong>: Upgrade project to HEC-RAS 6.x
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Open in HEC-RAS 6.x GUI</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Open in HEC-RAS 6.x GUI</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># File → Save As (converts to 6.x format)</span>
 </span></code></pre></div></p>
 <p><strong>Step 2</strong>: Replace RasControl with RasCmdr
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># ❌ Legacy (RasControl - HEC-RAS 5.x)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># ❌ Legacy (RasControl - HEC-RAS 5.x)</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">RasControl</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">df</span> <span class="o">=</span> <span class="n">RasControl</span><span class="o">.</span><span class="n">get_steady_results</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
@@ -5705,7 +5761,7 @@ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_
 4. Results available in HEC-RAS viewer</p>
 <p><strong>Troubleshooting COM Errors</strong>:</p>
 <p><strong>Error 1: "COM object not found"</strong>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Verify HEC-RAS is registered</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Verify HEC-RAS is registered</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">win32com.client</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">try</span><span class="p">:</span>
@@ -5716,7 +5772,7 @@ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_
 </span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Solution: Reinstall HEC-RAS or run as Administrator&quot;</span><span class="p">)</span>
 </span></code></pre></div></p>
 <p><strong>Error 2: "Project won't open"</strong>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Check project file path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Check project file path</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">prj_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">project_folder</span><span class="p">)</span> <span class="o">/</span> <span class="s2">&quot;project.prj&quot;</span>
@@ -5724,14 +5780,14 @@ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[OK] Project file exists: </span><span class="si">{</span><span class="n">prj_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div></p>
 <p><strong>Error 3: "Results not extracting"</strong>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Verify plan computed successfully</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Verify plan computed successfully</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Check HEC-RAS GUI for computation messages</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># Look for &quot;Run completed successfully&quot;</span>
 </span></code></pre></div></p>
 <h3 id="understanding-com-output-structure">Understanding COM Output Structure<a class="headerlink" href="#understanding-com-output-structure" title="Permanent link">&para;</a></h3>
 <p>RasControl returns results in <strong>different formats</strong> than modern API:</p>
 <p><strong>Steady Flow</strong> (RasControl.get_steady_results):
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Returns DataFrame with columns:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Returns DataFrame with columns:</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># - river_id</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># - reach_id</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># - node_id</span>
@@ -5741,7 +5797,7 @@ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1"># - etc.</span>
 </span></code></pre></div></p>
 <p><strong>Unsteady Flow</strong> (RasControl.get_unsteady_results):
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Returns DataFrame with columns:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Returns DataFrame with columns:</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># - river_id</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># - reach_id</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># - node_id</span>
@@ -5752,7 +5808,7 @@ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_
 </span></code></pre></div></p>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># PARAMETERS - Edit these to customize the notebook</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
@@ -5764,7 +5820,7 @@ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_
 </span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project: </span><span class="si">{</span><span class="n">PROJECT_NAME</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;HEC-RAS Version: </span><span class="si">{</span><span class="n">RAS_VERSION</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Project: Muncie
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Project: Muncie
 HEC-RAS Version: 6.6
 </code></pre></div>
 <h1 id="working-with-legacy-hec-ras-using-rascontrol">Working with Legacy HEC-RAS Using RasControl<a class="headerlink" href="#working-with-legacy-hec-ras-using-rascontrol" title="Permanent link">&para;</a></h1>
@@ -5809,7 +5865,7 @@ HEC-RAS Version: 6.6
 <p>3.0, 3.1, 4.0, 4.1, 5.0-5.0.7, 6.0-6.7 Beta</p>
 <p>Accepts: <code>"4.1"</code>, <code>"41"</code>, <code>"5.0.6"</code>, <code>"506"</code>, <code>"6.6"</code>, <code>"66"</code>, etc.</p>
 <h2 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># ============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># ============================================================================</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># PLOTTING CONFIGURATION</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># ============================================================================</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
@@ -5827,10 +5883,10 @@ HEC-RAS Version: 6.6
 </span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>
 </span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✓ Plotting configuration loaded&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>✓ Plotting configuration loaded
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>✓ Plotting configuration loaded
 </code></pre></div>
 <h2 id="extract-and-initialize-project">Extract and Initialize Project<a class="headerlink" href="#extract-and-initialize-project" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Extract example project</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Extract example project</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="s2">&quot;Balde Eagle Creek&quot;</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;17&quot;</span><span class="p">)</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Initialize project with HEC-RAS 6.6</span>
@@ -5838,7 +5894,7 @@ HEC-RAS Version: 6.6
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Project initialized: </span><span class="si">{</span><span class="n">project_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:36:12 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:36:12 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
 2026-01-14 10:36:12 - ras_commander.RasExamples - INFO - Extracting project &#39;Balde Eagle Creek&#39; as &#39;Balde Eagle Creek_17&#39;
 2026-01-14 10:36:12 - ras_commander.RasExamples - INFO - Folder &#39;Balde Eagle Creek_17&#39; already exists. Deleting existing folder...
 2026-01-14 10:36:12 - ras_commander.RasExamples - INFO - Existing folder &#39;Balde Eagle Creek_17&#39; has been deleted.
@@ -5849,7 +5905,7 @@ HEC-RAS Version: 6.6
 
 ✓ Project initialized: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span>
 </span></code></pre></div>
 <div>
 <style scoped>
@@ -5948,7 +6004,7 @@ HEC-RAS Version: 6.6
 
 <h1 id="part-1-steady-state-plan-02">Part 1: Steady State (Plan 02)<a class="headerlink" href="#part-1-steady-state-plan-02" title="Permanent link">&para;</a></h1>
 <p>Extract steady profiles. <strong>Note:</strong> <code>run_plan()</code> automatically sets Plan 02 as current!</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># Run Plan 02 (Steady Flow)</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Must run the plan before extracting results</span>
@@ -5956,7 +6012,7 @@ HEC-RAS Version: 6.6
 </span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;02&quot;</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 </span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✓ Plan 02 completed&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:36:12 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:36:12 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17
 2026-01-14 10:36:12 - ras_commander.RasUtils - INFO - Using provided plan file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.p02
 2026-01-14 10:36:12 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.p02
 2026-01-14 10:36:12 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 02
@@ -5991,7 +6047,7 @@ c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commande
 - Reads from <code>.comp_msgs.txt</code> or <code>.computeMsgs.txt</code> files (version-dependent)
 - Falls back to HDF extraction if .txt files not available
 - Returns detailed information about the computation process</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Extract computation messages for steady flow Plan 02</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Extract computation messages for steady flow Plan 02</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;COMPUTATION MESSAGES - Plan 02 (Steady Flow)&quot;</span><span class="p">)</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
@@ -6013,7 +6069,7 @@ c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commande
 </span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a>
 </span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:36:17 - ras_commander.RasControl - WARNING - Computation messages .txt file not found (tried .comp_msgs.txt and .computeMsgs.txt), falling back to HDF extraction
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:36:17 - ras_commander.RasControl - WARNING - Computation messages .txt file not found (tried .comp_msgs.txt and .computeMsgs.txt), falling back to HDF extraction
 
 
 ================================================================================
@@ -6023,7 +6079,7 @@ No computation messages available for Plan 02
 
 ================================================================================
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Extract steady results (auto-sets Plan 02 as current)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Extract steady results (auto-sets Plan 02 as current)</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">df_steady</span> <span class="o">=</span> <span class="n">RasControl</span><span class="o">.</span><span class="n">get_steady_results</span><span class="p">(</span><span class="s2">&quot;02&quot;</span><span class="p">)</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Rows: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">df_steady</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -6031,7 +6087,7 @@ No computation messages available for Plan 02
 </span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;XS: </span><span class="si">{</span><span class="n">df_steady</span><span class="p">[</span><span class="s1">&#39;node_id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">nunique</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="n">df_steady</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:36:17 - ras_commander.RasControl - INFO - Opening HEC-RAS: RAS66.HECRASController (version: 6.6)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:36:17 - ras_commander.RasControl - INFO - Opening HEC-RAS: RAS66.HECRASController (version: 6.6)
 2026-01-14 10:36:17 - ras_commander.RasControl - INFO - Opening project: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.prj
 2026-01-14 10:36:18 - ras_commander.RasControl - INFO - Detected ras.exe PID 204396 (confidence: 100/100)
 2026-01-14 10:36:18 - ras_commander.RasControl - INFO - Executing operation...
@@ -6225,7 +6281,7 @@ XS: 178
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># ============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># ============================================================================</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># STEADY FLOW: Longitudinal Profiles by River/Reach</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="c1"># ============================================================================</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>
@@ -6271,19 +6327,19 @@ XS: 178
 </span><span id="__span-15-44"><a id="__codelineno-15-44" name="__codelineno-15-44" href="#__codelineno-15-44"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Station range: </span><span class="si">{</span><span class="n">group_df</span><span class="p">[</span><span class="s1">&#39;node_id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">group_df</span><span class="p">[</span><span class="s1">&#39;node_id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_17_0.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>✓ Plotted 8 profiles for Bald Eagle - Loc Hav
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>✓ Plotted 8 profiles for Bald Eagle - Loc Hav
   Station range: 659.9 to 138154.4
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Export</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Export</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;working&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">df_steady</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="s2">&quot;working/steady_plan02.csv&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Exported </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">df_steady</span><span class="p">)</span><span class="si">}</span><span class="s2"> rows to working/steady_plan02.csv&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Exported 1424 rows to working/steady_plan02.csv
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Exported 1424 rows to working/steady_plan02.csv
 </code></pre></div>
 <h1 id="part-2-unsteady-time-series-plan-01">Part 2: Unsteady Time Series (Plan 01)<a class="headerlink" href="#part-2-unsteady-time-series-plan-01" title="Permanent link">&para;</a></h1>
 <p>Extract unsteady results. <strong>Note:</strong> Methods automatically set Plan 01 as current!</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Run Plan 01 (auto-sets as current, waits for completion)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Run Plan 01 (auto-sets as current, waits for completion)</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># This may take 5-10 minutes!</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Running Plan 01 (Unsteady)...&quot;</span><span class="p">)</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># NOTE: Using RasCmdr.compute_plan() instead of RasControl.run_plan() </span>
@@ -6291,7 +6347,7 @@ XS: 178
 </span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">clear_geompre</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 </span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✓ Plan 01 completed&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:36:21 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:36:21 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17
 2026-01-14 10:36:21 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.p01
 2026-01-14 10:36:21 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.p01
 2026-01-14 10:36:21 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
@@ -6326,13 +6382,13 @@ c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commande
 
 ✓ Plan 01 completed
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Get output times (auto-sets Plan 01 as current)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Get output times (auto-sets Plan 01 as current)</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">times</span> <span class="o">=</span> <span class="n">RasControl</span><span class="o">.</span><span class="n">get_output_times</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">times</span><span class="p">)</span><span class="si">}</span><span class="s2"> timesteps&quot;</span><span class="p">)</span>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;First: </span><span class="si">{</span><span class="n">times</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Last: </span><span class="si">{</span><span class="n">times</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:37:55 - ras_commander.RasControl - INFO - Opening HEC-RAS: RAS66.HECRASController (version: 6.6)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:37:55 - ras_commander.RasControl - INFO - Opening HEC-RAS: RAS66.HECRASController (version: 6.6)
 2026-01-14 10:37:55 - ras_commander.RasControl - INFO - Opening project: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.prj
 2026-01-14 10:37:56 - ras_commander.RasControl - INFO - Detected ras.exe PID 312952 (confidence: 100/100)
 2026-01-14 10:37:56 - ras_commander.RasControl - INFO - Executing operation...
@@ -6353,7 +6409,7 @@ Last: 24FEB1999 0400
 - Simulation timing and performance
 - Convergence information
 - Any warnings or errors encountered during computation</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Extract computation messages for unsteady flow Plan 01</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Extract computation messages for unsteady flow Plan 01</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;COMPUTATION MESSAGES - Plan 01 (Unsteady Flow)&quot;</span><span class="p">)</span>
 </span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
@@ -6390,7 +6446,7 @@ Last: 24FEB1999 0400
 </span><span id="__span-19-35"><a id="__codelineno-19-35" name="__codelineno-19-35" href="#__codelineno-19-35"></a>
 </span><span id="__span-19-36"><a id="__codelineno-19-36" name="__codelineno-19-36" href="#__codelineno-19-36"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:37:56 - ras_commander.RasControl - INFO - Reading computation messages from: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.p01.comp_msgs.txt
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:37:56 - ras_commander.RasControl - INFO - Reading computation messages from: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.p01.comp_msgs.txt
 2026-01-14 10:37:56 - ras_commander.RasControl - INFO - Read 1175 characters from comp_msgs file
 
 
@@ -6442,7 +6498,7 @@ Found 1 warning/error lines:
 
 ================================================================================
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Extract unsteady (limit to 10 timesteps for demo)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Extract unsteady (limit to 10 timesteps for demo)</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">df_unsteady</span> <span class="o">=</span> <span class="n">RasControl</span><span class="o">.</span><span class="n">get_unsteady_results</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Rows: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">df_unsteady</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -6450,7 +6506,7 @@ Found 1 warning/error lines:
 </span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;XS: </span><span class="si">{</span><span class="n">df_unsteady</span><span class="p">[</span><span class="s1">&#39;node_id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">nunique</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="n">df_unsteady</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:37:56 - ras_commander.RasControl - INFO - Opening HEC-RAS: RAS66.HECRASController (version: 6.6)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:37:56 - ras_commander.RasControl - INFO - Opening HEC-RAS: RAS66.HECRASController (version: 6.6)
 2026-01-14 10:37:56 - ras_commander.RasControl - INFO - Opening project: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.prj
 2026-01-14 10:37:57 - ras_commander.RasControl - INFO - Detected ras.exe PID 401528 (confidence: 100/100)
 2026-01-14 10:37:57 - ras_commander.RasControl - INFO - Executing operation...
@@ -6677,7 +6733,7 @@ XS: 178
 - Filter out when plotting time series (it's not a timestep)
 - Show as horizontal reference line on plots to indicate peak</p>
 <p>The next cell demonstrates this pattern.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># ============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># ============================================================================</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="c1"># UNSTEADY FLOW: Time Series at Multiple Cross Sections</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="c1"># ============================================================================</span>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># NOTE: This cell shows LEGACY manual datetime parsing for reference.</span>
@@ -6775,11 +6831,11 @@ XS: 178
 </span><span id="__span-21-96"><a id="__codelineno-21-96" name="__codelineno-21-96" href="#__codelineno-21-96"></a>
 </span><span id="__span-21-97"><a id="__codelineno-21-97" name="__codelineno-21-97" href="#__codelineno-21-97"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ Created time series plots for </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">selected_xs</span><span class="p">)</span><span class="si">}</span><span class="s2"> stations&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Creating time series plots for 9 cross sections:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Creating time series plots for 9 cross sections:
   Stations: [&#39;138154.4&#39;, &#39;126454.1&#39;, &#39;116401.3&#39;, &#39;98206.9&#39;, &#39;76643.4&#39;, &#39;58836.2&#39;, &#39;45233.9&#39;, &#39;27226.4&#39;, &#39;11865.8&#39;]
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_26_1.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>✓ Created time series plots for 9 stations
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>✓ Created time series plots for 9 stations
 </code></pre></div>
 <h2 id="new-in-v0810-automatic-datetime-parsing">NEW in v0.81.0: Automatic Datetime Parsing<a class="headerlink" href="#new-in-v0810-automatic-datetime-parsing" title="Permanent link">&para;</a></h2>
 <p>Starting in version 0.81.0, <code>get_unsteady_results()</code> automatically includes a <code>datetime</code> column with proper datetime64[ns] objects. <strong>Manual parsing is no longer needed!</strong></p>
@@ -6790,7 +6846,7 @@ XS: 178
 - ✅ Immediate compatibility with pandas datetime operations
 - ✅ Backward compatible - <code>time_string</code> still included</p>
 <p>The cell above shows the old manual parsing method (kept for reference). The next cell demonstrates the modern approach using the automatic <code>datetime</code> column.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># ============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># ============================================================================</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># MODERN APPROACH: Using Automatic datetime Column (v0.81.0+)</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1"># ============================================================================</span>
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>
@@ -6832,7 +6888,7 @@ XS: 178
 </span><span id="__span-22-40"><a id="__codelineno-22-40" name="__codelineno-22-40" href="#__codelineno-22-40"></a>
 </span><span id="__span-22-41"><a id="__codelineno-22-41" name="__codelineno-22-41" href="#__codelineno-22-41"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ Modern datetime functionality demonstrated&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>DataFrame columns:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>DataFrame columns:
 [&#39;river&#39;, &#39;reach&#39;, &#39;node_id&#39;, &#39;time_index&#39;, &#39;time_string&#39;, &#39;datetime&#39;, &#39;wsel&#39;, &#39;min_ch_el&#39;, &#39;velocity&#39;, &#39;flow&#39;, &#39;froude&#39;, &#39;energy&#39;, &#39;max_depth&#39;]
 
 datetime column type: datetime64[ns]
@@ -6863,7 +6919,7 @@ Data points between 1999-02-18 12:00:00 and 1999-02-20 12:00:00: 4450
 
 ✓ Modern datetime functionality demonstrated
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># ============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># ============================================================================</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># UNSTEADY FLOW: Maximum Water Surface Envelope</span>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># ============================================================================</span>
 </span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>
@@ -6910,11 +6966,11 @@ Data points between 1999-02-18 12:00:00 and 1999-02-20 12:00:00: 4450
 </span><span id="__span-23-45"><a id="__codelineno-23-45" name="__codelineno-23-45" href="#__codelineno-23-45"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Highest WSE: </span><span class="si">{</span><span class="n">max_wse_sorted</span><span class="p">[</span><span class="s1">&#39;wsel&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ft at station </span><span class="si">{</span><span class="n">max_wse_sorted</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">max_wse_sorted</span><span class="p">[</span><span class="s1">&#39;wsel&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">idxmax</span><span class="p">(),</span><span class="w"> </span><span class="s1">&#39;node_id&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_29_0.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>✓ Maximum Water Surface Envelope
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>✓ Maximum Water Surface Envelope
   Max depth: 76.66 ft at station 82607.9
   Highest WSE: 672.81 ft at station 138154.4
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># ============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># ============================================================================</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># UNSTEADY FLOW: Velocity Hydrographs at Key Locations</span>
 </span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># ============================================================================</span>
 </span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>
@@ -6959,11 +7015,11 @@ Data points between 1999-02-18 12:00:00 and 1999-02-20 12:00:00: 4450
 </span><span id="__span-24-43"><a id="__codelineno-24-43" name="__codelineno-24-43" href="#__codelineno-24-43"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ Created velocity hydrographs for </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">critical_xs</span><span class="p">)</span><span class="si">}</span><span class="s2"> key locations&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_30_0.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>✓ Created velocity hydrographs for 3 key locations
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>✓ Created velocity hydrographs for 3 key locations
 </code></pre></div>
 <h1 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h1>
 <h2 id="complete-rascontrol-api">Complete RasControl API<a class="headerlink" href="#complete-rascontrol-api" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Initialize with version (flexible formats)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Initialize with version (flexible formats)</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">&quot;4.1&quot;</span><span class="p">)</span>  <span class="c1"># or &quot;41&quot;, &quot;66&quot;, &quot;5.0.6&quot;, &quot;506&quot;, etc.</span>
 </span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>
 </span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="c1"># Run plans (auto-sets as current, waits for completion)</span>
@@ -7022,7 +7078,7 @@ Data points between 1999-02-18 12:00:00 and 1999-02-20 12:00:00: 4450
 - All plans remain in project for further analysis
 - CSV files for external comparison
 - Plots showing version differences</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># OPTIONAL: Multi-version unsteady comparison (SKIP for automated testing)</span>
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="c1"># This cell runs multiple HEC-RAS versions and takes 1-2 hours.</span>
@@ -7103,7 +7159,7 @@ Data points between 1999-02-18 12:00:00 and 1999-02-20 12:00:00: 4450
 </span><span id="__span-26-79"><a id="__codelineno-26-79" name="__codelineno-26-79" href="#__codelineno-26-79"></a>
 </span><span id="__span-26-80"><a id="__codelineno-26-80" name="__codelineno-26-80" href="#__codelineno-26-80"></a>        <span class="nb">print</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:38:27 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.rasmap
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:38:27 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.rasmap
 2026-01-14 10:38:27 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.p01.hdf
 2026-01-14 10:38:27 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.p01.hdf
 2026-01-14 10:38:27 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: BaldEagle.p01.hdf
@@ -7687,7 +7743,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
 
   Extracted 13528 rows -&gt; working\unsteady_v66.csv
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="c1"># Plot multi-version unsteady comparison (if data available)</span>
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>
@@ -7793,10 +7849,10 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
 </span><span id="__span-27-104"><a id="__codelineno-27-104" name="__codelineno-27-104" href="#__codelineno-27-104"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipping multi-version unsteady comparison plots (no data)&quot;</span><span class="p">)</span>
 </span><span id="__span-27-105"><a id="__codelineno-27-105" name="__codelineno-27-105" href="#__codelineno-27-105"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Set SKIP_MULTIVERSION = False in cell above to run the analysis&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Plotting 36 stations (every 5th of 178 total)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Plotting 36 stations (every 5th of 178 total)
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_1.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 138154.4:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 138154.4:
   v4.1: timesteps=75, max_wse=672.80 ft
   v5.0.4: timesteps=75, max_wse=672.80 ft
   v5.0.6: timesteps=75, max_wse=672.80 ft
@@ -7804,7 +7860,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=672.80 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_3.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 135591.4:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 135591.4:
   v4.1: timesteps=75, max_wse=666.43 ft
   v5.0.4: timesteps=75, max_wse=666.43 ft
   v5.0.6: timesteps=75, max_wse=666.43 ft
@@ -7812,7 +7868,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=666.43 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_5.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 132973.6:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 132973.6:
   v4.1: timesteps=75, max_wse=663.44 ft
   v5.0.4: timesteps=75, max_wse=663.44 ft
   v5.0.6: timesteps=75, max_wse=663.44 ft
@@ -7820,7 +7876,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=663.44 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_7.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 129627.5:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 129627.5:
   v4.1: timesteps=75, max_wse=662.05 ft
   v5.0.4: timesteps=75, max_wse=662.05 ft
   v5.0.6: timesteps=75, max_wse=662.05 ft
@@ -7828,7 +7884,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=662.05 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_9.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 126454.1:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 126454.1:
   v4.1: timesteps=75, max_wse=661.92 ft
   v5.0.4: timesteps=75, max_wse=661.93 ft
   v5.0.6: timesteps=75, max_wse=661.93 ft
@@ -7836,7 +7892,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=661.93 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_11.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 124025.0:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 124025.0:
   v4.1: timesteps=75, max_wse=661.85 ft
   v5.0.4: timesteps=75, max_wse=661.86 ft
   v5.0.6: timesteps=75, max_wse=661.86 ft
@@ -7844,7 +7900,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=661.86 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_13.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 121754.0:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 121754.0:
   v4.1: timesteps=75, max_wse=661.81 ft
   v5.0.4: timesteps=75, max_wse=661.82 ft
   v5.0.6: timesteps=75, max_wse=661.82 ft
@@ -7852,7 +7908,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=661.82 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_15.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 119473.8:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 119473.8:
   v4.1: timesteps=75, max_wse=661.77 ft
   v5.0.4: timesteps=75, max_wse=661.78 ft
   v5.0.6: timesteps=75, max_wse=661.78 ft
@@ -7860,7 +7916,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=661.78 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_17.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 116401.3:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 116401.3:
   v4.1: timesteps=75, max_wse=661.76 ft
   v5.0.4: timesteps=75, max_wse=661.77 ft
   v5.0.6: timesteps=75, max_wse=661.77 ft
@@ -7868,7 +7924,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=661.77 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_19.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 111971.0:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 111971.0:
   v4.1: timesteps=75, max_wse=661.76 ft
   v5.0.4: timesteps=75, max_wse=661.76 ft
   v5.0.6: timesteps=75, max_wse=661.76 ft
@@ -7876,7 +7932,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=661.76 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_21.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 106466.0:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 106466.0:
   v4.1: timesteps=75, max_wse=661.75 ft
   v5.0.4: timesteps=75, max_wse=661.76 ft
   v5.0.6: timesteps=75, max_wse=661.76 ft
@@ -7884,7 +7940,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=661.76 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_23.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 103369.7:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 103369.7:
   v4.1: timesteps=75, max_wse=661.75 ft
   v5.0.4: timesteps=75, max_wse=661.75 ft
   v5.0.6: timesteps=75, max_wse=661.75 ft
@@ -7892,7 +7948,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=661.75 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_25.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 98206.87:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 98206.87:
   v4.1: timesteps=75, max_wse=661.73 ft
   v5.0.4: timesteps=75, max_wse=661.73 ft
   v5.0.6: timesteps=75, max_wse=661.73 ft
@@ -7900,7 +7956,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=661.73 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_27.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 92011.85:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 92011.85:
   v4.1: timesteps=75, max_wse=661.72 ft
   v5.0.4: timesteps=75, max_wse=661.72 ft
   v5.0.6: timesteps=75, max_wse=661.72 ft
@@ -7908,7 +7964,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=661.72 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_29.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 86942.04:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 86942.04:
   v4.1: timesteps=75, max_wse=661.72 ft
   v5.0.4: timesteps=75, max_wse=661.72 ft
   v5.0.6: timesteps=75, max_wse=661.72 ft
@@ -7916,7 +7972,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=661.72 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_31.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 81849.41:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 81849.41:
   v4.1: timesteps=75, max_wse=661.72 ft
   v5.0.4: timesteps=75, max_wse=661.72 ft
   v5.0.6: timesteps=75, max_wse=661.72 ft
@@ -7924,7 +7980,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=661.72 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_33.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 76643.4:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 76643.4:
   v4.1: timesteps=75, max_wse=595.93 ft
   v5.0.4: timesteps=75, max_wse=595.93 ft
   v5.0.6: timesteps=75, max_wse=595.93 ft
@@ -7932,7 +7988,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=595.94 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_35.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 74207.96:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 74207.96:
   v4.1: timesteps=75, max_wse=591.37 ft
   v5.0.4: timesteps=75, max_wse=591.37 ft
   v5.0.6: timesteps=75, max_wse=591.37 ft
@@ -7940,7 +7996,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=591.37 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_37.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 69567.33:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 69567.33:
   v4.1: timesteps=75, max_wse=588.82 ft
   v5.0.4: timesteps=75, max_wse=588.82 ft
   v5.0.6: timesteps=75, max_wse=588.82 ft
@@ -7948,7 +8004,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=588.82 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_39.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 63812.99:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 63812.99:
   v4.1: timesteps=75, max_wse=584.55 ft
   v5.0.4: timesteps=75, max_wse=584.55 ft
   v5.0.6: timesteps=75, max_wse=584.55 ft
@@ -7956,7 +8012,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=584.55 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_41.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 58836.23:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 58836.23:
   v4.1: timesteps=75, max_wse=580.49 ft
   v5.0.4: timesteps=75, max_wse=580.49 ft
   v5.0.6: timesteps=75, max_wse=580.49 ft
@@ -7964,7 +8020,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=580.49 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_43.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 56775.92:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 56775.92:
   v4.1: timesteps=75, max_wse=578.21 ft
   v5.0.4: timesteps=75, max_wse=578.21 ft
   v5.0.6: timesteps=75, max_wse=578.21 ft
@@ -7972,7 +8028,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=578.21 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_45.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 52879.19:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 52879.19:
   v4.1: timesteps=75, max_wse=574.95 ft
   v5.0.4: timesteps=75, max_wse=574.95 ft
   v5.0.6: timesteps=75, max_wse=574.95 ft
@@ -7980,7 +8036,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=574.95 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_47.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 48110.09:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 48110.09:
   v4.1: timesteps=75, max_wse=572.39 ft
   v5.0.4: timesteps=75, max_wse=572.40 ft
   v5.0.6: timesteps=75, max_wse=572.40 ft
@@ -7988,7 +8044,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=572.40 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_49.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 45233.89:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 45233.89:
   v4.1: timesteps=75, max_wse=570.90 ft
   v5.0.4: timesteps=75, max_wse=570.91 ft
   v5.0.6: timesteps=75, max_wse=570.91 ft
@@ -7996,7 +8052,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=570.91 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_51.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 40526.85:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 40526.85:
   v4.1: timesteps=75, max_wse=569.95 ft
   v5.0.4: timesteps=75, max_wse=569.97 ft
   v5.0.6: timesteps=75, max_wse=569.97 ft
@@ -8004,7 +8060,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=569.97 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_53.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 36769.88:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 36769.88:
   v4.1: timesteps=75, max_wse=567.81 ft
   v5.0.4: timesteps=75, max_wse=567.83 ft
   v5.0.6: timesteps=75, max_wse=567.83 ft
@@ -8012,7 +8068,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=567.83 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_55.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 34098.93:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 34098.93:
   v4.1: timesteps=75, max_wse=566.11 ft
   v5.0.4: timesteps=75, max_wse=566.11 ft
   v5.0.6: timesteps=75, max_wse=566.11 ft
@@ -8020,7 +8076,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=566.11 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_57.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 27226.4:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 27226.4:
   v4.1: timesteps=75, max_wse=565.45 ft
   v5.0.4: timesteps=75, max_wse=565.45 ft
   v5.0.6: timesteps=75, max_wse=565.45 ft
@@ -8028,7 +8084,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=565.45 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_59.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 23783.65:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 23783.65:
   v4.1: timesteps=75, max_wse=565.32 ft
   v5.0.4: timesteps=75, max_wse=565.32 ft
   v5.0.6: timesteps=75, max_wse=565.32 ft
@@ -8036,7 +8092,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=565.32 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_61.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 21199.93:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 21199.93:
   v4.1: timesteps=75, max_wse=564.16 ft
   v5.0.4: timesteps=75, max_wse=564.16 ft
   v5.0.6: timesteps=75, max_wse=564.16 ft
@@ -8044,7 +8100,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=564.16 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_63.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 16787.45:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 16787.45:
   v4.1: timesteps=75, max_wse=563.08 ft
   v5.0.4: timesteps=75, max_wse=563.09 ft
   v5.0.6: timesteps=75, max_wse=563.09 ft
@@ -8052,7 +8108,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=563.09 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_65.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 11865.8:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 11865.8:
   v4.1: timesteps=75, max_wse=562.22 ft
   v5.0.4: timesteps=75, max_wse=562.21 ft
   v5.0.6: timesteps=75, max_wse=562.21 ft
@@ -8060,7 +8116,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=562.21 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_67.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 8541.462:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 8541.462:
   v4.1: timesteps=75, max_wse=562.01 ft
   v5.0.4: timesteps=75, max_wse=562.01 ft
   v5.0.6: timesteps=75, max_wse=562.01 ft
@@ -8068,7 +8124,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=562.01 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_69.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 4293.71:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 4293.71:
   v4.1: timesteps=75, max_wse=561.86 ft
   v5.0.4: timesteps=75, max_wse=561.85 ft
   v5.0.6: timesteps=75, max_wse=561.85 ft
@@ -8076,7 +8132,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
   v6.6: timesteps=75, max_wse=561.85 ft
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_34_71.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Station 1692.633:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Station 1692.633:
   v4.1: timesteps=75, max_wse=561.44 ft
   v5.0.4: timesteps=75, max_wse=561.44 ft
   v5.0.6: timesteps=75, max_wse=561.44 ft
@@ -8149,7 +8205,7 @@ Max WSE by version at station 138154.4:
 </table>
 <h3 id="version-comparison-workflow">Version Comparison Workflow<a class="headerlink" href="#version-comparison-workflow" title="Permanent link">&para;</a></h3>
 <p>This notebook demonstrates running <strong>same project in multiple HEC-RAS versions</strong> for validation:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Run in HEC-RAS 5.0.7</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Run in HEC-RAS 5.0.7</span>
 </span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="n">ras507_results</span> <span class="o">=</span> <span class="n">run_with_version</span><span class="p">(</span><span class="s2">&quot;5.0.7&quot;</span><span class="p">,</span> <span class="n">project_path</span><span class="p">,</span> <span class="s2">&quot;01&quot;</span><span class="p">)</span>
 </span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>
 </span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="c1"># Run in HEC-RAS 6.3</span>
@@ -8167,7 +8223,7 @@ Max WSE by version at station 138154.4:
 - <strong>Regression testing</strong>: Detect unexpected changes from HEC-RAS updates</p>
 <h3 id="llm-forward-multi-version-documentation">LLM Forward: Multi-Version Documentation<a class="headerlink" href="#llm-forward-multi-version-documentation" title="Permanent link">&para;</a></h3>
 <p>Document version comparison for peer review:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">document_version_comparison</span><span class="p">(</span><span class="n">versions_tested</span><span class="p">,</span> <span class="n">results_dict</span><span class="p">,</span> <span class="n">output_file</span><span class="p">):</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">document_version_comparison</span><span class="p">(</span><span class="n">versions_tested</span><span class="p">,</span> <span class="n">results_dict</span><span class="p">,</span> <span class="n">output_file</span><span class="p">):</span>
 </span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 </span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 </span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>
@@ -8210,7 +8266,7 @@ Max WSE by version at station 138154.4:
 - <strong>Validation documentation</strong>: Proof that upgrade doesn't change results
 - <strong>Peer review</strong>: Non-programmers can review statistics
 - <strong>Audit trail</strong>: Record which versions were compared when</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="c1"># OPTIONAL: Multi-version steady state comparison (SKIP for automated testing)</span>
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="c1"># This cell runs multiple HEC-RAS versions and can take 30+ minutes.</span>
@@ -8293,7 +8349,7 @@ Max WSE by version at station 138154.4:
 </span><span id="__span-30-81"><a id="__codelineno-30-81" name="__codelineno-30-81" href="#__codelineno-30-81"></a>    <span class="k">else</span><span class="p">:</span>
 </span><span id="__span-30-82"><a id="__codelineno-30-82" name="__codelineno-30-82" href="#__codelineno-30-82"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No steady results to plot&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-14 10:48:07 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.p02 to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.p08
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-14 10:48:07 - ras_commander.RasUtils - INFO - File cloned from C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.p02 to C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.p08
 2026-01-14 10:48:07 - ras_commander.RasUtils - INFO - Successfully updated file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.p08
 2026-01-14 10:48:07 - ras_commander.RasUtils - INFO - Project file updated with new Plan entry: 08
 2026-01-14 10:48:07 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Balde Eagle Creek_17\BaldEagle.rasmap
@@ -9084,7 +9140,7 @@ True [&#39;Starting Steady Computations&#39;, &#39;Computing&#39;, &#39;Computat
   Extracted 1424 rows -&gt; working\steady_v66.csv
 </code></pre></div>
 <p><img alt="png" src="../121_legacy_hecrascontroller_and_rascontrol_files/121_legacy_hecrascontroller_and_rascontrol_36_26.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Compared 4 versions
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Compared 4 versions
 </code></pre></div>
 
 
@@ -9108,7 +9164,7 @@ True [&#39;Starting Steady Computations&#39;, &#39;Computing&#39;, &#39;Computat
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
@@ -9118,7 +9174,7 @@ True [&#39;Starting Steady Computations&#39;, &#39;Computing&#39;, &#39;Computat
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     

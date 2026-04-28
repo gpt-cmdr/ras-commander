@@ -2084,6 +2084,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3859,6 +3887,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5579,7 +5635,7 @@
 <li>Read the JSON/Markdown evidence report and inspect compute-message summaries.</li>
 </ol>
 <p>The full steady-plan batch can take a while because it touches 253 projects, so it is intentionally opt-in inside the notebook.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
@@ -5600,7 +5656,7 @@
 </span></code></pre></div>
 <h2 id="configure-the-ebfe-workspace">Configure the eBFE Workspace<a class="headerlink" href="#configure-the-ebfe-workspace" title="Permanent link">&para;</a></h2>
 <p>The shared eBFE workspace is on <code>H:\\Testing\\eBFE Model Organization</code>. Set <code>RAS_COMMANDER_EBFE_ROOT</code> if you want to use a different local cache.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">EBFE_WORKSPACE</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;RAS_COMMANDER_EBFE_ROOT&quot;</span><span class="p">,</span> <span class="sa">r</span><span class="s2">&quot;H:\Testing\eBFE Model Organization&quot;</span><span class="p">))</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">EBFE_WORKSPACE</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;RAS_COMMANDER_EBFE_ROOT&quot;</span><span class="p">,</span> <span class="sa">r</span><span class="s2">&quot;H:\Testing\eBFE Model Organization&quot;</span><span class="p">))</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">DOWNLOAD_ROOT</span> <span class="o">=</span> <span class="n">EBFE_WORKSPACE</span> <span class="o">/</span> <span class="s2">&quot;Downloads&quot;</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">ORGANIZED_ROOT</span> <span class="o">=</span> <span class="n">EBFE_WORKSPACE</span> <span class="o">/</span> <span class="s2">&quot;Organized&quot;</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">VALIDATION_ROOT</span> <span class="o">=</span> <span class="n">EBFE_WORKSPACE</span> <span class="o">/</span> <span class="s2">&quot;Validation&quot;</span> <span class="o">/</span> <span class="s2">&quot;ebfe_delivery&quot;</span>
@@ -5624,14 +5680,14 @@
 </span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Validation root: </span><span class="si">{</span><span class="n">VALIDATION_ROOT</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Validation matrix: </span><span class="si">{</span><span class="n">VALIDATION_MATRIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Rio Hondo organized folder: H:\Testing\eBFE Model Organization\Organized\RioHondo_13060008
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Rio Hondo organized folder: H:\Testing\eBFE Model Organization\Organized\RioHondo_13060008
 RAS Model root exists: True
 Validation root: H:\Testing\eBFE Model Organization\Validation\ebfe_delivery
 Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
 </code></pre></div>
 <h2 id="discover-the-ras-projects">Discover the RAS Projects<a class="headerlink" href="#discover-the-ras-projects" title="Permanent link">&para;</a></h2>
 <p>Rio Hondo is a 1D steady collection, so the unit of validation is each individual HEC-RAS project folder.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">projects</span> <span class="o">=</span> <span class="n">RasUtils</span><span class="o">.</span><span class="n">find_valid_ras_folders</span><span class="p">(</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">projects</span> <span class="o">=</span> <span class="n">RasUtils</span><span class="o">.</span><span class="n">find_valid_ras_folders</span><span class="p">(</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">ras_model_root</span><span class="p">,</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">max_depth</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">return_project_info</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
@@ -5640,7 +5696,7 @@ Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Discovered </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">project_df</span><span class="p">)</span><span class="si">}</span><span class="s2"> HEC-RAS project folders&quot;</span><span class="p">)</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">project_df</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:35:25 - ras_commander.RasUtils - INFO - Searching for HEC-RAS projects in: H:\Testing\eBFE Model Organization\Organized\RioHondo_13060008\RAS Model
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:35:25 - ras_commander.RasUtils - INFO - Searching for HEC-RAS projects in: H:\Testing\eBFE Model Organization\Organized\RioHondo_13060008\RAS Model
 
 
 2026-04-26 22:35:50 - ras_commander.RasUtils - INFO - Found 253 valid HEC-RAS project folders
@@ -5720,7 +5776,7 @@ Discovered 253 HEC-RAS project folders
 
 <h2 id="inspect-one-project">Inspect One Project<a class="headerlink" href="#inspect-one-project" title="Permanent link">&para;</a></h2>
 <p>A quick initialization pass confirms that ras-commander can read the project metadata before running the full batch.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">sample_project</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">project_df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;folder&quot;</span><span class="p">])</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">sample_project</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">project_df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;folder&quot;</span><span class="p">])</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">sample_ras</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">init_ras_project</span><span class="p">(</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">sample_project</span><span class="p">,</span>
@@ -5731,7 +5787,7 @@ Discovered 253 HEC-RAS project folders
 </span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">sample_ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[[</span><span class="s2">&quot;plan_number&quot;</span><span class="p">,</span> <span class="s2">&quot;flow_type&quot;</span><span class="p">,</span> <span class="s2">&quot;Geom File&quot;</span><span class="p">,</span> <span class="s2">&quot;Flow File&quot;</span><span class="p">,</span> <span class="s2">&quot;HDF_Results_Path&quot;</span><span class="p">]]</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:35:50 - ras_commander.RasPrj - INFO - No unsteady flow files found in the project.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:35:50 - ras_commander.RasPrj - INFO - No unsteady flow files found in the project.
 
 
 2026-04-26 22:35:50 - ras_commander.RasMap - WARNING - RASMapper file not found: H:\Testing\eBFE Model Organization\Organized\RioHondo_13060008\RAS Model\Berrendo Creek\BarnDraw\BarnDraw.rasmap
@@ -5780,7 +5836,7 @@ Discovered 253 HEC-RAS project folders
 <h2 id="run-or-reuse-the-full-steady-plan-validation">Run or Reuse the Full Steady-Plan Validation<a class="headerlink" href="#run-or-reuse-the-full-steady-plan-validation" title="Permanent link">&para;</a></h2>
 <p>Set <code>RUN_FULL_STEADY_VALIDATION = True</code> to run all Rio Hondo steady plans. The script uses <code>RasCmdr.compute_plan(..., verify=True)</code>, then reads detailed compute messages and writes evidence under <code>Validation/ebfe_delivery/steady_plan_validation</code>.</p>
 <p>The saved notebook run keeps the batch compute disabled by default and loads the latest existing validation report when one is present. That makes the committed example fast while still showing the evidence trail used for acceptance.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">RUN_FULL_STEADY_VALIDATION</span> <span class="o">=</span> <span class="kc">False</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">RUN_FULL_STEADY_VALIDATION</span> <span class="o">=</span> <span class="kc">False</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">repo_root</span> <span class="o">=</span> <span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span><span class="o">.</span><span class="n">parent</span> <span class="k">if</span> <span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;examples&quot;</span> <span class="k">else</span> <span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">batch_script</span> <span class="o">=</span> <span class="n">repo_root</span> <span class="o">/</span> <span class="s2">&quot;scripts&quot;</span> <span class="o">/</span> <span class="s2">&quot;ebfe_steady_plan_batch.py&quot;</span>
@@ -5801,12 +5857,12 @@ Discovered 253 HEC-RAS project folders
 </span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Full validation is opt-in. Command to run:&quot;</span><span class="p">)</span>
 </span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="se">\&quot;</span><span class="si">{</span><span class="n">part</span><span class="si">}</span><span class="se">\&quot;</span><span class="s1">&#39;</span> <span class="k">if</span> <span class="s2">&quot; &quot;</span> <span class="ow">in</span> <span class="n">part</span> <span class="k">else</span> <span class="n">part</span> <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">cmd</span><span class="p">))</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Full validation is opt-in. Command to run:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Full validation is opt-in. Command to run:
 C:\Users\billk_clb\anaconda3\python.exe C:\GH\ras-commander\scripts\ebfe_steady_plan_batch.py --root &quot;H:\Testing\eBFE Model Organization\Organized\RioHondo_13060008\RAS Model&quot; --ras-version 6.6 --output-dir &quot;H:\Testing\eBFE Model Organization\Validation\ebfe_delivery\steady_plan_validation&quot;
 </code></pre></div>
 <h2 id="review-validation-evidence">Review Validation Evidence<a class="headerlink" href="#review-validation-evidence" title="Permanent link">&para;</a></h2>
 <p>After the batch run completes, this cell loads the latest JSON report and summarizes project pass/fail status.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">report_dir</span> <span class="o">=</span> <span class="n">VALIDATION_ROOT</span> <span class="o">/</span> <span class="s2">&quot;steady_plan_validation&quot;</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">report_dir</span> <span class="o">=</span> <span class="n">VALIDATION_ROOT</span> <span class="o">/</span> <span class="s2">&quot;steady_plan_validation&quot;</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">reports</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">report_dir</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;steady_plan_validation_*.json&quot;</span><span class="p">))</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">reports</span><span class="p">:</span>
@@ -5830,7 +5886,7 @@ C:\Users\billk_clb\anaconda3\python.exe C:\GH\ras-commander\scripts\ebfe_steady_
 </span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>    <span class="n">display</span><span class="p">(</span><span class="n">validation_df</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">value_counts</span><span class="p">())</span>
 </span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>    <span class="n">validation_df</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Loaded existing report: H:\Testing\eBFE Model Organization\Validation\ebfe_delivery\steady_plan_validation\steady_plan_validation_20260424_160022.json
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Loaded existing report: H:\Testing\eBFE Model Organization\Validation\ebfe_delivery\steady_plan_validation\steady_plan_validation_20260424_160022.json
 Saved notebook run reused existing validation evidence; set RUN_FULL_STEADY_VALIDATION = True to regenerate it.
 
 
@@ -5841,7 +5897,7 @@ Name: count, dtype: int64
 </code></pre></div>
 <h2 id="inspect-detailed-compute-messages">Inspect Detailed Compute Messages<a class="headerlink" href="#inspect-detailed-compute-messages" title="Permanent link">&para;</a></h2>
 <p>For this collection, results are considered resolved when the generated HDFs contain <code>Complete Process</code> and the parsed compute messages do not contain blocking errors.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">sample_hdf</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">ras_model_root</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;**/*.p01.hdf&quot;</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">sample_hdf</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">ras_model_root</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;**/*.p01.hdf&quot;</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">if</span> <span class="n">sample_hdf</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No plan HDF found yet. Run the steady validation batch first.&quot;</span><span class="p">)</span>
@@ -5851,7 +5907,7 @@ Name: count, dtype: int64
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">sample_hdf</span><span class="p">)</span>
 </span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    <span class="n">parsed</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:35:50 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\RioHondo_13060008\RAS Model\Rio Ruidoso\BradyCanyon\BradyCanyon.p01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:35:50 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\RioHondo_13060008\RAS Model\Rio Ruidoso\BradyCanyon\BradyCanyon.p01.hdf
 
 
 2026-04-26 22:35:50 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\RioHondo_13060008\RAS Model\Rio Ruidoso\BradyCanyon\BradyCanyon.p01.hdf
@@ -5890,7 +5946,7 @@ H:\Testing\eBFE Model Organization\Organized\RioHondo_13060008\RAS Model\Rio Rui
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:45 UTC">April 28, 2026</span>
   </span>
 
     
@@ -5900,7 +5956,7 @@ H:\Testing\eBFE Model Organization\Organized\RioHondo_13060008\RAS Model\Rio Rui
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:45 UTC">April 28, 2026</span>
   </span>
 
     

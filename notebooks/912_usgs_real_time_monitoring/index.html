@@ -2084,6 +2084,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3926,6 +3954,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5721,7 +5777,7 @@
 - Automated model triggering
 - Early warning systems</p>
 <h2 id="setup-and-imports">Setup and Imports<a class="headerlink" href="#setup-and-imports" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
@@ -5764,7 +5820,7 @@
 </span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✓ Imports successful&quot;</span><span class="p">)</span>
 </span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Current time: </span><span class="si">{</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1"> %H:%M:%S&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>📁 LOCAL SOURCE MODE: Loading from c:\GH\ras-commander/ras_commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>📁 LOCAL SOURCE MODE: Loading from c:\GH\ras-commander/ras_commander
 ✓ Loaded: c:\GH\ras-commander\ras_commander\__init__.py
 ✓ Imports successful
 Current time: 2025-12-29 06:49:06
@@ -5787,7 +5843,7 @@ Current time: 2025-12-29 06:49:06
 - <a href="https://waterdata.usgs.gov/nwis/help/?provisional">USGS Provisional Data Statement</a></p>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># PARAMETERS - Edit these to customize the notebook</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
@@ -5805,11 +5861,11 @@ Current time: 2025-12-29 06:49:06
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
 </span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Parameters configured for notebook </span><span class="si">{</span><span class="n">SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Parameters configured for notebook 912
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Parameters configured for notebook 912
 </code></pre></div>
 <h2 id="1-gauge-information">1. Gauge Information<a class="headerlink" href="#1-gauge-information" title="Permanent link">&para;</a></h2>
 <p>First, let's get metadata about the gauge to understand what we're monitoring.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Bald Eagle Creek at Milesburg, PA</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Bald Eagle Creek at Milesburg, PA</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">site_id</span> <span class="o">=</span> <span class="n">USGS_SITE</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Get gauge metadata</span>
@@ -5827,7 +5883,7 @@ Current time: 2025-12-29 06:49:06
 </span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Available Parameters: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">metadata</span><span class="p">[</span><span class="s1">&#39;available_parameters&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">70</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:49:06 - ras_commander.usgs.core - INFO - dataretrieval package loaded successfully
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-29 06:49:06 - ras_commander.usgs.core - INFO - dataretrieval package loaded successfully
 2025-12-29 06:49:06 - ras_commander.usgs.core - INFO - Retrieving metadata for site 03335500
 2025-12-29 06:49:06 - ras_commander.usgs.core - INFO - Retrieved metadata for WABASH RIVER AT LAFAYETTE, IN (drainage area: 7267.0 sq mi)
 
@@ -5845,7 +5901,7 @@ Drainage Area: 7267.0 sq mi
 Available Parameters: 
 ======================================================================
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Load HEC-RAS project geometry</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Load HEC-RAS project geometry</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">try</span><span class="p">:</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasExamples</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfMesh</span>
@@ -5925,7 +5981,7 @@ Available Parameters:
 </span><span id="__span-3-78"><a id="__codelineno-3-78" name="__codelineno-3-78" href="#__codelineno-3-78"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  This section requires the example project to be available&quot;</span><span class="p">)</span>
 </span><span id="__span-3-79"><a id="__codelineno-3-79" name="__codelineno-3-79" href="#__codelineno-3-79"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  Continuing with gauge data demonstrations...&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:49:06 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-29 06:49:06 - ras_commander.RasExamples - INFO - Found zip file: C:\GH\ras-commander\examples\Example_Projects_6_6.zip
 2025-12-29 06:49:06 - ras_commander.RasExamples - INFO - Loading project data from CSV...
 2025-12-29 06:49:06 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
 2025-12-29 06:49:06 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
@@ -5942,7 +5998,7 @@ Extracting Bald Eagle Creek project...
 <p>Load the Bald Eagle Creek HEC-RAS project and visualize the model extent with the gauge location.</p>
 <h2 id="2-get-latest-reading-current-conditions">2. Get Latest Reading (Current Conditions)<a class="headerlink" href="#2-get-latest-reading-current-conditions" title="Permanent link">&para;</a></h2>
 <p>Retrieve the most recent gauge reading. This is updated approximately hourly by USGS.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Get latest flow value</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Get latest flow value</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">latest_flow</span> <span class="o">=</span> <span class="n">get_latest_value</span><span class="p">(</span><span class="n">site_id</span><span class="p">,</span> <span class="n">parameter</span><span class="o">=</span><span class="s1">&#39;flow&#39;</span><span class="p">)</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">70</span><span class="p">)</span>
@@ -5966,7 +6022,7 @@ Extracting Bald Eagle Creek project...
 </span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="n">latest_stage</span> <span class="o">=</span> <span class="n">get_latest_value</span><span class="p">(</span><span class="n">site_id</span><span class="p">,</span> <span class="n">parameter</span><span class="o">=</span><span class="s1">&#39;stage&#39;</span><span class="p">)</span>
 </span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Current Stage: </span><span class="si">{</span><span class="n">latest_stage</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">latest_stage</span><span class="p">[</span><span class="s1">&#39;units&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:49:06 - ras_commander.usgs.real_time - INFO - dataretrieval package loaded for real-time operations
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-29 06:49:06 - ras_commander.usgs.real_time - INFO - dataretrieval package loaded for real-time operations
 2025-12-29 06:49:06 - ras_commander.usgs.real_time - INFO - Retrieving latest flow value for site 03335500
 2025-12-29 06:49:07 - ras_commander.usgs.real_time - INFO - Latest flow for 03335500: 1420.00 cfs at 2025-12-29 11:30:00+00:00 (19.1 min old)
 2025-12-29 06:49:07 - ras_commander.usgs.real_time - INFO - Retrieving latest stage value for site 03335500
@@ -5993,7 +6049,7 @@ Current Stage: 1.79 feet
 </code></pre></div>
 <h2 id="3-recent-data-analysis-last-48-hours">3. Recent Data Analysis (Last 48 Hours)<a class="headerlink" href="#3-recent-data-analysis-last-48-hours" title="Permanent link">&para;</a></h2>
 <p>Get recent time series to understand trends and current conditions.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Get last 48 hours of flow data</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Get last 48 hours of flow data</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">recent_flow</span> <span class="o">=</span> <span class="n">get_recent_data</span><span class="p">(</span><span class="n">site_id</span><span class="p">,</span> <span class="n">parameter</span><span class="o">=</span><span class="s1">&#39;flow&#39;</span><span class="p">,</span> <span class="n">hours</span><span class="o">=</span><span class="mi">48</span><span class="p">)</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Retrieved </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">recent_flow</span><span class="p">)</span><span class="si">}</span><span class="s2"> records&quot;</span><span class="p">)</span>
@@ -6019,7 +6075,7 @@ Current Stage: 1.79 feet
 </span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>
 </span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Trend: </span><span class="si">{</span><span class="n">trend</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">change</span><span class="si">:</span><span class="s2">+.1f</span><span class="si">}</span><span class="s2"> cfs over 48h)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:49:07 - ras_commander.usgs.real_time - INFO - Retrieving last 48 hours of flow data for site 03335500
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-29 06:49:07 - ras_commander.usgs.real_time - INFO - Retrieving last 48 hours of flow data for site 03335500
 2025-12-29 06:49:07 - ras_commander.usgs.real_time - INFO - Retrieved 191 recent flow records for site 03335500
 
 
@@ -6036,7 +6092,7 @@ Flow Statistics (48-hour):
 Trend: RISING ↑ (+240.0 cfs over 48h)
 </code></pre></div>
 <h3 id="visualize-recent-data">Visualize Recent Data<a class="headerlink" href="#visualize-recent-data" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">fig</span><span class="p">,</span> <span class="p">(</span><span class="n">ax1</span><span class="p">,</span> <span class="n">ax2</span><span class="p">)</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">fig</span><span class="p">,</span> <span class="p">(</span><span class="n">ax1</span><span class="p">,</span> <span class="n">ax2</span><span class="p">)</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># Plot 1: Flow time series</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">ax1</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">recent_flow</span><span class="p">[</span><span class="s1">&#39;datetime&#39;</span><span class="p">],</span> <span class="n">recent_flow</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">],</span> <span class="s1">&#39;b-&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mf">1.5</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Flow&#39;</span><span class="p">)</span>
@@ -6066,11 +6122,11 @@ Trend: RISING ↑ (+240.0 cfs over 48h)
 </span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ Visualized </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">recent_flow</span><span class="p">)</span><span class="si">}</span><span class="s2"> recent measurements&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../912_usgs_real_time_monitoring_files/912_usgs_real_time_monitoring_15_0.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>✓ Visualized 191 recent measurements
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>✓ Visualized 191 recent measurements
 </code></pre></div>
 <h2 id="4-incremental-cache-refresh">4. Incremental Cache Refresh<a class="headerlink" href="#4-incremental-cache-refresh" title="Permanent link">&para;</a></h2>
 <p>Demonstrate efficient data updates - only download new records since last refresh.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Initial cache (last 24 hours)...&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Initial cache (last 24 hours)...&quot;</span><span class="p">)</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">cache_df</span> <span class="o">=</span> <span class="n">get_recent_data</span><span class="p">(</span><span class="n">site_id</span><span class="p">,</span> <span class="n">parameter</span><span class="o">=</span><span class="s1">&#39;flow&#39;</span><span class="p">,</span> <span class="n">hours</span><span class="o">=</span><span class="mi">24</span><span class="p">)</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Records: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">cache_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Latest: </span><span class="si">{</span><span class="n">cache_df</span><span class="p">[</span><span class="s1">&#39;datetime&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -6090,7 +6146,7 @@ Trend: RISING ↑ (+240.0 cfs over 48h)
 </span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ Cache refreshed efficiently (only new records downloaded)&quot;</span><span class="p">)</span>
 </span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  In production, this saves bandwidth by not re-downloading entire dataset&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:49:07 - ras_commander.usgs.real_time - INFO - Retrieving last 24 hours of flow data for site 03335500
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-29 06:49:07 - ras_commander.usgs.real_time - INFO - Retrieving last 24 hours of flow data for site 03335500
 2025-12-29 06:49:08 - ras_commander.usgs.real_time - INFO - Retrieved 95 recent flow records for site 03335500
 
 
@@ -6121,7 +6177,7 @@ Refreshing cache...
 <h2 id="5-threshold-crossing-detection">5. Threshold Crossing Detection<a class="headerlink" href="#5-threshold-crossing-detection" title="Permanent link">&para;</a></h2>
 <p>Detect when flow crosses specified thresholds (e.g., flood stages).</p>
 <p><strong>Note:</strong> We'll use a threshold slightly above recent flow to demonstrate the concept.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Define threshold (slightly above mean for demonstration)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Define threshold (slightly above mean for demonstration)</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">threshold</span> <span class="o">=</span> <span class="n">recent_flow</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span> <span class="o">+</span> <span class="mi">50</span>  <span class="c1"># cfs</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Threshold: </span><span class="si">{</span><span class="n">threshold</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> cfs&quot;</span><span class="p">)</span>
@@ -6170,7 +6226,7 @@ Refreshing cache...
 </span><span id="__span-8-47"><a id="__codelineno-8-47" name="__codelineno-8-47" href="#__codelineno-8-47"></a><span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-8-48"><a id="__codelineno-8-48" name="__codelineno-8-48" href="#__codelineno-8-48"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Threshold: 1220 cfs
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Threshold: 1220 cfs
 Current flow: 1420.0 cfs
 Mean flow (48h): 1170.1 cfs
 
@@ -6190,7 +6246,7 @@ Last crossing:
 <p><img alt="png" src="../912_usgs_real_time_monitoring_files/912_usgs_real_time_monitoring_19_1.png" /></p>
 <h2 id="6-rapid-change-detection-flash-flood">6. Rapid Change Detection (Flash Flood)<a class="headerlink" href="#6-rapid-change-detection-flash-flood" title="Permanent link">&para;</a></h2>
 <p>Detect rapid rises or recessions that could indicate flash flood conditions.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Define rate threshold (100 cfs/hour for demonstration)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Define rate threshold (100 cfs/hour for demonstration)</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">rate_threshold</span> <span class="o">=</span> <span class="mi">100</span>  <span class="c1"># cfs/hour</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Detect rapid changes</span>
@@ -6219,7 +6275,7 @@ Last crossing:
 </span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a>
 </span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">70</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>======================================================================
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>======================================================================
 RAPID CHANGE DETECTION RESULTS
 ======================================================================
 Rate threshold: 100 cfs/hour
@@ -6240,7 +6296,7 @@ Rapid change detected: True
 <p>Demonstrate continuous monitoring with callback notifications.</p>
 <p><strong>Note:</strong> This will run for a short duration (5 minutes) with 1-minute checks.
 In production, you might use 15-minute intervals and run for hours/days.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Define callback function</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Define callback function</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">monitoring_callback</span><span class="p">(</span><span class="n">site_id</span><span class="p">,</span> <span class="n">latest_value</span><span class="p">,</span> <span class="n">change_info</span><span class="p">,</span> <span class="n">data_df</span><span class="p">):</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="sd">    Custom callback invoked when new data arrives.</span>
@@ -6303,7 +6359,7 @@ In production, you might use 15-minute intervals and run for hours/days.</p>
 </span><span id="__span-10-61"><a id="__codelineno-10-61" name="__codelineno-10-61" href="#__codelineno-10-61"></a><span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
 </span><span id="__span-10-62"><a id="__codelineno-10-62" name="__codelineno-10-62" href="#__codelineno-10-62"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✗ Error during monitoring: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2025-12-29 06:49:18 - ras_commander.usgs.real_time - INFO - Starting gauge monitoring for 03335500 (flow), interval=1 min, duration=0.03333333333333333 hours
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-29 06:49:18 - ras_commander.usgs.real_time - INFO - Starting gauge monitoring for 03335500 (flow), interval=1 min, duration=0.03333333333333333 hours
 2025-12-29 06:49:18 - ras_commander.usgs.real_time - INFO - No cache, retrieving last 24 hours
 
 
@@ -6355,7 +6411,7 @@ Total records collected: 75
 </code></pre></div>
 <h2 id="8-production-use-case-automated-model-triggering">8. Production Use Case: Automated Model Triggering<a class="headerlink" href="#8-production-use-case-automated-model-triggering" title="Permanent link">&para;</a></h2>
 <p>Example of how to integrate real-time monitoring with HEC-RAS automation.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="s2">=&quot; * 70)</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="s2">PRODUCTION EXAMPLE: Automated Model Triggering</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="s2">=&quot; * 70)</span>
@@ -6408,7 +6464,7 @@ Total records collected: 75
 </span></code></pre></div>
 <p>=" * 70)
 """)
-<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>    =&quot; * 70)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>    =&quot; * 70)
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>    PRODUCTION EXAMPLE: Automated Model Triggering
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    =&quot; * 70)
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
@@ -6515,7 +6571,7 @@ Total records collected: 75
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
@@ -6525,7 +6581,7 @@ Total records collected: 75
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     

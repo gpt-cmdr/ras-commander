@@ -2069,6 +2069,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3672,6 +3700,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -5529,7 +5585,7 @@ The Davis example project (HEC-RAS Pipes beta) contains:</p>
 <li>Conduit geometry is preserved through mesh regeneration</li>
 </ol>
 <h2 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">True</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">True</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">if</span> <span class="n">USE_LOCAL_SOURCE</span><span class="p">:</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
@@ -5556,13 +5612,13 @@ The Davis example project (HEC-RAS Pipes beta) contains:</p>
 </span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>LOCAL SOURCE MODE: Loading from G:\GH\ras-commander/ras_commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>LOCAL SOURCE MODE: Loading from G:\GH\ras-commander/ras_commander
 
 
 Loaded: G:\GH\ras-commander\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="extract-project-and-initialize">Extract Project and Initialize<a class="headerlink" href="#extract-project-and-initialize" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;Davis&quot;</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;Davis&quot;</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">RAS_VERSION</span> <span class="o">=</span> <span class="s2">&quot;6.6&quot;</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">SUFFIX</span> <span class="o">=</span> <span class="s2">&quot;231_pipes&quot;</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
@@ -5575,7 +5631,7 @@ Loaded: G:\GH\ras-commander\ras_commander\__init__.py
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Geometries:&quot;</span><span class="p">)</span>
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="nb">print</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">[[</span><span class="s1">&#39;geom_number&#39;</span><span class="p">,</span> <span class="s1">&#39;geom_title&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">to_string</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-22 16:48:22 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_7_0.zip
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-22 16:48:22 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_7_0.zip
 
 
 2026-04-22 16:48:22 - ras_commander.RasExamples - INFO - Loading project data from CSV...
@@ -5686,7 +5742,7 @@ geom_number                geom_title
 </code></pre></div>
 <h2 id="inspect-existing-geometry">Inspect Existing Geometry<a class="headerlink" href="#inspect-existing-geometry" title="Permanent link">&para;</a></h2>
 <p>Read the pipe network topology and mesh state from the HDF before regeneration.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">geom_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">geom_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">[</span><span class="s1">&#39;geom_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;02&#39;</span><span class="p">,</span> <span class="s1">&#39;full_path&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="p">)</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">hdf_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">geom_path</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.hdf&#39;</span><span class="p">)</span>
@@ -5744,7 +5800,7 @@ geom_number                geom_title
 </span><span id="__span-2-56"><a id="__codelineno-2-56" name="__codelineno-2-56" href="#__codelineno-2-56"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    Cell table: </span><span class="si">{</span><span class="n">orig_cell_shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-2-57"><a id="__codelineno-2-57" name="__codelineno-2-57" href="#__codelineno-2-57"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    Node connectivity: </span><span class="si">{</span><span class="n">orig_node_shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>=== Flow Areas (from text) ===
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>=== Flow Areas (from text) ===
   area2
     Cell size: 0,0,150,150
     Seed points: 2705
@@ -5770,7 +5826,7 @@ geom_number                geom_title
 </code></pre></div>
 <h2 id="figure-1-original-mesh-with-pipe-network">Figure 1: Original Mesh with Pipe Network<a class="headerlink" href="#figure-1-original-mesh-with-pipe-network" title="Permanent link">&para;</a></h2>
 <p>Show the original cell centers, pipe node locations, and conduit lines.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Build conduit line segments for plotting</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Build conduit line segments for plotting</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">build_conduit_segments</span><span class="p">(</span><span class="n">polyline_pts</span><span class="p">,</span> <span class="n">poly_info</span><span class="p">):</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">segments</span> <span class="o">=</span> <span class="p">[]</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">poly_info</span><span class="p">:</span>
@@ -5811,7 +5867,7 @@ geom_number                geom_title
 <p><img alt="png" src="../231_pipe_network_mesh_generation_files/231_pipe_network_mesh_generation_8_0.png" /></p>
 <h2 id="clone-geometry-and-regenerate-mesh">Clone Geometry and Regenerate Mesh<a class="headerlink" href="#clone-geometry-and-regenerate-mesh" title="Permanent link">&para;</a></h2>
 <p>Clone the geometry so the original is preserved, then regenerate the mesh for <code>area2</code>.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Clone geometry</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Clone geometry</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">new_geom</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">clone_geom</span><span class="p">(</span><span class="s1">&#39;02&#39;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">)</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">new_geom_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">[</span><span class="s1">&#39;geom_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">new_geom</span><span class="p">,</span> <span class="s1">&#39;full_path&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -5829,7 +5885,7 @@ geom_number                geom_title
 </span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>        <span class="n">pre_counts</span><span class="p">[</span><span class="n">current_area</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
 </span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Pre-generation seed counts: </span><span class="si">{</span><span class="n">pre_counts</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-22 16:48:23 - ras_commander.RasUtils - INFO - File cloned from G:\GH\ras-commander\examples\example_projects\Davis_231_pipes\DavisStormSystem.g02 to G:\GH\ras-commander\examples\example_projects\Davis_231_pipes\DavisStormSystem.g01
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-22 16:48:23 - ras_commander.RasUtils - INFO - File cloned from G:\GH\ras-commander\examples\example_projects\Davis_231_pipes\DavisStormSystem.g02 to G:\GH\ras-commander\examples\example_projects\Davis_231_pipes\DavisStormSystem.g01
 
 
 2026-04-22 16:48:23 - ras_commander.RasUtils - INFO - File cloned from G:\GH\ras-commander\examples\example_projects\Davis_231_pipes\DavisStormSystem.g02.hdf to G:\GH\ras-commander\examples\example_projects\Davis_231_pipes\DavisStormSystem.g01.hdf
@@ -5853,7 +5909,7 @@ geom_number                geom_title
 Cloned: g02 -&gt; g01 (DavisStormSystem.g01)
 Pre-generation seed counts: {&#39;area2&#39;: 2705, &#39;DS Channel&#39;: 11}
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Generate mesh for area2 (the main flow area with pipe connections)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Generate mesh for area2 (the main flow area with pipe connections)</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Generating mesh for area2 (cell_size=150)...&quot;</span><span class="p">)</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">result</span> <span class="o">=</span> <span class="n">GeomMesh</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">geom_number</span><span class="o">=</span><span class="n">new_geom_path</span><span class="p">,</span>
@@ -5873,7 +5929,7 @@ Pre-generation seed counts: {&#39;area2&#39;: 2705, &#39;DS Channel&#39;: 11}
 </span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">error_message</span><span class="p">:</span>
 </span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Error: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">error_message</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Generating mesh for area2 (cell_size=150)...
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Generating mesh for area2 (cell_size=150)...
 
 
 2026-04-22 16:48:24 - ras_commander.geom.GeomMesh - INFO - [area2] 57-point perimeter from .NET
@@ -5909,7 +5965,7 @@ Result:
 </code></pre></div>
 <h2 id="figure-2-before-vs-after-cell-center-comparison">Figure 2: Before vs After — Cell Center Comparison<a class="headerlink" href="#figure-2-before-vs-after-cell-center-comparison" title="Permanent link">&para;</a></h2>
 <p>Side-by-side comparison of original and regenerated cell centers with pipe nodes.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Read regenerated cell centers</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Read regenerated cell centers</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">new_hdf_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">new_geom_path</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.hdf&#39;</span><span class="p">)</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">new_hdf_path</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">regen_cc</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;Geometry/2D Flow Areas/area2/Cells Center Coordinate&#39;</span><span class="p">][:]</span>
@@ -5947,7 +6003,7 @@ Result:
 <p><img alt="png" src="../231_pipe_network_mesh_generation_files/231_pipe_network_mesh_generation_13_0.png" /></p>
 <h2 id="figure-3-zoomed-pipe-inlet-detail">Figure 3: Zoomed Pipe Inlet Detail<a class="headerlink" href="#figure-3-zoomed-pipe-inlet-detail" title="Permanent link">&para;</a></h2>
 <p>Zoom into an area with pipe inlets to show cell centers surround each node.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Find a cluster of pipe nodes near the center of the mesh</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Find a cluster of pipe nodes near the center of the mesh</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">cx</span><span class="p">,</span> <span class="n">cy</span> <span class="o">=</span> <span class="n">pipe_node_pts</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(),</span> <span class="n">pipe_node_pts</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">dists_to_center</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">((</span><span class="n">pipe_node_pts</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">cx</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">pipe_node_pts</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">cy</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">center_idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">dists_to_center</span><span class="p">)</span>
@@ -5999,7 +6055,7 @@ Result:
 <p><img alt="png" src="../231_pipe_network_mesh_generation_files/231_pipe_network_mesh_generation_15_0.png" /></p>
 <h2 id="proof-1-multi-area-integrity">Proof 1: Multi-Area Integrity<a class="headerlink" href="#proof-1-multi-area-integrity" title="Permanent link">&para;</a></h2>
 <p>Confirm that only <code>area2</code> was modified — <code>DS Channel</code> must be untouched.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">post_text</span> <span class="o">=</span> <span class="n">new_geom_path</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s1">&#39;utf-8&#39;</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s1">&#39;replace&#39;</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">post_text</span> <span class="o">=</span> <span class="n">new_geom_path</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s1">&#39;utf-8&#39;</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s1">&#39;replace&#39;</span><span class="p">)</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">post_counts</span> <span class="o">=</span> <span class="p">{}</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">current_area</span> <span class="o">=</span> <span class="kc">None</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">post_text</span><span class="o">.</span><span class="n">splitlines</span><span class="p">():</span>
@@ -6022,7 +6078,7 @@ Result:
 </span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>    <span class="s2">&quot;FAIL: area2 text count does not match generate() cell_count!&quot;</span>
 </span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Multi-area integrity: PASSED&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>      Area  Before  After  Changed
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>      Area  Before  After  Changed
      area2    2705   2705    False
 DS Channel      11     11    False
 
@@ -6031,7 +6087,7 @@ Multi-area integrity: PASSED
 <h2 id="proof-2-pipe-network-tables-recomputed">Proof 2: Pipe Network Tables Recomputed<a class="headerlink" href="#proof-2-pipe-network-tables-recomputed" title="Permanent link">&para;</a></h2>
 <p>Verify that pipe network connectivity tables exist in the regenerated HDF
 and reference valid cell/face indices.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">new_hdf_path</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">new_hdf_path</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="n">pn</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;Geometry/Pipe Networks/Davis&#39;</span><span class="p">]</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">face_tbl</span> <span class="o">=</span> <span class="n">pn</span><span class="p">[</span><span class="s1">&#39;Face Property Table&#39;</span><span class="p">]</span>
@@ -6065,7 +6121,7 @@ and reference valid cell/face indices.</p>
 </span><span id="__span-9-32"><a id="__codelineno-9-32" name="__codelineno-9-32" href="#__codelineno-9-32"></a><span class="k">assert</span> <span class="n">post_node_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">n_nodes</span><span class="p">,</span> <span class="s2">&quot;FAIL: Node connectivity count mismatch!&quot;</span>
 </span><span id="__span-9-33"><a id="__codelineno-9-33" name="__codelineno-9-33" href="#__codelineno-9-33"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Pipe network tables: PASSED&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Pipe network tables (before -&gt; after):
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Pipe network tables (before -&gt; after):
   Face table:       (1991,) -&gt; (1991,)
   Cell table:       (1992,) -&gt; (1992,)
   Node connectivity: (133,) -&gt; (133,)
@@ -6080,7 +6136,7 @@ Pipe network tables: PASSED
 <p>Verify every pipe node falls within the bounding box of the regenerated mesh.
 Nearest-neighbor distance from each node to its closest cell center should be
 less than the cell size (150 ft).</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scipy.spatial</span><span class="w"> </span><span class="kn">import</span> <span class="n">cKDTree</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scipy.spatial</span><span class="w"> </span><span class="kn">import</span> <span class="n">cKDTree</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># Build KD-tree from regenerated cell centers</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">tree</span> <span class="o">=</span> <span class="n">cKDTree</span><span class="p">(</span><span class="n">regen_cc</span><span class="p">)</span>
@@ -6110,7 +6166,7 @@ less than the cell size (150 ft).</p>
 </span><span id="__span-10-28"><a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">  Nodes within mesh bounding box: </span><span class="si">{</span><span class="n">nodes_in_bbox</span><span class="si">}</span><span class="s2"> / </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">pipe_node_pts</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-10-29"><a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Pipe node proximity: PASSED&quot;</span> <span class="k">if</span> <span class="n">within_2x</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mf">0.95</span> <span class="k">else</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">WARNING: Some nodes far from cells&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Pipe node to nearest cell center distances:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Pipe node to nearest cell center distances:
   Min:    1.2 ft
   Median: 55.7 ft
   Mean:   54.9 ft
@@ -6126,7 +6182,7 @@ Pipe node proximity: PASSED
 </code></pre></div>
 <h2 id="figure-4-pipe-node-distance-distribution">Figure 4: Pipe Node Distance Distribution<a class="headerlink" href="#figure-4-pipe-node-distance-distribution" title="Permanent link">&para;</a></h2>
 <p>Histogram of nearest-neighbor distances from pipe nodes to regenerated cell centers.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">fig</span><span class="p">,</span> <span class="p">(</span><span class="n">ax1</span><span class="p">,</span> <span class="n">ax2</span><span class="p">)</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">fig</span><span class="p">,</span> <span class="p">(</span><span class="n">ax1</span><span class="p">,</span> <span class="n">ax2</span><span class="p">)</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># Histogram</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">ax1</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">dists</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;steelblue&#39;</span><span class="p">,</span> <span class="n">edgecolor</span><span class="o">=</span><span class="s1">&#39;white&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
@@ -6160,7 +6216,7 @@ Pipe node proximity: PASSED
 <p><img alt="png" src="../231_pipe_network_mesh_generation_files/231_pipe_network_mesh_generation_23_0.png" /></p>
 <h2 id="proof-4-conduit-geometry-preserved">Proof 4: Conduit Geometry Preserved<a class="headerlink" href="#proof-4-conduit-geometry-preserved" title="Permanent link">&para;</a></h2>
 <p>Verify pipe conduit polylines are identical before and after mesh regeneration.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">new_hdf_path</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">new_hdf_path</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>    <span class="n">post_conduit_pts</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;Geometry/Pipe Conduits/Polyline Points&#39;</span><span class="p">][:]</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="n">post_conduit_info</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;Geometry/Pipe Conduits/Polyline Info&#39;</span><span class="p">][:]</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="n">post_node_pts</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;Geometry/Pipe Nodes/Points&#39;</span><span class="p">][:]</span>
@@ -6177,7 +6233,7 @@ Pipe node proximity: PASSED
 </span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="k">assert</span> <span class="n">nodes_match</span><span class="p">,</span> <span class="s2">&quot;FAIL: Pipe node locations were modified!&quot;</span>
 </span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Conduit geometry preservation: PASSED&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Conduit polyline points preserved: True
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Conduit polyline points preserved: True
 Conduit polyline info preserved:   True
 Pipe node locations preserved:     True
 
@@ -6187,7 +6243,7 @@ Conduit geometry preservation: PASSED
 <p>Verify the regenerated mesh cell centers are identical to the original — same count,
 same positions, to machine precision. This proves <code>RegenerateMeshPoints</code> uses the
 same grid origin as the original RAS Mapper session.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Compare all cell centers between original and regenerated HDF</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Compare all cell centers between original and regenerated HDF</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">hdf_path</span><span class="p">),</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">orig_hdf_cc</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s2">&quot;Geometry/2D Flow Areas/area2/Cells Center Coordinate&quot;</span><span class="p">][:]</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">new_hdf_path</span><span class="p">),</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
@@ -6213,7 +6269,7 @@ same grid origin as the original RAS Mapper session.</p>
 </span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Exact cell center match: PASSED&quot;</span><span class="p">)</span>
 </span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a><span class="n">exact_match</span> <span class="o">=</span> <span class="kc">True</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Original HDF cells:     2,941
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Original HDF cells:     2,941
 Regenerated HDF cells:  2,941
 
 Nearest-neighbor distances:
@@ -6226,7 +6282,7 @@ Exact cell center match: PASSED
 <h2 id="proof-6-hdfpipe-api-coverage">Proof 6: HdfPipe API Coverage<a class="headerlink" href="#proof-6-hdfpipe-api-coverage" title="Permanent link">&para;</a></h2>
 <p>Demonstrate that the ras-commander <code>HdfPipe</code> API reads pipe node attributes
 and inlet data correctly, covering the full pipe network query surface.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf.HdfPipe</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfPipe</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf.HdfPipe</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfPipe</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># Read pipe nodes with attributes via API</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">nodes_gdf</span> <span class="o">=</span> <span class="n">HdfPipe</span><span class="o">.</span><span class="n">get_pipe_nodes</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">new_hdf_path</span><span class="p">))</span>
@@ -6260,7 +6316,7 @@ and inlet data correctly, covering the full pipe network query surface.</p>
 </span><span id="__span-14-32"><a id="__codelineno-14-32" name="__codelineno-14-32" href="#__codelineno-14-32"></a><span class="nb">print</span><span class="p">()</span>
 </span><span id="__span-14-33"><a id="__codelineno-14-33" name="__codelineno-14-33" href="#__codelineno-14-33"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;HdfPipe API coverage: PASSED&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-22 16:48:27 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Davis_231_pipes\DavisStormSystem.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-22 16:48:27 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Davis_231_pipes\DavisStormSystem.g01.hdf
 
 
 2026-04-22 16:48:27 - ras_commander.hdf.HdfPipe - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Davis_231_pipes\DavisStormSystem.g01.hdf
@@ -6294,7 +6350,7 @@ HdfPipe.get_pipe_inlets(): 5 inlets
 
 HdfPipe API coverage: PASSED
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">summary_data</span> <span class="o">=</span> <span class="p">[</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">summary_data</span> <span class="o">=</span> <span class="p">[</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>    <span class="p">[</span><span class="s2">&quot;Mesh generation&quot;</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;complete&quot;</span><span class="p">,</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>     <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">cell_count</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> cells, </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">face_count</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> faces, </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">iterations</span><span class="si">}</span><span class="s2"> iter&quot;</span><span class="p">],</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    <span class="p">[</span><span class="s2">&quot;Multi-area integrity&quot;</span><span class="p">,</span> <span class="n">post_counts</span><span class="p">[</span><span class="s2">&quot;DS Channel&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">pre_counts</span><span class="p">[</span><span class="s2">&quot;DS Channel&quot;</span><span class="p">],</span>
@@ -6325,7 +6381,7 @@ HdfPipe API coverage: PASSED
 </span><span id="__span-15-29"><a id="__codelineno-15-29" name="__codelineno-15-29" href="#__codelineno-15-29"></a><span class="nb">print</span><span class="p">()</span>
 </span><span id="__span-15-30"><a id="__codelineno-15-30" name="__codelineno-15-30" href="#__codelineno-15-30"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Overall: </span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>===========================================================================
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>===========================================================================
 Davis Pipe Network Mesh Generation - Validation Summary
 ===========================================================================
                      Check Result                                      Detail
@@ -6340,7 +6396,7 @@ Conduit geometry preserved   PASS           132 conduits, 133 nodes identical
 
 Overall: ALL CHECKS PASSED
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">summary_data</span> <span class="o">=</span> <span class="p">[</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">summary_data</span> <span class="o">=</span> <span class="p">[</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>    <span class="p">[</span><span class="s1">&#39;Mesh generation&#39;</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s1">&#39;complete&#39;</span><span class="p">,</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>     <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">cell_count</span><span class="si">:</span><span class="s1">,</span><span class="si">}</span><span class="s1"> cells, </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">face_count</span><span class="si">:</span><span class="s1">,</span><span class="si">}</span><span class="s1"> faces, </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">iterations</span><span class="si">}</span><span class="s1"> iter&#39;</span><span class="p">],</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    <span class="p">[</span><span class="s1">&#39;Multi-area integrity&#39;</span><span class="p">,</span> <span class="n">post_counts</span><span class="p">[</span><span class="s1">&#39;DS Channel&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">pre_counts</span><span class="p">[</span><span class="s1">&#39;DS Channel&#39;</span><span class="p">],</span>
@@ -6365,7 +6421,7 @@ Overall: ALL CHECKS PASSED
 </span><span id="__span-16-23"><a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a><span class="n">all_pass</span> <span class="o">=</span> <span class="n">summary_df</span><span class="p">[</span><span class="s1">&#39;Pass&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
 </span><span id="__span-16-24"><a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Overall: </span><span class="si">{</span><span class="s1">&#39;ALL CHECKS PASSED&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">all_pass</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;SOME CHECKS FAILED&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>======================================================================
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>======================================================================
 Davis Pipe Network Mesh Generation — Validation Summary
 ======================================================================
                      Check Result                                      Detail
@@ -6417,7 +6473,7 @@ Overall: ALL CHECKS PASSED
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
@@ -6427,7 +6483,7 @@ Overall: ALL CHECKS PASSED
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     

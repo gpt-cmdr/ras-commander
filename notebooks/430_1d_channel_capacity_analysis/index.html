@@ -2084,6 +2084,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3824,6 +3852,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -5585,7 +5641,7 @@ bank elevations at each cross section.</p>
 - Compare existing vs proposed conditions</p>
 <p><strong>Data Source:</strong> FEMA BLE model (Lower Colorado-Cummins, HUC 12090301), SHILOH BRANCH reach
 with 40 cross sections and 7 steady-state flow profiles.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
@@ -5614,7 +5670,7 @@ with 40 cross sections and 7 steady-state flow profiles.</p>
 </span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 </span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>LOCAL SOURCE MODE: Loading from C:\GH\ras-commander/ras_commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>LOCAL SOURCE MODE: Loading from C:\GH\ras-commander/ras_commander
 
 
 2026-04-26 22:48:53 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
@@ -5626,7 +5682,7 @@ Loaded: C:\GH\ras-commander\ras_commander\__init__.py
 <p>We use a FEMA Base Level Engineering (BLE) reach model — SHILOH BRANCH from the Lower Colorado-Cummins study (HUC 12090301). BLE models are steady-state with 7 flow profiles representing different AEP events.</p>
 <p><code>RasEbfeModels.organize_model("lower-colorado-cummins")</code> handles downloading the 290.7 MB BLE archive from S3 and organizing the selected reach into the shared delivery workspace. Since BLE models were built with HEC-RAS 4.x, we re-run with HEC-RAS 6.5 to generate HDF output files needed for analysis.</p>
 <p><strong>Saved-run interpretation</strong>: 1D BLE reach projects may not include <code>.rasmap</code> files, project CRS metadata, terrain, or land-cover layers. Those warnings are expected for this 1D steady workflow and do not invalidate the HDF-based channel-capacity analysis. HDF logs may also include non-blocking metadata warnings such as unknown simulation timestamps.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># Parameters</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
@@ -5670,12 +5726,12 @@ Loaded: C:\GH\ras-commander\ras_commander\__init__.py
 </span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;eBFE workspace: </span><span class="si">{</span><span class="n">EBFE_WORKSPACE</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Validation matrix: </span><span class="si">{</span><span class="n">VALIDATION_MATRIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Reach: Rabbs Creek-Colorado River / SHILOH BRANCH
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Reach: Rabbs Creek-Colorado River / SHILOH BRANCH
 Storm order: [&#39;10P&#39;, &#39;4P&#39;, &#39;2P&#39;, &#39;1P&#39;, &#39;0.2P&#39;]
 eBFE workspace: H:\Testing\eBFE Model Organization
 Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Download/cache, extract, and organize the BLE model using the shared eBFE delivery workspace.</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Download/cache, extract, and organize the BLE model using the shared eBFE delivery workspace.</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># Auto-downloads 290.7 MB from S3 if not already cached under DOWNLOAD_ROOT.</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_model</span><span class="p">(</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="s2">&quot;lower-colorado-cummins&quot;</span><span class="p">,</span>
@@ -5696,7 +5752,7 @@ Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
 </span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>    <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
 </span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> bytes)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Organizing Lower Colorado-Cummins (12090301) - Pattern 1D-BLE
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Organizing Lower Colorado-Cummins (12090301) - Pattern 1D-BLE
 Source: H:\Testing\eBFE Model Organization\Downloads\12090301_LowerColoradoCummins
 Output: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301
 
@@ -5737,7 +5793,7 @@ Project files:
   SHILOH BRANCH.r01 (255,091 bytes)
   SHILOH BRANCH.xml (1,543,746 bytes)
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Initialize project</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Initialize project</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">ras</span> <span class="o">=</span> <span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_folder</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -5768,7 +5824,7 @@ Project files:
 </span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="k">for</span> <span class="n">h</span> <span class="ow">in</span> <span class="n">hdf_files</span><span class="p">:</span>
 </span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">h</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">h</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> bytes)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:49:06 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 7.0 at C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe via filesystem (x86)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:49:06 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 7.0 at C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe via filesystem (x86)
 
 
 2026-04-26 22:49:06 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.7 Beta 5 at C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 5\Ras.exe via filesystem (x86)
@@ -6125,7 +6181,7 @@ HDF files generated:
 <p><code>extract_bank_elevations()</code> reads cross section geometry from the geometry HDF
 and interpolates elevations at the left and right bank stations. The "controlling"
 bank elevation (the higher of the two) determines where overtopping occurs.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Get geometry HDF path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Get geometry HDF path</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">geom_hdf</span> <span class="o">=</span> <span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.g01.hdf&quot;</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">bank_df</span> <span class="o">=</span> <span class="n">HdfChannelCapacity</span><span class="o">.</span><span class="n">extract_bank_elevations</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">geom_hdf</span><span class="p">))</span>
@@ -6138,7 +6194,7 @@ bank elevation (the higher of the two) determines where overtopping occurs.</p>
 </span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
 </span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">bank_df</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:49:10 - ras_commander.hdf.HdfChannelCapacity - INFO - Extracting bank elevations from: SHILOH BRANCH.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:49:10 - ras_commander.hdf.HdfChannelCapacity - INFO - Extracting bank elevations from: SHILOH BRANCH.g01.hdf
 
 
 2026-04-26 22:49:10 - ras_commander.hdf.HdfChannelCapacity - INFO - Extracted bank elevations for 40 cross sections
@@ -6305,7 +6361,7 @@ Bank elevation range:
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Plot bank elevations along the channel</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Plot bank elevations along the channel</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">rs_float</span> <span class="o">=</span> <span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;RS&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">)</span>
@@ -6329,7 +6385,7 @@ Bank elevation range:
 plan HDF. Unlike <code>extract_max_wse()</code> (which collapses profiles to max), this method
 preserves each profile as a separate column — essential for capacity analysis.</p>
 <p>The BLE model has 7 profiles. We map 5 standard AEP events </p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Extract all steady-state profiles from the plan HDF</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Extract all steady-state profiles from the plan HDF</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">plan_hdf</span> <span class="o">=</span> <span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.p01.hdf&quot;</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">all_profiles</span> <span class="o">=</span> <span class="n">HdfChannelCapacity</span><span class="o">.</span><span class="n">extract_steady_profile_wse</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">plan_hdf</span><span class="p">))</span>
@@ -6347,7 +6403,7 @@ preserves each profile as a separate column — essential for capacity analysis.
 </span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>
 </span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="n">wse_df</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:49:10 - ras_commander.hdf.HdfChannelCapacity - INFO - Extracting steady-state profiles from: SHILOH BRANCH.p01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:49:10 - ras_commander.hdf.HdfChannelCapacity - INFO - Extracting steady-state profiles from: SHILOH BRANCH.p01.hdf
 
 
 2026-04-26 22:49:10 - ras_commander.hdf.HdfChannelCapacity - INFO - Extracted 7 steady profiles for 40 cross sections from SHILOH BRANCH.p01.hdf
@@ -6502,7 +6558,7 @@ Excluded: 1pct_min, 1pct_plu (confidence bounds)
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Plot WSE profiles with controlling bank elevation</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Plot WSE profiles with controlling bank elevation</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">rs_float</span> <span class="o">=</span> <span class="n">wse_df</span><span class="p">[</span><span class="s1">&#39;RS&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">)</span>
@@ -6530,7 +6586,7 @@ Excluded: 1pct_min, 1pct_plu (confidence bounds)
 <p><code>determine_capacity()</code> tests storms from smallest (10P) to largest (0.2P) at each
 cross section. The capacity level is the largest storm the channel can contain
 without the WSE exceeding the controlling bank elevation.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">capacity_df</span> <span class="o">=</span> <span class="n">HdfChannelCapacity</span><span class="o">.</span><span class="n">determine_capacity</span><span class="p">(</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">capacity_df</span> <span class="o">=</span> <span class="n">HdfChannelCapacity</span><span class="o">.</span><span class="n">determine_capacity</span><span class="p">(</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="n">bank_df</span><span class="p">,</span> <span class="n">wse_df</span><span class="p">,</span> <span class="n">storm_order</span><span class="o">=</span><span class="n">STORM_ORDER_BLE</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="p">)</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
@@ -6544,7 +6600,7 @@ without the WSE exceeding the controlling bank elevation.</p>
 </span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="n">capacity_df</span><span class="p">[[</span><span class="s1">&#39;RS&#39;</span><span class="p">,</span> <span class="s1">&#39;controlling_bank_elev&#39;</span><span class="p">,</span> <span class="s1">&#39;capacity_level&#39;</span><span class="p">,</span> 
 </span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>             <span class="s1">&#39;capacity_category&#39;</span><span class="p">,</span> <span class="s1">&#39;last_contained_storm&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">15</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:49:10 - ras_commander.hdf.HdfChannelCapacity - INFO -   Level 1 (X &lt;= 10%): 15 XS
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:49:10 - ras_commander.hdf.HdfChannelCapacity - INFO -   Level 1 (X &lt;= 10%): 15 XS
 
 
 2026-04-26 22:49:10 - ras_commander.hdf.HdfChannelCapacity - INFO -   Level 2 (10% &lt; X &lt;= 4%): 4 XS
@@ -6718,7 +6774,7 @@ Capacity distribution:
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Color-coded capacity level along the channel</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Color-coded capacity level along the channel</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">rs_float</span> <span class="o">=</span> <span class="n">capacity_df</span><span class="p">[</span><span class="s1">&#39;RS&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">)</span>
@@ -6761,7 +6817,7 @@ Capacity distribution:
 <p><code>segment_channel()</code> groups cross sections into fixed-length segments (default: 0.25 mi)
 and computes a weighted average capacity for each segment. The capacity is rounded DOWN
 (conservative) to ensure the weakest areas in a segment are not masked.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">segments_df</span> <span class="o">=</span> <span class="n">HdfChannelCapacity</span><span class="o">.</span><span class="n">segment_channel</span><span class="p">(</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">segments_df</span> <span class="o">=</span> <span class="n">HdfChannelCapacity</span><span class="o">.</span><span class="n">segment_channel</span><span class="p">(</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    <span class="n">capacity_df</span><span class="p">,</span> <span class="n">segment_length</span><span class="o">=</span><span class="n">SEGMENT_LENGTH</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="p">)</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
@@ -6770,7 +6826,7 @@ and computes a weighted average capacity for each segment. The capacity is round
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="n">segments_df</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:49:11 - ras_commander.hdf.HdfChannelCapacity - INFO - Created 17 segments across 1 reaches
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:49:11 - ras_commander.hdf.HdfChannelCapacity - INFO - Created 17 segments across 1 reaches
 
 
 Segments created: 17
@@ -7032,14 +7088,14 @@ Segment length: 1320 ft (0.25 mi)
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">summary_df</span> <span class="o">=</span> <span class="n">HdfChannelCapacity</span><span class="o">.</span><span class="n">system_capacity_summary</span><span class="p">(</span><span class="n">capacity_df</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">summary_df</span> <span class="o">=</span> <span class="n">HdfChannelCapacity</span><span class="o">.</span><span class="n">system_capacity_summary</span><span class="p">(</span><span class="n">capacity_df</span><span class="p">)</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total channel length: </span><span class="si">{</span><span class="n">summary_df</span><span class="p">[</span><span class="s1">&#39;channel_length_ft&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="si">:</span><span class="s2">,.0f</span><span class="si">}</span><span class="s2"> ft &quot;</span><span class="p">)</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;                    = </span><span class="si">{</span><span class="n">summary_df</span><span class="p">[</span><span class="s1">&#39;channel_length_ft&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">/</span><span class="mi">5280</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> mi&quot;</span><span class="p">)</span>
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="nb">print</span><span class="p">()</span>
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="n">summary_df</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:49:11 - ras_commander.hdf.HdfChannelCapacity - INFO - System Capacity Summary:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:49:11 - ras_commander.hdf.HdfChannelCapacity - INFO - System Capacity Summary:
 
 
 2026-04-26 22:49:11 - ras_commander.hdf.HdfChannelCapacity - INFO -   Level 1 (X &lt;= 10%): 9639 ft (39.6%)
@@ -7184,7 +7240,7 @@ Total channel length: 24,315 ft
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
@@ -7194,7 +7250,7 @@ Total channel length: 24,315 ft
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     

@@ -15,7 +15,7 @@
         <link rel="canonical" href="https://gpt-cmdr.github.io/ras-commander/notebooks/915_realtime_forecast_workflow/">
       
       
-        <link rel="prev" href="../914_model_validation_with_usgs/">
+        <link rel="prev" href="../920_terrain_creation/">
       
       
         <link rel="next" href="../916_hrrr_precipitation_forecast/">
@@ -2084,6 +2084,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3711,6 +3739,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -5830,7 +5886,7 @@
 <blockquote>
 <p><strong>Note</strong>: This is a documentation/educational notebook. Actual download steps require internet access to NOAA NOMADS and STOFS servers. Code cells that require internet access will gracefully skip and continue.</p>
 </blockquote>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">True</span>
@@ -5845,7 +5901,7 @@
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PIP PACKAGE MODE: Loading installed ras-commander&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
@@ -5855,7 +5911,7 @@
 </span></code></pre></div>
 <h2 id="the-rtspy-workflow-context">The rtsPy Workflow (Context)<a class="headerlink" href="#the-rtspy-workflow-context" title="Permanent link">&para;</a></h2>
 <p>The NWS operational flood forecast pipeline (historically known as rtsPy) follows a 10-step process:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Step 1:  Check forecast cycle availability (HRRR, GFS, etc.)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Step 1:  Check forecast cycle availability (HRRR, GFS, etc.)
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>Step 2:  Download precipitation forecast (HRRR GRIB2)
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>Step 3:  Download coastal boundary (STOFS-3D NetCDF)
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>Step 4:  Download upstream boundary (USGS real-time gauges)
@@ -5931,7 +5987,7 @@ Estimated runtime (demonstration mode, no internet): &lt; 30 seconds.</p>
 <p>This example demonstrates a riverine flood forecast workflow using HRRR precipitation as the forcing data. The Muncie, Indiana area is used as a representative inland watershed.</p>
 <h3 id="step-1-check-hrrr-forecast-availability">Step 1: Check HRRR Forecast Availability<a class="headerlink" href="#step-1-check-hrrr-forecast-availability" title="Permanent link">&para;</a></h3>
 <p>Before downloading, check what HRRR cycles are currently available on NOAA NOMADS. The HRRR is updated hourly with 18-hour forecasts (48-hour for the 00z and 12z cycles).</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check what HRRR data is available</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check what HRRR data is available</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">info</span> <span class="o">=</span> <span class="n">PrecipHrrr</span><span class="o">.</span><span class="n">get_info</span><span class="p">()</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;HRRR Forecast Information:&quot;</span><span class="p">)</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">info</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -5943,7 +5999,7 @@ Estimated runtime (demonstration mode, no internet): &lt; 30 seconds.</p>
 </span></code></pre></div>
 <h3 id="step-2-download-hrrr-forecast">Step 2: Download HRRR Forecast<a class="headerlink" href="#step-2-download-hrrr-forecast" title="Permanent link">&para;</a></h3>
 <p>Download the latest available HRRR forecast GRIB2 files. Each file contains one forecast hour of gridded precipitation, wind, and thermodynamic data at 3 km resolution over CONUS.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Download latest HRRR forecast (18 hours ahead)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Download latest HRRR forecast (18 hours ahead)</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># Note: Requires internet access to NOAA NOMADS</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">output_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;example_data/hrrr_forecast&quot;</span><span class="p">)</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">output_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -5966,7 +6022,7 @@ Estimated runtime (demonstration mode, no internet): &lt; 30 seconds.</p>
 </span></code></pre></div>
 <h3 id="step-3-update-plan-simulation-dates">Step 3: Update Plan Simulation Dates<a class="headerlink" href="#step-3-update-plan-simulation-dates" title="Permanent link">&para;</a></h3>
 <p>Before executing, update the HEC-RAS plan's simulation start and end dates to match the forecast window. <code>RasPlan.update_simulation_date()</code> modifies the <code>.p##</code> file directly, preserving all other plan settings.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># In a real workflow, update the plan dates to match the forecast period</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># In a real workflow, update the plan dates to match the forecast period</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># RasPlan.update_simulation_date() modifies the .p## file directly</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Example: Set simulation to cover next 18 hours</span>
@@ -5985,7 +6041,7 @@ Estimated runtime (demonstration mode, no internet): &lt; 30 seconds.</p>
 </span></code></pre></div>
 <h3 id="step-4-execute-hec-ras">Step 4: Execute HEC-RAS<a class="headerlink" href="#step-4-execute-hec-ras" title="Permanent link">&para;</a></h3>
 <p>Execute the forecast plan. The <code>force_rerun=True</code> parameter ensures HEC-RAS always runs even if existing results appear current, which is essential in operational forecasting where the forecast data changes each cycle.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Execute the forecast plan</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Execute the forecast plan</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># init_ras_project(&quot;/path/to/project&quot;, &quot;6.6&quot;)</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># RasCmdr.compute_plan(&quot;01&quot;, force_rerun=True)</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
@@ -5998,7 +6054,7 @@ Estimated runtime (demonstration mode, no internet): &lt; 30 seconds.</p>
 <p>This example extends the inland workflow by adding a downstream coastal stage boundary condition from STOFS-3D (formerly ADCIRC). Coastal watersheds like those draining into Galveston Bay require a downstream WSE boundary that accounts for storm surge and tides.</p>
 <h3 id="step-1-download-stofs-3d-coastal-boundary">Step 1: Download STOFS-3D Coastal Boundary<a class="headerlink" href="#step-1-download-stofs-3d-coastal-boundary" title="Permanent link">&para;</a></h3>
 <p>STOFS-3D (Surge, Tide, and Overland Flow Surge - 3D) is NOAA's operational coastal storm surge model. It provides water surface elevation forecasts at 1-km resolution along the US coastline, updated 4 times daily.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Check STOFS-3D availability</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Check STOFS-3D availability</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">info</span> <span class="o">=</span> <span class="n">CoastalBoundary</span><span class="o">.</span><span class="n">get_info</span><span class="p">()</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;STOFS-3D Information:&quot;</span><span class="p">)</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">info</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -6021,7 +6077,7 @@ Estimated runtime (demonstration mode, no internet): &lt; 30 seconds.</p>
 </span></code></pre></div>
 <h3 id="step-2-extract-coastal-wse-at-point">Step 2: Extract Coastal WSE at Point<a class="headerlink" href="#step-2-extract-coastal-wse-at-point" title="Permanent link">&para;</a></h3>
 <p>Extract the water surface elevation time series at a specific coastal point. For the Houston Ship Channel example, we use the Galveston Bay entrance (lat=29.35, lon=-94.77). The WSE is extracted from the nearest STOFS-3D node and interpolated to the HEC-RAS simulation timestep.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Extract water surface elevation at Galveston Bay entrance</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Extract water surface elevation at Galveston Bay entrance</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># lat=29.35, lon=-94.77 (Houston Ship Channel)</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">try</span><span class="p">:</span>
@@ -6044,7 +6100,7 @@ Estimated runtime (demonstration mode, no internet): &lt; 30 seconds.</p>
 </span></code></pre></div>
 <h3 id="step-3-generate-stage-boundary-condition">Step 3: Generate Stage Boundary Condition<a class="headerlink" href="#step-3-generate-stage-boundary-condition" title="Permanent link">&para;</a></h3>
 <p>Write the coastal WSE time series as a downstream stage boundary condition in the HEC-RAS unsteady flow file (<code>.u##</code>). The method writes in HEC-RAS fixed-width format and automatically detects the appropriate time interval.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Write coastal WSE as downstream stage boundary condition</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Write coastal WSE as downstream stage boundary condition</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># CoastalBoundary.generate_stage_bc() writes to HEC-RAS .u## file</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;To write coastal boundary condition:&quot;</span><span class="p">)</span>
@@ -6127,7 +6183,7 @@ Estimated runtime (demonstration mode, no internet): &lt; 30 seconds.</p>
 <li><code>ras_commander/sources/federal/</code> - NOAA/USGS data source modules</li>
 </ul>
 <h2 id="cleanup">Cleanup<a class="headerlink" href="#cleanup" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;example_data/hrrr_forecast&quot;</span><span class="p">,</span> <span class="s2">&quot;example_data/stofs3d_forecast&quot;</span><span class="p">]:</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="n">d</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
@@ -6156,7 +6212,7 @@ Estimated runtime (demonstration mode, no internet): &lt; 30 seconds.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:45 UTC">April 28, 2026</span>
   </span>
 
     
@@ -6166,7 +6222,7 @@ Estimated runtime (demonstration mode, no internet): &lt; 30 seconds.</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:45 UTC">April 28, 2026</span>
   </span>
 
     

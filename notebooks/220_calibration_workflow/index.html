@@ -2069,6 +2069,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3672,6 +3700,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -5478,7 +5534,7 @@ into a streamlined calibration API.</p>
 <li>Example 2 (optimization, 8 iterations): ~18 minutes</li>
 <li><strong>Total: ~28 minutes</strong></li>
 </ul>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span><span class="p">,</span> <span class="n">RasExamples</span><span class="p">,</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">RasCalibrate</span><span class="p">,</span> <span class="n">CalibrationPoint</span><span class="p">,</span> <span class="n">make_mannings_apply_fn</span><span class="p">,</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="p">)</span>
@@ -5500,7 +5556,7 @@ into a streamlined calibration API.</p>
 serve as the synthetic observed data that the calibration tries to reproduce.</p>
 <p>In a real calibration, replace these extracted WSE values with gauge-measured
 stage records.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Extract a fresh copy of the example project</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Extract a fresh copy of the example project</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">project_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="s2">&quot;BaldEagleCrkMulti2D&quot;</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;calibration&quot;</span><span class="p">)</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">ras</span> <span class="o">=</span> <span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_path</span><span class="p">,</span> <span class="s2">&quot;6.6&quot;</span><span class="p">)</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
@@ -5508,7 +5564,7 @@ stage records.</p>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Plans available:&quot;</span><span class="p">)</span>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">display</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[[</span><span class="s2">&quot;plan_number&quot;</span><span class="p">,</span> <span class="s2">&quot;Plan Title&quot;</span><span class="p">,</span> <span class="s2">&quot;flow_type&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-11 20:52:46 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_6_6.zip
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-11 20:52:46 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_6_6.zip
 
 
 2026-04-11 20:52:46 - ras_commander.RasExamples - INFO - Loading project data from CSV...
@@ -5695,7 +5751,7 @@ Plans available:
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Run plan 03 — Single 2D Area (g09, 3-day flood, ~2.2 min on 4 cores)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Run plan 03 — Single 2D Area (g09, 3-day flood, ~2.2 min on 4 cores)</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># This is the baseline: original Manning&#39;s n values from the geometry file</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Running baseline (plan 03, original Manning&#39;s n)...&quot;</span><span class="p">)</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">result</span> <span class="o">=</span> <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;03&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">,</span> <span class="n">force_rerun</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">num_cores</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
@@ -5707,7 +5763,7 @@ Plans available:
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="p">)</span>
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Results HDF: </span><span class="si">{</span><span class="n">baseline_hdf</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">baseline_hdf</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">1e6</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> MB)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-11 20:52:48 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: G:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_calibration
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-11 20:52:48 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: G:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_calibration
 
 
 2026-04-11 20:52:48 - ras_commander.RasUtils - INFO - Using provided plan file path: G:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_calibration\BaldEagleDamBrk.p03
@@ -5777,7 +5833,7 @@ Results HDF: BaldEagleDamBrk.p03.hdf (61.9 MB)
 <p>Three locations along the Bald Eagle Creek 2D mesh simulate gauge stations.
 <code>HdfResultsQuery.query_points()</code> snaps each (x, y) coordinate to the nearest
 mesh cell and returns the WSE at the requested time step.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Representative (x, y) locations along the simulated reach</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Representative (x, y) locations along the simulated reach</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># These coordinates are in the model&#39;s projected coordinate system (ft)</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">gauge_locations</span> <span class="o">=</span> <span class="p">{</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="s2">&quot;Upper Gauge&quot;</span><span class="p">:</span>  <span class="p">(</span><span class="mf">2048000.0</span><span class="p">,</span> <span class="mf">355500.0</span><span class="p">),</span>
@@ -5798,7 +5854,7 @@ mesh cell and returns the WSE at the requested time step.</p>
 </span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Observed WSE from baseline run (serve as calibration targets):&quot;</span><span class="p">)</span>
 </span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="n">display</span><span class="p">(</span><span class="n">observed_raw</span><span class="p">[[</span><span class="s2">&quot;gauge&quot;</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="s2">&quot;y&quot;</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;cell_id&quot;</span><span class="p">,</span> <span class="s2">&quot;mesh_name&quot;</span><span class="p">]])</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-11 20:55:04 - ras_commander.hdf.HdfResultsQuery - INFO - Using existing Path object HDF file: G:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_calibration\BaldEagleDamBrk.p03.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-11 20:55:04 - ras_commander.hdf.HdfResultsQuery - INFO - Using existing Path object HDF file: G:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_calibration\BaldEagleDamBrk.p03.hdf
 
 
 2026-04-11 20:55:04 - ras_commander.hdf.HdfResultsQuery - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_calibration\BaldEagleDamBrk.p03.hdf
@@ -5908,7 +5964,7 @@ uses to extract modeled values from each plan HDF.</p>
 <li><code>time_index=-1</code> — compare at the final (peak) time step</li>
 <li><code>metric="rmse"</code> — per-point RMSE contribution to the composite objective</li>
 </ul>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">calibration_points</span> <span class="o">=</span> <span class="p">[]</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">calibration_points</span> <span class="o">=</span> <span class="p">[]</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">gauge_locations</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">observed_wse</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">observed_raw</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="s2">&quot;value&quot;</span><span class="p">])</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">pt</span> <span class="o">=</span> <span class="n">CalibrationPoint</span><span class="p">(</span>
@@ -5925,7 +5981,7 @@ uses to extract modeled values from each plan HDF.</p>
 </span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>    <span class="n">calibration_points</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pt</span><span class="p">)</span>
 </span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">:</span><span class="s2">&gt;14s</span><span class="si">}</span><span class="s2"> — observed WSE = </span><span class="si">{</span><span class="n">observed_wse</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> ft&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>   Upper Gauge — observed WSE = 566.142 ft
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>   Upper Gauge — observed WSE = 566.142 ft
   Middle Gauge — observed WSE = 597.702 ft
    Lower Gauge — observed WSE = 676.983 ft
 </code></pre></div>
@@ -5956,7 +6012,7 @@ classes.  We calibrate two:</p>
 </tr>
 </tbody>
 </table>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Factory returns an apply_fn that modifies the geometry file in-place</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Factory returns an apply_fn that modifies the geometry file in-place</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">apply_fn</span> <span class="o">=</span> <span class="n">make_mannings_apply_fn</span><span class="p">(</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">zone_column_map</span><span class="o">=</span><span class="p">{</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>        <span class="s2">&quot;n_channel&quot;</span><span class="p">:</span> <span class="s2">&quot;Open Water&quot;</span><span class="p">,</span>       <span class="c1"># river channel roughness</span>
@@ -5969,14 +6025,14 @@ classes.  We calibrate two:</p>
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  n_channel → &#39;Open Water&#39;       (baseline n = 0.035)&quot;</span><span class="p">)</span>
 </span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  n_forest  → &#39;Deciduous Forest&#39; (baseline n = 0.100)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>apply_fn ready.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>apply_fn ready.
   n_channel → &#39;Open Water&#39;       (baseline n = 0.035)
   n_forest  → &#39;Deciduous Forest&#39; (baseline n = 0.100)
 </code></pre></div>
 <hr />
 <h2 id="example-1-grid-search">Example 1 — Grid Search<a class="headerlink" href="#example-1-grid-search" title="Permanent link">&para;</a></h2>
 <p>A 3 × 3 Cartesian grid spanning ±25 % of each baseline value.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>n_channel  : [0.025, 0.035, 0.045]   (baseline = 0.035)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>n_channel  : [0.025, 0.035, 0.045]   (baseline = 0.035)
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>n_forest   : [0.080, 0.100, 0.120]   (baseline = 0.100)
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>combinations: 9 plans, 4 parallel workers
 </span></code></pre></div>
@@ -5987,7 +6043,7 @@ classes.  We calibrate two:</p>
 3. Extracts modeled WSE from each HDF and scores against the calibration points.</p>
 <p><strong>Expected outcome</strong>: the combination (0.035, 0.100) — the original values —
 produces the lowest RMSE because its simulation exactly reproduces the baseline.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">parameters</span> <span class="o">=</span> <span class="p">{</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">parameters</span> <span class="o">=</span> <span class="p">{</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="s2">&quot;n_channel&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.025</span><span class="p">,</span> <span class="mf">0.035</span><span class="p">,</span> <span class="mf">0.045</span><span class="p">],</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="s2">&quot;n_forest&quot;</span><span class="p">:</span>  <span class="p">[</span><span class="mf">0.080</span><span class="p">,</span> <span class="mf">0.100</span><span class="p">,</span> <span class="mf">0.120</span><span class="p">],</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="p">}</span>
@@ -6010,7 +6066,7 @@ produces the lowest RMSE because its simulation exactly reproduces the baseline.
 </span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>
 </span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Grid search complete!&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-11 20:55:05 - ras_commander.RasPermutation - INFO - Defined 9 total permutation(s)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-11 20:55:05 - ras_commander.RasPermutation - INFO - Defined 9 total permutation(s)
 
 
 Grid search: 9 combinations, 4 workers
@@ -8592,7 +8648,7 @@ Execution Results:
 
 Grid search complete!
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Display results (best fit at top)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Display results (best fit at top)</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">param_cols</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;n_channel&quot;</span><span class="p">,</span> <span class="s2">&quot;n_forest&quot;</span><span class="p">]</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">score_cols</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;overall_objective&quot;</span><span class="p">,</span> <span class="s2">&quot;n_points_scored&quot;</span><span class="p">]</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">point_cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">results_df</span><span class="o">.</span><span class="n">columns</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;point_&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">c</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;_objective&quot;</span><span class="p">)]</span>
@@ -8605,7 +8661,7 @@ Grid search complete!
 </span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>      <span class="sa">f</span><span class="s2">&quot;n_forest=</span><span class="si">{</span><span class="n">best</span><span class="p">[</span><span class="s1">&#39;n_forest&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">, &quot;</span>
 </span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>      <span class="sa">f</span><span class="s2">&quot;RMSE=</span><span class="si">{</span><span class="n">best</span><span class="p">[</span><span class="s1">&#39;overall_objective&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> ft&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Grid search results (sorted by RMSE — lower is better):
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Grid search results (sorted by RMSE — lower is better):
 </code></pre></div>
 <div>
 <style scoped>
@@ -8729,9 +8785,9 @@ Grid search complete!
 </table>
 </div>
 
-<div class="language-text highlight"><pre><span></span><code>Best fit: n_channel=0.025, n_forest=0.080, RMSE=nan ft
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Best fit: n_channel=0.025, n_forest=0.080, RMSE=nan ft
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Heatmap of the objective function landscape</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Heatmap of the objective function landscape</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">pivot</span> <span class="o">=</span> <span class="n">results_df</span><span class="o">.</span><span class="n">pivot</span><span class="p">(</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">index</span><span class="o">=</span><span class="s2">&quot;n_forest&quot;</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="s2">&quot;n_channel&quot;</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="s2">&quot;overall_objective&quot;</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="p">)</span>
@@ -8773,7 +8829,7 @@ Grid search complete!
 </span><span id="__span-9-40"><a id="__codelineno-9-40" name="__codelineno-9-40" href="#__codelineno-9-40"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Figure saved: calibration_grid_search.png&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../220_calibration_workflow_files/220_calibration_workflow_14_0.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Figure saved: calibration_grid_search.png
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Figure saved: calibration_grid_search.png
 </code></pre></div>
 <hr />
 <h2 id="example-2-nelder-mead-optimization">Example 2 — Nelder-Mead Optimization<a class="headerlink" href="#example-2-nelder-mead-optimization" title="Permanent link">&para;</a></h2>
@@ -8786,7 +8842,7 @@ returns the RMSE.  Nelder-Mead adjusts the simplex toward the minimum.</p>
 model evaluations (~1–4 hours for this model).  <code>max_iterations=8</code> here
 demonstrates the trajectory without waiting for full convergence.</p>
 </blockquote>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Running Nelder-Mead optimization (max 8 iterations)...&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Running Nelder-Mead optimization (max 8 iterations)...&quot;</span><span class="p">)</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  Starting from midpoint: n_channel=0.040, n_forest=0.100&quot;</span><span class="p">)</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  True parameter values:  n_channel=0.035, n_forest=0.100</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
@@ -8811,7 +8867,7 @@ demonstrates the trajectory without waiting for full convergence.</p>
 </span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Best parameters:     </span><span class="si">{</span><span class="n">opt_result</span><span class="p">[</span><span class="s1">&#39;best_parameters&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Best RMSE:           </span><span class="si">{</span><span class="n">opt_result</span><span class="p">[</span><span class="s1">&#39;best_objective&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> ft&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-11 21:12:30 - ras_commander.RasCalibrate - WARNING - SciPy&#39;s Nelder-Mead bound handling varies by version; midpoint initialization stays inside the requested bounds, but strict bound enforcement depends on SciPy.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-11 21:12:30 - ras_commander.RasCalibrate - WARNING - SciPy&#39;s Nelder-Mead bound handling varies by version; midpoint initialization stays inside the requested bounds, but strict bound enforcement depends on SciPy.
 
 
 2026-04-11 21:12:30 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: G:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_calibration
@@ -12019,7 +12075,7 @@ Starting parameters: {&#39;n_channel&#39;: 0.04, &#39;n_forest&#39;: 0.1}
 Best parameters:     {&#39;n_channel&#39;: 0.04, &#39;n_forest&#39;: 0.1}
 Best RMSE:           0.0000 ft
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Convergence and trajectory visualization</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Convergence and trajectory visualization</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">history</span> <span class="o">=</span> <span class="n">opt_result</span><span class="p">[</span><span class="s2">&quot;iteration_history&quot;</span><span class="p">]</span>  <span class="c1"># already a DataFrame</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mf">4.5</span><span class="p">))</span>
@@ -12079,7 +12135,7 @@ Best RMSE:           0.0000 ft
 </span><span id="__span-11-58"><a id="__codelineno-11-58" name="__codelineno-11-58" href="#__codelineno-11-58"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Figure saved: calibration_optimization.png&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../220_calibration_workflow_files/220_calibration_workflow_17_0.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Figure saved: calibration_optimization.png
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Figure saved: calibration_optimization.png
 </code></pre></div>
 <hr />
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
@@ -12137,7 +12193,7 @@ Best RMSE:           0.0000 ft
 - <code>"1d_xs"</code> — 1D cross section by river/reach/station</p>
 <p><strong>Scoring metrics</strong>: <code>rmse</code>, <code>nse</code>, <code>kge</code>, <code>pbias</code>, <code>mae</code></p>
 <h3 id="adapting-for-your-model">Adapting for Your Model<a class="headerlink" href="#adapting-for-your-model" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Real USGS stage observations</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Real USGS stage observations</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">dataretrieval.nwis</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nwis</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">obs</span> <span class="o">=</span> <span class="n">nwis</span><span class="o">.</span><span class="n">get_record</span><span class="p">(</span><span class="n">sites</span><span class="o">=</span><span class="s2">&quot;01550000&quot;</span><span class="p">,</span> <span class="n">service</span><span class="o">=</span><span class="s2">&quot;iv&quot;</span><span class="p">,</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>                       <span class="n">start</span><span class="o">=</span><span class="s2">&quot;1999-01-01&quot;</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;1999-01-04&quot;</span><span class="p">)</span>
@@ -12177,7 +12233,7 @@ Best RMSE:           0.0000 ft
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
@@ -12187,7 +12243,7 @@ Best RMSE:           0.0000 ft
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     

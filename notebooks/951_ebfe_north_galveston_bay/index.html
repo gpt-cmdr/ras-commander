@@ -2084,6 +2084,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3936,6 +3964,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5764,7 +5820,7 @@
 1. North Galveston Bay Models.zip (8.2 GB) - HMS + nested RAS
 2. North Galveston Bay Documents.zip (20 MB) - BLE reports</p>
 <p><strong>Note</strong>: This is Pattern 4 - most complex pattern with both hydrologic and hydraulic models.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
@@ -5777,11 +5833,11 @@
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:51:38 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:51:38 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
 </code></pre></div>
 <h2 id="step-1-organize-downloaded-model">Step 1: Organize Downloaded Model<a class="headerlink" href="#step-1-organize-downloaded-model" title="Permanent link">&para;</a></h2>
 <p>Use <code>RasEbfeModels.organize_model("north-galveston-bay")</code> to download/cache, extract, organize, and normalize HMS and RAS content into separate folders.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Import eBFE model organization function</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Import eBFE model organization function</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Shared eBFE workspace. Override RAS_COMMANDER_EBFE_ROOT to use a different local cache.</span>
@@ -5817,7 +5873,7 @@
 </span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Validation root: </span><span class="si">{</span><span class="n">VALIDATION_ROOT</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Validation matrix: </span><span class="si">{</span><span class="n">VALIDATION_MATRIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Model already organized at: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Model already organized at: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203
 
 Organized model location: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203
 Download/cache root: H:\Testing\eBFE Model Organization\Downloads
@@ -5826,7 +5882,7 @@ Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
 </code></pre></div>
 <h2 id="step-2-explore-hms-model">Step 2: Explore HMS Model<a class="headerlink" href="#step-2-explore-hms-model" title="Permanent link">&para;</a></h2>
 <p>Pattern 4 includes HEC-HMS hydrologic model with multiple storm frequencies.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># HMS model location</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># HMS model location</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">hms_folder</span> <span class="o">=</span> <span class="n">organized_folder</span> <span class="o">/</span> <span class="s2">&quot;HMS Model&quot;</span> <span class="o">/</span> <span class="s2">&quot;NorthGalvestonBay&quot;</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">hms_project</span> <span class="o">=</span> <span class="n">hms_folder</span> <span class="o">/</span> <span class="s2">&quot;NorthGalvestonBay.hms&quot;</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
@@ -5850,7 +5906,7 @@ Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
 </span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;⚠️ HMS project not found - check organization&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>HMS Project: NorthGalvestonBay.hms
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>HMS Project: NorthGalvestonBay.hms
 Location: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\HMS Model\NorthGalvestonBay
 
 Storm Frequencies (8 DSS files):
@@ -5870,7 +5926,7 @@ Basin Models (3):
 </code></pre></div>
 <h2 id="step-3-explore-hms-dss-time-series">Step 3: Explore HMS DSS Time Series<a class="headerlink" href="#step-3-explore-hms-dss-time-series" title="Permanent link">&para;</a></h2>
 <p>HMS models generate streamflow hydrographs in DSS format that feed into HEC-RAS.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Pick one storm frequency to explore. DSS catalog access requires Java/pyjnius;</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># skip gracefully in notebook validation environments without JAVA_HOME.</span>
@@ -5906,7 +5962,7 @@ Basin Models (3):
 </span><span id="__span-3-34"><a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-3-35"><a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;⚠️ </span><span class="si">{</span><span class="n">dss_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> not found&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Exploring: 100yr.dss
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Exploring: 100yr.dss
 
 Configuring Java VM for DSS operations...
 DSS catalog validation skipped because Java/JVM is not configured.
@@ -5915,7 +5971,7 @@ Download from: https://www.oracle.com/java/technologies/downloads/
 </code></pre></div>
 <h2 id="step-4-check-ras-model-status">Step 4: Check RAS Model Status<a class="headerlink" href="#step-4-check-ras-model-status" title="Permanent link">&para;</a></h2>
 <p>Pattern 4 RAS model is in a nested 6.1 GB zip. Check extraction status.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">ras_folder</span> <span class="o">=</span> <span class="n">organized_folder</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">ras_folder</span> <span class="o">=</span> <span class="n">organized_folder</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Check if RAS has been extracted and normalized into an openable project.</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">ras_prj_files</span> <span class="o">=</span> <span class="p">[</span>
@@ -5936,12 +5992,12 @@ Download from: https://www.oracle.com/java/technologies/downloads/
 </span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>        <span class="nb">print</span><span class="p">(</span><span class="n">extraction_readme</span><span class="o">.</span><span class="n">read_text</span><span class="p">())</span>
 </span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>    <span class="n">ras_extracted</span> <span class="o">=</span> <span class="kc">False</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>RAS model extracted and normalized successfully
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>RAS model extracted and normalized successfully
   Project folder: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model
 </code></pre></div>
 <h2 id="step-5-initialize-ras-model-if-extracted">Step 5: Initialize RAS Model (If Extracted)<a class="headerlink" href="#step-5-initialize-ras-model-if-extracted" title="Permanent link">&para;</a></h2>
 <p>If RAS_Submittal.zip has been manually extracted, initialize with ras-commander.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">if</span> <span class="n">ras_extracted</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">if</span> <span class="n">ras_extracted</span><span class="p">:</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Initializing RAS model...&quot;</span><span class="p">)</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">ras_project</span> <span class="o">=</span> <span class="n">ras_prj_files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">parent</span>
@@ -5967,7 +6023,7 @@ Download from: https://www.oracle.com/java/technologies/downloads/
 </span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;⚠️ RAS model not extracted - complete manual extraction first&quot;</span><span class="p">)</span>
 </span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">After extraction, re-run this cell to initialize RAS model&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Initializing RAS model...
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Initializing RAS model...
 
 
 2026-04-26 22:51:40 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.rasmap
@@ -6294,7 +6350,7 @@ Download from: https://www.oracle.com/java/technologies/downloads/
 <li><strong>HEC-RAS</strong>: Uses DSS hydrographs as boundary conditions</li>
 <li><strong>2D Routing</strong>: Computes inundation depths and extents</li>
 </ol>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;HMS → RAS Workflow for North Galveston Bay:</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;HMS → RAS Workflow for North Galveston Bay:</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Step 1: HEC-HMS Hydrologic Modeling&quot;</span><span class="p">)</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  - Input: Design storm precipitation (10yr, 25yr, 50yr, 100yr, 500yr)&quot;</span><span class="p">)</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  - Process: Basin rainfall-runoff transformation&quot;</span><span class="p">)</span>
@@ -6315,7 +6371,7 @@ Download from: https://www.oracle.com/java/technologies/downloads/
 </span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - Status: Pending manual extraction&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>HMS → RAS Workflow for North Galveston Bay:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>HMS → RAS Workflow for North Galveston Bay:
 
 Step 1: HEC-HMS Hydrologic Modeling
   - Input: Design storm precipitation (10yr, 25yr, 50yr, 100yr, 500yr)
@@ -6336,7 +6392,7 @@ Step 3: HEC-RAS Hydraulic Modeling
 </code></pre></div>
 <h2 id="step-7-review-documentation">Step 7: Review Documentation<a class="headerlink" href="#step-7-review-documentation" title="Permanent link">&para;</a></h2>
 <p>Pattern 4 models include comprehensive BLE reports and metadata.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">docs_folder</span> <span class="o">=</span> <span class="n">organized_folder</span> <span class="o">/</span> <span class="s2">&quot;Documentation&quot;</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">docs_folder</span> <span class="o">=</span> <span class="n">organized_folder</span> <span class="o">/</span> <span class="s2">&quot;Documentation&quot;</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">doc_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">docs_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;*&#39;</span><span class="p">))</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Documentation Files (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">doc_files</span><span class="p">)</span><span class="si">}</span><span class="s2">):&quot;</span><span class="p">)</span>
@@ -6352,7 +6408,7 @@ Step 3: HEC-RAS Hydraulic Modeling
 </span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_excel</span><span class="p">(</span><span class="n">inventory</span><span class="p">,</span> <span class="n">sheet_name</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">nrows</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
 </span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">to_string</span><span class="p">())</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Documentation Files (2):
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Documentation Files (2):
 ================================================================================
   - 2D_Model_Inventory.xlsx: 0.06 MB
   - 480119_Hydraulics_metadata.xml: 0.02 MB
@@ -6374,7 +6430,7 @@ Reading model inventory...
 </code></pre></div>
 <h2 id="step-8-check-agent-work-log">Step 8: Check Agent Work Log<a class="headerlink" href="#step-8-check-agent-work-log" title="Permanent link">&para;</a></h2>
 <p>Every organized model has agent/model_log.md documenting the organization process.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">model_log</span> <span class="o">=</span> <span class="n">organized_folder</span> <span class="o">/</span> <span class="s2">&quot;agent&quot;</span> <span class="o">/</span> <span class="s2">&quot;model_log.md&quot;</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">model_log</span> <span class="o">=</span> <span class="n">organized_folder</span> <span class="o">/</span> <span class="s2">&quot;agent&quot;</span> <span class="o">/</span> <span class="s2">&quot;model_log.md&quot;</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="k">if</span> <span class="n">model_log</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Agent Work Log: </span><span class="si">{</span><span class="n">model_log</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -6395,7 +6451,7 @@ Reading model inventory...
 </span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;⚠️ Agent work log not found&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Agent Work Log: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\agent\model_log.md
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Agent Work Log: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\agent\model_log.md
 
 Preview (first 30 lines, normalized for current API labels/workspace):
 ================================================================================
@@ -6436,7 +6492,7 @@ Preview (first 30 lines, normalized for current API labels/workspace):
 <h2 id="optional-extract-results-and-validate-ras-assembly">Optional: Extract Results and Validate RAS Assembly<a class="headerlink" href="#optional-extract-results-and-validate-ras-assembly" title="Permanent link">&para;</a></h2>
 <p><strong>Requires</strong>: Manual extraction of <code>RAS_Submittal.zip</code> first.</p>
 <p>After extracting the RAS model, initialize it with ras-commander and inspect any existing <code>.p##.hdf</code> result files. If result HDF files are missing, the delivery-format validation gate is the geometry preprocessor, not a full unsteady compute.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">GeomPreprocessor</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">GeomPreprocessor</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">RUN_GEOMETRY_PREPROCESSOR</span> <span class="o">=</span> <span class="kc">False</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">PREPROCESSOR_TIMEOUT_SECONDS</span> <span class="o">=</span> <span class="mi">7200</span>
@@ -6481,7 +6537,7 @@ Preview (first 30 lines, normalized for current API labels/workspace):
 </span><span id="__span-9-43"><a id="__codelineno-9-43" name="__codelineno-9-43" href="#__codelineno-9-43"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;RAS model not extracted&quot;</span><span class="p">)</span>
 </span><span id="__span-9-44"><a id="__codelineno-9-44" name="__codelineno-9-44" href="#__codelineno-9-44"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Re-run the organizer with extract_ras_nested=True when source archives are available.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:51:40 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:51:40 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
 
 
 2026-04-26 22:51:40 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
@@ -6539,7 +6595,7 @@ Full HMS-to-RAS execution remains optional engineering validation, not the deliv
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:45 UTC">April 28, 2026</span>
   </span>
 
     
@@ -6549,7 +6605,7 @@ Full HMS-to-RAS execution remains optional engineering validation, not the deliv
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:45 UTC">April 28, 2026</span>
   </span>
 
     

@@ -2084,6 +2084,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4040,6 +4068,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -6017,7 +6073,7 @@
 </ul>
 <hr />
 <h2 id="part-1-setup-and-imports">Part 1: Setup and Imports<a class="headerlink" href="#part-1-setup-and-imports" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># Set to True for local development, False for pip package</span>
@@ -6069,7 +6125,7 @@
 </span><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50" href="#__codelineno-0-50"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">  Install hms-commander for all HMS-equivalent methods:&quot;</span><span class="p">)</span>
 </span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51" href="#__codelineno-0-51"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  pip install hms-commander&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>LOCAL SOURCE MODE: Loading from c:\GH\ras-commander/ras_commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>LOCAL SOURCE MODE: Loading from c:\GH\ras-commander/ras_commander
 Loaded ras_commander: c:\GH\ras-commander\ras_commander\__init__.py
 
 HMS-Equivalent Methods Availability:
@@ -6077,7 +6133,7 @@ HMS-Equivalent Methods Availability:
   FrequencyStorm: [OK]
   ScsTypeStorm:   [OK]
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
@@ -6091,9 +6147,9 @@ HMS-Equivalent Methods Availability:
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Standard libraries imported successfully&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Standard libraries imported successfully
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Standard libraries imported successfully
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># CONFIGURATION - Edit these for your project</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
@@ -6128,7 +6184,7 @@ HMS-Equivalent Methods Availability:
 </span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Execute Plan: </span><span class="si">{</span><span class="n">EXECUTE_PLAN</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Variance Threshold: </span><span class="si">{</span><span class="n">VARIANCE_THRESHOLD_PCT</span><span class="si">}</span><span class="s2">%&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Configuration Summary:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Configuration Summary:
   Project: BaldEagleCrkMulti2D
   Plan: 06 (configured for gridded precipitation)
   Storm Duration: 24 hours
@@ -6136,7 +6192,7 @@ HMS-Equivalent Methods Availability:
   Execute Plan: True
   Variance Threshold: 10.0%
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># 1.1 Extract Example Project</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Extracting BaldEagleCrkMulti2D example project...&quot;</span><span class="p">)</span>
@@ -6157,7 +6213,7 @@ HMS-Equivalent Methods Availability:
 </span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>    <span class="n">PROJECT_AVAILABLE</span> <span class="o">=</span> <span class="kc">False</span>
 </span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="n">project_path</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:38:36 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_6_6.zip
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-25 16:38:36 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_6_6.zip
 2026-01-25 16:38:36 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_6_6.zip
 2026-01-25 16:38:36 - ras_commander.RasExamples - INFO - Loading project data from CSV...
 2026-01-25 16:38:36 - ras_commander.RasExamples - INFO - Loading project data from CSV...
@@ -6182,7 +6238,7 @@ Extracting BaldEagleCrkMulti2D example project...
 
 [OK] Extracted to: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># 1.2 Initialize Project</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">if</span> <span class="n">PROJECT_AVAILABLE</span><span class="p">:</span>
@@ -6201,7 +6257,7 @@ Extracting BaldEagleCrkMulti2D example project...
 </span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[!!] Project not available - cannot continue&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:38:39 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.rasmap
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-25 16:38:39 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.rasmap
 2026-01-25 16:38:39 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.rasmap
 2026-01-25 16:38:39 - ras_commander.RasPrj - INFO - Updated results_df with 11 plan(s)
 
@@ -6338,7 +6394,7 @@ Available Plans:
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># 1.3 Verify Gridded Precipitation Configuration</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">if</span> <span class="n">PROJECT_AVAILABLE</span><span class="p">:</span>
@@ -6370,7 +6426,7 @@ Available Plans:
 </span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a>    <span class="n">PLAN_AVAILABLE</span> <span class="o">=</span> <span class="kc">False</span>
 </span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a>    <span class="n">geom_hdf</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Verifying Plan 06 for gridded precipitation...
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Verifying Plan 06 for gridded precipitation...
 
 [OK] Plan 06 found:
   Title: Gridded Precip - Infiltration
@@ -6379,7 +6435,7 @@ Available Plans:
 
 [OK] Geometry HDF: BaldEagleDamBrk.g01.hdf
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span>
 </span></code></pre></div>
 <div>
 <style scoped>
@@ -6695,7 +6751,7 @@ Available Plans:
 <hr />
 <h2 id="part-2-mesh-analysis">Part 2: Mesh Analysis<a class="headerlink" href="#part-2-mesh-analysis" title="Permanent link">&para;</a></h2>
 <p>Extract and visualize the 2D mesh cells that will receive precipitation. Each mesh cell in a rain-on-grid model receives precipitation input independently.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># 2.1 Get 2D Mesh Area Names</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">if</span> <span class="n">PROJECT_AVAILABLE</span> <span class="ow">and</span> <span class="n">geom_hdf</span><span class="p">:</span>
@@ -6713,7 +6769,7 @@ Available Plans:
 </span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[!!] Project or geometry HDF not available&quot;</span><span class="p">)</span>
 </span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>    <span class="n">mesh_area_names</span> <span class="o">=</span> <span class="p">[]</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:38:39 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-25 16:38:39 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
 2026-01-25 16:38:39 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
 2026-01-25 16:38:39 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
 2026-01-25 16:38:39 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
@@ -6724,7 +6780,7 @@ Extracting 2D mesh area names...
 [OK] Found 1 2D flow area(s):
   - BaldEagleCr
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># 2.2 Extract Mesh Cell Points</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">if</span> <span class="n">PROJECT_AVAILABLE</span> <span class="ow">and</span> <span class="n">geom_hdf</span> <span class="ow">and</span> <span class="n">mesh_area_names</span><span class="p">:</span>
@@ -6755,7 +6811,7 @@ Extracting 2D mesh area names...
 </span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[!!] Cannot extract mesh cells - prerequisites not available&quot;</span><span class="p">)</span>
 </span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>    <span class="n">mesh_cells_gdf</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:38:39 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-25 16:38:39 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
 2026-01-25 16:38:39 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
 2026-01-25 16:38:39 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
 2026-01-25 16:38:39 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
@@ -6847,7 +6903,7 @@ Sample cells:
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># 2.3 Extract Mesh Area Perimeters</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="k">if</span> <span class="n">PROJECT_AVAILABLE</span> <span class="ow">and</span> <span class="n">geom_hdf</span><span class="p">:</span>
@@ -6876,7 +6932,7 @@ Sample cells:
 </span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a>    <span class="n">mesh_areas_gdf</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:38:40 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-25 16:38:40 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
 2026-01-25 16:38:40 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
 2026-01-25 16:38:40 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
 2026-01-25 16:38:40 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
@@ -6904,7 +6960,7 @@ Flow area bounds:
   Max X: 2084790.14
   Max Y: 371007.58
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># 2.4 Visualize Mesh Domain</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="k">if</span> <span class="n">mesh_cells_gdf</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">mesh_areas_gdf</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -6955,10 +7011,10 @@ Flow area bounds:
 </span><span id="__span-10-49"><a id="__codelineno-10-49" name="__codelineno-10-49" href="#__codelineno-10-49"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-10-50"><a id="__codelineno-10-50" name="__codelineno-10-50" href="#__codelineno-10-50"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[--] Cannot visualize - mesh data not available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Visualizing mesh domain...
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Visualizing mesh domain...
 </code></pre></div>
 <p><img alt="png" src="../722_gridded_precipitation_atlas14_files/722_gridded_precipitation_atlas14_13_1.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>[OK] Mesh domain visualized
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>[OK] Mesh domain visualized
 Note: In rain-on-grid modeling, each of these 89,879 cells
       receives precipitation input independently.
 </code></pre></div>
@@ -6970,7 +7026,7 @@ Note: In rain-on-grid modeling, each of these 89,879 cells
 2. <strong>FrequencyStorm</strong> - TP-40 pattern
 3. <strong>ScsTypeStorm</strong> - Type II (standard for most of US)</p>
 <p><strong>Note</strong>: These are uniform storms - the depth is the same everywhere. Part 4 assesses whether spatial variation is needed.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># 3.1 Get Representative Precipitation Depth</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="k">if</span> <span class="n">PROJECT_AVAILABLE</span> <span class="ow">and</span> <span class="n">geom_hdf</span><span class="p">:</span>
@@ -7007,7 +7063,7 @@ Note: In rain-on-grid modeling, each of these 89,879 cells
 </span><span id="__span-11-35"><a id="__codelineno-11-35" name="__codelineno-11-35" href="#__codelineno-11-35"></a>    <span class="n">TOTAL_DEPTH_INCHES</span> <span class="o">=</span> <span class="mf">5.75</span>
 </span><span id="__span-11-36"><a id="__codelineno-11-36" name="__codelineno-11-36" href="#__codelineno-11-36"></a>    <span class="n">DEPTH_AVAILABLE</span> <span class="o">=</span> <span class="kc">False</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:38:40 - ras_commander.precip.Atlas14Variance - INFO - Starting Atlas 14 variance analysis for BaldEagleDamBrk.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-25 16:38:40 - ras_commander.precip.Atlas14Variance - INFO - Starting Atlas 14 variance analysis for BaldEagleDamBrk.g01.hdf
 2026-01-25 16:38:40 - ras_commander.precip.Atlas14Variance - INFO - Starting Atlas 14 variance analysis for BaldEagleDamBrk.g01.hdf
 2026-01-25 16:38:40 - ras_commander.precip.Atlas14Variance - INFO - Durations: [24] hours, Return periods: [100] years
 2026-01-25 16:38:40 - ras_commander.precip.Atlas14Variance - INFO - Durations: [24] hours, Return periods: [100] years
@@ -7075,7 +7131,7 @@ Getting representative precipitation depth for model domain...
 
 Using total depth: 5.75 inches
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># 3.2 Generate Storms Using All Available Storm Methods</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
@@ -7158,7 +7214,7 @@ Using total depth: 5.75 inches
 </span><span id="__span-12-81"><a id="__codelineno-12-81" name="__codelineno-12-81" href="#__codelineno-12-81"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;STORM GENERATION COMPLETE: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">storms_suite</span><span class="p">)</span><span class="si">}</span><span class="s2"> storms generated&quot;</span><span class="p">)</span>
 </span><span id="__span-12-82"><a id="__codelineno-12-82" name="__codelineno-12-82" href="#__codelineno-12-82"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:38:59 - hms_commander.Atlas14Storm - INFO - Downloading temporal distribution from: https://hdsc.nws.noaa.gov/pub/hdsc/data/pa/pa_1_24h_temporal.csv
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-25 16:38:59 - hms_commander.Atlas14Storm - INFO - Downloading temporal distribution from: https://hdsc.nws.noaa.gov/pub/hdsc/data/pa/pa_1_24h_temporal.csv
 2026-01-25 16:38:59 - hms_commander.Atlas14Storm - INFO - Downloading temporal distribution from: https://hdsc.nws.noaa.gov/pub/hdsc/data/pa/pa_1_24h_temporal.csv
 
 
@@ -7198,7 +7254,7 @@ Try duration_hours=24 or use StormGenerator for other durations.
 STORM GENERATION COMPLETE: 2 storms generated
 ================================================================================
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># 3.3 Visualize Generated Storms</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="k">if</span> <span class="n">storms_suite</span><span class="p">:</span>
@@ -7270,7 +7326,7 @@ STORM GENERATION COMPLETE: 2 storms generated
 </span><span id="__span-13-70"><a id="__codelineno-13-70" name="__codelineno-13-70" href="#__codelineno-13-70"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[--] No storms generated&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../722_gridded_precipitation_atlas14_files/722_gridded_precipitation_atlas14_17_0.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Depth Conservation Summary:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Depth Conservation Summary:
 ------------------------------------------------------------
 Storm Type                    Total Depth           Error
 ------------------------------------------------------------
@@ -7286,7 +7342,7 @@ Note: HMS-equivalent methods conserve depth at 10^-6 precision.
 <p><strong>Decision Criterion</strong>:
 - If range percentage <strong>&lt; 10%</strong>: Uniform rainfall is appropriate
 - If range percentage <strong>&gt;= 10%</strong>: Consider spatially variable rainfall</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># 4.1 Full Variance Analysis</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="k">if</span> <span class="n">PROJECT_AVAILABLE</span> <span class="ow">and</span> <span class="n">geom_hdf</span><span class="p">:</span>
@@ -7318,7 +7374,7 @@ Note: HMS-equivalent methods conserve depth at 10^-6 precision.
 </span><span id="__span-14-30"><a id="__codelineno-14-30" name="__codelineno-14-30" href="#__codelineno-14-30"></a>    <span class="n">variance_results</span> <span class="o">=</span> <span class="kc">None</span>
 </span><span id="__span-14-31"><a id="__codelineno-14-31" name="__codelineno-14-31" href="#__codelineno-14-31"></a>    <span class="n">VARIANCE_AVAILABLE</span> <span class="o">=</span> <span class="kc">False</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:39:00 - ras_commander.precip.Atlas14Variance - INFO - Starting Atlas 14 variance analysis for BaldEagleDamBrk.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-25 16:39:00 - ras_commander.precip.Atlas14Variance - INFO - Starting Atlas 14 variance analysis for BaldEagleDamBrk.g01.hdf
 2026-01-25 16:39:00 - ras_commander.precip.Atlas14Variance - INFO - Starting Atlas 14 variance analysis for BaldEagleDamBrk.g01.hdf
 2026-01-25 16:39:00 - ras_commander.precip.Atlas14Variance - INFO - Durations: [6, 12, 24] hours, Return periods: [10, 50, 100] years
 2026-01-25 16:39:00 - ras_commander.precip.Atlas14Variance - INFO - Durations: [6, 12, 24] hours, Return periods: [10, 50, 100] years
@@ -7500,7 +7556,7 @@ Variance Statistics:
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># 4.2 Uniformity Decision</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="k">if</span> <span class="n">VARIANCE_AVAILABLE</span> <span class="ow">and</span> <span class="n">variance_results</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -7528,7 +7584,7 @@ Variance Statistics:
 </span><span id="__span-15-26"><a id="__codelineno-15-26" name="__codelineno-15-26" href="#__codelineno-15-26"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Defaulting to uniform rainfall assumption.&quot;</span><span class="p">)</span>
 </span><span id="__span-15-27"><a id="__codelineno-15-27" name="__codelineno-15-27" href="#__codelineno-15-27"></a>    <span class="n">UNIFORM_APPROPRIATE</span> <span class="o">=</span> <span class="kc">True</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Assessing whether uniform rainfall is appropriate...
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Assessing whether uniform rainfall is appropriate...
 
 [OK] Uniform rainfall appropriate. Maximum variance is 7.1% (threshold: 10.0%)
 
@@ -7538,7 +7594,7 @@ Highest variance event:
   Range: 7.1%
   Min: 3.68 in, Max: 3.94 in
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="c1"># 4.3 Visualize Variance by Duration</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="k">if</span> <span class="n">VARIANCE_AVAILABLE</span> <span class="ow">and</span> <span class="n">variance_results</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -7585,7 +7641,7 @@ Highest variance event:
 </span><span id="__span-16-45"><a id="__codelineno-16-45" name="__codelineno-16-45" href="#__codelineno-16-45"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  See Part 5 for future spatially distributed rainfall workflows.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../722_gridded_precipitation_atlas14_files/722_gridded_precipitation_atlas14_21_0.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Interpretation: Spatial variance is low (&lt; threshold).
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Interpretation: Spatial variance is low (&lt; threshold).
   Uniform rainfall is appropriate for this model domain.
 </code></pre></div>
 <hr />
@@ -7602,7 +7658,7 @@ Highest variance event:
 <li><strong>Configure unsteady file</strong> with GDAL gridded precipitation</li>
 <li><strong>Execute and compare results</strong> (gridded vs uniform)</li>
 </ol>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># 5.1 Gridded Precipitation Workflow Concept</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
@@ -7635,7 +7691,7 @@ Highest variance event:
 </span><span id="__span-17-31"><a id="__codelineno-17-31" name="__codelineno-17-31" href="#__codelineno-17-31"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">PLACEHOLDER CODE (Future Implementation):&quot;</span><span class="p">)</span>
 </span><span id="__span-17-32"><a id="__codelineno-17-32" name="__codelineno-17-32" href="#__codelineno-17-32"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">50</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>================================================================================
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>================================================================================
 GRIDDED PRECIPITATION WORKFLOW - CONCEPT
 ================================================================================
 
@@ -7664,7 +7720,7 @@ NOT PLANNED:
 PLACEHOLDER CODE (Future Implementation):
 --------------------------------------------------
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># 5.2 Future Workflow (Placeholder - Not Yet Implemented)</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>
@@ -7713,7 +7769,7 @@ PLACEHOLDER CODE (Future Implementation):
 </span><span id="__span-18-47"><a id="__codelineno-18-47" name="__codelineno-18-47" href="#__codelineno-18-47"></a>
 </span><span id="__span-18-48"><a id="__codelineno-18-48" name="__codelineno-18-48" href="#__codelineno-18-48"></a><span class="nb">print</span><span class="p">(</span><span class="n">future_workflow</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code># ==================== FUTURE IMPLEMENTATION ====================
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code># ==================== FUTURE IMPLEMENTATION ====================
 # Direct Atlas 14 gridded NetCDF export (AORC-compatible)
 
 from ras_commander.precip import Atlas14Grid, Atlas14Storm
@@ -7751,7 +7807,7 @@ hyeto = Atlas14Storm.generate_hyetograph(
 #     interpolation=&quot;Nearest&quot;
 # )
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># 5.3 What We CAN Do Now</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;CURRENT STATE SUMMARY&quot;</span><span class="p">)</span>
@@ -7779,7 +7835,7 @@ hyeto = Atlas14Storm.generate_hyetograph(
 </span><span id="__span-19-26"><a id="__codelineno-19-26" name="__codelineno-19-26" href="#__codelineno-19-26"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-19-27"><a id="__codelineno-19-27" name="__codelineno-19-27" href="#__codelineno-19-27"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">[!!] Setup incomplete - please run Parts 1-4&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>CURRENT STATE SUMMARY
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>CURRENT STATE SUMMARY
 ============================================================
 
 Mesh cells identified: 89,879
@@ -7798,7 +7854,7 @@ Next Steps (Manual Workflow):
   4. Execute plan in HEC-RAS GUI or via RasCmdr
   5. Review results and compute messages
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># 5.4 Create Uniform Precipitation Plan for Comparison</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
@@ -7928,7 +7984,7 @@ Next Steps (Manual Workflow):
 </span><span id="__span-20-128"><a id="__codelineno-20-128" name="__codelineno-20-128" href="#__codelineno-20-128"></a>        <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
 </span><span id="__span-20-129"><a id="__codelineno-20-129" name="__codelineno-20-129" href="#__codelineno-20-129"></a>        <span class="n">COMPARISON_PLAN_CREATED</span> <span class="o">=</span> <span class="kc">False</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:39:09 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p07
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-25 16:39:09 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p07
 2026-01-25 16:39:09 - ras_commander.RasUtils - INFO - File cloned from C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06 to C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p07
 2026-01-25 16:39:09 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p07
 2026-01-25 16:39:09 - ras_commander.RasUtils - INFO - Successfully updated file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p07
@@ -7978,7 +8034,7 @@ distributed uniformly across the entire 2D mesh using a hyetograph.
 <h2 id="part-6-optional-plan-execution">Part 6: Optional Plan Execution<a class="headerlink" href="#part-6-optional-plan-execution" title="Permanent link">&para;</a></h2>
 <p>This section provides optional execution of Plan 06 if the project is properly configured for gridded precipitation.</p>
 <p><strong>WARNING</strong>: Set <code>EXECUTE_PLAN = True</code> in Part 1 to enable execution.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="c1"># 6.1 Execute Plans (Gridded + Optional Uniform Comparison)</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
@@ -8053,7 +8109,7 @@ distributed uniformly across the entire 2D mesh using a hyetograph.
 </span><span id="__span-21-73"><a id="__codelineno-21-73" name="__codelineno-21-73" href="#__codelineno-21-73"></a>
 </span><span id="__span-21-74"><a id="__codelineno-21-74" name="__codelineno-21-74" href="#__codelineno-21-74"></a>    <span class="n">EXECUTION_SUCCESS</span> <span class="o">=</span> <span class="nb">all</span><span class="p">(</span><span class="n">execution_results</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="ow">and</span> <span class="n">successful</span> <span class="o">&gt;</span> <span class="mi">0</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Display results summary from results_df (if execution was performed)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Display results summary from results_df (if execution was performed)</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># Shows execution status, completion, errors/warnings, and runtime for all plans</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="k">if</span> <span class="n">EXECUTE_PLAN</span> <span class="ow">and</span> <span class="n">EXECUTION_SUCCESS</span><span class="p">:</span>
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>    <span class="c1"># Re-initialize from computed folder to get updated results_df</span>
@@ -8067,7 +8123,7 @@ distributed uniformly across the entire 2D mesh using a hyetograph.
 </span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a>        <span class="n">ras</span> <span class="o">=</span> <span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
 </span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a>        <span class="n">display</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;plan_title&#39;</span><span class="p">,</span> <span class="s1">&#39;completed&#39;</span><span class="p">,</span> <span class="s1">&#39;has_errors&#39;</span><span class="p">,</span> <span class="s1">&#39;has_warnings&#39;</span><span class="p">,</span> <span class="s1">&#39;runtime_complete_process_hours&#39;</span><span class="p">]])</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:45:38 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.rasmap
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-25 16:45:38 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.rasmap
 2026-01-25 16:45:38 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.rasmap
 2026-01-25 16:45:38 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
 2026-01-25 16:45:38 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
@@ -8233,7 +8289,7 @@ distributed uniformly across the entire 2D mesh using a hyetograph.
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># 6.2 Extract Results (If Executed)</span>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="k">if</span> <span class="n">EXECUTE_PLAN</span> <span class="ow">and</span> <span class="n">EXECUTION_SUCCESS</span><span class="p">:</span>
@@ -8281,7 +8337,7 @@ distributed uniformly across the entire 2D mesh using a hyetograph.
 </span><span id="__span-23-46"><a id="__codelineno-23-46" name="__codelineno-23-46" href="#__codelineno-23-46"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-23-47"><a id="__codelineno-23-47" name="__codelineno-23-47" href="#__codelineno-23-47"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[--] No results to extract (execution skipped or failed)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:45:38 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-25 16:45:38 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
 2026-01-25 16:45:38 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
 2026-01-25 16:45:38 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
 2026-01-25 16:45:38 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
@@ -8350,7 +8406,7 @@ Maximum Water Surface Elevation (2D Mesh):
 - Shows flood extent and depth from the executed storm event
 - Enables comparison across different temporal distributions when multiple runs are performed
 - Critical for identifying areas of highest flood risk</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># 7.0 Helper Functions for Spatial Analysis</span>
 </span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># These functions analyze which precipitation approach produces highest max WSE</span>
@@ -8645,9 +8701,9 @@ Maximum Water Surface Elevation (2D Mesh):
 </span><span id="__span-24-293"><a id="__codelineno-24-293" name="__codelineno-24-293" href="#__codelineno-24-293"></a>
 </span><span id="__span-24-294"><a id="__codelineno-24-294" name="__codelineno-24-294" href="#__codelineno-24-294"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[OK] Spatial analysis helper functions defined&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>[OK] Spatial analysis helper functions defined
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>[OK] Spatial analysis helper functions defined
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="c1"># 7.1 Atlas 14 Spatial Variance Map</span>
 </span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
@@ -8803,7 +8859,7 @@ Maximum Water Surface Elevation (2D Mesh):
 </span><span id="__span-25-154"><a id="__codelineno-25-154" name="__codelineno-25-154" href="#__codelineno-25-154"></a>        <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
 </span><span id="__span-25-155"><a id="__codelineno-25-155" name="__codelineno-25-155" href="#__codelineno-25-155"></a>        <span class="n">VARIANCE_MAP_AVAILABLE</span> <span class="o">=</span> <span class="kc">False</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:45:38 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf using 2d_flow_area
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-25 16:45:38 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf using 2d_flow_area
 2026-01-25 16:45:38 - ras_commander.precip.Atlas14Grid - INFO - Extracting extent from c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf using 2d_flow_area
 2026-01-25 16:45:38 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
 2026-01-25 16:45:38 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.g01.hdf
@@ -8854,7 +8910,7 @@ Creating Atlas 14 spatial variance visualization...
   [OK] Figure saved: atlas14_variance_100yr_24hr.png
 </code></pre></div>
 <p><img alt="png" src="../722_gridded_precipitation_atlas14_files/722_gridded_precipitation_atlas14_33_4.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>  [OK] Variance map created successfully
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>  [OK] Variance map created successfully
 </code></pre></div>
 <h3 id="72-maximum-water-surface-elevation-map">7.2 Maximum Water Surface Elevation Map<a class="headerlink" href="#72-maximum-water-surface-elevation-map" title="Permanent link">&para;</a></h3>
 <p>This map visualizes the maximum water surface elevation (WSE) for each mesh cell from the executed HEC-RAS plan. This visualization:</p>
@@ -8867,7 +8923,7 @@ Creating Atlas 14 spatial variance visualization...
 - Identify areas of highest flood risk
 - Verify model behavior is reasonable
 - Compare results across different precipitation methods</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># 7.2 Maximum WSE Map</span>
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
@@ -9134,7 +9190,7 @@ Creating Atlas 14 spatial variance visualization...
 </span><span id="__span-26-265"><a id="__codelineno-26-265" name="__codelineno-26-265" href="#__codelineno-26-265"></a>        <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
 </span><span id="__span-26-266"><a id="__codelineno-26-266" name="__codelineno-26-266" href="#__codelineno-26-266"></a>        <span class="n">METHOD_MAP_AVAILABLE</span> <span class="o">=</span> <span class="kc">False</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:45:50 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-25 16:45:50 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
 2026-01-25 16:45:50 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
 2026-01-25 16:45:50 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
 2026-01-25 16:45:50 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: c:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.p06.hdf
@@ -9224,7 +9280,7 @@ Creating maximum WSE visualization...
   [OK] Figure saved: wse_map_100yr_24hr.png
 </code></pre></div>
 <p><img alt="png" src="../722_gridded_precipitation_atlas14_files/722_gridded_precipitation_atlas14_35_6.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>  [OK] Maximum WSE map created successfully
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>  [OK] Maximum WSE map created successfully
        Visualization: Mesh cell polygons (choropleth)
 
   WSE Summary:
@@ -9239,7 +9295,7 @@ Creating maximum WSE visualization...
 <li><strong>Maximum WSE Map</strong> - Displays the highest WSE from either approach</li>
 <li><strong>WSE Difference Map</strong> - Shows <code>gridded_wse - uniform_wse</code> (positive = gridded higher, negative = uniform higher)</li>
 </ol>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="c1"># 7.3 Gridded vs Uniform Precipitation Comparison</span>
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
@@ -9370,7 +9426,7 @@ Creating maximum WSE visualization...
 </span><span id="__span-27-129"><a id="__codelineno-27-129" name="__codelineno-27-129" href="#__codelineno-27-129"></a>
 </span><span id="__span-27-130"><a id="__codelineno-27-130" name="__codelineno-27-130" href="#__codelineno-27-130"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-25 16:45:55 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.rasmap
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-25 16:45:55 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.rasmap
 2026-01-25 16:45:55 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: C:\GH\ras-commander\examples\example_projects\BaldEagleCrkMulti2D_722_gridded\BaldEagleDamBrk.rasmap
 
 
@@ -9433,7 +9489,7 @@ Generating 3 figures:
 <li><strong>Color code by "winning" method</strong> for visualization</li>
 </ol>
 <p><strong>Example workflow</strong> (conceptual):</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Run all methods with same depth</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Run all methods with same depth</span>
 </span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="n">methods</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Atlas14Storm&#39;</span><span class="p">,</span> <span class="s1">&#39;FrequencyStorm&#39;</span><span class="p">,</span> <span class="s1">&#39;ScsTypeStorm&#39;</span><span class="p">,</span> <span class="s1">&#39;StormGenerator&#39;</span><span class="p">]</span>
 </span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="n">method_plans</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Atlas14Storm&#39;</span><span class="p">:</span> <span class="s1">&#39;01&#39;</span><span class="p">,</span> <span class="s1">&#39;FrequencyStorm&#39;</span><span class="p">:</span> <span class="s1">&#39;02&#39;</span><span class="p">,</span> <span class="o">...</span><span class="p">}</span>
 </span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>
@@ -9462,7 +9518,7 @@ Generating 3 figures:
 <p>This analysis helps determine which temporal distribution is most conservative for each part of the model domain.</p>
 <hr />
 <h2 id="part-8-conclusion-and-roadmap">Part 8: Conclusion and Roadmap<a class="headerlink" href="#part-8-conclusion-and-roadmap" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="c1"># 8.1 Summary Statistics</span>
 </span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">80</span><span class="p">)</span>
@@ -9493,7 +9549,7 @@ Generating 3 figures:
 </span><span id="__span-29-29"><a id="__codelineno-29-29" name="__codelineno-29-29" href="#__codelineno-29-29"></a><span class="k">if</span> <span class="n">EXECUTE_PLAN</span><span class="p">:</span>
 </span><span id="__span-29-30"><a id="__codelineno-29-30" name="__codelineno-29-30" href="#__codelineno-29-30"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Success: </span><span class="si">{</span><span class="s1">&#39;Yes&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">EXECUTION_SUCCESS</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;No&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>================================================================================
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>================================================================================
 NOTEBOOK SUMMARY
 ================================================================================
 
@@ -9639,7 +9695,7 @@ Execution:
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
@@ -9649,7 +9705,7 @@ Execution:
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     

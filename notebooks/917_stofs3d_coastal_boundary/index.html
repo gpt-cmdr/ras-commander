@@ -2084,6 +2084,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3711,6 +3739,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -5947,7 +6003,7 @@
 <p><strong>Note</strong>: Download and extraction steps require internet access to NOAA NOMADS servers. Code cells that require internet access will gracefully skip and show expected output.</p>
 </blockquote>
 <p>!pip install --upgrade ras-commander</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Set USE_LOCAL_SOURCE based on your setup:</span>
@@ -5968,9 +6024,9 @@
 </span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PIP PACKAGE MODE: Loading installed ras-commander&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>LOCAL SOURCE MODE: Loading from C:\GH\ras-commander/ras_commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>LOCAL SOURCE MODE: Loading from C:\GH\ras-commander/ras_commander
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
@@ -6019,13 +6075,13 @@
 - <code>fields</code> - Gridded spatial output (larger, used for flood mapping)</p>
 <p><strong>Temporal resolution</strong>: Sub-hourly output (~6-minute intervals, ~1200 time steps per 48-hour forecast)</p>
 <p><strong>Why it matters for HEC-RAS</strong>: STOFS-3D provides physically consistent tidal and storm surge predictions that can be used directly as downstream stage boundary conditions, replacing manually estimated tidal curves or NOAA tidal predictions.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Get STOFS-3D model information</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Get STOFS-3D model information</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">info</span> <span class="o">=</span> <span class="n">CoastalBoundary</span><span class="o">.</span><span class="n">get_info</span><span class="p">()</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;STOFS-3D-Atlantic Information:&quot;</span><span class="p">)</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">info</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>STOFS-3D-Atlantic Information:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>STOFS-3D-Atlantic Information:
   name: STOFS-3D-Atlantic (Surge and Tide Operational Forecast System)
   provider: NOAA / NOS / CO-OPS
   spatial_resolution: Variable (80m nearshore to 50km offshore)
@@ -6045,17 +6101,17 @@
 - Well-documented historical surge events (Hurricane Harvey, Ike)
 - Many HEC-RAS models use Galveston Bay as downstream boundary</p>
 <h3 id="step-1-check-data-availability">Step 1: Check Data Availability<a class="headerlink" href="#step-1-check-data-availability" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check whether the latest STOFS-3D cycle is available on NOMADS</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check whether the latest STOFS-3D cycle is available on NOMADS</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">try</span><span class="p">:</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">available</span> <span class="o">=</span> <span class="n">CoastalBoundary</span><span class="o">.</span><span class="n">check_availability</span><span class="p">()</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Latest STOFS-3D cycle available: </span><span class="si">{</span><span class="n">available</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Availability check requires internet: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Latest STOFS-3D cycle available: False
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Latest STOFS-3D cycle available: False
 </code></pre></div>
 <h3 id="step-2-download-stofs-3d-forecast">Step 2: Download STOFS-3D Forecast<a class="headerlink" href="#step-2-download-stofs-3d-forecast" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Create output directory</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Create output directory</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">stofs_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;example_data/stofs3d_gulf&quot;</span><span class="p">)</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">stofs_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
@@ -6075,7 +6131,7 @@
 </span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  stofs_3d_atl.t00z.points.cwl.nc (~50 MB)&quot;</span><span class="p">)</span>
 </span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>    <span class="n">stofs_files</span> <span class="o">=</span> <span class="p">[]</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:55:58 - ras_commander.sources.federal.coastal_boundary - INFO - No data for 20260427, using 20260426 instead
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:58 - ras_commander.sources.federal.coastal_boundary - INFO - No data for 20260427, using 20260426 instead
 
 
 2026-04-26 22:55:58 - ras_commander.sources.federal.coastal_boundary - INFO - Auto-detected latest available: 20260426 cycle 12z
@@ -6091,7 +6147,7 @@ Downloaded 1 STOFS-3D files
   stofs_3d_atl.t12z.points.cwl.temp.salt.vel.nc (5.3 MB)
 </code></pre></div>
 <h3 id="step-3-extract-wse-at-galveston-bay-entrance">Step 3: Extract WSE at Galveston Bay Entrance<a class="headerlink" href="#step-3-extract-wse-at-galveston-bay-entrance" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Galveston Bay entrance coordinates</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Galveston Bay entrance coordinates</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">galveston_lat</span> <span class="o">=</span> <span class="mf">29.35</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">galveston_lon</span> <span class="o">=</span> <span class="o">-</span><span class="mf">94.77</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
@@ -6121,7 +6177,7 @@ Downloaded 1 STOFS-3D files
 </span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  ...&quot;</span><span class="p">)</span>
 </span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a>    <span class="n">wse_df</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:55:58 - ras_commander.sources.federal.coastal_boundary - INFO - Extracting WSE at (29.3500, -94.7700) from 1 file(s)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:58 - ras_commander.sources.federal.coastal_boundary - INFO - Extracting WSE at (29.3500, -94.7700) from 1 file(s)
 
 
 2026-04-26 22:55:58 - ras_commander.sources.federal.coastal_boundary - INFO - Using swapped x/y orientation (NOAA data quirk)
@@ -6154,7 +6210,7 @@ First 10 time steps:
 2026-04-25 13:00:00 0.149065 0.489058
 </code></pre></div>
 <h3 id="step-4-write-stage-boundary-condition">Step 4: Write Stage Boundary Condition<a class="headerlink" href="#step-4-write-stage-boundary-condition" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Write WSE as downstream stage boundary condition in HEC-RAS .u## file.</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Write WSE as downstream stage boundary condition in HEC-RAS .u## file.</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># CoastalBoundary.generate_stage_bc() writes directly to the unsteady file.</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Show the WSE DataFrame structure (input to generate_stage_bc)</span>
@@ -6223,7 +6279,7 @@ First 10 time steps:
 </span><span id="__span-6-67"><a id="__codelineno-6-67" name="__codelineno-6-67" href="#__codelineno-6-67"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  - HEC-RAS model may use a different vertical datum&quot;</span><span class="p">)</span>
 </span><span id="__span-6-68"><a id="__codelineno-6-68" name="__codelineno-6-68" href="#__codelineno-6-68"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  - Use datum_adjustment_ft to add/subtract offset&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>WSE time series (input to generate_stage_bc):
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>WSE time series (input to generate_stage_bc):
            datetime    wse_m   wse_ft
 2026-04-25 12:06:00 0.062779 0.205967
 2026-04-25 12:12:00 0.071804 0.235577
@@ -6269,7 +6325,7 @@ Datum adjustment:
 - Complex tidal dynamics (semidiurnal pattern)
 - Storm surge compounds on top of a larger tidal baseline</p>
 <p>This comparison demonstrates how STOFS-3D handles both microtidal (Gulf) and mesotidal (Atlantic) environments.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Charleston Harbor coordinates</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Charleston Harbor coordinates</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">charleston_lat</span> <span class="o">=</span> <span class="mf">32.78</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">charleston_lon</span> <span class="o">=</span> <span class="o">-</span><span class="mf">79.93</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
@@ -6294,7 +6350,7 @@ Datum adjustment:
 </span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  Tidal range: 5.70 ft (typical for Charleston)&quot;</span><span class="p">)</span>
 </span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>    <span class="n">wse_charleston</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:55:58 - ras_commander.sources.federal.coastal_boundary - INFO - Extracting WSE at (32.7800, -79.9300) from 1 file(s)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:58 - ras_commander.sources.federal.coastal_boundary - INFO - Extracting WSE at (32.7800, -79.9300) from 1 file(s)
 
 
 2026-04-26 22:55:58 - ras_commander.sources.federal.coastal_boundary - INFO - Using swapped x/y orientation (NOAA data quirk)
@@ -6312,7 +6368,7 @@ Charleston Harbor WSE (32.78, -79.93):
   Tidal range: 5.18 ft
 </code></pre></div>
 <h3 id="comparing-locations">Comparing Locations<a class="headerlink" href="#comparing-locations" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Comparison of Coastal Locations:&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Comparison of Coastal Locations:&quot;</span><span class="p">)</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">60</span><span class="p">)</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;Feature&#39;</span><span class="si">:</span><span class="s2">&lt;25</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="s1">&#39;Galveston Bay&#39;</span><span class="si">:</span><span class="s2">&lt;18</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="s1">&#39;Charleston Harbor&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">60</span><span class="p">)</span>
@@ -6328,7 +6384,7 @@ Charleston Harbor WSE (32.78, -79.93):
 </span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  - Atlantic Coast: Higher tidal range, complex tidal dynamics&quot;</span><span class="p">)</span>
 </span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  - Both: NAVD88 meters in STOFS-3D, auto-converted to feet&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Comparison of Coastal Locations:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Comparison of Coastal Locations:
 ============================================================
 Feature                   Galveston Bay      Charleston Harbor
 ------------------------------------------------------------
@@ -6357,7 +6413,7 @@ Key considerations:
 <h3 id="step-1-download-and-organize-north-galveston-bay-ebfe-model">Step 1: Download and Organize North Galveston Bay eBFE Model<a class="headerlink" href="#step-1-download-and-organize-north-galveston-bay-ebfe-model" title="Permanent link">&para;</a></h3>
 <p>The North Galveston Bay model (HUC 12040203) is a compound HMS + RAS archive from FEMA's eBFE program. <code>RasEbfeModels.organize_model("north-galveston-bay")</code> downloads/caches the source archive when needed and normalizes the model into the shared eBFE delivery workspace.</p>
 <p><strong>Note</strong>: The RAS model is nested inside a 6.1 GB zip (<code>RAS_Submittal.zip</code>) that can take a long time to extract and may need manual extraction on some machines. The notebook uses <code>extract_ras_nested=True</code> when organization is required, then keeps the expensive model-file edits and several-hour unsteady simulation opt-in for saved example execution.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Shared eBFE workspace. Override RAS_COMMANDER_EBFE_ROOT to use a different local cache.</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">EBFE_WORKSPACE</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;RAS_COMMANDER_EBFE_ROOT&quot;</span><span class="p">,</span> <span class="sa">r</span><span class="s2">&quot;H:\Testing\eBFE Model Organization&quot;</span><span class="p">))</span>
@@ -6400,7 +6456,7 @@ Key considerations:
 </span><span id="__span-9-41"><a id="__codelineno-9-41" name="__codelineno-9-41" href="#__codelineno-9-41"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Model edit demo enabled: </span><span class="si">{</span><span class="n">RUN_EBFE_MODEL_EDIT_DEMO</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-9-42"><a id="__codelineno-9-42" name="__codelineno-9-42" href="#__codelineno-9-42"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Full unsteady simulation enabled: </span><span class="si">{</span><span class="n">RUN_FULL_UNSTEADY_SIMULATION</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Model already organized at: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Model already organized at: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203
 
 Organized model: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203
 Download/cache root: H:\Testing\eBFE Model Organization\Downloads
@@ -6410,7 +6466,7 @@ Model edit demo enabled: False
 Full unsteady simulation enabled: False
 </code></pre></div>
 <h3 id="step-2-verify-ras-model-extraction-and-initialize">Step 2: Verify RAS Model Extraction and Initialize<a class="headerlink" href="#step-2-verify-ras-model-extraction-and-initialize" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">ras_folder</span> <span class="o">=</span> <span class="n">organized_folder</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
@@ -6450,7 +6506,7 @@ Full unsteady simulation enabled: False
 </span><span id="__span-10-38"><a id="__codelineno-10-38" name="__codelineno-10-38" href="#__codelineno-10-38"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Manual extraction required: open RAS Model/README_EXTRACTION_NEEDED.txt&quot;</span><span class="p">)</span>
 </span><span id="__span-10-39"><a id="__codelineno-10-39" name="__codelineno-10-39" href="#__codelineno-10-39"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Extract RAS_Submittal.zip (6.1 GB) via Windows Explorer, then re-run.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>RAS project found: NGB.prj
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>RAS project found: NGB.prj
 Location: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model
 
 
@@ -6752,7 +6808,7 @@ Boundary conditions: 77
 </code></pre></div>
 <h3 id="step-3-identify-coastal-boundary-location">Step 3: Identify Coastal Boundary Location<a class="headerlink" href="#step-3-identify-coastal-boundary-location" title="Permanent link">&para;</a></h3>
 <p>Inspect the model's boundary conditions to find the coastal (downstream) stage boundary where we'll inject the STOFS-3D forecast. We need a boundary condition with a <code>Stage Hydrograph</code> type at a coastal location.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># List all boundary conditions and their types</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># List all boundary conditions and their types</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">if</span> <span class="n">ras_prj_files</span><span class="p">:</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    <span class="n">bc_df</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
@@ -6813,7 +6869,7 @@ Boundary conditions: 77
 </span><span id="__span-11-59"><a id="__codelineno-11-59" name="__codelineno-11-59" href="#__codelineno-11-59"></a>    <span class="n">unsteady_file</span> <span class="o">=</span> <span class="kc">None</span>
 </span><span id="__span-11-60"><a id="__codelineno-11-60" name="__codelineno-11-60" href="#__codelineno-11-60"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipped - RAS model not available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:56:00 - ras_commander.RasUnsteady - INFO - Successfully extracted boundaries and tables from H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.u01
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:56:00 - ras_commander.RasUnsteady - INFO - Successfully extracted boundaries and tables from H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.u01
 
 
 All Boundary Conditions:
@@ -6830,7 +6886,7 @@ Unsteady file: NGB.u01 (exists: True)
 </code></pre></div>
 <h3 id="step-4-download-stofs-3d-forecast-and-extract-coastal-wse">Step 4: Download STOFS-3D Forecast and Extract Coastal WSE<a class="headerlink" href="#step-4-download-stofs-3d-forecast-and-extract-coastal-wse" title="Permanent link">&para;</a></h3>
 <p>Download the latest STOFS-3D forecast and extract water surface elevation at the Galveston Bay entrance (lat=29.35, lon=-94.77). This is the same extraction demonstrated in Example 1, but now we'll inject it into the real model.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Download STOFS-3D forecast for the North Galveston Bay model</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Download STOFS-3D forecast for the North Galveston Bay model</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">ebfe_stofs_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;example_data/stofs3d_ebfe&quot;</span><span class="p">)</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">ebfe_stofs_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
@@ -6887,7 +6943,7 @@ Unsteady file: NGB.u01 (exists: True)
 </span><span id="__span-12-55"><a id="__codelineno-12-55" name="__codelineno-12-55" href="#__codelineno-12-55"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Synthetic tidal signal: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">wse_ebfe</span><span class="p">)</span><span class="si">}</span><span class="s2"> time steps, 48-hour duration&quot;</span><span class="p">)</span>
 </span><span id="__span-12-56"><a id="__codelineno-12-56" name="__codelineno-12-56" href="#__codelineno-12-56"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;WSE range: </span><span class="si">{</span><span class="n">wse_ebfe</span><span class="p">[</span><span class="s1">&#39;wse_ft&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">wse_ebfe</span><span class="p">[</span><span class="s1">&#39;wse_ft&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ft NAVD88&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:56:01 - ras_commander.sources.federal.coastal_boundary - INFO - No data for 20260427, using 20260426 instead
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:56:01 - ras_commander.sources.federal.coastal_boundary - INFO - No data for 20260427, using 20260426 instead
 
 
 2026-04-26 22:56:01 - ras_commander.sources.federal.coastal_boundary - INFO - Auto-detected latest available: 20260426 cycle 12z
@@ -6919,7 +6975,7 @@ WSE range: -0.15 to 1.88 ft NAVD88
 </code></pre></div>
 <h3 id="step-5-visualize-coastal-wse-before-injection">Step 5: Visualize Coastal WSE Before Injection<a class="headerlink" href="#step-5-visualize-coastal-wse-before-injection" title="Permanent link">&para;</a></h3>
 <p>Always inspect the data being injected into a model. The plot below shows the stage hydrograph that will be written to the unsteady file.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.dates</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">mdates</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
@@ -6947,7 +7003,7 @@ WSE range: -0.15 to 1.88 ft NAVD88
 </span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Mean WSE:    </span><span class="si">{</span><span class="n">wse_ebfe</span><span class="p">[</span><span class="s1">&#39;wse_ft&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ft NAVD88&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../917_stofs3d_coastal_boundary_files/917_stofs3d_coastal_boundary_30_0.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Stage Hydrograph Summary:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Stage Hydrograph Summary:
   Time steps:  1200
   Duration:    119.9 hours
   Min WSE:     -0.15 ft NAVD88
@@ -6962,7 +7018,7 @@ WSE range: -0.15 to 1.88 ft NAVD88
 <blockquote>
 <p><strong>Datum note</strong>: STOFS-3D uses NAVD88. If the HEC-RAS model uses a different vertical datum, adjust with <code>datum_adjustment_ft</code>.</p>
 </blockquote>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">RUN_EBFE_MODEL_EDIT_DEMO</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">RUN_EBFE_MODEL_EDIT_DEMO</span><span class="p">:</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipping BC injection in the saved notebook run.&quot;</span><span class="p">)</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Set RUN_EBFE_MODEL_EDIT_DEMO = True to write STOFS-3D stages into the organized RAS project.&quot;</span><span class="p">)</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="k">elif</span> <span class="n">coastal_bc_name</span> <span class="ow">and</span> <span class="n">unsteady_file</span> <span class="ow">and</span> <span class="n">unsteady_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
@@ -6995,14 +7051,14 @@ WSE range: -0.15 to 1.88 ft NAVD88
 </span><span id="__span-14-31"><a id="__codelineno-14-31" name="__codelineno-14-31" href="#__codelineno-14-31"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">unsteady_file</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">unsteady_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
 </span><span id="__span-14-32"><a id="__codelineno-14-32" name="__codelineno-14-32" href="#__codelineno-14-32"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - Unsteady file not found: </span><span class="si">{</span><span class="n">unsteady_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Skipping BC injection in the saved notebook run.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Skipping BC injection in the saved notebook run.
 Set RUN_EBFE_MODEL_EDIT_DEMO = True to write STOFS-3D stages into the organized RAS project.
 </code></pre></div>
 <h3 id="step-6b-update-plan-and-unsteady-file-metadata">Step 6b: Update Plan and Unsteady File Metadata<a class="headerlink" href="#step-6b-update-plan-and-unsteady-file-metadata" title="Permanent link">&para;</a></h3>
 <p>Best practice: update plan titles, short identifiers, and descriptions so the model is self-documenting when opened in the HEC-RAS GUI. This leaves behind a well-organized project folder for inspection.</p>
 <p><strong>Disabling precipitation DSS linkage</strong>: The eBFE model's <code>.u01</code> file references HMS precipitation excess from a January 2000 DSS file (<code>InputDSS/100yr.dss</code>). Our simulation dates are in April 2026 (matching the STOFS-3D forecast), so HEC-RAS cannot find precipitation data for that period and exits immediately. Since this demo is <strong>coastal boundary injection only</strong> (no precipitation forcing), we disable the DSS linkage.</p>
 <p><strong>Step 6c</strong> (next cell) goes further: it removes ALL individual DSS boundary references (<code>DSS File=</code> and <code>DSS Path=</code> lines) from the <code>.u01</code>. The <code>Use DSS=False</code> flag only disables the global precipitation DSS — each flow hydrograph BC has its own DSS reference that must be neutralized separately.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasPlan</span><span class="p">,</span> <span class="n">RasUnsteady</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasPlan</span><span class="p">,</span> <span class="n">RasUnsteady</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="k">if</span> <span class="n">ras_prj_files</span><span class="p">:</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    <span class="n">plan_number</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;plan_number&quot;</span><span class="p">]</span>
@@ -7058,10 +7114,10 @@ Set RUN_EBFE_MODEL_EDIT_DEMO = True to write STOFS-3D stages into the organized 
 </span><span id="__span-15-54"><a id="__codelineno-15-54" name="__codelineno-15-54" href="#__codelineno-15-54"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-15-55"><a id="__codelineno-15-55" name="__codelineno-15-55" href="#__codelineno-15-55"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipped - RAS model not available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Skipping plan/unsteady metadata edits in the saved notebook run.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Skipping plan/unsteady metadata edits in the saved notebook run.
 Set RUN_EBFE_MODEL_EDIT_DEMO = True to modify the organized RAS project files.
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Step 6c: Neutralize HMS-linked DSS flow boundary conditions</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Step 6c: Neutralize HMS-linked DSS flow boundary conditions</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="c1"># This mutates the unsteady file, so it is opt-in for saved notebook execution.</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
@@ -7101,14 +7157,14 @@ Set RUN_EBFE_MODEL_EDIT_DEMO = True to modify the organized RAS project files.
 </span><span id="__span-16-38"><a id="__codelineno-16-38" name="__codelineno-16-38" href="#__codelineno-16-38"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-16-39"><a id="__codelineno-16-39" name="__codelineno-16-39" href="#__codelineno-16-39"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipped - RAS model not available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Skipping DSS neutralization in the saved notebook run.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Skipping DSS neutralization in the saved notebook run.
 </code></pre></div>
 <h3 id="step-7-fix-file-references-and-verify-geometry">Step 7: Fix File References and Verify Geometry<a class="headerlink" href="#step-7-fix-file-references-and-verify-geometry" title="Permanent link">&para;</a></h3>
 <p>eBFE models have terrain, land cover, and projection files at different relative locations than the <code>.rasmap</code> expects. The North Galveston Bay model's <code>.rasmap</code> contains <code>Filename="..."</code> references that break after reorganization. We scan ALL references and fix any that don't resolve — this is critical because HEC-RAS 5.0.7's RasGeomWriter.exe requires land cover files even with <code>Run HTab=0</code>.</p>
 <blockquote>
 <p><strong>Note</strong>: The eBFE delivery includes a pre-processed geometry file (<code>.g01.hdf</code>) generated by the original modelers. We preserve this file rather than regenerating it, since geometry preprocessing for 568K cells takes 30+ minutes and requires fully resolved terrain/land cover paths.</p>
 </blockquote>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">h5py</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>
@@ -7211,10 +7267,10 @@ Set RUN_EBFE_MODEL_EDIT_DEMO = True to modify the organized RAS project files.
 </span><span id="__span-17-101"><a id="__codelineno-17-101" name="__codelineno-17-101" href="#__codelineno-17-101"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-17-102"><a id="__codelineno-17-102" name="__codelineno-17-102" href="#__codelineno-17-102"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipped - RAS model not available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Skipping .rasmap / geometry-HDF path rewrites in the saved notebook run.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Skipping .rasmap / geometry-HDF path rewrites in the saved notebook run.
 The organized delivery has already been path-audited; enable RUN_EBFE_MODEL_EDIT_DEMO for repair experiments.
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Verify pre-processed geometry exists from eBFE delivery</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Verify pre-processed geometry exists from eBFE delivery</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># The .g01.hdf is created by geometry preprocessing and is required for unsteady simulation.</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1"># eBFE deliveries include this file - we preserve it rather than regenerating.</span>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>
@@ -7238,7 +7294,7 @@ The organized delivery has already been path-audited; enable RUN_EBFE_MODEL_EDIT
 </span><span id="__span-18-22"><a id="__codelineno-18-22" name="__codelineno-18-22" href="#__codelineno-18-22"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-18-23"><a id="__codelineno-18-23" name="__codelineno-18-23" href="#__codelineno-18-23"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipped - RAS model not available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Pre-processed geometry found: NGB.g01.hdf (160.7 MB)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Pre-processed geometry found: NGB.g01.hdf (160.7 MB)
 Using existing geometry from eBFE delivery (no regeneration needed)
 </code></pre></div>
 <h3 id="step-8-optional-full-unsteady-simulation">Step 8: Optional Full Unsteady Simulation<a class="headerlink" href="#step-8-optional-full-unsteady-simulation" title="Permanent link">&para;</a></h3>
@@ -7248,7 +7304,7 @@ Using existing geometry from eBFE delivery (no regeneration needed)
 <p><strong>Version note</strong>: We use HEC-RAS 5.0.7 because the eBFE delivery's <code>.g01.hdf</code> was preprocessed with that version. HEC-RAS 6.x crashes with "Unexpected error; quitting" when loading 5.07-era preprocessed geometry tables. Step 6b sets <code>Run HTab=0</code> to skip geometry preprocessing and use the existing tables directly.</p>
 <p><strong>Saved-run interpretation</strong>: With <code>RUN_FULL_UNSTEADY_SIMULATION = False</code>, downstream cells inspect existing/current result HDF files only. They do not prove a fresh STOFS-3D-injected HEC-RAS run was executed.</p>
 </blockquote>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Version diagnostic: Verify HEC-RAS 5.0.7 is correctly resolved.</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Version diagnostic: Verify HEC-RAS 5.0.7 is correctly resolved.</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># Previous runs showed compute_plan() invoking 6.5 despite init_ras_project(&quot;5.0.7&quot;).</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1"># This cell detects and corrects the mismatch before execution.</span>
 </span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>
@@ -7271,10 +7327,10 @@ Using existing geometry from eBFE delivery (no regeneration needed)
 </span><span id="__span-19-21"><a id="__codelineno-19-21" name="__codelineno-19-21" href="#__codelineno-19-21"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-19-22"><a id="__codelineno-19-22" name="__codelineno-19-22" href="#__codelineno-19-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipped - RAS model not available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>ras.ras_exe_path = C:\Program Files (x86)\HEC\HEC-RAS\5.0.7\Ras.exe
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>ras.ras_exe_path = C:\Program Files (x86)\HEC\HEC-RAS\5.0.7\Ras.exe
 HEC-RAS 5.0.7 correctly resolved — no override needed
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">RUN_FULL_UNSTEADY_SIMULATION</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">RUN_FULL_UNSTEADY_SIMULATION</span><span class="p">:</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipping full unsteady simulation in the saved notebook run.&quot;</span><span class="p">)</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Set RUN_FULL_UNSTEADY_SIMULATION = True to launch the several-hour HEC-RAS run.&quot;</span><span class="p">)</span>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="k">elif</span> <span class="n">ras_prj_files</span><span class="p">:</span>
@@ -7300,12 +7356,12 @@ HEC-RAS 5.0.7 correctly resolved — no override needed
 </span><span id="__span-20-24"><a id="__codelineno-20-24" name="__codelineno-20-24" href="#__codelineno-20-24"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-20-25"><a id="__codelineno-20-25" name="__codelineno-20-25" href="#__codelineno-20-25"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipped - RAS model not available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Skipping full unsteady simulation in the saved notebook run.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Skipping full unsteady simulation in the saved notebook run.
 Set RUN_FULL_UNSTEADY_SIMULATION = True to launch the several-hour HEC-RAS run.
 </code></pre></div>
 <h3 id="step-9-inspect-boundary-adjacent-results">Step 9: Inspect Boundary-Adjacent Results<a class="headerlink" href="#step-9-inspect-boundary-adjacent-results" title="Permanent link">&para;</a></h3>
 <p>When the optional full simulation is enabled, this section compares computed WSE near the NGB_Outlet boundary against the injected STOFS-3D stage hydrograph. In the committed notebook run, the optional simulation is disabled, so the cell treats the STOFS-3D hydrograph as a <strong>reference forecast only</strong> and inspects existing/current plan HDFs. It is not a boundary-condition verification unless <code>RUN_FULL_UNSTEADY_SIMULATION = True</code>.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfBndry</span><span class="p">,</span> <span class="n">HdfMesh</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfBndry</span><span class="p">,</span> <span class="n">HdfMesh</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">h5py</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># Initialize variables used by Step 10</span>
@@ -7418,7 +7474,7 @@ Set RUN_FULL_UNSTEADY_SIMULATION = True to launch the several-hour HEC-RAS run.
 </span><span id="__span-21-111"><a id="__codelineno-21-111" name="__codelineno-21-111" href="#__codelineno-21-111"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-21-112"><a id="__codelineno-21-112" name="__codelineno-21-112" href="#__codelineno-21-112"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipped - RAS model not available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:56:01 - ras_commander.hdf.HdfBndry - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:56:01 - ras_commander.hdf.HdfBndry - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
 
 
 2026-04-26 22:56:01 - ras_commander.hdf.HdfBase - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
@@ -7473,7 +7529,7 @@ Cells nearest to &#39;NGB_Outlet&#39;:
   Cell 565222: 134.6 model units from BC line
 </code></pre></div>
 <p><img alt="png" src="../917_stofs3d_coastal_boundary_files/917_stofs3d_coastal_boundary_43_16.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Boundary-adjacent HDF inspection summary:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Boundary-adjacent HDF inspection summary:
   Reference STOFS-3D range (not injected): -0.15 to 1.88 ft
   Existing/current HDF cell 565368 WSE range: 0.00 to 1.34 ft
   Existing/current HDF cell 565160 WSE range: 0.00 to 1.34 ft
@@ -7481,7 +7537,7 @@ Cells nearest to &#39;NGB_Outlet&#39;:
 </code></pre></div>
 <h3 id="step-10-inspect-results-at-interior-locations">Step 10: Inspect Results at Interior Locations<a class="headerlink" href="#step-10-inspect-results-at-interior-locations" title="Permanent link">&para;</a></h3>
 <p>When the optional STOFS-3D simulation is enabled, this section shows how the coastal tidal signal propagates inland through the model domain. In the committed saved run, the full simulation is disabled, so this cell inspects existing/current result HDF output only and labels the plot accordingly.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">if</span> <span class="n">ras_prj_files</span> <span class="ow">and</span> <span class="n">hdf_result_path</span> <span class="ow">and</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">hdf_result_path</span><span class="p">))</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="n">cell_pts</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">mesh_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">if</span> <span class="n">ras_prj_files</span> <span class="ow">and</span> <span class="n">hdf_result_path</span> <span class="ow">and</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">hdf_result_path</span><span class="p">))</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="n">cell_pts</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">mesh_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>    <span class="k">try</span><span class="p">:</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>        <span class="c1"># Select cells at increasing distances from the outlet</span>
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>        <span class="n">target_distances</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">3000</span><span class="p">,</span> <span class="mi">6000</span><span class="p">,</span> <span class="mi">12000</span><span class="p">,</span> <span class="mi">25000</span><span class="p">]</span>
@@ -7548,7 +7604,7 @@ Cells nearest to &#39;NGB_Outlet&#39;:
 </span><span id="__span-22-65"><a id="__codelineno-22-65" name="__codelineno-22-65" href="#__codelineno-22-65"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipped - no results available or boundary verification did not complete&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../917_stofs3d_coastal_boundary_files/917_stofs3d_coastal_boundary_45_0.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Interior WSE summary:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Interior WSE summary:
   0.2 mi: WSE 1.34 to 1.35 ft (tidal range: 0.01 ft)
   0.6 mi: WSE 19.97 to 20.59 ft (tidal range: 0.62 ft)
   1.1 mi: WSE 10.85 to 11.83 ft (tidal range: 0.98 ft)
@@ -7558,7 +7614,7 @@ Cells nearest to &#39;NGB_Outlet&#39;:
 <h3 id="step-11-compare-available-plan-hdf-results">Step 11: Compare Available Plan HDF Results<a class="headerlink" href="#step-11-compare-available-plan-hdf-results" title="Permanent link">&para;</a></h3>
 <p>The eBFE model may include pre-run results for AEP (Annual Exceedance Probability) storm events with full precipitation forcing. When <code>RUN_FULL_UNSTEADY_SIMULATION = True</code>, this cell can compare the fresh STOFS-3D tidal-only run against those design storm results.</p>
 <p>In the committed saved run, the optional STOFS-3D HEC-RAS simulation is disabled, so this section summarizes existing/current plan HDFs only.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfResultsMesh</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfResultsMesh</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="k">if</span> <span class="n">ras_prj_files</span><span class="p">:</span>
 </span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>    <span class="n">plan_number</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span>
@@ -7652,7 +7708,7 @@ Cells nearest to &#39;NGB_Outlet&#39;:
 </span><span id="__span-23-92"><a id="__codelineno-23-92" name="__codelineno-23-92" href="#__codelineno-23-92"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-23-93"><a id="__codelineno-23-93" name="__codelineno-23-93" href="#__codelineno-23-93"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipped - RAS model not available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-26 22:56:09 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:56:09 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
 
 
 2026-04-26 22:56:09 - ras_commander.hdf.HdfResultsMesh - INFO - Processing summary output for variable: Maximum Water Surface
@@ -7984,7 +8040,7 @@ Existing delivery/current plan 01     567987        120.16          38.65
                      100_YR_MINUS     567987        119.86          38.06
 </code></pre></div>
 <p><img alt="png" src="../917_stofs3d_coastal_boundary_files/917_stofs3d_coastal_boundary_47_107.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Note: These are existing/current result HDFs from the organized delivery, not a fresh STOFS-3D run.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Note: These are existing/current result HDFs from the organized delivery, not a fresh STOFS-3D run.
 </code></pre></div>
 <h2 id="key-takeaways">Key Takeaways<a class="headerlink" href="#key-takeaways" title="Permanent link">&para;</a></h2>
 <p><strong>What the committed notebook run demonstrated</strong>:
@@ -8012,7 +8068,7 @@ Existing delivery/current plan 01     567987        120.16          38.65
 | <code>CoastalBoundary.extract_wse_at_point()</code> | Extract WSE time series at lat/lon |
 | <code>CoastalBoundary.generate_stage_bc()</code> | Write stage hydrograph to a HEC-RAS unsteady flow file |
 | <code>RasEbfeModels.organize_model("north-galveston-bay")</code> | Download/extract/normalize the eBFE delivery |</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>
 </span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># Clean up STOFS-3D temporary download data only.</span>
 </span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;example_data/stofs3d_gulf&quot;</span><span class="p">,</span> <span class="s2">&quot;example_data/stofs3d_ebfe&quot;</span><span class="p">,</span> <span class="s2">&quot;stofs_data&quot;</span><span class="p">]:</span>
@@ -8038,7 +8094,7 @@ Existing delivery/current plan 01     567987        120.16          38.65
 </span><span id="__span-24-24"><a id="__codelineno-24-24" name="__codelineno-24-24" href="#__codelineno-24-24"></a>
 </span><span id="__span-24-25"><a id="__codelineno-24-25" name="__codelineno-24-25" href="#__codelineno-24-25"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Done!&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Cleaned up: example_data/stofs3d_gulf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Cleaned up: example_data/stofs3d_gulf
 Cleaned up: example_data/stofs3d_ebfe
 Removed empty directory: example_data
 
@@ -8072,7 +8128,7 @@ Done!
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:45 UTC">April 28, 2026</span>
   </span>
 
     
@@ -8082,7 +8138,7 @@ Done!
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:45 UTC">April 28, 2026</span>
   </span>
 
     

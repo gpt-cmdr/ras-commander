@@ -2084,6 +2084,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3832,6 +3860,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5523,7 +5579,7 @@
 - <strong>Pump Stations</strong>: Mechanical pumps (rating curve or multi-stage)
 - <strong>Culverts</strong>: Buried conduits (can pressure flow)</p>
 <h3 id="hdf5-structure-for-hydraulic-structures">HDF5 Structure for Hydraulic Structures<a class="headerlink" href="#hdf5-structure-for-hydraulic-structures" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>/Results/Unsteady/Output/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>/Results/Unsteady/Output/
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── Output Blocks/
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│   └── Base Output/
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│       └── Unsteady Time Series/
@@ -5561,7 +5617,7 @@
 <li><strong>Highway Crossings</strong>: Road culverts through 2D floodplains</li>
 <li><strong>Levee Systems</strong>: Closures and pump-around structures</li>
 </ul>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
@@ -5583,12 +5639,12 @@
 </span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
 ✓ Loaded: c:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># PARAMETERS - Edit these to customize the notebook</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
@@ -5601,7 +5657,7 @@
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">TIME_INDEX</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>                   <span class="c1"># Time step index (-1 = last)</span>
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">PROFILE</span> <span class="o">=</span> <span class="s2">&quot;Max&quot;</span>                   <span class="c1"># Profile name for steady analysis</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">h5py</span>
@@ -5625,7 +5681,7 @@
 </span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="kn">from</span><span class="w"> </span><span class="nn">shapely.geometry</span><span class="w"> </span><span class="kn">import</span> <span class="n">Point</span><span class="p">,</span> <span class="n">LineString</span><span class="p">,</span> <span class="n">Polygon</span>
 </span></code></pre></div>
 <h1 id="use-example-project-or-load-your-own-project">Use Example Project or Load Your Own Project<a class="headerlink" href="#use-example-project-or-load-your-own-project" title="Permanent link">&para;</a></h1>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Extract the Davis example project using static method</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Extract the Davis example project using static method</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">pipes_ex_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;12&quot;</span><span class="p">)</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Extracted project to: </span><span class="si">{</span><span class="n">pipes_ex_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
@@ -5648,7 +5704,7 @@
 </span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>    <span class="n">num_cores</span><span class="o">=</span><span class="mi">2</span>
 </span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:51:58 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:51:58 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\Example_Projects_6_6.zip
 2026-01-12 12:51:58 - ras_commander.RasExamples - INFO - Loading project data from CSV...
 2026-01-12 12:51:58 - ras_commander.RasExamples - INFO - Loaded 68 projects from CSV.
 2026-01-12 12:51:58 - ras_commander.RasExamples - INFO - ----- RasExamples Extracting Project -----
@@ -5698,15 +5754,15 @@ True
 plan_number = "01"  # Plan number to use for this notebook </p>
 <h3 id="if-you-use-this-code-cell-dont-run-the-previous-cell-or-change-to-markdown">If you use this code cell, don't run the previous cell or change to markdown<a class="headerlink" href="#if-you-use-this-code-cell-dont-run-the-previous-cell-or-change-to-markdown" title="Permanent link">&para;</a></h3>
 <h3 id="note-ensure-the-hdf-results-file-was-generated-by-hec-ras-version-6x-or-above">NOTE: Ensure the HDF Results file was generated by HEC-RAS Version 6.x or above<a class="headerlink" href="#note-ensure-the-hdf-results-file-was-generated-by-hec-ras-version-6x-or-above" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>
 </span></code></pre></div>
 <h1 id="explore-project-dataframes-using-ras-object">Explore Project Dataframes using 'ras' Object<a class="headerlink" href="#explore-project-dataframes-using-ras-object" title="Permanent link">&para;</a></h1>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Plan DataFrame for the project:&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Plan DataFrame for the project:&quot;</span><span class="p">)</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Plan DataFrame for the project:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Plan DataFrame for the project:
 </code></pre></div>
 <div>
 <style scoped>
@@ -5779,10 +5835,10 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 <p>1 rows × 29 columns</p>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Unsteady DataFrame for the project:&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Unsteady DataFrame for the project:&quot;</span><span class="p">)</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">unsteady_df</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Unsteady DataFrame for the project:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Unsteady DataFrame for the project:
 </code></pre></div>
 <div>
 <style scoped>
@@ -5836,10 +5892,10 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Boundary Conditions DataFrame for the project:&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Boundary Conditions DataFrame for the project:&quot;</span><span class="p">)</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span> 
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Boundary Conditions DataFrame for the project:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Boundary Conditions DataFrame for the project:
 </code></pre></div>
 <div>
 <style scoped>
@@ -5936,7 +5992,7 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 <p>2 rows × 28 columns</p>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Get HDF Results Entries (only present when results are present)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Get HDF Results Entries (only present when results are present)</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">get_hdf_entries</span><span class="p">()</span>
 </span></code></pre></div>
 <div>
@@ -6011,26 +6067,26 @@ plan_number = "01"  # Plan number to use for this notebook </p>
 </div>
 
 <h1 id="find-paths-for-results-and-geometry-hdfs">Find Paths for Results and Geometry HDF's<a class="headerlink" href="#find-paths-for-results-and-geometry-hdfs" title="Permanent link">&para;</a></h1>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Get the plan HDF path for the plan_number defined above</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Get the plan HDF path for the plan_number defined above</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">plan_hdf_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">plan_number</span><span class="p">,</span> <span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">plan_hdf_path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">plan_hdf_path</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>&#39;C:\\Users\\billk_clb\\anaconda3\\envs\\rascmdr_piptest\\Lib\\site-packages\\examples\\example_projects\\Davis_12\\DavisStormSystem.p02.hdf&#39;
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>&#39;C:\\Users\\billk_clb\\anaconda3\\envs\\rascmdr_piptest\\Lib\\site-packages\\examples\\example_projects\\Davis_12\\DavisStormSystem.p02.hdf&#39;
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Alternate: Get the geometry HDF path if you are extracting geometry elements from the geometry HDF</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Alternate: Get the geometry HDF path if you are extracting geometry elements from the geometry HDF</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">geom_hdf_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">plan_number</span><span class="p">,</span> <span class="s1">&#39;Geom Path&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;.hdf&#39;</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">geom_hdf_path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">geom_hdf_path</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>&#39;C:\\Users\\billk_clb\\anaconda3\\envs\\rascmdr_piptest\\Lib\\site-packages\\examples\\example_projects\\Davis_12\\DavisStormSystem.g02.hdf&#39;
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>&#39;C:\\Users\\billk_clb\\anaconda3\\envs\\rascmdr_piptest\\Lib\\site-packages\\examples\\example_projects\\Davis_12\\DavisStormSystem.g02.hdf&#39;
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Extract runtime and compute time data</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Extract runtime and compute time data</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Extracting runtime and compute time data&quot;</span><span class="p">)</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">runtime_df</span> <span class="o">=</span> <span class="n">HdfResultsPlan</span><span class="o">.</span><span class="n">get_runtime_data</span><span class="p">(</span><span class="n">hdf_path</span><span class="o">=</span><span class="n">plan_number</span><span class="p">)</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="n">runtime_df</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:52:56 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:52:56 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:52:56 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: DavisStormSystem.p02.hdf
 2026-01-12 12:52:56 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: Full System ROM with Pump
 2026-01-12 12:52:56 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 36.0
@@ -6095,12 +6151,12 @@ Extracting runtime and compute time data
 
 <hr />
 <h1 id="2d-models-with-pipe-networks-hdf-data-extraction-examples">2D Models with Pipe Networks: HDF Data Extraction Examples<a class="headerlink" href="#2d-models-with-pipe-networks-hdf-data-extraction-examples" title="Permanent link">&para;</a></h1>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Get pipe conduits</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Get pipe conduits</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">pipe_conduits_gdf</span> <span class="o">=</span> <span class="n">HdfPipe</span><span class="o">.</span><span class="n">get_pipe_conduits</span><span class="p">(</span><span class="s2">&quot;02&quot;</span><span class="p">)</span> <span class="c1"># NOTE: Here we use the plan number instead of the path variable.  The library decorators ensure this maps correctly.  </span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Pipe Conduits: pipe_conduits_gdf&quot;</span><span class="p">)</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">pipe_conduits_gdf</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:52:56 - ras_commander.hdf.HdfPipe - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:52:56 - ras_commander.hdf.HdfPipe - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 
 
 
@@ -6417,7 +6473,7 @@ Pipe Conduits: pipe_conduits_gdf
 <p>132 rows × 25 columns</p>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Plot the pipe conduit linestrings</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Plot the pipe conduit linestrings</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Create a new figure with a specified size</span>
@@ -6459,7 +6515,7 @@ Pipe Conduits: pipe_conduits_gdf
 </span><span id="__span-17-40"><a id="__codelineno-17-40" name="__codelineno-17-40" href="#__codelineno-17-40"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
 <p><img alt="png" src="../411_2d_hdf_pipes_and_pumps_files/411_2d_hdf_pipes_and_pumps_25_0.png" /></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Plot the first 2 terrain profiles</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Plot the first 2 terrain profiles</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Extract terrain profiles from the GeoDataFrame</span>
@@ -6492,15 +6548,15 @@ Pipe Conduits: pipe_conduits_gdf
 </span></code></pre></div>
 <p><img alt="png" src="../411_2d_hdf_pipes_and_pumps_files/411_2d_hdf_pipes_and_pumps_26_0.png" /></p>
 <p><img alt="png" src="../411_2d_hdf_pipes_and_pumps_files/411_2d_hdf_pipes_and_pumps_26_1.png" /></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Use get_hdf5_dataset_info function to get Pipe Conduits data:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Use get_hdf5_dataset_info function to get Pipe Conduits data:</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1">#HdfUtils.get_hdf5_dataset_info(plan_hdf_path, &quot;/Geometry/Pipe Nodes/&quot;)</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Get pipe nodes</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Get pipe nodes</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">pipe_nodes_gdf</span> <span class="o">=</span> <span class="n">HdfPipe</span><span class="o">.</span><span class="n">get_pipe_nodes</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">)</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Pipe Nodes:&quot;</span><span class="p">)</span>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="n">pipe_nodes_gdf</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:52:57 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:52:57 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfPipe - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 
 
@@ -6770,15 +6826,15 @@ Pipe Nodes:
 <p>133 rows × 17 columns</p>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Use get_hdf5_dataset_info function to get Pipe Conduits data:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Use get_hdf5_dataset_info function to get Pipe Conduits data:</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="c1">#HdfUtils.get_hdf5_dataset_info(plan_hdf_path, &quot;/Geometry/Pipe Networks/&quot;)</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Get pipe network data</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Get pipe network data</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">pipe_network_gdf</span> <span class="o">=</span> <span class="n">HdfPipe</span><span class="o">.</span><span class="n">get_pipe_network</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">)</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Pipe Network Data:&quot;</span><span class="p">)</span>
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="n">pipe_network_gdf</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:52:57 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:52:57 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfPipe - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:52:57 - root - INFO - Selected Pipe Network: Davis
 
@@ -7037,12 +7093,12 @@ Pipe Network Data:
 <p>1992 rows × 16 columns</p>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Get pump stations</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Get pump stations</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="n">pump_stations_gdf</span> <span class="o">=</span> <span class="n">HdfPump</span><span class="o">.</span><span class="n">get_pump_stations</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">)</span>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Pump Stations:&quot;</span><span class="p">)</span>
 </span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="n">pump_stations_gdf</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:52:57 - ras_commander.hdf.HdfPump - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:52:57 - ras_commander.hdf.HdfPump - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfPump - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfBase - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
@@ -7124,12 +7180,12 @@ Pump Stations:
 <p>1 rows × 24 columns</p>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Get pump groups</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Get pump groups</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="n">pump_groups_df</span> <span class="o">=</span> <span class="n">HdfPump</span><span class="o">.</span><span class="n">get_pump_groups</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">)</span>
 </span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Pump Groups:&quot;</span><span class="p">)</span>
 </span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="n">pump_groups_df</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:52:57 - ras_commander.hdf.HdfPump - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:52:57 - ras_commander.hdf.HdfPump - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfPump - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 
 
@@ -7184,12 +7240,12 @@ Pump Groups:
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Use HdfUtils for extracting projection</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Use HdfUtils for extracting projection</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Extracting Projection from HDF&quot;</span><span class="p">)</span>
 </span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="n">projection</span> <span class="o">=</span> <span class="n">HdfBase</span><span class="o">.</span><span class="n">get_projection</span><span class="p">(</span><span class="n">hdf_path</span><span class="o">=</span><span class="n">geom_hdf_path</span><span class="p">)</span>
 </span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Projection: </span><span class="si">{</span><span class="n">projection</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:52:57 - ras_commander.hdf.HdfBase - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.g02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:52:57 - ras_commander.hdf.HdfBase - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.g02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.g02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.g02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2871 from HDF file DavisStormSystem.g02.hdf
@@ -7199,7 +7255,7 @@ Pump Groups:
 Extracting Projection from HDF
 Projection: EPSG:2871
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Set CRS for GeoDataFrames</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Set CRS for GeoDataFrames</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="k">if</span> <span class="n">projection</span><span class="p">:</span>
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>    <span class="n">pipe_conduits_gdf</span><span class="o">.</span><span class="n">set_crs</span><span class="p">(</span><span class="n">projection</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">allow_override</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>    <span class="n">pipe_nodes_gdf</span><span class="o">.</span><span class="n">set_crs</span><span class="p">(</span><span class="n">projection</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">allow_override</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -7217,7 +7273,7 @@ Projection: EPSG:2871
 </span><span id="__span-26-16"><a id="__codelineno-26-16" name="__codelineno-26-16" href="#__codelineno-26-16"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Perimeter Polygons GeoDataFrame columns:&quot;</span><span class="p">)</span>
 </span><span id="__span-26-17"><a id="__codelineno-26-17" name="__codelineno-26-17" href="#__codelineno-26-17"></a><span class="nb">print</span><span class="p">(</span><span class="n">perimeter_polygons</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:52:57 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.g02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:52:57 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.g02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.g02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.g02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.g02.hdf
@@ -7249,7 +7305,7 @@ Index([&#39;Name&#39;, &#39;System Name&#39;, &#39;Node Type&#39;, &#39;Node Sta
 Perimeter Polygons GeoDataFrame columns:
 Index([&#39;mesh_name&#39;, &#39;geometry&#39;], dtype=&#39;object&#39;)
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">shapely</span><span class="w"> </span><span class="kn">import</span> <span class="n">wkt</span>
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.patches</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">mpatches</span>
 </span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.lines</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">mlines</span>
@@ -7320,7 +7376,7 @@ Index([&#39;mesh_name&#39;, &#39;geometry&#39;], dtype=&#39;object&#39;)
 </span><span id="__span-27-69"><a id="__codelineno-27-69" name="__codelineno-27-69" href="#__codelineno-27-69"></a>
 </span><span id="__span-27-70"><a id="__codelineno-27-70" name="__codelineno-27-70" href="#__codelineno-27-70"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:52:57 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.g02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:52:57 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.g02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.g02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.g02.hdf
 2026-01-12 12:52:57 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.g02.hdf
@@ -7338,7 +7394,7 @@ Index([&#39;mesh_name&#39;, &#39;geometry&#39;], dtype=&#39;object&#39;)
 2026-01-12 12:52:57 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2871 from HDF file DavisStormSystem.g02.hdf
 </code></pre></div>
 <p><img alt="png" src="../411_2d_hdf_pipes_and_pumps_files/411_2d_hdf_pipes_and_pumps_35_1.png" /></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Visualize pump stations on a map</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Visualize pump stations on a map</span>
 </span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
 </span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="n">pump_stations_gdf</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;green&#39;</span><span class="p">,</span> <span class="n">markersize</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Pump Station&#39;</span><span class="p">)</span>
 </span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>
@@ -7350,12 +7406,12 @@ Index([&#39;mesh_name&#39;, &#39;geometry&#39;], dtype=&#39;object&#39;)
 </span><span id="__span-28-10"><a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a><span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
 </span><span id="__span-28-11"><a id="__codelineno-28-11" name="__codelineno-28-11" href="#__codelineno-28-11"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>C:\Users\billk_clb\AppData\Local\Temp\ipykernel_99404\1821049155.py:10: UserWarning: Legend does not support handles for PatchCollection instances.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>C:\Users\billk_clb\AppData\Local\Temp\ipykernel_99404\1821049155.py:10: UserWarning: Legend does not support handles for PatchCollection instances.
 See: https://matplotlib.org/stable/tutorials/intermediate/legend_guide.html#implementing-a-custom-legend-handler
   ax.legend()
 </code></pre></div>
 <p><img alt="png" src="../411_2d_hdf_pipes_and_pumps_files/411_2d_hdf_pipes_and_pumps_36_1.png" /></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Example 3: Get pipe network timeseries</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Example 3: Get pipe network timeseries</span>
 </span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">valid_variables</span> <span class="o">=</span> <span class="p">[</span>
 </span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>    <span class="s2">&quot;Cell Courant&quot;</span><span class="p">,</span> <span class="s2">&quot;Cell Water Surface&quot;</span><span class="p">,</span> <span class="s2">&quot;Face Flow&quot;</span><span class="p">,</span> <span class="s2">&quot;Face Velocity&quot;</span><span class="p">,</span>
 </span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>    <span class="s2">&quot;Face Water Surface&quot;</span><span class="p">,</span> <span class="s2">&quot;Pipes/Pipe Flow DS&quot;</span><span class="p">,</span> <span class="s2">&quot;Pipes/Pipe Flow US&quot;</span><span class="p">,</span>
@@ -7378,7 +7434,7 @@ See: https://matplotlib.org/stable/tutorials/intermediate/legend_guide.html#impl
 </span><span id="__span-29-21"><a id="__codelineno-29-21" name="__codelineno-29-21" href="#__codelineno-29-21"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
 </span><span id="__span-29-22"><a id="__codelineno-29-22" name="__codelineno-29-22" href="#__codelineno-29-22"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error extracting </span><span class="si">{</span><span class="n">variable</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:52:59 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:52:59 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:52:59 - ras_commander.hdf.HdfPipe - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:52:59 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:52:59 - ras_commander.hdf.HdfPipe - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
@@ -7569,7 +7625,7 @@ Attributes:
 - The 'location' dimension represents either pipe IDs or node IDs, depending on the variable.
 - The number of timesteps and locations may vary depending on the specific dataset and simulation setup.
 - Negative values in flow variables may indicate reverse flow direction.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">matplotlib.dates</span><span class="w"> </span><span class="kn">import</span> <span class="n">DateFormatter</span>
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 </span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
@@ -7622,42 +7678,42 @@ Attributes:
 </span><span id="__span-30-51"><a id="__codelineno-30-51" name="__codelineno-30-51" href="#__codelineno-30-51"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
 </span><span id="__span-30-52"><a id="__codelineno-30-52" name="__codelineno-30-52" href="#__codelineno-30-52"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error plotting </span><span class="si">{</span><span class="n">variable</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:52:59 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:52:59 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:52:59 - ras_commander.hdf.HdfPipe - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 </code></pre></div>
 <p><img alt="png" src="../411_2d_hdf_pipes_and_pumps_files/411_2d_hdf_pipes_and_pumps_39_1.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 </code></pre></div>
 <p><img alt="png" src="../411_2d_hdf_pipes_and_pumps_files/411_2d_hdf_pipes_and_pumps_39_3.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 </code></pre></div>
 <p><img alt="png" src="../411_2d_hdf_pipes_and_pumps_files/411_2d_hdf_pipes_and_pumps_39_5.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 </code></pre></div>
 <p><img alt="png" src="../411_2d_hdf_pipes_and_pumps_files/411_2d_hdf_pipes_and_pumps_39_7.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 </code></pre></div>
 <p><img alt="png" src="../411_2d_hdf_pipes_and_pumps_files/411_2d_hdf_pipes_and_pumps_39_9.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 </code></pre></div>
 <p><img alt="png" src="../411_2d_hdf_pipes_and_pumps_files/411_2d_hdf_pipes_and_pumps_39_11.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:53:00 - ras_commander.hdf.HdfPipe - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 </code></pre></div>
 <p><img alt="png" src="../411_2d_hdf_pipes_and_pumps_files/411_2d_hdf_pipes_and_pumps_39_13.png" /></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Example 8: Get pump station timeseries</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Example 8: Get pump station timeseries</span>
 </span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="n">pump_station_name</span> <span class="o">=</span> <span class="n">pump_stations_gdf</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span>  <span class="c1"># Get the first pump station name</span>
 </span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="c1"># Use the results_pump_station_timeseries method </span>
 </span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="n">pump_timeseries</span> <span class="o">=</span> <span class="n">HdfPump</span><span class="o">.</span><span class="n">get_pump_station_timeseries</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">,</span> <span class="n">pump_station</span><span class="o">=</span><span class="n">pump_station_name</span><span class="p">)</span>
 </span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Pump Station Timeseries (</span><span class="si">{</span><span class="n">pump_station_name</span><span class="si">}</span><span class="s2">):&quot;</span><span class="p">)</span>
 </span><span id="__span-31-6"><a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">pump_timeseries</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:53:01 - ras_commander.hdf.HdfPump - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:53:01 - ras_commander.hdf.HdfPump - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:53:01 - ras_commander.hdf.HdfPump - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 
 
@@ -7679,10 +7735,10 @@ Attributes:
     units:         [[b&#39;Flow&#39; b&#39;cfs&#39;]\n [b&#39;Stage HW&#39; b&#39;ft&#39;]\n [b&#39;Stage TW&#39; b&#39;f...
     pump_station:  Pump Station #1
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="c1"># Use get_hdf5_dataset_info function to get Pipe Conduits data:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="c1"># Use get_hdf5_dataset_info function to get Pipe Conduits data:</span>
 </span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="n">HdfBase</span><span class="o">.</span><span class="n">get_dataset_info</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">,</span> <span class="s2">&quot;/Geometry/Pump Stations/&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:53:01 - ras_commander.hdf.HdfBase - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:53:01 - ras_commander.hdf.HdfBase - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:53:01 - ras_commander.hdf.HdfBase - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 
 
@@ -7745,7 +7801,7 @@ Exploring group: /Geometry/Pump Stations/
                 Shape: (1,)
                 Dtype: [(&#39;Pump Station ID&#39;, &#39;&lt;i4&#39;), (&#39;Pump Group ID&#39;, &#39;&lt;i4&#39;), (&#39;Pump ID&#39;, &#39;&lt;i4&#39;), (&#39;Cell Index&#39;, &#39;&lt;i4&#39;), (&#39;Station Start&#39;, &#39;&lt;f4&#39;), (&#39;Station End&#39;, &#39;&lt;f4&#39;)]
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># Extract the pump station timeseries data</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># Extract the pump station timeseries data</span>
 </span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="n">pump_station_name</span> <span class="o">=</span> <span class="n">pump_stations_gdf</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span>  <span class="c1"># Get the first pump station name</span>
 </span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="n">pump_timeseries</span> <span class="o">=</span> <span class="n">HdfPump</span><span class="o">.</span><span class="n">get_pump_station_timeseries</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">,</span> <span class="n">pump_station</span><span class="o">=</span><span class="n">pump_station_name</span><span class="p">)</span>
 </span><span id="__span-33-4"><a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a>
@@ -7797,7 +7853,7 @@ Exploring group: /Geometry/Pump Stations/
 </span><span id="__span-33-50"><a id="__codelineno-33-50" name="__codelineno-33-50" href="#__codelineno-33-50"></a><span class="c1"># Show the plot</span>
 </span><span id="__span-33-51"><a id="__codelineno-33-51" name="__codelineno-33-51" href="#__codelineno-33-51"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-01-12 12:53:01 - ras_commander.hdf.HdfPump - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-01-12 12:53:01 - ras_commander.hdf.HdfPump - INFO - Using HDF file from direct string path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 2026-01-12 12:53:01 - ras_commander.hdf.HdfPump - INFO - Final validated file path: C:\Users\billk_clb\anaconda3\envs\rascmdr_piptest\Lib\site-packages\examples\example_projects\Davis_12\DavisStormSystem.p02.hdf
 
 
@@ -7847,7 +7903,7 @@ Attributes:
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
@@ -7857,7 +7913,7 @@ Attributes:
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     

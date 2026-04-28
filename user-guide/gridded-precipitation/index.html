@@ -2649,6 +2649,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4252,6 +4280,34 @@
     
   
     Model Validation with USGS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notebooks/920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
   
 
     
@@ -6441,7 +6497,7 @@
 <p><strong>For design storms</strong>, see <a href="../atlas14-precipitation/">Atlas 14 Precipitation</a>.</p>
 <h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
 <p>Basic AORC workflow for a historical storm event:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">PrecipAorc</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">PrecipAorc</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># 1. Define watershed (HUC code or shapefile)</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">watershed</span> <span class="o">=</span> <span class="s2">&quot;02070010&quot;</span>  <span class="c1"># HUC-8 code</span>
@@ -6468,7 +6524,7 @@
 <h2 id="data-retrieval">Data Retrieval<a class="headerlink" href="#data-retrieval" title="Permanent link">&para;</a></h2>
 <h3 id="by-huc-code">By HUC Code<a class="headerlink" href="#by-huc-code" title="Permanent link">&para;</a></h3>
 <p>Use USGS Hydrologic Unit Code for watershed definition:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">PrecipAorc</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">PrecipAorc</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># Retrieve by HUC-8 code</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">aorc_data</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">retrieve_aorc_data</span><span class="p">(</span>
@@ -6479,7 +6535,7 @@
 </span></code></pre></div>
 <h3 id="by-custom-boundary">By Custom Boundary<a class="headerlink" href="#by-custom-boundary" title="Permanent link">&para;</a></h3>
 <p>Use custom watershed shapefile:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># Custom watershed boundary</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">watershed_shp</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;watershed_boundary.shp&quot;</span><span class="p">)</span>
@@ -6492,7 +6548,7 @@
 </span></code></pre></div>
 <h3 id="check-data-availability">Check Data Availability<a class="headerlink" href="#check-data-availability" title="Permanent link">&para;</a></h3>
 <p>Verify AORC coverage before retrieval:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check if data exists for period</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check if data exists for period</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">coverage</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">check_data_coverage</span><span class="p">(</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">watershed</span><span class="o">=</span><span class="s2">&quot;02070010&quot;</span><span class="p">,</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;1990-01-01&quot;</span><span class="p">,</span>
@@ -6506,14 +6562,14 @@
 </span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;AORC data not available for this period&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="get-available-years">Get Available Years<a class="headerlink" href="#get-available-years" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># List all available AORC years</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># List all available AORC years</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">years</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">get_available_years</span><span class="p">()</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;AORC coverage: </span><span class="si">{</span><span class="nb">min</span><span class="p">(</span><span class="n">years</span><span class="p">)</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="nb">max</span><span class="p">(</span><span class="n">years</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="spatial-processing">Spatial Processing<a class="headerlink" href="#spatial-processing" title="Permanent link">&para;</a></h2>
 <h3 id="spatial-averaging">Spatial Averaging<a class="headerlink" href="#spatial-averaging" title="Permanent link">&para;</a></h3>
 <p>Calculate areal average precipitation over watershed:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Option 1: Average during retrieval</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Option 1: Average during retrieval</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">avg_precip</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">retrieve_aorc_data</span><span class="p">(</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">watershed</span><span class="o">=</span><span class="s2">&quot;02070010&quot;</span><span class="p">,</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;2018-05-15&quot;</span><span class="p">,</span>
@@ -6532,7 +6588,7 @@
 </span></code></pre></div>
 <h3 id="grid-resampling">Grid Resampling<a class="headerlink" href="#grid-resampling" title="Permanent link">&para;</a></h3>
 <p>Adjust AORC grid resolution for specific workflows:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Resample from 4 km to 2 km grid (finer resolution)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Resample from 4 km to 2 km grid (finer resolution)</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">fine_grid</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">resample_grid</span><span class="p">(</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">aorc_data</span><span class="p">,</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">target_resolution_km</span><span class="o">=</span><span class="mi">2</span>  <span class="c1"># Interpolate to finer grid</span>
@@ -6547,13 +6603,13 @@
 <h2 id="temporal-processing">Temporal Processing<a class="headerlink" href="#temporal-processing" title="Permanent link">&para;</a></h2>
 <h3 id="using-hourly-data-for-hec-ras">Using Hourly Data for HEC-RAS<a class="headerlink" href="#using-hourly-data-for-hec-ras" title="Permanent link">&para;</a></h3>
 <p>AORC provides hourly precipitation, which is appropriate for most HEC-RAS modeling:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Use hourly data directly (AORC native interval)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Use hourly data directly (AORC native interval)</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">hourly</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">aggregate_to_interval</span><span class="p">(</span><span class="n">avg_precip</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="s2">&quot;1HR&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><strong>For HEC-RAS modeling</strong>: Use hourly data. HEC-RAS computational timesteps are typically seconds to minutes—the model linearly interpolates hourly precipitation to each computational timestep internally.</p>
 <h3 id="aggregation-for-statistical-analysis">Aggregation for Statistical Analysis<a class="headerlink" href="#aggregation-for-statistical-analysis" title="Permanent link">&para;</a></h3>
 <p>Longer intervals are useful for storm statistics and trend analysis (not modeling):</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Aggregate to 6-hour (for storm statistics)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Aggregate to 6-hour (for storm statistics)</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">six_hour</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">aggregate_to_interval</span><span class="p">(</span><span class="n">avg_precip</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="s2">&quot;6HR&quot;</span><span class="p">)</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Aggregate to daily (for annual totals, climate trends)</span>
@@ -6562,7 +6618,7 @@
 <p><strong>Supported intervals</strong>: <code>1HR</code>, <code>6HR</code>, <code>1DAY</code></p>
 <h3 id="storm-event-extraction">Storm Event Extraction<a class="headerlink" href="#storm-event-extraction" title="Permanent link">&para;</a></h3>
 <p>Automatically identify and extract individual storms from continuous record:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Extract storm events from multi-year record</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Extract storm events from multi-year record</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">storms</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">extract_storm_events</span><span class="p">(</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">avg_precip</span><span class="p">,</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="n">inter_event_hours</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>      <span class="c1"># Minimum dry period between storms</span>
@@ -6583,7 +6639,7 @@
 </span></code></pre></div>
 <h3 id="rolling-precipitation-totals">Rolling Precipitation Totals<a class="headerlink" href="#rolling-precipitation-totals" title="Permanent link">&para;</a></h3>
 <p>Calculate N-hour rolling accumulations:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Calculate 24-hour rolling totals</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Calculate 24-hour rolling totals</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">rolling_24hr</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">calculate_rolling_totals</span><span class="p">(</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="n">hourly_precip</span><span class="p">,</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    <span class="n">window_hours</span><span class="o">=</span><span class="mi">24</span>
@@ -6604,7 +6660,7 @@
 <h2 id="integration-with-hec-ras">Integration with HEC-RAS<a class="headerlink" href="#integration-with-hec-ras" title="Permanent link">&para;</a></h2>
 <h3 id="spatially-uniform-precipitation">Spatially Uniform Precipitation<a class="headerlink" href="#spatially-uniform-precipitation" title="Permanent link">&para;</a></h3>
 <p>For models with uniform rainfall over entire domain:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">PrecipAorc</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">PrecipAorc</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.usgs</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasUsgsFileIo</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># 1. Retrieve and average AORC data</span>
@@ -6631,7 +6687,7 @@
 </span></code></pre></div>
 <h3 id="gridded-precipitation-rain-on-grid">Gridded Precipitation (Rain-on-Grid)<a class="headerlink" href="#gridded-precipitation-rain-on-grid" title="Permanent link">&para;</a></h3>
 <p>For 2D models with spatially distributed rainfall:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># 1. Retrieve AORC in gridded format</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># 1. Retrieve AORC in gridded format</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">aorc_grid</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">retrieve_aorc_data</span><span class="p">(</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="n">watershed</span><span class="o">=</span><span class="n">watershed_boundary</span><span class="p">,</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;2018-05-15&quot;</span><span class="p">,</span>
@@ -6659,7 +6715,7 @@
 <p><strong>Note</strong>: You do not need to resample AORC grids to match mesh cell size. HEC-RAS internally interpolates gridded precipitation data to 2D mesh cells during simulation.</p>
 <h2 id="model-calibration-workflow">Model Calibration Workflow<a class="headerlink" href="#model-calibration-workflow" title="Permanent link">&para;</a></h2>
 <p>Use AORC for calibrating HEC-RAS models to historical events:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">PrecipAorc</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.usgs</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasUsgsCore</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
@@ -6699,7 +6755,7 @@
 </span></code></pre></div>
 <h2 id="storm-catalog-generation">Storm Catalog Generation<a class="headerlink" href="#storm-catalog-generation" title="Permanent link">&para;</a></h2>
 <p>Create catalog of all significant storms in multi-year period:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Retrieve long-term AORC record</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Retrieve long-term AORC record</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">long_term</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">retrieve_aorc_data</span><span class="p">(</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>    <span class="n">watershed</span><span class="o">=</span><span class="s2">&quot;02070010&quot;</span><span class="p">,</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;2015-01-01&quot;</span><span class="p">,</span>
@@ -6736,7 +6792,7 @@
 <h2 id="performance-optimization">Performance Optimization<a class="headerlink" href="#performance-optimization" title="Permanent link">&para;</a></h2>
 <h3 id="temporal-subsetting">Temporal Subsetting<a class="headerlink" href="#temporal-subsetting" title="Permanent link">&para;</a></h3>
 <p>Minimize data volume by downloading only required periods:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Bad: Download entire year when only need one month</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Bad: Download entire year when only need one month</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">aorc_full</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">retrieve_aorc_data</span><span class="p">(</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>    <span class="n">watershed</span><span class="o">=</span><span class="s2">&quot;02070010&quot;</span><span class="p">,</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;2018-01-01&quot;</span><span class="p">,</span>
@@ -6752,7 +6808,7 @@
 </span></code></pre></div>
 <h3 id="spatial-buffering">Spatial Buffering<a class="headerlink" href="#spatial-buffering" title="Permanent link">&para;</a></h3>
 <p>Reduce download area to just what's needed:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Retrieve with minimal buffer around watershed</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Retrieve with minimal buffer around watershed</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">aorc_data</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">retrieve_aorc_data</span><span class="p">(</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>    <span class="n">watershed</span><span class="o">=</span><span class="n">watershed_boundary</span><span class="p">,</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;2018-05-15&quot;</span><span class="p">,</span>
@@ -6762,7 +6818,7 @@
 </span></code></pre></div>
 <h3 id="local-caching">Local Caching<a class="headerlink" href="#local-caching" title="Permanent link">&para;</a></h3>
 <p>Cache processed AORC data to avoid re-downloading:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1"># Define cache directory</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">cache_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;C:/AORC_Cache&quot;</span><span class="p">)</span>
@@ -6787,7 +6843,7 @@
 <h2 id="export-formats">Export Formats<a class="headerlink" href="#export-formats" title="Permanent link">&para;</a></h2>
 <h3 id="csv-export">CSV Export<a class="headerlink" href="#csv-export" title="Permanent link">&para;</a></h3>
 <p>Simple tabular format for spreadsheet analysis:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Export to CSV</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Export to CSV</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">hourly_precip</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="s2">&quot;aorc_precipitation.csv&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># CSV format:</span>
@@ -6798,7 +6854,7 @@
 </span></code></pre></div>
 <h3 id="dss-export">DSS Export<a class="headerlink" href="#dss-export" title="Permanent link">&para;</a></h3>
 <p>HEC-DSS format for HEC-RAS and HEC-HMS:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.usgs</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasUsgsFileIo</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.usgs</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasUsgsFileIo</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1"># Export to DSS</span>
 </span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="n">RasUsgsFileIo</span><span class="o">.</span><span class="n">export_to_dss</span><span class="p">(</span>
@@ -6809,7 +6865,7 @@
 </span></code></pre></div>
 <h3 id="netcdf-export">NetCDF Export<a class="headerlink" href="#netcdf-export" title="Permanent link">&para;</a></h3>
 <p>Keep gridded structure for further analysis:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Export gridded data to NetCDF</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Export gridded data to NetCDF</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">PrecipAorc</span><span class="o">.</span><span class="n">export_to_netcdf</span><span class="p">(</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="n">aorc_grid</span><span class="p">,</span>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    <span class="n">output_file</span><span class="o">=</span><span class="s2">&quot;aorc_grid.nc&quot;</span>
@@ -6818,7 +6874,7 @@
 <h2 id="advanced-workflows">Advanced Workflows<a class="headerlink" href="#advanced-workflows" title="Permanent link">&para;</a></h2>
 <h3 id="multi-year-continuous-simulation">Multi-Year Continuous Simulation<a class="headerlink" href="#multi-year-continuous-simulation" title="Permanent link">&para;</a></h3>
 <p>Run HEC-RAS with continuous precipitation record:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.precip</span><span class="w"> </span><span class="kn">import</span> <span class="n">PrecipAorc</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.usgs</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasUsgsFileIo</span>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>
@@ -6851,7 +6907,7 @@
 <p><strong>Note</strong>: Use hourly data for HEC-RAS simulations. Daily aggregation loses storm intensity patterns and is only appropriate for precipitation statistics.</p>
 <h3 id="storm-comparison-analysis">Storm Comparison Analysis<a class="headerlink" href="#storm-comparison-analysis" title="Permanent link">&para;</a></h3>
 <p>Compare precipitation patterns across multiple historical storms:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Define storm periods</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Define storm periods</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">storms</span> <span class="o">=</span> <span class="p">{</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>    <span class="s2">&quot;May 2018&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;2018-05-15&quot;</span><span class="p">,</span> <span class="s2">&quot;2018-05-20&quot;</span><span class="p">),</span>
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>    <span class="s2">&quot;Sep 2019&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;2019-09-12&quot;</span><span class="p">,</span> <span class="s2">&quot;2019-09-18&quot;</span><span class="p">),</span>
@@ -6882,7 +6938,7 @@
 </span></code></pre></div>
 <h3 id="climate-trend-analysis">Climate Trend Analysis<a class="headerlink" href="#climate-trend-analysis" title="Permanent link">&para;</a></h3>
 <p>Analyze precipitation trends over decades:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Retrieve 20+ years of AORC data</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Retrieve 20+ years of AORC data</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="n">long_record</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">retrieve_aorc_data</span><span class="p">(</span>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>    <span class="n">watershed</span><span class="o">=</span><span class="s2">&quot;02070010&quot;</span><span class="p">,</span>
 </span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>    <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;2000-01-01&quot;</span><span class="p">,</span>
@@ -6918,7 +6974,7 @@
 - ⚠ May differ from rain gauge measurements</p>
 <h3 id="validation-with-rain-gauges">Validation with Rain Gauges<a class="headerlink" href="#validation-with-rain-gauges" title="Permanent link">&para;</a></h3>
 <p>Compare AORC to observed rain gauge data:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Retrieve AORC for gauge location</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Retrieve AORC for gauge location</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="n">aorc_point</span> <span class="o">=</span> <span class="n">PrecipAorc</span><span class="o">.</span><span class="n">extract_by_point</span><span class="p">(</span>
 </span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>    <span class="n">latitude</span><span class="o">=</span><span class="mf">38.9</span><span class="p">,</span>
 </span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>    <span class="n">longitude</span><span class="o">=-</span><span class="mf">77.0</span><span class="p">,</span>
@@ -6942,10 +6998,10 @@
 </span></code></pre></div>
 <h2 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">&para;</a></h2>
 <p><strong>Required</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>pip<span class="w"> </span>install<span class="w"> </span>xarray<span class="w">  </span><span class="c1"># For AORC NetCDF data handling</span>
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>pip<span class="w"> </span>install<span class="w"> </span>xarray<span class="w">  </span><span class="c1"># For AORC NetCDF data handling</span>
 </span></code></pre></div></p>
 <p><strong>Optional (for advanced features)</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>pip<span class="w"> </span>install<span class="w"> </span>rasterio<span class="w">    </span><span class="c1"># For gridded processing</span>
+<div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>pip<span class="w"> </span>install<span class="w"> </span>rasterio<span class="w">    </span><span class="c1"># For gridded processing</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>pip<span class="w"> </span>install<span class="w"> </span>geopandas<span class="w">   </span><span class="c1"># For custom watershed boundaries</span>
 </span></code></pre></div></p>
 <p>The module uses <strong>lazy loading</strong> - methods check for dependencies only when needed and provide installation instructions if missing.</p>

@@ -2084,6 +2084,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../212_landcover_mannings_n_write/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Land Cover Manning's n Write
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3849,6 +3877,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../920_terrain_creation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Creation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -5557,7 +5613,7 @@
 - <strong>Mass Balance</strong>: Face flows used to verify conservation of mass
 - <strong>Flux Analysis</strong>: Pollutant transport, sediment transport require face data</p>
 <h3 id="hdf5-structure-for-face-data">HDF5 Structure for Face Data<a class="headerlink" href="#hdf5-structure-for-face-data" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>/Geometry/2D Flow Areas/
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>/Geometry/2D Flow Areas/
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── {Area Name}/
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│   ├── Cells Center Coordinate        # Cell center coords
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│   ├── Cells Face and Orientation Info # Face connectivity
@@ -5610,11 +5666,11 @@ from ras_commander import *</p>
 <p>This notebook demonstrates how to extract detailed 2D face data, display individual cell face results and calculate a discharge weighted velocity using a user-provided profile line located where cell faces are perpendicular to flow. </p>
 <h2 id="package-installation-and-environment-setup">Package Installation and Environment Setup<a class="headerlink" href="#package-installation-and-environment-setup" title="Permanent link">&para;</a></h2>
 <p>Uncomment and run package installation commands if needed</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Install ras-commander from pip (uncomment to install if needed)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Install ras-commander from pip (uncomment to install if needed)</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1">#!pip install ras-commander</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># This installs ras-commander and all dependencies</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># DEVELOPMENT MODE TOGGLE</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
@@ -5664,14 +5720,14 @@ from ras_commander import *</p>
 </span><span id="__span-2-48"><a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-2-49"><a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>📁 LOCAL SOURCE MODE: Loading from G:\GH\ras-commander/ras_commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>📁 LOCAL SOURCE MODE: Loading from G:\GH\ras-commander/ras_commander
 
 
 ✓ Loaded: G:\GH\ras-commander\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># =============================================================================</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># PARAMETERS - Edit these to customize the notebook</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
@@ -5688,7 +5744,7 @@ from ras_commander import *</p>
 <p>Note: This notebook relies on the Chippewa 2D Project along with:
  - A user-generated GeoJSON containing the proposed profile lines
  - An example is provided in the "data" subfolder with name profile_lines_chippewa2D.geojson</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Extract the Chippewa_2D example project using static method</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Extract the Chippewa_2D example project using static method</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">chippewa_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span><span class="n">PROJECT_NAME</span><span class="p">,</span> <span class="n">suffix</span><span class="o">=</span><span class="s2">&quot;13&quot;</span><span class="p">)</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Extracted project to: </span><span class="si">{</span><span class="n">chippewa_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
@@ -5712,7 +5768,7 @@ from ras_commander import *</p>
 </span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>    <span class="n">num_cores</span><span class="o">=</span><span class="mi">2</span>
 </span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:43:19 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_7_0.zip
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:43:19 - ras_commander.RasExamples - INFO - Found zip file: C:\Users\bill\AppData\Local\ras-commander\examples\Example_Projects_7_0.zip
 
 
 2026-04-27 21:43:19 - ras_commander.RasExamples - INFO - Loading project data from CSV...
@@ -5880,7 +5936,7 @@ Chippewa_2D project exists: True
 
 ComputeResult(SUCCESS, results_df_row=available)
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Show ras object info</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Show ras object info</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span>
 </span></code></pre></div>
 <div>
@@ -5954,7 +6010,7 @@ ComputeResult(SUCCESS, results_df_row=available)
 <p>1 rows × 29 columns</p>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">ras</span><span class="o">.</span><span class="n">unsteady_df</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">ras</span><span class="o">.</span><span class="n">unsteady_df</span>
 </span></code></pre></div>
 <div>
 <style scoped>
@@ -6004,7 +6060,7 @@ ComputeResult(SUCCESS, results_df_row=available)
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span> 
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span> 
 </span></code></pre></div>
 <div>
 <style scoped>
@@ -6173,7 +6229,7 @@ ComputeResult(SUCCESS, results_df_row=available)
 <p>5 rows × 33 columns</p>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">ras</span><span class="o">.</span><span class="n">get_hdf_entries</span><span class="p">()</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">ras</span><span class="o">.</span><span class="n">get_hdf_entries</span><span class="p">()</span>
 </span></code></pre></div>
 <div>
 <style scoped>
@@ -6247,11 +6303,11 @@ ComputeResult(SUCCESS, results_df_row=available)
 </div>
 
 <h1 id="find-paths-for-results-and-geometry-hdfs">Find Paths for Results and Geometry HDF's<a class="headerlink" href="#find-paths-for-results-and-geometry-hdfs" title="Permanent link">&para;</a></h1>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Define the HDF input path as Plan Number</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Define the HDF input path as Plan Number</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">plan_number</span> <span class="o">=</span> <span class="n">PLAN</span>  <span class="c1"># Assuming we&#39;re using plan 01 as in the previous code</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span>
 </span></code></pre></div>
 <div>
 <style scoped>
@@ -6324,25 +6380,25 @@ ComputeResult(SUCCESS, results_df_row=available)
 <p>1 rows × 29 columns</p>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">PLAN</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">PLAN</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>&#39;02&#39;
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>&#39;02&#39;
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Get the plan HDF path for the plan_number defined above</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Get the plan HDF path for the plan_number defined above</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">plan_hdf_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">plan_number</span><span class="p">,</span> <span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">plan_hdf_path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">plan_hdf_path</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>&#39;G:\\GH\\ras-commander\\examples\\example_projects\\Chippewa_2D_13\\Chippewa_2D.p02.hdf&#39;
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>&#39;G:\\GH\\ras-commander\\examples\\example_projects\\Chippewa_2D_13\\Chippewa_2D.p02.hdf&#39;
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Alternate: Get the geometry HDF path if you are extracting geometry elements from the geometry HDF </span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Alternate: Get the geometry HDF path if you are extracting geometry elements from the geometry HDF </span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">geom_hdf_path</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">plan_number</span><span class="p">,</span> <span class="s1">&#39;Geom Path&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;.hdf&#39;</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">geom_hdf_path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">geom_hdf_path</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>&#39;G:\\GH\\ras-commander\\examples\\example_projects\\Chippewa_2D_13\\Chippewa_2D.g01.hdf&#39;
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>&#39;G:\\GH\\ras-commander\\examples\\example_projects\\Chippewa_2D_13\\Chippewa_2D.g01.hdf&#39;
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Example: Extract runtime and compute time data</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Example: Extract runtime and compute time data</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Example 2: Extracting runtime and compute time data&quot;</span><span class="p">)</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">runtime_df</span> <span class="o">=</span> <span class="n">HdfResultsPlan</span><span class="o">.</span><span class="n">get_runtime_data</span><span class="p">(</span><span class="n">hdf_path</span><span class="o">=</span><span class="n">plan_number</span><span class="p">)</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="k">if</span> <span class="n">runtime_df</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -6350,7 +6406,7 @@ ComputeResult(SUCCESS, results_df_row=available)
 </span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No runtime data found.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:45:45 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:45:45 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
 
 
 2026-04-27 21:45:45 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Chippewa_2D.p02.hdf
@@ -6365,16 +6421,16 @@ ComputeResult(SUCCESS, results_df_row=available)
 
 Example 2: Extracting runtime and compute time data
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># For all of the RasGeomHdf Class Functions, we will use geom_hdf_path</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># For all of the RasGeomHdf Class Functions, we will use geom_hdf_path</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">geom_hdf_path</span><span class="p">)</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># For the example project, plan 02 is associated with geometry 09</span>
 </span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="c1"># If you want to call the geometry by number, call RasHdfGeom functions with a number</span>
 </span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="c1"># Otherwise, if you want to look up geometry hdf path by plan number, follow the logic in the previous code cells</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Use HdfUtils for extracting projection</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Use HdfUtils for extracting projection</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Extracting Projection from HDF&quot;</span><span class="p">)</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="n">projection</span> <span class="o">=</span> <span class="n">HdfBase</span><span class="o">.</span><span class="n">get_projection</span><span class="p">(</span><span class="n">hdf_path</span><span class="o">=</span><span class="n">geom_hdf_path</span><span class="p">)</span>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="k">if</span> <span class="n">projection</span><span class="p">:</span>
@@ -6382,7 +6438,7 @@ Example 2: Extracting runtime and compute time data
 </span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No projection information found.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:45:45 - ras_commander.hdf.HdfBase - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:45:45 - ras_commander.hdf.HdfBase - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 2026-04-27 21:45:45 - ras_commander.hdf.HdfBase - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
@@ -6402,11 +6458,11 @@ To fix this:
 Extracting Projection from HDF
 No projection information found.
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Set the  to USA Contiguous Albers Equal Area Conic (USGS version)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Set the  to USA Contiguous Albers Equal Area Conic (USGS version)</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># Note, we would usually call the projection function in HdfMesh but the projection is not set in this example project</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">projection</span> <span class="o">=</span> <span class="s1">&#39;EPSG:5070&#39;</span>  
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Use HdfPlan for geometry-related operations</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Use HdfPlan for geometry-related operations</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Example: Extracting Base Geometry Attributes&quot;</span><span class="p">)</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="n">geom_attrs</span> <span class="o">=</span> <span class="n">HdfPlan</span><span class="o">.</span><span class="n">get_geometry_information</span><span class="p">(</span><span class="n">geom_hdf_path</span><span class="p">)</span>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>
@@ -6417,7 +6473,7 @@ No projection information found.
 </span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No base geometry attributes found.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:45:45 - ras_commander.hdf.HdfPlan - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:45:45 - ras_commander.hdf.HdfPlan - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 2026-04-27 21:45:45 - ras_commander.hdf.HdfPlan - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
@@ -6439,12 +6495,12 @@ No projection information found.
 Example: Extracting Base Geometry Attributes
 Base Geometry Attributes:
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Use HdfMesh for geometry-related operations</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Use HdfMesh for geometry-related operations</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Example 3: Listing 2D Flow Area Names&quot;</span><span class="p">)</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="n">flow_area_names</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_area_names</span><span class="p">(</span><span class="n">geom_hdf_path</span><span class="p">)</span>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;2D Flow Area Names:&quot;</span><span class="p">,</span> <span class="n">flow_area_names</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:45:45 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:45:45 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 2026-04-27 21:45:45 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
@@ -6454,12 +6510,12 @@ Base Geometry Attributes:
 Example 3: Listing 2D Flow Area Names
 2D Flow Area Names: [&#39;Perimeter 1&#39;]
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Example: Get 2D Flow Area Attributes (get_geom_2d_flow_area_attrs)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Example: Get 2D Flow Area Attributes (get_geom_2d_flow_area_attrs)</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Example: Extracting 2D Flow Area Attributes&quot;</span><span class="p">)</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="n">flow_area_attributes</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_area_attributes</span><span class="p">(</span><span class="n">geom_hdf_path</span><span class="p">)</span>
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="n">flow_area_attributes</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:45:45 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:45:45 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 2026-04-27 21:45:45 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
@@ -6562,11 +6618,11 @@ Example: Extracting 2D Flow Area Attributes
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Example: Get 2D Flow Area Perimeter Polygons (mesh_areas)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Example: Get 2D Flow Area Perimeter Polygons (mesh_areas)</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Example: Extracting 2D Flow Area Perimeter Polygons&quot;</span><span class="p">)</span>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="n">mesh_areas</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_areas</span><span class="p">(</span><span class="n">geom_hdf_path</span><span class="p">)</span>  <span class="c1"># Corrected function name</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:45:45 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:45:45 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 2026-04-27 21:45:45 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
@@ -6597,7 +6653,7 @@ To fix this:
 
 Example: Extracting 2D Flow Area Perimeter Polygons
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Example: Extract mesh cell faces</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Example: Extract mesh cell faces</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Example: Extracting mesh cell faces&quot;</span><span class="p">)</span>
 </span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>
 </span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># Get mesh cell faces using the standardize_input decorator for consistent file handling</span>
@@ -6607,7 +6663,7 @@ Example: Extracting 2D Flow Area Perimeter Polygons
 </span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;First few rows of mesh cell faces:&quot;</span><span class="p">)</span>
 </span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="n">mesh_cell_faces</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:45:45 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:45:45 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 2026-04-27 21:45:45 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
@@ -6697,11 +6753,11 @@ First few rows of mesh cell faces:
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Set the projection to USA Contiguous Albers Equal Area Conic (USGS version)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Set the projection to USA Contiguous Albers Equal Area Conic (USGS version)</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="c1"># Note, we would usually call the projection function in HdfMesh but the projection is not set in this example project</span>
 </span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="n">projection</span> <span class="o">=</span> <span class="s1">&#39;EPSG:5070&#39;</span>  <span class="c1"># NAD83 / Conus Albers</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Example: Find the nearest cell face to a given point using library API</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Example: Find the nearest cell face to a given point using library API</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># The HdfMesh.find_nearest_face() function replaces the notebook&#39;s custom helper</span>
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
 </span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Example: Finding the nearest cell face to a given point&quot;</span><span class="p">)</span>
@@ -6752,13 +6808,13 @@ First few rows of mesh cell faces:
 </span><span id="__span-26-49"><a id="__codelineno-26-49" name="__codelineno-26-49" href="#__codelineno-26-49"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-26-50"><a id="__codelineno-26-50" name="__codelineno-26-50" href="#__codelineno-26-50"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Unable to find nearest face - check mesh_cell_faces data&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Example: Finding the nearest cell face to a given point
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Example: Finding the nearest cell face to a given point
 Nearest cell face to point (1025677, 7853731):
 Face ID: 209
 Distance: 5.74 units
 </code></pre></div>
 <p><img alt="png" src="../412_2d_detail_face_data_extraction_files/412_2d_detail_face_data_extraction_33_1.png" /></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Example: Extract mesh cell faces and plot with profile lines</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Example: Extract mesh cell faces and plot with profile lines</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Example: Extracting mesh cell faces and plotting with profile lines&quot;</span><span class="p">)</span>
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>
 </span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># Get mesh cell faces</span>
@@ -6793,7 +6849,7 @@ Distance: 5.74 units
 </span><span id="__span-27-33"><a id="__codelineno-27-33" name="__codelineno-27-33" href="#__codelineno-27-33"></a><span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-27-34"><a id="__codelineno-27-34" name="__codelineno-27-34" href="#__codelineno-27-34"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:45:46 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:45:46 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 2026-04-27 21:45:46 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
@@ -6826,7 +6882,7 @@ Example: Extracting mesh cell faces and plotting with profile lines
 First few rows of mesh cell faces:
 </code></pre></div>
 <p><img alt="png" src="../412_2d_detail_face_data_extraction_files/412_2d_detail_face_data_extraction_34_8.png" /></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Example: Extracting mesh cell faces near profile lines using library API</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Example: Extracting mesh cell faces near profile lines using library API</span>
 </span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="c1"># HdfMesh.get_faces_along_profile_line() replaces ~100 lines of custom helper functions</span>
 </span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>
 </span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Example: Extracting mesh cell faces near profile lines&quot;</span><span class="p">)</span>
@@ -6926,7 +6982,7 @@ First few rows of mesh cell faces:
 </span><span id="__span-28-98"><a id="__codelineno-28-98" name="__codelineno-28-98" href="#__codelineno-28-98"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">faces</span><span class="o">.</span><span class="n">empty</span> <span class="ow">and</span> <span class="s1">&#39;distance_along_profile&#39;</span> <span class="ow">in</span> <span class="n">faces</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
 </span><span id="__span-28-99"><a id="__codelineno-28-99" name="__codelineno-28-99" href="#__codelineno-28-99"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    Distance range: </span><span class="si">{</span><span class="n">faces</span><span class="p">[</span><span class="s1">&#39;distance_along_profile&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">faces</span><span class="p">[</span><span class="s1">&#39;distance_along_profile&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:45:47 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:45:47 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 2026-04-27 21:45:47 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
@@ -6980,7 +7036,7 @@ Profile Line 3: Found 19 perpendicular faces
 Total profile lines processed: 3
 </code></pre></div>
 <p><img alt="png" src="../412_2d_detail_face_data_extraction_files/412_2d_detail_face_data_extraction_35_14.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Faces near profile lines:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Faces near profile lines:
   Profile Line 1: 16 faces
     Distance range: 0.0 to 1436.8
   Profile Line 2: 25 faces
@@ -6989,11 +7045,11 @@ Total profile lines processed: 3
     Distance range: 0.0 to 2114.2
 </code></pre></div>
 <hr />
-<div class="language-python highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Get face property tables with error handling</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Get face property tables with error handling</span>
 </span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">face_property_tables</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_face_property_tables</span><span class="p">(</span><span class="n">geom_hdf_path</span><span class="p">)</span>
 </span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="n">face_property_tables</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:45:50 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:45:50 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 2026-04-27 21:45:50 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
@@ -7023,7 +7079,7 @@ Total profile lines processed: 3
 
  [5188 rows x 5 columns]}
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># Extract the face property table for Face ID 4 and display it</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># Extract the face property table for Face ID 4 and display it</span>
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>
 </span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="n">face_id</span> <span class="o">=</span> <span class="mi">4</span>
@@ -7064,7 +7120,7 @@ Total profile lines processed: 3
 <p>Similar to face property tables, <strong>cell property tables</strong> provide elevation-volume relationships for each mesh cell.
 This data defines how cell volume changes with water surface elevation and is used internally by HEC-RAS for 2D hydraulic computations.</p>
 <p>Note: Cell surface area is stored in a separate dataset (<code>Cells Surface Area</code>), not in the elevation-volume table.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Get cell property tables for all mesh areas</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Get cell property tables for all mesh areas</span>
 </span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="n">cell_property_tables</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_cell_property_tables</span><span class="p">(</span><span class="n">geom_hdf_path</span><span class="p">)</span>
 </span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>
 </span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="c1"># Display available mesh areas</span>
@@ -7083,7 +7139,7 @@ This data defines how cell volume changes with water surface elevation and is us
 </span><span id="__span-31-17"><a id="__codelineno-31-17" name="__codelineno-31-17" href="#__codelineno-31-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No cell property tables found in geometry HDF.&quot;</span><span class="p">)</span>
 </span><span id="__span-31-18"><a id="__codelineno-31-18" name="__codelineno-31-18" href="#__codelineno-31-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Cell property tables are generated during geometry preprocessing.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:45:51 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:45:51 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 2026-04-27 21:45:51 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
@@ -7102,7 +7158,7 @@ Mesh: Perimeter 1
   Columns: [&#39;Cell ID&#39;, &#39;Elevation&#39;, &#39;Volume&#39;]
   Number of unique cells: 354
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="c1"># Plot elevation-volume curve for a sample cell</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="c1"># Plot elevation-volume curve for a sample cell</span>
 </span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="k">if</span> <span class="n">cell_property_tables</span><span class="p">:</span>
 </span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 </span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a>
@@ -7125,14 +7181,14 @@ Mesh: Perimeter 1
 </span><span id="__span-32-21"><a id="__codelineno-32-21" name="__codelineno-32-21" href="#__codelineno-32-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipping plot - no cell property tables available.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p><img alt="png" src="../412_2d_detail_face_data_extraction_files/412_2d_detail_face_data_extraction_41_0.png" /></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># Get mesh timeseries output</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># Get mesh timeseries output</span>
 </span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="c1"># Get mesh areas from previous code cell</span>
 </span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="n">mesh_areas</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_mesh_area_names</span><span class="p">(</span><span class="n">geom_hdf_path</span><span class="p">)</span>
 </span><span id="__span-33-4"><a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a>
 </span><span id="__span-33-5"><a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="n">mesh_name</span> <span class="o">=</span> <span class="n">mesh_areas</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># Use the first 2D flow area name</span>
 </span><span id="__span-33-6"><a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a><span class="n">timeseries_da</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_mesh_timeseries</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">,</span> <span class="n">mesh_name</span><span class="p">,</span> <span class="s2">&quot;Water Surface&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:45:51 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:45:51 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 2026-04-27 21:45:51 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
@@ -7143,10 +7199,10 @@ Mesh: Perimeter 1
 
 2026-04-27 21:45:51 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Mesh Timeseries Output (Water Surface) for </span><span class="si">{</span><span class="n">mesh_name</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Mesh Timeseries Output (Water Surface) for </span><span class="si">{</span><span class="n">mesh_name</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
 </span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="n">timeseries_da</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Mesh Timeseries Output (Water Surface) for Perimeter 1:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Mesh Timeseries Output (Water Surface) for Perimeter 1:
 </code></pre></div>
 <div><svg style="position: absolute; width: 0; height: 0; overflow: hidden">
 <defs>
@@ -7727,10 +7783,10 @@ Attributes:
        &#x27;2019-05-05T23:30:00.000000000&#x27;, &#x27;2019-05-06T00:00:00.000000000&#x27;],
       shape=(1633,), dtype=&#x27;datetime64[ns]&#x27;)</pre></div></li><li class='xr-var-item'><div class='xr-var-name'><span class='xr-has-index'>cell_id</span></div><div class='xr-var-dims'>(cell_id)</div><div class='xr-var-dtype'>int64</div><div class='xr-var-preview xr-preview'>0 1 2 3 4 5 ... 428 429 430 431 432</div><input id='attrs-fb37ceaa-f173-4adc-be13-80a7ab127fce' class='xr-var-attrs-in' type='checkbox' disabled><label for='attrs-fb37ceaa-f173-4adc-be13-80a7ab127fce' title='Show/Hide attributes'><svg class='icon xr-icon-file-text2'><use xlink:href='#icon-file-text2'></use></svg></label><input id='data-bdfa34f1-93a7-47ca-9640-68d9eb65fdf1' class='xr-var-data-in' type='checkbox'><label for='data-bdfa34f1-93a7-47ca-9640-68d9eb65fdf1' title='Show/Hide data repr'><svg class='icon xr-icon-database'><use xlink:href='#icon-database'></use></svg></label><div class='xr-var-attrs'><dl class='xr-attrs'></dl></div><div class='xr-var-data'><pre>array([  0,   1,   2, ..., 430, 431, 432], shape=(433,))</pre></div></li></ul></div></li><li class='xr-section-item'><input id='section-63b62dfd-6702-46b4-bc9b-9e007f72aaa4' class='xr-section-summary-in' type='checkbox' checked /><label for='section-63b62dfd-6702-46b4-bc9b-9e007f72aaa4' class='xr-section-summary' title='Expand/collapse section'>Attributes: <span>(3)</span></label><div class='xr-section-inline-details'></div><div class='xr-section-details'><dl class='xr-attrs'><dt><span>units :</span></dt><dd>ft</dd><dt><span>mesh_name :</span></dt><dd>Perimeter 1</dd><dt><span>variable :</span></dt><dd>Water Surface</dd></dl></div></li></ul></div></div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Get mesh cells timeseries output</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Get mesh cells timeseries output</span>
 </span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="n">cells_timeseries_ds</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_mesh_cells_timeseries</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">,</span> <span class="n">mesh_name</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:45:51 - ras_commander.hdf.HdfResultsMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:45:51 - ras_commander.hdf.HdfResultsMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
 
 
 2026-04-27 21:45:51 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
@@ -7822,10 +7878,10 @@ Attributes:
 
 2026-04-27 21:45:51 - ras_commander.hdf.HdfResultsMesh - WARNING - Variable &#39;Face Tangential Velocity&#39; not found in the HDF file for mesh &#39;Perimeter 1&#39;. Skipping.
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Mesh Cells Timeseries Output:&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Mesh Cells Timeseries Output:&quot;</span><span class="p">)</span>
 </span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="n">cells_timeseries_ds</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Mesh Cells Timeseries Output:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Mesh Cells Timeseries Output:
 
 
 
@@ -7845,18 +7901,18 @@ Attributes:
      mesh_name:   Perimeter 1
      start_time:  2019-04-02 00:00:00}
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="c1"># Get mesh faces timeseries output</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="c1"># Get mesh faces timeseries output</span>
 </span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="n">faces_timeseries_ds</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_mesh_faces_timeseries</span><span class="p">(</span><span class="n">plan_hdf_path</span><span class="p">,</span> <span class="n">mesh_name</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:45:51 - ras_commander.hdf.HdfResultsMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:45:51 - ras_commander.hdf.HdfResultsMesh - INFO - Using HDF file from direct string path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
 
 
 2026-04-27 21:45:51 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Mesh Faces Timeseries Output:&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Mesh Faces Timeseries Output:&quot;</span><span class="p">)</span>
 </span><span id="__span-38-2"><a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="n">faces_timeseries_ds</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Mesh Faces Timeseries Output:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Mesh Faces Timeseries Output:
 </code></pre></div>
 <div><svg style="position: absolute; width: 0; height: 0; overflow: hidden">
 <defs>
@@ -8452,7 +8508,7 @@ reverse-flow, or mixed-direction zones and may overstate through-flow.</p>
 <p>Use this only when you have independently confirmed that the transect is behaving as a one-way
 flow section for the timesteps of interest.</p>
 <p><strong>Future Library Candidate</strong>: <code>HdfResultsMesh.normalize_face_flow_direction()</code></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="c1"># Convert all face velocities and face flow values to positive for further calculations</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="c1"># Convert all face velocities and face flow values to positive for further calculations</span>
 </span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="c1"># We have visually confirmed for this model that all flow is moving in the same direction</span>
 </span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a>
 </span><span id="__span-39-4"><a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a><span class="c1"># Function to process and convert face data to positive values</span>
@@ -8499,12 +8555,12 @@ flow section for the timesteps of interest.</p>
 </span><span id="__span-39-45"><a id="__codelineno-39-45" name="__codelineno-39-45" href="#__codelineno-39-45"></a>    <span class="n">cells_timeseries_ds</span>
 </span><span id="__span-39-46"><a id="__codelineno-39-46" name="__codelineno-39-46" href="#__codelineno-39-46"></a><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Face flow data processed.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Face flow data processed.
 Conversion to positive values complete.
 Number of faces processed: 814
 Available variables: [&#39;face_flow&#39;, &#39;face_velocity&#39;, &#39;velocity_direction&#39;]
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 </span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 </span><span id="__span-40-3"><a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">xarray</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xr</span>
 </span><span id="__span-40-4"><a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a>
@@ -8542,7 +8598,7 @@ native HEC-RAS reference-line conveyance-weighted quantity. The later native ref
 comparison section demonstrates a short-form version of those calculations by interpolating
 stage-specific face hydraulic properties along the native internal-face chain.</p>
 <p>Then, save the results to CSV</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="c1"># Process all profile lines</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="c1"># Process all profile lines</span>
 </span><span id="__span-41-2"><a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a><span class="n">all_results</span> <span class="o">=</span> <span class="p">[]</span>
 </span><span id="__span-41-3"><a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a><span class="k">for</span> <span class="n">profile_name</span><span class="p">,</span> <span class="n">faces</span> <span class="ow">in</span> <span class="n">faces_near_profile_lines</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 </span><span id="__span-41-4"><a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a>    <span class="n">profile_results</span> <span class="o">=</span> <span class="n">process_profile_line</span><span class="p">(</span><span class="n">profile_name</span><span class="p">,</span> <span class="n">faces</span><span class="p">,</span> <span class="n">cells_timeseries_ds</span><span class="p">,</span> <span class="n">faces_timeseries_ds</span><span class="p">)</span>
@@ -8631,7 +8687,7 @@ stage-specific face hydraulic properties along the native internal-face chain.</
 </div>
 
 <hr />
-<div class="language-python highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="n">profile_time_series</span> <span class="o">=</span> <span class="p">{}</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="n">profile_time_series</span> <span class="o">=</span> <span class="p">{}</span>
 </span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a>
 </span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="c1"># Iterate through each profile line and extract its corresponding data</span>
 </span><span id="__span-42-4"><a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="k">for</span> <span class="n">profile_name</span><span class="p">,</span> <span class="n">faces_gdf</span> <span class="ow">in</span> <span class="n">faces_near_profile_lines</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -8658,7 +8714,7 @@ stage-specific face hydraulic properties along the native internal-face chain.</
 </span><span id="__span-42-25"><a id="__codelineno-42-25" name="__codelineno-42-25" href="#__codelineno-42-25"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Profile Lines Processed:&quot;</span><span class="p">)</span>
 </span><span id="__span-42-26"><a id="__codelineno-42-26" name="__codelineno-42-26" href="#__codelineno-42-26"></a><span class="n">profile_time_series</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Time Series DataFrame for Profile Line 1:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Time Series DataFrame for Profile Line 1:
 
 Time Series DataFrame for Profile Line 2:
 
@@ -8752,13 +8808,13 @@ Profile Lines Processed:
 
  [31027 rows x 6 columns]}
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="n">all_profiles_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">profile_time_series</span><span class="o">.</span><span class="n">values</span><span class="p">(),</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="n">all_profiles_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">profile_time_series</span><span class="o">.</span><span class="n">values</span><span class="p">(),</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a>
 </span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="c1"># Display the combined dataframe</span>
 </span><span id="__span-43-4"><a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Combined Time Series DataFrame for All Profiles:&quot;</span><span class="p">)</span>
 </span><span id="__span-43-5"><a id="__codelineno-43-5" name="__codelineno-43-5" href="#__codelineno-43-5"></a><span class="n">all_profiles_df</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Combined Time Series DataFrame for All Profiles:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Combined Time Series DataFrame for All Profiles:
 </code></pre></div>
 <div>
 <style scoped>
@@ -8891,7 +8947,7 @@ Profile Lines Processed:
 <p>97980 rows × 6 columns</p>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="c1"># Check if we have the necessary variables</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="c1"># Check if we have the necessary variables</span>
 </span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Available variables:&quot;</span><span class="p">)</span>
 </span><span id="__span-44-3"><a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;profile_time_series:&quot;</span><span class="p">,</span> <span class="s1">&#39;profile_time_series&#39;</span> <span class="ow">in</span> <span class="nb">locals</span><span class="p">())</span>
 </span><span id="__span-44-4"><a id="__codelineno-44-4" name="__codelineno-44-4" href="#__codelineno-44-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;faces_near_profile_lines:&quot;</span><span class="p">,</span> <span class="s1">&#39;faces_near_profile_lines&#39;</span> <span class="ow">in</span> <span class="nb">locals</span><span class="p">())</span>
@@ -8903,7 +8959,7 @@ Profile Lines Processed:
 </span><span id="__span-44-10"><a id="__codelineno-44-10" name="__codelineno-44-10" href="#__codelineno-44-10"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Columns in </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
 </span><span id="__span-44-11"><a id="__codelineno-44-11" name="__codelineno-44-11" href="#__codelineno-44-11"></a>        <span class="nb">print</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Available variables:
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Available variables:
 profile_time_series: True
 faces_near_profile_lines: True
 profile_averages: False
@@ -8932,7 +8988,7 @@ representative velocity when face flows vary substantially.</p>
 - <code>HdfResultsMesh.aggregate_faces_along_profile(..., weight='Face Flow')</code>
 - <code>HdfMesh.compute_profile_face_signs(profile_line, faces_gdf)</code>
 - <code>HdfMesh.get_mesh_face_conveyance_tables()</code> or an equivalent derived-table helper</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">calculate_discharge_weighted_velocity</span><span class="p">(</span><span class="n">profile_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">calculate_discharge_weighted_velocity</span><span class="p">(</span><span class="n">profile_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 </span><span id="__span-45-2"><a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 </span><span id="__span-45-3"><a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a><span class="sd">    Calculate discharge-weighted average velocity for a profile line.</span>
 </span><span id="__span-45-4"><a id="__codelineno-45-4" name="__codelineno-45-4" href="#__codelineno-45-4"></a><span class="sd">    Vw = Sum(|Qi|*|Vi|)/Sum(|Qi|) where Qi is face flow and Vi is face velocity.</span>
@@ -8972,7 +9028,7 @@ representative velocity when face flows vary substantially.</p>
 </span><span id="__span-45-38"><a id="__codelineno-45-38" name="__codelineno-45-38" href="#__codelineno-45-38"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Calculated velocities:</span><span class="se">\n</span><span class="si">{</span><span class="n">weighted_df</span><span class="o">.</span><span class="n">head</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-45-39"><a id="__codelineno-45-39" name="__codelineno-45-39" href="#__codelineno-45-39"></a>    <span class="k">return</span> <span class="n">weighted_df</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a><span class="c1"># Calculate for each profile line</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a><span class="c1"># Calculate for each profile line</span>
 </span><span id="__span-46-2"><a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a><span class="k">for</span> <span class="n">profile_name</span><span class="p">,</span> <span class="n">profile_df</span> <span class="ow">in</span> <span class="n">profile_time_series</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 </span><span id="__span-46-3"><a id="__codelineno-46-3" name="__codelineno-46-3" href="#__codelineno-46-3"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Processing profile: </span><span class="si">{</span><span class="n">profile_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-46-4"><a id="__codelineno-46-4" name="__codelineno-46-4" href="#__codelineno-46-4"></a>
@@ -8995,7 +9051,7 @@ representative velocity when face flows vary substantially.</p>
 </span><span id="__span-46-21"><a id="__codelineno-46-21" name="__codelineno-46-21" href="#__codelineno-46-21"></a>    <span class="n">weighted_velocities</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </span><span id="__span-46-22"><a id="__codelineno-46-22" name="__codelineno-46-22" href="#__codelineno-46-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Saved weighted velocities to </span><span class="si">{</span><span class="n">output_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Processing profile: Profile Line 1
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Processing profile: Profile Line 1
 Calculating weighted velocity...
 Input DataFrame columns: [&#39;time&#39;, &#39;face_id&#39;, &#39;face_velocity&#39;, &#39;face_flow&#39;, &#39;profile_name&#39;, &#39;face_order&#39;]
 
@@ -9049,7 +9105,7 @@ Converted time to datetime format.
 Number of ordered faces: 19
 Saved weighted velocities to G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Profile Line 3_discharge_weighted_velocity.csv
 </code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a><span class="c1"># Create plots comparing discharge-weighted velocity and simple average for each profile line</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a><span class="c1"># Create plots comparing discharge-weighted velocity and simple average for each profile line</span>
 </span><span id="__span-47-2"><a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a><span class="k">for</span> <span class="n">profile_name</span><span class="p">,</span> <span class="n">profile_df</span> <span class="ow">in</span> <span class="n">profile_time_series</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 </span><span id="__span-47-3"><a id="__codelineno-47-3" name="__codelineno-47-3" href="#__codelineno-47-3"></a>
 </span><span id="__span-47-4"><a id="__codelineno-47-4" name="__codelineno-47-4" href="#__codelineno-47-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Generating comparison plot for profile: </span><span class="si">{</span><span class="n">profile_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -9154,7 +9210,7 @@ Saved weighted velocities to G:\GH\ras-commander\examples\example_projects\Chipp
 </span><span id="__span-47-103"><a id="__codelineno-47-103" name="__codelineno-47-103" href="#__codelineno-47-103"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Max: </span><span class="si">{</span><span class="n">simple_averages</span><span class="p">[</span><span class="s1">&#39;face_velocity&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ft/s&quot;</span><span class="p">)</span>
 </span><span id="__span-47-104"><a id="__codelineno-47-104" name="__codelineno-47-104" href="#__codelineno-47-104"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Min: </span><span class="si">{</span><span class="n">simple_averages</span><span class="p">[</span><span class="s1">&#39;face_velocity&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ft/s&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Generating comparison plot for profile: Profile Line 1
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Generating comparison plot for profile: Profile Line 1
 Calculating weighted velocity...
 Input DataFrame columns: [&#39;time&#39;, &#39;face_id&#39;, &#39;face_velocity&#39;, &#39;face_flow&#39;, &#39;profile_name&#39;, &#39;face_order&#39;]
 
@@ -9168,7 +9224,7 @@ Calculated velocities:
 4 2019-04-02 02:00:00           1.143858
 </code></pre></div>
 <p><img alt="png" src="../412_2d_detail_face_data_extraction_files/412_2d_detail_face_data_extraction_60_2.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Velocity Comparison for Profile Line 1 
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Velocity Comparison for Profile Line 1 
 Individual Face Velocities vs Simple Average Velocity vs Discharge-Weighted Average Velocity
 Number of faces: 16
 
@@ -9196,7 +9252,7 @@ Calculated velocities:
 4 2019-04-02 02:00:00           0.836489
 </code></pre></div>
 <p><img alt="png" src="../412_2d_detail_face_data_extraction_files/412_2d_detail_face_data_extraction_60_5.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Velocity Comparison for Profile Line 2 
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Velocity Comparison for Profile Line 2 
 Individual Face Velocities vs Simple Average Velocity vs Discharge-Weighted Average Velocity
 Number of faces: 25
 
@@ -9224,7 +9280,7 @@ Calculated velocities:
 4 2019-04-02 02:00:00           0.201955
 </code></pre></div>
 <p><img alt="png" src="../412_2d_detail_face_data_extraction_files/412_2d_detail_face_data_extraction_60_8.png" /></p>
-<div class="language-text highlight"><pre><span></span><code>Velocity Comparison for Profile Line 3 
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Velocity Comparison for Profile Line 3 
 Individual Face Velocities vs Simple Average Velocity vs Discharge-Weighted Average Velocity
 Number of faces: 19
 
@@ -9275,7 +9331,7 @@ from <code>Geometry/Reference Lines/Internal Faces</code> connectivity.</p>
 - 2D face hydraulic property tables: https://www.hec.usace.army.mil/confluence/rasdocs/r2dum/latest/development-of-a-2d-or-combined-1d-2d-model/creating-hydraulic-property-tables-for-2d-flow-areas
 - Conveyance/Manning form: https://www.hec.usace.army.mil/confluence/rasdocs/ras1dtechref/latest/theoretical-basis-for-one-dimensional-and-two-dimensional-hydrodynamic-calculations/1d-steady-flow-water-surface-profiles/cross-section-subdivision-for-conveyance-calculations</p>
 <p>This remains a demonstration notebook, not a native reference-line implementation, but it now exposes the specific differences between native reference-line results and the computed face/property-table metrics.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">GeomReferenceFeatures</span><span class="p">,</span> <span class="n">RasPlan</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">GeomReferenceFeatures</span><span class="p">,</span> <span class="n">RasPlan</span>
 </span><span id="__span-48-2"><a id="__codelineno-48-2" name="__codelineno-48-2" href="#__codelineno-48-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfMesh</span><span class="p">,</span> <span class="n">HdfResultsMesh</span><span class="p">,</span> <span class="n">HdfResultsXsec</span>
 </span><span id="__span-48-3"><a id="__codelineno-48-3" name="__codelineno-48-3" href="#__codelineno-48-3"></a>
 </span><span id="__span-48-4"><a id="__codelineno-48-4" name="__codelineno-48-4" href="#__codelineno-48-4"></a><span class="n">profile_geojson_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;data/profile_lines_chippewa2D.geojson&quot;</span><span class="p">)</span>
@@ -9363,7 +9419,7 @@ from <code>Geometry/Reference Lines/Internal Faces</code> connectivity.</p>
 </span><span id="__span-48-86"><a id="__codelineno-48-86" name="__codelineno-48-86" href="#__codelineno-48-86"></a><span class="p">)</span>
 </span><span id="__span-48-87"><a id="__codelineno-48-87" name="__codelineno-48-87" href="#__codelineno-48-87"></a><span class="n">native_reference_lines_ds</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:46:04 - ras_commander.RasPlan - INFO - Added HDF output variable &#39;Face Flow&#39; to plan file: Chippewa_2D.p02
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:46:04 - ras_commander.RasPlan - INFO - Added HDF output variable &#39;Face Flow&#39; to plan file: Chippewa_2D.p02
 
 
 2026-04-27 21:46:04 - ras_commander.RasPlan - INFO - Added HDF output variable &#39;Face Velocity&#39; to plan file: Chippewa_2D.p02
@@ -10103,7 +10159,7 @@ Data variables:
        [680.81744, 680.18256, 679.86334],
        [680.81134, 680.17957, 679.86237]], shape=(1633, 3), dtype=float32)</pre></div></li></ul></div></li></ul></div></div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">reconstruct_reference_line_metrics</span><span class="p">(</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">reconstruct_reference_line_metrics</span><span class="p">(</span>
 </span><span id="__span-49-2"><a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a>    <span class="n">profile_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 </span><span id="__span-49-3"><a id="__codelineno-49-3" name="__codelineno-49-3" href="#__codelineno-49-3"></a>    <span class="n">face_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
 </span><span id="__span-49-4"><a id="__codelineno-49-4" name="__codelineno-49-4" href="#__codelineno-49-4"></a>    <span class="n">face_flow_da</span><span class="p">:</span> <span class="n">xr</span><span class="o">.</span><span class="n">DataArray</span><span class="p">,</span>
@@ -10214,7 +10270,7 @@ Data variables:
 </span><span id="__span-49-109"><a id="__codelineno-49-109" name="__codelineno-49-109" href="#__codelineno-49-109"></a>    <span class="p">})</span>
 </span><span id="__span-49-110"><a id="__codelineno-49-110" name="__codelineno-49-110" href="#__codelineno-49-110"></a>    <span class="k">return</span> <span class="n">reconstructed_df</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-50-1"><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a><span class="n">native_internal_faces_df</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_reference_line_internal_faces</span><span class="p">(</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-50-1"><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a><span class="n">native_internal_faces_df</span> <span class="o">=</span> <span class="n">HdfMesh</span><span class="o">.</span><span class="n">get_reference_line_internal_faces</span><span class="p">(</span>
 </span><span id="__span-50-2"><a id="__codelineno-50-2" name="__codelineno-50-2" href="#__codelineno-50-2"></a>    <span class="n">geom_hdf_path</span><span class="p">,</span>
 </span><span id="__span-50-3"><a id="__codelineno-50-3" name="__codelineno-50-3" href="#__codelineno-50-3"></a>    <span class="n">mesh_name</span><span class="o">=</span><span class="n">mesh_name</span><span class="p">,</span>
 </span><span id="__span-50-4"><a id="__codelineno-50-4" name="__codelineno-50-4" href="#__codelineno-50-4"></a><span class="p">)</span>
@@ -10229,7 +10285,7 @@ Data variables:
 </span><span id="__span-50-13"><a id="__codelineno-50-13" name="__codelineno-50-13" href="#__codelineno-50-13"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Native reference lines with internal faces: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">native_internal_faces</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-50-14"><a id="__codelineno-50-14" name="__codelineno-50-14" href="#__codelineno-50-14"></a><span class="n">native_internal_faces_df</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:48:42 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:48:42 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
 
 
 2026-04-27 21:48:42 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.g01.hdf
@@ -10343,7 +10399,7 @@ Native reference lines with internal faces: [&#39;Profile Line 1&#39;, &#39;Prof
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a><span class="n">native_face_results_ds</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_mesh_faces_timeseries</span><span class="p">(</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a><span class="n">native_face_results_ds</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_mesh_faces_timeseries</span><span class="p">(</span>
 </span><span id="__span-51-2"><a id="__codelineno-51-2" name="__codelineno-51-2" href="#__codelineno-51-2"></a>    <span class="n">plan_hdf_path</span><span class="p">,</span>
 </span><span id="__span-51-3"><a id="__codelineno-51-3" name="__codelineno-51-3" href="#__codelineno-51-3"></a>    <span class="n">mesh_name</span><span class="p">,</span>
 </span><span id="__span-51-4"><a id="__codelineno-51-4" name="__codelineno-51-4" href="#__codelineno-51-4"></a>    <span class="n">truncate</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
@@ -10611,7 +10667,7 @@ Native reference lines with internal faces: [&#39;Profile Line 1&#39;, &#39;Prof
 </span><span id="__span-51-266"><a id="__codelineno-51-266" name="__codelineno-51-266" href="#__codelineno-51-266"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Updated latest comparison aliases: </span><span class="si">{</span><span class="n">latest_comparison_csv_path</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">latest_summary_csv_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-51-267"><a id="__codelineno-51-267" name="__codelineno-51-267" href="#__codelineno-51-267"></a><span class="n">reference_line_summary_df</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>2026-04-27 21:48:43 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-27 21:48:43 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
 
 
 2026-04-27 21:48:43 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: G:\GH\ras-commander\examples\example_projects\Chippewa_2D_13\Chippewa_2D.p02.hdf
@@ -10882,7 +10938,7 @@ Updated latest comparison aliases: G:\GH\ras-commander\examples\example_projects
 </table>
 </div>
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-52-1"><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a><span class="n">native_conveyance_available</span> <span class="o">=</span> <span class="n">reference_line_comparison_df</span><span class="p">[</span><span class="s1">&#39;native_water_surface_conveyance&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span><span class="o">.</span><span class="n">any</span><span class="p">()</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-52-1"><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a><span class="n">native_conveyance_available</span> <span class="o">=</span> <span class="n">reference_line_comparison_df</span><span class="p">[</span><span class="s1">&#39;native_water_surface_conveyance&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span><span class="o">.</span><span class="n">any</span><span class="p">()</span>
 </span><span id="__span-52-2"><a id="__codelineno-52-2" name="__codelineno-52-2" href="#__codelineno-52-2"></a><span class="n">native_face_area_available</span> <span class="o">=</span> <span class="n">reference_line_comparison_df</span><span class="p">[</span><span class="s1">&#39;short_face_output_area_sqft&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span><span class="o">.</span><span class="n">any</span><span class="p">()</span>
 </span><span id="__span-52-3"><a id="__codelineno-52-3" name="__codelineno-52-3" href="#__codelineno-52-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Native Water Surface Conveyance output available in HDF: </span><span class="si">{</span><span class="n">native_conveyance_available</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-52-4"><a id="__codelineno-52-4" name="__codelineno-52-4" href="#__codelineno-52-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Native Face Area output available in HDF: </span><span class="si">{</span><span class="n">native_face_area_available</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -10962,7 +11018,7 @@ Updated latest comparison aliases: G:\GH\ras-commander\examples\example_projects
 </span><span id="__span-52-78"><a id="__codelineno-52-78" name="__codelineno-52-78" href="#__codelineno-52-78"></a>
 </span><span id="__span-52-79"><a id="__codelineno-52-79" name="__codelineno-52-79" href="#__codelineno-52-79"></a><span class="n">reference_line_comparison_df</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code>Native Water Surface Conveyance output available in HDF: False
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Native Water Surface Conveyance output available in HDF: False
 Native Face Area output available in HDF: True
 HdfMesh-derived conveyance comes from geometry-preprocessor face property tables.
 Prefer native HdfResultsMesh face outputs when available; those are the solver&#39;s canonical output path.
@@ -11158,7 +11214,7 @@ Prefer native HdfResultsMesh face outputs when available; those are the solver&#
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
@@ -11168,7 +11224,7 @@ Prefer native HdfResultsMesh face outputs when available; those are the solver&#
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:52:11 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:44 UTC">April 28, 2026</span>
   </span>
 
     
