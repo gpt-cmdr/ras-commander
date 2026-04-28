@@ -6467,7 +6467,7 @@ with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
 <li>Upper Guadalupe: UPGU1, UPGU2, and UPGU3 passed; UPGU4 requires the 7200-second validation record because its geometry preprocessor can exceed one hour.</li>
 <li>Eleven Point: organized from the split <code>Input.zip</code>, <code>Terrain.zip</code>, and <code>Land_Cover.zip</code> delivery; path-audited with zero issues, seven local plan HDFs, and a passing ras-commander geometry-preprocessor run using HEC-RAS 6.6.</li>
 <li>Spring River: cataloged separately from Spring Creek as <code>spring-river</code> / <code>SpringRiver_11010010</code>; downloaded, organized, path-audited with zero issues, and results-ready with seven local plan HDFs. Geometry-preprocessor validation remains pending.</li>
-<li>Lower Brazos: LB_MA01, LB_MA02, and LB_MA03 are downloaded, extracted, organized, path-audited with zero issues, and results-ready with 63 local plan HDFs. LB_MA01 exceeded the current 7200-second geometry-preprocessor timeout with no compute messages, so Lower Brazos requires a longer dedicated preprocessor validation window.</li>
+<li>Lower Brazos: LB_MA01, LB_MA02, and LB_MA03 are downloaded, extracted, organized, path-audited with zero issues, and results-ready with 61 local plan HDFs in the latest audit. LB_MA02 passed ras-commander geometry-preprocessor validation in 3846.3 seconds; LB_MA01 exceeded the 7200-second timeout with no compute messages, and LB_MA03 returned without producing compute messages, so Lower Brazos remains partially preprocessor-validated.</li>
 <li>Amite: full E2E organization completed for five RAS projects. WA1, WA2,
   WA3, and WA5 passed geometry preprocessor validation; WA4 is blocked by a
   <code>RasGeomWriter</code> / <code>ERROR: Incorrect Type in ./Projection. (Expected String)</code>
@@ -6541,7 +6541,7 @@ outputs in the eBFE notebook set.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 27, 2026 22:26:25 UTC">April 27, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 01:01:56 UTC">April 28, 2026</span>
   </span>
 
     
