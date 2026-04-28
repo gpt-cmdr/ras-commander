@@ -2170,9 +2170,11 @@ def associate_geometry_layers(
     landcover_hdf_path: Optional[Union[str, Path]] = None,
     soil_layer_path: Optional[Union[str, Path]] = None,
     infiltration_hdf_path: Optional[Union[str, Path]] = None,
+    terrain_hdf_path: Optional[Union[str, Path]] = None,
+    sediment_soils_hdf_path: Optional[Union[str, Path]] = None,
     ras_object: Any = None,
 ) -> Path:
-    """Associate project land-cover / infiltration layers to a geometry HDF."""
+    """Associate project terrain / classification layers to a geometry HDF."""
     project_paths = resolve_project_paths(ras_project_path)
     geom_hdf_path = resolve_geometry_hdf_path(
         project_paths,
@@ -2195,25 +2197,36 @@ def associate_geometry_layers(
         if infiltration_hdf_path is not None
         else resolve_registered_land_classification_path(project_paths, "infiltration")
     )
+    resolved_terrain_path = (
+        RasUtils.safe_resolve(Path(terrain_hdf_path))
+        if terrain_hdf_path is not None
+        else None
+    )
+    resolved_sediment_soils_path = (
+        RasUtils.safe_resolve(Path(sediment_soils_hdf_path))
+        if sediment_soils_hdf_path is not None
+        else None
+    )
 
-    ns = get_interop_namespace()
-    set_geometry_association_command = ns["SetGeometryAssociationCommand"]()
-    set_geometry_association_command.GeometryFilename = str(geom_hdf_path)
-    if resolved_landcover_path is not None:
-        set_geometry_association_command.NValueFilename = str(resolved_landcover_path)
-    if resolved_infiltration_path is not None:
-        set_geometry_association_command.InfiltrationFilename = str(resolved_infiltration_path)
-
-    # SedimentSoilsFilename is for sediment bed material, not hydrologic soils groups.
     if resolved_soil_path is not None:
         logger.debug(
             "Hydrologic soils layer resolved for association but not passed to "
             "SedimentSoilsFilename because that geometry attribute is for sediment "
-            "bed material, not infiltration soils."
+            "bed material, not infiltration soils. Use sediment_soils_hdf_path "
+            "to write the SedimentSoilsFilename association explicitly."
         )
 
-    set_geometry_association_command.Execute(None)
-    return geom_hdf_path
+    from ._geometry_association import write_geometry_association
+
+    return write_geometry_association(
+        geom_hdf_path,
+        terrain_hdf_path=resolved_terrain_path,
+        landcover_hdf_path=resolved_landcover_path,
+        infiltration_hdf_path=resolved_infiltration_path,
+        sediment_soils_hdf_path=resolved_sediment_soils_path,
+        project_folder=project_paths.project_folder,
+        rasmap_path=project_paths.rasmap_path,
+    )
 
 
 def recompute_property_tables(

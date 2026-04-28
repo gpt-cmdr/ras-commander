@@ -796,6 +796,119 @@ Step 5: Configure (optional — auto-detection usually works)
 
     @staticmethod
     @log_call
+    def validate_geometry_association_cli(
+        hdf_path: Union[str, Path],
+        terrain_hdf_path: Optional[Union[str, Path]] = None,
+        landcover_hdf_path: Optional[Union[str, Path]] = None,
+        infiltration_hdf_path: Optional[Union[str, Path]] = None,
+        sediment_soils_hdf_path: Optional[Union[str, Path]] = None,
+        ras_version: str = None,
+        timeout: int = 600,
+        ras_object=None,
+    ) -> Dict[str, Any]:
+        """
+        Validate geometry association behavior against RasProcess.exe.
+
+        Warning:
+            This method runs RasProcess.exe ``SetGeometryAssociation`` in-place
+            and mutates the supplied geometry HDF. It is a reference/validation
+            path only. Normal workflows should call
+            ``RasMap.associate_geometry_layers(...)``, which writes the same
+            ``/Geometry`` association attributes through Python-native h5py.
+
+        Args:
+            hdf_path: Existing geometry HDF to mutate and validate.
+            terrain_hdf_path: Optional terrain HDF to associate.
+            landcover_hdf_path: Optional land-cover/Manning's n HDF.
+            infiltration_hdf_path: Optional infiltration HDF.
+            sediment_soils_hdf_path: Optional sediment bed-material soils HDF.
+            ras_version: Optional HEC-RAS version for RasProcess.exe lookup.
+            timeout: Command timeout in seconds.
+            ras_object: Optional RasPrj object. Present for API consistency.
+
+        Returns:
+            Dict containing command args, return code, stdout/stderr,
+            before/after association attrs, expected attrs, mismatches, and
+            ``passed``.
+        """
+        from ._geometry_association import (
+            build_expected_geometry_association_attrs,
+            build_set_geometry_association_args,
+            compare_expected_geometry_association_attrs,
+            read_geometry_association,
+            safe_resolve_path,
+        )
+
+        hdf_path = safe_resolve_path(hdf_path)
+        if not hdf_path.exists():
+            raise FileNotFoundError(f"Geometry HDF not found: {hdf_path}")
+
+        supplied = {
+            "terrain_hdf_path": terrain_hdf_path,
+            "landcover_hdf_path": landcover_hdf_path,
+            "infiltration_hdf_path": infiltration_hdf_path,
+            "sediment_soils_hdf_path": sediment_soils_hdf_path,
+        }
+        if all(path is None for path in supplied.values()):
+            raise ValueError("Provide at least one geometry association path.")
+
+        resolved_paths: Dict[str, Path] = {}
+        for key, path_value in supplied.items():
+            if path_value is None:
+                continue
+            resolved_path = safe_resolve_path(path_value)
+            if not resolved_path.exists():
+                raise FileNotFoundError(
+                    f"Association artifact not found for {key}: {resolved_path}"
+                )
+            resolved_paths[key] = resolved_path
+
+        before = read_geometry_association(hdf_path, resolve_paths=True)
+        expected_attrs = build_expected_geometry_association_attrs(
+            hdf_path,
+            resolved_paths,
+            project_folder=hdf_path.parent,
+        )
+
+        rasprocess = RasProcess.find_rasprocess(ras_version)
+        if rasprocess is None:
+            raise FileNotFoundError("RasProcess.exe not found")
+
+        command_args = build_set_geometry_association_args(
+            hdf_path,
+            resolved_paths,
+            path_formatter=RasProcess._resolve_path_for_rasprocess,
+        )
+        result = RasProcess._run_rasprocess(
+            rasprocess,
+            command_args,
+            timeout=timeout,
+            working_dir=hdf_path.parent,
+        )
+
+        after = read_geometry_association(hdf_path, resolve_paths=True)
+        mismatches = compare_expected_geometry_association_attrs(
+            hdf_path,
+            after,
+            expected_attrs,
+        )
+        passed = result.returncode == 0 and not mismatches
+
+        return {
+            "rasprocess_path": str(rasprocess),
+            "command_args": command_args,
+            "return_code": result.returncode,
+            "stdout": result.stdout or "",
+            "stderr": result.stderr or "",
+            "before": before,
+            "after": after,
+            "expected_attrs": expected_attrs,
+            "mismatches": mismatches,
+            "passed": passed,
+        }
+
+    @staticmethod
+    @log_call
     def get_plan_timestamps(
         plan_number: str,
         ras_object=None

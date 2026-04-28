@@ -4,8 +4,8 @@ GeomMesh - Headless 2D mesh generation, repair, and BC conflict resolution.
 Provides headless (no-GUI) mesh generation via RasMapperLib.dll + pythonnet.
 Replaces the need for RAS Mapper or RasProcess.exe for mesh operations.
 
-Architecture: Text-First
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Architecture: Text-First, Existing-HDF Workspace
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 The .g## plain text file is the sole persistent output and source of truth.
 HEC-RAS preprocessing reads "Storage Area 2D Points= N" plus the XY seed
 coordinates from text and regenerates the mesh — overriding any HDF content.
@@ -13,28 +13,31 @@ coordinates from text and regenerates the mesh — overriding any HDF content.
 The HDF (.g##.hdf) is used only as a *temporary workspace*:
   - .NET RASGeometry loads geometry from HDF (perimeter, breaklines)
   - geom.Save() writes cell centers to HDF so we can bulk-read via h5py
-  - The HDF is NEVER the deliverable — HEC-RAS will recompile it from text
+  - ras-commander does not generate .g##.hdf from .g## text; that remains
+    a full HEC-RAS/Ras.exe responsibility
 
 Production Workflow (generate)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 1. **Breakline spacing** — Read per-breakline CellSize Min/Max from .g01 text.
    Only overwrite if the caller explicitly passes bl_spacing_near/bl_spacing_far.
-2. **Text → HDF sync** — Sync per-breakline spacing from text into the HDF so
+2. **Existing HDF validation** — Require a current .g##.hdf compiled by
+   HEC-RAS/Ras.exe before any mesh-generation work begins.
+3. **Text → HDF sync** — Sync per-breakline spacing from text into the HDF so
    RegenerateMeshPoints (which reads HDF, not text) uses correct values.
-3. **Load .NET geometry** — RASGeometry(hdf_path) → D2FlowArea → perimeter,
+4. **Load .NET geometry** — RASGeometry(hdf_path) → D2FlowArea → perimeter,
    breaklines (merged BreakLines + Regions + Structures via _build_breaklines).
-4. **Generate seeds** — Primary: RegenerateMeshPoints (private .NET method via
+5. **Generate seeds** — Primary: RegenerateMeshPoints (private .NET method via
    reflection) produces breakline-aware seeds. Fallback: PointGenerator.
    GeneratePoints(perim, cell_size) for base-grid seeds.
-5. **Fix loop** (matches TryAutoFix tier ordering):
+6. **Fix loop** (matches TryAutoFix tier ordering):
    - Tier 0: Pre-flight removal of short perimeter segments
    - Tier 2 first: MaxFacesPerCellExceeded → add midpoint seeds
    - Tier 3: FacePerimeterConnectionError → remove bad perimeter vertices
    - Tier 1: Ratio escalation [0.05 → 0.10 → 0.15 → 0.25]
    - Tier 4: Douglas-Peucker perimeter simplification (last resort)
-6. **Extract cell centers** — geom.Save() + h5py read (fast), or .NET Cell(i)
+7. **Extract cell centers** — geom.Save() + h5py read (fast), or .NET Cell(i)
    iteration (slow fallback).
-7. **Write .g01 text** — _patch_text_seeds() writes cell centers as the sole
+8. **Write .g01 text** — _patch_text_seeds() writes cell centers as the sole
    persistent output. _set_point_generation_data() updates the seed count header.
 
 Requires:
@@ -65,6 +68,14 @@ from .._gdal_runtime import (
     configure_hecras_gdal_runtime,
     configure_rasmapper_gdal_bridge,
 )
+from .._geometry_association import (
+    GEOMETRY_ASSOCIATION_FIELDS,
+    compare_geometry_association_paths,
+    decode_hdf_attr as _shared_decode_hdf_attr,
+    ensure_geometry_group,
+    read_geometry_association,
+    resolve_association_attr_path as _shared_resolve_association_attr_path,
+)
 from ..LoggingConfig import get_logger
 from .GeomMeshDataclasses import BCConflict, BCFixResult, MeshResult
 
@@ -83,6 +94,7 @@ _DEPS = ["Utility.Core", "Geospatial.Core", "H5Assist", "RasMapperLib"]
 MAX_FACES_PER_CELL = 8
 PERIMETER_NEAR_DUPLICATE_TOL = 1e-6
 _RATIO_LADDER = [0.05, 0.10, 0.15, 0.25]
+_GEOMETRY_ASSOCIATION_FIELDS = GEOMETRY_ASSOCIATION_FIELDS
 
 # ── Module-level state ────────────────────────────────────────────────────────
 
@@ -984,7 +996,7 @@ def _sync_breakline_spacing_text_to_hdf(
     """Sync breakline spacing from .g01 text (source of truth) into HDF.
 
     RegenerateMeshPoints reads spacing from the HDF, not from text.
-    When the HDF is pre-compiled or stale, its spacing may differ.
+    The existing HDF workspace may not yet reflect current run parameters.
     """
     try:
         import h5py
@@ -1144,46 +1156,13 @@ def _reseed_after_perimeter_fix(
     ns: dict,
     hecras_dir=None,
 ) -> "PointMs":
-    """Text-first reseed: write perimeter to text, recompile, regenerate seeds.
-
-    After a perimeter mutation (vertex removal, Douglas-Peucker), this writes
-    the modified perimeter to .g01 text, recompiles the HDF, syncs spacing,
-    and regenerates breakline-aware seeds via RegenerateMeshPoints.
-    """
-    _patch_text_perimeter(text_path, current_perim, mesh_name=mesh_name)
-
-    from RasMapperLib.Scripting import CompleteGeometryCommand  # type: ignore
-    cmd = CompleteGeometryCommand()
-    cmd.GeometryFilename = str(text_path)
-    cmd.ExecuteOutOfProcess(True)
-    hdf_path = text_path.with_suffix(text_path.suffix + ".hdf")
-
-    _sync_breakline_spacing_text_to_hdf(text_path, hdf_path)
-    _sync_cell_size_to_hdf(hdf_path, cell_size, mesh_name=mesh_name)
-    reseed_geom = ns["RASGeometry"](str(hdf_path))
-    reseed_d2fa = reseed_geom.D2FlowArea
-    reseed_fid = fid
-    if mesh_name is not None:
-        try:
-            resolved_fid = reseed_d2fa.GetFeatureByName(mesh_name)
-            if resolved_fid >= 0:
-                reseed_fid = int(resolved_fid)
-        except Exception:
-            pass
-    try:
-        seeds = _generate_seeds_via_net(str(hdf_path), ns, fid=reseed_fid)
-        logger.info(
-            f"[{mesh_name}] Reseeded via .NET after perimeter fix: "
-            f"{seeds.Count} seeds"
-        )
-        return seeds
-    except Exception as exc:
-        logger.warning(
-            f"[{mesh_name}] .NET reseed failed after perimeter fix: "
-            f"{exc}, falling back"
-        )
-        perim_ns = reseed_d2fa.Geometry.MeshPerimeters.Polygon(reseed_fid)
-        return _generate_seeds_safe(perim_ns, cell_size, ns)
+    """Reject perimeter fixes that require text-to-HDF regeneration."""
+    raise RuntimeError(
+        "Perimeter repair would require regenerating the compiled geometry HDF "
+        f"from {text_path.name}. ras-commander cannot generate .g##.hdf from "
+        ".g## text with RasMapperLib; create or refresh the geometry HDF through "
+        "full HEC-RAS/Ras.exe behavior, then retry."
+    )
 
 
 def _set_point_generation_data(
@@ -1358,16 +1337,123 @@ def _resolve_geom_text_path(
     )
 
 
-def _ensure_hdf(geom_text_path: Path, hecras_dir=None) -> Path:
-    """Return an up-to-date HDF for *geom_text_path*, recompiling if stale."""
+def _geometry_hdf_unavailable_message(
+    geom_text_path: Path,
+    hdf_path: Path,
+    reason: str,
+) -> str:
+    return (
+        f"Compiled geometry HDF is {reason}: {hdf_path}. "
+        "ras-commander cannot generate .g##.hdf from .g## text with "
+        "RasMapperLib; CompleteGeometryCommand completes existing HDF files "
+        "and is not a text-geometry compiler. Refresh the geometry through "
+        "full HEC-RAS/Ras.exe behavior, then retry."
+    )
+
+
+def _ensure_hdf(
+    geom_text_path: Path,
+    hecras_dir=None,
+    *,
+    require_current: bool = True,
+) -> Path:
+    """Return an existing compiled HDF for *geom_text_path*.
+
+    This helper intentionally does not call ``compile_geometry()``. True
+    .g## text -> .g##.hdf generation is unavailable here unless HEC-RAS/Ras.exe
+    drives it.
+    """
     hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
-    need_compile = not hdf_path.exists()
-    if not need_compile and geom_text_path.stat().st_mtime > hdf_path.stat().st_mtime:
-        logger.info(f"{geom_text_path.name} is newer than HDF — recompiling")
-        need_compile = True
-    if need_compile:
-        hdf_path = GeomMesh.compile_geometry(geom_text_path, hecras_dir=hecras_dir)
+    if not hdf_path.exists():
+        raise RuntimeError(
+            _geometry_hdf_unavailable_message(geom_text_path, hdf_path, "missing")
+        )
+    if geom_text_path.stat().st_mtime > hdf_path.stat().st_mtime:
+        message = _geometry_hdf_unavailable_message(
+            geom_text_path,
+            hdf_path,
+            f"stale; {geom_text_path.name} is newer than {hdf_path.name}",
+        )
+        if require_current:
+            raise RuntimeError(message)
+        logger.warning(message)
     return hdf_path
+
+
+def _safe_resolve_path(path: Path) -> Path:
+    try:
+        return path.resolve(strict=False)
+    except OSError:
+        return path.absolute()
+
+
+def _paths_equivalent(left: Union[str, Path], right: Union[str, Path]) -> bool:
+    left_norm = os.path.normcase(os.path.normpath(str(left)))
+    right_norm = os.path.normcase(os.path.normpath(str(right)))
+    return left_norm == right_norm
+
+
+def _resolve_geom_hdf_path(
+    geom_number: Union[str, Number, Path],
+    hecras_dir=None,
+    ras_object=None,
+    *,
+    require_current: bool = True,
+) -> Path:
+    """Resolve a geometry number, .g## text path, or .g##.hdf path to HDF."""
+    candidate = None
+    if isinstance(geom_number, Path):
+        candidate = geom_number
+    elif isinstance(geom_number, str):
+        candidate = Path(geom_number)
+
+    if candidate is not None and candidate.suffix.lower() in {".hdf", ".h5"}:
+        if candidate.is_file():
+            return candidate
+        raise FileNotFoundError(f"Geometry HDF not found: {candidate}")
+
+    geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
+    return _ensure_hdf(
+        geom_text_path,
+        hecras_dir=hecras_dir,
+        require_current=require_current,
+    )
+
+
+def _decode_hdf_attr(value) -> Optional[str]:
+    return _shared_decode_hdf_attr(value)
+
+
+def _resolve_association_attr_path(geom_hdf_path: Path, attr_value: str) -> Path:
+    return _shared_resolve_association_attr_path(geom_hdf_path, attr_value)
+
+
+def _validate_geometry_hdf_path(hdf_path: Path) -> None:
+    ensure_geometry_group(hdf_path)
+
+
+def _read_geometry_association(
+    hdf_path: Path,
+    *,
+    resolve_paths: bool = True,
+) -> dict:
+    return read_geometry_association(hdf_path, resolve_paths=resolve_paths)
+
+
+def _validate_geometry_association(
+    hdf_path: Path,
+    expected_paths: dict[str, Path],
+) -> None:
+    observed = _read_geometry_association(hdf_path, resolve_paths=True)
+    mismatches = compare_geometry_association_paths(observed, expected_paths)
+    if mismatches:
+        mismatch = mismatches[0]
+        field = _GEOMETRY_ASSOCIATION_FIELDS[mismatch["key"]]["filename_attr"]
+        raise RuntimeError(
+            f"SetGeometryAssociationCommand did not persist {field} on "
+            f"{hdf_path}. Expected {mismatch['expected']}, "
+            f"observed {mismatch['observed']!r}."
+        )
 
 
 def _normalise_polygon_coords(polygon) -> "numpy.ndarray":
@@ -1640,8 +1726,8 @@ class GeomMesh:
         ``set_refinement_region_name()`` by name.  When duplicates
         exist, targeting by *region_fid* is the most reliable approach.
 
-        Refinement regions are stored in HDF, not .g## text.  If the
-        HDF does not exist it is compiled first.
+        Refinement regions are stored in HDF, not .g## text.  The compiled
+        HDF must already exist.
 
         Returns:
             List of (fid, name) tuples in HDF order.  *fid* is the
@@ -1769,8 +1855,8 @@ class GeomMesh:
         ``set_refinement_region_name(region_fid=...)`` when names are
         ambiguous.
 
-        Refinement regions are stored in HDF, not .g## text.  If the HDF
-        does not exist it is compiled first.
+        Refinement regions are stored in HDF, not .g## text.  The compiled
+        HDF must already exist.
 
         Returns:
             List of dicts with keys: fid, name, spacing_dx, spacing_dy.
@@ -2096,10 +2182,12 @@ class GeomMesh:
         ras_object=None,
     ) -> Path:
         """
-        Compile a .g## text file into .g##.hdf without Ras.exe.
+        Disabled compatibility shim for .g## text -> .g##.hdf generation.
 
-        Uses RasMapperLib's CompleteGeometryCommand to convert the plain-text
-        geometry file into its compiled HDF representation, bypassing Ras.exe.
+        ras-commander cannot compile a plain-text geometry file into its
+        compiled HDF representation without full HEC-RAS/Ras.exe behavior.
+        RasMapperLib's CompleteGeometryCommand only completes existing HDF
+        files; it is not a text geometry compiler.
 
         Args:
             geom_number: Geometry number ("01", 1) or path to .g## text file.
@@ -2107,34 +2195,148 @@ class GeomMesh:
             ras_object: Optional RasPrj instance for multi-project support.
 
         Returns:
-            Path to the compiled .g##.hdf file.
+            Never returns successfully.
 
         Raises:
             FileNotFoundError: If geometry file cannot be resolved.
-            RuntimeError: If compilation fails.
+            RuntimeError: Always, because this path is unavailable.
         """
         geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
+        hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
+        raise RuntimeError(
+            _geometry_hdf_unavailable_message(
+                geom_text_path,
+                hdf_path,
+                "not generated by ras-commander",
+            )
+        )
+
+    @staticmethod
+    @log_call
+    def get_geometry_association(
+        geom_number: Union[str, Number, Path],
+        hecras_dir: Optional[Union[str, Path]] = None,
+        ras_object=None,
+        resolve_paths: bool = True,
+    ) -> dict:
+        """
+        Read terrain and classification associations from a geometry HDF.
+
+        Args:
+            geom_number: Geometry number, .g## text path, or .g##.hdf path.
+                Text inputs require an existing current .g##.hdf.
+            hecras_dir: Kept for API symmetry; no DLLs are loaded here.
+            ras_object: Optional RasPrj instance for geometry-number lookup.
+            resolve_paths: If True, return absolute paths resolved relative to
+                the geometry HDF. If False, return the raw HDF attribute text.
+
+        Returns:
+            Dict with keys ``terrain_hdf_path``, ``landcover_hdf_path``,
+            ``infiltration_hdf_path``, ``sediment_soils_hdf_path``, matching
+            ``*_layer_name`` keys, and ``si_units``.
+        """
+        hdf_path = _resolve_geom_hdf_path(
+            geom_number,
+            hecras_dir=hecras_dir,
+            ras_object=ras_object,
+        )
+        hdf_path = _safe_resolve_path(hdf_path)
+        return _read_geometry_association(hdf_path, resolve_paths=resolve_paths)
+
+    @staticmethod
+    @log_call
+    def set_geometry_association(
+        geom_number: Union[str, Number, Path],
+        terrain_hdf_path: Optional[Union[str, Path]] = None,
+        landcover_hdf_path: Optional[Union[str, Path]] = None,
+        infiltration_hdf_path: Optional[Union[str, Path]] = None,
+        sediment_soils_hdf_path: Optional[Union[str, Path]] = None,
+        hecras_dir: Optional[Union[str, Path]] = None,
+        ras_object=None,
+        validate: bool = True,
+    ) -> Path:
+        """
+        Associate terrain / classification layers to an existing geometry HDF.
+
+        This wraps RasMapperLib's ``SetGeometryAssociationCommand`` and writes
+        attributes under ``/Geometry`` in the compiled ``.g##.hdf``. It does
+        not create or refresh a missing geometry HDF.
+
+        Args:
+            geom_number: Geometry number, .g## text path, or .g##.hdf path.
+                Text inputs require an existing current .g##.hdf.
+            terrain_hdf_path: Terrain HDF to associate.
+            landcover_hdf_path: Land-cover / Manning's n HDF.
+            infiltration_hdf_path: Infiltration HDF.
+            sediment_soils_hdf_path: Sediment bed-material soils HDF. This is
+                the HEC-RAS ``SedimentSoilsFilename`` slot, not the hydrologic
+                soils layer used to build infiltration data.
+            hecras_dir: Override HEC-RAS installation directory.
+            ras_object: Optional RasPrj instance for geometry-number lookup.
+            validate: Re-read ``/Geometry`` attributes after execution and
+                verify supplied paths were persisted.
+
+        Returns:
+            Path to the existing geometry HDF that was updated.
+
+        Raises:
+            ValueError: If no association paths are supplied.
+            FileNotFoundError: If any supplied artifact is missing.
+            RuntimeError: If the HDF is missing /Geometry, execution fails, or
+                validation does not find the expected attributes.
+        """
+        supplied = {
+            "terrain_hdf_path": terrain_hdf_path,
+            "landcover_hdf_path": landcover_hdf_path,
+            "infiltration_hdf_path": infiltration_hdf_path,
+            "sediment_soils_hdf_path": sediment_soils_hdf_path,
+        }
+        if all(path is None for path in supplied.values()):
+            raise ValueError("Provide at least one geometry association path.")
+
+        hdf_path = _resolve_geom_hdf_path(
+            geom_number,
+            hecras_dir=hecras_dir,
+            ras_object=ras_object,
+        )
+        hdf_path = _safe_resolve_path(hdf_path)
+        _validate_geometry_hdf_path(hdf_path)
+
+        resolved_paths = {}
+        for key, path_value in supplied.items():
+            if path_value is None:
+                continue
+            resolved_path = _safe_resolve_path(Path(path_value))
+            if not resolved_path.exists():
+                raise FileNotFoundError(
+                    f"Association artifact not found for {key}: {resolved_path}"
+                )
+            resolved_paths[key] = resolved_path
 
         _load_dlls(hecras_dir)
+        from RasMapperLib.Scripting import SetGeometryAssociationCommand  # type: ignore
 
-        from RasMapperLib.Scripting import CompleteGeometryCommand  # type: ignore
-
-        cmd = CompleteGeometryCommand()
-        cmd.GeometryFilename = str(geom_text_path)
+        cmd = SetGeometryAssociationCommand()
+        cmd.GeometryFilename = str(hdf_path)
+        for key, resolved_path in resolved_paths.items():
+            command_property = _GEOMETRY_ASSOCIATION_FIELDS[key]["command_property"]
+            setattr(cmd, command_property, str(resolved_path))
 
         try:
-            cmd.ExecuteOutOfProcess(True)
+            cmd.Execute(None)
         except Exception as exc:
             raise RuntimeError(
-                f"CompleteGeometryCommand failed for {geom_text_path.name}: {exc}"
+                f"SetGeometryAssociationCommand failed for {hdf_path.name}: {exc}"
             ) from exc
 
-        hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
-        if not hdf_path.exists():
-            raise RuntimeError(
-                f"CompleteGeometryCommand did not produce {hdf_path.name}"
-            )
-        logger.info(f"Compiled geometry: {geom_text_path.name} -> {hdf_path.name}")
+        if validate:
+            _validate_geometry_association(hdf_path, resolved_paths)
+
+        logger.info(
+            "Updated geometry associations on %s: %s",
+            hdf_path.name,
+            ", ".join(sorted(resolved_paths)),
+        )
         return hdf_path
 
     @staticmethod
@@ -2235,27 +2437,29 @@ class GeomMesh:
         bl_spacing_near: Optional[float] = None,
         bl_spacing_far: Optional[float] = None,
         ras_object=None,
+        _require_current_hdf: bool = True,
     ) -> MeshResult:
         """
         Generate or regenerate a 2D mesh headlessly via text-first workflow.
 
         The .g01 text file is the sole persistent output. The HDF is used only
-        as a temporary workspace for .NET geometry loading and cell center
-        extraction. HEC-RAS will recompile the HDF from text on project open.
+        as an existing temporary workspace for .NET geometry loading and cell
+        center extraction. ras-commander does not generate .g##.hdf from text.
 
         Workflow:
-            1. Read per-breakline spacing from .g01 text (preserve existing)
-            2. Sync text spacing → HDF (RegenerateMeshPoints reads HDF)
-            3. Load .NET geometry → perimeter, breaklines
-            4. Generate seeds: RegenerateMeshPoints (primary) or GeneratePoints
-            5. Fix loop (matches TryAutoFix tier ordering):
+            1. Validate an existing current compiled .g##.hdf workspace.
+            2. Read per-breakline spacing from .g01 text (preserve existing)
+            3. Sync text spacing -> HDF (RegenerateMeshPoints reads HDF)
+            4. Load .NET geometry -> perimeter, breaklines
+            5. Generate seeds: RegenerateMeshPoints (primary) or GeneratePoints
+            6. Fix loop (matches TryAutoFix tier ordering):
                - Tier 0: Remove short perimeter segments (pre-flight)
-               - Tier 2: MaxFaces → add midpoint seeds (before ratio escalation)
-               - Tier 3: Perimeter errors → remove bad vertices
-               - Tier 1: Escalate MinFaceLengthRatio [0.05 → 0.25]
+               - Tier 2: MaxFaces -> add midpoint seeds (before ratio escalation)
+               - Tier 3: Perimeter errors -> remove bad vertices
+               - Tier 1: Escalate MinFaceLengthRatio [0.05 -> 0.25]
                - Tier 4: Douglas-Peucker perimeter simplification (last resort)
-            6. Extract cell centers via geom.Save() + h5py read
-            7. Write cell centers to .g01 text — sole persistent output
+            7. Extract cell centers via geom.Save() + h5py read
+            8. Write cell centers to .g01 text - sole persistent output
 
         Args:
             geom_number: Geometry number ("01", 1) or path to .g## text file.
@@ -2313,6 +2517,16 @@ class GeomMesh:
         try:
             text_path = geom_path
 
+            # ── Step 1: Validate existing compiled HDF workspace ─────
+            # True .g## text -> .g##.hdf generation is a full HEC-RAS/Ras.exe
+            # responsibility. This method only works against an existing
+            # compiled geometry HDF.
+            hdf_path = _ensure_hdf(
+                text_path,
+                hecras_dir=hecras_dir,
+                require_current=_require_current_hdf,
+            )
+
             # Only modify .g01 text breakline properties if explicitly provided.
             # Otherwise the geometry's existing per-breakline values are
             # the source of truth — don't overwrite them with defaults.
@@ -2328,15 +2542,10 @@ class GeomMesh:
                     all_breaklines=True,
                 )
 
-            # ── Step 1: Compile .g01 text → HDF ────────────────────────
-            # Always recompile when text is newer than HDF so that
-            # perimeter/breakline/structure edits are picked up.
-            hdf_path = _ensure_hdf(text_path, hecras_dir=hecras_dir)
-
             # ── Step 1b: Sync text → HDF ────────────────────────────────
             # RegenerateMeshPoints reads spacing from the HDF, not from
-            # .g01 text.  The HDF may be pre-compiled or stale, so sync
-            # cell size and per-breakline values from text into HDF.
+            # .g01 text. Sync current cell size and per-breakline values from
+            # text into the existing HDF workspace.
             _sync_cell_size_to_hdf(hdf_path, cell_size, mesh_name=mesh_name)
             _sync_breakline_spacing_text_to_hdf(text_path, hdf_path)
 
@@ -2458,8 +2667,8 @@ class GeomMesh:
                     #
                     # geom.Save() is used only to bulk-write cell centers
                     # to HDF so we can read them back via h5py (fast).
-                    # The HDF is NOT patched further — it's a temporary
-                    # workspace that HEC-RAS will recompile from text.
+                    # The HDF is a temporary workspace created by
+                    # HEC-RAS/Ras.exe, not a deliverable generated here.
 
                     import numpy as _np
                     _nv = mesh.NonVirtualCellCount
@@ -2650,7 +2859,11 @@ class GeomMesh:
         text_path = _resolve_geom_text_path(geom_number, ras_object=ras_object)
         _load_dlls(hecras_dir)
         ns = _imports()
-        hdf_path = _ensure_hdf(text_path, hecras_dir=hecras_dir)
+        hdf_path = _ensure_hdf(
+            text_path,
+            hecras_dir=hecras_dir,
+            require_current=True,
+        )
         geom = ns["RASGeometry"](str(hdf_path))
         d2fa = geom.D2FlowArea
         count = d2fa.FeatureCount()
@@ -2670,6 +2883,7 @@ class GeomMesh:
                 max_iterations=max_iterations,
                 hecras_dir=hecras_dir,
                 ras_object=ras_object,
+                _require_current_hdf=False,
             )
             results.append(r)
         return results

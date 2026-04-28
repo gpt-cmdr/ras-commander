@@ -46,6 +46,7 @@ Work with geometry files: parsing, modification, and repair.
 | 1D Plaintext Geometry | Parse and modify 1D geometry: cross sections, HTAB, lateral structures | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/201_1d_plaintext_geometry.ipynb) |
 | 2D Plaintext Geometry | Parse and modify 2D geometry: storage areas, SA/2D connections, dam breach | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/202_2d_plaintext_geometry.ipynb) |
 | Fixit Blocked Obstructions | Detect and fix overlapping blocked obstructions | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/210_fixit_blocked_obstructions.ipynb) |
+| Land Cover Manning's n Write | Discover land-cover sidecars, audit geometry HDF associations, and update Manning's n values | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/212_landcover_mannings_n_write.ipynb) |
 
 ### Boundary Conditions (300s)
 
@@ -88,7 +89,7 @@ Mapping, visualization, and advanced spatial analysis.
 | Floodplain Mapping GUI | RASMapper GUI automation (legacy) | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/600_floodplain_mapping_gui.ipynb) |
 | Floodplain Mapping RasProcess | RasProcess CLI (recommended) | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/601_floodplain_mapping_rasprocess.ipynb) |
 | Fluvial-Pluvial Delineation | Classify flooding mechanism | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/610_fluvial_pluvial_delineation.ipynb) |
-| Map Layer Validation | Validate RASMapper layers | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/611_validating_map_layers.ipynb) |
+| Map Layer Validation | Validate RASMapper layers, discover registered terrain/classification layers, and audit HDF associations | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/611_validating_map_layers.ipynb) |
 
 ### Sensitivity & Benchmarking (700s)
 
@@ -127,6 +128,7 @@ Integration with external data sources: precipitation, gauges, etc.
 | USGS Real-Time Monitoring | Real-time gauge monitoring | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/912_usgs_real_time_monitoring.ipynb) |
 | BC from Live Gauge | Generate BCs from live data | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/913_bc_generation_from_live_gauge.ipynb) |
 | Model Validation with USGS | Validate results against gauges | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/914_model_validation_with_usgs.ipynb) |
+| Terrain Creation | Create terrain from USGS 3DEP, register it in RASMapper, and associate it to geometry HDFs | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/920_terrain_creation.ipynb) |
 
 ## Using Notebooks as Templates
 

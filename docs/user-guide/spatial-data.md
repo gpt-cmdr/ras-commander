@@ -34,15 +34,150 @@ The `rasmap_df` typically contains paths to:
 ### Accessing Specific Data Paths
 
 ```python
-# Example: Get terrain HDF path
-terrain_path = ras.rasmap_df['terrain_hdf_path'][0]
+# rasmap_df is a compact project summary. Several columns contain lists.
+summary = ras.rasmap_df.iloc[0]
 
-# Example: Get infiltration data path
-infiltration_path = ras.rasmap_df['infiltration_hdf_path'][0][0]
+terrain_paths = summary["terrain_hdf_path"]
+landcover_paths = summary["landcover_hdf_path"]
+soil_paths = summary["soil_layer_path"]
+infiltration_paths = summary["infiltration_hdf_path"]
 
-# Example: Get land cover layer path
-landcover_path = ras.rasmap_df['landcover_hdf_path'][0]
+print(terrain_paths)
 ```
+
+For discoverable automation, prefer the layer-list methods below. They return one row per RASMapper layer rather than one compact project-summary row.
+
+## Discovering RASMapper Layers
+
+`RasMap` can list terrain, land-cover, soils, and infiltration layers directly from the `.rasmap` catalog. These methods are useful when building QA/QC tools because they expose the layer names that users see in RASMapper and the paths that automation needs.
+
+```python
+from ras_commander import RasExamples, RasMap
+
+project_path = RasExamples.extract_project("BaldEagleCrkMulti2D")
+
+terrain_layers = RasMap.list_terrain_layers(project_path)
+landcover_layers = RasMap.list_landcover_layers(project_path)
+soils_layers = RasMap.list_soils_layers(project_path)
+infiltration_layers = RasMap.list_infiltration_layers(project_path)
+
+print(terrain_layers[[
+    "name",
+    "filename",
+    "resolved_path",
+    "checked",
+    "type",
+    "resample_method",
+    "surface_on",
+]])
+
+print(landcover_layers[[
+    "name",
+    "classification_kind",
+    "resolved_path",
+    "selected_parameter",
+]])
+```
+
+### Layer Discovery Methods
+
+| Method | Reads | Typical use |
+|--------|-------|-------------|
+| `RasMap.list_terrain_layers(project_path)` | `.rasmap` `Terrains/Layer` entries | Find valid terrain layer names and HDF paths |
+| `RasMap.list_land_classification_layers(project_path)` | `.rasmap` `Type="LandCoverLayer"` entries | Inspect every land-classification style layer |
+| `RasMap.list_landcover_layers(project_path)` | Filtered land-classification rows | Manning's n / land-cover sidecar workflows |
+| `RasMap.list_soils_layers(project_path)` | Filtered land-classification rows | Hydrologic soils discovery |
+| `RasMap.list_infiltration_layers(project_path)` | Filtered land-classification rows | Infiltration sidecar discovery |
+
+!!! note "rasmap_df vs list methods"
+    `ras.rasmap_df` remains a compact initialization summary. Use it when you want a quick project overview. Use `RasMap.list_*_layers()` when users need names, per-layer metadata, and paths for a workflow.
+
+## Geometry HDF Associations
+
+HEC-RAS stores layer availability in the `.rasmap` file, but compiled geometry and plan/result HDF files also carry `/Geometry` attributes that record which terrain, land-cover, infiltration, and sediment bed-material layers are associated with a geometry.
+
+Use `RasMap.get_hdf_geometry_association()` for read-only QA/QC:
+
+```python
+from pathlib import Path
+from ras_commander import RasMap
+
+project_path = Path(r"C:\Projects\MyModel")
+geometry_hdf = project_path / "MyModel.g01.hdf"
+plan_hdf = project_path / "MyModel.p01.hdf"
+
+geometry_assoc = RasMap.get_hdf_geometry_association(geometry_hdf)
+plan_assoc = RasMap.get_hdf_geometry_association(plan_hdf)
+
+print(geometry_assoc.get("terrain_hdf_path"))
+print(geometry_assoc.get("terrain_layer_name"))
+print(plan_assoc.get("landcover_hdf_path"))
+```
+
+Common returned keys include:
+
+| Key | HEC-RAS attribute |
+|-----|-------------------|
+| `terrain_hdf_path` | `Terrain Filename` |
+| `terrain_layer_name` | `Terrain Layername` |
+| `landcover_hdf_path` | `Land Cover Filename` |
+| `landcover_layer_name` | `Land Cover Layername` |
+| `infiltration_hdf_path` | `Infiltration Filename` |
+| `infiltration_layer_name` | `Infiltration Layername` |
+| `sediment_soils_hdf_path` | `SedimentSoilsFilename` |
+
+### Writing Geometry Associations
+
+Use `RasMap.associate_geometry_layers()` to write HEC-style `/Geometry` association attributes to an existing compiled geometry HDF.
+
+```python
+from pathlib import Path
+from ras_commander import RasMap
+
+project_path = Path(r"C:\Projects\MyModel")
+geometry_hdf = project_path / "MyModel.g01.hdf"
+terrain_hdf = project_path / "Terrain" / "ExistingTerrain.hdf"
+landcover_hdf = project_path / "Land Classification" / "LandCover.hdf"
+
+RasMap.associate_geometry_layers(
+    project_path,
+    geometry_hdf,
+    terrain_hdf_path=terrain_hdf,
+    landcover_hdf_path=landcover_hdf,
+)
+
+updated = RasMap.get_hdf_geometry_association(geometry_hdf)
+print(updated["terrain_hdf_path"])
+print(updated["landcover_hdf_path"])
+```
+
+!!! warning "Existing compiled geometry HDF required"
+    `RasMap.associate_geometry_layers()` updates attributes on an existing `.g##.hdf`. It does not compile a plain-text `.g##` file into HDF and does not create missing geometry datasets. Treat true `.g##` to `.g##.hdf` generation as HEC-RAS/Ras.exe behavior unless a native endpoint is explicitly available.
+
+!!! tip "Layer name resolution"
+    When possible, ras-commander resolves `Terrain Layername`, `Land Cover Layername`, and `Infiltration Layername` from the `.rasmap` catalog. If the layer cannot be found in `.rasmap`, it falls back to the file stem.
+
+### Native RasProcess Reference Validator
+
+`RasProcess.validate_geometry_association_cli()` wraps the native `RasProcess.exe SetGeometryAssociation` command as a reference validator. It is intentionally not the primary workflow because the native command mutates the supplied HDF in place.
+
+```python
+from ras_commander import RasProcess
+
+result = RasProcess.validate_geometry_association_cli(
+    geometry_hdf,
+    terrain_hdf_path=terrain_hdf,
+    landcover_hdf_path=landcover_hdf,
+    ras_version="7.0",
+)
+
+print(result["passed"])
+print(result["command_args"])
+print(result["mismatches"])
+```
+
+!!! danger "Validation/reference only"
+    Run the native validator only on a disposable copy or a model you intentionally want `RasProcess.exe` to mutate. Normal automation should use `RasMap.associate_geometry_layers()`.
 
 ## Map Layer Management
 
@@ -154,6 +289,8 @@ print(f"Available terrains: {terrains}")
 
 This is useful when you have multiple terrain datasets and need to specify which one to use for map generation or analysis.
 
+For richer terrain metadata, use `RasMap.list_terrain_layers(project_path)` as shown above.
+
 ## Land Cover and Soil Layers
 
 Land cover and soil data are critical for 2D modeling, controlling Manning's n roughness and infiltration parameters.
@@ -163,8 +300,9 @@ Land cover and soil data are critical for 2D modeling, controlling Manning's n r
 Land cover datasets define Manning's n values across 2D flow areas. These are typically stored as HDF files referenced in the RASMapper configuration.
 
 ```python
-# Get land cover layer path from rasmap_df
-landcover_path = ras.rasmap_df['landcover_hdf_path'][0]
+# Discover land-cover sidecars and RASMapper layer names
+landcover_layers = RasMap.list_landcover_layers(project_path)
+landcover_path = landcover_layers.iloc[0]["resolved_path"]
 
 # Land cover is used for Manning's n assignment
 # See Manning's n Calibration section below for modification
@@ -175,8 +313,9 @@ landcover_path = ras.rasmap_df['landcover_hdf_path'][0]
 Soil layers define hydrologic soil groups (A, B, C, D) used for infiltration calculations.
 
 ```python
-# Get soil layer path from rasmap_df
-soil_path = ras.rasmap_df['soil_hdf_path'][0]
+# Discover hydrologic soils layers
+soils_layers = RasMap.list_soils_layers(project_path)
+soil_path = soils_layers.iloc[0]["resolved_path"]
 
 # Soil data is used with infiltration methods
 # See Infiltration Data Handling section below

@@ -30,6 +30,27 @@ These data types exist **only in HDF** - there is no plain text representation:
 
 For these data types, direct HDF editing is the **only** option.
 
+## Geometry Association Attributes
+
+Compiled geometry HDFs also carry `/Geometry` attributes that link the geometry to RASMapper assets such as terrain, land cover, infiltration, and sediment bed-material soils. ras-commander exposes this narrow write path through `RasMap.associate_geometry_layers()` because the attributes are small, well-bounded, and easy to validate.
+
+```python
+from ras_commander import RasMap
+
+RasMap.associate_geometry_layers(
+    project_path,
+    "MyModel.g01.hdf",
+    terrain_hdf_path="Terrain/ExistingTerrain.hdf",
+    landcover_hdf_path="Land Classification/LandCover.hdf",
+)
+
+association = RasMap.get_hdf_geometry_association("MyModel.g01.hdf")
+print(association["terrain_hdf_path"])
+```
+
+!!! warning "Do not confuse association with compilation"
+    Association writes only update HDF attributes on an existing compiled geometry HDF. They do not create `.g##.hdf` files from plain-text `.g##` geometry and do not regenerate 2D mesh or property-table datasets.
+
 ## The Golden Rule
 
 !!! danger "Match HEC-RAS Exactly"
