@@ -5,8 +5,7 @@ Provides methods for comparing results across multiple plan HDF files,
 including identification of critical storm duration at reference locations.
 """
 
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 import logging
 
 import pandas as pd
@@ -96,6 +95,7 @@ class HdfResultsAnalysis:
         >>> print(f"{len(critical)} locations exceed {5.0}% threshold")
         """
         from ras_commander.hdf.HdfResultsPlan import HdfResultsPlan
+        from ras_commander.RasPrjAssets import RasPrjAssets
         from ras_commander import ras as global_ras
 
         _ras = ras_object if ras_object is not None else global_ras
@@ -108,10 +108,14 @@ class HdfResultsAnalysis:
         plan_peaks = {}
         for plan_num in plan_numbers:
             label = plan_labels.get(plan_num, plan_num)
-            plan_hdf = _ras.project_folder / f"{_ras.project_name}.p{plan_num}.hdf"
+            plan_hdf = RasPrjAssets.plan_results_hdf(
+                plan_num,
+                ras_object=_ras,
+                must_exist=True,
+            )
 
-            if not plan_hdf.exists():
-                logger.warning(f"Plan HDF not found: {plan_hdf}")
+            if plan_hdf is None:
+                logger.warning(f"Plan HDF not found for plan {plan_num}")
                 continue
 
             try:

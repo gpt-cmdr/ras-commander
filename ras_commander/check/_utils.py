@@ -13,6 +13,7 @@ import numpy as np
 import h5py
 
 from ..LoggingConfig import get_logger
+from ..RasPrjAssets import RasPrjAssets
 from .types import Severity, FlowType, CheckMessage, CheckResults
 
 logger = get_logger(__name__)
@@ -33,31 +34,45 @@ def resolve_hdf_paths(
         Note: geom_hdf_path may equal plan_hdf_path if no separate geometry HDF exists
     """
     if isinstance(plan, str) and len(plan) <= 3:
-        # Plan number format (e.g., "01")
-        matching = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan]
+        plan_number = RasPrjAssets.normalize_number(plan, prefix="p")
+        matching = ras_obj.plan_df[
+            ras_obj.plan_df['plan_number'].astype(str).str.zfill(2) == plan_number
+        ]
         if matching.empty:
-            raise ValueError(f"Plan '{plan}' not found. Available: {ras_obj.plan_df['plan_number'].tolist()}")
-        plan_row = matching.iloc[0]
-        plan_hdf = Path(plan_row['HDF_Results_Path'])
-        geom_path = plan_row['Geom Path']
-        # Get geometry HDF from geometry file path
-        # Pattern: Muncie.g01 -> Muncie.g01.hdf (append .hdf, don't replace suffix)
-        geom_base = Path(str(geom_path))
-        geom_hdf = geom_base.parent / f"{geom_base.name}.hdf"
+            raise ValueError(
+                f"Plan '{plan}' not found. Available: {ras_obj.plan_df['plan_number'].tolist()}"
+            )
+        plan_hdf = RasPrjAssets.plan_results_hdf(
+            plan_number,
+            ras_object=ras_obj,
+            must_exist=False,
+        )
+        geom_hdf = RasPrjAssets.geometry_hdf(
+            plan_number,
+            ras_object=ras_obj,
+            selector_kind="plan",
+            must_exist=False,
+        )
     else:
         plan_hdf = Path(plan)
-        # Derive geometry HDF from plan HDF name
-        # Pattern: project.p01.hdf -> project.g01.hdf
-        plan_stem = plan_hdf.stem  # e.g., "project.p01"
-        if '.p' in plan_stem:
-            geom_stem = plan_stem.replace('.p', '.g', 1)
-        else:
-            geom_stem = plan_stem
-        geom_hdf = plan_hdf.parent / f"{geom_stem}.hdf"
+        geom_hdf = RasPrjAssets.geometry_hdf(
+            plan_hdf,
+            ras_object=ras_obj,
+            selector_kind="plan_hdf",
+            must_exist=False,
+        )
+        if geom_hdf is None:
+            # Legacy fallback for path-only calls without project metadata.
+            plan_stem = plan_hdf.stem
+            geom_stem = plan_stem.replace('.p', '.g', 1) if '.p' in plan_stem else plan_stem
+            geom_hdf = plan_hdf.parent / f"{geom_stem}.hdf"
+
+    if plan_hdf is None:
+        raise ValueError(f"Could not resolve plan HDF for '{plan}'")
 
     # Fall back to plan HDF if geometry HDF doesn't exist
     # HEC-RAS 6.x plan HDF files contain geometry data
-    if not geom_hdf.exists():
+    if geom_hdf is None or not geom_hdf.exists():
         logger.debug(f"Geometry HDF not found at {geom_hdf}, using plan HDF for geometry data")
         geom_hdf = plan_hdf
 
