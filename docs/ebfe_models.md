@@ -711,7 +711,7 @@ Current validation is tracked in the repository-level
 - Upper Guadalupe: UPGU1, UPGU2, and UPGU3 passed; UPGU4 requires the 7200-second validation record because its geometry preprocessor can exceed one hour.
 - Eleven Point: organized from the split `Input.zip`, `Terrain.zip`, and `Land_Cover.zip` delivery; path-audited with zero issues, seven local plan HDFs, and a passing ras-commander geometry-preprocessor run using HEC-RAS 6.6.
 - Spring River: cataloged separately from Spring Creek as `spring-river` / `SpringRiver_11010010`; downloaded, organized, path-audited with zero issues, and results-ready with seven local plan HDFs. Geometry-preprocessor validation remains pending.
-- Lower Brazos: LB_MA01, LB_MA02, and LB_MA03 are downloaded, extracted, organized, path-audited with zero issues, and results-ready with 63 local plan HDFs. LB_MA01 exceeded the current 7200-second geometry-preprocessor timeout with no compute messages, so Lower Brazos requires a longer dedicated preprocessor validation window.
+- Lower Brazos: LB_MA01, LB_MA02, and LB_MA03 are downloaded, extracted, organized, path-audited with zero issues, and results-ready with 61 local plan HDFs in the latest audit. LB_MA02 passed ras-commander geometry-preprocessor validation in 3846.3 seconds; LB_MA01 exceeded the 7200-second timeout with no compute messages, and LB_MA03 returned without producing compute messages, so Lower Brazos remains partially preprocessor-validated.
 - Amite: full E2E organization completed for five RAS projects. WA1, WA2,
   WA3, and WA5 passed geometry preprocessor validation; WA4 is blocked by a
   `RasGeomWriter` / `ERROR: Incorrect Type in ./Projection. (Expected String)`
