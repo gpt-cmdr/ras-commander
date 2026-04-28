@@ -1,4 +1,5 @@
 from pathlib import Path
+import logging
 
 import h5py
 import numpy as np
@@ -132,6 +133,40 @@ def test_face_hydraulic_properties_2d_dry_and_invalid_n(tmp_path):
     assert ds["hydraulic_radius"].sel(time=1, face_id=0).item() == pytest.approx(0.0)
     assert ds["conveyance"].sel(time=1, face_id=0).item() == pytest.approx(0.0)
     assert np.isnan(ds["conveyance"].sel(time=1, face_id=2).item())
+
+
+def test_face_hydraulic_properties_warns_for_above_table_stage(tmp_path, caplog):
+    hdf_path = _write_face_property_hdf(tmp_path / "mesh.g01.hdf")
+
+    with caplog.at_level(logging.WARNING, logger="ras_commander.hdf.HdfMesh"):
+        ds = HdfMesh.get_mesh_face_hydraulic_properties_at_stage(
+            hdf_path,
+            "MainArea",
+            [0, 1],
+            np.array([[101.0, 103.0], [103.5, 102.0]]),
+        )
+
+    assert ds.attrs["above_table_stage_count"] == 2
+    assert ds.attrs["above_table_face_count"] == 2
+    assert ds.attrs["above_table_max_excess"] == pytest.approx(1.5)
+    assert ds["area"].sel(time=1, face_id=0).item() == pytest.approx(20.0)
+    assert ds["area"].sel(time=0, face_id=1).item() == pytest.approx(8.0)
+    assert "Water-surface stages exceed the highest face property table elevation" in caplog.text
+    assert "Values above the table are clipped" in caplog.text
+
+
+def test_face_hydraulic_properties_above_table_face_count_is_unique(tmp_path):
+    hdf_path = _write_face_property_hdf(tmp_path / "mesh.g01.hdf")
+
+    ds = HdfMesh.get_mesh_face_hydraulic_properties_at_stage(
+        hdf_path,
+        "MainArea",
+        [0, 0],
+        np.array([[103.0, 103.5]]),
+    )
+
+    assert ds.attrs["above_table_stage_count"] == 2
+    assert ds.attrs["above_table_face_count"] == 1
 
 
 def test_face_hydraulic_properties_rejects_wrong_1d_shape(tmp_path):

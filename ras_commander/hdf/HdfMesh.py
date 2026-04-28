@@ -503,6 +503,18 @@ class HdfMesh:
 
         Notes
         -----
+        This helper is sourced from the geometry preprocessor face property
+        tables stored in the geometry HDF. It is therefore a
+        geometry-derived/interpolated view of face hydraulic properties, not
+        the canonical native unsteady-results calculation path.
+
+        When native face results such as ``Face Area`` or ``Face Manning's n``
+        are available in the plan/results HDF, prefer
+        ``HdfResultsMesh.get_mesh_faces_timeseries()`` for QAQC and direct
+        comparison to native HEC-RAS output. Those values reflect the solver's
+        canonical results path, including aggregation from computational time
+        steps to output time steps.
+
         Conveyance is derived from face property tables using:
         ``K = C * A * (A / P) ** (2 / 3) / n``.
 
@@ -533,6 +545,9 @@ class HdfMesh:
             area = np.full(shape, np.nan, dtype=float)
             wetted_perimeter = np.full(shape, np.nan, dtype=float)
             mannings_n = np.full(shape, np.nan, dtype=float)
+            above_table_stage_count = 0
+            above_table_face_ids = set()
+            above_table_max_excess = 0.0
 
             for col_idx, face_id in enumerate(face_id_array):
                 face_table = face_lookup.get(int(face_id))
@@ -543,12 +558,43 @@ class HdfMesh:
                     )
                     continue
 
+                max_table_elevation = float(face_table['Elevation'].max())
+                face_water_surface = water_surface_array[:, col_idx]
+                above_table_mask = (
+                    np.isfinite(face_water_surface)
+                    & np.isfinite(max_table_elevation)
+                    & (face_water_surface > max_table_elevation)
+                )
+                if above_table_mask.any():
+                    above_count = int(above_table_mask.sum())
+                    above_table_stage_count += above_count
+                    above_table_face_ids.add(int(face_id))
+                    max_excess = float(
+                        np.max(face_water_surface[above_table_mask] - max_table_elevation)
+                    )
+                    above_table_max_excess = max(above_table_max_excess, max_excess)
+
                 interpolated = HdfMesh._interpolate_face_property_table(
                     face_table, water_surface_array[:, col_idx]
                 )
                 area[:, col_idx] = interpolated['area']
                 wetted_perimeter[:, col_idx] = interpolated['wetted_perimeter']
                 mannings_n[:, col_idx] = interpolated['mannings_n']
+
+            above_table_face_count = len(above_table_face_ids)
+            if above_table_stage_count:
+                face_preview = sorted(above_table_face_ids)[:10]
+                more_faces = ''
+                if above_table_face_count > len(face_preview):
+                    more_faces = f" and {above_table_face_count - len(face_preview)} more"
+                logger.warning(
+                    "Water-surface stages exceed the highest face property table "
+                    f"elevation for {above_table_stage_count} stage/face value(s) "
+                    f"across {above_table_face_count} face(s) in mesh '{mesh_name}'. "
+                    "Values above the table are clipped to the highest tabulated "
+                    f"face properties; max exceedance is {above_table_max_excess:.3f}. "
+                    f"Face IDs: {face_preview}{more_faces}"
+                )
 
             wet_mask = (area > 0) & (wetted_perimeter > 0)
             hydraulic_radius = np.divide(
@@ -587,6 +633,20 @@ class HdfMesh:
                     'manning_conveyance_coefficient': coefficient,
                     'formula': 'K = C * A * (A / P) ** (2 / 3) / n',
                     'source': 'Geometry/2D Flow Areas/<mesh>/Faces Area Elevation',
+                    'source_scope': 'geometry_preprocessor',
+                    'above_table_stage_count': above_table_stage_count,
+                    'above_table_face_count': above_table_face_count,
+                    'above_table_max_excess': above_table_max_excess,
+                    'above_table_handling': (
+                        'Stages above the last tabulated elevation are clipped '
+                        'to the highest tabulated face properties and logged as '
+                        'a warning.'
+                    ),
+                    'preferred_native_alternative': (
+                        'Use HdfResultsMesh.get_mesh_faces_timeseries() when '
+                        "native Face Area or Face Manning's n outputs are "
+                        'available in the plan/results HDF.'
+                    ),
                     'dry_face_handling': (
                         'Stages below the first tabulated elevation use zero '
                         'area, wetted perimeter, hydraulic radius, and conveyance.'
@@ -626,6 +686,9 @@ class HdfMesh:
             ``station_end``, ``station_length``, ``face_length``, and
             ``station_fraction`` where source fields are available. Returns an
             empty DataFrame when reference lines or internal faces are absent.
+            ``station_fraction`` is the raw HDF-derived fraction and may be
+            outside [0, 1] for unusual station data; consumers should validate
+            or clip it before using it as a multiplier.
         """
         columns = [
             'reference_line_id',
