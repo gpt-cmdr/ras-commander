@@ -480,6 +480,118 @@ class HdfUtils:
 
     @staticmethod
     @log_call
+    def resolve_hdf_input(
+        hdf_input: Union[str, Path],
+        label: str = "HDF",
+        ras_object=None,
+        hdf_kind: str = "plan",
+        must_exist: bool = False,
+    ) -> Path:
+        """
+        Resolve a user-facing HDF selector to a concrete path.
+
+        Handles the common HDF APIs that accept full paths, project-local HDF
+        filenames, or plan/geometry selectors such as ``"01"``, ``"p01"``, and
+        ``"g01"``.
+        """
+        from ..RasPrjAssets import RasPrjAssets
+
+        if hdf_input is None:
+            raise ValueError(f"Cannot resolve empty {label} HDF input")
+
+        input_text = str(hdf_input).strip()
+        if not input_text:
+            raise ValueError(f"Cannot resolve empty {label} HDF input")
+
+        input_path = Path(hdf_input)
+        if (
+            input_path.exists()
+            or input_path.is_absolute()
+            or any(sep in input_text for sep in ("/", "\\"))
+        ):
+            return input_path
+
+        project_folder = HdfUtils._project_folder_for_hdf_input(ras_object)
+
+        if input_text.lower().endswith(".hdf"):
+            if project_folder is None:
+                raise ValueError(
+                    f"Cannot resolve HDF filename '{input_text}' without initialized project. "
+                    f"Either provide a full path or pass ras_object."
+                )
+            return project_folder / input_text
+
+        if ras_object is None:
+            raise ValueError(
+                f"Cannot resolve {label} selector '{input_text}' without initialized project. "
+                f"Either provide a full HDF path or pass ras_object."
+            )
+
+        kind = hdf_kind.lower().replace("_", "-")
+        resolved_path = None
+        fallback_suffix = None
+
+        if kind in {"plan", "plan-results", "results"}:
+            plan_number = RasPrjAssets.extract_number(input_text, prefix="p")
+            if plan_number is None:
+                raise ValueError(f"Cannot resolve {label} plan selector '{input_text}'")
+            resolved_path = RasPrjAssets.plan_results_hdf(
+                plan_number,
+                ras_object=ras_object,
+                must_exist=must_exist,
+            )
+            fallback_suffix = f"p{plan_number}.hdf"
+        elif kind in {"geom", "geometry"}:
+            geom_number = RasPrjAssets.extract_number(input_text, prefix="g")
+            if geom_number is None:
+                raise ValueError(f"Cannot resolve {label} geometry selector '{input_text}'")
+            resolved_path = RasPrjAssets.geometry_hdf(
+                geom_number,
+                ras_object=ras_object,
+                selector_kind="geom",
+                must_exist=must_exist,
+            )
+            fallback_suffix = f"g{geom_number}.hdf"
+        elif kind in {"auto", "any", "plan-or-geometry"}:
+            plan_number = RasPrjAssets.extract_number(input_text, prefix="p")
+            if plan_number is not None:
+                resolved_path = RasPrjAssets.plan_results_hdf(
+                    plan_number,
+                    ras_object=ras_object,
+                    must_exist=must_exist,
+                )
+                fallback_suffix = f"p{plan_number}.hdf"
+            if resolved_path is None:
+                geom_number = RasPrjAssets.extract_number(input_text, prefix="g")
+                if geom_number is not None:
+                    resolved_path = RasPrjAssets.geometry_hdf(
+                        geom_number,
+                        ras_object=ras_object,
+                        selector_kind="geom",
+                        must_exist=must_exist,
+                    )
+                    fallback_suffix = f"g{geom_number}.hdf"
+        else:
+            raise ValueError(
+                f"Unsupported HDF input kind '{hdf_kind}'. "
+                "Use 'plan', 'geometry', or 'auto'."
+            )
+
+        if resolved_path is not None:
+            return Path(resolved_path)
+
+        expected_path = HdfUtils._expected_project_hdf_path(
+            ras_object,
+            fallback_suffix,
+            project_folder=project_folder,
+        )
+        if expected_path is not None:
+            return expected_path
+
+        raise ValueError(f"Failed to resolve {label} HDF input '{input_text}'")
+
+    @staticmethod
+    @log_call
     def resolve_hdf_paths(ras_folder: Path, plan_number: str, ras_object=None) -> Dict[str, Optional[Path]]:
         """
         Resolve HDF plan and geometry file paths for a plan.
@@ -534,6 +646,35 @@ class HdfUtils:
                 result['geom'] = result['geometry']
 
         return result
+
+    @staticmethod
+    def _project_folder_for_hdf_input(ras_object=None) -> Optional[Path]:
+        if ras_object is None:
+            return None
+        for attr_name in ("folder", "project_folder"):
+            value = getattr(ras_object, attr_name, None)
+            if value:
+                return Path(value)
+        return None
+
+    @staticmethod
+    def _expected_project_hdf_path(
+        ras_object,
+        suffix: Optional[str],
+        project_folder: Optional[Path] = None,
+    ) -> Optional[Path]:
+        if suffix is None:
+            return None
+        folder = project_folder or HdfUtils._project_folder_for_hdf_input(ras_object)
+        if folder is None:
+            return None
+
+        project_name = getattr(ras_object, "project_name", None)
+        if not project_name:
+            prj_files = sorted(folder.glob("*.prj"))
+            project_name = prj_files[0].stem if prj_files else folder.name
+
+        return folder / f"{project_name}.{suffix}"
 
 
 

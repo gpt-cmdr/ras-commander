@@ -126,43 +126,13 @@ class HdfChannelCapacity:
         """
         from ras_commander.hdf import HdfUtils
 
-        input_str = str(hdf_input)
-
-        # Case 1: Full path (contains directory separators)
-        if '/' in input_str or '\\' in input_str:
-            return Path(hdf_input)
-
-        # Case 2: HDF filename (ends with .hdf)
-        if input_str.endswith('.hdf'):
-            if ras_object is None or not hasattr(ras_object, 'folder'):
-                raise ValueError(
-                    f"Cannot resolve HDF filename '{input_str}' without initialized project."
-                )
-            return Path(ras_object.folder) / input_str
-
-        # Case 3: Plan/geometry number
-        plan_number = input_str.lstrip('pgPG')
-
-        if ras_object is None:
-            raise ValueError(
-                f"Cannot resolve number '{plan_number}' without initialized project."
-            )
-
-        try:
-            project_folder = ras_object.folder
-            hdfs = HdfUtils.resolve_hdf_paths(
-                project_folder, plan_number, ras_object=ras_object
-            )
-            # Try plan HDF first, fall back to geometry HDF
-            hdf_path = hdfs.get('plan') or hdfs.get('geom')
-            if hdf_path is not None:
-                return Path(hdf_path)
-            return Path(project_folder) / f"unknown.p{plan_number}.hdf"
-        except Exception as e:
-            logger.warning(f"Could not resolve {label} '{input_str}': {e}")
-            if hasattr(ras_object, 'folder') and ras_object.folder:
-                return Path(ras_object.folder) / f"unknown.p{plan_number}.hdf"
-            raise ValueError(f"Failed to resolve {label} '{input_str}': {e}")
+        hdf_kind = "geometry" if label.lower().startswith("geometry") else "plan"
+        return HdfUtils.resolve_hdf_input(
+            hdf_input,
+            label=label,
+            ras_object=ras_object,
+            hdf_kind=hdf_kind,
+        )
 
     # -----------------------------------------------------------------
     # Public methods
@@ -201,17 +171,6 @@ class HdfChannelCapacity:
         geom_path = HdfChannelCapacity._standardize_hdf_input(
             geom_hdf, "geometry", _ras
         )
-
-        # If the input looks like a plan number, try to find the geometry HDF
-        input_str = str(geom_hdf)
-        if not input_str.endswith('.hdf') and '/' not in input_str and '\\' not in input_str:
-            # May be a geometry number — try resolving via geom_df
-            geom_num = input_str.lstrip('gG')
-            if hasattr(_ras, 'geom_df') and _ras.geom_df is not None and len(_ras.geom_df) > 0:
-                matches = _ras.geom_df[_ras.geom_df['geom_number'] == geom_num]
-                if len(matches) > 0:
-                    geom_file = Path(matches.iloc[0]['full_path'])
-                    geom_path = geom_file.with_suffix(geom_file.suffix + '.hdf')
 
         if not geom_path.exists():
             raise FileNotFoundError(f"Geometry HDF not found: {geom_path}")

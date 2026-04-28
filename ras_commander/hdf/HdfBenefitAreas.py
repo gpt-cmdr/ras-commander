@@ -296,72 +296,13 @@ class HdfBenefitAreas:
             ValueError: If input cannot be resolved to HDF path
         """
         from ras_commander.hdf import HdfUtils
-        from ras_commander.RasPrjAssets import RasPrjAssets
 
-        # Convert to string for pattern matching
-        input_str = str(hdf_input)
-
-        # Case 1: Full path (contains directory separators)
-        if '/' in input_str or '\\' in input_str:
-            return Path(hdf_input)
-
-        # Case 2: HDF filename (ends with .hdf)
-        if input_str.endswith('.hdf'):
-            if ras_object is None or not hasattr(ras_object, 'folder'):
-                raise ValueError(
-                    f"Cannot resolve HDF filename '{input_str}' without initialized project. "
-                    f"Either provide full path or call init_ras_project() first."
-                )
-            return Path(ras_object.folder) / input_str
-
-        # Case 3: Plan number (assume anything else is a plan number)
-        plan_number = RasPrjAssets.normalize_number(input_str, prefix="p")
-
-        if ras_object is None:
-            raise ValueError(
-                f"Cannot resolve plan number '{plan_number}' without initialized project. "
-                f"Call init_ras_project() first."
-            )
-
-        # Resolve plan number to HDF path
-        try:
-            # Get project folder
-            if hasattr(ras_object, 'folder') and ras_object.folder is not None:
-                project_folder = ras_object.folder
-            else:
-                # Try alternate attribute names
-                if hasattr(ras_object, 'project_folder'):
-                    project_folder = ras_object.project_folder
-                else:
-                    raise ValueError(
-                        f"RAS project object doesn't have a 'folder' attribute. "
-                        f"Ensure init_ras_project() was called successfully."
-                    )
-
-            hdfs = HdfUtils.resolve_hdf_paths(
-                project_folder,
-                plan_number,
-                ras_object=ras_object
-            )
-            hdf_path = hdfs['plan']
-
-            if hdf_path is None:
-                # Return a Path that doesn't exist - this will trigger FileNotFoundError later
-                # Construct expected path for better error message
-                return Path(project_folder) / f"{Path(project_folder).name}.p{plan_number}.hdf"
-
-            return Path(hdf_path)
-
-        except Exception as e:
-            # If we can't resolve, try constructing expected path
-            # This allows FileNotFoundError to be raised later with the expected path
-            logger.warning(f"Could not resolve {label} plan '{input_str}': {e}")
-            if hasattr(ras_object, 'folder') and ras_object.folder:
-                return Path(ras_object.folder) / f"unknown.p{plan_number}.hdf"
-            else:
-                raise ValueError(
-                    f"Failed to resolve {label} plan '{input_str}': {e}"
-                )
+        return HdfUtils.resolve_hdf_input(
+            hdf_input,
+            label=label,
+            ras_object=ras_object,
+            hdf_kind="plan",
+        )
 
     @staticmethod
     def _match_points_by_xy(
