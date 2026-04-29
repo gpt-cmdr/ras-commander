@@ -49,7 +49,7 @@ uv venv .venv
 source .venv/bin/activate
 
 # Install dependencies ONLY (NOT ras-commander itself)
-uv pip install h5py numpy pandas geopandas matplotlib shapely scipy xarray tqdm requests rasterstats rtree pyproj fiona pytest
+uv pip install h5py numpy pandas geopandas matplotlib shapely scipy xarray tqdm requests rasterstats rtree pyproj fiona pytest papermill
 ```
 
 **Why uv**:
@@ -96,7 +96,7 @@ conda activate rascmdr_local
 pip install h5py numpy pandas geopandas matplotlib shapely scipy xarray tqdm requests rasterstats rtree pyproj fiona
 
 # Install notebook dependencies
-pip install jupyter notebook ipykernel
+pip install jupyter notebook ipykernel papermill
 
 # Register kernel for Jupyter
 python -m ipykernel install --user --name rascmdr_local --display-name "Python (rascmdr_local)"
@@ -165,7 +165,7 @@ conda activate RasCommander
 pip install ras-commander
 
 # Install notebook dependencies
-pip install jupyter notebook ipykernel
+pip install jupyter notebook ipykernel papermill
 
 # Register kernel for Jupyter
 python -m ipykernel install --user --name RasCommander --display-name "Python (RasCommander)"

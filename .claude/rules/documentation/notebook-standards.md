@@ -33,7 +33,7 @@ using ras-commander.
 ```
 
 **Why Required**:
-- mkdocs-jupyter uses H1 for page title
+- Notebook-to-markdown conversion preserves the first H1 as the page title
 - Missing H1 → title becomes filename ("01_basic_usage")
 - H1 provides context in documentation site
 
@@ -99,27 +99,28 @@ using ras-commander.
    shutil.rmtree(project_path.parent / "example_projects", ignore_errors=True)
    ```
 
-## mkdocs-jupyter Configuration
+## Documentation Build Configuration
 
 ### Current Settings
 
-**mkdocs.yml**:
+**Build workflow**:
 ```yaml
-plugins:
-  - mkdocs-jupyter:
-      include_source: true          # Show source code
-      execute: false                # DON'T run during build
-      include: ["notebooks/*.ipynb"]
-      ignore: ["notebooks/example_projects/**"]
-      ignore_h1_titles: true        # Use nav titles
+- name: Prepare notebooks for docs
+  run: |
+    python .claude/scripts/prepare_notebooks_for_docs.py
+
+# prepare_notebooks_for_docs.py:
+# - converts examples/*.ipynb -> docs/notebooks/*.md with nbconvert
+# - rewrites mkdocs nav from .ipynb to .md at build time
+# - disables mkdocs-jupyter during the docs build
 ```
 
 ### Setting Implications
 
-**execute: false**:
-- Notebooks NOT executed during doc build
-- Must be pre-executed with outputs saved
-- Faster builds, no HEC-RAS requirement
+**Pre-convert with nbconvert**:
+- Notebooks are NOT executed during docs build
+- Stored notebook outputs are what appear in generated `docs/notebooks/*.md`
+- Docs builds stay fast and do not require HEC-RAS in CI
 
 **Result**: Run notebooks locally, save outputs, commit
 
@@ -134,7 +135,7 @@ plugins:
 
 **Don't Commit**:
 - Notebooks with errors
-- Notebooks without outputs (if execute: false)
+- Notebooks without outputs when the notebook is intended to appear in docs
 - Notebooks with absolute paths in outputs
 
 ## Content Guidelines

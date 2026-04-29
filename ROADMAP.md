@@ -298,7 +298,41 @@ path, but the knowledge is not yet packaged for normal users.
 - Add a discoverability section to `docs/ebfe_models.md`
 - Clarify how study enumeration works when bucket listing is unavailable
 
-### 3. Test and Notebook Hardening
+### 3. RASMapper Results, Stored Maps, and Spatial Review Integration
+
+**Status**: Planned
+
+The RASMapper automation surface has grown from separate efforts:
+stored-map creation/export helpers, calculated-map setup, map/reference layer
+registration, result-layer visibility controls, CurrentView/screenshot
+packaging, and RASMapper QA/QC review bundles. These should be integrated into
+one discoverable workflow family instead of remaining as parallel function
+groups.
+
+**Open work**:
+- Audit existing stored-map creation functions, including `RasMap.store_all_maps()`,
+  `RasMap.postprocess_stored_maps()`, calculated-layer helpers, and any
+  RasProcess-backed stored-map wrappers
+- Align those APIs with `RasMap.list_result_layers()` and
+  `RasMap.set_result_layer_visibility()` so users can create/store maps and
+  then control the corresponding RASMapper result layers for figures and QA/QC
+- Add a high-level recipe that can: create or refresh stored result maps, select
+  the desired result/map/terrain/geometry layers, set `CurrentView`, enable
+  update-legend-with-view, open standalone RASMapper, and capture a screenshot
+- Keep low-level functions available, but document the recommended public
+  orchestration path for normal workflows
+- Extend the RASMapper spatial review notebook to show at least one stored-map
+  generation path feeding into result-layer visibility and screenshot capture
+
+**Exit criteria**:
+- Stored-map creation and RASMapper result-layer presentation are documented as
+  one coherent workflow family
+- Example notebooks demonstrate both low-level primitives and the recommended
+  high-level orchestration path
+- Result-layer naming/selection is validated against real projects before and
+  after stored-map generation
+
+### 4. Test and Notebook Hardening
 
 **Status**: Planned
 
