@@ -29,7 +29,7 @@ import re
 import subprocess
 import time
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 from ..ComputeResults import GeometryPreprocessResult
 from ..LoggingConfig import get_logger
@@ -180,83 +180,111 @@ class GeomPreprocessor:
                 project_folder, project_name, plan_num
             )
             hdf_message_path = project_folder / f"{project_name}.p{plan_num}.hdf"
+            tmp_hdf_path = project_folder / f"{project_name}.p{plan_num}.tmp.hdf"
 
             if clear_messages:
                 GeomPreprocessor._delete_files(message_paths)
+                GeomPreprocessor._delete_files([tmp_hdf_path])
 
             if clear_geompre:
                 GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
 
-            original_settings = GeomPreprocessor._read_plan_preprocessor_settings(
-                plan_path
+            original_plan_text = (
+                plan_path.read_text(encoding="utf-8", errors="ignore")
+                if restore_plan_settings
+                else None
             )
 
-            BcoMonitor.enable_detailed_logging(plan_path)
+            process = None
+            child_monitor = {
+                "saw_child": False,
+                "timed_out": False,
+                "tmp_hdf_path": None,
+            }
 
-            if force:
-                RasPlan.set_geom_preprocessor(
-                    plan_path,
-                    run_htab=-1,
-                    use_ib_tables=-1,
-                    ras_object=ras_obj,
+            try:
+                BcoMonitor.enable_detailed_logging(plan_path)
+
+                if force:
+                    RasPlan.set_geom_preprocessor(
+                        plan_path,
+                        run_htab=-1,
+                        use_ib_tables=-1,
+                        ras_object=ras_obj,
+                    )
+
+                if geometry_only:
+                    GeomPreprocessor._set_plan_run_flags(
+                        plan_path,
+                        {
+                            "Run UNet": "0",
+                            "Run PostProcess": "0",
+                            "Run RASMapper": "0",
+                            "Run Sediment": "0",
+                            "Run WQNet": "0",
+                        },
+                    )
+
+                cmd = [
+                    str(ras_exe_path),
+                    "-c",
+                    str(prj_file),
+                    str(plan_path),
+                ]
+                command_text = " ".join(
+                    f'"{part}"' if " " in part else part for part in cmd
+                )
+                logger.info("Running HEC-RAS geometry preprocessor validation:")
+                logger.info(command_text)
+
+                process = subprocess.Popen(
+                    cmd,
+                    cwd=str(project_folder),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
                 )
 
-            if geometry_only:
-                GeomPreprocessor._set_plan_run_flags(
-                    plan_path,
-                    {
-                        "Run UNet": "0",
-                        "Run PostProcess": "0",
-                        "Run RASMapper": "0",
-                        "Run Sediment": "0",
-                        "Run WQNet": "0",
-                    },
+                monitor_result = GeomPreprocessor._monitor_compute_messages(
+                    process=process,
+                    message_paths=message_paths,
+                    start_time=start_time,
+                    max_wait=max_wait,
+                    signals=flow_start_signals
+                    or GEOMETRY_PREPROCESSOR_FLOW_START_SIGNALS,
                 )
 
-            cmd = [
-                str(ras_exe_path),
-                "-c",
-                str(prj_file),
-                str(plan_path),
-            ]
-            command_text = " ".join(f'"{part}"' if " " in part else part for part in cmd)
-            logger.info("Running HEC-RAS geometry preprocessor validation:")
-            logger.info(command_text)
+                timed_out = monitor_result["timed_out"]
+                signal_detected = monitor_result["signal_detected"]
 
-            process = subprocess.Popen(
-                cmd,
-                cwd=str(project_folder),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-
-            monitor_result = GeomPreprocessor._monitor_compute_messages(
-                process=process,
-                message_paths=message_paths,
-                start_time=start_time,
-                max_wait=max_wait,
-                signals=flow_start_signals
-                or GEOMETRY_PREPROCESSOR_FLOW_START_SIGNALS,
-            )
-
-            timed_out = monitor_result["timed_out"]
-            signal_detected = monitor_result["signal_detected"]
-
-            if signal_detected and process.poll() is None:
-                logger.info(
-                    "Geometry preprocessing signal detected; terminating flow "
-                    "computation before full plan execution."
-                )
-                GeomPreprocessor._terminate_process_tree(process)
-            elif timed_out and process.poll() is None:
-                logger.error("Geometry preprocessing timed out; terminating HEC-RAS.")
-                GeomPreprocessor._terminate_process_tree(process)
-            else:
-                try:
-                    process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
+                if signal_detected and process.poll() is None:
+                    logger.info(
+                        "Geometry preprocessing signal detected; terminating flow "
+                        "computation before full plan execution."
+                    )
                     GeomPreprocessor._terminate_process_tree(process)
+                elif timed_out and process.poll() is None:
+                    logger.error("Geometry preprocessing timed out; terminating HEC-RAS.")
+                    GeomPreprocessor._terminate_process_tree(process)
+                else:
+                    child_monitor = GeomPreprocessor._wait_for_preprocess_child(
+                        tmp_hdf_path=tmp_hdf_path,
+                        start_time=start_time,
+                        max_wait=max_wait,
+                    )
+                    if child_monitor["timed_out"] and process.poll() is None:
+                        GeomPreprocessor._terminate_process_tree(process)
+
+                    try:
+                        process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        GeomPreprocessor._terminate_process_tree(process)
+            finally:
+                if restore_plan_settings and original_plan_text is not None:
+                    GeomPreprocessor._restore_plan_file(plan_path, original_plan_text)
+
+            if process is None:
+                raise RuntimeError("HEC-RAS process was not started")
 
             try:
                 stdout, stderr = process.communicate(timeout=2)
@@ -268,16 +296,11 @@ class GeomPreprocessor:
             if stderr:
                 logger.debug(stderr)
 
-            if restore_plan_settings and force:
-                GeomPreprocessor._restore_plan_preprocessor_settings(
-                    plan_path,
-                    original_settings,
-                )
-
             existing_message_paths, messages = (
                 GeomPreprocessor._read_compute_messages(
                     message_paths,
                     hdf_message_path=hdf_message_path,
+                    modified_after=start_time,
                 )
             )
             artifact_paths = GeomPreprocessor._preprocessor_artifacts(
@@ -285,6 +308,8 @@ class GeomPreprocessor:
                 project_name,
                 plan_num,
                 geometry_number,
+                tmp_hdf_path=tmp_hdf_path,
+                modified_after=start_time,
             )
 
             parsed = ResultsParser.parse_compute_messages(messages)
@@ -293,6 +318,10 @@ class GeomPreprocessor:
             errors = []
             if timed_out:
                 errors.append(f"Timed out after {max_wait} seconds")
+            if child_monitor["timed_out"]:
+                errors.append(
+                    f"Timed out after {max_wait} seconds waiting for RasProcess.exe"
+                )
             if process.returncode not in (0, None) and not signal_detected:
                 errors.append(f"HEC-RAS exited with code {process.returncode}")
             if parsed["has_errors"]:
@@ -491,6 +520,14 @@ class GeomPreprocessor:
         plan_path.write_text("".join(restored), encoding="utf-8")
 
     @staticmethod
+    def _restore_plan_file(plan_path: Path, original_text: str) -> None:
+        """Restore the plan file exactly after temporary validation edits."""
+        try:
+            plan_path.write_text(original_text, encoding="utf-8")
+        except OSError as exc:
+            logger.warning(f"Could not restore plan file {plan_path}: {exc}")
+
+    @staticmethod
     def _monitor_compute_messages(
         process: subprocess.Popen,
         message_paths: List[Path],
@@ -534,6 +571,95 @@ class GeomPreprocessor:
         return {"signal_detected": signal_detected, "timed_out": True}
 
     @staticmethod
+    def _wait_for_preprocess_child(
+        tmp_hdf_path: Path,
+        start_time: float,
+        max_wait: int,
+    ) -> dict[str, Any]:
+        """
+        Wait for orphaned RasProcess.exe CompletePreProcess work to finish.
+
+        Some HEC-RAS versions return from ``Ras.exe -c`` before the spawned
+        ``RasProcess.exe CompletePreProcess`` process finishes writing the
+        plan ``*.tmp.hdf``. Without this guard, validation can report failure
+        while the geometry preprocessor is still actively running.
+        """
+        deadline = start_time + max_wait
+        saw_child = False
+        last_size = None
+        stable_since = None
+        grace_deadline = min(deadline, time.time() + 5)
+
+        while time.time() < deadline:
+            child_pids = GeomPreprocessor._ras_processes_using_path(tmp_hdf_path)
+            if child_pids:
+                saw_child = True
+
+            tmp_is_fresh = GeomPreprocessor._path_is_fresh(tmp_hdf_path, start_time)
+            if not child_pids:
+                if not tmp_is_fresh:
+                    if not saw_child and time.time() < grace_deadline:
+                        time.sleep(1)
+                        continue
+                    break
+
+                try:
+                    current_size = tmp_hdf_path.stat().st_size
+                except OSError:
+                    break
+
+                if current_size == last_size:
+                    stable_since = stable_since or time.time()
+                    if time.time() - stable_since >= 2:
+                        break
+                else:
+                    last_size = current_size
+                    stable_since = time.time()
+
+            time.sleep(1)
+
+        return {
+            "saw_child": saw_child,
+            "timed_out": time.time() >= deadline,
+            "tmp_hdf_path": tmp_hdf_path
+            if GeomPreprocessor._path_is_fresh(tmp_hdf_path, start_time)
+            else None,
+        }
+
+    @staticmethod
+    def _ras_processes_using_path(path: Path) -> List[int]:
+        """Return RAS process IDs with command lines referencing a path."""
+        try:
+            import psutil
+        except Exception:
+            return []
+
+        path_text = str(path).casefold()
+        path_posix = path.as_posix().casefold()
+        file_name = path.name.casefold()
+        pids = []
+
+        for process in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                info = process.info
+                name = str(info.get("name") or "").casefold()
+                cmdline = " ".join(str(part) for part in info.get("cmdline") or [])
+                command = cmdline.casefold()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+
+            if "ras" not in name and "ras" not in command:
+                continue
+            if (
+                path_text in command
+                or path_posix in command
+                or ("completepreprocess" in command and file_name in command)
+            ):
+                pids.append(int(info["pid"]))
+
+        return pids
+
+    @staticmethod
     def _terminate_process_tree(process: subprocess.Popen) -> None:
         """Terminate a process and its children."""
         try:
@@ -559,6 +685,7 @@ class GeomPreprocessor:
     def _read_compute_messages(
         message_paths: List[Path],
         hdf_message_path: Optional[Path] = None,
+        modified_after: Optional[float] = None,
     ) -> tuple[List[Path], str]:
         """Read available compute-message files."""
         existing_paths = []
@@ -566,13 +693,20 @@ class GeomPreprocessor:
         for path in message_paths:
             if not path.exists() or path.stat().st_size == 0:
                 continue
+            if not GeomPreprocessor._path_is_fresh(path, modified_after):
+                continue
             existing_paths.append(path)
             try:
                 chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
             except OSError as exc:
                 logger.warning(f"Could not read compute messages from {path}: {exc}")
 
-        if hdf_message_path and hdf_message_path.exists() and hdf_message_path.stat().st_size > 0:
+        if (
+            hdf_message_path
+            and hdf_message_path.exists()
+            and hdf_message_path.stat().st_size > 0
+            and GeomPreprocessor._path_is_fresh(hdf_message_path, modified_after)
+        ):
             try:
                 from ..hdf.HdfResultsPlan import HdfResultsPlan
 
@@ -594,6 +728,8 @@ class GeomPreprocessor:
         project_name: str,
         plan_num: str,
         geometry_number: str,
+        tmp_hdf_path: Optional[Path] = None,
+        modified_after: Optional[float] = None,
     ) -> List[Path]:
         """Collect non-empty artifacts that prove geometry preprocessing ran."""
         candidates = [
@@ -602,11 +738,26 @@ class GeomPreprocessor:
             project_folder / f"{project_name}.x{geometry_number}",
             project_folder / f"{project_name}.b{plan_num}",
         ]
+        if tmp_hdf_path is not None:
+            candidates.append(tmp_hdf_path)
         return [
             path
             for path in candidates
-            if path.exists() and path.is_file() and path.stat().st_size > 0
+            if path.exists()
+            and path.is_file()
+            and path.stat().st_size > 0
+            and GeomPreprocessor._path_is_fresh(path, modified_after)
         ]
+
+    @staticmethod
+    def _path_is_fresh(path: Path, modified_after: Optional[float]) -> bool:
+        """Return True when a path is absent from staleness checks or recently written."""
+        if modified_after is None:
+            return True
+        try:
+            return path.exists() and path.stat().st_mtime >= modified_after - 1
+        except OSError:
+            return False
 
     @staticmethod
     def _find_blocking_message_lines(messages: str) -> List[str]:
