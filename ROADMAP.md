@@ -1,6 +1,6 @@
 # ras-commander Roadmap
 
-**Last Updated**: 2026-04-21
+**Last Updated**: 2026-04-29
 
 This document tracks forward-looking work for ras-commander.
 Execution-level task tracking lives in `agent_tasks/.agent/BACKLOG.md`.
@@ -197,6 +197,11 @@ Regionalization for Continuous Infiltration Methods
 - `Issue_38_Geometry_2D_Writer` + `RasDecomp_meshgen` -> 2D geometry / mesh
   authoring foundation (mesh generation landed on `feat/headless-mesh`
   2026-04-22; geometry writer remains open)
+- `examples/123_rasmapper_geometry_layer_updates.ipynb` -> RASMapper geometry
+  layer update validation suite; wait for terrain-modification authoring
+  functions before adding terrain-driven mutations, but add the plain-text
+  cross-section bank-station mutation/validation test as the first
+  non-terrain proof case
 
 **Open work**:
 - Keep `feature_dev_notes/README.md` and `feature_dev_notes/ROADMAP.md` as the
@@ -301,6 +306,32 @@ path, but the knowledge is not yet packaged for normal users.
 - Add an integration test covering all four HMS-derived precipitation methods
 - Add DSS direct-write coverage in the precipitation workflow docs/notebooks
 - Add parallel execution examples where that improves real workflows
+- Return to `examples/123_rasmapper_geometry_layer_updates.ipynb` and extend
+  the proof cells from "operation ran and artifacts changed" to "known local
+  geometry/terrain mutation propagated into the target RASMapper element."
+  Most cases depend on the parallel terrain-modification branch; before that
+  lands, mutate `Bank Sta=` values in the plain-text geometry and validate the
+  updated `Left Bank` / `Right Bank` fields in
+  `Geometry/Cross Sections/Attributes` after the RASMapper cross-section update.
+  Proposed mutation-backed tests:
+  - Cross-section bank stations from plain-text `Bank Sta=` edits, as the
+    immediate unblocked test.
+  - Cross-section terrain profile updates for all points, channel-only, and
+    overbanks-only once terrain mutation helpers land.
+  - XS interpolation surface TIN updates after a localized terrain change
+    between selected cross sections.
+  - Storage area elevation-volume curves after terrain edits inside selected
+    storage-area polygons.
+  - SA/2D connection from/to and terrain profile updates after terrain edits
+    along the connection centerline.
+  - Bridge/culvert, inline structure, and lateral structure river-station and
+    terrain-profile updates after localized terrain/profile-line changes.
+  - Edge-line creation after deterministic XS/bank-line or terrain-triggered
+    geometry changes.
+  - Blocked-obstruction updates and generated obstruction polygons after
+    controlled obstruction/terrain context changes.
+  Acceptance: every live demo has a mutation cell, GUI update cell, read-back
+  validation cell, and before/after figures where applicable.
 
 ## Long-Horizon Feature Development
 

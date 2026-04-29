@@ -91,7 +91,7 @@ setup(
             'azure-mgmt-compute>=30.0',
         ],
         # GUI automation and screenshot capture (Windows only)
-        'gui': ['Pillow>=9.0'],
+        'gui': ['Pillow>=9.0', 'comtypes>=1.4.0; sys_platform == "win32"'],
         # USGS gauge data integration
         'usgs': ['dataretrieval>=1.0'],
         # Precipitation enhancements
@@ -111,6 +111,7 @@ setup(
             'azure-identity>=1.14',
             'azure-mgmt-compute>=30.0',
             'Pillow>=9.0',
+            'comtypes>=1.4.0; sys_platform == "win32"',
             'dataretrieval>=1.0',
             'pygeohydro>=0.19.0',
             'rasterio',

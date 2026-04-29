@@ -109,7 +109,12 @@ class RasMapperElements:
 
     @staticmethod
     @log_call
-    def wait_for_rasmapper_idle(hwnd: int, timeout: int = 600, check_interval: int = 3) -> bool:
+    def wait_for_rasmapper_idle(
+        hwnd: int,
+        timeout: int = 600,
+        check_interval: int = 3,
+        idle_grace_seconds: int = 5,
+    ) -> bool:
         """
         Wait for RASMapper to become idle after an operation.
 
@@ -120,6 +125,8 @@ class RasMapperElements:
             hwnd: RASMapper window handle.
             timeout: Maximum seconds to wait. Default 600 (10 min).
             check_interval: Seconds between checks. Default 3.
+            idle_grace_seconds: Responsive quiet period to accept as idle when
+                the command never makes the window visibly unresponsive.
 
         Returns:
             True if RASMapper became idle within timeout.
@@ -127,23 +134,31 @@ class RasMapperElements:
         start_time = time.time()
         last_log_time = start_time
 
-        # Wait for window to become unresponsive (operation started)
-        # then responsive again (operation completed)
+        # Wait for window to become unresponsive (operation started) then
+        # responsive again. Some lightweight RASMapper commands never make the
+        # window visibly unresponsive, so accept a short responsive quiet period
+        # as completion instead of waiting out the full timeout.
         was_busy = False
+        responsive_since = None
 
         while time.time() - start_time < timeout:
             responsive = Win32Primitives.is_window_responsive(hwnd)
 
             if not responsive:
                 was_busy = True
+                responsive_since = None
                 logger.debug("RASMapper is busy...")
             elif was_busy and responsive:
                 elapsed = int(time.time() - start_time)
                 logger.info(f"RASMapper operation completed ({elapsed}s)")
                 return True
             elif responsive and not was_busy:
-                # Give it a moment — the operation may not have started yet
-                time.sleep(1)
+                if responsive_since is None:
+                    responsive_since = time.time()
+                elif time.time() - responsive_since >= idle_grace_seconds:
+                    elapsed = int(time.time() - start_time)
+                    logger.info(f"RASMapper remained responsive; treating as idle ({elapsed}s)")
+                    return True
 
             elapsed = time.time() - start_time
             if elapsed - (last_log_time - start_time) >= 15:

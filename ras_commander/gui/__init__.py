@@ -37,6 +37,8 @@ from .workflows import (
     RunMultiplePlansWorkflow,
     OpenRasMapperWorkflow,
     MeshRegenerationWorkflow,
+    RasMapperLayerCommandWorkflow,
+    RasMapperXsecUpdateWorkflow,
 )
 
 __all__ = [
@@ -57,6 +59,8 @@ __all__ = [
     'RunMultiplePlansWorkflow',
     'OpenRasMapperWorkflow',
     'MeshRegenerationWorkflow',
+    'RasMapperLayerCommandWorkflow',
+    'RasMapperXsecUpdateWorkflow',
     # Screenshots
     'RasScreenshot',
 ]
