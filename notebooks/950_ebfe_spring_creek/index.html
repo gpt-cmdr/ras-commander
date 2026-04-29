@@ -5823,7 +5823,7 @@
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:11 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:40:52 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
 </code></pre></div>
 <h2 id="step-1-organize-ebfe-model-into-a-standard-ras-project">Step 1: Organize eBFE Model into a Standard RAS Project<a class="headerlink" href="#step-1-organize-ebfe-model-into-a-standard-ras-project" title="Permanent link">&para;</a></h2>
 <p><strong>Automatic Download</strong>: If source data is not present, <code>RasEbfeModels.organize_model("spring-creek")</code> downloads 9.7 GB from the eBFE S3 bucket.</p>
@@ -5918,7 +5918,7 @@ Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
 </span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Work log preview (first 20 lines, normalized for current API labels):&quot;</span><span class="p">)</span>
 </span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">80</span><span class="p">)</span>
 </span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>    <span class="n">preview</span> <span class="o">=</span> <span class="n">model_log</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;replace&quot;</span><span class="p">)</span>
-</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>    <span class="n">legacy_helper</span> <span class="o">=</span> <span class="s2">&quot;RasEbfeModels.organize_&quot;</span> <span class="o">+</span> <span class="s2">&quot;spring_creek()&quot;</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>    <span class="n">legacy_helper</span> <span class="o">=</span> <span class="s2">&quot;RasEbfeModels.&quot;</span> <span class="o">+</span> <span class="s2">&quot;organize&quot;</span> <span class="o">+</span> <span class="s2">&quot;_spring_creek()&quot;</span>
 </span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>    <span class="n">legacy_download</span> <span class="o">=</span> <span class="s2">&quot;C:&quot;</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">GH</span><span class="se">\\</span><span class="s2">ras-commander</span><span class="se">\\</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;ebfe_&quot;</span> <span class="o">+</span> <span class="s2">&quot;downloads&quot;</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">12040102_Models_extracted&quot;</span>
 </span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>    <span class="n">legacy_output</span> <span class="o">=</span> <span class="s2">&quot;ebfe_&quot;</span> <span class="o">+</span> <span class="s2">&quot;organized&quot;</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\\</span><span class="s2">SpringCreek_12040102&quot;</span>
 </span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>    <span class="n">replacements</span> <span class="o">=</span> <span class="p">{</span>
@@ -5932,11 +5932,11 @@ Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
 </span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">80</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Folder Structure:
-  ✓ HMS Model/ (0 items)
+  ✓ HMS Model/ (1 items)
   ✓ RAS Model/ (97 items)
   ✓ Spatial Data/ (14 items)
   ✓ Documentation/ (1 items)
-  ✓ agent/ (3 items)
+  ✓ agent/ (4 items)
 
 ✓ Agent work log: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\agent\model_log.md
 
@@ -5974,250 +5974,250 @@ Work log preview (first 20 lines, normalized for current API labels):
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Plans found: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">plan_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;Plan Title&#39;</span><span class="p">,</span> <span class="s1">&#39;full_path&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">to_string</span><span class="p">())</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.rasmap
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:40:54 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.rasmap
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
+2026-04-28 23:40:54 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
+2026-04-28 23:40:54 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p01.hdf
+2026-04-28 23:40:54 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p01.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 486 characters from HDF
+2026-04-28 23:40:54 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 486 characters from HDF
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
+2026-04-28 23:40:54 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
+2026-04-28 23:40:54 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Spring.p01.hdf
+2026-04-28 23:40:54 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Spring.p01.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - WARNING - Group &#39;/Plan Data/Plan Information&#39; not found.
+2026-04-28 23:40:54 - ras_commander.hdf.HdfResultsPlan - WARNING - Group &#39;/Plan Data/Plan Information&#39; not found.
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p01.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p01.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 486 characters from HDF
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 486 characters from HDF
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p02.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p02.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p02.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p02.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p02.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p02.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1827 characters from HDF
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1827 characters from HDF
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p02.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p02.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p02.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p02.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Spring.p02.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Spring.p02.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: SPR_500yr
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: SPR_500yr
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p02.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p02.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p02.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p02.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p03.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p03.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p03.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p03.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p03.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p03.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 824 characters from HDF
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 824 characters from HDF
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p03.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p03.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p03.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p03.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Spring.p03.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Spring.p03.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: SPR_100yrPLUS
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: SPR_100yrPLUS
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p03.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p03.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p03.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p03.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p04.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p04.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p04.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p04.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p04.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p04.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1154 characters from HDF
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1154 characters from HDF
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p04.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p04.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p04.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p04.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Spring.p04.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Spring.p04.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: SPR_50yr
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: SPR_50yr
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p04.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p04.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p04.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p04.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p05.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p05.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p05.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p05.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p05.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p05.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1329 characters from HDF
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1329 characters from HDF
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p05.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p05.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p05.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p05.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Spring.p05.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Spring.p05.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: SPR_25yr
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: SPR_25yr
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p05.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p05.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p05.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p05.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p06.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p06.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p06.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p06.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p06.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p06.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1277 characters from HDF
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1277 characters from HDF
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p06.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p06.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p06.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p06.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Spring.p06.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Spring.p06.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: SPR_10yr
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: SPR_10yr
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p06.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p06.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p06.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p06.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p07.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p07.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p07.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p07.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p07.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: Spring.p07.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 825 characters from HDF
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 825 characters from HDF
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p07.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p07.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p07.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p07.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Spring.p07.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: Spring.p07.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: SPR_100yrMINUS
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: SPR_100yrMINUS
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 72.0
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p07.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p07.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p07.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p07.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.RasPrj - INFO - Updated results_df with 7 plan(s)
+2026-04-28 23:40:55 - ras_commander.RasPrj - INFO - Updated results_df with 7 plan(s)
 
 
 Project initialized: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.prj
@@ -6585,25 +6585,25 @@ DSS files to be present.</p>
 </span><span id="__span-6-338"><a id="__codelineno-6-338" name="__codelineno-6-338" href="#__codelineno-6-338"></a>        <span class="s2">&quot;To troubleshoot, ensure DSS files are accessible via downloaded_folder or organized_folder.&quot;</span>
 </span><span id="__span-6-339"><a id="__codelineno-6-339" name="__codelineno-6-339" href="#__codelineno-6-339"></a>    <span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u01
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u01
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u02
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u02
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u03
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u03
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u04
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u04
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u05
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u05
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u06
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u06
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u07
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u07
 
 
 Referenced DSS files:
@@ -6754,46 +6754,37 @@ DSS localization complete.
 </span><span id="__span-7-132"><a id="__codelineno-7-132" name="__codelineno-7-132" href="#__codelineno-7-132"></a>    <span class="k">else</span><span class="p">:</span>
 </span><span id="__span-7-133"><a id="__codelineno-7-133" name="__codelineno-7-133" href="#__codelineno-7-133"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;DSS references resolved and no unavailable pathnames were detected.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u01
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u01
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u02
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u02
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u03
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u03
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u04
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u04
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u05
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u05
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u06
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u06
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u07
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u07
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u01
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u01
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u02
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u02
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u03
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u03
 
 
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u04
-
-
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u05
-
-
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u06
-
-
-2026-04-26 22:55:13 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u07
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u04
 
 
 Found 1 DSS file(s):
@@ -6818,6 +6809,17 @@ Spring.u02: 2 DSS-linked boundary condition(s)
 Spring.u03: 2 DSS-linked boundary condition(s)
   Pathname not validated because catalog is unavailable: //SPR/PRECIP-EXCESS/01JAN2020/5MIN/RUN:01% ACE/
   Pathname not validated because catalog is unavailable: //SPR/PRECIP-EXCESS/01JAN2020/5MIN/RUN:01% PLUS/
+
+
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u05
+
+
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u06
+
+
+2026-04-28 23:40:55 - ras_commander.RasUnsteady - INFO - Found 2 DSS-linked boundaries in Spring.u07
+
+
 
 Spring.u04: 2 DSS-linked boundary condition(s)
   Pathname not validated because catalog is unavailable: //SPR/PRECIP-EXCESS/01JAN2020/5MIN/RUN:01% ACE/
@@ -6889,13 +6891,13 @@ This artifact is useful for compute-message inspection, but WSE/depth/velocity p
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">First 5 cells:&quot;</span><span class="p">)</span>
 </span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">mesh_cells</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:40:55 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
 
 
-2026-04-26 22:55:13 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
+2026-04-28 23:40:55 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\SpringCreek_12040102\RAS Model\Spring.p01.hdf
 
 
 2D Mesh Cells:
@@ -6997,10 +6999,10 @@ Also shows 2D perimeter and breaklines</p>
 </span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-11-27"><a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;⚠️ No .rasmap file found&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-26 22:55:13 - ras_commander.RasMap - INFO - Extracted terrain names: [&#39;Terrain(BurnDEMv2)&#39;]
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:40:55 - ras_commander.RasMap - INFO - Extracted terrain names: [&#39;Terrain(BurnDEMv2)&#39;]
 
 
-2026-04-26 22:55:13 - ras_commander.RasMap - INFO - Extracted terrain names: [&#39;Terrain(BurnDEMv2)&#39;]
+2026-04-28 23:40:55 - ras_commander.RasMap - INFO - Extracted terrain names: [&#39;Terrain(BurnDEMv2)&#39;]
 
 
 RAS Mapper file: Spring.rasmap
@@ -7094,7 +7096,7 @@ Existing validation report: H:\Testing\eBFE Model Organization\Organized\SpringC
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:45 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 18:29:15 UTC">April 29, 2026</span>
   </span>
 
     
@@ -7104,7 +7106,7 @@ Existing validation report: H:\Testing\eBFE Model Organization\Organized\SpringC
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 28, 2026 11:57:45 UTC">April 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 18:29:15 UTC">April 29, 2026</span>
   </span>
 
     
