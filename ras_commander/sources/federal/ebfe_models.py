@@ -1539,6 +1539,13 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         'lb_ma03': 'https://ebfedata.s3-us-west-2.amazonaws.com/12070104_LowerBrazos/Models/LB_MA03.zip',
     }
 
+    _LOWER_BRAZOS_MA03_MESH_PATCH_POINTS = (
+        (3087941.382562246, 13615809.856806561),
+        (3087928.1296074027, 13615683.945253227),
+        (3087923.041224827, 13615947.91882961),
+        (3087819.86190253, 13615864.489458289),
+    )
+
     @staticmethod
     @log_call
     def organize_lower_brazos(
@@ -1639,6 +1646,10 @@ Flow data is contained in steady flow files (.f##) within each reach model.
 
         print("\n[3/4] Organizing extracted RAS models...")
         copied_files = 0
+        mesh_patch_record = {
+            "status": "skipped",
+            "reason": "Lower Brazos components were not downloaded",
+        }
         if processed_components:
             for component_root in processed_components:
                 component_name = component_root.name.replace("_extracted", "")
@@ -1667,6 +1678,16 @@ Flow data is contained in steady flow files (.f##) within each reach model.
                 )
 
             standardization = RasEbfeModels._standardize_ras_model_tree(folders['ras'])
+            mesh_patch_record = RasEbfeModels._apply_lower_brazos_ma03_mesh_seed_patch(
+                folders['ras']
+            )
+            if mesh_patch_record.get("status") == "applied":
+                print(
+                    "  Applied Lower Brazos MA03 mesh seed patch "
+                    f"(+{mesh_patch_record.get('points_added', 0)} points)"
+                )
+            elif mesh_patch_record.get("status") == "already_applied":
+                print("  Lower Brazos MA03 mesh seed patch already present")
             if validate_dss:
                 RasEbfeModels._validate_dss_files(folders['ras'])
         else:
@@ -1699,10 +1720,160 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             processed_components,
             copied_files,
             standardization,
+            mesh_patch_record,
         )
 
         print(f"\nLower Brazos organized to: {output_folder}")
         return output_folder
+
+    @staticmethod
+    def _parse_storage_area_seed_points(
+        geom_text_path: Path,
+        mesh_name: str,
+    ):
+        """Read a HEC-RAS ``Storage Area 2D Points`` block as a NumPy array."""
+        import numpy as np
+
+        lines = geom_text_path.read_text(
+            encoding="utf-8",
+            errors="replace",
+        ).splitlines()
+        current_area = None
+        idx = 0
+        while idx < len(lines):
+            line = lines[idx]
+            if line.startswith("Storage Area="):
+                current_area = line.split("=", 1)[1].split(",", 1)[0].strip()
+            elif (
+                line.startswith("Storage Area 2D Points=")
+                and current_area == mesh_name
+            ):
+                try:
+                    point_count = int(line.split("=", 1)[1].strip())
+                except ValueError as exc:
+                    raise ValueError(
+                        f"Invalid Storage Area 2D Points count in {geom_text_path}: {line}"
+                    ) from exc
+
+                values: list[float] = []
+                idx += 1
+                while idx < len(lines) and len(values) < point_count * 2:
+                    coord_line = lines[idx]
+                    chunks = [
+                        coord_line[start : start + 16]
+                        for start in range(0, len(coord_line), 16)
+                    ]
+                    parsed_this_line = 0
+                    for chunk in chunks:
+                        token = chunk.strip()
+                        if not token:
+                            continue
+                        try:
+                            values.append(float(token))
+                            parsed_this_line += 1
+                        except ValueError:
+                            continue
+                    if parsed_this_line == 0:
+                        for token in coord_line.split():
+                            try:
+                                values.append(float(token))
+                            except ValueError:
+                                continue
+                    idx += 1
+
+                if len(values) < point_count * 2:
+                    raise ValueError(
+                        f"Only parsed {len(values) // 2} of {point_count} "
+                        f"Storage Area 2D Points from {geom_text_path}"
+                    )
+                return np.array(values[: point_count * 2], dtype=float).reshape(
+                    point_count,
+                    2,
+                )
+            idx += 1
+
+        raise ValueError(
+            f"Storage Area 2D Points block for {mesh_name!r} not found in "
+            f"{geom_text_path}"
+        )
+
+    @staticmethod
+    def _apply_lower_brazos_ma03_mesh_seed_patch(ras_root: Path) -> Dict[str, Any]:
+        """
+        Apply the validated four-seed MA03 mesh repair needed for preprocessing.
+
+        The delivered MA03 text geometry can produce one breakline-only
+        ``MaxFacesPerCellExceeded`` cell during command-line preprocessing.
+        These four seed points were derived from RasMapperLib bad-index cells
+        592314/592315 and validated with HEC-RAS 6.6 geometry preprocessing.
+        """
+        import numpy as np
+        from ras_commander.geom.GeomMesh import (
+            _patch_text_seeds,
+            _set_point_generation_data,
+        )
+
+        ras_root = Path(ras_root)
+        project_folder = ras_root / "LB_MA03"
+        geom_text_path = project_folder / "MA_3.g02"
+        mesh_name = "MA_3_2DArea"
+
+        record: Dict[str, Any] = {
+            "project": "LB_MA03",
+            "geometry": str(geom_text_path),
+            "mesh_name": mesh_name,
+            "status": "skipped",
+        }
+
+        if not geom_text_path.exists():
+            record["reason"] = "MA_3.g02 not found"
+            return record
+
+        existing_points = RasEbfeModels._parse_storage_area_seed_points(
+            geom_text_path,
+            mesh_name,
+        )
+        patch_points = np.array(
+            RasEbfeModels._LOWER_BRAZOS_MA03_MESH_PATCH_POINTS,
+            dtype=float,
+        )
+
+        missing_points = []
+        for point in patch_points:
+            matches = np.isclose(
+                existing_points,
+                point,
+                atol=1e-6,
+                rtol=0.0,
+            )
+            if not np.any(np.all(matches, axis=1)):
+                missing_points.append(point)
+
+        record["old_seed_count"] = int(len(existing_points))
+        if not missing_points:
+            record["status"] = "already_applied"
+            record["new_seed_count"] = int(len(existing_points))
+            record["points_added"] = 0
+            return record
+
+        points_to_add = np.array(missing_points, dtype=float)
+        combined_points = np.vstack([existing_points, points_to_add])
+        _set_point_generation_data(geom_text_path, 200.0, mesh_name=mesh_name)
+        _patch_text_seeds(geom_text_path, combined_points, mesh_name=mesh_name)
+
+        record.update(
+            {
+                "status": "applied",
+                "new_seed_count": int(len(combined_points)),
+                "points_added": int(len(points_to_add)),
+                "added_points": points_to_add.tolist(),
+                "reason": (
+                    "Validated MA03 repair for one breakline-only "
+                    "MaxFacesPerCellExceeded mesh cell."
+                ),
+            }
+        )
+        return record
 
     @staticmethod
     @log_call
@@ -4854,7 +5025,8 @@ Size        URL
         selected_components: List[str],
         processed_components: List[Path],
         files_count: int,
-        standardization: Dict
+        standardization: Dict,
+        mesh_patch_record: Optional[Dict[str, Any]] = None,
     ):
         """Create agent/model_log.md for Lower Brazos."""
         agent_folder.mkdir(parents=True, exist_ok=True)
@@ -4865,6 +5037,24 @@ Size        URL
             if processed_components
             else "inventory/manifest shell only"
         )
+        mesh_patch_record = mesh_patch_record or {"status": "skipped"}
+        if mesh_patch_record.get("status") == "applied":
+            mesh_patch_section = (
+                "### Known Mesh Repairs\n"
+                "- LB_MA03 `MA_3.g02`: added "
+                f"{mesh_patch_record.get('points_added', 0)} validated seed "
+                "point(s) to resolve one breakline-only "
+                "`MaxFacesPerCellExceeded` cell before geometry "
+                "preprocessor validation.\n"
+            )
+        elif mesh_patch_record.get("status") == "already_applied":
+            mesh_patch_section = (
+                "### Known Mesh Repairs\n"
+                "- LB_MA03 `MA_3.g02`: validated four-seed mesh repair was "
+                "already present.\n"
+            )
+        else:
+            mesh_patch_section = ""
         log_content = f"""# Agent Work Log - Lower Brazos
 
 **Model**: Lower Brazos (12070104)
@@ -4890,6 +5080,7 @@ Size        URL
 - Terrain references updated: {standardization.get('terrain_references_updated', 0)}
 - Land cover references updated: {standardization.get('land_cover_references_updated', 0)}
 
+{mesh_patch_section}
 ## Notes
 
 Lower Brazos has about 600 GB of model component zips. The default organizer
