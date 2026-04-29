@@ -76,6 +76,7 @@ class WineConfig:
 
 from .RasPrj import ras
 from .RasMap import RasMap
+from .RasPrjAssets import RasPrjAssets
 from .RasUtils import RasUtils
 from .LoggingConfig import get_logger
 from .Decorators import log_call
@@ -817,10 +818,14 @@ Step 5: Configure (optional — auto-detection usually works)
 
         # Get HDF path for plan
         plan_num = RasUtils.normalize_ras_number(plan_number)
-        hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_num}.hdf"
+        hdf_path = RasPrjAssets.plan_results_hdf(
+            plan_num,
+            ras_object=ras_obj,
+            must_exist=True,
+        )
 
-        if not hdf_path.exists():
-            logger.error(f"Plan HDF not found: {hdf_path}")
+        if hdf_path is None:
+            logger.error(f"Plan HDF not found for plan {plan_num}")
             return []
 
         try:
@@ -1259,11 +1264,16 @@ Step 5: Configure (optional — auto-detection usually works)
         if rasmap_path is None:
             raise FileNotFoundError(f"No .rasmap file found in project folder")
 
-        plan_hdf = f"{ras_obj.project_name}.p{plan_num}.hdf"
-        plan_hdf_path = ras_obj.project_folder / plan_hdf
+        plan_hdf_path = RasPrjAssets.plan_results_hdf(
+            plan_num,
+            ras_object=ras_obj,
+            must_exist=True,
+        )
 
-        if not plan_hdf_path.exists():
-            raise FileNotFoundError(f"Plan HDF not found: {plan_hdf_path}")
+        if plan_hdf_path is None:
+            raise FileNotFoundError(f"Plan HDF not found for plan {plan_num}")
+
+        plan_hdf = plan_hdf_path.name
 
         # RasProcess.exe uses the Plan ShortID from HDF to determine output folder name
         # This is the authoritative source - rasmap Layer Name should match but isn't used by RasProcess
@@ -1578,14 +1588,21 @@ Step 5: Configure (optional — auto-detection usually works)
         # to store_maps() which used RasProcess.exe (ignores RenderMode in 6.x).
         # Now uses RasStoreMapHelper.exe via store_maps().
 
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
         all_results = {}
 
         # Get plans with HDF results
         for _, row in ras_obj.plan_df.iterrows():
             plan_num = row['plan_number']
-            hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_num}.hdf"
+            hdf_path = RasPrjAssets.plan_results_hdf(
+                plan_num,
+                ras_object=ras_obj,
+                must_exist=True,
+            )
 
-            if not hdf_path.exists():
+            if hdf_path is None:
                 logger.debug(f"Skipping plan {plan_num} - no HDF results")
                 continue
 
