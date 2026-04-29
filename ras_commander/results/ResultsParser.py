@@ -53,6 +53,10 @@ class ResultsParser:
         r'error\s+\(ft\)',                 # Error in feet (metric)
         r'maximum.*error',                 # Maximum error metrics
         r'rs\s+wsel\s+error',              # Cross section wsel error (metric)
+        r'\bpercent\s+error\b',            # Volume accounting table header/metric
+        r'\berror\s+percent\s+error\b',    # Volume accounting table header
+        r'\bcell\s+error\b',               # Iteration/convergence table header
+        r'\berror\s+node\s+or\s+conduit\b', # Pipe network iteration table header
         r'iterations',                     # Lines with iteration counts
     ]
 

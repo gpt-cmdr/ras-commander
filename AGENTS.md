@@ -52,6 +52,13 @@ This file is the canonical shared instruction contract for repository-local codi
 - Use local ignored working folders such as `working/`, `scripts/`, or `ras_agent/` at repo root for temporary outputs and extracted scripts.
 - If a `TASK.md` contains stale `C:\GH\...` paths, remap them to `G:\GH\...` before failing.
 
+## RAS Commander First
+
+- Hard rule: RAS Commander rules everything around RAS. Never invoke `Ras.exe` directly from ad hoc shell commands, raw subprocess calls, one-off scripts, manual command-line probes, notebooks, tests, or agent harness glue.
+- All HEC-RAS execution, preprocessing, compute-message reading, result inspection, path resolution, and validation must go through ras-commander APIs such as `RasCmdr`, `RasControl`, `RasPlan`, `RasPrj`, `RasMap`, `Hdf*`, or focused helper modules.
+- If a useful RAS capability is only available through a manual GUI action, command-line experiment, external script, or native HEC-RAS behavior, bring that capability back into the ras-commander API layer before relying on it as a repeatable workflow.
+- If ras-commander lacks the needed API, add or repair the API rather than bypassing it.
+
 ## Environment
 
 - Default host context is Windows.

@@ -53,6 +53,18 @@ def test_get_ras_exe_keeps_compact_66_mapped_to_66(monkeypatch):
     assert get_ras_exe("66") == str(fake_66)
 
 
+def test_get_ras_exe_maps_new_orleans_670_plan_version(monkeypatch):
+    fake_67 = Path(r"C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 5\Ras.exe")
+
+    monkeypatch.setattr(
+        RasUtils,
+        "discover_ras_versions",
+        staticmethod(lambda: {"6.7 Beta 5": fake_67}),
+    )
+
+    assert get_ras_exe("6.70") == str(fake_67)
+
+
 def test_clear_geompre_files_uses_geometry_number_from_plan_df(tmp_path):
     project = _FakeRasProject(tmp_path)
     plan_path = tmp_path / "TestProject.p17"

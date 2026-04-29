@@ -580,33 +580,38 @@ class RasPrj:
         pattern = re.compile(rf"{entry_type} File=(\w+)")
 
         try:
-            with open(self.prj_file, 'r', encoding='utf-8') as file:
-                for line in file:
-                    match = pattern.match(line.strip())
-                    if match:
-                        file_name = match.group(1)
-                        full_path = str(self.project_folder / f"{self.project_name}.{file_name}")
-                        entry_number = file_name[1:]
-                        
-                        entry = {
-                            f'{entry_type.lower()}_number': entry_number,
-                            'full_path': full_path
-                        }
-                        
-                        # Handle entry type-specific parsing
-                        if entry_type == 'Unsteady':
-                            entry.update(self._process_unsteady_entry(entry_number, full_path))
-                        elif entry_type == 'Flow':
-                            entry.update(self._process_flow_entry(entry_number, full_path))
-                        else:
-                            entry.update(self._process_default_entry())
-                        
-                        # Handle Plan entries
-                        if entry_type == 'Plan':
-                            entry.update(self._process_plan_entry(entry_number, full_path))
-                        
-                        entries.append(entry)
-            
+            content, encoding = read_file_with_fallback_encoding(self.prj_file)
+            if content is None:
+                raise IOError(
+                    f"Could not read project file {self.prj_file} with any supported encoding"
+                )
+
+            for line in content.splitlines():
+                match = pattern.match(line.strip())
+                if match:
+                    file_name = match.group(1)
+                    full_path = str(self.project_folder / f"{self.project_name}.{file_name}")
+                    entry_number = file_name[1:]
+
+                    entry = {
+                        f'{entry_type.lower()}_number': entry_number,
+                        'full_path': full_path
+                    }
+
+                    # Handle entry type-specific parsing
+                    if entry_type == 'Unsteady':
+                        entry.update(self._process_unsteady_entry(entry_number, full_path))
+                    elif entry_type == 'Flow':
+                        entry.update(self._process_flow_entry(entry_number, full_path))
+                    else:
+                        entry.update(self._process_default_entry())
+
+                    # Handle Plan entries
+                    if entry_type == 'Plan':
+                        entry.update(self._process_plan_entry(entry_number, full_path))
+
+                    entries.append(entry)
+
             df = pd.DataFrame(entries)
             return self._format_dataframe(df, entry_type)
         
@@ -2241,6 +2246,8 @@ def get_ras_exe(ras_version=None):
         "65": "6.5",
         "66": "6.6",
         "6.7": "6.7 Beta 5", # User passes "6.7" → finds "6.7 Beta 5"
+        "6.70": "6.7 Beta 5", # HEC-RAS 6.7 plan files write Program Version=6.70
+        "6.7.0": "6.7 Beta 5", # Legacy dotted normalization rewrites 6.70 to 6.7.0
         "67": "6.7 Beta 5",
         "70": "7.0",
     }
