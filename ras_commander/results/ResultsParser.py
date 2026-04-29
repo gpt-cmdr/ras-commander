@@ -43,6 +43,7 @@ class ResultsParser:
         r'exception\s*:',                  # "Exception:"
         r'aborted',                        # "aborted"
         r'terminated\s+abnormally',        # "terminated abnormally"
+        r'\berror\b',                      # HEC-RAS data_errors: "Error generating Mesh"
     ]
 
     # Exclusion patterns for known false positives (HEC-RAS metrics)

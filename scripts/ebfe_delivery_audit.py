@@ -694,7 +694,17 @@ def preprocessor_reports() -> list[Path]:
     report_folder = REPORT_ROOT / "preprocessor_validation"
     if not report_folder.exists():
         return []
-    return sorted(report_folder.glob("geometry_preprocessor_validation_*.json"))
+    timestamp_pattern = re.compile(r"geometry_preprocessor_validation_(\d{8}_\d{6})")
+
+    def report_sort_key(path: Path) -> tuple[str, str]:
+        match = timestamp_pattern.search(path.stem)
+        timestamp = match.group(1) if match else ""
+        return timestamp, str(path).lower()
+
+    return sorted(
+        report_folder.rglob("geometry_preprocessor_validation_*.json"),
+        key=report_sort_key,
+    )
 
 
 def load_preprocessor_records(report_paths: list[Path]) -> list[dict[str, Any]]:

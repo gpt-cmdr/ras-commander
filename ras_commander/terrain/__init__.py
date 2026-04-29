@@ -22,7 +22,7 @@ Main Classes:
         - compare_terrain_profiles(): Cut/fill analysis between terrains
         - compare_terrain_volumes(): No-net-fill compliance checking
         - compute_modified_terrain_raster(): Full-resolution GeoTIFF of modified terrain
-        Requires: pythonnet, HEC-RAS 6.6+, one-time setup_gdal_bridge() call
+        Requires: pythonnet, HEC-RAS 6.6+ with bundled GDAL
 
 Requirements:
     - HEC-RAS 6.3+ installed (for RasProcess.exe and GDAL tools)
@@ -40,7 +40,7 @@ Usage:
     )
 
     # Sample terrain with modifications (no GUI required)
-    RasTerrainMod.setup_gdal_bridge()  # one-time setup
+    RasTerrainMod.setup_gdal_bridge()  # optional explicit preflight
     profile = RasTerrainMod.get_terrain_profile(
         "project.rasmap", "project.g01.hdf",
         x_coords=[3400000, 3410000], y_coords=[612000, 612000]

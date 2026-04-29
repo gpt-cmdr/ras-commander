@@ -78,6 +78,57 @@ def test_configure_rasmapper_gdal_bridge_creates_python_sibling(monkeypatch, tmp
     assert commands
 
 
+def test_configure_rasmapper_gdal_bridge_creates_venv_and_base_bridges(
+    monkeypatch, tmp_path
+):
+    hecras_dir = _make_hecras_gdal_tree(tmp_path)
+    venv_scripts = tmp_path / "project" / ".venv" / "Scripts"
+    base_python_dir = tmp_path / "uv-python"
+    venv_scripts.mkdir(parents=True)
+    base_python_dir.mkdir()
+    commands = []
+
+    monkeypatch.setattr(os, "add_dll_directory", lambda path: object(), raising=False)
+    monkeypatch.setattr(_gdal_runtime.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(
+        _gdal_runtime.sys,
+        "executable",
+        str(venv_scripts / "python.exe"),
+    )
+    monkeypatch.setattr(
+        _gdal_runtime.sys,
+        "_base_executable",
+        str(base_python_dir / "python.exe"),
+        raising=False,
+    )
+    monkeypatch.setattr(_gdal_runtime.sys, "prefix", str(tmp_path / "project" / ".venv"))
+    monkeypatch.setattr(_gdal_runtime.sys, "base_prefix", str(base_python_dir))
+    monkeypatch.setattr(
+        _gdal_runtime.sys,
+        "exec_prefix",
+        str(tmp_path / "project" / ".venv"),
+    )
+    monkeypatch.setattr(_gdal_runtime.sys, "base_exec_prefix", str(base_python_dir))
+
+    def fake_run(cmd, **kwargs):
+        commands.append(cmd)
+        command_text = cmd[-1]
+        for candidate in (venv_scripts, base_python_dir):
+            if str(candidate / "GDAL") in command_text:
+                (candidate / "GDAL" / "bin64").mkdir(parents=True)
+                (candidate / "GDAL" / "common" / "data").mkdir(parents=True)
+                return CompletedProcess(cmd, 0, "", "")
+        raise AssertionError(f"Unexpected GDAL junction command: {command_text}")
+
+    monkeypatch.setattr(_gdal_runtime.subprocess, "run", fake_run)
+
+    _gdal_runtime.configure_rasmapper_gdal_bridge(hecras_dir)
+
+    assert _gdal_runtime.python_gdal_bridge_is_usable(venv_scripts)
+    assert _gdal_runtime.python_gdal_bridge_is_usable(base_python_dir)
+    assert len(commands) == 2
+
+
 def test_geom_mesh_setup_gdal_bridge_creates_python_gdal_by_default(monkeypatch, tmp_path):
     hecras_dir = _make_hecras_gdal_tree(tmp_path)
     python_dir = tmp_path / "uv-python"

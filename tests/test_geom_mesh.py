@@ -24,6 +24,10 @@ _patch_text_seeds = geom_mesh_module._patch_text_seeds
 _reseed_after_perimeter_fix = geom_mesh_module._reseed_after_perimeter_fix
 _remove_short_perimeter_segments = geom_mesh_module._remove_short_perimeter_segments
 _ensure_hdf = geom_mesh_module._ensure_hdf
+_dedupe_seed_points = geom_mesh_module._dedupe_seed_points
+_bad_seed_indexes = geom_mesh_module._bad_seed_indexes
+_remove_seed_indexes = geom_mesh_module._remove_seed_indexes
+_safe_non_virtual_cell_count = geom_mesh_module._safe_non_virtual_cell_count
 
 HECRAS_INTEGRATION_ENV = "RAS_COMMANDER_RUN_HECRAS_INTEGRATION"
 
@@ -60,8 +64,15 @@ class MockPointMs:
     def __init__(self):
         self._items = []
 
+    @property
+    def Count(self):
+        return len(self._items)
+
     def Add(self, pm):
         self._items.append(pm)
+
+    def __getitem__(self, index):
+        return self._items[index]
 
 
 class FakePointCollection:
@@ -104,6 +115,29 @@ class FakeMesh:
 
     def Cell(self, index):
         return self._cells[index]
+
+
+class FakeMeshWithUnavailableCellCount:
+    @property
+    def NonVirtualCellCount(self):
+        raise RuntimeError("mesh cell collection is unavailable")
+
+
+class FakeBadIndexes:
+    def __init__(self, values):
+        self._values = values
+
+    @property
+    def Count(self):
+        return len(self._values)
+
+    def __getitem__(self, index):
+        return self._values[index]
+
+
+class FakeMeshWithBadIndexes:
+    def __init__(self, values):
+        self.BadIndexes = FakeBadIndexes(values)
 
 
 @pytest.fixture
@@ -714,6 +748,46 @@ class TestFixBcConflicts:
 
 class TestGenerate:
     """Test generate() normalization and persistence semantics."""
+
+    def test_safe_cell_count_handles_rasmapper_null_mesh(self):
+        assert _safe_non_virtual_cell_count(FakeMeshWithUnavailableCellCount()) is None
+
+    def test_dedupe_seed_points_removes_duplicate_coordinates(self):
+        seeds = MockPointMs()
+        seeds.Add(MockPointM(1.0, 2.0))
+        seeds.Add(MockPointM(1.0, 2.0))
+        seeds.Add(MockPointM(3.0, 4.0))
+
+        deduped, removed = _dedupe_seed_points(
+            seeds,
+            {"PointMs": MockPointMs},
+            tolerance=1e-6,
+        )
+
+        assert removed == 1
+        assert deduped.Count == 2
+        assert [(deduped[i].X, deduped[i].Y) for i in range(deduped.Count)] == [
+            (1.0, 2.0),
+            (3.0, 4.0),
+        ]
+
+    def test_bad_seed_indexes_filter_to_seed_range(self):
+        indexes = _bad_seed_indexes(FakeMeshWithBadIndexes([-1, 0, 2, 10]), 3)
+        assert indexes == {0, 2}
+
+    def test_remove_seed_indexes_preserves_order(self):
+        seeds = MockPointMs()
+        seeds.Add(MockPointM(1.0, 1.0))
+        seeds.Add(MockPointM(2.0, 2.0))
+        seeds.Add(MockPointM(3.0, 3.0))
+
+        filtered, removed = _remove_seed_indexes(seeds, {1}, {"PointMs": MockPointMs})
+
+        assert removed == 1
+        assert [(filtered[i].X, filtered[i].Y) for i in range(filtered.Count)] == [
+            (1.0, 1.0),
+            (3.0, 3.0),
+        ]
 
     def test_defaults_persist_geometry_with_existing_hdf(self, monkeypatch, breakline_geom_text):
         captured = _mock_generate_success(

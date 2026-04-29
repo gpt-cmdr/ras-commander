@@ -98,8 +98,8 @@ class GeomPreprocessor:
         4. Launch ``Ras.exe -c <project.prj> <plan.p##>``.
         5. Monitor detailed compute messages for the start of hydraulic
            computations, then terminate early when possible.
-        6. Parse ``.bco##`` and ``.comp_msgs.txt``/``.computeMsgs.txt`` for
-           blocking errors.
+        6. Parse ``.bco##``, detailed compute messages, and
+           ``.data_errors.txt``/``.data_warnings.txt`` for blocking errors.
 
         Args:
             plan_number: Plan number or path to a plan file.
@@ -418,6 +418,8 @@ class GeomPreprocessor:
             project_folder / f"{project_name}.bco{plan_num}",
             project_folder / f"{project_name}.p{plan_num}.comp_msgs.txt",
             project_folder / f"{project_name}.p{plan_num}.computeMsgs.txt",
+            project_folder / f"{project_name}.p{plan_num}.data_errors.txt",
+            project_folder / f"{project_name}.p{plan_num}.data_warnings.txt",
         ]
 
     @staticmethod
