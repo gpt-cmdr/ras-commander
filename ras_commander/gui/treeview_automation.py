@@ -546,6 +546,15 @@ def find_tree_item_by_path(
                 break
             current = SendMessageW(treeview_hwnd, TVM_GETNEXTITEM, TVGN_NEXT, current)
 
+        # RAS Mapper nests geometry branches below a project/root node in some
+        # versions.  Allow the first requested path component to be discovered
+        # anywhere, then continue strict child traversal from that node.
+        if not found and depth == 0:
+            for hItem, _item_depth, text in read_tree_items(treeview_hwnd):
+                if text.lower() == target_lower or target_lower in text.lower():
+                    found = hItem
+                    break
+
         if not found:
             VirtualFreeEx(hProcess, remote_mem, 0, MEM_RELEASE)
             CloseHandle(hProcess)
@@ -686,7 +695,7 @@ def _postmessage_right_click(treeview_hwnd: int, hItem: int) -> bool:
     CloseHandle(hProcess)
 
     left, top, right, bottom = struct.unpack("<iiii", bytes(local_rect))
-    cx = (left + right) // 2
+    cx = left + min(max((right - left) // 4, 8), 40)
     cy = (top + bottom) // 2
 
     if cx <= 0 or cy <= 0:
@@ -763,7 +772,7 @@ def _physical_mouse_right_click(treeview_hwnd: int, hItem: int) -> bool:
     pt2 = wintypes.POINT(right, bottom)
     user32.ClientToScreen(treeview_hwnd, ctypes.byref(pt2))
 
-    cx = (pt1.x + pt2.x) // 2
+    cx = pt1.x + min(max((pt2.x - pt1.x) // 4, 8), 40)
     cy = (pt1.y + pt2.y) // 2
 
     if cx <= 0 or cy <= 0:
@@ -1107,6 +1116,120 @@ def click_context_menu_item_uia(menu_text: str, timeout: float = 2.0) -> bool:
         return False
     except Exception as e:
         print(f"[!] UIA menu click failed: {e}")
+        return False
+
+
+def click_context_menu_path_uia(menu_path: List[str], timeout: float = 5.0) -> bool:
+    """
+    Click a sequence of WinForms context-menu items using UI Automation.
+
+    This handles submenu paths such as:
+        ["Update Cross Sections", "River Stations Table"]
+
+    Each path component is matched case-insensitively as a substring of a
+    visible UIA MenuItem name. RASMapper's context menus are WinForms
+    ToolStripDropDown windows, so this UIA route is more reliable than HMENU
+    enumeration for nested menu items.
+    """
+    if not menu_path:
+        return False
+
+    try:
+        import comtypes
+        import comtypes.client
+        comtypes.CoInitialize()
+        comtypes.client.GetModule("UIAutomationCore.dll")
+        from comtypes.gen.UIAutomationClient import (
+            IUIAutomation,
+            IUIAutomationInvokePattern,
+        )
+
+        uia = comtypes.CoCreateInstance(
+            comtypes.GUID("{FF48DBA4-60EF-4201-AA87-54103EEF594E}"),
+            interface=IUIAutomation,
+        )
+        root = uia.GetRootElement()
+        UIA_ControlTypePropertyId = 30003
+        UIA_MenuItemControlTypeId = 50011
+        mi_cond = uia.CreatePropertyCondition(
+            UIA_ControlTypePropertyId, UIA_MenuItemControlTypeId
+        )
+
+        for menu_text in menu_path:
+            target_lower = menu_text.lower()
+            deadline = time.time() + timeout
+            item = None
+
+            while time.time() < deadline:
+                all_items = root.FindAll(4, mi_cond)  # TreeScope_Descendants
+                if all_items:
+                    partial_match = None
+                    for i in range(all_items.Length):
+                        candidate = all_items.GetElement(i)
+                        try:
+                            name = candidate.CurrentName or ""
+                        except Exception:
+                            continue
+                        name_lower = name.lower()
+                        if name_lower == target_lower:
+                            item = candidate
+                            break
+                        if partial_match is None and target_lower in name_lower:
+                            partial_match = candidate
+                    if item is None:
+                        item = partial_match
+                if item:
+                    break
+                time.sleep(0.2)
+
+            if not item:
+                visible_names = []
+                try:
+                    all_items = root.FindAll(4, mi_cond)
+                    for i in range(all_items.Length):
+                        name = all_items.GetElement(i).CurrentName or ""
+                        if name:
+                            visible_names.append(name)
+                except Exception:
+                    pass
+                if visible_names:
+                    print(
+                        "[!] Visible UIA menu items: "
+                        + " | ".join(visible_names[:30])
+                    )
+                print(f"[!] Menu path item '{menu_text}' not found via UIA")
+                return False
+
+            print(f"[+] Found menu path item: '{item.CurrentName}'")
+
+            invoked = False
+            try:
+                pattern = item.GetCurrentPattern(10000)  # UIA_InvokePatternId
+                invoke = pattern.QueryInterface(IUIAutomationInvokePattern)
+                invoke.Invoke()
+                invoked = True
+            except Exception:
+                invoked = False
+
+            if not invoked:
+                rect = item.CurrentBoundingRectangle
+                mx = (rect.left + rect.right) // 2
+                my = (rect.top + rect.bottom) // 2
+
+                user32.SetCursorPos(mx, my)
+                time.sleep(0.15)
+                user32.mouse_event(0x0002, 0, 0, 0, 0)  # LEFTDOWN
+                time.sleep(0.05)
+                user32.mouse_event(0x0004, 0, 0, 0, 0)  # LEFTUP
+            time.sleep(0.5)
+
+        return True
+
+    except ImportError:
+        print("[!] comtypes not installed -- UIA menu path click unavailable")
+        return False
+    except Exception as e:
+        print(f"[!] UIA menu path click failed: {e}")
         return False
 
 
