@@ -9,10 +9,13 @@ from .open_compute import OpenAndComputeWorkflow
 from .run_multiple_plans import RunMultiplePlansWorkflow
 from .open_rasmapper import OpenRasMapperWorkflow
 from .mesh_regeneration import MeshRegenerationWorkflow
+from .xsec_update import RasMapperLayerCommandWorkflow, RasMapperXsecUpdateWorkflow
 
 __all__ = [
     'OpenAndComputeWorkflow',
     'RunMultiplePlansWorkflow',
     'OpenRasMapperWorkflow',
     'MeshRegenerationWorkflow',
+    'RasMapperLayerCommandWorkflow',
+    'RasMapperXsecUpdateWorkflow',
 ]

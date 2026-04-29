@@ -54,6 +54,50 @@ def _add_dll_directory(path: Path) -> None:
     _DLL_DIRECTORY_HANDLES.append(handle)
 
 
+def _normalize_python_dir(path: Union[str, Path]) -> Path:
+    """Return the directory RasMapper may inspect for a sibling GDAL folder."""
+    path = Path(path)
+    if path.suffix.lower() == ".exe":
+        return path.parent
+    return path
+
+
+def _candidate_python_dirs(
+    python_dir: Optional[Union[str, Path]] = None,
+) -> list[Path]:
+    """
+    Return Python directories that RasMapper may treat as the app directory.
+
+    In uv/venv environments, .NET can report the base CPython executable even
+    though Python code is running from ``.venv/Scripts/python.exe``. Preparing
+    both locations prevents RasMapperLib's legacy GDAL probe from surfacing a
+    modal error before the managed assembly is fully loaded.
+    """
+    candidates: list[Path] = []
+
+    def add(value: Optional[Union[str, Path]]) -> None:
+        if value is None:
+            return
+        candidate = _normalize_python_dir(value)
+        if candidate not in candidates:
+            candidates.append(candidate)
+
+    if python_dir is not None:
+        add(python_dir)
+        return candidates
+
+    add(Path(sys.executable).parent)
+    add(getattr(sys, "_base_executable", None))
+
+    if getattr(sys, "base_prefix", None) != getattr(sys, "prefix", None):
+        add(getattr(sys, "base_prefix", None))
+
+    if getattr(sys, "base_exec_prefix", None) != getattr(sys, "exec_prefix", None):
+        add(getattr(sys, "base_exec_prefix", None))
+
+    return candidates
+
+
 def resolve_hecras_gdal_paths(hecras_dir: Union[str, Path]) -> GdalRuntimePaths:
     """Resolve and validate the GDAL runtime bundled with a HEC-RAS install."""
     hecras_dir = Path(hecras_dir)
@@ -113,7 +157,11 @@ def python_gdal_bridge_is_usable(
     python_dir: Optional[Union[str, Path]] = None,
 ) -> bool:
     """Return True when ``python_dir/GDAL`` looks like HEC-RAS's GDAL tree."""
-    python_dir = Path(python_dir) if python_dir is not None else Path(sys.executable).parent
+    python_dir = (
+        _normalize_python_dir(python_dir)
+        if python_dir is not None
+        else Path(sys.executable).parent
+    )
     gdal_dir = python_dir / "GDAL"
     return (
         (gdal_dir / "bin64").is_dir()
@@ -137,34 +185,48 @@ def ensure_python_gdal_junction(
         return False
 
     paths = resolve_hecras_gdal_paths(hecras_dir)
-    python_dir = Path(python_dir) if python_dir is not None else Path(sys.executable).parent
-    gdal_junction = python_dir / "GDAL"
-
-    if python_gdal_bridge_is_usable(python_dir):
-        return True
-
-    try:
-        result = subprocess.run(
-            [
-                "powershell",
-                "-Command",
-                f'New-Item -ItemType Junction -Path "{gdal_junction}" '
-                f'-Target "{paths.gdal_root}" -Force',
-            ],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-    except Exception as exc:
-        logger.error("GDAL junction creation failed: %s", exc)
+    python_dirs = _candidate_python_dirs(python_dir)
+    if not python_dirs:
+        logger.error("Could not identify a Python directory for GDAL bridge setup")
         return False
 
-    if result.returncode == 0:
-        logger.info("Created GDAL junction: %s -> %s", gdal_junction, paths.gdal_root)
-        return python_gdal_bridge_is_usable(python_dir)
+    ok = True
+    for target_python_dir in python_dirs:
+        gdal_junction = target_python_dir / "GDAL"
 
-    logger.error("GDAL junction creation failed: %s", result.stderr.strip())
-    return False
+        if python_gdal_bridge_is_usable(target_python_dir):
+            continue
+
+        try:
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-Command",
+                    f'New-Item -ItemType Junction -Path "{gdal_junction}" '
+                    f'-Target "{paths.gdal_root}" -Force',
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        except Exception as exc:
+            logger.error("GDAL junction creation failed for %s: %s", gdal_junction, exc)
+            ok = False
+            continue
+
+        if result.returncode == 0:
+            logger.info("Created GDAL junction: %s -> %s", gdal_junction, paths.gdal_root)
+            ok = python_gdal_bridge_is_usable(target_python_dir) and ok
+            continue
+
+        logger.error(
+            "GDAL junction creation failed for %s: %s",
+            gdal_junction,
+            result.stderr.strip(),
+        )
+        ok = False
+
+    return ok
 
 
 def configure_rasmapper_gdal_bridge(
@@ -180,9 +242,10 @@ def configure_rasmapper_gdal_bridge(
     """
     paths = configure_hecras_gdal_runtime(hecras_dir)
     if not ensure_python_gdal_junction(paths.hecras_dir, python_dir):
-        py_dir = Path(python_dir) if python_dir is not None else Path(sys.executable).parent
+        py_dirs = _candidate_python_dirs(python_dir)
+        expected = ", ".join(str(py_dir / "GDAL") for py_dir in py_dirs)
         raise RuntimeError(
             "Could not initialize the GDAL bridge required by RasMapperLib. "
-            f"Expected a usable GDAL directory at {py_dir / 'GDAL'}."
+            f"Expected usable GDAL directories at: {expected}."
         )
     return paths

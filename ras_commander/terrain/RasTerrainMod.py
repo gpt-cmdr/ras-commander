@@ -38,7 +38,7 @@ Platform:
 Requirements:
     - HEC-RAS 6.6+ installed
     - pythonnet (pip install pythonnet)
-    - GDAL runtime configured (call setup_gdal_bridge() once)
+    - HEC-RAS GDAL runtime, configured automatically before RasMapperLib loads
 
 Example:
     from ras_commander.terrain import RasTerrainMod
@@ -95,7 +95,7 @@ class RasTerrainMod:
     Prerequisites:
         1. HEC-RAS 6.6+ installed
         2. pythonnet installed (pip install pythonnet)
-        3. GDAL runtime configured (call setup_gdal_bridge() once)
+        3. HEC-RAS GDAL runtime available from the HEC-RAS install
 
     Thread Safety:
         NOT thread-safe. The .NET RASMapperCom instance is shared and COM

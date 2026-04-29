@@ -31,10 +31,11 @@ Production Workflow (generate)
    GeneratePoints(perim, cell_size) for base-grid seeds.
 6. **Fix loop** (matches TryAutoFix tier ordering):
    - Tier 0: Pre-flight removal of short perimeter segments
+   - Tier 1: DuplicatePoints → remove duplicate seed points
    - Tier 2 first: MaxFacesPerCellExceeded → add midpoint seeds
    - Tier 3: FacePerimeterConnectionError → remove bad perimeter vertices
-   - Tier 1: Ratio escalation [0.05 → 0.10 → 0.15 → 0.25]
-   - Tier 4: Douglas-Peucker perimeter simplification (last resort)
+   - Tier 4: Ratio escalation [0.05 → 0.10 → 0.15 → 0.25]
+   - Tier 5: Douglas-Peucker perimeter simplification (last resort)
 7. **Extract cell centers** — geom.Save() + h5py read (fast), or .NET Cell(i)
    iteration (slow fallback).
 8. **Write .g01 text** — _patch_text_seeds() writes cell centers as the sole
@@ -44,7 +45,7 @@ Requires:
     - Windows (HEC-RAS / RasMapperLib is Windows-only)
     - pythonnet >= 3.0.5: pip install pythonnet
     - HEC-RAS 6.6 installed (provides RasMapperLib.dll + GDAL)
-    - HEC-RAS GDAL runtime: call GeomMesh.setup_gdal_bridge() once per process
+    - HEC-RAS GDAL runtime, configured automatically before RasMapperLib loads
 
 All methods are static — no instantiation needed.
 
@@ -372,6 +373,78 @@ def _build_breaklines(d2fa, ns: dict):
 def _compute_mesh(perim, seeds, breaklines, ratio: float, ns: dict):
     """Create and return a MeshFV2D."""
     return ns["MeshFV2D"](perim, seeds, breaklines, None, float(ratio))
+
+
+def _safe_non_virtual_cell_count(mesh) -> Optional[int]:
+    """Return NonVirtualCellCount when RasMapper has a valid cell collection."""
+    try:
+        return int(mesh.NonVirtualCellCount)
+    except Exception as exc:
+        logger.debug("Could not read NonVirtualCellCount: %s", exc)
+        return None
+
+
+def _safe_face_count(mesh) -> Optional[int]:
+    """Return FaceCount when RasMapper has a valid face collection."""
+    try:
+        return int(mesh.FaceCount)
+    except Exception as exc:
+        logger.debug("Could not read FaceCount: %s", exc)
+        return None
+
+
+def _dedupe_seed_points(seeds_pm, ns: dict, tolerance: float = 1e-6):
+    """Remove duplicate seed points while preserving the original order."""
+    out = ns["PointMs"]()
+    seen: set[tuple[int, int]] = set()
+    removed = 0
+    tolerance = max(float(tolerance), 1e-12)
+
+    for i in range(seeds_pm.Count):
+        point = seeds_pm[i]
+        key = (
+            round(float(point.X) / tolerance),
+            round(float(point.Y) / tolerance),
+        )
+        if key in seen:
+            removed += 1
+            continue
+        seen.add(key)
+        out.Add(point)
+
+    return out, removed
+
+
+def _bad_seed_indexes(mesh, seed_count: int) -> set[int]:
+    """Return RasMapper BadIndexes that refer to generated seed points."""
+    try:
+        bad = mesh.BadIndexes
+        count = bad.Count if hasattr(bad, "Count") else len(bad)
+    except Exception as exc:
+        logger.debug("Could not read mesh BadIndexes: %s", exc)
+        return set()
+
+    indexes: set[int] = set()
+    for i in range(count):
+        try:
+            idx = int(bad[i])
+        except Exception:
+            continue
+        if 0 <= idx < seed_count:
+            indexes.add(idx)
+    return indexes
+
+
+def _remove_seed_indexes(seeds_pm, indexes: set[int], ns: dict):
+    """Remove seed points by zero-based index while preserving original order."""
+    out = ns["PointMs"]()
+    removed = 0
+    for i in range(seeds_pm.Count):
+        if i in indexes:
+            removed += 1
+            continue
+        out.Add(seeds_pm[i])
+    return out, removed
 
 
 
@@ -1502,7 +1575,7 @@ class GeomMesh:
 
     Example:
         >>> from ras_commander.geom import GeomMesh
-        >>> GeomMesh.setup_gdal_bridge()  # once per environment
+        >>> GeomMesh.setup_gdal_bridge()  # optional explicit preflight
         >>> result = GeomMesh.generate("01")  # by geometry number
         >>> result = GeomMesh.generate("project.g01")  # or by file path
         >>> if result:
@@ -2454,10 +2527,11 @@ class GeomMesh:
             5. Generate seeds: RegenerateMeshPoints (primary) or GeneratePoints
             6. Fix loop (matches TryAutoFix tier ordering):
                - Tier 0: Remove short perimeter segments (pre-flight)
+               - Tier 1: DuplicatePoints -> remove duplicate seed points
                - Tier 2: MaxFaces -> add midpoint seeds (before ratio escalation)
                - Tier 3: Perimeter errors -> remove bad vertices
-               - Tier 1: Escalate MinFaceLengthRatio [0.05 -> 0.25]
-               - Tier 4: Douglas-Peucker perimeter simplification (last resort)
+               - Tier 4: Escalate MinFaceLengthRatio [0.05 -> 0.25]
+               - Tier 5: Douglas-Peucker perimeter simplification (last resort)
             7. Extract cell centers via geom.Save() + h5py read
             8. Write cell centers to .g01 text - sole persistent output
 
@@ -2633,11 +2707,22 @@ class GeomMesh:
             tier4_count = 0
             midpoint_attempts = 0
             MAX_MIDPOINT_ATTEMPTS = 5
+            duplicate_tolerances = [
+                max(cell_size * 1e-8, 1e-6),
+                max(cell_size * 1e-6, 1e-4),
+                max(cell_size * 1e-5, 1e-3),
+                max(cell_size * 1e-4, 1e-2),
+            ]
+            duplicate_tolerance_idx = 0
             MeshStatus = ns["MeshStatus"]
             complete_val = int(MeshStatus.Complete)
             max_faces_val = int(MeshStatus.MaxFacesPerCellExceeded)
             face_perim_val = int(MeshStatus.FacePerimeterConnectionError)
             perim_poly_val = int(MeshStatus.PerimeterPolygonError)
+            try:
+                duplicate_points_val = int(MeshStatus.DuplicatePoints)
+            except AttributeError:
+                duplicate_points_val = None
 
             for iteration in range(max_iterations):
                 ratio = ratios[min(ratio_idx, len(ratios) - 1)]
@@ -2655,7 +2740,8 @@ class GeomMesh:
 
                 logger.info(
                     f"[{mesh_name}] Iteration {iteration + 1} result: "
-                    f"{state_name} ({mesh.NonVirtualCellCount} cells)"
+                    f"{state_name} "
+                    f"({_safe_non_virtual_cell_count(mesh) or 'unknown'} cells)"
                 )
 
                 if state_val == complete_val:
@@ -2671,7 +2757,15 @@ class GeomMesh:
                     # HEC-RAS/Ras.exe, not a deliverable generated here.
 
                     import numpy as _np
-                    _nv = mesh.NonVirtualCellCount
+                    _nv = _safe_non_virtual_cell_count(mesh)
+                    if _nv is None:
+                        result.status = "error"
+                        result.mesh_state = state_name
+                        result.error_message = (
+                            "Mesh reported Complete but RasMapper did not expose "
+                            "NonVirtualCellCount."
+                        )
+                        return result
 
                     # Fast path: geom.Save() → h5py bulk read
                     _new_seeds = None
@@ -2714,7 +2808,7 @@ class GeomMesh:
                     result.status = "complete"
                     result.mesh_state = state_name
                     result.cell_count = _nv
-                    result.face_count = mesh.FaceCount
+                    result.face_count = _safe_face_count(mesh) or 0
                     result.geom_hdf_path = str(hdf_path)
                     fixes_str = (
                         f", fixes: {result.fixes_applied}"
@@ -2722,12 +2816,55 @@ class GeomMesh:
                     )
                     logger.info(
                         f"[{mesh_name}] Mesh complete: "
-                        f"{_nv} cells, {mesh.FaceCount} faces "
+                        f"{_nv} cells, {result.face_count} faces "
                         f"in {iteration + 1} iteration(s){fixes_str}"
                     )
                     return result
 
                 # ── Try specific error fixes FIRST (matches TryAutoFix) ──
+
+                # DuplicatePoints → remove duplicate seed coordinates at current ratio.
+                if duplicate_points_val is not None and state_val == duplicate_points_val:
+                    bad_indexes = _bad_seed_indexes(mesh, current_seeds_pm.Count)
+                    if bad_indexes:
+                        current_seeds_pm, n_removed = _remove_seed_indexes(
+                            current_seeds_pm,
+                            bad_indexes,
+                            ns,
+                        )
+                        if n_removed > 0:
+                            fix_msg = (
+                                "DuplicatePoints:bad-index-removal"
+                                f"(-{n_removed}pts)"
+                            )
+                            result.fixes_applied.append(fix_msg)
+                            logger.info(f"[{mesh_name}] Fix applied: {fix_msg}")
+                            continue
+
+                    n_removed = 0
+                    while duplicate_tolerance_idx < len(duplicate_tolerances):
+                        tolerance = duplicate_tolerances[duplicate_tolerance_idx]
+                        duplicate_tolerance_idx += 1
+                        current_seeds_pm, n_removed = _dedupe_seed_points(
+                            current_seeds_pm,
+                            ns,
+                            tolerance=tolerance,
+                        )
+                        if n_removed > 0:
+                            fix_msg = (
+                                "DuplicatePoints:dedupe"
+                                f"(-{n_removed}pts,tol={tolerance:g})"
+                            )
+                            result.fixes_applied.append(fix_msg)
+                            logger.info(f"[{mesh_name}] Fix applied: {fix_msg}")
+                            break
+                    if n_removed > 0:
+                        continue
+                    result.error_message = (
+                        "Mesh reported DuplicatePoints, but no duplicate seed "
+                        "coordinates were found within the configured tolerances."
+                    )
+                    break
 
                 # MaxFaces → add midpoint seeds at current ratio
                 if (
