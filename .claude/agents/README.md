@@ -39,6 +39,7 @@ Task Subagents (Haiku)
 - **remote-executor** - Distributed HEC-RAS execution
 - **precipitation-specialist** - AORC and Atlas 14 workflows
 - **quality-assurance** - RasFixit geometry repair
+- **rasmapper-spatial-reviewer** - RASMapper spatial QA screenshots and contextual review
 - **win32com-automation-expert** - COM automation, GUI interaction
 - **ras-commander-api-expert** - API integration, dataframe structures, spawns explore subagents
 - **api-consistency-auditor** - Enforces API conventions, detects pattern violations
@@ -256,6 +257,7 @@ Result: Subagent has full context WITHOUT manual passing!
 | **usgs-integrator** | Sonnet | Domain specialist, multi-step workflows |
 | **remote-executor** | Sonnet | Domain specialist, complex configuration |
 | **quality-assurance** | Sonnet | Domain specialist, RasFixit patterns |
+| **rasmapper-spatial-reviewer** | Sonnet | Domain specialist, RASMapper spatial QA/QC |
 | **precipitation-specialist** | Sonnet | Domain specialist, AORC/Atlas 14 workflows |
 | **hecras-project-inspector** | Sonnet | Project analysis, DataFrame inspection |
 | **hecras-results-analyst** | Sonnet | Results interpretation, quality assessment |

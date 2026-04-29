@@ -121,6 +121,7 @@ Task Subagents (Claude Haiku)
 | **usgs-integrator** | Sonnet | USGS gauge data | usgs_integrate_gauges |
 | **precipitation-specialist** | Sonnet | AORC & Atlas 14 | precip_analyze_aorc |
 | **quality-assurance** | Sonnet | RasFixit validation | qa_repair_geometry |
+| **rasmapper-spatial-reviewer** | Sonnet | RASMapper spatial QA/QC | qa_rasmapper_spatial-review |
 | **remote-executor** | Sonnet | Distributed execution | hecras_compute_remote |
 | **documentation-generator** | Sonnet | Notebooks & API docs | - |
 | **git-operations** | Haiku | Version control | dev_manage_git-worktrees |

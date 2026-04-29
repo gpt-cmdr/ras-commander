@@ -494,6 +494,59 @@ RasGeometry2D.create_lateral_bc_from_gauge(
 - The result loads in HEC-RAS without geometry errors
 - Multi-gauge validation setup becomes minutes instead of hours
 
+### 4. 2D Mesh Face / Breakline Alignment QA
+
+**Status**: Proposed
+**Priority**: Medium-High
+
+**Goal**:
+Create a quantitative QA/QC tool for mesh alignment along breaklines,
+structures, and SA/2D connections.
+
+**Motivating use case**:
+- SA/2D connections and roadway breaklines often look close in plan view but
+  have adjacent mesh faces that are offset enough to change hydraulic behavior
+- Narrow roads or levees can have steep terrain gradients, so small horizontal
+  offsets can create large vertical profile errors
+- Wider roadway embankments can tolerate larger horizontal offsets, so the
+  score should account for feature width and terrain context rather than using a
+  single global tolerance
+
+**Likely API direction**:
+
+```python
+HdfMeshQuality.score_breakline_alignment(
+    geometry_hdf_path,
+    breakline_name=None,
+    structure_name=None,
+    horizontal_tolerance=5.0,
+    vertical_tolerance=0.25,
+    width_field=None,
+    terrain_hdf_path=None,
+)
+```
+
+**Scoring dimensions**:
+- Horizontal distance from the intended breakline/structure alignment to the
+  adjacent mesh cell faces
+- Longitudinal profile divergence between the intended breakline profile and
+  the profile sampled along the adjacent mesh faces
+- Context-sensitive tolerance adjustment for narrow roads, wide embankments,
+  levees, and high-gradient terrain
+- Per-feature score, flagged station ranges, and review geometries suitable for
+  RASMapper screenshots or GIS export
+
+**Explicit non-goals**:
+- Do not change meshing behavior in the first pass
+- Do not rely on visual screenshots alone; screenshots should support a
+  numerical score and extracted diagnostic geometry
+
+**Success criteria**:
+- Misaligned SA/2D connections and breaklines are detectable without manual map
+  inspection
+- The score identifies both horizontal offset risk and vertical profile risk
+- Outputs can drive RASMapper layer/view automation for documentation snapshots
+
 ## Roadmap Hygiene Rules
 
 - If work is already implemented, remove it from the future roadmap and record

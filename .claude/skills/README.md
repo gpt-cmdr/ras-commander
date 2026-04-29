@@ -115,6 +115,7 @@ Current folder names are legacy Claude-era names.
 
 **Repo Tooling And QA**
 - `qa_repair_geometry`
+- `qa_rasmapper_spatial-review`
 - `dev_gate_merge-to-main`
 - `dev_manage_git-worktrees`
 

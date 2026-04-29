@@ -99,8 +99,10 @@ When adding a new component, add it to the appropriate domain group AND the rela
 | Component | Type | Path |
 |-----------|------|------|
 | `qa_repair_geometry` | skill | `.claude/skills/qa_repair_geometry/SKILL.md` |
+| `qa_rasmapper_spatial-review` | skill | `.claude/skills/qa_rasmapper_spatial-review/SKILL.md` |
 | `qa_review_triple-model` | skill | `.claude/skills/qa_review_triple-model/SKILL.md` |
 | `quality-assurance` | agent | `.claude/agents/quality-assurance/SUBAGENT.md` |
+| `rasmapper-spatial-reviewer` | agent | `.claude/agents/rasmapper-spatial-reviewer.md` |
 | `validation-patterns.md` | rule | `.claude/rules/validation/validation-patterns.md` |
 
 ### HEC-RAS GUI & COM Automation
@@ -341,7 +343,16 @@ use these only when the user explicitly requests the legacy provider-mixed workf
 **`qa_repair_geometry`** (skill) -- geometry repair
 - Agents: `quality-assurance`
 - Rules: `validation-patterns.md`, `geometry.md`
-- Related skills: `hecras_parse_geometry`
+- Related skills: `hecras_parse_geometry`, `qa_rasmapper_spatial-review`
+
+**`qa_rasmapper_spatial-review`** (skill) -- RASMapper spatial QA snapshots
+- Agents: `rasmapper-spatial-reviewer`
+- Rules: `validation-patterns.md`, `hdf-files.md`
+- Related skills: `hecras_screenshot`, `hecras_extract_results`, `hecras_parse_geometry`, `qa_repair_geometry`
+
+**`rasmapper-spatial-reviewer`** (agent) -- terrain-backed RASMapper review
+- Uses skills: `qa_rasmapper_spatial-review`
+- Related agents: `quality-assurance`, `hdf-analyst`, `hecras-project-inspector`, `hecras-results-analyst`
 
 **`qa_review_triple-model`** (skill) -- legacy explicit-request-only provider-mixed review
 - Agents: `code-oracle-codex`, `code-oracle-gemini`
@@ -373,7 +384,7 @@ use these only when the user explicitly requests the legacy provider-mixed workf
 
 **`hecras_screenshot`** (skill) -- GUI screenshot capture
 - Agents: `win32com-automation-expert`, `hecras-code-archaeologist`
-- Related skills: `hecras_explore_gui`
+- Related skills: `hecras_explore_gui`, `qa_rasmapper_spatial-review`
 
 ### Notebook Operations Domain
 
