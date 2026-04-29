@@ -142,7 +142,7 @@ class RasEbfeModels:
             "organizer": "organize_spring_river",
             "download_subdir": "11010010_Models_extracted",
             "output_name": "SpringRiver_11010010",
-            "ras_version": "6.6",
+            "ras_version": "6.1",
             "notes": (
                 "Distinct Spring HUC model archive. Uses SpringRiver naming "
                 "to avoid confusion with SpringCreek_12040102."
@@ -1880,22 +1880,21 @@ Flow data is contained in steady flow files (.f##) within each reach model.
     def organize_tickfaw(
         downloaded_folder: Optional[Path] = None,
         output_folder: Optional[Path] = None,
-        validate_dss: bool = True
+        validate_dss: bool = True,
+        include_ble_surfaces: bool = False,
+        ras_version: str = "5.0.7",
     ) -> Path:
         """Organize Tickfaw (08070203) eBFE model with automatic download."""
         if downloaded_folder is None:
             downloaded_folder = Path("./ebfe_downloads/08070203_Models_extracted")
         if output_folder is None:
             output_folder = Path("./ebfe_organized/Tickfaw_08070203")
-        return RasEbfeModels._organize_single_archive_model(
-            display_name="Tickfaw",
-            huc8="08070203",
-            url=RasEbfeModels._TICKFAW_URLS['models'],
+        return RasEbfeModels._organize_tickfaw_delivery(
             downloaded_folder=Path(downloaded_folder),
             output_folder=Path(output_folder),
-            description="Tickfaw Models (13.5 GB)",
             validate_dss=validate_dss,
-            ras_version="5.0.7",
+            include_ble_surfaces=include_ble_surfaces,
+            ras_version=ras_version,
         )
 
     @staticmethod
@@ -1941,7 +1940,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             output_folder=Path(output_folder),
             description="Spring River Models (7.7 GB)",
             validate_dss=validate_dss,
-            ras_version="6.6",
+            ras_version="6.1",
         )
 
     @staticmethod
@@ -1974,6 +1973,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         output_folder: Optional[Path] = None,
         skip_output: bool = False,
         validate_dss: bool = False,
+        ras_version: str = "5.0.7",
         rebuild_mismatched_terrain: bool = True,
         terrain_create_ras_version: str = "6.6",
         terrain_rebuild_gdal_version: str = "6.6",
@@ -2003,6 +2003,8 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             skip_output: If True, skip downloading Output zips (saves ~27 GB).
                 Input/Terrain/LandUse still downloaded (~4 GB).
             validate_dss: Run DSS validation checks (default: False)
+            ras_version: HEC-RAS version used when initializing projects for
+                path repair metadata.
             rebuild_mismatched_terrain: Reproject and rebuild terrains when
                 a watershed's RAS projection does not match the delivered
                 shared terrain. Default True for Amite's LA North/LA South gap.
@@ -2117,21 +2119,17 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         if inv_file.exists():
             shutil.copy2(inv_file, folders['ras'] / inv_file.name)
 
-        # Find Terrain.hdf inside extracted archive
-        terrain_source = None
-        for candidate in [terrain_dir / 'Terrain', terrain_dir]:
-            hdf_files = list(candidate.rglob('Terrain.hdf'))
-            if hdf_files:
-                terrain_source = hdf_files[0].parent
-                break
-
-        # Find LandCover.tif inside extracted archive
-        landuse_source = None
-        for candidate in [landuse_dir / 'Landcover', landuse_dir / 'LandCover', landuse_dir]:
-            tif_files = list(candidate.rglob('LandCover.tif'))
-            if tif_files:
-                landuse_source = tif_files[0].parent
-                break
+        # Find candidate terrain and land-cover folders inside extracted archives.
+        terrain_candidates = RasEbfeModels._asset_parent_candidates(
+            terrain_dir,
+            "Terrain.hdf",
+        )
+        landuse_candidates = RasEbfeModels._asset_parent_candidates(
+            landuse_dir,
+            "LandCover.tif",
+        )
+        terrain_source = terrain_candidates[0] if terrain_candidates else None
+        landuse_source = landuse_candidates[0] if landuse_candidates else None
 
         if terrain_source:
             print(f"  Terrain source: {terrain_source}")
@@ -2163,17 +2161,76 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             file_count = len(list(wa_dest.rglob('*')))
             print(f"    Copied {file_count} input files")
 
-            # Copy shared terrain INTO project folder
-            terrain_dest = wa_dest / "Terrain"
-            if terrain_source and not terrain_dest.exists():
-                shutil.copytree(terrain_source, terrain_dest, dirs_exist_ok=True)
-                print(f"    Terrain/ copied into project folder")
+            project_reference = next(
+                iter(sorted(wa_dest.glob("*.g[0-9][0-9].hdf"))),
+                None,
+            ) or next(
+                (
+                    prj
+                    for prj in sorted(wa_dest.glob("*.prj"))
+                    if RasEbfeModels._is_hecras_project_prj(prj)
+                ),
+                None,
+            )
+            project_crs = RasEbfeModels._read_spatial_reference(project_reference)
 
-            # Copy shared landcover INTO project folder
-            landcover_dest = wa_dest / "Landcover"
-            if landuse_source and not landcover_dest.exists():
-                shutil.copytree(landuse_source, landcover_dest, dirs_exist_ok=True)
-                print(f"    Landcover/ copied into project folder")
+            # Copy CRS-matching shared terrain INTO each project folder. Also
+            # preserve the source folder name as an audit trail for LA North/South.
+            selected_terrain_source = RasEbfeModels._select_matching_asset_folder(
+                terrain_candidates,
+                project_crs,
+                "Terrain.hdf",
+            )
+            if selected_terrain_source:
+                for terrain_dest in {
+                    wa_dest / "Terrain",
+                    wa_dest / selected_terrain_source.name,
+                }:
+                    if not terrain_dest.exists():
+                        shutil.copytree(
+                            selected_terrain_source,
+                            terrain_dest,
+                            dirs_exist_ok=True,
+                        )
+                print(
+                    "    Terrain copied into project folder "
+                    f"({selected_terrain_source.name})"
+                )
+
+            # Copy CRS-matching shared landcover INTO each project folder.
+            selected_landuse_source = RasEbfeModels._select_matching_asset_folder(
+                landuse_candidates,
+                project_crs,
+                "LandCover.tif",
+            )
+            if selected_landuse_source:
+                for landcover_dest in {
+                    wa_dest / "Landcover",
+                    wa_dest / selected_landuse_source.name,
+                }:
+                    if not landcover_dest.exists():
+                        shutil.copytree(
+                            selected_landuse_source,
+                            landcover_dest,
+                            dirs_exist_ok=True,
+                        )
+                print(
+                    "    Landcover copied into project folder "
+                    f"({selected_landuse_source.name})"
+                )
+
+            projection_file = wa_dest / "projection_file.prj"
+            if project_crs and not projection_file.exists():
+                projection_text = str(project_crs)
+                try:
+                    from pyproj import CRS
+
+                    projection_text = CRS.from_user_input(project_crs).to_wkt(
+                        version="WKT1_ESRI",
+                    )
+                except Exception:
+                    pass
+                projection_file.write_text(projection_text + "\n", encoding='utf-8')
 
             # Move Output HDF files INTO project folder
             if wa_key in output_dirs:
@@ -2242,6 +2299,26 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         print(f"  DSS path corrections: {dss_corrections}")
         print(f"  Terrain path corrections: {terrain_corrections}")
         print(f"  Cross-model ref corrections: {cross_model_fixes}")
+
+        repair_summaries = []
+        for wa_key in RasEbfeModels._AMITE_WATERSHEDS:
+            project_folder = folders['ras'] / wa_key
+            if not project_folder.exists():
+                continue
+            has_project = any(
+                RasEbfeModels._is_hecras_project_prj(prj)
+                for prj in project_folder.glob("*.prj")
+            )
+            if not has_project:
+                continue
+            repair_summaries.append(
+                RasEbfeModels.repair_project_paths(
+                    project_folder,
+                    search_roots=[folders['spatial'], folders['docs']],
+                    ras_version=ras_version,
+                )
+            )
+
         standardization = RasEbfeModels._standardize_ras_model_tree(folders['ras'])
         print(
             "  Standardized "
@@ -2958,6 +3035,504 @@ HEC-RAS version: 5.0.1 / 5.0.3
 
         print(f"\n{display_name} organized to: {output_folder}")
         return output_folder
+
+    @staticmethod
+    def _component_folder(root: Path, folder_name: str) -> Optional[Path]:
+        """Find an extracted component folder under a download root."""
+        root = Path(root)
+        candidates = []
+        if root.name.lower() == folder_name.lower():
+            candidates.append(root)
+        candidates.append(root / folder_name)
+        if root.exists():
+            candidates.extend(
+                path for path in root.rglob(folder_name)
+                if path.is_dir() and path.name.lower() == folder_name.lower()
+            )
+        for candidate in candidates:
+            if candidate.exists() and candidate.is_dir():
+                return candidate
+        return None
+
+    @staticmethod
+    def _find_hecras_project_source(
+        search_root: Path,
+        preferred_name: Optional[str] = None,
+    ) -> Path:
+        """Find the most likely HEC-RAS project folder inside a delivery tree."""
+        search_root = Path(search_root)
+        project_files = [
+            prj for prj in search_root.rglob("*.prj")
+            if RasEbfeModels._is_hecras_project_prj(prj)
+        ]
+        if not project_files:
+            return search_root
+
+        preferred = (preferred_name or "").lower()
+
+        def score(prj_file: Path) -> tuple[int, int]:
+            text = str(prj_file.parent).lower()
+            name_score = 1 if preferred and preferred in text else 0
+            try:
+                depth = len(prj_file.parent.relative_to(search_root).parts)
+            except ValueError:
+                depth = 999
+            return (name_score, -depth)
+
+        return max(project_files, key=score).parent
+
+    @staticmethod
+    def _organize_tickfaw_delivery(
+        downloaded_folder: Path,
+        output_folder: Path,
+        validate_dss: bool,
+        include_ble_surfaces: bool,
+        ras_version: str,
+    ) -> Path:
+        """Organize Tickfaw with optional BLE surface and vector components."""
+        RasEbfeModels._ensure_console_output_safe()
+        downloaded_folder = Path(downloaded_folder)
+        output_folder = Path(output_folder)
+
+        folders = {
+            'hms': output_folder / "HMS Model",
+            'ras': output_folder / "RAS Model",
+            'spatial': output_folder / "Spatial Data",
+            'docs': output_folder / "Documentation",
+            'agent': output_folder / "agent",
+        }
+        for folder in folders.values():
+            folder.mkdir(parents=True, exist_ok=True)
+
+        print("Organizing Tickfaw (08070203)")
+        print(f"Source: {downloaded_folder}")
+        print(f"Output: {output_folder}\n")
+
+        models_root = (
+            RasEbfeModels._component_folder(
+                downloaded_folder,
+                "08070203_Models_extracted",
+            )
+            or downloaded_folder
+        )
+        if not models_root.exists() or not any(models_root.iterdir()):
+            download_parent = (
+                downloaded_folder.parent
+                if downloaded_folder.name.lower().endswith("_extracted")
+                else downloaded_folder
+            )
+            models_root = RasEbfeModels._download_and_extract(
+                url=RasEbfeModels._TICKFAW_URLS['models'],
+                output_folder=download_parent,
+                description="Tickfaw Models (13.5 GB)",
+            )
+
+        print("[1/4] Organizing RAS model files...")
+        source_project = RasEbfeModels._find_hecras_project_source(
+            models_root,
+            preferred_name="tickfaw",
+        )
+        project_dest = folders['ras'] / "Tickfaw"
+        ras_files = RasEbfeModels._copy_tree_contents(source_project, project_dest)
+        print(f"  Copied {ras_files} RAS file(s)")
+
+        print("\n[2/4] Organizing documentation and spatial data...")
+        docs_copied = RasEbfeModels._copy_documentation_assets(
+            models_root,
+            folders['docs'],
+        )
+        docs_root = RasEbfeModels._component_folder(
+            downloaded_folder,
+            "08070203_Documents_extracted",
+        )
+        if docs_root is not None:
+            docs_copied += RasEbfeModels._copy_documentation_assets(
+                docs_root,
+                folders['docs'],
+            )
+
+        vector_root = RasEbfeModels._component_folder(
+            downloaded_folder,
+            "08070203_VectorData_extracted",
+        )
+        vector_files = 0
+        if vector_root is not None:
+            vector_source = (
+                RasEbfeModels._find_named_folder(vector_root, "08070203_VectorData")
+                or vector_root
+            )
+            vector_files = RasEbfeModels._copy_tree_contents(
+                vector_source,
+                folders['spatial'] / "VectorData",
+            )
+
+        ble_labels = [
+            ("Depth01", "08070203_Depth01_extracted"),
+            ("Depth002", "08070203_Depth002_extracted"),
+            ("Elev01", "08070203_Elev01_extracted"),
+            ("Elev002", "08070203_Elev002_extracted"),
+        ]
+        ble_manifest_lines = ["# BLE Surfaces", ""]
+        if include_ble_surfaces:
+            for label, component_name in ble_labels:
+                component_root = RasEbfeModels._component_folder(
+                    downloaded_folder,
+                    component_name,
+                )
+                if component_root is None:
+                    continue
+                destination = folders['spatial'] / "BLE Surfaces" / label
+                copied = RasEbfeModels._copy_tree_contents(
+                    component_root,
+                    destination,
+                )
+                ble_manifest_lines.append(
+                    f"- {label}: {copied} file(s) copied to "
+                    f"`BLE Surfaces/{label}`"
+                )
+        if len(ble_manifest_lines) == 2:
+            ble_manifest_lines.append("- No BLE surface components were organized.")
+        (folders['spatial'] / "BLE_SURFACES.md").write_text(
+            "\n".join(ble_manifest_lines) + "\n",
+            encoding='utf-8',
+        )
+
+        (folders['hms'] / "README.md").write_text(
+            "# No HMS Model\n\n"
+            "No separate HEC-HMS project was delivered with the Tickfaw eBFE "
+            "RAS model archive.\n",
+            encoding='utf-8',
+        )
+        print(f"  Copied {docs_copied} documentation file(s)")
+        print(f"  Copied {vector_files} vector data file(s)")
+
+        print("\n[3/4] Repairing paths and applying delivery standardization...")
+        repair_stats = RasEbfeModels.repair_project_paths(
+            project_dest,
+            search_roots=[folders['spatial'], folders['docs']],
+            ras_version=ras_version,
+        )
+        standardization = RasEbfeModels._standardize_ras_model_tree(folders['ras'])
+        print(f"  Path repair: {repair_stats}")
+        print(
+            "  Standardized "
+            f"{standardization.get('project_count', 0)} RAS project folder(s)"
+        )
+
+        dss_results = []
+        if validate_dss:
+            print("\n[4/4] Validating DSS files...")
+            dss_results = RasEbfeModels._validate_dss_files(folders['ras'])
+        else:
+            print("\n[4/4] DSS validation skipped")
+
+        log_content = f"""# Agent Work Log - Tickfaw
+
+**Model**: Tickfaw (08070203)
+**HEC-RAS Version**: {ras_version}
+**Date**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## Organization Summary
+
+- RAS files copied: {ras_files}
+- Documentation files copied: {docs_copied}
+- Vector files copied: {vector_files}
+- DSS validation files checked: {len(dss_results)}
+- Path repair: {repair_stats}
+- Standardized RAS projects: {standardization.get('project_count', 0)}
+"""
+        (folders['agent'] / "model_log.md").write_text(
+            log_content,
+            encoding='utf-8',
+        )
+
+        print(f"\nTickfaw organized to: {output_folder}")
+        return output_folder
+
+    @staticmethod
+    def _path_basename(value: str) -> str:
+        """Return a basename from either Windows or POSIX path text."""
+        return re.split(r"[\\/]", str(value).strip().strip('"'))[-1]
+
+    @staticmethod
+    def _project_text_files_for_repair(
+        project_folder: Path,
+        ras_version: Optional[str],
+    ) -> List[Path]:
+        """Collect RAS project text files, preferring ras-commander DataFrames."""
+        project_folder = Path(project_folder)
+        files: set[Path] = set()
+
+        try:
+            import ras_commander
+
+            ras_object = ras_commander.RasPrj()
+            ras_commander.init_ras_project(
+                project_folder,
+                ras_version or "",
+                ras_object=ras_object,
+                load_results_summary=False,
+            )
+            prj_file = getattr(ras_object, "prj_file", None)
+            if prj_file:
+                files.add(Path(prj_file))
+            for attr_name in [
+                "plan_df",
+                "unsteady_df",
+                "flow_df",
+                "steady_df",
+                "geom_df",
+                "boundaries_df",
+            ]:
+                dataframe = getattr(ras_object, attr_name, None)
+                if dataframe is None or not hasattr(dataframe, "columns"):
+                    continue
+                for column in ["full_path", "path"]:
+                    if column not in dataframe.columns:
+                        continue
+                    for value in dataframe[column].dropna().tolist():
+                        files.add(Path(value))
+        except Exception:
+            pass
+
+        files.update(
+            path for path in project_folder.iterdir()
+            if path.is_file()
+            and (
+                path.suffix.lower() == ".prj"
+                or re.search(r"\.[puf]\d+$", path.name, re.IGNORECASE)
+            )
+        )
+        return sorted(path for path in files if path.exists())
+
+    @staticmethod
+    def _repair_dss_text_references(
+        project_folder: Path,
+        ras_version: Optional[str],
+    ) -> int:
+        """Rewrite DSS references in RAS text files to local relative paths."""
+        project_folder = Path(project_folder)
+        dss_files = sorted(project_folder.rglob("*.dss"))
+        dss_lookup = {path.name.lower(): path for path in dss_files}
+        text_files = RasEbfeModels._project_text_files_for_repair(
+            project_folder,
+            ras_version,
+        )
+        pattern = re.compile(
+            r"(?P<prefix>DSS (?:File|Filename)=)(?P<value>[^\r\n]+)",
+            re.IGNORECASE,
+        )
+        corrections = 0
+
+        for text_file in text_files:
+            content = text_file.read_text(encoding='utf-8', errors='ignore')
+            modified = False
+
+            def replace_match(match: re.Match) -> str:
+                nonlocal corrections, modified
+                old_value = match.group("value").strip()
+                dss_name = RasEbfeModels._path_basename(old_value).lower()
+                destination = dss_lookup.get(dss_name)
+                if destination is None and len(dss_files) == 1:
+                    destination = dss_files[0]
+                if destination is None:
+                    return match.group(0)
+                new_value = RasEbfeModels._format_windows_relative(
+                    destination,
+                    text_file.parent,
+                )
+                if new_value == old_value:
+                    return match.group(0)
+                corrections += 1
+                modified = True
+                return f"{match.group('prefix')}{new_value}"
+
+            updated = pattern.sub(replace_match, content)
+            if modified:
+                text_file.write_text(updated, encoding='utf-8')
+
+        return corrections
+
+    @staticmethod
+    def _find_repair_asset(
+        project_folder: Path,
+        search_roots: List[Path],
+        filename: str,
+    ) -> Optional[Path]:
+        """Find a referenced asset by basename in project and support folders."""
+        name = RasEbfeModels._path_basename(filename)
+        for root in [project_folder, *search_roots]:
+            root = Path(root)
+            if not root.exists():
+                continue
+            direct = root / name
+            if direct.exists() and direct.is_file():
+                return direct
+            for candidate in root.rglob(name):
+                if candidate.is_file() and candidate.name.lower() == name.lower():
+                    return candidate
+        return None
+
+    @staticmethod
+    def _repair_rasmap_references(
+        project_folder: Path,
+        search_roots: List[Path],
+    ) -> Dict[str, int]:
+        """Repair .rasmap Filename attributes and common folder settings."""
+        import xml.etree.ElementTree as ET
+
+        project_folder = Path(project_folder)
+        search_roots = [Path(root) for root in search_roots]
+        rasmap_corrections = 0
+        folder_corrections = 0
+        unresolved_paths = 0
+
+        def local_folder(*names: str) -> Optional[Path]:
+            for name in names:
+                candidate = project_folder / name
+                if candidate.exists() and candidate.is_dir():
+                    return candidate
+            return None
+
+        def vector_folder() -> Optional[Path]:
+            for root in search_roots:
+                if root.name.lower() == "vectordata":
+                    return root
+                candidate = root / "VectorData"
+                if candidate.exists() and candidate.is_dir():
+                    return candidate
+            return None
+
+        for rasmap_file in sorted(project_folder.glob("*.rasmap")):
+            try:
+                tree = ET.parse(rasmap_file)
+            except ET.ParseError:
+                continue
+            root = tree.getroot()
+            modified = False
+
+            for element in root.iter():
+                old_value = element.attrib.get("Filename")
+                if old_value is None:
+                    continue
+                destination = RasEbfeModels._find_repair_asset(
+                    project_folder,
+                    search_roots,
+                    old_value,
+                )
+                if destination is None:
+                    unresolved_paths += 1
+                    continue
+                new_value = RasEbfeModels._format_windows_relative(
+                    destination,
+                    project_folder,
+                )
+                if new_value == old_value:
+                    continue
+                element.set("Filename", new_value)
+                rasmap_corrections += 1
+                modified = True
+
+            folder_targets = {
+                "AddDataFolder": vector_folder(),
+                "TerrainDestinationFolder": local_folder("Terrain"),
+                "TerrainSourceFolder": local_folder("Terrain"),
+                "LandCoverDestinationFolder": local_folder(
+                    "LandCover",
+                    "Land Cover",
+                    "Landcover",
+                ),
+            }
+            for tag_name, target in folder_targets.items():
+                if target is None:
+                    continue
+                for element in root.iter(tag_name):
+                    new_value = RasEbfeModels._format_windows_relative(
+                        target,
+                        project_folder,
+                    )
+                    if element.text == new_value:
+                        continue
+                    element.text = new_value
+                    folder_corrections += 1
+                    modified = True
+
+            if modified:
+                tree.write(rasmap_file, encoding='utf-8', xml_declaration=False)
+
+        return {
+            "rasmap_corrections": rasmap_corrections,
+            "folder_corrections": folder_corrections,
+            "unresolved_paths": unresolved_paths,
+        }
+
+    @staticmethod
+    @log_call
+    def repair_project_paths(
+        project_folder: Path,
+        search_roots: Optional[List[Path]] = None,
+        ras_version: Optional[str] = None,
+    ) -> Dict[str, int]:
+        """Repair local DSS and rasmap references for an organized RAS project."""
+        project_folder = Path(project_folder)
+        roots = [Path(root) for root in (search_roots or [])]
+        dss_corrections = RasEbfeModels._repair_dss_text_references(
+            project_folder,
+            ras_version,
+        )
+        rasmap_stats = RasEbfeModels._repair_rasmap_references(
+            project_folder,
+            roots,
+        )
+        return {
+            "dss_corrections": dss_corrections,
+            "rasmap_corrections": rasmap_stats["rasmap_corrections"],
+            "folder_corrections": rasmap_stats["folder_corrections"],
+            "unresolved_paths": rasmap_stats["unresolved_paths"],
+        }
+
+    @staticmethod
+    def _asset_parent_candidates(root: Path, asset_name: str) -> List[Path]:
+        """Return unique parent folders containing a named terrain/landcover asset."""
+        root = Path(root)
+        if not root.exists():
+            return []
+        seen = set()
+        candidates = []
+        for asset in sorted(root.rglob(asset_name)):
+            if not asset.is_file():
+                continue
+            key = str(asset.parent.resolve()).lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append(asset.parent)
+        return candidates
+
+    @staticmethod
+    def _select_matching_asset_folder(
+        candidates: List[Path],
+        project_crs: Optional[str],
+        asset_name: str,
+    ) -> Optional[Path]:
+        """Prefer the candidate whose asset CRS matches the project CRS."""
+        if not candidates:
+            return None
+        if project_crs:
+            for candidate in candidates:
+                asset_crs = RasEbfeModels._read_spatial_reference(
+                    Path(candidate) / asset_name,
+                )
+                if asset_crs and RasEbfeModels._crs_matches(project_crs, asset_crs):
+                    return Path(candidate)
+        return Path(candidates[0])
+
+    @staticmethod
+    def _read_spatial_reference(path: Optional[Path]) -> Optional[str]:
+        """Compatibility shim for organizer CRS checks."""
+        if path is None:
+            return None
+        return RasEbfeModels._read_asset_projection(Path(path))
 
     @staticmethod
     def _find_named_folder(root: Path, folder_name: str) -> Optional[Path]:
@@ -3684,6 +4259,81 @@ HEC-RAS version: 5.0.1 / 5.0.3
         return {'nested_assets_copied': copied}
 
     @staticmethod
+    def _standardize_legacy_land_classification_assets(project_folder: Path) -> Dict[str, int]:
+        """
+        Copy Land Cover assets into legacy Land Classification paths when needed.
+
+        HEC-RAS 6.1 geometry HDFs can retain ``Land Cover Filename`` attributes
+        pointing at ``.\\Land Classification\\...`` even when the rasmap layer has
+        been normalized to the delivery-format ``Land Cover`` folder. Keeping a
+        compatibility copy lets the preprocessor resolve the original HDF
+        reference without abandoning the standardized rasmap layout.
+        """
+        try:
+            import h5py
+        except Exception:
+            return {'legacy_land_classification_assets_copied': 0}
+
+        project_folder = Path(project_folder)
+        land_cover_folder = project_folder / "Land Cover"
+        if not land_cover_folder.exists():
+            return {'legacy_land_classification_assets_copied': 0}
+
+        required_names = set()
+        hdf_files = list(project_folder.glob("*.g[0-9][0-9].hdf"))
+        hdf_files.extend(project_folder.glob("*.p[0-9][0-9].hdf"))
+
+        for hdf_file in hdf_files:
+            try:
+                with h5py.File(hdf_file, "r") as hdf:
+                    def collect(_name, obj):
+                        for attr_name in obj.attrs.keys():
+                            if "land cover filename" not in str(attr_name).lower():
+                                continue
+                            raw_value = obj.attrs[attr_name]
+                            if isinstance(raw_value, (bytes, bytearray)):
+                                current_value = raw_value.decode(
+                                    "utf-8",
+                                    errors="ignore",
+                                )
+                            elif hasattr(raw_value, "decode"):
+                                current_value = raw_value.decode(
+                                    "utf-8",
+                                    errors="ignore",
+                                )
+                            else:
+                                current_value = str(raw_value)
+                            normalized = current_value.replace("/", "\\").lower()
+                            if "land classification" in normalized:
+                                required_names.add(Path(current_value).name)
+
+                    collect("/", hdf)
+                    hdf.visititems(collect)
+            except Exception:
+                continue
+
+        copied = 0
+        if not required_names:
+            return {'legacy_land_classification_assets_copied': 0}
+
+        legacy_folder = project_folder / "Land Classification"
+        legacy_folder.mkdir(parents=True, exist_ok=True)
+        for name in sorted(required_names):
+            source = land_cover_folder / name
+            if not source.exists():
+                continue
+            for sibling in sorted(land_cover_folder.glob(f"{source.stem}.*")):
+                if not sibling.is_file():
+                    continue
+                destination = legacy_folder / sibling.name
+                if destination.exists():
+                    continue
+                shutil.copy2(sibling, destination)
+                copied += 1
+
+        return {'legacy_land_classification_assets_copied': copied}
+
+    @staticmethod
     def _standardize_hdf_asset_references(project_folder: Path) -> Dict[str, int]:
         """Update HDF terrain/land-cover filename attributes to local folders."""
         try:
@@ -3693,7 +4343,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             return {'hdf_asset_references_updated': 0}
 
         asset_lookup = {}
-        for folder_name in ["Terrain", "Land Cover"]:
+        for folder_name in ["Terrain", "Land Cover", "Land Classification"]:
             folder = project_folder / folder_name
             if not folder.exists():
                 continue
@@ -3714,6 +4364,24 @@ HEC-RAS version: 5.0.1 / 5.0.3
 
         if not asset_lookup:
             return {'hdf_asset_references_updated': 0}
+
+        def resolve_asset(current_value: str, is_terrain: bool, is_land_cover: bool) -> Optional[Path]:
+            asset_name = Path(current_value).name
+            normalized = current_value.replace("/", "\\").lower()
+            folder_order = []
+            if is_terrain:
+                folder_order.append("Terrain")
+            if is_land_cover:
+                if "land classification" in normalized:
+                    folder_order.extend(["Land Classification", "Land Cover"])
+                else:
+                    folder_order.extend(["Land Cover", "Land Classification"])
+
+            for folder_name in folder_order:
+                candidate = project_folder / folder_name / asset_name
+                if candidate.exists():
+                    return candidate
+            return asset_lookup.get(asset_name.lower())
 
         terrain_default = asset_lookup.get("terrain.hdf")
         land_cover_default = next(
@@ -3773,8 +4441,11 @@ HEC-RAS version: 5.0.1 / 5.0.3
                                 )
                             else:
                                 current_value = str(raw_value)
-                            asset_name = Path(current_value).name.lower()
-                            destination = asset_lookup.get(asset_name)
+                            destination = resolve_asset(
+                                current_value,
+                                is_terrain,
+                                is_land_cover,
+                            )
                             if destination is None and is_terrain:
                                 destination = terrain_default
                             if destination is None and is_land_cover:
@@ -4160,6 +4831,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         result.update(RasEbfeModels._standardize_projection(project_folder))
         result.update(RasEbfeModels._standardize_rasmap_assets(project_folder))
         result.update(RasEbfeModels._standardize_nested_asset_folders(project_folder))
+        result.update(RasEbfeModels._standardize_legacy_land_classification_assets(project_folder))
         result.update(RasEbfeModels._standardize_hdf_asset_references(project_folder))
         return result
 
@@ -4198,6 +4870,10 @@ HEC-RAS version: 5.0.1 / 5.0.3
             ),
             'nested_assets_copied': sum(
                 item.get('nested_assets_copied', 0) for item in results
+            ),
+            'legacy_land_classification_assets_copied': sum(
+                item.get('legacy_land_classification_assets_copied', 0)
+                for item in results
             ),
             'hdf_asset_references_updated': sum(
                 item.get('hdf_asset_references_updated', 0) for item in results
@@ -5261,6 +5937,20 @@ wrong Louisiana State Plane zone for watersheds whose coordinates place them in
 the Louisiana South delivery.
 """
 
+        crs_inventory_section = """
+### CRS Inventory
+The organizer inventories each watershed geometry, terrain, and land-cover
+source before copying shared assets into project-local folders. When multiple
+Louisiana State Plane deliveries are present, the CRS-matching terrain and
+land-cover folder is preferred for the watershed being organized.
+
+### Manual Terrain Follow-Up Required
+If an Amite watershed still reports a terrain/projection mismatch after
+organization, rebuild the terrain from the original AECOM submittal source
+(`Terrain/SOURCE/DEM_10ft.tif`) and log the manual rebuild in the validation
+matrix before marking the preprocessor as fully validated.
+"""
+
         log_content = f"""# Agent Work Log - Amite
 
 **Model**: Amite (08070202)
@@ -5291,6 +5981,7 @@ the Louisiana South delivery.
 {dss_section}
 {projection_override_section}
 {terrain_rebuild_section}
+{crs_inventory_section}
 ## Model Notes
 
 - WA1 covers Mississippi portion (WA1_LA.prj)

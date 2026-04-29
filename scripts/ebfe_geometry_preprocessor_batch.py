@@ -60,7 +60,7 @@ STUDY_RAS_VERSIONS = {
     "spring-creek": "5.0.7",
     "upper-guadalupe": "6.3.1",
     "eleven-point": "6.6",
-    "spring-river": "6.6",
+    "spring-river": "6.1",
     "north-galveston-bay": "5.0.7",
     "lower-brazos": "6.6",
     "amite": "5.0.7",
@@ -292,6 +292,7 @@ def run_project(
                 force=not args.no_force,
                 clear_messages=True,
                 clear_geompre=args.clear_geompre,
+                geometry_only=not args.run_until_flow_start,
                 restore_plan_settings=True,
             )
             plan_payload = result_to_dict(result)
@@ -478,6 +479,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-force", action="store_true", help="Do not set Run HTab=-1 before running.")
     parser.add_argument("--clear-geompre", action="store_true", help="Delete stale .c## files first.")
+    parser.add_argument(
+        "--run-until-flow-start",
+        action="store_true",
+        help=(
+            "Leave hydraulic run flags enabled so HEC-RAS writes fresh detailed "
+            "compute messages, then stop as soon as flow computation starts."
+        ),
+    )
     parser.add_argument("--stop-on-failure", action="store_true")
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--verbose", action="store_true")

@@ -726,6 +726,7 @@ def study_slug(study_area: str) -> str:
         "SpringCreek_12040102": "spring-creek",
         "NorthGalvestonBay_12040203": "north-galveston-bay",
         "UpperGuadalupe_12100201": "upper-guadalupe",
+        "SpringRiver_11010010": "spring-river",
         "LowerBrazos_12070104": "lower-brazos",
         "Amite_08070202": "amite",
         "Tickfaw_08070203": "tickfaw",
@@ -1288,6 +1289,10 @@ def run() -> None:
     eleven_point_root = organized_root / "ElevenPoint_11010011"
     if eleven_point_root.exists():
         studies.append(audit_organized_study("ElevenPoint_11010011", eleven_point_root))
+
+    spring_river_root = organized_root / "SpringRiver_11010010"
+    if spring_river_root.exists():
+        studies.append(audit_organized_study("SpringRiver_11010010", spring_river_root))
 
     rio_hondo_root = organized_root / "RioHondo_13060008"
     if rio_hondo_root.exists():
