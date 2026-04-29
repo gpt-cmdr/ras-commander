@@ -201,11 +201,15 @@ class RasPrj:
             logger.warning("RasMap module not available. RASMapper data will not be loaded.")
             self.rasmap_df = pd.DataFrame(columns=['projection_path', 'profile_lines_path', 'soil_layer_path', 
                                                 'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path', 
+                                                'reference_map_layer_names', 'reference_map_layer_path',
+                                                'basemap_layer_names', 'basemap_layer_path',
                                                 'current_settings'])
         except Exception as e:
             logger.error(f"Error initializing RASMapper data: {e}")
             self.rasmap_df = pd.DataFrame(columns=['projection_path', 'profile_lines_path', 'soil_layer_path',
                                                 'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path',
+                                                'reference_map_layer_names', 'reference_map_layer_path',
+                                                'basemap_layer_names', 'basemap_layer_path',
                                                 'current_settings'])
 
         self.refresh_project_crs()

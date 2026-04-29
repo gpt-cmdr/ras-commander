@@ -298,6 +298,10 @@ def empty_rasmap_dataframe() -> pd.DataFrame:
             "infiltration_hdf_path": [[]],
             "landcover_hdf_path": [[]],
             "terrain_hdf_path": [[]],
+            "reference_map_layer_names": [[]],
+            "reference_map_layer_path": [[]],
+            "basemap_layer_names": [[]],
+            "basemap_layer_path": [[]],
             "current_settings": [{}],
         }
     )

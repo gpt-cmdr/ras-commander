@@ -36,6 +36,7 @@ Core library functionality: project initialization, plan operations, and executi
 | Parallel Execution | Run plans in parallel across workers | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/113_parallel_execution.ipynb) |
 | Win32COM Automation | Direct HEC-RAS automation via Win32COM | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/120_automating_ras_with_win32com.ipynb) |
 | Legacy HECRASController | RasControl for HEC-RAS 3.x-5.x | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/121_legacy_hecrascontroller_and_rascontrol.ipynb) |
+| RASMapper Spatial Review | Control RASMapper state, capture screenshots, and build spatial QA/QC review bundles | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/122_rasmapper_spatial_review.ipynb) |
 
 ### Geometry Parsing & Operations (200s)
 
