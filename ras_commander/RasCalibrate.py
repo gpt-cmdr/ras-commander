@@ -26,6 +26,7 @@ from .RasCmdr import RasCmdr
 from .RasPermutation import RasPermutation
 from .RasPlan import RasPlan
 from .RasPrj import ras
+from .RasPrjAssets import RasPrjAssets
 from .RasUtils import RasUtils
 from .geom.GeomLandCover import GeomLandCover
 from .hdf.HdfInfiltration import HdfInfiltration
@@ -329,7 +330,7 @@ def _resolve_plan_hdf_path(
     compute_result: Any = None,
 ) -> Path:
     active_ras = _get_active_ras(ras_object)
-    plan_number_str = RasUtils.normalize_ras_number(plan_number)
+    plan_number_str = RasPrjAssets.normalize_number(plan_number, prefix="p")
 
     if (
         compute_result is not None
@@ -342,23 +343,13 @@ def _resolve_plan_hdf_path(
                 return candidate
 
     active_ras.plan_df = active_ras.get_plan_entries()
-    matching = active_ras.plan_df[
-        active_ras.plan_df["plan_number"].astype(str).str.zfill(2)
-        == plan_number_str
-    ]
-    if not matching.empty:
-        hdf_value = matching.iloc[0].get("HDF_Results_Path")
-        if pd.notna(hdf_value):
-            candidate = Path(str(hdf_value))
-            if candidate.exists():
-                return candidate
-
-    fallback = (
-        Path(active_ras.project_folder)
-        / f"{active_ras.project_name}.p{plan_number_str}.hdf"
+    resolved = RasPrjAssets.plan_results_hdf(
+        plan_number_str,
+        ras_object=active_ras,
+        must_exist=False,
     )
-    if fallback.exists():
-        return fallback
+    if resolved is not None and resolved.exists():
+        return resolved
 
     raise FileNotFoundError(
         f"Could not resolve plan HDF path for plan {plan_number_str}"
