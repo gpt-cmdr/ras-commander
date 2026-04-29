@@ -182,6 +182,25 @@ class HdfPlan:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
+    def get_plan_timestamps_rasmapper(hdf_path: Path) -> List[str]:
+        """
+        Get output timestamps formatted for RASMapper/RasProcess profile inputs.
+
+        Args:
+            hdf_path (Path): Path to the HEC-RAS plan HDF file.
+
+        Returns:
+            List[str]: Timestamp strings like ``10SEP2018 02:30:00``.
+        """
+        timestamps = HdfPlan.get_plan_timestamps_list(hdf_path)
+        return [
+            timestamp.strftime("%d%b%Y %H:%M:%S").upper()
+            for timestamp in timestamps
+        ]
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
     def get_plan_information(hdf_path: Path) -> PlanInformationDict:
         """
         Get plan information from a HEC-RAS HDF plan file.

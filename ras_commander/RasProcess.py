@@ -829,14 +829,7 @@ Step 5: Configure (optional — auto-detection usually works)
             return []
 
         try:
-            timestamps = HdfPlan.get_plan_timestamps_list(hdf_path)
-            # Convert to RASMapper format: "DDMMMYYYY HH:MM:SS"
-            rasmap_timestamps = []
-            for ts in timestamps:
-                # Format: 10SEP2018 02:30:00
-                formatted = ts.strftime("%d%b%Y %H:%M:%S").upper()
-                rasmap_timestamps.append(formatted)
-            return rasmap_timestamps
+            return HdfPlan.get_plan_timestamps_rasmapper(hdf_path)
         except Exception as e:
             logger.error(f"Failed to get timestamps from {hdf_path}: {e}")
             return []

@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 import h5py
@@ -169,6 +170,29 @@ def test_hdf_results_plan_attribute_readers_use_decoded_attrs(tmp_path):
     steady_info = HdfResultsPlan.get_steady_info(hdf_path)
     assert steady_info["Solution"].iloc[0] == "Steady Finished Successfully"
     assert steady_info["Flow Filename"].iloc[0] == "test.f01"
+
+
+def test_hdf_plan_formats_timestamps_for_rasmapper(monkeypatch, tmp_path):
+    from ras_commander.hdf.HdfPlan import HdfPlan
+
+    hdf_path = tmp_path / "plan.p01.hdf"
+    hdf_path.write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(
+        HdfPlan,
+        "get_plan_timestamps_list",
+        staticmethod(
+            lambda path: [
+                datetime(2026, 1, 2, 3, 4, 5),
+                datetime(2026, 9, 10, 12, 30, 0),
+            ]
+        ),
+    )
+
+    assert HdfPlan.get_plan_timestamps_rasmapper(hdf_path) == [
+        "02JAN2026 03:04:05",
+        "10SEP2026 12:30:00",
+    ]
 
 
 def test_resolve_hdf_input_uses_plan_assets_for_plan_selectors(tmp_path):

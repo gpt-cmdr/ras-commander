@@ -1,5 +1,4 @@
 from importlib import import_module
-from datetime import datetime
 from pathlib import Path
 import subprocess
 
@@ -32,14 +31,14 @@ def test_get_plan_timestamps_uses_project_asset_resolution(monkeypatch, tmp_path
     )
     observed = []
 
-    def fake_get_plan_timestamps_list(hdf_path):
+    def fake_get_plan_timestamps_rasmapper(hdf_path):
         observed.append(Path(hdf_path))
-        return [datetime(2026, 1, 2, 3, 4, 5)]
+        return ["02JAN2026 03:04:05"]
 
     monkeypatch.setattr(
         HdfPlan,
-        "get_plan_timestamps_list",
-        staticmethod(fake_get_plan_timestamps_list),
+        "get_plan_timestamps_rasmapper",
+        staticmethod(fake_get_plan_timestamps_rasmapper),
     )
 
     assert RasProcess.get_plan_timestamps("07", ras_object=ras_obj) == [
