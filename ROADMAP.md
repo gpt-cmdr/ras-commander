@@ -1,6 +1,6 @@
 # ras-commander Roadmap
 
-**Last Updated**: 2026-04-29
+**Last Updated**: 2026-04-30
 
 This document tracks forward-looking work for ras-commander.
 Execution-level task tracking lives in `agent_tasks/.agent/BACKLOG.md`.
@@ -118,6 +118,12 @@ already implemented.
 - Sync `docs/notebooks/` and `mkdocs.yml` to the actual `examples/*.ipynb`
   inventory
 - Remove generated docs for notebooks that no longer exist
+- Revise example notebooks that still import `CoastalBoundary` from
+  `ras_commander.sources.federal` so they use
+  `ras_commander.boundaries.CoastalBoundary`
+- After notebook and docs imports are updated, remove the temporary
+  `ras_commander.sources.federal.CoastalBoundary` compatibility shim and make
+  `ras_commander.sources` strictly model-source-only
 - Fix root `AGENTS.md` references to missing top-level documents
 - Update `.claude/skills/README.md`, `.claude/rules/README.md`, and
   `.claude/MANIFEST.md` to match the live skills/rules inventory
@@ -125,6 +131,8 @@ already implemented.
 
 **Exit criteria**:
 - Notebook docs and nav reflect only live notebooks
+- Coastal boundary notebooks use the boundary-condition namespace, and the old
+  `sources.federal.CoastalBoundary` import path is removed
 - `.claude` README/manifest indexes match the actual tree
 - Root guidance points only to live files
 - Merged/obsolete branches are cleaned up

@@ -119,16 +119,12 @@ RASMapper Data Integration
 - Calculated layers: programmatic WSE comparison (Existing vs. Proposed) with .rasscript generation
 - Viewport-dynamic symbology for calculated layer raster output
 
-Model Discovery & Download (NEW - Experimental)
-- Unified catalog for discovering HEC-RAS models from 25+ documented public sources
-- Federal sources: USGS ScienceBase (implemented), FEMA BLE (planned)
-- State sources: Virginia VFRIS, Wisconsin DNR, North Carolina FRIS (planned)
-- County sources: Henrico VA, Harris County TX M3 (planned)
-- Note: USACE official examples already available via `RasExamples` class
-- Advanced filtering: location, type, tags, spatial extent, file size, dates
-- Automatic download and extraction with validation
-- See `examples/600_discovering_hecras_models_from_usgs.ipynb` for usage
-- Requires: `pip install sciencebasepy` for USGS access
+Model Sources & Download (Experimental)
+- FEMA eBFE/BLE model download and organization via `RasEbfeModels`
+- Harris County M3 model download and extraction via `M3Model`
+- USACE official examples remain available through the `RasExamples` class
+- Automatic download, extraction, organization, and path validation for supported sources
+- See `docs/ebfe_models.md` and the 900-series eBFE notebooks for usage
 
 Manning's n Coefficient Management
 - Base Manning's n table extraction and modification

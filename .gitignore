@@ -208,9 +208,6 @@ examples/explore_*.py
 examples/find_*.py
 examples/verify_*.py
 
-# Temporary source folders
-ras_commander/sources/
-
 # Claude Code workspace directories
 examples/.claude/
 

@@ -1,11 +1,22 @@
-"""Federal model sources (USGS, FEMA eBFE, NOAA coastal, etc.)."""
+"""Federal model source integrations."""
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ras_commander.sources.federal.usgs_sciencebase import UsgsScienceBase
+import warnings
 
 from .ebfe_models import RasEbfeModels
-from .coastal_boundary import CoastalBoundary
 
-__all__ = ['UsgsScienceBase', 'RasEbfeModels', 'CoastalBoundary']
+
+def __getattr__(name):
+    if name == "CoastalBoundary":
+        warnings.warn(
+            "Importing CoastalBoundary from ras_commander.sources.federal is "
+            "deprecated. Use ras_commander.boundaries instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from ras_commander.boundaries import CoastalBoundary
+
+        return CoastalBoundary
+    raise AttributeError(f"module 'ras_commander.sources.federal' has no attribute {name!r}")
+
+
+__all__ = ['RasEbfeModels']
