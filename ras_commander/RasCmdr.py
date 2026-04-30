@@ -99,11 +99,7 @@ class RasCmdr:
         Returns:
             Path to the expected HDF file
         """
-        # Normalize plan number to 2-digit string
-        if isinstance(plan_number, Number):
-            plan_num_str = f"{int(plan_number):02d}"
-        else:
-            plan_num_str = str(plan_number).zfill(2)
+        plan_num_str = RasUtils.normalize_ras_number(plan_number)
 
         return Path(ras_object.project_folder) / f"{ras_object.project_name}.p{plan_num_str}.hdf"
 
@@ -543,7 +539,7 @@ class RasCmdr:
                 # Create monitor with callback wrapper
                 bco_monitor = BcoMonitor(
                     project_path=Path(compute_ras.project_folder),
-                    plan_number=str(plan_number).zfill(2) if isinstance(plan_number, (int, Number)) else str(plan_number),
+                    plan_number=RasUtils.normalize_ras_number(plan_number),
                     project_name=compute_ras.project_name,
                     message_callback=lambda msg: (
                         stream_callback.on_exec_message(str(plan_number), msg)
@@ -663,7 +659,7 @@ class RasCmdr:
                 logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
 
                 # Read compute message files (.bco## for 5.x, .computeMsgs.txt/.comp_msgs.txt for 6.x+)
-                plan_num_str = f"{int(plan_number):02d}" if isinstance(plan_number, Number) else str(plan_number).zfill(2)
+                plan_num_str = RasUtils.normalize_ras_number(plan_number)
                 try:
                     bco_path = Path(compute_ras.project_folder) / f"{compute_ras.project_name}.bco{plan_num_str}"
                     if bco_path.exists():
@@ -1416,7 +1412,7 @@ class RasCmdr:
         ras_obj = ras_object if ras_object is not None else ras
         ras_obj.check_initialized()
 
-        plan_num_str = str(plan_number).zfill(2) if isinstance(plan_number, Number) else str(plan_number).zfill(2)
+        plan_num_str = RasUtils.normalize_ras_number(plan_number)
 
         ras_exe_dir = Path(ras_exe_dir)
         ras_exe = ras_exe_dir / "RasUnsteady"

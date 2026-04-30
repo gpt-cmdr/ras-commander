@@ -327,7 +327,7 @@ class RasUtils:
         Parameters:
         ras_number (Union[str, int, float, Path, Number]): Input number in various formats:
             - int: 1, 2, 3, etc.
-            - str: "1", "01", "001", etc.
+            - str: "1", "01", "001", "p01", ".p01", "project.p01", etc.
             - float: 1.0, 2.0 (must be whole numbers)
             - Path: Path("project.p05") - extracts number from extension
             - Number: numpy.int64(1), etc.
@@ -347,6 +347,8 @@ class RasUtils:
         >>> RasUtils.normalize_ras_number("01")
         '01'
         >>> RasUtils.normalize_ras_number("001")
+        '01'
+        >>> RasUtils.normalize_ras_number("p01")
         '01'
         >>> RasUtils.normalize_ras_number(np.int64(5))
         '05'
@@ -380,9 +382,29 @@ class RasUtils:
 
         # Convert to integer for validation
         try:
-            # Handle string inputs - strip leading zeros before conversion
+            # Handle string inputs including bare prefixed forms ("p01") and
+            # filename/path strings ("project.p01").
             if isinstance(ras_number, str):
-                stripped = ras_number.lstrip('0')
+                text = ras_number.strip()
+                path_suffix = Path(text).suffix
+                if (
+                    len(path_suffix) >= 3
+                    and path_suffix[0] == "."
+                    and path_suffix[1].isalpha()
+                    and path_suffix[2:].isdigit()
+                ):
+                    text = path_suffix[2:]
+                elif (
+                    len(text) >= 2
+                    and text[0] == "."
+                    and text[1].isalpha()
+                    and text[2:].isdigit()
+                ):
+                    text = text[2:]
+                elif len(text) >= 2 and text[0].isalpha() and text[1:].isdigit():
+                    text = text[1:]
+
+                stripped = text.lstrip('0')
                 if not stripped or not stripped.isdigit():
                     # Handle edge cases like "0", "00", or non-numeric strings
                     if not stripped:  # Was all zeros
