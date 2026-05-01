@@ -47,6 +47,7 @@ from .RasProcess import RasProcess, ProjectionInfo
 from .RasGuiAutomation import RasGuiAutomation
 from .RasScreenshot import RasScreenshot
 from .RasBreach import RasBreach
+from .RasFloodway import RasFloodway
 from .RasHydroCompare import RasHydroCompare
 from .RasModPuls import RasModPuls
 from .RasPermutation import RasPermutation, RangeSpec
@@ -172,7 +173,7 @@ __all__ = [
     'PreprocessResult', 'GeometryPreprocessResult',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
-    'RasModPuls', 'RasPermutation', 'RangeSpec',
+    'RasFloodway', 'RasModPuls', 'RasPermutation', 'RangeSpec',
     'CalibrationPoint', 'RasCalibrate',
     'compute_objective', 'extract_modeled',
     'extract_steady_profile_modeled', 'extract_steady_profile_observations',
