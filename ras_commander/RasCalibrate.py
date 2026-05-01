@@ -27,10 +27,12 @@ from .RasPermutation import RasPermutation
 from .RasPlan import RasPlan
 from .RasPrj import ras
 from .RasUtils import RasUtils
+from .geom.GeomCrossSection import GeomCrossSection
 from .geom.GeomLandCover import GeomLandCover
 from .hdf.HdfInfiltration import HdfInfiltration
 from .hdf.HdfLandCover import HdfLandCover
 from .hdf.HdfResultsMesh import HdfResultsMesh
+from .hdf.HdfResultsPlan import HdfResultsPlan
 from .hdf.HdfResultsQuery import HdfResultsQuery
 from .hdf.HdfResultsXsec import HdfResultsXsec
 from .usgs.metrics import (
@@ -94,6 +96,9 @@ class CalibrationPoint:
     river: Optional[str] = None
     reach: Optional[str] = None
     station: Optional[str] = None
+    profile_name: Optional[str] = None
+    profile_index: Optional[int] = None
+    station_tolerance: Optional[float] = None
     ref_feature_name: Optional[str] = None
     time_index: Union[str, int, None] = "max"
     metric: str = "nse"               # per-point metric for composite scoring
@@ -117,7 +122,13 @@ class CalibrationPoint:
                 f"Valid values: {sorted(valid_variables)}"
             )
 
-        valid_methods = {"1d_xs", "2d_cell", "ref_line", "ref_point"}
+        valid_methods = {
+            "1d_xs",
+            "2d_cell",
+            "ref_line",
+            "ref_point",
+            "steady_profile",
+        }
         if self.extraction_method not in valid_methods:
             raise ValueError(
                 f"Unsupported extraction_method "
@@ -173,8 +184,20 @@ class CalibrationPoint:
             self.reach = str(self.reach).strip()
         if self.station is not None:
             self.station = str(self.station).strip()
+        if self.profile_name is not None:
+            self.profile_name = str(self.profile_name).strip()
         if self.ref_feature_name is not None:
             self.ref_feature_name = str(self.ref_feature_name).strip()
+        if self.profile_index is not None:
+            if not isinstance(self.profile_index, (int, np.integer)):
+                raise TypeError("profile_index must be an integer")
+            self.profile_index = int(self.profile_index)
+            if self.profile_index < 0:
+                raise ValueError("profile_index must be non-negative")
+        if self.station_tolerance is not None:
+            self.station_tolerance = float(self.station_tolerance)
+            if self.station_tolerance < 0:
+                raise ValueError("station_tolerance must be non-negative")
 
         # Validate metric and weight
         self.metric = _normalize_metric(self.metric)
@@ -194,6 +217,26 @@ class CalibrationPoint:
                 raise ValueError(
                     "1d_xs calibration points require river, reach, and "
                     "station"
+                )
+        elif self.extraction_method == "steady_profile":
+            if self.variable != "wse":
+                raise ValueError(
+                    "steady_profile calibration points currently support "
+                    "variable='wse' only"
+                )
+            if isinstance(self.observed, pd.Series):
+                raise ValueError(
+                    "steady_profile calibration points require scalar "
+                    "observations"
+                )
+            if not self.river or not self.reach or not self.station:
+                raise ValueError(
+                    "steady_profile calibration points require river, reach, "
+                    "and station"
+                )
+            if self.profile_name and self.profile_index is not None:
+                raise ValueError(
+                    "Specify either profile_name or profile_index, not both"
                 )
         else:
             if not self.ref_feature_name:
@@ -256,6 +299,13 @@ def _extract_two_digit_number(raw_value: str) -> str:
     if not digits:
         raise ValueError(f"Could not extract a file number from '{raw_value}'")
     return digits[-2:].zfill(2)
+
+
+def _plan_number_from_plan_path(plan_path: Path) -> str:
+    match = re.search(r"\.p(\d+)$", plan_path.name, flags=re.IGNORECASE)
+    if not match:
+        raise ValueError(f"Could not extract plan number from {plan_path}")
+    return match.group(1).zfill(2)
 
 
 def _read_plan_reference(plan_path: Path, key: str) -> str:
@@ -363,6 +413,158 @@ def _resolve_plan_hdf_path(
     raise FileNotFoundError(
         f"Could not resolve plan HDF path for plan {plan_number_str}"
     )
+
+
+def _remove_compiled_geometry_hdf(geom_path: Path) -> None:
+    compiled_hdf = Path(f"{Path(geom_path)}.hdf")
+    if compiled_hdf.exists():
+        compiled_hdf.unlink()
+        logger.info("Removed stale compiled geometry HDF: %s", compiled_hdf)
+
+
+def _resolve_profile_name_for_index(plan_hdf: Path, profile_index: int) -> str:
+    profile_names = HdfResultsPlan.get_steady_profile_names(plan_hdf)
+    if profile_index < 0 or profile_index >= len(profile_names):
+        raise ValueError(
+            f"Profile index {profile_index} out of range. "
+            f"Valid range: 0 to {len(profile_names) - 1}"
+        )
+    return profile_names[profile_index]
+
+
+def _normalize_steady_wse_frame(
+    steady_wse_df: pd.DataFrame,
+    plan_hdf: Path,
+    profile_name: Optional[str] = None,
+    profile_index: Optional[int] = None,
+    value_column: str = "observed",
+) -> pd.DataFrame:
+    result = steady_wse_df.copy()
+    if "Profile" not in result.columns:
+        resolved_profile = profile_name
+        if resolved_profile is None and profile_index is not None:
+            resolved_profile = _resolve_profile_name_for_index(
+                plan_hdf,
+                int(profile_index),
+            )
+        if resolved_profile is None:
+            try:
+                profile_names = HdfResultsPlan.get_steady_profile_names(plan_hdf)
+                if len(profile_names) == 1:
+                    resolved_profile = profile_names[0]
+            except Exception:
+                resolved_profile = None
+        result["Profile"] = resolved_profile or "Profile_1"
+
+    required_columns = {"River", "Reach", "Station", "Profile", "WSE"}
+    missing = required_columns - set(result.columns)
+    if missing:
+        raise KeyError(
+            f"Steady WSE frame is missing required column(s): {sorted(missing)}"
+        )
+
+    result = result.rename(
+        columns={
+            "River": "river",
+            "Reach": "reach",
+            "Station": "station",
+            "Profile": "profile",
+            "WSE": value_column,
+        }
+    )
+    result["river"] = result["river"].astype(str).str.strip()
+    result["reach"] = result["reach"].astype(str).str.strip()
+    result["station"] = result["station"].astype(str).str.strip()
+    result["profile"] = result["profile"].astype(str).str.strip()
+    result[value_column] = pd.to_numeric(
+        result[value_column],
+        errors="coerce",
+    )
+    return result[["river", "reach", "station", "profile", value_column]]
+
+
+def _station_match_mask(
+    station_series: pd.Series,
+    target_station: str,
+    tolerance: Optional[float],
+) -> pd.Series:
+    station_text = station_series.astype(str).str.strip()
+    target_text = str(target_station).strip()
+
+    exact_mask = station_text == target_text
+    if exact_mask.any():
+        return exact_mask
+
+    target_numeric = pd.to_numeric(
+        pd.Series([target_text]),
+        errors="coerce",
+    ).iloc[0]
+    if pd.isna(target_numeric):
+        return pd.Series(False, index=station_series.index)
+
+    station_numeric = pd.to_numeric(station_text, errors="coerce")
+    diffs = (station_numeric - float(target_numeric)).abs()
+    if tolerance is None:
+        numeric_mask = diffs == 0
+    else:
+        numeric_mask = diffs <= float(tolerance)
+    return numeric_mask.fillna(False)
+
+
+def _select_steady_profile_row(
+    steady_df: pd.DataFrame,
+    point: CalibrationPoint,
+) -> pd.Series:
+    profile_label = (
+        point.profile_name
+        if point.profile_name is not None
+        else (
+            f"profile_index={point.profile_index}"
+            if point.profile_index is not None
+            else "all profiles"
+        )
+    )
+    base_mask = (
+        steady_df["river"].astype(str).str.strip().eq(point.river)
+        & steady_df["reach"].astype(str).str.strip().eq(point.reach)
+    )
+    if point.profile_name is not None:
+        base_mask &= steady_df["profile"].astype(str).str.strip().eq(
+            point.profile_name
+        )
+
+    candidates = steady_df.loc[base_mask].copy()
+    if candidates.empty:
+        available = steady_df[["river", "reach", "profile"]].drop_duplicates()
+        raise ValueError(
+            "No steady-profile rows matched "
+            f"{point.river}/{point.reach}/{profile_label}. "
+            f"Available river/reach/profile rows: "
+            f"{available.head(10).to_dict('records')}"
+        )
+
+    station_mask = _station_match_mask(
+        candidates["station"],
+        str(point.station),
+        point.station_tolerance,
+    )
+    matched = candidates.loc[station_mask]
+    if matched.empty:
+        available_stations = candidates["station"].astype(str).tolist()
+        raise ValueError(
+            "No steady-profile row matched station "
+            f"'{point.station}' for {point.river}/{point.reach}/"
+            f"{profile_label}. Available stations after profile filtering: "
+            f"{available_stations[:20]}"
+        )
+    if len(matched) > 1:
+        raise ValueError(
+            "Steady-profile station selection was ambiguous for "
+            f"{point.river}/{point.reach}/{point.station}/"
+            f"{profile_label}. Matched rows: "
+            f"{matched[['station', 'profile']].to_dict('records')}"
+        )
+    return matched.iloc[0]
 
 
 def _dataset_variable_candidates(variable_name: str) -> List[str]:
@@ -673,6 +875,245 @@ def _evaluate_points(
     overall_objective = _aggregate_objectives(objectives, metric)
     return point_results, overall_objective
 
+
+def _resolve_required_df_column(
+    df: pd.DataFrame,
+    requested_column: str,
+) -> str:
+    if requested_column in df.columns:
+        return requested_column
+    lookup = {str(column).strip().lower(): column for column in df.columns}
+    normalized = str(requested_column).strip().lower()
+    if normalized in lookup:
+        return lookup[normalized]
+    raise KeyError(
+        f"Column '{requested_column}' not found. "
+        f"Available columns: {list(df.columns)}"
+    )
+
+
+def _resolve_optional_df_column(
+    df: pd.DataFrame,
+    requested_column: Optional[str],
+) -> Optional[str]:
+    if requested_column is None:
+        return None
+    if requested_column in df.columns:
+        return requested_column
+    lookup = {str(column).strip().lower(): column for column in df.columns}
+    return lookup.get(str(requested_column).strip().lower())
+
+
+@log_call
+def extract_steady_profile_observations(
+    plan_hdf: Union[str, Path],
+    profile_name: Optional[str] = None,
+    profile_index: Optional[int] = None,
+    profiles: Optional[Sequence[str]] = None,
+) -> pd.DataFrame:
+    """
+    Extract steady-profile WSE rows as observation records.
+
+    Returns a normalized DataFrame with columns:
+    ``river``, ``reach``, ``station``, ``profile``, and ``observed``.
+    """
+    plan_hdf = Path(plan_hdf)
+    selectors = [
+        profile_name is not None,
+        profile_index is not None,
+        profiles is not None,
+    ]
+    if sum(selectors) > 1:
+        raise ValueError(
+            "Use only one profile selector: profile_name, profile_index, "
+            "or profiles."
+        )
+
+    if profile_name is not None:
+        steady_df = HdfResultsPlan.get_steady_wse(
+            plan_hdf,
+            profile_name=profile_name,
+        )
+        return _normalize_steady_wse_frame(
+            steady_df,
+            plan_hdf,
+            profile_name=profile_name,
+            value_column="observed",
+        )
+
+    if profile_index is not None:
+        steady_df = HdfResultsPlan.get_steady_wse(
+            plan_hdf,
+            profile_index=int(profile_index),
+        )
+        return _normalize_steady_wse_frame(
+            steady_df,
+            plan_hdf,
+            profile_index=int(profile_index),
+            value_column="observed",
+        )
+
+    steady_df = HdfResultsPlan.get_steady_wse(plan_hdf)
+    observations = _normalize_steady_wse_frame(
+        steady_df,
+        plan_hdf,
+        value_column="observed",
+    )
+
+    if profiles is None:
+        return observations
+
+    if isinstance(profiles, str):
+        requested_profiles = [profiles]
+    else:
+        requested_profiles = list(profiles)
+    requested_profiles = [
+        str(profile).strip() for profile in requested_profiles
+    ]
+    if not requested_profiles:
+        raise ValueError("profiles must contain at least one profile name")
+
+    available_profiles = set(observations["profile"].astype(str).str.strip())
+    missing_profiles = [
+        profile for profile in requested_profiles
+        if profile not in available_profiles
+    ]
+    if missing_profiles:
+        raise ValueError(
+            f"Profile(s) not found: {missing_profiles}. "
+            f"Available profiles: {sorted(available_profiles)}"
+        )
+
+    return observations[
+        observations["profile"].astype(str).str.strip().isin(requested_profiles)
+    ].reset_index(drop=True)
+
+
+@log_call
+def make_steady_profile_calibration_points(
+    observations: pd.DataFrame,
+    observed_column: str = "observed",
+    river_column: str = "river",
+    reach_column: str = "reach",
+    station_column: str = "station",
+    profile_column: Optional[str] = "profile",
+    name_column: Optional[str] = None,
+    profile_name: Optional[str] = None,
+    profile_index: Optional[int] = None,
+    station_tolerance: Optional[float] = None,
+    metric: str = "rmse",
+    weight: float = 1.0,
+) -> List[CalibrationPoint]:
+    """
+    Convert steady-profile observation rows into CalibrationPoint objects.
+    """
+    if not isinstance(observations, pd.DataFrame):
+        raise TypeError("observations must be a pandas DataFrame")
+    if observations.empty:
+        raise ValueError("observations must contain at least one row")
+
+    observed_col = _resolve_required_df_column(observations, observed_column)
+    river_col = _resolve_required_df_column(observations, river_column)
+    reach_col = _resolve_required_df_column(observations, reach_column)
+    station_col = _resolve_required_df_column(observations, station_column)
+    profile_col = _resolve_optional_df_column(observations, profile_column)
+    name_col = _resolve_optional_df_column(observations, name_column)
+
+    points: List[CalibrationPoint] = []
+    for row_index, row in observations.reset_index(drop=True).iterrows():
+        row_profile_name = (
+            str(row[profile_col]).strip()
+            if profile_col is not None and pd.notna(row[profile_col])
+            else profile_name
+        )
+        row_profile_index = None if row_profile_name else profile_index
+        if name_col is not None and pd.notna(row[name_col]):
+            point_name = str(row[name_col]).strip()
+        else:
+            profile_label = row_profile_name
+            if profile_label is None and row_profile_index is not None:
+                profile_label = f"profile_{row_profile_index}"
+            if profile_label is None:
+                profile_label = "steady_profile"
+            point_name = (
+                f"{profile_label} {row[river_col]}/{row[reach_col]}/"
+                f"{row[station_col]}"
+            )
+
+        points.append(
+            CalibrationPoint(
+                name=point_name or f"steady_profile_{row_index + 1}",
+                variable="wse",
+                extraction_method="steady_profile",
+                observed=float(row[observed_col]),
+                river=str(row[river_col]).strip(),
+                reach=str(row[reach_col]).strip(),
+                station=str(row[station_col]).strip(),
+                profile_name=row_profile_name,
+                profile_index=row_profile_index,
+                station_tolerance=station_tolerance,
+                metric=metric,
+                weight=weight,
+            )
+        )
+
+    return points
+
+
+@log_call
+def extract_steady_profile_modeled(
+    point: CalibrationPoint,
+    plan_hdf: Union[str, Path],
+    ras_object: Any = None,
+) -> float:
+    """
+    Extract scalar modeled WSE for a steady-profile calibration point.
+    """
+    del ras_object  # steady HDF WSE extraction is path-based.
+
+    if point.extraction_method != "steady_profile":
+        raise ValueError(
+            "extract_steady_profile_modeled requires a steady_profile "
+            "CalibrationPoint"
+        )
+    if point.variable != "wse":
+        raise ValueError("steady_profile modeled extraction supports WSE only")
+
+    plan_hdf = Path(plan_hdf)
+    if point.profile_name is not None:
+        steady_df = HdfResultsPlan.get_steady_wse(
+            plan_hdf,
+            profile_name=point.profile_name,
+        )
+        normalized = _normalize_steady_wse_frame(
+            steady_df,
+            plan_hdf,
+            profile_name=point.profile_name,
+            value_column="modeled",
+        )
+    elif point.profile_index is not None:
+        steady_df = HdfResultsPlan.get_steady_wse(
+            plan_hdf,
+            profile_index=point.profile_index,
+        )
+        normalized = _normalize_steady_wse_frame(
+            steady_df,
+            plan_hdf,
+            profile_index=point.profile_index,
+            value_column="modeled",
+        )
+    else:
+        steady_df = HdfResultsPlan.get_steady_wse(plan_hdf)
+        normalized = _normalize_steady_wse_frame(
+            steady_df,
+            plan_hdf,
+            value_column="modeled",
+        )
+
+    matched = _select_steady_profile_row(normalized, point)
+    return float(matched["modeled"])
+
+
 @log_call
 def extract_modeled(
     point: CalibrationPoint,
@@ -685,6 +1126,13 @@ def extract_modeled(
     plan_hdf = Path(plan_hdf)
     if not plan_hdf.exists():
         raise FileNotFoundError(f"Plan HDF not found: {plan_hdf}")
+
+    if point.extraction_method == "steady_profile":
+        return extract_steady_profile_modeled(
+            point,
+            plan_hdf,
+            ras_object=ras_object,
+        )
 
     if point.extraction_method == "1d_xs":
         dataset = HdfResultsXsec.get_xsec_timeseries(plan_hdf)
@@ -820,6 +1268,233 @@ def compute_objective(
         )
 
     return abs(float(modeled) - float(observed))
+
+
+def _parse_xsec_mannings_target(
+    spec: Union[Tuple[Any, ...], List[Any], Dict[str, Any]],
+) -> dict:
+    if isinstance(spec, dict):
+        river = spec.get("river")
+        reach = spec.get("reach")
+        station = (
+            spec.get("station")
+            or spec.get("rs")
+            or spec.get("river_station")
+        )
+        subsection = spec.get("subsection")
+        breakpoint_station = (
+            spec.get("breakpoint_station")
+            or spec.get("mann_station")
+            or spec.get("mannings_station")
+        )
+        tolerance = spec.get("station_tolerance")
+    elif isinstance(spec, (tuple, list)):
+        if len(spec) not in {3, 4, 5}:
+            raise ValueError(
+                "Cross-section Manning's n tuple specs must be "
+                "(river, reach, station), "
+                "(river, reach, station, subsection), or "
+                "(river, reach, station, subsection, breakpoint_station)."
+            )
+        river, reach, station = spec[:3]
+        subsection = spec[3] if len(spec) >= 4 else None
+        breakpoint_station = spec[4] if len(spec) >= 5 else None
+        tolerance = None
+    else:
+        raise TypeError(
+            "Cross-section Manning's n mapping values must be dictionaries "
+            "or tuples/lists."
+        )
+
+    if not river or not reach or not station:
+        raise ValueError(
+            "Cross-section Manning's n targets require river, reach, and "
+            "station."
+        )
+
+    return {
+        "river": str(river).strip(),
+        "reach": str(reach).strip(),
+        "station": str(station).strip(),
+        "subsection": (
+            str(subsection).strip()
+            if subsection is not None and str(subsection).strip()
+            else None
+        ),
+        "breakpoint_station": (
+            float(breakpoint_station)
+            if breakpoint_station is not None
+            else None
+        ),
+        "station_tolerance": (
+            float(tolerance)
+            if tolerance is not None
+            else None
+        ),
+    }
+
+
+def _normalize_mannings_subsection(value: Any) -> str:
+    normalized = str(value).strip().lower().replace("_", " ")
+    aliases = {
+        "lob": "lob",
+        "left": "lob",
+        "left overbank": "lob",
+        "channel": "channel",
+        "main channel": "channel",
+        "mc": "channel",
+        "rob": "rob",
+        "right": "rob",
+        "right overbank": "rob",
+        "all": "all",
+        "*": "all",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _update_xsec_mannings_table(
+    mann_df: pd.DataFrame,
+    target: dict,
+    n_value: float,
+) -> pd.DataFrame:
+    if "Station" not in mann_df.columns or "n_value" not in mann_df.columns:
+        raise ValueError(
+            "GeomCrossSection.get_mannings_n() must return Station and "
+            "n_value columns."
+        )
+
+    updated_df = mann_df.copy()
+    mask = pd.Series(True, index=updated_df.index)
+
+    subsection = target.get("subsection")
+    if subsection is not None:
+        normalized_subsection = _normalize_mannings_subsection(subsection)
+        if normalized_subsection != "all":
+            if "Subsection" not in updated_df.columns:
+                raise ValueError(
+                    "Cannot filter Manning's n by subsection because the "
+                    "Manning table has no Subsection column."
+                )
+            mask &= updated_df["Subsection"].map(
+                _normalize_mannings_subsection
+            ).eq(normalized_subsection)
+
+    breakpoint_station = target.get("breakpoint_station")
+    if breakpoint_station is not None:
+        tolerance = target.get("station_tolerance")
+        station_diffs = (
+            pd.to_numeric(updated_df["Station"], errors="coerce")
+            - float(breakpoint_station)
+        ).abs()
+        if tolerance is None:
+            mask &= station_diffs == 0
+        else:
+            mask &= station_diffs <= float(tolerance)
+
+    if not mask.any():
+        raise ValueError(
+            "No Manning's n row matched target "
+            f"{target['river']}/{target['reach']}/{target['station']} "
+            f"subsection={target.get('subsection')} "
+            f"breakpoint_station={target.get('breakpoint_station')}"
+        )
+
+    updated_df.loc[mask, "n_value"] = float(n_value)
+    return updated_df
+
+
+@log_call
+def make_xsec_mannings_apply_fn(
+    parameter_mapping: Dict[
+        str,
+        Union[Tuple[Any, ...], List[Any], Dict[str, Any]],
+    ],
+    clone_geometry: bool = True,
+    remove_compiled_hdf: bool = True,
+) -> ApplyFn:
+    """
+    Factory returning an apply_fn for 1D cross-section Manning's n edits.
+
+    ``parameter_mapping`` maps parameter column names to cross-section targets.
+    Target values may be dictionaries with ``river``, ``reach``, ``station``,
+    optional ``subsection`` and optional ``breakpoint_station`` keys, or tuple
+    forms ``(river, reach, station[, subsection[, breakpoint_station]])``.
+    """
+    targets = {
+        param_column: _parse_xsec_mannings_target(target)
+        for param_column, target in parameter_mapping.items()
+    }
+    if not targets:
+        raise ValueError("parameter_mapping must contain at least one target")
+
+    @log_call
+    def apply_fn(
+        plan_path: Path,
+        param_row: pd.Series,
+        ras_object: Any = None,
+    ) -> None:
+        plan_path = Path(plan_path)
+        if not plan_path.exists():
+            raise FileNotFoundError(f"Plan file not found: {plan_path}")
+
+        if clone_geometry:
+            active_ras = _get_active_ras(ras_object)
+            active_ras.check_initialized()
+            source_geom_number = _extract_two_digit_number(
+                _read_plan_reference(plan_path, "Geom File")
+            )
+            plan_number = _plan_number_from_plan_path(plan_path)
+            new_geom_number = RasPlan.clone_geom(
+                source_geom_number,
+                ras_object=active_ras,
+            )
+            RasPlan.set_geom(
+                plan_number,
+                new_geom_number,
+                ras_object=active_ras,
+            )
+            geom_path_value = RasPlan.get_geom_path(
+                new_geom_number,
+                ras_object=active_ras,
+            )
+            if geom_path_value is None:
+                geom_path = (
+                    Path(active_ras.project_folder)
+                    / f"{active_ras.project_name}.g{new_geom_number}"
+                )
+            else:
+                geom_path = Path(geom_path_value)
+        else:
+            geom_path = _resolve_geom_path_from_plan(plan_path)
+
+        for param_column, target in targets.items():
+            if param_column not in param_row:
+                raise KeyError(
+                    f"Parameter column '{param_column}' not found in param_row"
+                )
+            mann_df = GeomCrossSection.get_mannings_n(
+                geom_path,
+                target["river"],
+                target["reach"],
+                target["station"],
+            )
+            updated_df = _update_xsec_mannings_table(
+                mann_df,
+                target,
+                float(param_row[param_column]),
+            )
+            GeomCrossSection.set_mannings_n(
+                geom_path,
+                target["river"],
+                target["reach"],
+                target["station"],
+                updated_df,
+            )
+
+        if remove_compiled_hdf:
+            _remove_compiled_geometry_hdf(geom_path)
+
+    return apply_fn
 
 
 @log_call
@@ -1444,3 +2119,19 @@ class RasCalibrate:
             "iteration_history": pd.DataFrame(iteration_history),
             "best_evaluation": best_evaluation,
         }
+
+    compute_objective = staticmethod(compute_objective)
+    extract_modeled = staticmethod(extract_modeled)
+    extract_steady_profile_observations = staticmethod(
+        extract_steady_profile_observations
+    )
+    make_steady_profile_calibration_points = staticmethod(
+        make_steady_profile_calibration_points
+    )
+    extract_steady_profile_modeled = staticmethod(
+        extract_steady_profile_modeled
+    )
+    make_mannings_apply_fn = staticmethod(make_mannings_apply_fn)
+    make_xsec_mannings_apply_fn = staticmethod(make_xsec_mannings_apply_fn)
+    make_infiltration_apply_fn = staticmethod(make_infiltration_apply_fn)
+    make_composite_apply_fn = staticmethod(make_composite_apply_fn)
