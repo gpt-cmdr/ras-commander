@@ -13,6 +13,8 @@ List of Functions:
 - get_abutment() - Read abutment geometry
 - get_approach_sections() - Read BR U/BR D approach sections
 - get_coefficients() - Read hydraulic coefficients
+- get_hydraulic_methods() - Read bridge low-flow/high-flow method selections
+- set_hydraulic_methods() - Set bridge low-flow/high-flow method selections
 - get_htab() - Read hydraulic table parameters (returns DataFrame)
 - get_htab_dict() - Read hydraulic table parameters (returns dict with invert)
 
@@ -58,6 +60,57 @@ class GeomBridge:
     VALUES_PER_LINE = 10
     DEFAULT_SEARCH_RANGE = 100
     MAX_PARSE_LINES = 200
+
+    LOW_FLOW_METHOD_CODES = {
+        'energy': 0,
+        'momentum': 1,
+        'yarnell': 2,
+        'wspro': 3,
+    }
+    LOW_FLOW_METHOD_NAMES = {value: key for key, value in LOW_FLOW_METHOD_CODES.items()}
+    HIGH_FLOW_METHODS = {'energy', 'pressure_weir'}
+
+    BR_COEF_FIELD_NAMES = {
+        0: 'use_energy',
+        1: 'use_momentum',
+        2: 'use_yarnell',
+        3: 'yarnell_k',
+        4: 'use_wspro',
+        6: 'submerged_inlet_cd',
+        7: 'submerged_inlet_outlet_cd',
+        8: 'use_high_standard_step',
+        9: 'momentum_cd',
+        10: 'low_flow_method_code',
+        11: 'low_chord_weir_check',
+    }
+
+    WSPRO_FIELD_NAMES = {
+        0: 'left_top_elevation',
+        1: 'right_top_elevation',
+        2: 'left_toe_elevation',
+        3: 'right_toe_elevation',
+        4: 'abutment_type',
+        5: 'abutment_slope',
+        6: 'bridge_opening_width',
+        7: 'centroid_station',
+        8: 'wing_wall_type',
+        9: 'wing_wall_width',
+        10: 'wing_wall_angle',
+        11: 'wing_wall_radius',
+        12: 'guide_bank_type',
+        13: 'guide_bank_length',
+        14: 'guide_bank_offset',
+        15: 'guide_bank_angle',
+        16: 'piers_continuous',
+        17: 'friction_slope_geometric_mean',
+        18: 'use_tables',
+        19: 'use_ce_approach',
+        20: 'use_ce_guide_banks',
+        21: 'use_ce_upstream_xs',
+        22: 'use_ce_upstream_bridge',
+        23: 'use_ce_downstream_bridge',
+    }
+    WSPRO_BOOLEAN_FIELDS = set(range(16, 24))
 
     @staticmethod
     def _find_bridge(lines: List[str], river: str, reach: str, rs: str) -> Optional[int]:
@@ -126,6 +179,246 @@ class GeomBridge:
                 flags[name] = None
 
         return flags
+
+    @staticmethod
+    def _split_line_ending(line: str) -> tuple:
+        """Split a text line into body and original line ending."""
+        if line.endswith('\r\n'):
+            return line[:-2], '\r\n'
+        if line.endswith('\n'):
+            return line[:-1], '\n'
+        if line.endswith('\r'):
+            return line[:-1], '\r'
+        return line, ''
+
+    @staticmethod
+    def _split_comma_fields_from_line(line: str, prefix: str) -> List[str]:
+        """Return comma fields after a HEC-RAS keyword while preserving field padding."""
+        body, _ = GeomBridge._split_line_ending(line)
+        return body[len(prefix):].split(',')
+
+    @staticmethod
+    def _parse_float_field(field: str) -> Optional[float]:
+        stripped = field.strip()
+        if not stripped:
+            return None
+        try:
+            return float(stripped)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _parse_int_field(field: str) -> Optional[int]:
+        value = GeomBridge._parse_float_field(field)
+        if value is None:
+            return None
+        return int(value)
+
+    @staticmethod
+    def _parse_bool_field(field: str) -> Optional[bool]:
+        value = GeomBridge._parse_float_field(field)
+        if value is None:
+            return None
+        return value != 0
+
+    @staticmethod
+    def _format_scalar_field(value: Any) -> str:
+        if isinstance(value, bool):
+            return '-1' if value else '0'
+        if isinstance(value, int):
+            return str(value)
+        if isinstance(value, float):
+            return f"{value:g}"
+        return str(value)
+
+    @staticmethod
+    def _format_bool_field(value: bool, existing_field: str = '') -> str:
+        if value:
+            existing = existing_field.strip()
+            if existing and existing not in {'0', '0.0'}:
+                return existing
+            return '-1'
+        return '0'
+
+    @staticmethod
+    def _set_comma_field(fields: List[str], index: int, value: Any) -> None:
+        """Set one comma field, preserving its surrounding whitespace when present."""
+        while len(fields) <= index:
+            fields.append('')
+
+        old_field = fields[index]
+        new_value = GeomBridge._format_scalar_field(value)
+        if old_field.strip():
+            leading_count = len(old_field) - len(old_field.lstrip())
+            trailing_count = len(old_field) - len(old_field.rstrip())
+            leading = old_field[:leading_count]
+            trailing = old_field[len(old_field) - trailing_count:] if trailing_count else ''
+            fields[index] = f"{leading}{new_value}{trailing}"
+        else:
+            fields[index] = new_value
+
+    @staticmethod
+    def _default_br_coef_fields() -> List[str]:
+        """Return a conservative default BR Coef field list for structures missing the line."""
+        return ['-1 ', ' 0 ', ' 0 ', '', ' 0 ', '', '', '0.8', '0', '', '0', '']
+
+    @staticmethod
+    def _format_comma_line(prefix: str, fields: List[str], line_ending: str = '\n') -> str:
+        return f"{prefix}{','.join(fields)}{line_ending}"
+
+    @staticmethod
+    def _find_bridge_method_lines(
+        lines: List[str],
+        bridge_idx: int,
+        struct_end_idx: int,
+        opening_index: int = 0
+    ) -> Dict[str, Optional[int]]:
+        """Find BR Coef and matching WSPro records for one bridge opening."""
+        if opening_index < 0:
+            raise ValueError("opening_index must be >= 0")
+
+        br_coef_indices = []
+        wspro_indices = []
+
+        for i in range(bridge_idx, struct_end_idx):
+            line = lines[i]
+            if line.startswith("BR Coef="):
+                br_coef_indices.append(i)
+            elif line.startswith("WSPro="):
+                wspro_indices.append(i)
+
+        br_coef_idx = br_coef_indices[opening_index] if opening_index < len(br_coef_indices) else None
+        wspro_idx = None
+
+        if br_coef_idx is not None:
+            next_br_coef_idx = (
+                br_coef_indices[opening_index + 1]
+                if opening_index + 1 < len(br_coef_indices)
+                else struct_end_idx
+            )
+            for idx in wspro_indices:
+                if br_coef_idx < idx < next_br_coef_idx:
+                    wspro_idx = idx
+                    break
+        elif opening_index < len(wspro_indices):
+            wspro_idx = wspro_indices[opening_index]
+
+        return {
+            'br_coef_idx': br_coef_idx,
+            'wspro_idx': wspro_idx,
+            'br_coef_count': len(br_coef_indices),
+            'wspro_count': len(wspro_indices),
+        }
+
+    @staticmethod
+    def _find_br_coef_insert_idx(lines: List[str], bridge_idx: int, struct_end_idx: int) -> int:
+        """Choose a stable insertion point for a missing BR Coef record."""
+        for i in range(bridge_idx + 1, struct_end_idx):
+            if (lines[i].startswith("WSPro=") or
+                    lines[i].startswith("BC Design=") or
+                    lines[i].startswith("BC HTab")):
+                return i
+        return struct_end_idx
+
+    @staticmethod
+    def _find_bridge_deck_line(lines: List[str], bridge_idx: int, struct_end_idx: int) -> Optional[int]:
+        """Find the data line following the bridge Deck Dist Width WeirC header."""
+        for i in range(bridge_idx + 1, struct_end_idx - 1):
+            if lines[i].startswith("Deck Dist Width WeirC"):
+                return i + 1
+        return None
+
+    @staticmethod
+    def _parse_wspro_fields(fields: List[str]) -> Dict[str, Any]:
+        wspro = {}
+        for idx, name in GeomBridge.WSPRO_FIELD_NAMES.items():
+            if idx >= len(fields):
+                wspro[name] = None
+                continue
+            if idx in GeomBridge.WSPRO_BOOLEAN_FIELDS:
+                wspro[name] = GeomBridge._parse_bool_field(fields[idx])
+            else:
+                value = GeomBridge._parse_float_field(fields[idx])
+                wspro[name] = value if value is not None else None
+        return wspro
+
+    @staticmethod
+    def _parse_br_coef_fields(fields: List[str]) -> Dict[str, Any]:
+        method_code = GeomBridge._parse_int_field(fields[10]) if len(fields) > 10 else None
+        high_standard_step = (
+            GeomBridge._parse_bool_field(fields[8]) if len(fields) > 8 else None
+        )
+
+        coefficients = {
+            'momentum_cd': GeomBridge._parse_float_field(fields[9]) if len(fields) > 9 else None,
+            'yarnell_k': GeomBridge._parse_float_field(fields[3]) if len(fields) > 3 else None,
+            'submerged_inlet_cd': GeomBridge._parse_float_field(fields[6]) if len(fields) > 6 else None,
+            'submerged_inlet_outlet_cd': (
+                GeomBridge._parse_float_field(fields[7]) if len(fields) > 7 else None
+            ),
+            'low_chord_weir_check': GeomBridge._parse_float_field(fields[11]) if len(fields) > 11 else None,
+        }
+
+        enabled = {
+            'energy': GeomBridge._parse_bool_field(fields[0]) if len(fields) > 0 else None,
+            'momentum': GeomBridge._parse_bool_field(fields[1]) if len(fields) > 1 else None,
+            'yarnell': GeomBridge._parse_bool_field(fields[2]) if len(fields) > 2 else None,
+            'wspro': GeomBridge._parse_bool_field(fields[4]) if len(fields) > 4 else None,
+        }
+
+        return {
+            'low_flow_method_code': method_code,
+            'low_flow_method': GeomBridge.LOW_FLOW_METHOD_NAMES.get(method_code),
+            'high_flow_method': (
+                'energy' if high_standard_step else 'pressure_weir'
+                if high_standard_step is not None else None
+            ),
+            'use_high_standard_step': high_standard_step,
+            'enabled_low_flow_methods': enabled,
+            'coefficients': coefficients,
+        }
+
+    @staticmethod
+    def _parse_bridge_deck_fields(fields: List[str]) -> Dict[str, Any]:
+        """Parse common bridge deck fields from the Deck Dist Width WeirC record."""
+        return {
+            'deck_distance': GeomBridge._parse_float_field(fields[0]) if len(fields) > 0 else None,
+            'deck_width': GeomBridge._parse_float_field(fields[1]) if len(fields) > 1 else None,
+            'weir_coefficient': GeomBridge._parse_float_field(fields[2]) if len(fields) > 2 else None,
+            'skew': GeomBridge._parse_float_field(fields[3]) if len(fields) > 3 else None,
+            'max_submergence': GeomBridge._parse_float_field(fields[8]) if len(fields) > 8 else None,
+            'is_ogee': GeomBridge._parse_bool_field(fields[9]) if len(fields) > 9 else None,
+        }
+
+    @staticmethod
+    def _normalize_hydraulic_method(method: Optional[str], accepted: set, field_name: str) -> Optional[str]:
+        if method is None:
+            return None
+        normalized = method.strip().lower().replace('-', '_').replace(' ', '_')
+        if normalized not in accepted:
+            accepted_values = ', '.join(sorted(accepted))
+            raise ValueError(f"{field_name} must be one of: {accepted_values}")
+        return normalized
+
+    @staticmethod
+    def _validate_hydraulic_method_selection(
+        low_flow_method: Optional[str],
+        high_flow_method: Optional[str],
+        enabled: Dict[str, Optional[bool]],
+        wspro_idx: Optional[int],
+        require_selected_enabled: bool = True,
+    ) -> None:
+        if (require_selected_enabled and
+                low_flow_method is not None and
+                enabled.get(low_flow_method) is False):
+            raise ValueError(
+                f"selected low_flow_method '{low_flow_method}' cannot be disabled"
+            )
+        if low_flow_method == 'wspro' and wspro_idx is None:
+            raise ValueError("low_flow_method 'wspro' requires an existing WSPro= record")
+        if high_flow_method is not None and high_flow_method not in GeomBridge.HIGH_FLOW_METHODS:
+            accepted_values = ', '.join(sorted(GeomBridge.HIGH_FLOW_METHODS))
+            raise ValueError(f"high_flow_method must be one of: {accepted_values}")
 
     @staticmethod
     @log_call
@@ -917,6 +1210,482 @@ class GeomBridge:
         except Exception as e:
             logger.error(f"Error reading bridge coefficients: {str(e)}")
             raise IOError(f"Failed to read bridge coefficients: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def get_hydraulic_methods(geom_file: Union[str, Path],
+                              river: str,
+                              reach: str,
+                              rs: str,
+                              opening_index: int = 0) -> Dict[str, Any]:
+        """
+        Read bridge hydraulic method selections from geometry text records.
+
+        This parser reads the bridge ``Bridge Culvert-`` marker, deck/weir
+        coefficient record, and the selected opening's ``BR Coef=`` and
+        ``WSPro=`` records. The ``BR Coef=`` record stores the selected
+        low-flow method code and high-flow method flag used by the Bridge
+        Modeling Approach editor.
+
+        Parameters:
+            geom_file: Path to geometry file (.g##)
+            river: River name (case-sensitive)
+            reach: Reach name (case-sensitive)
+            rs: River station (as string)
+            opening_index: Zero-based bridge opening/coefficient record index
+                when a bridge has multiple ``BR Coef=`` records (default 0)
+
+        Returns:
+            dict with keys:
+            - low_flow_method: one of ``energy``, ``momentum``, ``yarnell``,
+              ``wspro`` or None if no method code is present
+            - high_flow_method: ``energy`` or ``pressure_weir`` when available
+            - enabled_low_flow_methods: per-method compute flags from BR Coef
+            - coefficients: Momentum, Yarnell, pressure-flow, deck/weir, and
+              audit values
+            - deck: parsed values from the ``Deck Dist Width WeirC`` record
+            - wspro: named WSPRO fields, or None if no WSPro record exists
+            - raw: original method records and comma fields for audit
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If bridge or opening is not found
+            IOError: If file read fails
+
+        Example:
+            >>> methods = GeomBridge.get_hydraulic_methods(
+            ...     "model.g01", "Beaver Creek", "Kentwood", "5.4"
+            ... )
+            >>> methods["low_flow_method"]
+            'momentum'
+        """
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        try:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+
+            bridge_idx = GeomBridge._find_bridge(lines, river, reach, rs)
+            if bridge_idx is None:
+                raise ValueError(f"Bridge not found: {river}/{reach}/RS {rs}")
+
+            struct_end_idx = GeomBridge._find_structure_end(lines, bridge_idx)
+            method_lines = GeomBridge._find_bridge_method_lines(
+                lines, bridge_idx, struct_end_idx, opening_index
+            )
+
+            br_coef_idx = method_lines['br_coef_idx']
+            wspro_idx = method_lines['wspro_idx']
+
+            if br_coef_idx is None:
+                if method_lines['br_coef_count'] == 0:
+                    raise ValueError(
+                        f"BR Coef= record not found for bridge {river}/{reach}/RS {rs}"
+                    )
+                raise ValueError(
+                    f"BR Coef= opening_index {opening_index} not found for "
+                    f"{river}/{reach}/RS {rs}; found {method_lines['br_coef_count']}"
+                )
+
+            br_coef_fields = GeomBridge._split_comma_fields_from_line(
+                lines[br_coef_idx], "BR Coef="
+            )
+            parsed = GeomBridge._parse_br_coef_fields(br_coef_fields)
+
+            wspro_fields = None
+            wspro = None
+            if wspro_idx is not None:
+                wspro_fields = GeomBridge._split_comma_fields_from_line(
+                    lines[wspro_idx], "WSPro="
+                )
+                wspro = GeomBridge._parse_wspro_fields(wspro_fields)
+
+            bridge_culvert_fields = GeomBridge._split_comma_fields_from_line(
+                lines[bridge_idx], "Bridge Culvert-"
+            )
+            deck_idx = GeomBridge._find_bridge_deck_line(lines, bridge_idx, struct_end_idx)
+            deck_fields = None
+            deck = None
+            if deck_idx is not None:
+                deck_body, _ = GeomBridge._split_line_ending(lines[deck_idx])
+                deck_fields = deck_body.split(',')
+                deck = GeomBridge._parse_bridge_deck_fields(deck_fields)
+                parsed['coefficients']['weir_coefficient'] = deck['weir_coefficient']
+            else:
+                parsed['coefficients']['weir_coefficient'] = None
+
+            result = {
+                'river': river,
+                'reach': reach,
+                'rs': str(rs),
+                'opening_index': opening_index,
+                'low_flow_method': parsed['low_flow_method'],
+                'low_flow_method_code': parsed['low_flow_method_code'],
+                'high_flow_method': parsed['high_flow_method'],
+                'use_high_standard_step': parsed['use_high_standard_step'],
+                'enabled_low_flow_methods': parsed['enabled_low_flow_methods'],
+                'coefficients': parsed['coefficients'],
+                'deck': deck,
+                'wspro': wspro,
+                'raw': {
+                    'bridge_culvert_line': lines[bridge_idx].rstrip('\r\n'),
+                    'bridge_culvert_fields': [field.strip() for field in bridge_culvert_fields],
+                    'bridge_culvert_flags': GeomBridge._parse_bridge_header(lines[bridge_idx]),
+                    'br_coef_line': lines[br_coef_idx].rstrip('\r\n'),
+                    'br_coef_fields': [field.strip() for field in br_coef_fields],
+                    'deck_line': lines[deck_idx].rstrip('\r\n') if deck_idx is not None else None,
+                    'deck_fields': (
+                        [field.strip() for field in deck_fields]
+                        if deck_fields is not None else None
+                    ),
+                    'wspro_line': lines[wspro_idx].rstrip('\r\n') if wspro_idx is not None else None,
+                    'wspro_fields': (
+                        [field.strip() for field in wspro_fields]
+                        if wspro_fields is not None else None
+                    ),
+                },
+            }
+
+            logger.info(
+                f"Read bridge hydraulic methods for {river}/{reach}/RS {rs}: "
+                f"low={result['low_flow_method']}, high={result['high_flow_method']}"
+            )
+            return result
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error reading bridge hydraulic methods: {str(e)}")
+            raise IOError(f"Failed to read bridge hydraulic methods: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def set_hydraulic_methods(geom_file: Union[str, Path],
+                              river: str,
+                              reach: str,
+                              rs: str,
+                              low_flow_method: Optional[str] = None,
+                              high_flow_method: Optional[str] = None,
+                              use_energy: Optional[bool] = None,
+                              use_momentum: Optional[bool] = None,
+                              use_yarnell: Optional[bool] = None,
+                              use_wspro: Optional[bool] = None,
+                              momentum_cd: Optional[float] = None,
+                              yarnell_k: Optional[float] = None,
+                              pressure_flow_submerged_inlet_cd: Optional[float] = None,
+                              pressure_flow_submerged_inlet_outlet_cd: Optional[float] = None,
+                              weir_coefficient: Optional[float] = None,
+                              opening_index: int = 0,
+                              create_backup: bool = True,
+                              validate: bool = True) -> Dict[str, Any]:
+        """
+        Set bridge low-flow/high-flow hydraulic method selections.
+
+        Accepted ``low_flow_method`` values are ``energy``, ``momentum``,
+        ``yarnell``, and ``wspro``. Accepted ``high_flow_method`` values are
+        ``energy`` and ``pressure_weir``. Momentum and Yarnell selections
+        require an existing or supplied coefficient. Existing comma-field
+        spacing is preserved for updated ``BR Coef=`` and deck/weir fields,
+        and a ``.bak`` backup is created by default before writing.
+
+        Parameters:
+            geom_file: Path to geometry file (.g##)
+            river: River name (case-sensitive)
+            reach: Reach name (case-sensitive)
+            rs: River station (as string)
+            low_flow_method: Optional low-flow method selection
+            high_flow_method: Optional high-flow method selection
+            use_energy: Optional compute flag for the energy method
+            use_momentum: Optional compute flag for the momentum method
+            use_yarnell: Optional compute flag for the Yarnell method
+            use_wspro: Optional compute flag for the WSPRO method
+            momentum_cd: Optional momentum drag coefficient
+            yarnell_k: Optional Yarnell pier coefficient
+            pressure_flow_submerged_inlet_cd: Optional pressure-flow Cd
+            pressure_flow_submerged_inlet_outlet_cd: Optional pressure-flow Cd
+            weir_coefficient: Optional bridge deck/weir coefficient from the
+                ``Deck Dist Width WeirC`` record
+            opening_index: Zero-based bridge opening/coefficient record index
+            create_backup: Create ``.bak`` backup before writing (default True)
+            validate: Validate method names and unsupported combinations
+
+        Returns:
+            dict with before/after method dictionaries, changed line text, and
+            backup path.
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If bridge, method value, or combination is invalid
+            IOError: If file write fails
+
+        Example:
+            >>> GeomBridge.set_hydraulic_methods(
+            ...     "model.g01", "Beaver Creek", "Kentwood", "5.4",
+            ...     low_flow_method="yarnell",
+            ...     high_flow_method="energy",
+            ...     yarnell_k=1.05
+            ... )
+        """
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        normalized_low = GeomBridge._normalize_hydraulic_method(
+            low_flow_method,
+            set(GeomBridge.LOW_FLOW_METHOD_CODES),
+            'low_flow_method'
+        )
+        normalized_high = GeomBridge._normalize_hydraulic_method(
+            high_flow_method,
+            GeomBridge.HIGH_FLOW_METHODS,
+            'high_flow_method'
+        )
+
+        if all(value is None for value in [
+            normalized_low,
+            normalized_high,
+            use_energy,
+            use_momentum,
+            use_yarnell,
+            use_wspro,
+            momentum_cd,
+            yarnell_k,
+            pressure_flow_submerged_inlet_cd,
+            pressure_flow_submerged_inlet_outlet_cd,
+            weir_coefficient,
+        ]):
+            raise ValueError("At least one hydraulic method or coefficient must be specified")
+
+        if validate and weir_coefficient is not None and float(weir_coefficient) <= 0:
+            raise ValueError("weir_coefficient must be positive")
+
+        backup_path = None
+        try:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+
+            bridge_idx = GeomBridge._find_bridge(lines, river, reach, rs)
+            if bridge_idx is None:
+                raise ValueError(f"Bridge not found: {river}/{reach}/RS {rs}")
+
+            struct_end_idx = GeomBridge._find_structure_end(lines, bridge_idx)
+            method_lines = GeomBridge._find_bridge_method_lines(
+                lines, bridge_idx, struct_end_idx, opening_index
+            )
+            br_coef_idx = method_lines['br_coef_idx']
+            wspro_idx = method_lines['wspro_idx']
+            deck_idx = GeomBridge._find_bridge_deck_line(lines, bridge_idx, struct_end_idx)
+            if weir_coefficient is not None and deck_idx is None:
+                raise ValueError(
+                    f"Deck Dist Width WeirC record not found for bridge {river}/{reach}/RS {rs}"
+                )
+
+            if br_coef_idx is None and method_lines['br_coef_count'] > 0:
+                raise ValueError(
+                    f"BR Coef= opening_index {opening_index} not found for "
+                    f"{river}/{reach}/RS {rs}; found {method_lines['br_coef_count']}"
+                )
+
+            inserted_br_coef = False
+            if br_coef_idx is None:
+                line_ending = '\n'
+                if bridge_idx < len(lines):
+                    _, line_ending = GeomBridge._split_line_ending(lines[bridge_idx])
+                    line_ending = line_ending or '\n'
+                br_coef_fields = GeomBridge._default_br_coef_fields()
+                insert_idx = GeomBridge._find_br_coef_insert_idx(lines, bridge_idx, struct_end_idx)
+                lines.insert(
+                    insert_idx,
+                    GeomBridge._format_comma_line("BR Coef=", br_coef_fields, line_ending)
+                )
+                br_coef_idx = insert_idx
+                inserted_br_coef = True
+                if wspro_idx is not None and wspro_idx >= insert_idx:
+                    wspro_idx += 1
+            else:
+                br_coef_fields = GeomBridge._split_comma_fields_from_line(
+                    lines[br_coef_idx], "BR Coef="
+                )
+
+            before_line = lines[br_coef_idx].rstrip('\r\n')
+            current = GeomBridge._parse_br_coef_fields(br_coef_fields)
+            before = None if inserted_br_coef else GeomBridge.get_hydraulic_methods(
+                geom_file, river, reach, rs, opening_index=opening_index
+            )
+
+            if validate and normalized_low == 'momentum':
+                effective_momentum_cd = (
+                    momentum_cd
+                    if momentum_cd is not None
+                    else current['coefficients']['momentum_cd']
+                )
+                if effective_momentum_cd is None:
+                    raise ValueError(
+                        "low_flow_method 'momentum' requires momentum_cd when no "
+                        "existing momentum Cd is set"
+                    )
+
+            if validate and normalized_low == 'yarnell':
+                effective_yarnell_k = (
+                    yarnell_k
+                    if yarnell_k is not None
+                    else current['coefficients']['yarnell_k']
+                )
+                if effective_yarnell_k is None:
+                    raise ValueError(
+                        "low_flow_method 'yarnell' requires yarnell_k when no "
+                        "existing Yarnell K is set"
+                    )
+
+            explicit_enabled = {
+                'energy': use_energy,
+                'momentum': use_momentum,
+                'yarnell': use_yarnell,
+                'wspro': use_wspro,
+            }
+            enabled = dict(current['enabled_low_flow_methods'])
+
+            for method_name, flag_value in explicit_enabled.items():
+                if flag_value is not None:
+                    enabled[method_name] = bool(flag_value)
+
+            if normalized_low is not None:
+                if explicit_enabled.get(normalized_low) is False:
+                    raise ValueError(
+                        f"selected low_flow_method '{normalized_low}' cannot be disabled"
+                    )
+                enabled[normalized_low] = True
+
+            method_to_validate = normalized_low or current['low_flow_method']
+            require_selected_enabled = (
+                normalized_low is not None or
+                (method_to_validate is not None and explicit_enabled.get(method_to_validate) is False)
+            )
+            if validate:
+                GeomBridge._validate_hydraulic_method_selection(
+                    method_to_validate,
+                    normalized_high,
+                    enabled,
+                    wspro_idx,
+                    require_selected_enabled=require_selected_enabled,
+                )
+
+            flag_fields = {
+                'energy': 0,
+                'momentum': 1,
+                'yarnell': 2,
+                'wspro': 4,
+            }
+            for method_name, field_idx in flag_fields.items():
+                if explicit_enabled.get(method_name) is not None or normalized_low == method_name:
+                    existing = br_coef_fields[field_idx] if field_idx < len(br_coef_fields) else ''
+                    GeomBridge._set_comma_field(
+                        br_coef_fields,
+                        field_idx,
+                        GeomBridge._format_bool_field(bool(enabled[method_name]), existing)
+                    )
+
+            if normalized_low is not None:
+                GeomBridge._set_comma_field(
+                    br_coef_fields,
+                    10,
+                    GeomBridge.LOW_FLOW_METHOD_CODES[normalized_low]
+                )
+
+            if normalized_high is not None:
+                high_standard_step = normalized_high == 'energy'
+                existing = br_coef_fields[8] if len(br_coef_fields) > 8 else ''
+                GeomBridge._set_comma_field(
+                    br_coef_fields,
+                    8,
+                    GeomBridge._format_bool_field(high_standard_step, existing)
+                )
+
+            if momentum_cd is not None:
+                GeomBridge._set_comma_field(br_coef_fields, 9, float(momentum_cd))
+
+            if yarnell_k is not None:
+                GeomBridge._set_comma_field(br_coef_fields, 3, float(yarnell_k))
+
+            if pressure_flow_submerged_inlet_cd is not None:
+                GeomBridge._set_comma_field(
+                    br_coef_fields, 6, float(pressure_flow_submerged_inlet_cd)
+                )
+
+            if pressure_flow_submerged_inlet_outlet_cd is not None:
+                GeomBridge._set_comma_field(
+                    br_coef_fields, 7, float(pressure_flow_submerged_inlet_outlet_cd)
+                )
+
+            body, line_ending = GeomBridge._split_line_ending(lines[br_coef_idx])
+            line_ending = line_ending or '\n'
+            lines[br_coef_idx] = GeomBridge._format_comma_line(
+                "BR Coef=", br_coef_fields, line_ending
+            )
+            after_line = lines[br_coef_idx].rstrip('\r\n')
+            deck_line_before = None
+            deck_line_after = None
+
+            if weir_coefficient is not None and deck_idx is not None:
+                deck_body, deck_line_ending = GeomBridge._split_line_ending(lines[deck_idx])
+                deck_line_ending = deck_line_ending or '\n'
+                deck_fields = deck_body.split(',')
+                deck_line_before = lines[deck_idx].rstrip('\r\n')
+                GeomBridge._set_comma_field(deck_fields, 2, float(weir_coefficient))
+                lines[deck_idx] = f"{','.join(deck_fields)}{deck_line_ending}"
+                deck_line_after = lines[deck_idx].rstrip('\r\n')
+
+            if create_backup:
+                backup_path = GeomParser.create_backup(geom_file)
+                logger.info(f"Created backup: {backup_path}")
+
+            with open(geom_file, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+
+            after = GeomBridge.get_hydraulic_methods(
+                geom_file, river, reach, rs, opening_index=opening_index
+            )
+
+            result = {
+                'river': river,
+                'reach': reach,
+                'rs': str(rs),
+                'opening_index': opening_index,
+                'low_flow_method': after['low_flow_method'],
+                'high_flow_method': after['high_flow_method'],
+                'inserted_br_coef': inserted_br_coef,
+                'br_coef_before': before_line,
+                'br_coef_after': after_line,
+                'deck_line_before': deck_line_before,
+                'deck_line_after': deck_line_after,
+                'backup_path': str(backup_path) if backup_path else None,
+                'before': before,
+                'after': after,
+            }
+
+            logger.info(
+                f"Set bridge hydraulic methods for {river}/{reach}/RS {rs}: "
+                f"low={result['low_flow_method']}, high={result['high_flow_method']}"
+            )
+            return result
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error writing bridge hydraulic methods: {str(e)}")
+            if backup_path and backup_path.exists():
+                logger.info(f"Restoring from backup: {backup_path}")
+                import shutil
+                shutil.copy2(backup_path, geom_file)
+            raise IOError(f"Failed to write bridge hydraulic methods: {str(e)}")
 
     @staticmethod
     @log_call

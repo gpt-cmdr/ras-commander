@@ -58,7 +58,15 @@ Inline structure parsing.
 - `get_bridge_abutment(geom, river, reach, station)` - Get abutment data
 - `get_bridge_approach_sections(geom, river, reach, station)` - Get approach sections
 - `get_bridge_coefficients(geom, river, reach, station)` - Get coefficients
+- `get_hydraulic_methods(geom, river, reach, station)` - Get bridge low-flow/high-flow method selections from `Bridge Culvert-`, `Deck Dist Width WeirC`, `BR Coef=`, and `WSPro=` records
+- `set_hydraulic_methods(geom, river, reach, station, low_flow_method=..., high_flow_method=..., weir_coefficient=...)` - Set bridge modeling approach method selections and related coefficients
 - `get_bridge_htab(geom, river, reach, station)` - Get HTAB settings
+
+Accepted `low_flow_method` values are `energy`, `momentum`, `yarnell`, and `wspro`.
+Accepted `high_flow_method` values are `energy` and `pressure_weir`.
+Optional compute flags are `use_energy`, `use_momentum`, `use_yarnell`, and `use_wspro`.
+Optional coefficient fields include `momentum_cd`, `yarnell_k`, `pressure_flow_submerged_inlet_cd`, `pressure_flow_submerged_inlet_outlet_cd`, and positive `weir_coefficient`.
+Unsupported combinations, such as disabling the selected low-flow method or selecting Momentum/Yarnell without an existing or supplied coefficient, raise `ValueError`.
 
 ### Culvert Methods
 
