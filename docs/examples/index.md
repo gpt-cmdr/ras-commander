@@ -46,7 +46,7 @@ These are the notebooks most directly tied to the April 2026 docs-drift sweep.
 | [150_results_dataframe.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/150_results_dataframe.ipynb) | Current `results_df` / lightweight HDF summary workflow |
 | [212_landcover_mannings_n_write.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/212_landcover_mannings_n_write.ipynb) | HDF geometry association QA and land-cover update workflow |
 | [611_validating_map_layers.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/611_validating_map_layers.ipynb) | RASMapper layer and HDF asset validation |
-| [920_terrain_creation.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/920_terrain_creation.ipynb) | Terrain generation plus geometry-HDF association workflow |
+| [920_terrain_creation.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/920_terrain_creation.ipynb) | HEC-RAS terrain tutorial workflow: single-raster terrain, USGS 3DEP terrain, multi-source priority ordering, RASMapper registration, and geometry association |
 | [950_ebfe_spring_creek.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/950_ebfe_spring_creek.ipynb) through [957_ebfe_spring_river_validation.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/957_ebfe_spring_river_validation.ipynb) | Current eBFE delivery-validation notebook set |
 | [960_cloud_native_geometry_export.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/960_cloud_native_geometry_export.ipynb) through [962_cloud_native_cog_results_export.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/962_cloud_native_cog_results_export.ipynb) | Current cloud-native export workflow family |
 
