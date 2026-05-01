@@ -97,6 +97,7 @@ These are the notebooks most directly tied to the April 2026 docs-drift sweep.
 `312_boundary_df_qmult_dss_paths.ipynb`,
 `313_hms_to_ras_boundary_matching.ipynb`,
 `314_reference_line_generation.ipynb`,
+`314_restart_file_settings.ipynb`,
 `320_1d_boundary_condition_visualization.ipynb`
 
 ### 400s

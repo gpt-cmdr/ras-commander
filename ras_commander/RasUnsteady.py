@@ -31,6 +31,8 @@ List of Functions in RasUnsteady:
 - read_unsteady_description()
 - update_unsteady_description()
 - update_restart_settings()
+- set_restart_settings()
+- get_restart_settings()
 - extract_boundary_and_tables()
 - print_boundaries_and_tables()
 - identify_tables()
@@ -205,6 +207,74 @@ class RasUnsteady:
         return RasUtils._write_description_block(unsteady_file_path, description, 'Flow Title')
 
     @staticmethod
+    def _resolve_unsteady_file_path(
+        unsteady_number_or_path: Union[str, Path],
+        ras_object: Optional[Any] = None
+    ) -> Path:
+        """
+        Resolve an unsteady flow number or explicit path to a .u## file path.
+        """
+        unsteady_file_path = Path(unsteady_number_or_path)
+        if unsteady_file_path.is_file():
+            return unsteady_file_path
+
+        from .RasPlan import RasPlan
+
+        resolved_path = RasPlan.get_unsteady_path(unsteady_number_or_path, ras_object)
+        if resolved_path is None or not Path(resolved_path).exists():
+            raise ValueError(f"Unsteady flow file not found: {unsteady_number_or_path}")
+        return Path(resolved_path)
+
+    @staticmethod
+    @log_call
+    def get_initial_conditions(
+        unsteady_number_or_path: Union[str, Path],
+        ras_object: Optional[Any] = None
+    ) -> pd.DataFrame:
+        """
+        Parse initial condition entries from a HEC-RAS unsteady flow file.
+
+        Args:
+            unsteady_number_or_path: Unsteady flow number or path to a .u## file.
+            ras_object: Optional RAS project object. If None, uses global ``ras``.
+
+        Returns:
+            pd.DataFrame: Initial flow, storage/2D elevation, and RRR elevation
+                entries from the unsteady file.
+        """
+        from .usgs.initial_conditions import InitialConditions
+
+        unsteady_file_path = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path,
+            ras_object=ras_object,
+        )
+        return InitialConditions.parse_initial_conditions(unsteady_file_path)
+
+    @staticmethod
+    @log_call
+    def set_initial_conditions(
+        unsteady_number_or_path: Union[str, Path],
+        ic_entries: List[Dict[str, Any]],
+        ras_object: Optional[Any] = None
+    ) -> None:
+        """
+        Write initial condition entries to a HEC-RAS unsteady flow file.
+
+        Args:
+            unsteady_number_or_path: Unsteady flow number or path to a .u## file.
+            ic_entries: List of initial condition dictionaries with keys accepted
+                by ``InitialConditions.write_initial_conditions()``.
+            ras_object: Optional RAS project object. If None, uses global ``ras``.
+        """
+        from .usgs.initial_conditions import InitialConditions
+
+        unsteady_file_path = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path,
+            ras_object=ras_object,
+        )
+        InitialConditions.write_initial_conditions(unsteady_file_path, ic_entries)
+
+    @staticmethod
     @log_call
     def update_restart_settings(unsteady_file: str, use_restart: bool, restart_filename: Optional[str] = None, ras_object: Optional[Any] = None) -> None:
         """
@@ -212,9 +282,11 @@ class RasUnsteady:
 
         Restart files in HEC-RAS allow simulations to continue from a previously saved state,
         which is useful for long simulations or when making downstream changes.
+        This method controls restart-file usage only. To configure a plan to write restart
+        files, use ``RasPlan.set_restart_output_settings()``.
 
         Parameters:
-            unsteady_file (str): Path to the unsteady flow file
+            unsteady_file (str): Path to the unsteady flow file or unsteady number
             use_restart (bool): Whether to use a restart file (True) or not (False)
             restart_filename (str, optional): Path to the restart file (.rst)
                                              Required if use_restart is True
@@ -234,9 +306,16 @@ class RasUnsteady:
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-        
+
+        if hasattr(ras_obj, "get_unsteady_entries"):
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
         unsteady_path = Path(unsteady_file)
+        if not unsteady_path.is_file():
+            from .RasPlan import RasPlan
+            resolved_path = RasPlan.get_unsteady_path(unsteady_file, ras_obj)
+            if resolved_path:
+                unsteady_path = Path(resolved_path)
         
         try:
             with open(unsteady_path, 'r') as f:
@@ -248,33 +327,44 @@ class RasUnsteady:
         except PermissionError:
             logger.error(f"Permission denied when reading unsteady flow file: {unsteady_path}")
             raise PermissionError(f"Permission denied when reading unsteady flow file: {unsteady_path}")
-        
-        updated = False
-        restart_line_index = None
-        for i, line in enumerate(lines):
+
+        if use_restart and not restart_filename:
+            logger.error("Restart filename must be specified when enabling restart.")
+            raise ValueError("Restart filename must be specified when enabling restart.")
+
+        original_lines = list(lines)
+        new_value = "-1" if use_restart else "0"
+        use_restart_index = None
+        program_version_index = None
+        retained_lines = []
+
+        for line in lines:
+            if line.startswith("Restart Filename="):
+                continue
+            if line.startswith("Program Version="):
+                program_version_index = len(retained_lines)
             if line.startswith("Use Restart="):
-                restart_line_index = i
-                old_value = line.strip().split('=')[1]
-                new_value = "-1" if use_restart else "0"
-                lines[i] = f"Use Restart={new_value}\n"
-                updated = True
+                use_restart_index = len(retained_lines)
+                old_value = line.strip().split("=", 1)[1]
+                retained_lines.append(f"Use Restart={new_value}\n")
                 logger.info(f"Updated Use Restart from {old_value} to {new_value}")
-                break
-        
-        if use_restart:
-            if not restart_filename:
-                logger.error("Restart filename must be specified when enabling restart.")
-                raise ValueError("Restart filename must be specified when enabling restart.")
-            if restart_line_index is not None:
-                lines.insert(restart_line_index + 1, f"Restart Filename={restart_filename}\n")
-                logger.info(f"Added Restart Filename: {restart_filename}")
             else:
-                logger.warning("Could not find 'Use Restart' line to insert 'Restart Filename'")
-        
-        if updated:
+                retained_lines.append(line)
+
+        if use_restart_index is None:
+            insert_index = program_version_index + 1 if program_version_index is not None else 0
+            retained_lines.insert(insert_index, f"Use Restart={new_value}\n")
+            use_restart_index = insert_index
+            logger.info(f"Inserted Use Restart={new_value} in {unsteady_path.name}")
+
+        if use_restart:
+            retained_lines.insert(use_restart_index + 1, f"Restart Filename={restart_filename}\n")
+            logger.info(f"Set Restart Filename: {restart_filename}")
+
+        if retained_lines != original_lines:
             try:
                 with open(unsteady_path, 'w') as f:
-                    f.writelines(lines)
+                    f.writelines(retained_lines)
                 logger.debug(f"Successfully wrote modifications to unsteady flow file: {unsteady_path}")
             except PermissionError:
                 logger.error(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
@@ -284,9 +374,89 @@ class RasUnsteady:
                 raise IOError(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
             logger.info(f"Applied restart settings modification to {unsteady_file}")
         else:
-            logger.warning(f"Use Restart setting not found in {unsteady_file}")
-    
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            logger.info(f"Restart settings already current in {unsteady_file}")
+
+        if hasattr(ras_obj, "get_unsteady_entries"):
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+    @staticmethod
+    @log_call
+    def set_restart_settings(unsteady_file: str, use_restart: bool, restart_filename: Optional[str] = None, ras_object: Optional[Any] = None) -> None:
+        """
+        Set restart-file usage in an unsteady flow file.
+
+        Alias for ``update_restart_settings()`` using setter-style naming. This
+        method writes ``Use Restart`` and ``Restart Filename`` in the unsteady
+        file. Restart output creation is configured separately on the plan file
+        with ``RasPlan.set_restart_output_settings()``.
+        """
+        RasUnsteady.update_restart_settings(
+            unsteady_file,
+            use_restart=use_restart,
+            restart_filename=restart_filename,
+            ras_object=ras_object,
+        )
+
+    @staticmethod
+    @log_call
+    def get_restart_settings(unsteady_file: Union[str, Path], ras_object: Optional[Any] = None) -> Dict[str, Optional[Any]]:
+        """
+        Parse restart-file usage settings from an unsteady flow file.
+
+        HEC-RAS stores restart-file usage in the unsteady-flow file using
+        ``Use Restart`` and ``Restart Filename``. This is separate from plan
+        restart output settings, which are stored as ``Write IC File`` keys.
+
+        Args:
+            unsteady_file: Path to an unsteady flow file or an unsteady number.
+            ras_object: Optional RAS project object. If None, uses global ``ras``.
+
+        Returns:
+            Dict[str, Optional[Any]]: Parsed usage settings and raw values.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        unsteady_path = Path(unsteady_file)
+        if not unsteady_path.is_file():
+            from .RasPlan import RasPlan
+            resolved_path = RasPlan.get_unsteady_path(unsteady_file, ras_obj)
+            if resolved_path:
+                unsteady_path = Path(resolved_path)
+
+        raw_values = {
+            "Use Restart": None,
+            "Restart Filename": None,
+        }
+
+        try:
+            with open(unsteady_path, 'r') as file:
+                for line in file:
+                    if line.startswith("Use Restart="):
+                        raw_values["Use Restart"] = line.split("=", 1)[1].strip()
+                    elif line.startswith("Restart Filename=") and raw_values["Restart Filename"] is None:
+                        raw_values["Restart Filename"] = line.split("=", 1)[1].strip()
+        except FileNotFoundError:
+            logger.error(f"Unsteady flow file not found: {unsteady_path}")
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+        except PermissionError:
+            logger.error(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+            raise PermissionError(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+
+        use_restart = None
+        if raw_values["Use Restart"] is not None:
+            use_restart = raw_values["Use Restart"].strip().lower() in {"-1", "1", "true"}
+
+        return {
+            "use_restart": use_restart,
+            "restart_filename": raw_values["Restart Filename"],
+            "raw": raw_values,
+            "compatibility_note": (
+                "HEC-RAS stores restart usage in unsteady-flow files as Use Restart "
+                "and Restart Filename. Restart output/save settings are plan-file "
+                "Write IC File keys in HEC-RAS 5.x through 7.0."
+            ),
+        }
 
     @staticmethod
     @log_call

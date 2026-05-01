@@ -77,6 +77,9 @@ Key columns you can rely on:
 | `Geom File` / `Geom Path` | geometry reference and resolved path |
 | `Flow File` / `Flow Path` | steady or unsteady flow reference and resolved path |
 | `Computation Interval` / `Output Interval` | time-step metadata |
+| `Write IC File` / `IC Time` | restart / hot-start output-save settings when present |
+| `Write IC File Reoccurance` | restart output recurrence interval, preserving the HEC-RAS spelling |
+| `Write IC File at Sim End` | final-step restart output flag |
 | `Program Version` | HEC-RAS version recorded in the plan |
 | `HDF_Results_Path` | resolved `.p##.hdf` path when present |
 | `full_path` | resolved `.p##` path |
@@ -124,7 +127,7 @@ Typical columns:
 | DataFrame | Common columns |
 |-----------|----------------|
 | `flow_df` | `flow_number`, `full_path`, `description` |
-| `unsteady_df` | `unsteady_number`, `full_path`, `description`, plus parsed unsteady metadata |
+| `unsteady_df` | `unsteady_number`, `full_path`, `description`, `Use Restart`, `Restart Filename`, plus parsed unsteady metadata |
 
 Use these tables when you need to audit which `.f##` / `.u##` files exist
 before editing them through `RasPlan` or `RasUnsteady`.

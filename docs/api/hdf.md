@@ -21,6 +21,7 @@ Plan-level information from HDF files.
 - `get_plan_info(hdf_path)` - Get plan metadata
 - `get_simulation_times(hdf_path)` - Get start/end times
 - `get_plan_parameters(hdf_path)` - Get computation parameters
+- `get_2d_flow_options(hdf_path)` - Get 2D equation set, initial condition time, tolerances, and solver options from computed HDF output
 
 ## Mesh Operations
 
