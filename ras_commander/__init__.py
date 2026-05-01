@@ -26,6 +26,7 @@ from .RasGeo import RasGeo  # DEPRECATED - use geom subpackage
 from .RasGeometry import RasGeometry  # DEPRECATED - use geom subpackage
 from .RasGeometryUtils import RasGeometryUtils  # DEPRECATED - use geom subpackage
 from .RasUnsteady import RasUnsteady
+from .RasSteady import RasSteady
 from .RasUtils import RasUtils
 from .RasExamples import RasExamples
 from .sources.federal import RasEbfeModels
@@ -170,7 +171,7 @@ def __getattr__(name):
 __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
-    'RasPlan', 'RasUnsteady', 'RasUtils',
+    'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils',
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
     'PreprocessResult', 'GeometryPreprocessResult',
     'RasPreprocess',

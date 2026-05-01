@@ -12,6 +12,7 @@ Primary classes for project management and execution:
 - [`RasFlowOptimization`](core.md#rasflowoptimization) - Native HEC-RAS flow hydrograph optimization settings and trial results
 - [`RasGeo`](core.md#rasgeo) - Geometry file operations
 - [`RasUnsteady`](core.md#rasunsteady) - Unsteady flow file management
+- [`RasSteady`](core.md#rassteady) - Steady flow file authoring and parsing
 - [`RasUtils`](core.md#rasutils) - Utility functions
 - [`RasExamples`](core.md#rasexamples) - Example project management
 - [`RasMap`](core.md#rasmap) - RASMapper configuration, layer discovery, and geometry HDF associations
