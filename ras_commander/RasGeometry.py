@@ -24,6 +24,7 @@ DEPRECATION NOTICE:
     SA/2D Connection Operations:
     - GeomLateral.get_connections() - replaces RasGeometry.get_connections()
     - GeomLateral.get_connection_profile() - replaces RasGeometry.get_connection_weir_profile()
+    - GeomLateral.set_connection_profile() - replaces RasGeometry.set_connection_weir_profile()
     - GeomLateral.get_connection_gates() - replaces RasGeometry.get_connection_gates()
 
 This module is part of the ras-commander library and uses a centralized logging configuration.
@@ -43,6 +44,7 @@ List of Functions in RasGeometry (all DEPRECATED):
 - get_lateral_weir_profile() - Read station-elevation profile for lateral weir [DEPRECATED]
 - get_connections() - List all SA/2D area connections [DEPRECATED]
 - get_connection_weir_profile() - Read dam/weir crest station-elevation profile [DEPRECATED]
+- set_connection_weir_profile() - Write dam/weir crest station-elevation profile [DEPRECATED]
 - get_connection_gates() - Read gate definitions (CSV format, 23+ parameters) [DEPRECATED]
 """
 
@@ -319,6 +321,28 @@ class RasGeometry:
         )
         from .geom import GeomLateral
         return GeomLateral.get_connection_profile(geom_file, connection_name)
+
+    @staticmethod
+    @log_call
+    def set_connection_weir_profile(geom_file: Union[str, Path],
+                                    connection_name: str,
+                                    sta_elev_df: pd.DataFrame,
+                                    create_backup: bool = True):
+        """
+        Write weir/dam crest station-elevation profile for a connection.
+
+        DEPRECATED: Use GeomLateral.set_connection_profile() instead.
+        """
+        warnings.warn(
+            "RasGeometry.set_connection_weir_profile() is deprecated. "
+            "Use GeomLateral.set_connection_profile() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        from .geom import GeomLateral
+        return GeomLateral.set_connection_profile(
+            geom_file, connection_name, sta_elev_df, create_backup=create_backup
+        )
 
     @staticmethod
     @log_call
