@@ -218,6 +218,12 @@ examples/.claude/
 tmpclaude-*-cwd
 **/tmpclaude-*-cwd
 
+# Symphony runner workspace artifacts (per-issue, not version-controlled)
+OUTPUT.md
+COMMIT_READY.md
+TASK.md
+VALIDATION_MATRIX.md
+
 # Environment variables and API keys
 .env
 .env.local
