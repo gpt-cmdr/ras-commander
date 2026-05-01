@@ -42,6 +42,15 @@ Classes for parsing geometry files:
 - [`RasStruct`](geometry.md#rasstruct) - Inline structures
 - [`RasBreach`](geometry.md#rasbreach) - Breach parameters
 
+## Terrain Modules
+
+Classes for terrain creation, modification writing, and terrain-modification
+analysis:
+
+- `RasTerrain` - Terrain HDF creation from rasters
+- `RasTerrainModWriter` - Channel, high-ground, and fill-surface terrain modification HDF/.rasmap writing
+- `RasTerrainMod` - Terrain profile and volume comparison with modifications applied
+
 ## Fixit Module
 
 Automated geometry repair:
