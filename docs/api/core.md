@@ -294,6 +294,23 @@ The `get_comp_msgs()` method attempts to read computation messages from multiple
         - get_value
         - set_value
 
+### RasFlowOptimization
+
+::: ras_commander.RasFlowOptimization
+    options:
+      show_root_heading: true
+      heading_level: 3
+      members:
+        - copy_plan_with_optimization
+        - enable_plan
+        - set_settings
+        - get_settings
+        - disable_plan
+        - list_flow_hydrographs
+        - compute_plan_and_get_trials
+        - get_trial_results
+        - parse_compute_messages
+
 ### RasGeo
 
 ::: ras_commander.RasGeo

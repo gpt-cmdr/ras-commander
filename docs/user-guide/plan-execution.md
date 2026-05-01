@@ -160,6 +160,41 @@ RasPlan.set_description(new_plan, "Run with finer timestep")
 success = RasCmdr.compute_plan(new_plan)
 ```
 
+## Native Flow Hydrograph Optimization
+
+HEC-RAS native automated flow optimization scales selected flow hydrographs until a stage or flow target is met at a reference point or line. RAS Commander exposes this through `RasFlowOptimization` while keeping execution inside `RasCmdr`.
+
+```python
+from ras_commander import init_ras_project, RasFlowOptimization, RasCmdr
+
+init_ras_project("/path/to/tutorial-13-project", "6.5")
+
+# Copy a plan and enable native HEC-RAS flow optimization on the copy.
+opt_plan = RasFlowOptimization.copy_plan_with_optimization(
+    "01",
+    new_plan_shortid="Native Flow Opt",
+    mode="stage",
+    reference_location="Yosemite Falls Vantage Point",
+    target_value=3963.5,
+    tolerance=0.1,
+    hydrographs=["BCLine: Inflow"],
+    min_ratio=0.5,
+    max_ratio=1.0,
+    max_iterations=10,
+)
+
+# Execute through RAS Commander, not a direct Ras.exe call.
+success = RasCmdr.compute_plan(opt_plan)
+
+# After compute, read native trial output from the plan HDF or compute messages.
+trials = RasFlowOptimization.get_trial_results(opt_plan)
+print(trials[["trial", "ratio", "difference", "target", "computed"]])
+```
+
+Use `RasFlowOptimization.get_settings()` to audit an existing plan and `RasFlowOptimization.list_flow_hydrographs()` to discover flow hydrographs that can be selected for scaling. `RasFlowOptimization.compute_plan_and_get_trials()` is a convenience wrapper around `RasCmdr.compute_plan()` followed by trial extraction. See `examples/301_flow_hydrograph_optimization.ipynb` for the Tutorial 13 workflow and fallback guidance.
+
+`RasCalibrate` remains the ras-commander-native calibration/search API for broader parameter sweeps, arbitrary model edits, and custom objective metrics. Native flow optimization is narrower: it delegates HEC-RAS' built-in flow-ratio trial loop to HEC-RAS and reports the resulting trial table where available. See the [official HEC-RAS flow hydrograph optimization tutorial](https://www.hec.usace.army.mil/confluence/rasdocs/hgt/latest/tutorials/2d-unsteady-flow/flow-hydrograph-optimization) for the corresponding GUI workflow.
+
 ## Checking Results
 
 After execution, verify results were generated and the run completed without errors. This is critical for determining if the simulation succeeded.

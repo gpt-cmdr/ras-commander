@@ -64,6 +64,7 @@ from .RasCalibrate import (
     make_steady_profile_calibration_points,
     make_xsec_mannings_apply_fn,
 )
+from .RasFlowOptimization import RasFlowOptimization
 
 # Validation framework - core validation infrastructure
 from .RasValidation import ValidationSeverity, ValidationResult, ValidationReport
@@ -179,7 +180,7 @@ __all__ = [
     'extract_steady_profile_modeled', 'extract_steady_profile_observations',
     'make_composite_apply_fn', 'make_infiltration_apply_fn',
     'make_mannings_apply_fn', 'make_steady_profile_calibration_points',
-    'make_xsec_mannings_apply_fn',
+    'make_xsec_mannings_apply_fn', 'RasFlowOptimization',
 
     # Geometry handling (new in v0.86.0)
     'GeomParser', 'GeomPreprocessor', 'GeomLandCover',

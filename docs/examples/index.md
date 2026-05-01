@@ -90,7 +90,9 @@ These are the notebooks most directly tied to the April 2026 docs-drift sweep.
 
 ### 300s
 
-`300_unsteady_flow_operations.ipynb`, `310_dss_boundary_extraction.ipynb`,
+`300_unsteady_flow_operations.ipynb`,
+`301_flow_hydrograph_optimization.ipynb`,
+`310_dss_boundary_extraction.ipynb`,
 `311_validating_dss_paths.ipynb`,
 `312_boundary_df_qmult_dss_paths.ipynb`,
 `313_hms_to_ras_boundary_matching.ipynb`,
