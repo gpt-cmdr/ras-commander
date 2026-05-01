@@ -42,6 +42,8 @@ class RasFloodway:
         "value_2",
         "left_station",
         "right_station",
+        "target_top_width",
+        "conveyance_reduction_percent",
         "target_surcharge",
         "energy_target",
         "encroach_param_1",
@@ -128,6 +130,8 @@ class RasFloodway:
                     "value_2": value_2,
                     "left_station": value_1 if method == 1 else None,
                     "right_station": value_2 if method == 1 else None,
+                    "target_top_width": value_1 if method == 2 else None,
+                    "conveyance_reduction_percent": value_1 if method == 3 else None,
                     "target_surcharge": value_1 if method in (4, 5) else None,
                     "energy_target": value_2 if method == 5 else None,
                     "encroach_param_1": encroach_param[0],
@@ -183,7 +187,10 @@ class RasFloodway:
         ``encroachments`` may be a DataFrame with one row per node/profile or a
         sequence of dictionaries. Dictionary records can either be flat rows with
         ``method`` plus method values, or grouped node records with a ``profiles``
-        list.
+        list. Method-specific aliases include ``left_station``/``right_station``
+        for Method 1, ``fixed_top_width`` for Method 2,
+        ``conveyance_reduction_percent`` for Method 3, ``target_surcharge`` for
+        Method 4, and ``target_surcharge`` plus ``energy_target`` for Method 5.
         """
         plan_path = RasFloodway._resolve_plan_path(plan_number_or_path, ras_object)
         normalised = RasFloodway._normalise_encroachment_records(encroachments)
@@ -604,6 +611,12 @@ class RasFloodway:
             entry,
             "value_1",
             "left_station",
+            "fixed_top_width",
+            "target_top_width",
+            "top_width",
+            "conveyance_reduction_percent",
+            "conveyance_reduction_pct",
+            "percent_conveyance_reduction",
             "target_surcharge",
             "target",
             "target_width",

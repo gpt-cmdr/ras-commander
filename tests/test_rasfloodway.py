@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from ras_commander import RasFloodway
@@ -128,6 +129,36 @@ def test_set_encroachments_writes_multiple_targets_and_bridge_sections(tmp_path)
     parsed = RasFloodway.parse_encroachments(plan)
     assert len(parsed) == 4
     assert parsed["profile_number"].tolist() == [2, 3, 2, 3]
+
+
+def test_set_encroachments_accepts_method_2_and_3_named_targets(tmp_path):
+    plan = _write_plan(tmp_path / "Project.p01")
+
+    RasFloodway.set_encroachments(
+        plan,
+        [
+            {
+                "river": "Clear Creek",
+                "reach": "Main",
+                "node": "1020.50",
+                "profiles": [
+                    {"method": 2, "fixed_top_width": 850},
+                    {"method": 3, "conveyance_reduction_percent": 25},
+                ],
+            },
+        ],
+        profile_count=3,
+    )
+
+    text = plan.read_text(encoding="utf-8")
+    assert "       2     850       0       3      25       0" in text
+
+    parsed = RasFloodway.parse_encroachments(plan)
+    assert parsed["method"].tolist() == [2, 3]
+    assert parsed.loc[0, "target_top_width"] == 850
+    assert pd.isna(parsed.loc[1, "target_top_width"])
+    assert pd.isna(parsed.loc[0, "conveyance_reduction_percent"])
+    assert parsed.loc[1, "conveyance_reduction_percent"] == 25
 
 
 def test_set_encroachments_requires_method_specific_values(tmp_path):
