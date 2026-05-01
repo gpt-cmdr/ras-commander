@@ -40,6 +40,9 @@ List of Functions in RasMap:
 - get_current_view(): Read the RASMapper CurrentView bounds
 - set_current_view(): Write the RASMapper CurrentView bounds
 - set_terrain_layer_visibility(): Toggle terrain layers for RASMapper inspection
+- list_terrain_display_settings(): List persisted terrain display settings
+- get_terrain_display_settings(): Read persisted terrain display settings for one terrain
+- set_terrain_display_settings(): Write persisted terrain display settings
 - set_update_legend_with_view(): Enable viewport-updated legends on raster surface layers
 - zoom_to_geometry_layer(): Zoom CurrentView to HDF-derived geometry element extents
 - get_geometry_feature_bounds(): Get HDF-derived extents for a selected feature
@@ -1717,6 +1720,114 @@ class RasMap:
             checked=checked,
             exclusive=exclusive,
             surface_on=surface_on,
+        )
+
+    @staticmethod
+    @log_call
+    def list_terrain_display_settings(
+        ras_project_path: Optional[Union[str, Path]] = None,
+        *,
+        terrain_name: Optional[str] = None,
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """
+        List terrain display settings persisted in a project ``.rasmap`` file.
+
+        The returned DataFrame includes hillshade, contour, and stitch-edge
+        display controls for each ``Type="TerrainLayer"`` entry. These settings
+        are read directly from RASMapper XML; no GUI automation is used.
+        """
+        from . import _rasmap_control_helper as _rch
+
+        resolved_project_path = _resolve_optional_ras_project_path(
+            ras_project_path,
+            ras_object,
+        )
+        return _rch.list_terrain_display_settings(
+            resolved_project_path,
+            terrain_name=terrain_name,
+        )
+
+    @staticmethod
+    @log_call
+    def get_terrain_display_settings(
+        ras_project_path: Optional[Union[str, Path]] = None,
+        *,
+        terrain_name: Optional[str] = None,
+        ras_object=None,
+    ) -> Dict[str, Any]:
+        """
+        Read persisted terrain display settings for one terrain layer.
+
+        Provide ``terrain_name`` when the project has multiple terrain layers.
+        The name match uses the RASMapper display name.
+        """
+        from . import _rasmap_control_helper as _rch
+
+        resolved_project_path = _resolve_optional_ras_project_path(
+            ras_project_path,
+            ras_object,
+        )
+        return _rch.get_terrain_display_settings(
+            resolved_project_path,
+            terrain_name=terrain_name,
+        )
+
+    @staticmethod
+    @log_call
+    def set_terrain_display_settings(
+        ras_project_path: Optional[Union[str, Path]] = None,
+        *,
+        terrain_name: Optional[str] = None,
+        hillshade_enabled: Optional[bool] = None,
+        hillshade_z_factor: Optional[float] = None,
+        contour_enabled: Optional[bool] = None,
+        contour_interval: Optional[float] = None,
+        stitch_edges_enabled: Optional[bool] = None,
+        stitch_tin_edges_enabled: Optional[bool] = None,
+        level0_stitch_edges_enabled: Optional[bool] = None,
+        level0_stitch_tin_edges_enabled: Optional[bool] = None,
+        remove_stitch_rendering_enabled: Optional[bool] = None,
+        ras_object=None,
+    ) -> int:
+        """
+        Write persisted terrain display settings in a project ``.rasmap`` file.
+
+        Args:
+            ras_project_path: Project folder, ``.prj`` file, or ``.rasmap`` file.
+                If omitted, the active ``RasPrj`` object is used.
+            terrain_name: Optional terrain layer display name. When omitted, all
+                terrain layers are targeted.
+            hillshade_enabled: Toggle ``Symbology/HillShade`` display.
+            hillshade_z_factor: Set the hillshade Z factor where persisted.
+            contour_enabled: Toggle ``Symbology/Contour`` display.
+            contour_interval: Set the contour interval where persisted.
+            stitch_edges_enabled: Toggle ``Plot stitch TIN edges``.
+            level0_stitch_edges_enabled: Toggle ``Plot Level0 stitch TIN edges``.
+            remove_stitch_rendering_enabled: Toggle ``Remove Stitch Rendering``.
+            ras_object: Optional ``RasPrj`` object instance.
+
+        Returns:
+            int: Number of XML attributes/elements modified.
+        """
+        from . import _rasmap_control_helper as _rch
+
+        resolved_project_path = _resolve_optional_ras_project_path(
+            ras_project_path,
+            ras_object,
+        )
+        return _rch.set_terrain_display_settings(
+            resolved_project_path,
+            terrain_name=terrain_name,
+            hillshade_enabled=hillshade_enabled,
+            hillshade_z_factor=hillshade_z_factor,
+            contour_enabled=contour_enabled,
+            contour_interval=contour_interval,
+            stitch_edges_enabled=stitch_edges_enabled,
+            stitch_tin_edges_enabled=stitch_tin_edges_enabled,
+            level0_stitch_edges_enabled=level0_stitch_edges_enabled,
+            level0_stitch_tin_edges_enabled=level0_stitch_tin_edges_enabled,
+            remove_stitch_rendering_enabled=remove_stitch_rendering_enabled,
         )
 
     @staticmethod
