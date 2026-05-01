@@ -1,6 +1,6 @@
 # Example Notebooks
 
-The repository currently ships **88 canonical notebooks** under `examples/`.
+The repository currently ships **89 canonical notebooks** under `examples/`.
 This overview tracks the live notebook inventory in git. Executed copies such as
 `*_executed.ipynb` and local `_test_*.py` helpers are intentionally excluded.
 
@@ -97,6 +97,7 @@ These are the notebooks most directly tied to the April 2026 docs-drift sweep.
 `410_2d_hdf_data_extraction.ipynb`,
 `411_2d_hdf_pipes_and_pumps.ipynb`,
 `412_2d_detail_face_data_extraction.ipynb`,
+`413_profile_line_flow_extraction.ipynb`,
 `415_2d_spatial_result_queries.ipynb`,
 `420_breach_results_extraction.ipynb`,
 `430_1d_channel_capacity_analysis.ipynb`

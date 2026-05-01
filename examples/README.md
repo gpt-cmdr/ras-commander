@@ -216,6 +216,16 @@ This notebook demonstrates techniques for detailed face data extraction from 2D 
 - Visualizing time series data for selected faces
 - Creating profile-specific result datasets for analysis
 
+### [413_profile_line_flow_extraction.ipynb](413_profile_line_flow_extraction.ipynb)
+
+This notebook demonstrates the callable profile-line flow API for completed 2D plan HDF results.
+
+**Key contents:**
+- Extracting a flow time series across a named RAS Mapper profile/reference line
+- Retrieving peak Q and peak time for the same line
+- Comparing absolute and signed face-flow aggregation
+- Validating API output against manual selected-face aggregation
+
 ### [14_fluvial_pluvial_delineation.ipynb](14_fluvial_pluvial_delineation.ipynb)
 
 This notebook demonstrates how to delineate fluvial and pluvial flooding areas based on the timing of maximum water surface elevations.

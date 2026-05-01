@@ -48,6 +48,8 @@ Mesh geometry data.
 - `get_mesh_timeseries(hdf_path, mesh, var)` - Time series for mesh
 - `get_mesh_cells_timeseries(hdf_path, mesh, cell_ids, var)` - Cell time series
 - `get_mesh_faces_timeseries(hdf_path, mesh, face_ids, var)` - Face time series
+- `get_profile_line_flow_timeseries(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Flow time series across a RAS Mapper profile/reference line
+- `get_profile_line_peak_flow(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Peak Q and peak time for a profile/reference line
 
 ## Plan Results
 
