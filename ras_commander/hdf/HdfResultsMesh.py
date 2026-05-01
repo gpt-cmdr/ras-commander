@@ -193,6 +193,556 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
+    def get_profile_line_flow_timeseries(
+        hdf_path: Path,
+        line_name: str,
+        mesh_name: Optional[str] = None,
+        profile_lines_path: Optional[Union[str, Path]] = None,
+        direction: str = "absolute",
+        truncate: bool = False,
+        ras_object: Optional[Any] = None,
+    ) -> pd.DataFrame:
+        """
+        Return a flow time series across a RAS Mapper profile/reference line.
+
+        The method first looks for native HEC-RAS reference-line internal-face
+        metadata in the plan HDF. If no matching native reference line is found,
+        it reads the RAS Mapper Profile Lines feature file and uses
+        ``HdfMesh.get_faces_along_profile_line()`` to select mesh faces
+        geometrically. Face flows are read through ``get_mesh_timeseries()``.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Plan HDF path, plan number, or other input accepted by
+            ``@standardize_input(file_type='plan_hdf')``.
+        line_name : str
+            Profile/reference line name to extract.
+        mesh_name : Optional[str], optional
+            2D flow area name. Required when the line resolves to more than one
+            mesh area.
+        profile_lines_path : Optional[Union[str, Path]], optional
+            Explicit RAS Mapper Profile Lines feature path. If omitted, the
+            method attempts to use ``ras_object.rasmap_df.profile_lines_path``.
+        direction : str, default "absolute"
+            ``"absolute"`` sums absolute face flows to avoid face-normal sign
+            cancellation. ``"signed"`` preserves native HEC-RAS face-flow signs;
+            orientation is controlled by the underlying face normals.
+        truncate : bool, default False
+            Passed to ``get_mesh_timeseries()``.
+        ras_object : Optional[Any], optional
+            RAS project object used for plan-number and rasmap path resolution.
+
+        Returns
+        -------
+        pd.DataFrame
+            Columns: ``time``, ``flow``, ``line_name``, ``mesh_name``,
+            ``direction``, ``face_count``, and ``selection_source``.
+        """
+        direction = HdfResultsMesh._normalize_profile_line_direction(direction)
+        selected_faces, resolved_mesh_name, selection_source = (
+            HdfResultsMesh._resolve_profile_line_faces(
+                hdf_path=hdf_path,
+                line_name=line_name,
+                mesh_name=mesh_name,
+                profile_lines_path=profile_lines_path,
+                ras_object=ras_object,
+            )
+        )
+
+        face_ids = HdfResultsMesh._unique_int_values(selected_faces['face_id'])
+        if not face_ids:
+            raise ValueError(f"No valid face IDs resolved for profile line '{line_name}'.")
+
+        face_flow = HdfResultsMesh.get_mesh_timeseries(
+            hdf_path,
+            resolved_mesh_name,
+            "Face Flow",
+            truncate=truncate,
+        )
+        if "face_id" not in face_flow.coords:
+            raise ValueError(
+                f"Face Flow output for mesh '{resolved_mesh_name}' does not include face_id coordinates."
+            )
+
+        available_face_ids = {
+            int(face_id) for face_id in face_flow.coords["face_id"].values.tolist()
+        }
+        missing_face_ids = [
+            face_id for face_id in face_ids if face_id not in available_face_ids
+        ]
+        if missing_face_ids:
+            preview = missing_face_ids[:10]
+            more = "" if len(missing_face_ids) <= len(preview) else (
+                f" and {len(missing_face_ids) - len(preview)} more"
+            )
+            raise ValueError(
+                f"Face Flow output for mesh '{resolved_mesh_name}' is missing selected "
+                f"face IDs: {preview}{more}"
+            )
+
+        selected_flow = face_flow.sel(face_id=face_ids)
+        values = np.asarray(selected_flow.values, dtype=float)
+        if values.ndim == 1:
+            values = values.reshape((-1, 1))
+
+        if direction == "absolute":
+            flow = np.abs(values).sum(axis=1)
+        else:
+            flow = values.sum(axis=1)
+
+        result = pd.DataFrame({
+            "time": pd.to_datetime(face_flow.coords["time"].values),
+            "flow": flow,
+            "line_name": str(line_name),
+            "mesh_name": resolved_mesh_name,
+            "direction": direction,
+            "face_count": len(face_ids),
+            "selection_source": selection_source,
+        })
+        result.attrs["face_ids"] = face_ids
+        result.attrs["units"] = face_flow.attrs.get("units", "")
+        result.attrs["variable"] = "Face Flow"
+        return result
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_profile_line_peak_flow(
+        hdf_path: Path,
+        line_name: str,
+        mesh_name: Optional[str] = None,
+        profile_lines_path: Optional[Union[str, Path]] = None,
+        direction: str = "absolute",
+        ras_object: Optional[Any] = None,
+    ) -> pd.DataFrame:
+        """
+        Return peak flow across a RAS Mapper profile/reference line.
+
+        For ``direction="absolute"``, the peak is the maximum absolute-flow
+        sum. For ``direction="signed"``, the peak timestep is selected by
+        maximum signed-flow magnitude and the returned ``peak_flow`` preserves
+        the native sign at that timestep.
+        """
+        flow_df = HdfResultsMesh.get_profile_line_flow_timeseries(
+            hdf_path=hdf_path,
+            line_name=line_name,
+            mesh_name=mesh_name,
+            profile_lines_path=profile_lines_path,
+            direction=direction,
+            truncate=False,
+            ras_object=ras_object,
+        )
+        if flow_df.empty:
+            return pd.DataFrame(
+                columns=[
+                    "line_name",
+                    "mesh_name",
+                    "peak_time",
+                    "peak_flow",
+                    "direction",
+                    "face_count",
+                    "selection_source",
+                ]
+            )
+
+        peak_index = flow_df["flow"].abs().idxmax()
+        peak_row = flow_df.loc[peak_index]
+        return pd.DataFrame([{
+            "line_name": peak_row["line_name"],
+            "mesh_name": peak_row["mesh_name"],
+            "peak_time": peak_row["time"],
+            "peak_flow": peak_row["flow"],
+            "direction": peak_row["direction"],
+            "face_count": peak_row["face_count"],
+            "selection_source": peak_row["selection_source"],
+        }])
+
+    @staticmethod
+    def _normalize_profile_line_direction(direction: str) -> str:
+        normalized = str(direction).strip().lower()
+        if normalized not in {"absolute", "signed"}:
+            raise ValueError("direction must be either 'absolute' or 'signed'")
+        return normalized
+
+    @staticmethod
+    def _resolve_profile_line_faces(
+        hdf_path: Path,
+        line_name: str,
+        mesh_name: Optional[str],
+        profile_lines_path: Optional[Union[str, Path]],
+        ras_object: Optional[Any],
+    ) -> Tuple[pd.DataFrame, str, str]:
+        native_faces = HdfResultsMesh._get_native_profile_line_faces(
+            hdf_path=hdf_path,
+            line_name=line_name,
+            mesh_name=mesh_name,
+            ras_object=ras_object,
+        )
+        if not native_faces.empty:
+            resolved_mesh_name = HdfResultsMesh._resolve_single_mesh_name(
+                native_faces,
+                mesh_name,
+                line_name,
+            )
+            return native_faces, resolved_mesh_name, "reference_line_internal_faces"
+
+        resolved_profile_lines_path = HdfResultsMesh._resolve_profile_lines_path(
+            profile_lines_path=profile_lines_path,
+            ras_object=ras_object,
+        )
+        if resolved_profile_lines_path is None:
+            raise ValueError(
+                f"Profile/reference line '{line_name}' was not found in native HDF "
+                "reference-line internal faces, and no RAS Mapper profile-lines "
+                "feature path could be resolved. Pass profile_lines_path or initialize "
+                "a ras_object with rasmap_df."
+            )
+
+        cell_faces = HdfMesh.get_mesh_cell_faces(hdf_path)
+        if cell_faces is None or cell_faces.empty:
+            raise ValueError(f"No mesh cell faces found in HDF file: {hdf_path}")
+
+        profile_line = HdfResultsMesh._read_profile_line_geometry(
+            profile_lines_path=resolved_profile_lines_path,
+            line_name=line_name,
+            target_crs=getattr(cell_faces, "crs", None),
+        )
+        selected_faces = HdfMesh.get_faces_along_profile_line(
+            profile_line=profile_line,
+            cell_faces_gdf=cell_faces,
+            mesh_name=mesh_name,
+        )
+        if selected_faces is None or selected_faces.empty:
+            raise ValueError(
+                f"No mesh faces found along profile line '{line_name}'. "
+                "Check that the line crosses the target mesh and that the HDF "
+                "and feature file use compatible coordinates."
+            )
+
+        resolved_mesh_name = HdfResultsMesh._resolve_single_mesh_name(
+            selected_faces,
+            mesh_name,
+            line_name,
+        )
+        selected_faces = selected_faces[selected_faces["mesh_name"] == resolved_mesh_name]
+        return selected_faces, resolved_mesh_name, "profile_lines_geometry"
+
+    @staticmethod
+    def _get_native_profile_line_faces(
+        hdf_path: Path,
+        line_name: str,
+        mesh_name: Optional[str],
+        ras_object: Optional[Any],
+    ) -> pd.DataFrame:
+        reference_hdf_path = HdfResultsMesh._resolve_reference_line_hdf_path(
+            hdf_path,
+            ras_object=ras_object,
+        )
+        reference_faces = HdfMesh.get_reference_line_internal_faces(
+            reference_hdf_path,
+            mesh_name=mesh_name,
+        )
+        if reference_faces.empty or "profile_name" not in reference_faces.columns:
+            return reference_faces.iloc[0:0].copy()
+
+        target_name = str(line_name).strip()
+        profile_names = reference_faces["profile_name"].fillna("").astype(str).str.strip()
+        selected = reference_faces.loc[profile_names == target_name].copy()
+        if selected.empty:
+            selected = reference_faces.loc[
+                profile_names.str.lower() == target_name.lower()
+            ].copy()
+
+        if selected.empty:
+            return selected
+
+        selected["face_id"] = pd.to_numeric(selected["face_id"], errors="coerce")
+        selected = selected.dropna(subset=["face_id"]).copy()
+        selected["face_id"] = selected["face_id"].astype(int)
+        if "station_start" in selected.columns:
+            selected = selected.sort_values(
+                ["mesh_name", "station_start", "station_end", "face_id"],
+                na_position="last",
+            )
+        return selected.reset_index(drop=True)
+
+    @staticmethod
+    def _resolve_reference_line_hdf_path(
+        hdf_path: Path,
+        ras_object: Optional[Any],
+    ) -> Path:
+        hdf_path = Path(hdf_path)
+        reference_faces_path = "Geometry/Reference Lines/Internal Faces"
+        if HdfResultsMesh._hdf_contains_path(hdf_path, reference_faces_path):
+            return hdf_path
+
+        geom_hdf_path = (
+            HdfResultsMesh._geometry_hdf_from_ras_object(hdf_path, ras_object)
+            or HdfResultsMesh._geometry_hdf_from_plan_hdf_path(hdf_path)
+        )
+        if geom_hdf_path is not None and geom_hdf_path.exists():
+            return geom_hdf_path
+        return hdf_path
+
+    @staticmethod
+    def _hdf_contains_path(hdf_path: Path, hdf_internal_path: str) -> bool:
+        try:
+            with h5py.File(hdf_path, "r") as hdf_file:
+                return hdf_internal_path in hdf_file
+        except Exception:
+            return False
+
+    @staticmethod
+    def _geometry_hdf_from_ras_object(
+        hdf_path: Path,
+        ras_object: Optional[Any],
+    ) -> Optional[Path]:
+        if ras_object is None:
+            return None
+
+        plan_df = getattr(ras_object, "plan_df", None)
+        if plan_df is None or plan_df.empty:
+            return None
+
+        target = HdfResultsMesh._normalized_path_string(hdf_path)
+        for _, row in plan_df.iterrows():
+            result_paths = []
+            for column in ("HDF_Results_Path", "hdf_path", "results_path"):
+                if column in row and pd.notna(row[column]):
+                    result_paths.append(row[column])
+
+            if not any(
+                HdfResultsMesh._normalized_path_string(path_value) == target
+                for path_value in result_paths
+            ):
+                continue
+
+            plan_number = row.get("plan_number")
+            if pd.notna(plan_number) and hasattr(ras_object, "get_hdf_paths"):
+                try:
+                    paths = ras_object.get_hdf_paths(str(plan_number))
+                    geom_hdf_path = paths.get("geometry")
+                    if geom_hdf_path is not None and Path(geom_hdf_path).exists():
+                        return Path(geom_hdf_path)
+                except Exception:
+                    pass
+
+            geom_path = row.get("Geom Path")
+            if pd.notna(geom_path):
+                geom_hdf_path = Path(str(geom_path) + ".hdf")
+                if geom_hdf_path.exists():
+                    return geom_hdf_path
+
+        return None
+
+    @staticmethod
+    def _geometry_hdf_from_plan_hdf_path(hdf_path: Path) -> Optional[Path]:
+        if hdf_path.suffix.lower() != ".hdf":
+            return None
+
+        plan_path = Path(str(hdf_path)[:-4])
+        if not plan_path.exists():
+            return None
+
+        geom_file = None
+        try:
+            with open(plan_path, "r", encoding="utf-8", errors="ignore") as plan_file:
+                for line in plan_file:
+                    if line.startswith("Geom File="):
+                        geom_file = line.split("=", 1)[1].strip()
+                        break
+        except Exception:
+            return None
+
+        if not geom_file:
+            return None
+
+        plan_name = plan_path.name
+        if "." not in plan_name:
+            return None
+        project_name = plan_name.rsplit(".", 1)[0]
+        geom_hdf_path = hdf_path.parent / f"{project_name}.{geom_file}.hdf"
+        return geom_hdf_path if geom_hdf_path.exists() else None
+
+    @staticmethod
+    def _normalized_path_string(path_value) -> str:
+        try:
+            return str(Path(str(path_value)).resolve()).lower()
+        except Exception:
+            return str(path_value).lower()
+
+    @staticmethod
+    def _resolve_single_mesh_name(
+        selected_faces: pd.DataFrame,
+        mesh_name: Optional[str],
+        line_name: str,
+    ) -> str:
+        if mesh_name is not None:
+            return str(mesh_name)
+
+        mesh_names = [
+            str(value)
+            for value in selected_faces.get("mesh_name", pd.Series(dtype=object)).dropna().unique()
+        ]
+        if len(mesh_names) == 1:
+            return mesh_names[0]
+        if not mesh_names:
+            raise ValueError(
+                f"Profile line '{line_name}' did not resolve a mesh name. "
+                "Specify mesh_name explicitly."
+            )
+        raise ValueError(
+            f"Profile line '{line_name}' intersects multiple mesh areas: {mesh_names}. "
+            "Specify mesh_name explicitly."
+        )
+
+    @staticmethod
+    def _resolve_profile_lines_path(
+        profile_lines_path: Optional[Union[str, Path]],
+        ras_object: Optional[Any],
+    ) -> Optional[Path]:
+        candidate_paths = []
+        if profile_lines_path is not None:
+            candidate_paths.append(profile_lines_path)
+        else:
+            ras_obj = ras_object
+            if ras_obj is None:
+                try:
+                    from ..RasPrj import ras as ras_obj
+                except Exception:
+                    ras_obj = None
+
+            rasmap_df = getattr(ras_obj, "rasmap_df", None)
+            if rasmap_df is not None and not rasmap_df.empty and "profile_lines_path" in rasmap_df.columns:
+                for value in rasmap_df["profile_lines_path"].tolist():
+                    if isinstance(value, (list, tuple, set)):
+                        candidate_paths.extend(value)
+                    elif pd.notna(value):
+                        candidate_paths.append(value)
+
+        project_folder = getattr(ras_object, "project_folder", None)
+        for candidate in candidate_paths:
+            if candidate is None or (not isinstance(candidate, (list, tuple, set)) and pd.isna(candidate)):
+                continue
+            path = Path(candidate)
+            if not path.is_absolute() and project_folder is not None:
+                path = Path(project_folder) / path
+
+            resolved = HdfResultsMesh._resolve_profile_lines_file(path)
+            if resolved is not None:
+                return resolved
+        return None
+
+    @staticmethod
+    def _resolve_profile_lines_file(path: Path) -> Optional[Path]:
+        if path.is_file():
+            return path
+        if path.is_dir():
+            for pattern in ("*.shp", "*.geojson", "*.json", "*.gpkg"):
+                matches = sorted(path.glob(pattern))
+                if matches:
+                    return matches[0]
+        return None
+
+    @staticmethod
+    def _read_profile_line_geometry(
+        profile_lines_path: Path,
+        line_name: str,
+        target_crs: Optional[Any] = None,
+    ):
+        from shapely.geometry import LineString
+        from shapely.ops import linemerge, unary_union
+
+        profile_lines_gdf = gpd.read_file(profile_lines_path)
+        if profile_lines_gdf.empty:
+            raise ValueError(f"No profile-line features found in {profile_lines_path}")
+
+        name_column = HdfResultsMesh._profile_line_name_column(profile_lines_gdf)
+        target_name = str(line_name).strip()
+        names = profile_lines_gdf[name_column].fillna("").astype(str).str.strip()
+        selected = profile_lines_gdf.loc[names == target_name].copy()
+        if selected.empty:
+            selected = profile_lines_gdf.loc[names.str.lower() == target_name.lower()].copy()
+
+        if selected.empty:
+            available_names = sorted(names[names != ""].unique().tolist())
+            raise ValueError(
+                f"Profile line '{line_name}' not found in {profile_lines_path}. "
+                f"Available profile lines: {available_names}"
+            )
+
+        if (
+            target_crs is not None
+            and selected.crs is not None
+            and selected.crs != target_crs
+        ):
+            selected = selected.to_crs(target_crs)
+
+        geometries = [geom for geom in selected.geometry if geom is not None and not geom.is_empty]
+        if not geometries:
+            raise ValueError(f"Profile line '{line_name}' has no valid geometry.")
+
+        if len(geometries) == 1:
+            profile_line = geometries[0]
+        else:
+            merged_geometry = unary_union(geometries)
+            if merged_geometry.geom_type in {"LineString", "LinearRing"}:
+                profile_line = merged_geometry
+            else:
+                profile_line = linemerge(merged_geometry)
+        if profile_line.geom_type == "MultiLineString":
+            profile_line = max(profile_line.geoms, key=lambda geom: geom.length)
+
+        if profile_line.geom_type == "LinearRing":
+            profile_line = LineString(profile_line)
+        if profile_line.geom_type != "LineString":
+            raise ValueError(
+                f"Profile line '{line_name}' geometry must be a LineString; "
+                f"got {profile_line.geom_type}."
+            )
+        return profile_line
+
+    @staticmethod
+    def _profile_line_name_column(profile_lines_gdf: gpd.GeoDataFrame) -> str:
+        for candidate in (
+            "Name",
+            "name",
+            "Profile",
+            "ProfileName",
+            "profile_name",
+            "LineName",
+            "line_name",
+        ):
+            if candidate in profile_lines_gdf.columns:
+                return candidate
+
+        non_geometry_columns = [
+            column
+            for column in profile_lines_gdf.columns
+            if column != profile_lines_gdf.geometry.name
+        ]
+        if len(non_geometry_columns) == 1:
+            return non_geometry_columns[0]
+        raise ValueError(
+            "Could not identify a profile-line name column. Expected one of "
+            "Name, name, Profile, ProfileName, profile_name, LineName, or line_name."
+        )
+
+    @staticmethod
+    def _unique_int_values(values) -> List[int]:
+        result = []
+        seen = set()
+        for value in pd.to_numeric(pd.Series(values), errors="coerce").dropna():
+            int_value = int(value)
+            if int_value not in seen:
+                seen.add(int_value)
+                result.append(int_value)
+        return result
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
     def get_mesh_faces_timeseries(
         hdf_path: Path,
         mesh_name: str,

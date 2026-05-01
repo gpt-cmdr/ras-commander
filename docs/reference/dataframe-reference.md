@@ -1019,6 +1019,44 @@ Final iteration count for each mesh cell.
 
 ---
 
+### Profile-Line Flow Time Series
+
+**Source**: `HdfResultsMesh.get_profile_line_flow_timeseries(plan_hdf, line_name)`
+**Example notebook**: `examples/413_profile_line_flow_extraction.ipynb`
+
+Modeled flow across a RAS Mapper profile/reference line. Native HDF
+reference-line face metadata is used when present; otherwise the method selects
+faces geometrically from the RAS Mapper Profile Lines feature file.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `time` | datetime64 | Output timestamp |
+| `flow` | float | Sum of selected face flows |
+| `line_name` | str | Requested profile/reference line name |
+| `mesh_name` | str | 2D flow area used for extraction |
+| `direction` | str | `absolute` or `signed` aggregation mode |
+| `face_count` | int | Count of selected mesh faces |
+| `selection_source` | str | `reference_line_internal_faces` or `profile_lines_geometry` |
+
+### Profile-Line Peak Flow
+
+**Source**: `HdfResultsMesh.get_profile_line_peak_flow(plan_hdf, line_name)`
+**Example notebook**: `examples/413_profile_line_flow_extraction.ipynb`
+
+One-row peak-Q summary derived from the profile-line flow time series.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `line_name` | str | Requested profile/reference line name |
+| `mesh_name` | str | 2D flow area used for extraction |
+| `peak_time` | datetime64 | Timestamp of peak flow magnitude |
+| `peak_flow` | float | Peak flow value; signed mode preserves native sign |
+| `direction` | str | `absolute` or `signed` aggregation mode |
+| `face_count` | int | Count of selected mesh faces |
+| `selection_source` | str | `reference_line_internal_faces` or `profile_lines_geometry` |
+
+---
+
 ## Breach Analysis DataFrames
 
 DataFrames for dam breach analysis from `HdfResultsBreach` class.

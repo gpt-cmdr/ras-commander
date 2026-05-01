@@ -91,6 +91,36 @@ face_ts = HdfResultsMesh.get_mesh_faces_timeseries(
 )
 ```
 
+### Profile-Line Flow and Peak Q
+
+Use the profile-line helpers when you need modeled Q across a named RAS Mapper
+profile/reference line. The API uses native HDF reference-line internal faces
+when present. If those are absent, pass a RAS Mapper Profile Lines feature file
+or initialize a project whose `rasmap_df` resolves `profile_lines_path`.
+
+```python
+from ras_commander import HdfResultsMesh
+
+flow_ts = HdfResultsMesh.get_profile_line_flow_timeseries(
+    hdf_path,
+    line_name="Upstream",
+    mesh_name="Perimeter 1",
+    profile_lines_path="Features/Profile Lines.shp",
+    direction="absolute",
+)
+
+peak_q = HdfResultsMesh.get_profile_line_peak_flow(
+    hdf_path,
+    line_name="Upstream",
+    mesh_name="Perimeter 1",
+    profile_lines_path="Features/Profile Lines.shp",
+)
+```
+
+`direction="absolute"` sums absolute face flows to avoid cancellation from
+opposing face-normal signs. `direction="signed"` preserves native HEC-RAS face
+signs, so the line orientation and face normals control the sign convention.
+
 ## 1D Cross-Section Results
 
 ```python

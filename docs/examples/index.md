@@ -71,6 +71,7 @@ Extract and analyze results from HEC-RAS HDF output files.
 | 2D HDF Data Extraction | 2D mesh cells, faces, time series | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/410_2d_hdf_data_extraction.ipynb) |
 | Pipes and Pumps | Pipe networks and pump stations | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/411_2d_hdf_pipes_and_pumps.ipynb) |
 | 2D Face Data Extraction | Detailed face data for flow analysis | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/412_2d_detail_face_data_extraction.ipynb) |
+| Profile-Line Flow Extraction | Flow time series and peak Q across a RAS Mapper profile/reference line | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/413_profile_line_flow_extraction.ipynb) |
 | Breach Results Extraction | Dam breach time series and statistics | [:material-github:](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/420_breach_results_extraction.ipynb) |
 
 ### Remote Plan Execution (500s)
