@@ -1,6 +1,6 @@
 # Example Notebooks
 
-The repository currently ships **89 canonical notebooks** under `examples/`.
+The repository currently ships **92 canonical notebooks** under `examples/`.
 This overview tracks the live notebook inventory in git. Executed copies such as
 `*_executed.ipynb` and local `_test_*.py` helpers are intentionally excluded.
 
@@ -75,11 +75,14 @@ These are the notebooks most directly tied to the April 2026 docs-drift sweep.
 `205_extract_xs_xyz_from_geometry.ipynb`,
 `206_structures_and_metadata.ipynb`,
 `207_reference_lines_and_points.ipynb`,
+`208_bridge_method_comparison.ipynb`,
+`209_culvert_authoring.ipynb`,
 `210_fixit_blocked_obstructions.ipynb`,
 `211_final_mannings_and_infiltration.ipynb`,
 `212_landcover_mannings_n_write.ipynb`,
 `220_calibration_workflow.ipynb`,
 `221_calibration_1d_workflow.ipynb`,
+`222_steady_flow_calibration.ipynb`,
 `230_mesh_sensitivity_analysis.ipynb`,
 `231_pipe_network_mesh_generation.ipynb`
 
