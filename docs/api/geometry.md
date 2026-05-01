@@ -40,6 +40,46 @@ Parsing utilities for HEC-RAS geometry files.
 - `parse_count_line(line)` - Parse count header line
 - `interpolate_bank_station(sta_elev, bank)` - Interpolate bank station elevation
 
+## GeomReferenceFeatures
+
+Reference line and reference point helpers for 2D calibration and native
+reference-line output.
+
+### Reference Line Methods
+
+- `add_reference_lines(geom_file, lines, storage_area)` - Insert manually
+  supplied reference lines into a `.g##` file
+- `generate_reference_lines_from_longitudinal_line(...)` - Generate
+  transverse reference-line dictionaries at regular station intervals along a
+  named longitudinal line
+- `add_reference_lines_from_longitudinal_line(...)` - Generate and write
+  transverse reference lines through the existing `.g##` writer
+- `get_reference_lines(geom_file)` - Read reference lines from a `.g##` file
+
+### Automated Reference Lines
+
+```python
+from ras_commander import GeomReferenceFeatures
+
+reference_lines = GeomReferenceFeatures.generate_reference_lines_from_longitudinal_line(
+    centerlines_gdf,
+    longitudinal_line_name="Main River",
+    spacing=500.0,
+    line_length=1500.0,
+    name_template="MainRiver_{station_int}",
+)
+
+GeomReferenceFeatures.add_reference_lines(
+    "MyModel.g01",
+    reference_lines,
+    storage_area="Perimeter 1",
+)
+```
+
+For result-guided orientation, pass `orientation="velocity"` or
+`orientation="depth_velocity"` with `orientation_plan_hdf`. Generated lines fall
+back to normal-to-line orientation unless `orientation_fallback="raise"` is set.
+
 ## RasStruct
 
 Inline structure parsing.
