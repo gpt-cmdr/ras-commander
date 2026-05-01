@@ -69,6 +69,8 @@ def standardize_input(file_type: str = 'plan_hdf'):
             # ras_object is always keyword-only, never in args
             ras_object = kwargs.pop('ras_object', None)
             ras_obj = ras_object or ras
+            if ras_object is not None and 'ras_object' in param_names:
+                kwargs['ras_object'] = ras_object
 
             # If no hdf_input provided, return the function unmodified
             if hdf_input is None:

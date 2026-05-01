@@ -242,7 +242,37 @@ not. Prefer the dedicated HDF readers and xarray-backed APIs for:
 - 1D cross-section time series
 - 2D mesh cell or face time series
 - reference lines and reference points
+- profile-line flow and peak-Q extraction
 - large raster or mesh-derived result families
+
+### Profile-Line Flow Outputs
+
+`HdfResultsMesh.get_profile_line_flow_timeseries()` returns a profile/reference
+line flow time series. The API uses native HDF reference-line internal faces
+when present, then falls back to RAS Mapper profile-line geometry.
+
+| Column | Meaning |
+|--------|---------|
+| `time` | Output timestamp |
+| `flow` | Sum of selected face flows |
+| `line_name` | Requested profile/reference line |
+| `mesh_name` | 2D flow area used for extraction |
+| `direction` | `absolute` or `signed` aggregation mode |
+| `face_count` | Count of selected mesh faces |
+| `selection_source` | `reference_line_internal_faces` or `profile_lines_geometry` |
+
+`HdfResultsMesh.get_profile_line_peak_flow()` returns one peak-Q row derived
+from the time series.
+
+| Column | Meaning |
+|--------|---------|
+| `line_name` | Requested profile/reference line |
+| `mesh_name` | 2D flow area used for extraction |
+| `peak_time` | Timestamp of peak flow magnitude |
+| `peak_flow` | Peak flow value; signed mode preserves native sign |
+| `direction` | `absolute` or `signed` aggregation mode |
+| `face_count` | Count of selected mesh faces |
+| `selection_source` | `reference_line_internal_faces` or `profile_lines_geometry` |
 
 See:
 
