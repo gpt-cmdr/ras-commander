@@ -205,6 +205,74 @@ class RasUnsteady:
         return RasUtils._write_description_block(unsteady_file_path, description, 'Flow Title')
 
     @staticmethod
+    def _resolve_unsteady_file_path(
+        unsteady_number_or_path: Union[str, Path],
+        ras_object: Optional[Any] = None
+    ) -> Path:
+        """
+        Resolve an unsteady flow number or explicit path to a .u## file path.
+        """
+        unsteady_file_path = Path(unsteady_number_or_path)
+        if unsteady_file_path.is_file():
+            return unsteady_file_path
+
+        from .RasPlan import RasPlan
+
+        resolved_path = RasPlan.get_unsteady_path(unsteady_number_or_path, ras_object)
+        if resolved_path is None or not Path(resolved_path).exists():
+            raise ValueError(f"Unsteady flow file not found: {unsteady_number_or_path}")
+        return Path(resolved_path)
+
+    @staticmethod
+    @log_call
+    def get_initial_conditions(
+        unsteady_number_or_path: Union[str, Path],
+        ras_object: Optional[Any] = None
+    ) -> pd.DataFrame:
+        """
+        Parse initial condition entries from a HEC-RAS unsteady flow file.
+
+        Args:
+            unsteady_number_or_path: Unsteady flow number or path to a .u## file.
+            ras_object: Optional RAS project object. If None, uses global ``ras``.
+
+        Returns:
+            pd.DataFrame: Initial flow, storage/2D elevation, and RRR elevation
+                entries from the unsteady file.
+        """
+        from .usgs.initial_conditions import InitialConditions
+
+        unsteady_file_path = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path,
+            ras_object=ras_object,
+        )
+        return InitialConditions.parse_initial_conditions(unsteady_file_path)
+
+    @staticmethod
+    @log_call
+    def set_initial_conditions(
+        unsteady_number_or_path: Union[str, Path],
+        ic_entries: List[Dict[str, Any]],
+        ras_object: Optional[Any] = None
+    ) -> None:
+        """
+        Write initial condition entries to a HEC-RAS unsteady flow file.
+
+        Args:
+            unsteady_number_or_path: Unsteady flow number or path to a .u## file.
+            ic_entries: List of initial condition dictionaries with keys accepted
+                by ``InitialConditions.write_initial_conditions()``.
+            ras_object: Optional RAS project object. If None, uses global ``ras``.
+        """
+        from .usgs.initial_conditions import InitialConditions
+
+        unsteady_file_path = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path,
+            ras_object=ras_object,
+        )
+        InitialConditions.write_initial_conditions(unsteady_file_path, ic_entries)
+
+    @staticmethod
     @log_call
     def update_restart_settings(unsteady_file: str, use_restart: bool, restart_filename: Optional[str] = None, ras_object: Optional[Any] = None) -> None:
         """
