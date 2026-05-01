@@ -32,7 +32,7 @@ import h5py
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, TypedDict, Union
+from typing import Any, Dict, List, Optional, TypedDict, Union
 import re
 import numpy as np
 
@@ -284,6 +284,153 @@ class HdfPlan:
 
         except Exception as e:
             raise ValueError(f"Failed to get plan parameter attributes: {str(e)}")
+
+    @staticmethod
+    def _decode_hdf_attr_value(value: Any) -> Any:
+        """
+        Convert HDF attribute scalars/arrays to Python values.
+        """
+        if isinstance(value, bytes):
+            return HdfUtils.convert_ras_string(value)
+        if isinstance(value, np.bytes_):
+            return HdfUtils.convert_ras_string(bytes(value))
+        if isinstance(value, np.ndarray):
+            return [
+                HdfPlan._decode_hdf_attr_value(item)
+                for item in value.tolist()
+            ]
+        if isinstance(value, np.generic):
+            value = value.item()
+        if isinstance(value, float) and np.isnan(value):
+            return None
+        return value
+
+    @staticmethod
+    def _value_at_index(value: Any, index: int) -> Any:
+        """
+        Return a per-mesh HDF attribute value for one mesh index.
+        """
+        if isinstance(value, list):
+            if not value:
+                return None
+            if index < len(value):
+                return value[index]
+            if len(value) == 1:
+                return value[0]
+            return None
+        return value
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_2d_flow_options(
+        hdf_path: Path,
+        mesh_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Extract 2D unsteady computation options stored in a plan HDF output.
+
+        Args:
+            hdf_path: Path to the HEC-RAS plan HDF file.
+            mesh_name: Optional 2D flow area name to filter returned areas.
+
+        Returns:
+            Dict[str, Any]: Parsed 2D options using the same public option names
+                as ``RasPlan.get_2d_flow_options()``.
+        """
+        from ..RasPlan import RasPlan
+
+        hdf_option_keys = {
+            "theta": "2D Theta",
+            "theta_warmup": "2D Theta Warmup",
+            "water_surface_tolerance": "2D Water Surface Tolerance",
+            "volume_tolerance": "2D Volume Tolerance",
+            "max_iterations": "2D Maximum Iterations",
+            "equation_set": "2D Equation Set",
+            "initial_conditions_time_hours": "2D Initial Conditions Ramp Up Time (hrs)",
+            "ramp_up_fraction": "2D Boundary Condition Ramp Up Fraction",
+            "time_slices": "2D Number of Time Slices",
+            "eddy_viscosity": "2D Longitudinal Mixing Coefficient",
+            "transverse_eddy_viscosity": "2D Transverse Mixing Coefficient",
+            "smagorinsky_mixing": "2D Smagorinsky Mixing Coefficient",
+            "boundary_condition_volume_check": "2D Boundary Condition Volume Check",
+            "latitude": "2D Latitude for Coriolis",
+            "cores": "2D Cores (per mesh)",
+            "solver_type": "2D Matrix Solver",
+        }
+
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                params_path = "Plan Data/Plan Parameters"
+                if params_path not in hdf_file:
+                    raise ValueError(f"Plan Parameters not found in {hdf_path}")
+
+                params_group = hdf_file[params_path]
+                attrs = {
+                    key: HdfPlan._decode_hdf_attr_value(value)
+                    for key, value in params_group.attrs.items()
+                }
+
+                names = attrs.get("2D Names") or []
+                if not isinstance(names, list):
+                    names = [names]
+
+                mesh_count = len(names)
+                if mesh_count == 0:
+                    mesh_count = max(
+                        (
+                            len(value) for value in attrs.values()
+                            if isinstance(value, list)
+                        ),
+                        default=0,
+                    )
+
+                areas = []
+                for index in range(mesh_count):
+                    name = HdfPlan._value_at_index(names, index)
+                    area = {"name": str(name).strip() if name is not None else None}
+                    for api_key, hdf_key in hdf_option_keys.items():
+                        if hdf_key not in attrs:
+                            continue
+                        raw_value = HdfPlan._value_at_index(attrs[hdf_key], index)
+                        area[api_key] = RasPlan._coerce_2d_option_value(api_key, raw_value)
+                    areas.append(area)
+
+                if mesh_name is not None:
+                    normalized = mesh_name.strip().lower()
+                    areas = [
+                        area for area in areas
+                        if (area.get("name") or "").strip().lower() == normalized
+                    ]
+                    if not areas:
+                        raise ValueError(f"2D flow area '{mesh_name}' not found in {hdf_path.name}")
+
+                plan_info = {}
+                info_path = "Plan Data/Plan Information"
+                if info_path in hdf_file:
+                    plan_info = {
+                        key: HdfPlan._decode_hdf_attr_value(value)
+                        for key, value in hdf_file[info_path].attrs.items()
+                    }
+
+                global_options = {}
+                if "2D Coriolis" in attrs:
+                    global_options["coriolis"] = RasPlan._coerce_2d_option_value(
+                        "coriolis",
+                        attrs["2D Coriolis"],
+                    )
+
+                return {
+                    "source": "hdf",
+                    "hdf_path": str(hdf_path),
+                    "program_version": plan_info.get("Program Version"),
+                    "plan": {},
+                    "default": global_options,
+                    "areas": areas,
+                }
+
+        except Exception as e:
+            raise ValueError(f"Failed to get 2D flow options from HDF: {str(e)}")
 
     @staticmethod
     @log_call
