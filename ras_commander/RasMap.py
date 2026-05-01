@@ -57,6 +57,7 @@ List of Functions in RasMap:
 - get_water_surface_render_mode(): Get the current water surface rendering mode
 - add_terrain_layer(): Add terrain layer to RASMapper configuration
 - list_results_plans(): List all plan result layers in the RASMapper configuration
+- ensure_results_plan_layer(): Register a plan HDF as a RASMapper result layer
 - ensure_2d_encroachment_plan_layers(): Register editable 2D encroachment plan layers
 - list_results_map_layers(): List RASMapper result map layers
 - add_results_map_layer(): Add a RASMapper result map layer
@@ -3973,6 +3974,84 @@ class RasMap:
 
     @staticmethod
     @log_call
+    def ensure_results_plan_layer(
+        plan_number_or_path: Union[str, int, float, Path],
+        *,
+        name: Optional[str] = None,
+        checked: bool = True,
+        expanded: bool = True,
+        ras_object=None,
+    ) -> Dict[str, Any]:
+        """
+        Ensure a plan HDF is registered in the RASMapper ``Results`` tree.
+
+        This is useful after cloning and computing a plan programmatically, when
+        command-line execution creates ``<project>.p##.hdf`` but does not add a
+        corresponding ``RASResults`` layer to the project ``.rasmap``.
+        """
+        plan_path = _resolve_plan_file_for_rasmap(
+            plan_number_or_path,
+            ras_object=ras_object,
+        )
+        project_folder = plan_path.parent
+        project_name = _project_name_from_plan_path(plan_path)
+        rasmap_path = project_folder / f"{project_name}.rasmap"
+        hdf_path = Path(str(plan_path) + ".hdf")
+
+        if not hdf_path.exists():
+            raise FileNotFoundError(f"Plan results HDF not found: {hdf_path}")
+
+        if rasmap_path.exists():
+            try:
+                tree = ET.parse(rasmap_path)
+                root = tree.getroot()
+            except ET.ParseError as e:
+                raise ValueError(f"Error parsing .rasmap XML: {e}") from e
+        else:
+            root = ET.Element("RASMapper")
+            tree = ET.ElementTree(root)
+
+        results = root.find("Results")
+        if results is None:
+            results = ET.Element("Results", {"Checked": "True", "Expanded": "True"})
+            root.append(results)
+        else:
+            results.set("Checked", results.get("Checked", "True"))
+            results.set("Expanded", results.get("Expanded", "True"))
+
+        rel_hdf = _rasmap_relative_path(project_folder, hdf_path)
+        rel_hdf_norm = _normalize_rasmap_filename(rel_hdf)
+        layer = None
+        for candidate in results.findall("Layer"):
+            if candidate.get("Type") != "RASResults":
+                continue
+            if _normalize_rasmap_filename(candidate.get("Filename")) == rel_hdf_norm:
+                layer = candidate
+                break
+
+        if layer is None:
+            layer = ET.SubElement(results, "Layer")
+
+        layer_name = name or _plan_display_name_for_rasmap(plan_path)
+        layer.set("Name", layer_name)
+        layer.set("Type", "RASResults")
+        layer.set("Checked", "True" if checked else "False")
+        layer.set("Expanded", "True" if expanded else "False")
+        layer.set("Filename", rel_hdf)
+
+        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        record = {
+            "name": layer_name,
+            "filename": rel_hdf,
+            "checked": checked,
+            "expanded": expanded,
+            "rasmap_path": rasmap_path,
+        }
+        logger.info("Ensured RASResults layer '%s' in %s", layer_name, rasmap_path)
+        return record
+
+    @staticmethod
+    @log_call
     def ensure_2d_encroachment_plan_layers(
         plan_number_or_path: Union[str, int, float, Path],
         *,
@@ -4603,7 +4682,8 @@ class RasMap:
                 )
 
         # Validate terrain names exist
-        terrain_names = RasMap.get_terrain_names(ras_object=ras_obj)
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        terrain_names = RasMap.get_terrain_names(rasmap_path)
         for t_name in (exist_terrain, prop_terrain):
             if t_name not in terrain_names:
                 raise ValueError(
