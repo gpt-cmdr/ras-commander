@@ -9,6 +9,7 @@ Primary classes for project management and execution:
 - [`RasPrj`](core.md#rasprj) - Project management and data structures
 - [`RasCmdr`](core.md#rascmdr) - Plan execution (single, parallel, sequential)
 - [`RasPlan`](core.md#rasplan) - Plan file operations
+- [`RasFlowOptimization`](core.md#rasflowoptimization) - Native HEC-RAS flow hydrograph optimization settings and trial results
 - [`RasGeo`](core.md#rasgeo) - Geometry file operations
 - [`RasUnsteady`](core.md#rasunsteady) - Unsteady flow file management
 - [`RasUtils`](core.md#rasutils) - Utility functions
