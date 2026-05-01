@@ -42,6 +42,7 @@ from .ComputeResults import (
 )
 from .RasPreprocess import RasPreprocess
 from .RasMap import RasMap
+from .RasEncroachments import RasEncroachments
 from .RasMapValidation import RasMapValidation
 from .RasProcess import RasProcess, ProjectionInfo
 from .RasGuiAutomation import RasGuiAutomation
@@ -159,7 +160,7 @@ __all__ = [
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
     'PreprocessResult', 'GeometryPreprocessResult',
     'RasPreprocess',
-    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
+    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasModPuls', 'RasPermutation', 'RangeSpec',
     'CalibrationPoint', 'RasCalibrate',
 
