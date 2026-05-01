@@ -154,6 +154,7 @@ Infiltration parameter management from HDF geometry files.
 **Raster and Layer Operations:**
 
 - `get_infiltration_layer_data(hdf_path)` - Get infiltration layer data from HDF
+- `get_classification_polygons(hdf_path)` - Read infiltration sidecar classification polygon overrides
 - `get_infiltration_map(hdf_path)` - Read infiltration raster map
 - `calculate_soil_statistics(hdf_path)` - Process zonal statistics for soil analysis
 
@@ -167,6 +168,14 @@ Infiltration parameter management from HDF geometry files.
 **Data Export:**
 
 - `save_statistics(data, path)` - Export soil statistics to CSV
+
+### HdfLandCover
+
+Land-cover sidecar and final Manning's n extraction.
+
+- `get_landcover_raster_map(hdf_path)` - Read land-cover class IDs, names, and Manning's n values
+- `get_classification_polygons(hdf_path)` - Read land-cover sidecar classification polygon overrides
+- `get_preprocessed_mannings_n(hdf_path)` - Read preprocessed cell-center Manning's n values from geometry HDF
 
 ### HdfBndry
 

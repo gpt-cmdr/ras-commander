@@ -556,6 +556,26 @@ class HdfInfiltration:
         except Exception as e:
             logger.error(f"Error reading infiltration layer data from {hdf_path}: {str(e)}")
             return None
+
+    @staticmethod
+    @log_call
+    def get_classification_polygons(
+        hdf_path: Path,
+        ras_object: Any = None,
+    ) -> 'gpd.GeoDataFrame':
+        """
+        Read classification polygon overrides from an infiltration sidecar HDF.
+
+        Args:
+            hdf_path: Path to an infiltration HDF file.
+            ras_object: Optional RasPrj object for API consistency.
+
+        Returns:
+            GeoDataFrame with ``polygon_index``, ``class_name``, and geometry.
+        """
+        from .. import _land_classification_helper as _lch
+
+        return _lch.list_land_classification_polygons(hdf_path)
         
 
     @staticmethod

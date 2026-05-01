@@ -386,6 +386,26 @@ class HdfLandCover:
             return None
 
     @staticmethod
+    @log_call
+    def get_classification_polygons(
+        landcover_hdf_path: Union[str, Path],
+        ras_object: Any = None,
+    ) -> 'gpd.GeoDataFrame':
+        """
+        Read classification polygon overrides from a land-cover sidecar HDF.
+
+        Args:
+            landcover_hdf_path: Path to a land-cover HDF file.
+            ras_object: Optional RasPrj object for API consistency.
+
+        Returns:
+            GeoDataFrame with ``polygon_index``, ``class_name``, and geometry.
+        """
+        from .. import _land_classification_helper as _lch
+
+        return _lch.list_land_classification_polygons(landcover_hdf_path)
+
+    @staticmethod
     def _detect_sidecar_format(
         hdf_path: Union[str, Path]
     ) -> str:

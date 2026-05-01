@@ -34,6 +34,10 @@ List of Functions in RasMap:
 - remove_map_layer(): Remove a map layer from the RASMapper configuration file
 - list_geometry_layers(): List top-level geometries and child geometry elements
 - list_geometry_features(): List HDF geometry features inside a layer
+- list_land_classification_polygons(): List sidecar classification polygon overrides
+- add_land_classification_polygon(): Add sidecar classification polygon override
+- update_land_classification_polygon(): Update sidecar classification polygon override
+- delete_land_classification_polygon(): Delete sidecar classification polygon override
 - set_geometry_layer_visibility(): Toggle child geometry elements such as mesh, XS, and structures
 - list_result_layers(): List RASMapper result plan and child layers
 - set_result_layer_visibility(): Toggle result plan and result child layers
@@ -603,6 +607,113 @@ class RasMap:
             ras_object=ras_object,
         )
         return layers.loc[layers["classification_kind"] == "infiltration"].copy()
+
+    @staticmethod
+    @log_call
+    def list_land_classification_polygons(
+        layer_hdf_path: Union[str, Path],
+        ras_object=None,
+    ) -> "GeoDataFrame":
+        """
+        List classification polygon overrides stored in a land-classification HDF.
+
+        Args:
+            layer_hdf_path: Land-cover, soils, or infiltration sidecar HDF.
+            ras_object: Optional RasPrj object. Present for API consistency.
+
+        Returns:
+            GeoDataFrame with ``polygon_index``, ``class_name``, and geometry.
+        """
+        from . import _land_classification_helper as _lch
+
+        return _lch.list_land_classification_polygons(layer_hdf_path)
+
+    @staticmethod
+    @log_call
+    def add_land_classification_polygon(
+        layer_hdf_path: Union[str, Path],
+        polygon: Any,
+        class_name: str,
+        class_id: Optional[int] = None,
+        variable_values: Optional[dict[str, Any]] = None,
+        backup: bool = True,
+        ras_object=None,
+    ) -> "GeoDataFrame":
+        """
+        Add a classification polygon override to a land-cover, soils, or infiltration HDF.
+
+        The method writes the RAS Mapper ``/Classification Polygons`` group and
+        upserts the affected ``/Raster Map`` and/or ``/Variables`` class rows.
+        Existing compiled geometry HDFs should be preprocessed again before
+        simulation so HEC-RAS consumes the new override.
+        """
+        from . import _land_classification_helper as _lch
+
+        return _lch.add_land_classification_polygon(
+            layer_hdf_path=layer_hdf_path,
+            polygon=polygon,
+            class_name=class_name,
+            class_id=class_id,
+            variable_values=variable_values,
+            backup=backup,
+        )
+
+    @staticmethod
+    @log_call
+    def update_land_classification_polygon(
+        layer_hdf_path: Union[str, Path],
+        polygon_index: int,
+        polygon: Optional[Any] = None,
+        class_name: Optional[str] = None,
+        class_id: Optional[int] = None,
+        variable_values: Optional[dict[str, Any]] = None,
+        backup: bool = True,
+        ras_object=None,
+    ) -> "GeoDataFrame":
+        """
+        Update a classification polygon's geometry, class name, or class values.
+
+        ``polygon_index`` is the zero-based index returned by
+        :meth:`list_land_classification_polygons`.
+        """
+        from . import _land_classification_helper as _lch
+
+        return _lch.update_land_classification_polygon(
+            layer_hdf_path=layer_hdf_path,
+            polygon_index=polygon_index,
+            polygon=polygon,
+            class_name=class_name,
+            class_id=class_id,
+            variable_values=variable_values,
+            backup=backup,
+        )
+
+    @staticmethod
+    @log_call
+    def delete_land_classification_polygon(
+        layer_hdf_path: Union[str, Path],
+        polygon_index: Optional[int] = None,
+        class_name: Optional[str] = None,
+        remove_unused_class: bool = False,
+        backup: bool = True,
+        ras_object=None,
+    ) -> "GeoDataFrame":
+        """
+        Delete classification polygon overrides by index or class name.
+
+        By default this removes only the polygon records. Set
+        ``remove_unused_class=True`` to also remove class rows from ``Raster Map``
+        and ``Variables`` when no remaining polygon uses that class.
+        """
+        from . import _land_classification_helper as _lch
+
+        return _lch.delete_land_classification_polygon(
+            layer_hdf_path=layer_hdf_path,
+            polygon_index=polygon_index,
+            class_name=class_name,
+            remove_unused_class=remove_unused_class,
+            backup=backup,
+        )
 
     @staticmethod
     @log_call
