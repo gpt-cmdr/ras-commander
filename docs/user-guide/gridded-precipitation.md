@@ -668,8 +668,8 @@ AORC data is accessed from NOAA's cloud storage (AWS S3):
 
 Comprehensive AORC workflow demonstrations:
 
-- [AORC Precipitation](../notebooks/900_aorc_precipitation.md) - Basic retrieval and processing
-- [AORC Storm Catalog](../notebooks/901_aorc_precipitation_catalog.md) - Automated storm extraction
+- [AORC Precipitation](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/900_aorc_precipitation.ipynb) - Basic retrieval and processing
+- [AORC Storm Catalog](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/901_aorc_precipitation_catalog.ipynb) - Automated storm extraction
 
 ## Common Workflows
 

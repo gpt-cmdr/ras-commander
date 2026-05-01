@@ -65,6 +65,12 @@ def test_get_ras_exe_maps_new_orleans_670_plan_version(monkeypatch):
     assert get_ras_exe("6.70") == str(fake_67)
 
 
+def test_normalize_ras_number_accepts_prefixed_strings_and_filenames():
+    assert RasUtils.normalize_ras_number("p01") == "01"
+    assert RasUtils.normalize_ras_number(".g07") == "07"
+    assert RasUtils.normalize_ras_number("Model.u12") == "12"
+
+
 def test_clear_geompre_files_uses_geometry_number_from_plan_df(tmp_path):
     project = _FakeRasProject(tmp_path)
     plan_path = tmp_path / "TestProject.p17"

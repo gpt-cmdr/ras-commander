@@ -567,11 +567,11 @@ cached_data = RasUsgsFileIo.load_cached_gauge_data(
 
 Comprehensive workflow demonstrations:
 
-- [USGS Gauge Catalog](../notebooks/910_usgs_gauge_catalog.md) - Catalog generation
-- [USGS Gauge Data Integration](../notebooks/911_usgs_gauge_data_integration.md) - Complete workflow
-- [USGS Real-Time Monitoring](../notebooks/912_usgs_real_time_monitoring.md) - Real-time data access
-- [BC from Live Gauge](../notebooks/913_bc_generation_from_live_gauge.md) - Boundary condition generation
-- [Model Validation with USGS](../notebooks/914_model_validation_with_usgs.md) - Validation workflow
+- [USGS Gauge Catalog](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/910_usgs_gauge_catalog.ipynb) - Catalog generation
+- [USGS Gauge Data Integration](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/911_usgs_gauge_data_integration.ipynb) - Complete workflow
+- [USGS Real-Time Monitoring](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/912_usgs_real_time_monitoring.ipynb) - Real-time data access
+- [BC from Live Gauge](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/913_bc_generation_from_live_gauge.ipynb) - Boundary condition generation
+- [Model Validation with USGS](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/914_model_validation_with_usgs.ipynb) - Validation workflow
 
 ## See Also
 

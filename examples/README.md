@@ -423,6 +423,20 @@ project_folder/USGS Gauge Data/
 **Use case:** Provides standard project organization similar to precipitation module, enables engineering review of all available gauges, and serves as foundation for automated workflows
 
 
+### eBFE Delivery Validation (950s)
+
+These notebooks validate FEMA eBFE and BLE deliveries after they are normalized
+through `RasEbfeModels.organize_model(...)`.
+
+**Current notebooks:**
+- `950_ebfe_spring_creek.ipynb` - Single-archive 2D Spring Creek delivery normalization, DSS checks, and result-HDF review
+- `951_ebfe_north_galveston_bay.ipynb` - Compound HMS plus nested RAS delivery organization and validation
+- `952_ebfe_upper_guadalupe_cascade.ipynb` - Cascaded 2D watershed delivery organization and validation
+- `953_ebfe_rio_hondo_steady_collection.ipynb` - 1D steady BLE reach-model organization and sequential plan validation
+- `954_ebfe_lake_maurepas_validation.ipynb` - Preprocessor-valid Louisiana delivery with the source result-HDF gap documented
+- `955_ebfe_tickfaw_validation.ipynb` - Results-ready Louisiana delivery with seven local plan HDFs
+- `957_ebfe_spring_river_validation.ipynb` - Distinct Spring River 6.1 delivery validation with legacy `Land Classification` compatibility evidence
+
 ## Contributing
 
 If you have suggestions for additional examples or improvements to existing ones, please feel free to contribute by submitting pull requests or opening issues in the repository.

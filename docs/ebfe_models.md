@@ -51,7 +51,7 @@ normalization that transforms broken eBFE archives into runnable HEC-RAS models.
 ### Quick Start
 
 ```python
-from ras_commander.sources.federal import RasEbfeModels
+from ras_commander.sources import RasEbfeModels
 from ras_commander import init_ras_project
 from pathlib import Path
 
@@ -78,10 +78,18 @@ init_ras_project(organized / "RAS Model/UPGU1", "6.5")
 To inspect the built-in model catalog:
 
 ```python
-from ras_commander.sources.federal import RasEbfeModels
+from ras_commander.sources import RasEbfeModels
 
 RasEbfeModels.available_models()
 ```
+
+!!! note "Current import paths"
+    Use `from ras_commander.sources import RasEbfeModels` for model-source
+    organizers. The `ras_commander.sources` package intentionally exports model
+    sources only. Coastal forecast helpers now live under
+    `ras_commander.boundaries.CoastalBoundary`; the old
+    `ras_commander.sources.federal.CoastalBoundary` path remains a deprecated
+    compatibility shim for notebooks that have not been cleaned up yet.
 
 Current built-in organizers include:
 
@@ -154,6 +162,25 @@ Early eBFE organizers focused on three recurring breakages: separated outputs,
 terrain paths, and DSS paths. The current delivery format also standardizes
 projection and land-cover assets because those are required for reliable
 geometry-preprocessor validation.
+
+### Fix #0: Shared HDF Asset Reference Normalization
+
+Compiled geometry and plan/result HDFs can carry `/Geometry` attributes that
+point at terrain, land-cover, and infiltration sidecars. Recent organizer work
+standardizes those references across the normalized `Terrain/`, `Land Cover/`,
+and legacy `Land Classification/` folders.
+
+- If a delivered model already points at a legacy
+  `.\Land Classification\...` sidecar, ras-commander preserves that HDF
+  attribute and copies the required sidecars into the legacy folder instead of
+  forcing a rename.
+- If the organized project needs normalized terrain or land-cover references,
+  the organizer rewrites those HDF attributes to the local asset that actually
+  exists in the standardized project tree.
+
+This keeps geometry-HDF association checks aligned with the organized delivery
+format while still supporting legacy eBFE asset layouts that appear in the
+wild.
 
 ### Fix #1: Output/ Folder Integration
 
@@ -276,7 +303,7 @@ for hecras_file in hecras_files:
 
 **Usage**:
 ```python
-from ras_commander.sources.federal import RasEbfeModels
+from ras_commander.sources import RasEbfeModels
 from ras_commander import init_ras_project
 
 organized = RasEbfeModels.organize_spring_creek(
@@ -303,7 +330,7 @@ init_ras_project(organized / "RAS Model", "5.0.7")
 
 **Usage**:
 ```python
-from ras_commander.sources.federal import RasEbfeModels
+from ras_commander.sources import RasEbfeModels
 
 organized = RasEbfeModels.organize_north_galveston_bay(
     downloaded_folder,
@@ -336,7 +363,7 @@ RAS_Submittal archive in place.
 
 **Usage**:
 ```python
-from ras_commander.sources.federal import RasEbfeModels
+from ras_commander.sources import RasEbfeModels
 from ras_commander import init_ras_project, RasCmdr, RasPrj
 
 # Organize (applies delivery normalization across all 4 models)
@@ -645,6 +672,15 @@ Complete working examples demonstrating each model:
 - Reusing saved ras-commander geometry-preprocessor evidence for plan 13.
 - Verifying that all seven plan result HDF paths resolve inside the organized RAS project folder.
 
+### 957_ebfe_spring_river_validation.ipynb
+
+**Demonstrates**:
+- Organizing the distinct Spring River HUC 11010010 delivery without confusing it with Spring Creek.
+- Confirming local projection, terrain, land-cover, legacy land-classification compatibility assets, DSS inputs, and RASMapper references.
+- Executing a fresh HEC-RAS 6.1 geometry-preprocessor validation for plan 01 / geometry 01.
+- Archiving the fresh preprocessor HDF before restoring the delivered full-result `Spring_BLE.p01.hdf`.
+- Verifying that all seven plan result HDF paths resolve inside the organized RAS project folder.
+
 ## Organizing New Models
 
 For eBFE models not included in RasEbfeModels, use the **ebfe_organize_models agent skill**:
@@ -710,7 +746,7 @@ Current validation is tracked in the repository-level
 - North Galveston Bay: nested download/extract/organize path passed geometry preprocessor validation; delivered HMS project loads through hms-commander.
 - Upper Guadalupe: UPGU1, UPGU2, and UPGU3 passed; UPGU4 requires the 7200-second validation record because its geometry preprocessor can exceed one hour.
 - Eleven Point: organized from the split `Input.zip`, `Terrain.zip`, and `Land_Cover.zip` delivery; path-audited with zero issues, seven local plan HDFs, and a passing ras-commander geometry-preprocessor run using HEC-RAS 6.6.
-- Spring River: cataloged separately from Spring Creek as `spring-river` / `SpringRiver_11010010`; downloaded, organized, path-audited with zero issues, and results-ready with seven local plan HDFs. Geometry-preprocessor validation remains pending.
+- Spring River: cataloged separately from Spring Creek as `spring-river` / `SpringRiver_11010010`; downloaded, organized, path-audited with zero issues, preprocessor-valid in HEC-RAS 6.1, and results-ready with seven local plan HDFs. The validation notebook preserves the legacy `Land Classification` compatibility copy referenced by `Spring_BLE.g01.hdf`, archives fresh preprocessor evidence, and restores the delivered full-result plan HDF; see `examples/957_ebfe_spring_river_validation.ipynb`.
 - Lower Brazos: LB_MA01, LB_MA02, and LB_MA03 are downloaded, extracted, organized, path-audited with zero issues, and results-ready with 61 local plan HDFs in the latest audit. LB_MA02 passed ras-commander geometry-preprocessor validation in 3846.3 seconds; LB_MA01 exceeded the 7200-second timeout with no compute messages, and LB_MA03 returned without producing compute messages, so Lower Brazos remains partially preprocessor-validated.
 - Amite: full E2E organization completed for five RAS projects. WA1, WA2,
   WA3, and WA5 passed geometry preprocessor validation; WA4 is blocked by a
@@ -721,7 +757,7 @@ Current validation is tracked in the repository-level
 
 ### Notebook Testing
 
-Current eBFE notebooks `950`-`955` execute against the shared
+Current eBFE notebooks `950`-`957` execute against the shared
 `H:\Testing\eBFE Model Organization` workspace by default, with
 `RAS_COMMANDER_EBFE_ROOT` available for overrides. Stored notebook outputs were
 refreshed after delivery-format updates, and notebook QA confirmed no error
@@ -768,10 +804,11 @@ outputs in the eBFE notebook set.
 
 ## See Also
 
-- **Critical Fixes Documentation**: `feature_dev_notes/eBFE_Integration/CRITICAL_FIXES.md`
-- **Implementation Details**: `feature_dev_notes/eBFE_Integration/IMPLEMENTATION_COMPLETE.md`
-- **Pattern Research**: `feature_dev_notes/eBFE_Integration/RESEARCH_FINDINGS.md`
-- **Agent Skill**: `.claude/skills/ebfe_organize_models/SKILL.md`
+- [eBFE Delivery Validation](user-guide/ebfe-delivery-validation.md)
+- `VALIDATION_MATRIX.md`
+- [950_ebfe_spring_creek.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/950_ebfe_spring_creek.ipynb)
+- [955_ebfe_tickfaw_validation.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/955_ebfe_tickfaw_validation.ipynb)
+- [957_ebfe_spring_river_validation.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/957_ebfe_spring_river_validation.ipynb)
 
 ---
 

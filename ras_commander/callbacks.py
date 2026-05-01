@@ -22,6 +22,7 @@ try:
 except ImportError:
     TQDM_AVAILABLE = False
 
+from .ExecutionCallback import ExecutionCallback
 from .LoggingConfig import get_logger
 
 logger = get_logger(__name__)
@@ -237,7 +238,7 @@ class SynchronizedCallback:
         >>> RasCmdr.compute_parallel(["01", "02"], stream_callback=safe_callback)
     """
 
-    def __init__(self, callback):
+    def __init__(self, callback: ExecutionCallback):
         """
         Wrap a callback with thread-safety.
 
