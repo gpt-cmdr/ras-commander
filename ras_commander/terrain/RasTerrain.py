@@ -54,10 +54,11 @@ See Also:
     - feature_dev_notes/HEC-RAS_Terrain_CLI/test_rasprocess_createterrain.py
 """
 
-import subprocess
 import logging
+import math
+import subprocess
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Import decorator from parent package
 from ..Decorators import log_call
@@ -99,6 +100,1014 @@ class RasTerrain:
         Path("C:/Program Files (x86)/HEC/HEC-RAS"),
         Path("C:/Program Files/HEC/HEC-RAS"),
     ]
+
+    @staticmethod
+    def _safe_float(value: Any) -> Optional[float]:
+        """Convert HEC-RAS numeric values to finite floats when possible."""
+        if value is None:
+            return None
+        if isinstance(value, (bytes, bytearray)):
+            value = value.decode("utf-8", errors="ignore").strip()
+        try:
+            result = float(value)
+        except (TypeError, ValueError):
+            return None
+        return result if math.isfinite(result) else None
+
+    @staticmethod
+    def _as_linestring(geometry):
+        """Return a LineString from single or multipart line geometry."""
+        from shapely.geometry import LineString, MultiLineString
+        from shapely.ops import linemerge
+
+        if geometry is None or geometry.is_empty:
+            return None
+        if isinstance(geometry, LineString):
+            return geometry if len(geometry.coords) >= 2 else None
+        if isinstance(geometry, MultiLineString):
+            merged = linemerge(geometry)
+            if isinstance(merged, LineString):
+                return merged if len(merged.coords) >= 2 else None
+            if isinstance(merged, MultiLineString) and len(merged.geoms) > 0:
+                longest = max(merged.geoms, key=lambda geom: geom.length)
+                return longest if len(longest.coords) >= 2 else None
+        if hasattr(geometry, "geoms"):
+            line_parts = [
+                part for part in geometry.geoms
+                if isinstance(part, LineString) and len(part.coords) >= 2
+            ]
+            if line_parts:
+                return max(line_parts, key=lambda geom: geom.length)
+        return None
+
+    @staticmethod
+    def _point_along_xs(line, station: float, min_station: float, max_station: float):
+        """Project a cross-section station onto a GIS cut line."""
+        if max_station == min_station:
+            normalized = 0.5
+        else:
+            normalized = (station - min_station) / (max_station - min_station)
+        normalized = max(0.0, min(1.0, float(normalized)))
+        return line.interpolate(normalized, normalized=True)
+
+    @staticmethod
+    def _station_elevation_array(station_elevation: Any):
+        import numpy as np
+
+        values = np.asarray(station_elevation, dtype=float)
+        if values.ndim != 2 or values.shape[1] < 2:
+            raise ValueError("Station/elevation data must be an Nx2 array")
+        values = values[:, :2]
+        finite = np.isfinite(values[:, 0]) & np.isfinite(values[:, 1])
+        values = values[finite]
+        if len(values) == 0:
+            return values
+        order = np.argsort(values[:, 0])
+        return values[order]
+
+    @staticmethod
+    def _add_bank_station_points(
+        station_elevation,
+        left_bank: Optional[float],
+        right_bank: Optional[float],
+    ):
+        """Ensure left/right bank stations are present for channel clipping."""
+        import numpy as np
+
+        values = RasTerrain._station_elevation_array(station_elevation)
+        if len(values) == 0:
+            return values
+
+        stations = values[:, 0]
+        elevations = values[:, 1]
+        min_station = float(stations.min())
+        max_station = float(stations.max())
+        additions = []
+
+        for bank_station in (left_bank, right_bank):
+            if bank_station is None:
+                continue
+            if bank_station < min_station or bank_station > max_station:
+                continue
+            if np.any(np.isclose(stations, bank_station, atol=0.005)):
+                continue
+            bank_elevation = float(np.interp(bank_station, stations, elevations))
+            additions.append([float(bank_station), bank_elevation])
+
+        if additions:
+            values = np.vstack([values, np.asarray(additions, dtype=float)])
+            values = values[np.argsort(values[:, 0])]
+
+        return values
+
+    @staticmethod
+    def _build_xs_point_records(
+        *,
+        line,
+        station_elevation,
+        river: str,
+        reach: str,
+        rs: str,
+        xs_order: int,
+        left_bank: Optional[float],
+        right_bank: Optional[float],
+        channel_only: bool,
+    ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]], Dict[str, Any]]:
+        """Create interpolation point records and bank/end-point metadata for one XS."""
+        values = RasTerrain._add_bank_station_points(
+            station_elevation,
+            left_bank,
+            right_bank,
+        )
+        if len(values) == 0:
+            return [], None, {}
+
+        min_station = float(values[:, 0].min())
+        max_station = float(values[:, 0].max())
+        valid_banks = (
+            left_bank is not None
+            and right_bank is not None
+            and left_bank < right_bank
+        )
+
+        records: List[Dict[str, Any]] = []
+        for station, elevation in values:
+            station = float(station)
+            elevation = float(elevation)
+            if channel_only and valid_banks:
+                if station < left_bank or station > right_bank:
+                    continue
+            point = RasTerrain._point_along_xs(
+                line,
+                station,
+                min_station,
+                max_station,
+            )
+            records.append(
+                {
+                    "River": river,
+                    "Reach": reach,
+                    "RS": rs,
+                    "xs_order": xs_order,
+                    "station": station,
+                    "elevation": elevation,
+                    "geometry": point,
+                }
+            )
+
+        bank_info = None
+        if valid_banks:
+            left_point = RasTerrain._point_along_xs(
+                line,
+                float(left_bank),
+                min_station,
+                max_station,
+            )
+            right_point = RasTerrain._point_along_xs(
+                line,
+                float(right_bank),
+                min_station,
+                max_station,
+            )
+            bank_info = {
+                "River": river,
+                "Reach": reach,
+                "RS": rs,
+                "xs_order": xs_order,
+                "left_bank": float(left_bank),
+                "right_bank": float(right_bank),
+                "left_point": left_point,
+                "right_point": right_point,
+            }
+
+        left_extent = RasTerrain._point_along_xs(
+            line,
+            min_station,
+            min_station,
+            max_station,
+        )
+        right_extent = RasTerrain._point_along_xs(
+            line,
+            max_station,
+            min_station,
+            max_station,
+        )
+        edge_info = {
+            "River": river,
+            "Reach": reach,
+            "RS": rs,
+            "xs_order": xs_order,
+            "left_point": left_extent,
+            "right_point": right_extent,
+        }
+
+        return records, bank_info, edge_info
+
+    @staticmethod
+    def _set_gdf_crs(gdf, crs):
+        if gdf is None or getattr(gdf, "empty", True) or crs is None:
+            return gdf
+        if getattr(gdf, "crs", None) is None:
+            return gdf.set_crs(crs, allow_override=True)
+        return gdf
+
+    @staticmethod
+    def _resolve_xs_surface_crs(geom_path: Path, crs=None):
+        if crs is not None:
+            return crs
+
+        hdf_path = geom_path if geom_path.suffix.lower() == ".hdf" else Path(f"{geom_path}.hdf")
+        if hdf_path.exists():
+            try:
+                from ..hdf import HdfBase
+
+                resolved = HdfBase.get_projection(hdf_path)
+                if resolved:
+                    return resolved
+            except Exception as e:
+                logger.debug(f"Could not resolve CRS from {hdf_path}: {e}")
+
+        return None
+
+    @staticmethod
+    def _bank_lines_from_bank_points(bank_infos: List[Dict[str, Any]], crs=None):
+        import geopandas as gpd
+        from shapely.geometry import LineString
+
+        if not bank_infos:
+            return gpd.GeoDataFrame(
+                columns=["River", "Reach", "bank_side", "source", "geometry"],
+                geometry="geometry",
+                crs=crs,
+            )
+
+        rows = []
+        key_order = []
+        grouped: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+        for bank_info in bank_infos:
+            key = (bank_info["River"], bank_info["Reach"])
+            if key not in grouped:
+                key_order.append(key)
+                grouped[key] = []
+            grouped[key].append(bank_info)
+
+        for river, reach in key_order:
+            group = sorted(grouped[(river, reach)], key=lambda item: item["xs_order"])
+            for side, point_key in (("Left", "left_point"), ("Right", "right_point")):
+                points = [item[point_key] for item in group if item.get(point_key) is not None]
+                coords = [(pt.x, pt.y) for pt in points]
+                unique_coords = []
+                for coord in coords:
+                    if not unique_coords or coord != unique_coords[-1]:
+                        unique_coords.append(coord)
+                if len(unique_coords) >= 2:
+                    rows.append(
+                        {
+                            "River": river,
+                            "Reach": reach,
+                            "bank_side": side,
+                            "source": "xs_bank_stations",
+                            "geometry": LineString(unique_coords),
+                        }
+                    )
+
+        return gpd.GeoDataFrame(rows, geometry="geometry", crs=crs)
+
+    @staticmethod
+    def _polygon_parts(geometry):
+        from shapely.geometry import GeometryCollection, MultiPolygon, Polygon
+
+        if geometry is None or geometry.is_empty:
+            return []
+        if isinstance(geometry, Polygon):
+            return [geometry]
+        if isinstance(geometry, MultiPolygon):
+            return list(geometry.geoms)
+        if isinstance(geometry, GeometryCollection):
+            parts = []
+            for part in geometry.geoms:
+                parts.extend(RasTerrain._polygon_parts(part))
+            return parts
+        return []
+
+    @staticmethod
+    def _polygon_from_two_lines(left_line, right_line):
+        from shapely.geometry import Polygon
+
+        left = RasTerrain._as_linestring(left_line)
+        right = RasTerrain._as_linestring(right_line)
+        if left is None or right is None:
+            return None
+        coords = list(left.coords) + list(reversed(right.coords))
+        if len(coords) < 4:
+            return None
+        polygon = Polygon(coords)
+        if not polygon.is_valid:
+            polygon = polygon.buffer(0)
+        if polygon.is_empty:
+            return None
+        return polygon
+
+    @staticmethod
+    def _footprint_from_bank_lines(bank_lines_gdf, crs=None):
+        import geopandas as gpd
+
+        if bank_lines_gdf is None or bank_lines_gdf.empty:
+            return gpd.GeoDataFrame(
+                columns=["source", "geometry"],
+                geometry="geometry",
+                crs=crs,
+            )
+
+        polygons = []
+        if {"River", "Reach", "bank_side"}.issubset(bank_lines_gdf.columns):
+            for (river, reach), group in bank_lines_gdf.groupby(["River", "Reach"], dropna=False):
+                left_lines = group[group["bank_side"].astype(str).str.lower() == "left"]
+                right_lines = group[group["bank_side"].astype(str).str.lower() == "right"]
+                for idx in range(min(len(left_lines), len(right_lines))):
+                    polygon = RasTerrain._polygon_from_two_lines(
+                        left_lines.iloc[idx].geometry,
+                        right_lines.iloc[idx].geometry,
+                    )
+                    if polygon is not None:
+                        polygons.append(
+                            {
+                                "River": river,
+                                "Reach": reach,
+                                "source": "bank_lines",
+                                "geometry": polygon,
+                            }
+                        )
+        else:
+            rows = list(bank_lines_gdf.itertuples())
+            for idx in range(0, len(rows) - 1, 2):
+                polygon = RasTerrain._polygon_from_two_lines(
+                    rows[idx].geometry,
+                    rows[idx + 1].geometry,
+                )
+                if polygon is not None:
+                    polygons.append(
+                        {
+                            "source": "bank_lines",
+                            "geometry": polygon,
+                        }
+                    )
+
+        return gpd.GeoDataFrame(polygons, geometry="geometry", crs=crs)
+
+    @staticmethod
+    def _footprint_from_xs_edges(edge_infos: List[Dict[str, Any]], crs=None):
+        import geopandas as gpd
+        from shapely.geometry import Polygon
+
+        if not edge_infos:
+            return gpd.GeoDataFrame(
+                columns=["River", "Reach", "source", "geometry"],
+                geometry="geometry",
+                crs=crs,
+            )
+
+        rows = []
+        key_order = []
+        grouped: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+        for edge_info in edge_infos:
+            key = (edge_info["River"], edge_info["Reach"])
+            if key not in grouped:
+                key_order.append(key)
+                grouped[key] = []
+            grouped[key].append(edge_info)
+
+        for river, reach in key_order:
+            group = sorted(grouped[(river, reach)], key=lambda item: item["xs_order"])
+            left_points = [item["left_point"] for item in group if item.get("left_point") is not None]
+            right_points = [item["right_point"] for item in group if item.get("right_point") is not None]
+            if len(left_points) < 2 or len(right_points) < 2:
+                continue
+            coords = (
+                [(pt.x, pt.y) for pt in left_points]
+                + [(pt.x, pt.y) for pt in reversed(right_points)]
+            )
+            if len(coords) < 4:
+                continue
+            polygon = Polygon(coords)
+            if not polygon.is_valid:
+                polygon = polygon.buffer(0)
+            if not polygon.is_empty:
+                rows.append(
+                    {
+                        "River": river,
+                        "Reach": reach,
+                        "source": "xs_extents",
+                        "geometry": polygon,
+                    }
+                )
+
+        return gpd.GeoDataFrame(rows, geometry="geometry", crs=crs)
+
+    @staticmethod
+    def _geo_union(gdf):
+        if hasattr(gdf.geometry, "union_all"):
+            return gdf.geometry.union_all()
+        return gdf.geometry.unary_union
+
+    @staticmethod
+    def _unique_interpolation_points(points_gdf):
+        import numpy as np
+
+        x = points_gdf.geometry.x.to_numpy(dtype=float)
+        y = points_gdf.geometry.y.to_numpy(dtype=float)
+        z = points_gdf["elevation"].to_numpy(dtype=float)
+        finite = np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
+        coords = np.column_stack([x[finite], y[finite]])
+        values = z[finite]
+        if len(coords) == 0:
+            return coords, values
+
+        rounded = np.round(coords, decimals=8)
+        unique_xy, inverse = np.unique(rounded, axis=0, return_inverse=True)
+        unique_coords = np.zeros((len(unique_xy), 2), dtype=float)
+        unique_values = np.zeros(len(unique_xy), dtype=float)
+        for idx in range(len(unique_xy)):
+            mask = inverse == idx
+            unique_coords[idx] = coords[mask].mean(axis=0)
+            unique_values[idx] = values[mask].mean()
+        return unique_coords, unique_values
+
+    @staticmethod
+    def _compute_tin_triangles(points_gdf, footprint_gdf, crs=None):
+        import geopandas as gpd
+        import numpy as np
+        from scipy.spatial import Delaunay, QhullError
+        from shapely.geometry import Polygon
+
+        coords, elevations = RasTerrain._unique_interpolation_points(points_gdf)
+        if len(coords) < 3:
+            raise ValueError("At least three unique interpolation points are required")
+
+        try:
+            delaunay = Delaunay(coords)
+        except QhullError as e:
+            raise ValueError(f"Could not build XS interpolation TIN: {e}") from e
+
+        footprint = RasTerrain._geo_union(footprint_gdf)
+        rows = []
+        for tri_id, simplex in enumerate(delaunay.simplices):
+            tri_coords = coords[simplex]
+            triangle = Polygon(tri_coords)
+            if triangle.is_empty or triangle.area <= 0:
+                continue
+            clipped = triangle.intersection(footprint)
+            for part_id, part in enumerate(RasTerrain._polygon_parts(clipped)):
+                if part.area <= 0:
+                    continue
+                tri_z = elevations[simplex]
+                rows.append(
+                    {
+                        "tri_id": int(tri_id),
+                        "part_id": int(part_id),
+                        "z_min": float(np.min(tri_z)),
+                        "z_mean": float(np.mean(tri_z)),
+                        "z_max": float(np.max(tri_z)),
+                        "geometry": part,
+                    }
+                )
+
+        if not rows:
+            raise ValueError("TIN triangles did not overlap the interpolation footprint")
+
+        return gpd.GeoDataFrame(rows, geometry="geometry", crs=crs)
+
+    @staticmethod
+    def _contains_footprint_xy(footprint, xx, yy, transform=None):
+        import numpy as np
+
+        try:
+            from rasterio.features import geometry_mask
+
+            return geometry_mask(
+                [footprint],
+                out_shape=xx.shape,
+                transform=transform,
+                invert=True,
+                all_touched=True,
+            )
+        except Exception:
+            pass
+
+        try:
+            from shapely import contains_xy
+
+            return contains_xy(footprint, xx, yy)
+        except Exception:
+            pass
+
+        try:
+            from shapely.vectorized import contains
+
+            return contains(footprint, xx, yy)
+        except Exception:
+            pass
+
+        from shapely.geometry import Point
+        from shapely.prepared import prep
+
+        prepared = prep(footprint)
+        flat_mask = np.asarray(
+            [
+                prepared.covers(Point(float(x), float(y)))
+                for x, y in zip(xx.ravel(), yy.ravel())
+            ],
+            dtype=bool,
+        )
+        return flat_mask.reshape(xx.shape)
+
+    @staticmethod
+    def _build_raster_surface(
+        points_gdf,
+        footprint_gdf,
+        raster_cell_size: float,
+        crs=None,
+        nodata: float = -9999.0,
+        output_raster: Optional[Union[str, Path]] = None,
+    ) -> Dict[str, Any]:
+        import numpy as np
+        from scipy.interpolate import LinearNDInterpolator
+
+        if raster_cell_size is None or raster_cell_size <= 0:
+            raise ValueError("raster_cell_size must be positive when raster output is requested")
+
+        coords, elevations = RasTerrain._unique_interpolation_points(points_gdf)
+        if len(coords) < 3:
+            raise ValueError("At least three unique interpolation points are required")
+
+        footprint = RasTerrain._geo_union(footprint_gdf)
+        minx, miny, maxx, maxy = footprint.bounds
+        width = int(math.ceil((maxx - minx) / raster_cell_size))
+        height = int(math.ceil((maxy - miny) / raster_cell_size))
+        if width <= 0 or height <= 0:
+            raise ValueError("Interpolation footprint has invalid raster bounds")
+
+        try:
+            from rasterio.transform import from_origin
+
+            transform = from_origin(minx, maxy, raster_cell_size, raster_cell_size)
+        except Exception:
+            transform = (minx, raster_cell_size, 0.0, maxy, 0.0, -raster_cell_size)
+
+        x_coords = minx + (np.arange(width) + 0.5) * raster_cell_size
+        y_coords = maxy - (np.arange(height) + 0.5) * raster_cell_size
+        xx, yy = np.meshgrid(x_coords, y_coords)
+
+        interpolator = LinearNDInterpolator(coords, elevations, fill_value=np.nan)
+        interpolated = interpolator(xx, yy)
+        inside = RasTerrain._contains_footprint_xy(footprint, xx, yy, transform)
+        valid = inside & np.isfinite(interpolated)
+
+        array = np.full((height, width), nodata, dtype=np.float32)
+        array[valid] = interpolated[valid].astype(np.float32)
+
+        if output_raster is not None:
+            try:
+                import rasterio
+            except ImportError as e:
+                raise ImportError(
+                    "rasterio is required to write output_raster. "
+                    "Install ras-commander with the notebooks or all extra."
+                ) from e
+
+            output_raster = Path(output_raster)
+            output_raster.parent.mkdir(parents=True, exist_ok=True)
+            with rasterio.open(
+                output_raster,
+                "w",
+                driver="GTiff",
+                height=height,
+                width=width,
+                count=1,
+                dtype="float32",
+                crs=crs,
+                transform=transform,
+                nodata=nodata,
+                compress="lzw",
+                tiled=True,
+            ) as dst:
+                dst.write(array, 1)
+
+        return {
+            "array": array,
+            "transform": transform,
+            "crs": crs,
+            "nodata": nodata,
+            "cell_size": raster_cell_size,
+            "bounds": (minx, miny, maxx, maxy),
+            "valid_cell_count": int(valid.sum()),
+            "path": Path(output_raster) if output_raster is not None else None,
+        }
+
+    @staticmethod
+    def _serializable_gdf(gdf):
+        import numpy as np
+
+        safe = gdf.copy()
+        for column in safe.columns:
+            if column == safe.geometry.name:
+                continue
+            if safe[column].dtype == object:
+                safe[column] = safe[column].map(
+                    lambda value: value.decode("utf-8", errors="ignore")
+                    if isinstance(value, (bytes, bytearray))
+                    else (
+                        str(value)
+                        if isinstance(value, (dict, list, tuple, np.ndarray))
+                        else value
+                    )
+                )
+        return safe
+
+    @staticmethod
+    def _write_xs_surface_gpkg(output_gpkg: Union[str, Path], layers: Dict[str, Any]) -> Path:
+        output_gpkg = Path(output_gpkg)
+        output_gpkg.parent.mkdir(parents=True, exist_ok=True)
+        if output_gpkg.exists():
+            output_gpkg.unlink()
+
+        wrote_layer = False
+        for layer_name, gdf in layers.items():
+            if gdf is None or getattr(gdf, "empty", True):
+                continue
+            RasTerrain._serializable_gdf(gdf).to_file(
+                output_gpkg,
+                layer=layer_name,
+                driver="GPKG",
+            )
+            wrote_layer = True
+
+        if not wrote_layer:
+            raise ValueError("No non-empty XS interpolation layers were available to write")
+
+        return output_gpkg
+
+    @staticmethod
+    def _load_hdf_xs_surface_inputs(geom_path: Path, crs, channel_only: bool):
+        import geopandas as gpd
+
+        from ..hdf import HdfXsec
+
+        xs_gdf = HdfXsec.get_cross_sections(str(geom_path))
+        if xs_gdf is None or xs_gdf.empty:
+            raise ValueError(f"No cross sections found in geometry HDF: {geom_path}")
+        xs_gdf = RasTerrain._set_gdf_crs(xs_gdf, crs)
+
+        try:
+            centerlines_gdf = HdfXsec.get_river_centerlines(geom_path)
+            centerlines_gdf = RasTerrain._set_gdf_crs(centerlines_gdf, crs)
+        except Exception as e:
+            logger.warning(f"Could not read river centerlines from {geom_path}: {e}")
+            centerlines_gdf = gpd.GeoDataFrame(geometry=[], crs=crs)
+
+        try:
+            bank_lines_gdf = HdfXsec.get_river_bank_lines(geom_path)
+            bank_lines_gdf = RasTerrain._set_gdf_crs(bank_lines_gdf, crs)
+            if bank_lines_gdf is not None and not bank_lines_gdf.empty:
+                bank_lines_gdf = bank_lines_gdf.copy()
+                bank_lines_gdf["source"] = "hdf_bank_lines"
+        except Exception as e:
+            logger.warning(f"Could not read river bank lines from {geom_path}: {e}")
+            bank_lines_gdf = gpd.GeoDataFrame(geometry=[], crs=crs)
+
+        point_records: List[Dict[str, Any]] = []
+        bank_infos: List[Dict[str, Any]] = []
+        edge_infos: List[Dict[str, Any]] = []
+
+        for xs_order, (_, row) in enumerate(xs_gdf.iterrows()):
+            line = RasTerrain._as_linestring(row.geometry)
+            if line is None:
+                continue
+            left_bank = RasTerrain._safe_float(row.get("Left Bank"))
+            right_bank = RasTerrain._safe_float(row.get("Right Bank"))
+            try:
+                records, bank_info, edge_info = RasTerrain._build_xs_point_records(
+                    line=line,
+                    station_elevation=row.get("station_elevation"),
+                    river=str(row.get("River", "")),
+                    reach=str(row.get("Reach", "")),
+                    rs=str(row.get("RS", "")),
+                    xs_order=xs_order,
+                    left_bank=left_bank,
+                    right_bank=right_bank,
+                    channel_only=channel_only,
+                )
+            except Exception as e:
+                logger.warning(f"Skipping HDF cross section {row.get('RS', xs_order)}: {e}")
+                continue
+            point_records.extend(records)
+            if bank_info:
+                bank_infos.append(bank_info)
+            if edge_info:
+                edge_infos.append(edge_info)
+
+        return xs_gdf, centerlines_gdf, bank_lines_gdf, point_records, bank_infos, edge_infos
+
+    @staticmethod
+    def _load_plain_xs_surface_inputs(geom_path: Path, crs, channel_only: bool):
+        import geopandas as gpd
+        import numpy as np
+
+        from ..geom import GeomCrossSection, GeomParser
+
+        xs_df = GeomCrossSection.get_cross_sections(geom_path)
+        if xs_df.empty:
+            raise ValueError(f"No cross sections found in geometry file: {geom_path}")
+        if "Type" in xs_df.columns:
+            xs_df = xs_df[xs_df["Type"] == 1].reset_index(drop=True)
+        if xs_df.empty:
+            raise ValueError(f"No Type 1 cross sections found in geometry file: {geom_path}")
+
+        cut_lines_gdf = GeomParser.get_xs_cut_lines(geom_path)
+        cut_lines_gdf = RasTerrain._set_gdf_crs(cut_lines_gdf, crs)
+        if cut_lines_gdf.empty:
+            raise ValueError(f"No XS GIS cut lines found in geometry file: {geom_path}")
+
+        try:
+            centerlines_gdf = GeomParser.get_river_centerlines(geom_path)
+            centerlines_gdf = RasTerrain._set_gdf_crs(centerlines_gdf, crs)
+        except Exception as e:
+            logger.warning(f"Could not read river centerlines from {geom_path}: {e}")
+            centerlines_gdf = gpd.GeoDataFrame(geometry=[], crs=crs)
+
+        point_records: List[Dict[str, Any]] = []
+        bank_infos: List[Dict[str, Any]] = []
+        edge_infos: List[Dict[str, Any]] = []
+        xs_records: List[Dict[str, Any]] = []
+
+        for xs_order, row in xs_df.iterrows():
+            river = str(row["River"])
+            reach = str(row["Reach"])
+            rs = str(row["RS"])
+            matches = cut_lines_gdf[
+                (cut_lines_gdf["river"] == river)
+                & (cut_lines_gdf["reach"] == reach)
+                & (cut_lines_gdf["station"] == rs)
+            ]
+            if matches.empty:
+                logger.warning(f"No XS GIS cut line found for {river}/{reach}/RS {rs}")
+                continue
+            line = RasTerrain._as_linestring(matches.iloc[0].geometry)
+            if line is None:
+                continue
+
+            try:
+                sta_elev_df = GeomCrossSection.get_station_elevation(
+                    geom_path,
+                    river,
+                    reach,
+                    rs,
+                )
+            except ValueError as e:
+                logger.warning(f"Skipping cross section {river}/{reach}/RS {rs}: {e}")
+                continue
+
+            banks = GeomCrossSection.get_bank_stations(geom_path, river, reach, rs)
+            left_bank = RasTerrain._safe_float(banks[0]) if banks else None
+            right_bank = RasTerrain._safe_float(banks[1]) if banks else None
+            station_elevation = sta_elev_df[["Station", "Elevation"]].to_numpy(dtype=float)
+
+            records, bank_info, edge_info = RasTerrain._build_xs_point_records(
+                line=line,
+                station_elevation=station_elevation,
+                river=river,
+                reach=reach,
+                rs=rs,
+                xs_order=int(xs_order),
+                left_bank=left_bank,
+                right_bank=right_bank,
+                channel_only=channel_only,
+            )
+            point_records.extend(records)
+            if bank_info:
+                bank_infos.append(bank_info)
+            if edge_info:
+                edge_infos.append(edge_info)
+
+            xs_record = row.to_dict()
+            xs_record.update(
+                {
+                    "xs_order": int(xs_order),
+                    "point_count": int(len(station_elevation)),
+                    "Left Bank": left_bank if left_bank is not None else np.nan,
+                    "Right Bank": right_bank if right_bank is not None else np.nan,
+                    "geometry": line,
+                }
+            )
+            xs_records.append(xs_record)
+
+        cross_sections_gdf = gpd.GeoDataFrame(xs_records, geometry="geometry", crs=crs)
+        bank_lines_gdf = gpd.GeoDataFrame(geometry=[], crs=crs)
+        return cross_sections_gdf, centerlines_gdf, bank_lines_gdf, point_records, bank_infos, edge_infos
+
+    @staticmethod
+    @log_call
+    def compute_xs_interpolation_surface(
+        geom_path: Union[str, Path],
+        output_gpkg: Optional[Union[str, Path]] = None,
+        output_raster: Optional[Union[str, Path]] = None,
+        raster_cell_size: Optional[float] = None,
+        crs: Optional[Union[str, int]] = None,
+        channel_only: bool = True,
+        nodata: float = -9999.0,
+    ) -> Dict[str, Any]:
+        """
+        Compute a cross-section interpolation surface for channel bathymetry.
+
+        This is the ras-commander API equivalent of the RASMapper workflow:
+        Cross Sections -> Interpolation Surface -> Compute XS Interpolation
+        Surface. It reads cross-section cut lines, station/elevation points,
+        bank stations, river centerlines, and bank lines through existing HDF
+        or plain-text geometry APIs, then returns reviewable GeoDataFrames and
+        optionally persists review layers and a GeoTIFF raster.
+
+        Args:
+            geom_path: Geometry HDF path (``*.g##.hdf``) or plain geometry path
+                (``*.g##``).
+            output_gpkg: Optional GeoPackage path for review layers.
+            output_raster: Optional GeoTIFF path for rasterized interpolation.
+            raster_cell_size: Cell size in project units. Required when
+                ``output_raster`` is provided. If provided without
+                ``output_raster``, an in-memory raster array is returned.
+            crs: Optional CRS override. Plain geometry files otherwise try to
+                resolve CRS from the sibling geometry HDF/RASMapper projection.
+            channel_only: If True, clip/interpolate between left and right
+                bank stations or RAS bank lines. If False, use full XS extents.
+            nodata: NoData value for raster output.
+
+        Returns:
+            dict: Contains ``points``, ``triangles``, ``channel_polygon``,
+            ``cross_sections``, ``bank_lines``, ``river_centerlines``,
+            ``metadata``, and optional ``raster`` entries.
+        """
+        import geopandas as gpd
+
+        geom_path = Path(geom_path)
+        if not geom_path.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_path}")
+        if output_raster is not None and raster_cell_size is None:
+            raise ValueError("raster_cell_size is required when output_raster is provided")
+        if raster_cell_size is not None and raster_cell_size <= 0:
+            raise ValueError(f"raster_cell_size must be positive, got: {raster_cell_size}")
+
+        resolved_crs = RasTerrain._resolve_xs_surface_crs(geom_path, crs)
+        is_hdf = geom_path.suffix.lower() == ".hdf"
+
+        if is_hdf:
+            (
+                cross_sections_gdf,
+                centerlines_gdf,
+                hdf_bank_lines_gdf,
+                point_records,
+                bank_infos,
+                edge_infos,
+            ) = RasTerrain._load_hdf_xs_surface_inputs(
+                geom_path,
+                resolved_crs,
+                channel_only,
+            )
+            source_type = "geometry_hdf"
+        else:
+            (
+                cross_sections_gdf,
+                centerlines_gdf,
+                hdf_bank_lines_gdf,
+                point_records,
+                bank_infos,
+                edge_infos,
+            ) = RasTerrain._load_plain_xs_surface_inputs(
+                geom_path,
+                resolved_crs,
+                channel_only,
+            )
+            source_type = "plain_geometry"
+
+        if not point_records:
+            raise ValueError(f"No interpolation points could be built from {geom_path}")
+
+        points_gdf = gpd.GeoDataFrame(point_records, geometry="geometry", crs=resolved_crs)
+        if points_gdf.empty:
+            raise ValueError(f"No interpolation points could be built from {geom_path}")
+
+        derived_bank_lines_gdf = RasTerrain._bank_lines_from_bank_points(
+            bank_infos,
+            crs=resolved_crs,
+        )
+
+        bank_line_source = "none"
+        if channel_only:
+            bank_lines_gdf = hdf_bank_lines_gdf
+            footprint_gdf = RasTerrain._footprint_from_bank_lines(
+                bank_lines_gdf,
+                crs=resolved_crs,
+            )
+            if footprint_gdf.empty:
+                bank_lines_gdf = derived_bank_lines_gdf
+                footprint_gdf = RasTerrain._footprint_from_bank_lines(
+                    bank_lines_gdf,
+                    crs=resolved_crs,
+                )
+                bank_line_source = "xs_bank_stations" if not footprint_gdf.empty else "none"
+            else:
+                bank_line_source = "hdf_bank_lines"
+
+            if footprint_gdf.empty:
+                raise ValueError(
+                    "Could not build a channel interpolation footprint from bank "
+                    "lines or XS bank stations. Use channel_only=False to build "
+                    "a full-cross-section interpolation footprint."
+                )
+            footprint_source = "channel_banks"
+        else:
+            bank_lines_gdf = (
+                hdf_bank_lines_gdf
+                if hdf_bank_lines_gdf is not None and not hdf_bank_lines_gdf.empty
+                else derived_bank_lines_gdf
+            )
+            if bank_lines_gdf is not None and not bank_lines_gdf.empty:
+                bank_line_source = str(bank_lines_gdf.iloc[0].get("source", "bank_lines"))
+            footprint_gdf = RasTerrain._footprint_from_xs_edges(edge_infos, crs=resolved_crs)
+            if footprint_gdf.empty:
+                raise ValueError("Could not build a full-cross-section interpolation footprint")
+            footprint_source = "xs_extents"
+
+        triangles_gdf = RasTerrain._compute_tin_triangles(
+            points_gdf,
+            footprint_gdf,
+            crs=resolved_crs,
+        )
+
+        raster = None
+        if raster_cell_size is not None:
+            raster = RasTerrain._build_raster_surface(
+                points_gdf,
+                footprint_gdf,
+                raster_cell_size,
+                crs=resolved_crs,
+                nodata=nodata,
+                output_raster=output_raster,
+            )
+
+        metadata = {
+            "geom_path": str(geom_path),
+            "source_type": source_type,
+            "channel_only": bool(channel_only),
+            "crs": str(resolved_crs) if resolved_crs is not None else None,
+            "cross_section_count": int(len(cross_sections_gdf)),
+            "interpolation_point_count": int(len(points_gdf)),
+            "triangle_count": int(len(triangles_gdf)),
+            "bank_line_count": int(len(bank_lines_gdf)) if bank_lines_gdf is not None else 0,
+            "bank_line_source": bank_line_source,
+            "footprint_source": footprint_source,
+            "output_gpkg": str(output_gpkg) if output_gpkg is not None else None,
+            "output_raster": str(output_raster) if output_raster is not None else None,
+        }
+        if raster is not None:
+            metadata.update(
+                {
+                    "raster_shape": tuple(int(value) for value in raster["array"].shape),
+                    "raster_cell_size": float(raster_cell_size),
+                    "raster_valid_cell_count": int(raster["valid_cell_count"]),
+                }
+            )
+
+        if output_gpkg is not None:
+            RasTerrain._write_xs_surface_gpkg(
+                output_gpkg,
+                {
+                    "xs_interpolation_triangles": triangles_gdf,
+                    "xs_interpolation_points": points_gdf,
+                    "channel_polygon": footprint_gdf,
+                    "cross_sections": cross_sections_gdf,
+                    "bank_lines": bank_lines_gdf,
+                    "river_centerlines": centerlines_gdf,
+                },
+            )
+
+        logger.info(
+            "Computed XS interpolation surface from %s: %s cross sections, "
+            "%s points, %s triangles",
+            geom_path.name,
+            metadata["cross_section_count"],
+            metadata["interpolation_point_count"],
+            metadata["triangle_count"],
+        )
+
+        return {
+            "points": points_gdf,
+            "triangles": triangles_gdf,
+            "channel_polygon": footprint_gdf,
+            "cross_sections": cross_sections_gdf,
+            "bank_lines": bank_lines_gdf,
+            "river_centerlines": centerlines_gdf,
+            "metadata": metadata,
+            "raster": raster,
+        }
 
     @staticmethod
     @log_call

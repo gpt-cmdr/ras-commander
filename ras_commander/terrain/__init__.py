@@ -4,6 +4,7 @@ ras-commander terrain subpackage: HEC-RAS terrain creation, manipulation, and an
 This subpackage provides terrain capabilities for HEC-RAS projects:
 - Terrain HDF creation from rasters via RasProcess.exe CreateTerrain
 - VRT mosaic to single TIFF conversion via HEC-RAS GDAL tools
+- Cross-section interpolation surface creation for channel bathymetry export
 - USGS 3DEP elevation data download from AWS
 - Terrain modification analysis (cut/fill, no-net-fill) via RasMapperLib.dll
 
@@ -11,6 +12,7 @@ Main Classes:
     RasTerrain: Terrain HDF creation and VRT conversion (RasProcess.exe CLI)
         - create_terrain_hdf(): Create terrain HDF from input rasters
         - vrt_to_tiff(): Convert VRT to single TIFF with overviews
+        - compute_xs_interpolation_surface(): Build channel interpolation TIN/raster
 
     Usgs3depAws: USGS 3DEP elevation tile download from AWS S3
         - find_tiles_for_bbox(): Find tiles covering a bounding box
