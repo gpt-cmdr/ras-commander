@@ -54,6 +54,8 @@ List of Functions in RasPlan:
 - read_flow_description(): Read the description from a steady flow file
 - update_flow_description(): Update the description in a steady flow file
 - update_simulation_date(): Update simulation start and end dates
+- get_restart_output_settings(): Parse restart/Hot Start output settings
+- set_restart_output_settings(): Configure restart/Hot Start output settings
 - get_shortid(): Get the Short Identifier from a plan file
 - set_shortid(): Set the Short Identifier in a plan file
 - get_plan_title(): Get the Plan Title from a plan file
@@ -75,7 +77,7 @@ import re
 import logging
 from pathlib import Path
 import shutil
-from typing import Union, Optional, List, Dict, Any
+from typing import Union, Optional, List, Dict, Any, Tuple
 from numbers import Number
 import pandas as pd
 from .RasPrj import RasPrj, ras
@@ -195,6 +197,23 @@ class RasPlan:
         "Face Yield Stress",
         "Governing Equation Terms",
     ]
+
+    RESTART_OUTPUT_PARAMETER_KEYS = {
+        "enabled": "Write IC File",
+        "save_at_fixed_datetime": "Write IC File at Fixed DateTime",
+        "save_time": "IC Time",
+        "recurrence_interval_hours": "Write IC File Reoccurance",
+        "write_at_sim_end": "Write IC File at Sim End",
+    }
+
+    RESTART_OUTPUT_FILE_PATTERN = "ProjectName.p##.DDMMMYYYY hhmm.rst"
+
+    RESTART_OUTPUT_COMPATIBILITY_NOTE = (
+        "HEC-RAS labels restart output as Initial Conditions or Hot Start files. "
+        "In HEC-RAS 5.x through 7.0 these output-save settings are stored in the "
+        "plan file using Write IC File keys. Restart-file usage remains separate "
+        "in the unsteady-flow file as Use Restart and Restart Filename."
+    )
     
     @staticmethod
     @log_call
@@ -1130,7 +1149,9 @@ class RasPlan:
             'Run HTab', 'Run Post Process', 'Run Sediment', 'Run UNET', 'Run WQNET',
             'Short Identifier', 'Simulation Date', 'UNET D1 Cores', 'UNET D2 Cores', 'PS Cores',
             'UNET Use Existing IB Tables', 'UNET 1D Methodology', 'UNET D2 Solver Type', 
-            'UNET D2 Name', 'Run RASMapper', 'Run HTab', 'Run UNET'
+            'UNET D2 Name', 'Run RASMapper', 'Run HTab', 'Run UNET',
+            'Write IC File', 'Write IC File at Fixed DateTime', 'IC Time',
+            'Write IC File Reoccurance', 'Write IC File at Sim End'
         }
 
         if key not in supported_plan_keys:
@@ -2043,6 +2064,351 @@ class RasPlan:
                 insert_index = i + 1
 
         return insert_index if insert_index is not None else len(lines)
+
+    @staticmethod
+    def _parse_restart_flag(raw_value: Optional[str]) -> Optional[bool]:
+        """
+        Parse HEC-RAS integer/string flags used by restart-output settings.
+        """
+        if raw_value is None:
+            return None
+        value = str(raw_value).strip().lower()
+        if value in {"-1", "1", "true"}:
+            return True
+        if value in {"0", "false"}:
+            return False
+        return None
+
+    @staticmethod
+    def _coerce_restart_number(raw_value: Optional[Any]) -> Optional[Any]:
+        """
+        Convert numeric restart-output values while preserving nonnumeric text.
+        """
+        if raw_value is None:
+            return None
+        value = str(raw_value).strip()
+        if value == "":
+            return None
+        try:
+            number = float(value)
+        except ValueError:
+            return value
+        return int(number) if number.is_integer() else number
+
+    @staticmethod
+    def _format_restart_number(value: Any) -> str:
+        """
+        Format restart-output hour values without unnecessary decimals.
+        """
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            raise ValueError("Restart hour values must be numeric, not boolean")
+        if isinstance(value, Number):
+            number = float(value)
+            return str(int(number)) if number.is_integer() else str(number)
+        return str(value).strip()
+
+    @staticmethod
+    def _parse_restart_ic_time(raw_value: Optional[str]) -> Dict[str, Optional[Any]]:
+        """
+        Parse the HEC-RAS IC Time line into relative-hour and fixed-date parts.
+        """
+        result = {
+            "save_time_hours": None,
+            "save_date": None,
+            "save_time": None,
+            "save_datetime": None,
+        }
+        if raw_value is None:
+            return result
+
+        parts = [part.strip() for part in str(raw_value).strip().split(",")]
+        while len(parts) < 3:
+            parts.append("")
+
+        hours, save_date, save_time = parts[:3]
+        result["save_time_hours"] = RasPlan._coerce_restart_number(hours)
+        result["save_date"] = save_date or None
+        result["save_time"] = save_time or None
+        if result["save_date"] and result["save_time"]:
+            result["save_datetime"] = f"{result['save_date']},{result['save_time']}"
+        return result
+
+    @staticmethod
+    def _format_restart_datetime(value: Union[str, Tuple[str, str], datetime]) -> Tuple[str, str]:
+        """
+        Format a fixed restart-save datetime as HEC-RAS date and hhmm strings.
+        """
+        if isinstance(value, datetime):
+            return value.strftime("%d%b%Y").upper(), value.strftime("%H%M")
+
+        if isinstance(value, (tuple, list)) and len(value) == 2:
+            save_date, save_time = value
+            return str(save_date).strip().upper(), str(save_time).strip()
+
+        if isinstance(value, str):
+            raw = value.strip().lstrip(",")
+            parts = [part for part in re.split(r"[,\s]+", raw) if part]
+            if len(parts) == 2:
+                return parts[0].upper(), parts[1]
+
+        raise ValueError(
+            "save_datetime must be a datetime, a (date, time) pair, or "
+            "a 'DDMMMYYYY,hhmm' string"
+        )
+
+    @staticmethod
+    def _find_restart_output_insert_index(lines: List[str]) -> int:
+        """
+        Find a stable insertion point for restart-output plan settings.
+        """
+        for i, line in enumerate(lines):
+            if line.startswith("DSS File="):
+                return i + 1
+
+        for i, line in enumerate(lines):
+            if (
+                line.startswith("Echo Input=")
+                or line.startswith("Echo Parameters=")
+                or line.startswith("Echo Output=")
+                or line.startswith("Write Detailed=")
+                or line.startswith("HDF ")
+                or line.startswith("Calibration Method=")
+                or line.startswith("Met Data")
+                or line.startswith("Sim Duration")
+            ):
+                return i
+
+        return len(lines)
+
+    @staticmethod
+    def _expected_restart_filename(plan_file_path: Path, save_date: Optional[str], save_time: Optional[str]) -> Optional[str]:
+        """
+        Return the HEC-RAS restart filename for a fixed date/time save.
+        """
+        if not save_date or not save_time:
+            return None
+        return f"{plan_file_path.name}.{save_date} {save_time}.rst"
+
+    @staticmethod
+    @log_call
+    def get_restart_output_settings(
+        plan_number_or_path: Union[str, Number, Path],
+        ras_object=None
+    ) -> Dict[str, Optional[Any]]:
+        """
+        Get restart/Hot Start output settings from a HEC-RAS plan file.
+
+        HEC-RAS stores restart-file creation settings in the plan file using
+        ``Write IC File`` keys. These settings control writing restart files.
+        They do not control whether a subsequent unsteady-flow file uses a
+        restart file; use ``RasUnsteady.get_restart_settings()`` and
+        ``RasUnsteady.set_restart_settings()`` for that separate usage setting.
+
+        Args:
+            plan_number_or_path: Plan number or explicit plan-file path.
+            ras_object: Optional RAS project object. If None, uses global ``ras``.
+
+        Returns:
+            Dict[str, Optional[Any]]: Parsed restart-output settings, including
+                raw HEC-RAS keys for auditability.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        plan_file_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
+        raw_values = {
+            plan_key: None
+            for plan_key in RasPlan.RESTART_OUTPUT_PARAMETER_KEYS.values()
+        }
+        if not plan_file_path or not plan_file_path.exists():
+            logger.error(f"Plan file not found: {plan_number_or_path}")
+            return {
+                "enabled": None,
+                "save_at_fixed_datetime": None,
+                "save_time_hours": None,
+                "save_date": None,
+                "save_time": None,
+                "save_datetime": None,
+                "recurrence_interval_hours": None,
+                "write_at_sim_end": None,
+                "expected_filename": None,
+                "output_filename_pattern": RasPlan.RESTART_OUTPUT_FILE_PATTERN,
+                "raw": raw_values,
+                "compatibility_note": RasPlan.RESTART_OUTPUT_COMPATIBILITY_NOTE,
+            }
+
+        try:
+            with open(plan_file_path, 'r') as file:
+                for line in file:
+                    if "=" not in line:
+                        continue
+                    key, raw_value = line.split("=", 1)
+                    key = key.strip()
+                    if key in raw_values:
+                        raw_values[key] = raw_value.strip()
+
+            ic_time = RasPlan._parse_restart_ic_time(raw_values["IC Time"])
+            expected_filename = RasPlan._expected_restart_filename(
+                plan_file_path,
+                ic_time["save_date"],
+                ic_time["save_time"],
+            )
+
+            return {
+                "enabled": RasPlan._parse_restart_flag(raw_values["Write IC File"]),
+                "save_at_fixed_datetime": RasPlan._parse_restart_flag(
+                    raw_values["Write IC File at Fixed DateTime"]
+                ),
+                "save_time_hours": ic_time["save_time_hours"],
+                "save_date": ic_time["save_date"],
+                "save_time": ic_time["save_time"],
+                "save_datetime": ic_time["save_datetime"],
+                "recurrence_interval_hours": RasPlan._coerce_restart_number(
+                    raw_values["Write IC File Reoccurance"]
+                ),
+                "write_at_sim_end": RasPlan._parse_restart_flag(
+                    raw_values["Write IC File at Sim End"]
+                ),
+                "expected_filename": expected_filename,
+                "output_filename_pattern": RasPlan.RESTART_OUTPUT_FILE_PATTERN,
+                "raw": raw_values,
+                "compatibility_note": RasPlan.RESTART_OUTPUT_COMPATIBILITY_NOTE,
+            }
+        except IOError as e:
+            logger.error(f"Error reading restart output settings from {plan_file_path}: {e}")
+            raise
+
+    @staticmethod
+    @log_call
+    def set_restart_output_settings(
+        plan_number_or_path: Union[str, Number, Path],
+        enabled: bool = True,
+        save_time_hours: Optional[Union[int, float, str]] = None,
+        save_datetime: Optional[Union[str, Tuple[str, str], datetime]] = None,
+        recurrence_interval_hours: Optional[Union[int, float, str]] = None,
+        write_at_sim_end: bool = False,
+        ras_object=None
+    ) -> bool:
+        """
+        Configure a plan to write HEC-RAS restart/Hot Start files.
+
+        HEC-RAS stores these output-save settings in the plan file as
+        ``Write IC File`` keys. A restart file written by a run is named by
+        HEC-RAS from the project name, plan number, and save time
+        (``ProjectName.p##.DDMMMYYYY hhmm.rst``); the output filename itself is
+        not an independent plan-file field in HEC-RAS 5.x through 7.0.
+
+        Args:
+            plan_number_or_path: Plan number or explicit plan-file path.
+            enabled: Enable restart output. False clears save timing settings.
+            save_time_hours: First save time in hours from simulation start.
+            save_datetime: First save as ``datetime``, ``(DDMMMYYYY, hhmm)``,
+                or ``"DDMMMYYYY,hhmm"``.
+            recurrence_interval_hours: Hours between subsequent restart writes.
+            write_at_sim_end: Also write a restart file at the final time step.
+            ras_object: Optional RAS project object. If None, uses global ``ras``.
+
+        Returns:
+            bool: True when the plan file was updated or already current.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        if save_time_hours is not None and save_datetime is not None:
+            raise ValueError("Specify either save_time_hours or save_datetime, not both")
+        if recurrence_interval_hours is not None and save_time_hours is None and save_datetime is None:
+            raise ValueError("recurrence_interval_hours requires save_time_hours or save_datetime")
+        if enabled and save_time_hours is None and save_datetime is None and not write_at_sim_end:
+            raise ValueError(
+                "Enable restart output with save_time_hours, save_datetime, "
+                "or write_at_sim_end=True"
+            )
+
+        plan_file_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
+        if not plan_file_path or not plan_file_path.exists():
+            logger.error(f"Plan file not found: {plan_number_or_path}")
+            return False
+
+        if not enabled:
+            line_values = {
+                "Write IC File": " 0 ",
+                "Write IC File at Fixed DateTime": "0",
+                "IC Time": ",,",
+                "Write IC File Reoccurance": "",
+                "Write IC File at Sim End": "0",
+            }
+        else:
+            fixed_datetime = save_datetime is not None
+            if fixed_datetime:
+                save_date, save_time = RasPlan._format_restart_datetime(save_datetime)
+                ic_time = f",{save_date},{save_time}"
+            elif save_time_hours is not None:
+                ic_time = f"{RasPlan._format_restart_number(save_time_hours)},,"
+            else:
+                ic_time = ",,"
+
+            line_values = {
+                "Write IC File": " 1 ",
+                "Write IC File at Fixed DateTime": "-1" if fixed_datetime else "0",
+                "IC Time": ic_time,
+                "Write IC File Reoccurance": RasPlan._format_restart_number(
+                    recurrence_interval_hours
+                ),
+                "Write IC File at Sim End": "-1" if write_at_sim_end else "0",
+            }
+
+        try:
+            with open(plan_file_path, 'r') as file:
+                lines = file.readlines()
+            original_lines = list(lines)
+
+            managed_keys = set(line_values)
+            existing_indexes = [
+                i for i, line in enumerate(lines)
+                if "=" in line and line.split("=", 1)[0].strip() in managed_keys
+            ]
+            insert_index = (
+                min(existing_indexes)
+                if existing_indexes
+                else RasPlan._find_restart_output_insert_index(lines)
+            )
+
+            retained_lines = []
+            adjusted_insert_index = 0
+            for i, line in enumerate(lines):
+                key = line.split("=", 1)[0].strip() if "=" in line else None
+                if i < insert_index and key not in managed_keys:
+                    adjusted_insert_index += 1
+                if key in managed_keys:
+                    continue
+                retained_lines.append(line)
+
+            new_block = [
+                f"{key}={line_values[key]}\n"
+                for key in RasPlan.RESTART_OUTPUT_PARAMETER_KEYS.values()
+            ]
+            retained_lines[adjusted_insert_index:adjusted_insert_index] = new_block
+            lines = retained_lines
+
+            if lines == original_lines:
+                logger.info(
+                    f"Restart output settings already current in plan file: {plan_file_path.name}"
+                )
+                return True
+
+            with open(plan_file_path, 'w') as file:
+                file.writelines(lines)
+
+            if hasattr(ras_obj, "get_plan_entries"):
+                ras_obj.plan_df = ras_obj.get_plan_entries()
+
+            logger.info(f"Updated restart output settings in plan file: {plan_file_path.name}")
+            return True
+        except IOError as e:
+            logger.error(f"Error updating restart output settings in {plan_file_path}: {e}")
+            return False
 
     @staticmethod
     @log_call

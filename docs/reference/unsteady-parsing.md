@@ -39,6 +39,12 @@ Restart Filename=Muncie.p01.rst
 | `Use Restart=` | Restart file usage | `-1`=use, `0`=don't use |
 | `Restart Filename=` | Path to restart file | Relative path |
 
+`Use Restart=` and `Restart Filename=` only control use of an existing restart
+file. HEC-RAS restart/Hot Start output creation is stored in the plan file
+(`.p##`) as `Write IC File`, `IC Time`, `Write IC File Reoccurance`, and related
+keys. In HEC-RAS 5.x through 7.0, the GUI labels these as Restart File Options
+or Initial Conditions file options.
+
 ### Boundary Location Block
 
 Each boundary condition starts with a location definition:
@@ -247,6 +253,15 @@ DSS Path=/BASIN/RESERVOIR_1/PRECIP-INC/01JAN2020/1HOUR/OBSERVED/
 | `parse_fixed_width_table()` | Convert fixed-width to DataFrame |
 | `extract_tables()` | Extract all tables as dict of DataFrames |
 | `write_table_to_file()` | Write modified table back to file |
+| `get_restart_settings()` | Parse `Use Restart` and `Restart Filename` usage settings |
+| `set_restart_settings()` | Set restart-file usage without changing plan output settings |
+
+### RasPlan Restart Output Methods
+
+| Method | Description |
+|--------|-------------|
+| `get_restart_output_settings()` | Parse plan-file restart/Hot Start output settings |
+| `set_restart_output_settings()` | Configure plan-file restart/Hot Start output save time, recurrence, and final-step write |
 
 ### RasPrj Methods
 

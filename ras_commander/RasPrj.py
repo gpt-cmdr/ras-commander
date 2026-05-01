@@ -438,6 +438,11 @@ class RasPrj:
             'UNET 1D Methodology',
             'UNET D2 SolverType',
             'UNET D2 Name',
+            'Write IC File',
+            'Write IC File at Fixed DateTime',
+            'IC Time',
+            'Write IC File Reoccurance',
+            'Write IC File at Sim End',
             'description'  # Special case for description block
         }
 
@@ -531,7 +536,12 @@ class RasPrj:
                 'UNET Use Existing IB Tables': r'UNET Use Existing IB Tables=(.+)',
                 'UNET 1D Methodology': r'UNET 1D Methodology=(.+)',
                 'UNET D2 SolverType': r'UNET D2 SolverType=(.+)',
-                'UNET D2 Name': r'UNET D2 Name=(.+)'
+                'UNET D2 Name': r'UNET D2 Name=(.+)',
+                'Write IC File': r'Write IC File=(.*)',
+                'Write IC File at Fixed DateTime': r'Write IC File at Fixed DateTime=(.*)',
+                'IC Time': r'IC Time=(.*)',
+                'Write IC File Reoccurance': r'Write IC File Reoccurance=(.*)',
+                'Write IC File at Sim End': r'Write IC File at Sim End=(.*)',
             }
             
             # END Exception to Style Guide
@@ -718,6 +728,7 @@ class RasPrj:
                 'Flow Title': r'Flow Title=(.+)',
                 'Program Version': r'Program Version=(.+)',
                 'Use Restart': r'Use Restart=(.+)',
+                'Restart Filename': r'Restart Filename=(.+)',
                 'Precipitation Mode': r'Precipitation Mode=(.+)',
                 'Wind Mode': r'Wind Mode=(.+)',
                 'Met BC=Precipitation|Mode': r'Met BC=Precipitation\|Mode=(.+)',
