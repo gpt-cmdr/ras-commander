@@ -86,6 +86,30 @@ def test_set_bank_stations_inserts_bank_points_and_backup(tmp_path):
     assert "#Sta/Elev= 5" in text
 
 
+def test_set_station_elevation_expanding_block_preserves_following_xs(tmp_path):
+    geom_file = _write_geom(tmp_path, include_banks=True)
+    new_profile = pd.DataFrame({
+        "Station": [0.0, 100.0, 200.0, 400.0, 800.0, 1000.0],
+        "Elevation": [100.0, 98.0, 94.0, 93.0, 98.0, 100.0],
+    })
+
+    GeomCrossSection.set_station_elevation(
+        geom_file, RIVER, REACH, "1000", new_profile, create_backup=False
+    )
+
+    xs_df = GeomCrossSection.get_cross_sections(geom_file)
+    assert list(xs_df["RS"]) == ["1000", "2000"]
+    assert len(GeomCrossSection.get_station_elevation(geom_file, RIVER, REACH, "1000")) == 6
+    assert len(GeomCrossSection.get_station_elevation(geom_file, RIVER, REACH, "2000")) == 4
+
+    text = geom_file.read_text(encoding="utf-8")
+    target_block = text.split("Type RM Length L Ch R = 1 ,1000", 1)[1].split(
+        "Type RM Length L Ch R = 1 ,2000", 1
+    )[0]
+    assert "#Mann= 2 , 0 , 0" in target_block
+    assert "Bank Sta=200,800" in target_block
+
+
 def test_set_expansion_contraction_round_trip_insert_and_update(tmp_path):
     geom_file = _write_geom(tmp_path, include_banks=True, include_exp_cntr=False)
 
@@ -107,6 +131,27 @@ def test_set_expansion_contraction_round_trip_insert_and_update(tmp_path):
         0.50,
         0.20,
     )
+
+
+def test_set_expansion_contraction_preserves_new_value_precision(tmp_path):
+    geom_file = _write_geom(tmp_path, include_banks=True, include_exp_cntr=True)
+    geom_file.write_text(
+        geom_file.read_text(encoding="utf-8").replace(
+            "Exp/Cntr=0.30,0.10",
+            "Exp/Cntr=0.3,0.1",
+        ),
+        encoding="utf-8",
+    )
+
+    GeomCrossSection.set_expansion_contraction(
+        geom_file, RIVER, REACH, "1000", 0.45, 0.15, create_backup=False
+    )
+
+    assert GeomCrossSection.get_expansion_contraction(geom_file, RIVER, REACH, "1000") == (
+        0.45,
+        0.15,
+    )
+    assert "Exp/Cntr=0.45,0.15" in geom_file.read_text(encoding="utf-8")
 
 
 def test_interpolate_station_elevation_review_columns_and_point_limit():

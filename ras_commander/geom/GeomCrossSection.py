@@ -330,13 +330,23 @@ class GeomCrossSection:
         return f"{value:g}"
 
     @staticmethod
-    def _format_numeric_like(value: float, original: str) -> str:
+    def _format_numeric_like(value: float, original: str, min_decimals: int = 0) -> str:
         """Format a scalar using the decimal precision of an existing value string."""
         original = original.strip()
         if '.' in original:
-            decimals = len(original.split('.', 1)[1])
+            decimals = max(len(original.split('.', 1)[1]), int(min_decimals))
             return f"{float(value):.{decimals}f}"
         return GeomCrossSection._format_numeric(value)
+
+    @staticmethod
+    def _decimal_places_for_value(value: float) -> int:
+        """Return decimal places needed by the compact formatter for a scalar."""
+        text = GeomCrossSection._format_numeric(value)
+        if 'e' in text.lower():
+            text = f"{float(value):.12f}".rstrip('0').rstrip('.')
+        if '.' not in text:
+            return 0
+        return len(text.split('.', 1)[1].rstrip('0'))
 
     @staticmethod
     def _find_keyword_index(lines: List[str], start_idx: int, keyword: str) -> Optional[int]:
@@ -406,8 +416,16 @@ class GeomCrossSection:
             existing = GeomParser.extract_keyword_value(existing_line, "Exp/Cntr")
             existing_vals = [v.strip() for v in existing.split(',')]
             if len(existing_vals) >= 2:
-                exp = GeomCrossSection._format_numeric_like(expansion, existing_vals[0])
-                cntr = GeomCrossSection._format_numeric_like(contraction, existing_vals[1])
+                exp = GeomCrossSection._format_numeric_like(
+                    expansion,
+                    existing_vals[0],
+                    min_decimals=GeomCrossSection._decimal_places_for_value(expansion)
+                )
+                cntr = GeomCrossSection._format_numeric_like(
+                    contraction,
+                    existing_vals[1],
+                    min_decimals=GeomCrossSection._decimal_places_for_value(contraction)
+                )
                 return f"Exp/Cntr={exp},{cntr}\n"
 
         return (
@@ -858,25 +876,16 @@ class GeomCrossSection:
                         precision=2
                     )
 
-                    # Update count line
-                    modified_lines[j] = f"#Sta/Elev= {new_count}\n"
-
-                    # Replace data lines
-                    # Remove old data lines
-                    for k in range(old_data_lines):
-                        if j + 1 + k < len(modified_lines):
-                            modified_lines[j + 1 + k] = None  # Mark for deletion
-
-                    # Insert new data lines
-                    for k, data_line in enumerate(new_data_lines):
-                        if j + 1 + k < len(modified_lines):
-                            modified_lines[j + 1 + k] = data_line
-                        else:
-                            # Append if needed
-                            modified_lines.append(data_line)
-
-                    # Clean up None entries
-                    modified_lines = [line for line in modified_lines if line is not None]
+                    # Replace count and data lines as one block so longer
+                    # rewrites do not overwrite following geometry keywords.
+                    data_start = j + 1
+                    data_end = data_start + old_data_lines
+                    modified_lines = (
+                        modified_lines[:j]
+                        + [f"#Sta/Elev= {new_count}\n"]
+                        + new_data_lines
+                        + modified_lines[data_end:]
+                    )
 
                     # Update or insert Bank Sta= line when caller supplied bank values
                     if bank_left is not None or bank_right is not None:
