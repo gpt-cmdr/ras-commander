@@ -2,6 +2,7 @@ import xml.etree.ElementTree as ET
 
 import h5py
 import numpy as np
+import pandas as pd
 import pytest
 
 from ras_commander.terrain.RasTerrainModWriter import (
@@ -76,19 +77,24 @@ def test_add_high_ground_modification_writes_hdf_and_rasmap(tmp_path):
     with h5py.File(terrain_hdf, "r") as hdf:
         mod = hdf["Modifications/Upper Levee"]
         assert _decode(mod.attrs["Type"]) == "Levee"
-        assert _decode(mod.attrs["Subtype"]) == "High Ground"
+        assert _decode(mod.attrs["Subtype"]) == "Levee"
         np.testing.assert_allclose(mod["Polyline Points"][:], points[:, :2])
+        np.testing.assert_array_equal(mod["Profile Info"][:], np.array([[0, 3]]))
+        np.testing.assert_allclose(
+            mod["Profile Values"][:],
+            np.array([[0.0, 572.0], [100.0, 573.0], [200.0, 574.0]]),
+        )
         np.testing.assert_allclose(
             mod["Profile"][:],
             np.array([[0.0, 572.0], [100.0, 573.0], [200.0, 574.0]]),
         )
 
         attrs = mod["Attributes"][0]
-        assert attrs["ElevationType"] == MODIFICATION_TAKE_HIGHER
-        assert attrs["Width"] == pytest.approx(20.0)
-        assert attrs["LeftSlope"] == pytest.approx(2.0)
-        assert attrs["RightSlope"] == pytest.approx(2.0)
-        assert attrs["Max Extent"] == pytest.approx(100.0)
+        assert _decode(attrs["Elevation Type"]) == "SetIfHigher"
+        assert attrs["Top Width"] == pytest.approx(20.0)
+        assert attrs["Left Slope"] == pytest.approx(2.0)
+        assert attrs["Right Slope"] == pytest.approx(2.0)
+        assert attrs["Max Reach"] == pytest.approx(100.0)
         assert attrs["Elev Pt Tolerance"] == pytest.approx(25.0)
 
     layer = _mod_layer(rasmap, "Upper Levee")
@@ -100,8 +106,10 @@ def test_add_high_ground_modification_writes_hdf_and_rasmap(tmp_path):
 
     modifications = RasTerrainModWriter.list_modifications(terrain_hdf)
     assert modifications.loc[0, "name"] == "Upper Levee"
-    assert modifications.loc[0, "subtype"] == "High Ground"
+    assert modifications.loc[0, "subtype"] == "Levee"
+    assert modifications.loc[0, "modification_type"] == MODIFICATION_TAKE_HIGHER
     assert modifications.loc[0, "modification_mode"] == "take_higher"
+    assert modifications.loc[0, "profile_points"] == 3
 
     profile = RasTerrainModWriter.get_modification_profile(terrain_hdf, "Upper Levee")
     assert profile["elevation"].tolist() == [572.0, 573.0, 574.0]
@@ -124,17 +132,17 @@ def test_add_fill_surface_modification_uses_set_value_mode(tmp_path):
 
     with h5py.File(terrain_hdf, "r") as hdf:
         mod = hdf["Modifications/Floodway Fill"]
-        assert _decode(mod.attrs["Subtype"]) == "Fill Surface"
+        assert _decode(mod.attrs["Subtype"]) == "Levee"
         np.testing.assert_allclose(
-            mod["Profile"][:],
+            mod["Profile Values"][:],
             np.array([[0.0, 535.5], [50.0, 535.5]]),
         )
 
         attrs = mod["Attributes"][0]
-        assert attrs["ElevationType"] == MODIFICATION_SET_VALUE
-        assert attrs["Width"] == pytest.approx(30.0)
-        assert attrs["LeftSlope"] == pytest.approx(3.0)
-        assert attrs["RightSlope"] == pytest.approx(4.0)
+        assert _decode(attrs["Elevation Type"]) == "SetValue"
+        assert attrs["Top Width"] == pytest.approx(30.0)
+        assert attrs["Left Slope"] == pytest.approx(3.0)
+        assert attrs["Right Slope"] == pytest.approx(4.0)
 
     layer = _mod_layer(rasmap, "Floodway Fill")
     assert layer.find("DefaultModificationType").get("Value") == str(
@@ -159,15 +167,75 @@ def test_add_channel_modification_keeps_take_lower_mode(tmp_path):
         mod = hdf["Modifications/Pilot Channel"]
         assert _decode(mod.attrs["Subtype"]) == "Channel"
         np.testing.assert_allclose(
-            mod["Profile"][:],
+            mod["Profile Values"][:],
             np.array([[0.0, -4.0], [25.0, -4.0], [50.0, -4.0]]),
         )
-        assert mod["Attributes"][0]["ElevationType"] == MODIFICATION_TAKE_LOWER
+        assert _decode(mod["Attributes"][0]["Elevation Type"]) == "SetIfLower"
 
     layer = _mod_layer(rasmap, "Pilot Channel")
     assert layer.find("DefaultModificationType").get("Value") == str(
         MODIFICATION_TAKE_LOWER
     )
+
+
+def test_sample_modification_surface_applies_take_higher(tmp_path):
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    RasTerrainModWriter.add_high_ground_modification(
+        terrain_hdf,
+        rasmap,
+        name="Verification Levee",
+        polyline_points=np.array([[0.0, 0.0, 10.0], [100.0, 0.0, 10.0]]),
+        top_width=10.0,
+        side_slope=2.0,
+        max_extent=30.0,
+    )
+
+    sampled = RasTerrainModWriter.sample_modification_surface(
+        terrain_hdf,
+        "Verification Levee",
+        points=np.array([[50.0, 0.0], [50.0, 10.0], [50.0, 40.0]]),
+        existing_elevations=np.array([5.0, 9.0, 5.0]),
+    )
+
+    assert sampled["line_station"].tolist() == [50.0, 50.0, 50.0]
+    assert sampled["offset"].tolist() == [0.0, 10.0, 40.0]
+    assert sampled["modification_surface"].iloc[0] == pytest.approx(10.0)
+    assert sampled["modification_surface"].iloc[1] == pytest.approx(7.5)
+    assert np.isnan(sampled["modification_surface"].iloc[2])
+    assert sampled["modified_elevation"].tolist() == [10.0, 9.0, 5.0]
+    assert sampled["difference"].tolist() == [5.0, 0.0, 0.0]
+
+
+def test_apply_modification_to_profile_reconstructs_xy_from_station(tmp_path):
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    RasTerrainModWriter.add_high_ground_modification(
+        terrain_hdf,
+        rasmap,
+        name="Profile Levee",
+        polyline_points=np.array([[0.0, 0.0, 10.0], [100.0, 0.0, 10.0]]),
+        top_width=10.0,
+        side_slope=2.0,
+        max_extent=30.0,
+    )
+
+    profile = pd.DataFrame(
+        {
+            "station": [0.0, 20.0, 25.0, 30.0, 40.0],
+            "elevation": [5.0, 5.0, 5.0, 9.0, 5.0],
+        }
+    )
+    comparison = RasTerrainModWriter.apply_modification_to_profile(
+        terrain_hdf,
+        "Profile Levee",
+        profile,
+        x_coords=[50.0, 50.0],
+        y_coords=[-20.0, 20.0],
+    )
+
+    assert comparison["x"].tolist() == [50.0] * 5
+    assert comparison["y"].tolist() == [-20.0, 0.0, 5.0, 10.0, 20.0]
+    assert comparison["proposed_elevation"].tolist() == [5.0, 10.0, 10.0, 9.0, 5.0]
+    assert comparison["difference"].tolist() == [0.0, 5.0, 5.0, 0.0, 0.0]
 
 
 def test_high_ground_requires_elevation_for_xy_only_points(tmp_path):

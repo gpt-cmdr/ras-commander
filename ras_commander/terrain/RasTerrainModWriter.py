@@ -53,6 +53,30 @@ _MODE_ALIASES = {
     "add_value": MODIFICATION_ADD_VALUE,
 }
 
+_MODIFICATION_TYPE_DISK_NAMES = {
+    MODIFICATION_SET_VALUE: "SetValue",
+    MODIFICATION_TAKE_HIGHER: "SetIfHigher",
+    MODIFICATION_TAKE_LOWER: "SetIfLower",
+    MODIFICATION_ADD_VALUE: "Add",
+}
+
+_MODIFICATION_TYPE_BY_DISK_NAME = {
+    "setvalue": MODIFICATION_SET_VALUE,
+    "set": MODIFICATION_SET_VALUE,
+    "set_value": MODIFICATION_SET_VALUE,
+    "setifhigher": MODIFICATION_TAKE_HIGHER,
+    "takehigher": MODIFICATION_TAKE_HIGHER,
+    "take_higher": MODIFICATION_TAKE_HIGHER,
+    "higher": MODIFICATION_TAKE_HIGHER,
+    "setiflower": MODIFICATION_TAKE_LOWER,
+    "takelower": MODIFICATION_TAKE_LOWER,
+    "take_lower": MODIFICATION_TAKE_LOWER,
+    "lower": MODIFICATION_TAKE_LOWER,
+    "add": MODIFICATION_ADD_VALUE,
+    "addvalue": MODIFICATION_ADD_VALUE,
+    "add_value": MODIFICATION_ADD_VALUE,
+}
+
 
 class RasTerrainModWriter:
     """Write terrain modifications to HEC-RAS terrain HDF and .rasmap files."""
@@ -151,10 +175,14 @@ class RasTerrainModWriter:
             profile_points=profile_points,
         )
 
-        subtype = "High Ground" if modification_type == MODIFICATION_TAKE_HIGHER else "Fill Surface"
+        subtype_label = (
+            "High Ground"
+            if modification_type == MODIFICATION_TAKE_HIGHER
+            else "Fill Surface"
+        )
         logger.info(
             "Adding %s terrain modification '%s' to %s",
-            subtype.lower(),
+            subtype_label.lower(),
             name,
             terrain_hdf_path.name,
         )
@@ -171,7 +199,7 @@ class RasTerrainModWriter:
             elev_pt_tolerance=elev_pt_tolerance,
             modification_type=modification_type,
             transition_fraction=transition_fraction,
-            subtype=subtype,
+            subtype="Levee",
         )
 
         RasTerrainModWriter._update_rasmap_xml(
@@ -417,7 +445,11 @@ class RasTerrainModWriter:
                         )
                     }
 
-                modification_type = int(attr_row.get("ElevationType", -1))
+                modification_type = RasTerrainModWriter._modification_type_value(
+                    RasTerrainModWriter._attr_value(
+                        attr_row, "Elevation Type", "ElevationType", default=-1
+                    )
+                )
                 rows.append(
                     {
                         "name": mod_name,
@@ -432,15 +464,23 @@ class RasTerrainModWriter:
                         "modification_mode": RasTerrainModWriter._mode_name(
                             modification_type
                         ),
-                        "width": float(attr_row.get("Width", np.nan)),
-                        "left_slope": float(attr_row.get("LeftSlope", np.nan)),
-                        "right_slope": float(attr_row.get("RightSlope", np.nan)),
-                        "max_extent": float(attr_row.get("Max Extent", np.nan)),
-                        "elev_pt_tolerance": float(
-                            attr_row.get("Elev Pt Tolerance", np.nan)
+                        "width": RasTerrainModWriter._float_attr(
+                            attr_row, "Top Width", "Width"
                         ),
-                        "profile_points": int(
-                            mod_grp["Profile"].shape[0] if "Profile" in mod_grp else 0
+                        "left_slope": RasTerrainModWriter._float_attr(
+                            attr_row, "Left Slope", "LeftSlope"
+                        ),
+                        "right_slope": RasTerrainModWriter._float_attr(
+                            attr_row, "Right Slope", "RightSlope"
+                        ),
+                        "max_extent": RasTerrainModWriter._float_attr(
+                            attr_row, "Max Reach", "Max Extent"
+                        ),
+                        "elev_pt_tolerance": RasTerrainModWriter._float_attr(
+                            attr_row, "Elev Pt Tolerance"
+                        ),
+                        "profile_points": RasTerrainModWriter._profile_point_count(
+                            mod_grp
                         ),
                     }
                 )
@@ -464,15 +504,173 @@ class RasTerrainModWriter:
 
         terrain_hdf_path = Path(terrain_hdf_path)
         with h5py.File(terrain_hdf_path, "r") as f:
-            profile_path = f"Modifications/{name}/Profile"
-            if profile_path not in f:
-                raise KeyError(f"Modification profile not found: {profile_path}")
-            profile = np.asarray(f[profile_path][:], dtype=np.float64)
+            mod_path = f"Modifications/{name}"
+            if mod_path not in f:
+                raise KeyError(f"Modification not found: {mod_path}")
+            profile = RasTerrainModWriter._read_profile_array(f[mod_path])
 
         return pd.DataFrame(
             {
                 "station": profile[:, 0],
                 "elevation": profile[:, 1],
+            }
+        )
+
+    @staticmethod
+    @log_call
+    def sample_modification_surface(
+        terrain_hdf_path: Union[str, Path],
+        name: str,
+        points: Union[np.ndarray, Sequence[Sequence[float]], pd.DataFrame],
+        existing_elevations: Optional[Union[np.ndarray, Sequence[float], pd.Series]] = None,
+        x_col: str = "x",
+        y_col: str = "y",
+    ) -> pd.DataFrame:
+        """
+        Evaluate a line terrain modification at XY points.
+
+        This helper reads the ground-line sidecar data written under
+        ``/Modifications/<name>`` and computes the proposed trapezoidal
+        surface at each supplied XY point. When ``existing_elevations`` are
+        supplied, the terrain merge mode is applied and the returned
+        ``modified_elevation`` and ``difference`` columns provide a lightweight
+        before/after check without invoking the RAS Mapper GUI.
+
+        Parameters
+        ----------
+        terrain_hdf_path : Path
+            Terrain HDF containing the modification sidecar group.
+        name : str
+            Modification layer name under ``/Modifications``.
+        points : array-like or pandas.DataFrame
+            Nx2 XY coordinates or a DataFrame with ``x_col``/``y_col``.
+        existing_elevations : array-like, optional
+            Existing terrain elevations at the same points.
+        x_col, y_col : str
+            DataFrame coordinate column names used when ``points`` is a
+            DataFrame.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns include XY coordinates, projected line station, signed
+            offset, proposed modification surface, merge-mode-applied
+            elevation, and before/after difference when existing elevations are
+            supplied.
+        """
+        line, profile, attrs = RasTerrainModWriter._read_ground_line_modification(
+            terrain_hdf_path, name
+        )
+        xy = RasTerrainModWriter._points_to_xy(points, x_col=x_col, y_col=y_col)
+        existing = RasTerrainModWriter._optional_elevations(
+            existing_elevations, len(xy)
+        )
+
+        station, offset = RasTerrainModWriter._project_points_to_polyline(xy, line)
+        surface = RasTerrainModWriter._ground_line_surface_from_offsets(
+            station=station,
+            offset=offset,
+            profile=profile,
+            width=float(attrs["width"]),
+            left_slope=float(attrs["left_slope"]),
+            right_slope=float(attrs["right_slope"]),
+            max_extent=float(attrs["max_extent"]),
+        )
+        modified = RasTerrainModWriter._apply_modification_mode(
+            existing, surface, int(attrs["modification_type"])
+        )
+
+        result = pd.DataFrame(
+            {
+                "x": xy[:, 0],
+                "y": xy[:, 1],
+                "line_station": station,
+                "offset": offset,
+                "distance": np.abs(offset),
+                "modification_surface": surface,
+                "in_extent": np.isfinite(surface),
+                "modification_type": int(attrs["modification_type"]),
+                "modification_mode": RasTerrainModWriter._mode_name(
+                    int(attrs["modification_type"])
+                ),
+                "modified_elevation": modified,
+            }
+        )
+
+        if existing is not None:
+            result.insert(2, "existing_elevation", existing)
+            result["difference"] = result["modified_elevation"] - existing
+
+        return result
+
+    @staticmethod
+    @log_call
+    def apply_modification_to_profile(
+        terrain_hdf_path: Union[str, Path],
+        name: str,
+        profile: pd.DataFrame,
+        x_coords: Optional[Sequence[float]] = None,
+        y_coords: Optional[Sequence[float]] = None,
+        station_col: str = "station",
+        elevation_col: str = "elevation",
+        x_col: str = "x",
+        y_col: str = "y",
+    ) -> pd.DataFrame:
+        """
+        Apply a line terrain modification to an existing terrain profile.
+
+        The profile can either include XY coordinate columns or be paired with
+        the original profile polyline coordinates. The returned DataFrame keeps
+        the original profile station and adds proposed elevation and
+        difference columns suitable for before/after profile plots.
+        """
+        if station_col not in profile.columns:
+            raise ValueError(f"profile is missing station column '{station_col}'")
+        if elevation_col not in profile.columns:
+            raise ValueError(f"profile is missing elevation column '{elevation_col}'")
+
+        if {x_col, y_col}.issubset(profile.columns):
+            points = profile[[x_col, y_col]].to_numpy(dtype=np.float64)
+        else:
+            if x_coords is None or y_coords is None:
+                raise ValueError(
+                    "profile must include x/y columns or x_coords and y_coords "
+                    "must be provided"
+                )
+            points = RasTerrainModWriter._xy_along_polyline_from_stations(
+                x_coords=x_coords,
+                y_coords=y_coords,
+                stations=profile[station_col].to_numpy(dtype=np.float64),
+            )
+
+        sampled = RasTerrainModWriter.sample_modification_surface(
+            terrain_hdf_path=terrain_hdf_path,
+            name=name,
+            points=points,
+            existing_elevations=profile[elevation_col].to_numpy(dtype=np.float64),
+            x_col=x_col,
+            y_col=y_col,
+        )
+
+        return pd.DataFrame(
+            {
+                "station": profile[station_col].to_numpy(dtype=np.float64),
+                "x": sampled["x"].to_numpy(dtype=np.float64),
+                "y": sampled["y"].to_numpy(dtype=np.float64),
+                "existing_elevation": sampled["existing_elevation"].to_numpy(
+                    dtype=np.float64
+                ),
+                "modification_surface": sampled["modification_surface"].to_numpy(
+                    dtype=np.float64
+                ),
+                "proposed_elevation": sampled["modified_elevation"].to_numpy(
+                    dtype=np.float64
+                ),
+                "difference": sampled["difference"].to_numpy(dtype=np.float64),
+                "line_station": sampled["line_station"].to_numpy(dtype=np.float64),
+                "offset": sampled["offset"].to_numpy(dtype=np.float64),
+                "in_extent": sampled["in_extent"].to_numpy(dtype=bool),
+                "modification_mode": sampled["modification_mode"].to_numpy(),
             }
         )
 
@@ -544,31 +742,44 @@ class RasTerrainModWriter:
             # Polyline Info: [start_index, num_points, part_start, num_parts]
             n_pts = len(polyline_points)
             polyline_info = np.array([[0, n_pts, 0, 1]], dtype=np.int32)
-            mod_grp.create_dataset('Polyline Info', data=polyline_info)
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, 'Polyline Info', polyline_info
+            )
 
             # Polyline Parts: [start_index, num_points_in_part]
             polyline_parts = np.array([[0, n_pts]], dtype=np.int32)
-            mod_grp.create_dataset('Polyline Parts', data=polyline_parts)
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, 'Polyline Parts', polyline_parts
+            )
 
             # Polyline Points: Nx2 array of (x, y)
-            mod_grp.create_dataset('Polyline Points', data=polyline_points)
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, 'Polyline Points', polyline_points
+            )
+            mod_grp['Polyline Info'].attrs['Feature Type'] = np.bytes_('Polyline')
 
-            mod_grp.create_dataset('Profile', data=profile_data)
+            profile_info = np.array([[0, len(profile_data)]], dtype=np.int32)
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, 'Profile Info', profile_info
+            )
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, 'Profile Values', profile_data.astype(np.float32)
+            )
+            RasTerrainModWriter._create_hdf_dataset(mod_grp, 'Profile', profile_data)
 
             # Write attributes as a compound dataset
             # This matches the GroundLineModificationLayer attribute schema
             attr_dtype = np.dtype([
-                ('SystemName', 'S64'),
-                ('Computed System Name', 'S64'),
+                ('System Name', 'S128'),
+                ('Name', 'S128'),
+                ('Elevation Type', 'S16'),
                 ('Top Elevation', '<f4'),
-                ('Width', '<f4'),
-                ('LeftSlope', '<f4'),
-                ('RightSlope', '<f4'),
-                ('Transition Fraction', '<f4'),
-                ('Max Extent', '<f4'),
+                ('Top Width', '<f4'),
+                ('Left Slope', '<f4'),
+                ('Right Slope', '<f4'),
+                ('Max Reach', '<f4'),
+                ('Transition Percent', '<f4'),
                 ('Elev Pt Tolerance', '<f4'),
-                ('ElevationType', '<i4'),
-                ('ElevationValue', '<f4'),
             ])
 
             if elevation_value is None:
@@ -577,20 +788,22 @@ class RasTerrainModWriter:
                 top_elevation = float(np.max(profile_data[:, 1]))
 
             attrs_data = np.array([(
-                name.encode('utf-8')[:64],  # SystemName
-                name.encode('utf-8')[:64],  # Computed System Name
+                name.encode('utf-8')[:128],
+                name.encode('utf-8')[:128],
+                RasTerrainModWriter._modification_type_disk_name(modification_type)
+                .encode('utf-8')[:16],
                 np.float32(top_elevation),
                 np.float32(width),
                 np.float32(left_slope),
                 np.float32(right_slope),
-                np.float32(transition_fraction),
                 np.float32(max_extent),
+                np.float32(transition_fraction),
                 np.float32(elev_pt_tolerance),
-                np.int32(modification_type),
-                np.float32(elevation_value),
             )], dtype=attr_dtype)
 
-            mod_grp.create_dataset('Attributes', data=attrs_data)
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, 'Attributes', attrs_data
+            )
 
             # Create empty Control Points group
             cp_grp = mod_grp.create_group('Control Points')
@@ -619,6 +832,14 @@ class RasTerrainModWriter:
             raise ValueError("polyline_points must define a non-zero-length line")
 
         return points
+
+    @staticmethod
+    def _create_hdf_dataset(group, name: str, data: np.ndarray):
+        """Create a chunked HDF dataset compatible with HEC H5Assist readers."""
+        data = np.asarray(data)
+        if data.shape and all(dim > 0 for dim in data.shape):
+            return group.create_dataset(name, data=data, chunks=data.shape)
+        return group.create_dataset(name, data=data)
 
     @staticmethod
     def _station_values(xy_points: np.ndarray) -> np.ndarray:
@@ -741,6 +962,311 @@ class RasTerrainModWriter:
             MODIFICATION_ADD_VALUE: "add_value",
         }
         return names.get(modification_type, "unknown")
+
+    @staticmethod
+    def _modification_type_disk_name(modification_type: int) -> str:
+        """Return the RasMapper disk serializer name for a merge mode."""
+        return _MODIFICATION_TYPE_DISK_NAMES[
+            RasTerrainModWriter._resolve_modification_type(modification_type)
+        ]
+
+    @staticmethod
+    def _modification_type_value(value) -> int:
+        """Resolve an HDF attribute merge-mode scalar to the public integer code."""
+        value = RasTerrainModWriter._decode_hdf_scalar(value)
+        if value is None:
+            return -1
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return -1
+            try:
+                return int(text)
+            except ValueError:
+                key = text.lower().replace("-", "_").replace(" ", "_")
+                compact = key.replace("_", "")
+                return _MODIFICATION_TYPE_BY_DISK_NAME.get(
+                    key, _MODIFICATION_TYPE_BY_DISK_NAME.get(compact, -1)
+                )
+        try:
+            if np.isnan(value):
+                return -1
+        except TypeError:
+            pass
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return -1
+
+    @staticmethod
+    def _attr_value(attr_row: Dict[str, object], *names: str, default=np.nan):
+        """Return the first matching attribute value from current or legacy fields."""
+        for field_name in names:
+            if field_name in attr_row:
+                return attr_row[field_name]
+        return default
+
+    @staticmethod
+    def _float_attr(attr_row: Dict[str, object], *names: str) -> float:
+        value = RasTerrainModWriter._attr_value(attr_row, *names)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return float("nan")
+
+    @staticmethod
+    def _profile_point_count(mod_grp) -> int:
+        if "Profile Info" in mod_grp and len(mod_grp["Profile Info"]) > 0:
+            info = np.asarray(mod_grp["Profile Info"][:], dtype=np.int64)
+            return int(info[:, 1].sum())
+        if "Profile Values" in mod_grp:
+            return int(mod_grp["Profile Values"].shape[0])
+        if "Profile" in mod_grp:
+            return int(mod_grp["Profile"].shape[0])
+        return 0
+
+    @staticmethod
+    def _read_profile_array(mod_grp) -> np.ndarray:
+        if "Profile Values" in mod_grp:
+            values = np.asarray(mod_grp["Profile Values"][:], dtype=np.float64)
+            if "Profile Info" in mod_grp and len(mod_grp["Profile Info"]) > 0:
+                start, count = np.asarray(mod_grp["Profile Info"][0], dtype=np.int64)
+                values = values[start : start + count]
+            return values
+
+        if "Profile" in mod_grp:
+            return np.asarray(mod_grp["Profile"][:], dtype=np.float64)
+
+        raise KeyError(f"Modification profile not found: {mod_grp.name}/Profile Values")
+
+    @staticmethod
+    def _read_ground_line_modification(
+        terrain_hdf_path: Union[str, Path],
+        name: str,
+    ):
+        """Read ground-line geometry, profile, and attributes from a sidecar group."""
+        import h5py
+
+        terrain_hdf_path = Path(terrain_hdf_path)
+        with h5py.File(terrain_hdf_path, "r") as f:
+            mod_path = f"Modifications/{name}"
+            if mod_path not in f:
+                raise KeyError(f"Modification not found: {mod_path}")
+
+            mod_grp = f[mod_path]
+            if "Polyline Points" not in mod_grp:
+                raise KeyError(f"Modification polyline not found: {mod_path}/Polyline Points")
+
+            line = np.asarray(mod_grp["Polyline Points"][:], dtype=np.float64)
+            profile = RasTerrainModWriter._read_profile_array(mod_grp)
+            attr_row = {}
+            if "Attributes" in mod_grp and len(mod_grp["Attributes"]) > 0:
+                attr_row = {
+                    key: RasTerrainModWriter._decode_hdf_scalar(value)
+                    for key, value in zip(
+                        mod_grp["Attributes"].dtype.names,
+                        mod_grp["Attributes"][0],
+                    )
+                }
+
+        if line.ndim != 2 or line.shape[1] < 2 or len(line) < 2:
+            raise ValueError(f"Modification '{name}' has invalid polyline data")
+        if profile.ndim != 2 or profile.shape[1] != 2 or len(profile) < 2:
+            raise ValueError(f"Modification '{name}' has invalid profile data")
+
+        attrs = {
+            "width": RasTerrainModWriter._float_attr(attr_row, "Top Width", "Width"),
+            "left_slope": RasTerrainModWriter._float_attr(
+                attr_row, "Left Slope", "LeftSlope"
+            ),
+            "right_slope": RasTerrainModWriter._float_attr(
+                attr_row, "Right Slope", "RightSlope"
+            ),
+            "max_extent": RasTerrainModWriter._float_attr(
+                attr_row, "Max Reach", "Max Extent"
+            ),
+            "modification_type": RasTerrainModWriter._modification_type_value(
+                RasTerrainModWriter._attr_value(
+                    attr_row, "Elevation Type", "ElevationType", default=-1
+                )
+            ),
+        }
+
+        missing = [
+            key for key, value in attrs.items()
+            if isinstance(value, float) and not np.isfinite(value)
+        ]
+        if missing:
+            raise ValueError(
+                f"Modification '{name}' is missing required attributes: "
+                f"{', '.join(missing)}"
+            )
+        if int(attrs["modification_type"]) < 0:
+            raise ValueError(f"Modification '{name}' has unknown merge mode")
+
+        return line[:, :2], profile, attrs
+
+    @staticmethod
+    def _points_to_xy(
+        points: Union[np.ndarray, Sequence[Sequence[float]], pd.DataFrame],
+        x_col: str,
+        y_col: str,
+    ) -> np.ndarray:
+        if isinstance(points, pd.DataFrame):
+            if x_col not in points.columns or y_col not in points.columns:
+                raise ValueError(
+                    f"points DataFrame must include '{x_col}' and '{y_col}' columns"
+                )
+            xy = points[[x_col, y_col]].to_numpy(dtype=np.float64)
+        else:
+            xy = np.asarray(points, dtype=np.float64)
+
+        if xy.ndim != 2 or xy.shape[1] < 2:
+            raise ValueError("points must be an Nx2 coordinate array")
+        if len(xy) == 0:
+            raise ValueError("points must contain at least one row")
+        if not np.all(np.isfinite(xy[:, :2])):
+            raise ValueError("points must contain finite XY coordinates")
+        return xy[:, :2]
+
+    @staticmethod
+    def _optional_elevations(values, expected_len: int) -> Optional[np.ndarray]:
+        if values is None:
+            return None
+        elevations = np.asarray(values, dtype=np.float64)
+        if elevations.ndim != 1 or len(elevations) != expected_len:
+            raise ValueError(
+                "existing_elevations must be a 1D array matching the point count"
+            )
+        if not np.all(np.isfinite(elevations)):
+            raise ValueError("existing_elevations must contain only finite values")
+        return elevations
+
+    @staticmethod
+    def _project_points_to_polyline(
+        points: np.ndarray,
+        line: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Project points to the closest segment of a polyline."""
+        starts = line[:-1]
+        ends = line[1:]
+        vectors = ends - starts
+        lengths = np.linalg.norm(vectors, axis=1)
+        if np.any(lengths <= 0):
+            raise ValueError("Modification polyline contains a zero-length segment")
+
+        cumulative = np.zeros(len(line), dtype=np.float64)
+        cumulative[1:] = np.cumsum(lengths)
+
+        best_dist2 = np.full(len(points), np.inf, dtype=np.float64)
+        best_station = np.full(len(points), np.nan, dtype=np.float64)
+        best_offset = np.full(len(points), np.nan, dtype=np.float64)
+
+        for seg_idx, (start, vector, length) in enumerate(zip(starts, vectors, lengths)):
+            rel = points - start
+            t = np.clip((rel @ vector) / (length * length), 0.0, 1.0)
+            closest = start + t[:, None] * vector
+            delta = points - closest
+            dist2 = np.einsum("ij,ij->i", delta, delta)
+            improve = dist2 < best_dist2
+            if not improve.any():
+                continue
+
+            cross = vector[0] * (points[:, 1] - start[1]) - vector[1] * (
+                points[:, 0] - start[0]
+            )
+            signed_distance = np.sign(cross) * np.sqrt(dist2)
+            best_dist2[improve] = dist2[improve]
+            best_station[improve] = cumulative[seg_idx] + t[improve] * length
+            best_offset[improve] = signed_distance[improve]
+
+        return best_station, best_offset
+
+    @staticmethod
+    def _ground_line_surface_from_offsets(
+        station: np.ndarray,
+        offset: np.ndarray,
+        profile: np.ndarray,
+        width: float,
+        left_slope: float,
+        right_slope: float,
+        max_extent: float,
+    ) -> np.ndarray:
+        """Compute the proposed ground-line surface at projected station/offsets."""
+        half_width = width / 2.0
+        distance = np.abs(offset)
+        crest = np.interp(station, profile[:, 0], profile[:, 1])
+        slopes = np.where(offset >= 0.0, left_slope, right_slope).astype(np.float64)
+
+        surface = np.full(len(station), np.nan, dtype=np.float64)
+        in_extent = distance <= max_extent
+        on_crest = distance <= half_width
+        surface[in_extent & on_crest] = crest[in_extent & on_crest]
+
+        on_slope = in_extent & ~on_crest & (slopes > 0.0)
+        lateral = distance[on_slope] - half_width
+        surface[on_slope] = crest[on_slope] - lateral / slopes[on_slope]
+
+        return surface
+
+    @staticmethod
+    def _apply_modification_mode(
+        existing: Optional[np.ndarray],
+        surface: np.ndarray,
+        modification_type: int,
+    ) -> np.ndarray:
+        """Apply the HEC-RAS merge mode to existing elevations."""
+        if existing is None:
+            return surface.copy()
+
+        modified = existing.copy()
+        valid = np.isfinite(surface)
+        if modification_type == MODIFICATION_SET_VALUE:
+            modified[valid] = surface[valid]
+        elif modification_type == MODIFICATION_TAKE_HIGHER:
+            modified[valid] = np.maximum(existing[valid], surface[valid])
+        elif modification_type == MODIFICATION_TAKE_LOWER:
+            modified[valid] = np.minimum(existing[valid], surface[valid])
+        elif modification_type == MODIFICATION_ADD_VALUE:
+            modified[valid] = existing[valid] + surface[valid]
+        else:
+            raise ValueError(f"Unsupported terrain modification type: {modification_type}")
+        return modified
+
+    @staticmethod
+    def _xy_along_polyline_from_stations(
+        x_coords: Sequence[float],
+        y_coords: Sequence[float],
+        stations: np.ndarray,
+    ) -> np.ndarray:
+        """Interpolate XY coordinates along a profile polyline by station."""
+        if len(x_coords) != len(y_coords):
+            raise ValueError("x_coords and y_coords must have the same length")
+        line = np.column_stack(
+            [
+                np.asarray(x_coords, dtype=np.float64),
+                np.asarray(y_coords, dtype=np.float64),
+            ]
+        )
+        if len(line) < 2:
+            raise ValueError("x_coords and y_coords must define at least two points")
+        if not np.all(np.isfinite(line)):
+            raise ValueError("x_coords and y_coords must contain finite values")
+        if not np.all(np.isfinite(stations)):
+            raise ValueError("profile stations must contain finite values")
+
+        line_stations = RasTerrainModWriter._station_values(line)
+        if line_stations[-1] <= 0:
+            raise ValueError("x_coords and y_coords must define a non-zero-length line")
+        if stations.min(initial=0.0) < line_stations[0] or stations.max(initial=0.0) > line_stations[-1]:
+            raise ValueError("profile stations fall outside the profile polyline length")
+
+        return np.column_stack(
+            [
+                np.interp(stations, line_stations, line[:, 0]),
+                np.interp(stations, line_stations, line[:, 1]),
+            ]
+        )
 
     @staticmethod
     def _decode_hdf_scalar(value):
