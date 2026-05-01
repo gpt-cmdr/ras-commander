@@ -11,7 +11,11 @@ List of Functions:
 - get_station_elevation() - Read station/elevation pairs for a cross section
 - set_station_elevation() - Write station/elevation with automatic bank interpolation
 - get_bank_stations() - Read left and right bank station locations
+- set_bank_stations() - Write left and right bank station locations
 - get_expansion_contraction() - Read expansion and contraction coefficients
+- set_expansion_contraction() - Write expansion and contraction coefficients
+- interpolate_station_elevation() - Interpolate between two station/elevation profiles
+- interpolate_cross_section() - Read two cross sections and interpolate a reviewable profile
 - get_mannings_n() - Read Manning's roughness values with LOB/Channel/ROB classification
 - get_ineffective_flow() - Read ineffective flow area triplets (left_sta, right_sta, elevation)
 - set_ineffective_flow() - Write corrected ineffective flow area data
@@ -267,15 +271,27 @@ class GeomCrossSection:
             Modified DataFrame with banks interpolated and inserted
         """
         result_df = sta_elev_df.copy()
+        result_df['Station'] = pd.to_numeric(result_df['Station'], errors='raise')
+        result_df['Elevation'] = pd.to_numeric(result_df['Elevation'], errors='raise')
+        result_df = result_df.sort_values('Station').reset_index(drop=True)
+
+        if result_df['Station'].duplicated().any():
+            raise ValueError("Station values must be unique")
 
         for bank_sta, label in [(bank_left, "left"), (bank_right, "right")]:
             if bank_sta is None:
                 continue
 
+            bank_sta = float(bank_sta)
             stations = result_df['Station'].values
+            min_station = float(stations[0])
+            max_station = float(stations[-1])
 
-            if bank_sta in stations:
-                continue
+            if bank_sta < min_station - tolerance or bank_sta > max_station + tolerance:
+                raise ValueError(
+                    f"{label.title()} bank station ({bank_sta}) must be within "
+                    f"station/elevation range {min_station:g} to {max_station:g}"
+                )
 
             # Check for near-match within tolerance
             diffs = np.abs(stations - bank_sta)
@@ -304,6 +320,148 @@ class GeomCrossSection:
                 )
 
         return result_df
+
+    @staticmethod
+    def _format_numeric(value: float) -> str:
+        """Format a geometry-line scalar compactly without losing useful precision."""
+        value = float(value)
+        if value.is_integer():
+            return str(int(value))
+        return f"{value:g}"
+
+    @staticmethod
+    def _format_numeric_like(value: float, original: str, min_decimals: int = 0) -> str:
+        """Format a scalar using the decimal precision of an existing value string."""
+        original = original.strip()
+        if '.' in original:
+            decimals = max(len(original.split('.', 1)[1]), int(min_decimals))
+            return f"{float(value):.{decimals}f}"
+        return GeomCrossSection._format_numeric(value)
+
+    @staticmethod
+    def _decimal_places_for_value(value: float) -> int:
+        """Return decimal places needed by the compact formatter for a scalar."""
+        text = GeomCrossSection._format_numeric(value)
+        if 'e' in text.lower():
+            text = f"{float(value):.12f}".rstrip('0').rstrip('.')
+        if '.' not in text:
+            return 0
+        return len(text.split('.', 1)[1].rstrip('0'))
+
+    @staticmethod
+    def _find_keyword_index(lines: List[str], start_idx: int, keyword: str) -> Optional[int]:
+        """Find a keyword line inside one cross-section block."""
+        section_end = GeomCrossSection._find_xs_section_end(lines, start_idx)
+        for idx in range(start_idx, section_end):
+            if lines[idx].startswith(keyword):
+                return idx
+        return None
+
+    @staticmethod
+    def _insert_xs_keyword_line(lines: List[str],
+                                xs_idx: int,
+                                new_line: str,
+                                prefer_after: Optional[List[str]] = None,
+                                prefer_before: Optional[List[str]] = None) -> int:
+        """
+        Insert a cross-section keyword line without splitting fixed-width data blocks.
+
+        The caller can prefer inserting after simple one-line keywords or before
+        count/data keywords. If no anchor is found, the line is appended to the
+        end of the cross-section block.
+        """
+        section_end = GeomCrossSection._find_xs_section_end(lines, xs_idx)
+
+        if prefer_after:
+            for keyword in prefer_after:
+                for idx in range(xs_idx, section_end):
+                    if lines[idx].startswith(keyword):
+                        lines.insert(idx + 1, new_line)
+                        return idx + 1
+
+        if prefer_before:
+            for keyword in prefer_before:
+                for idx in range(xs_idx, section_end):
+                    if lines[idx].startswith(keyword):
+                        lines.insert(idx, new_line)
+                        return idx
+
+        lines.insert(section_end, new_line)
+        return section_end
+
+    @staticmethod
+    def _bank_station_line(bank_left: float,
+                           bank_right: float,
+                           existing_line: Optional[str] = None) -> str:
+        """Build a Bank Sta= line, preserving existing precision when available."""
+        if existing_line:
+            existing = GeomParser.extract_keyword_value(existing_line, "Bank Sta")
+            existing_vals = [v.strip() for v in existing.split(',')]
+            if len(existing_vals) >= 2:
+                left = GeomCrossSection._format_numeric_like(bank_left, existing_vals[0])
+                right = GeomCrossSection._format_numeric_like(bank_right, existing_vals[1])
+                return f"Bank Sta={left},{right}\n"
+
+        return (
+            f"Bank Sta={GeomCrossSection._format_numeric(bank_left)},"
+            f"{GeomCrossSection._format_numeric(bank_right)}\n"
+        )
+
+    @staticmethod
+    def _exp_cntr_line(expansion: float,
+                       contraction: float,
+                       existing_line: Optional[str] = None) -> str:
+        """Build an Exp/Cntr= line, preserving existing precision when available."""
+        if existing_line:
+            existing = GeomParser.extract_keyword_value(existing_line, "Exp/Cntr")
+            existing_vals = [v.strip() for v in existing.split(',')]
+            if len(existing_vals) >= 2:
+                exp = GeomCrossSection._format_numeric_like(
+                    expansion,
+                    existing_vals[0],
+                    min_decimals=GeomCrossSection._decimal_places_for_value(expansion)
+                )
+                cntr = GeomCrossSection._format_numeric_like(
+                    contraction,
+                    existing_vals[1],
+                    min_decimals=GeomCrossSection._decimal_places_for_value(contraction)
+                )
+                return f"Exp/Cntr={exp},{cntr}\n"
+
+        return (
+            f"Exp/Cntr={GeomCrossSection._format_numeric(expansion)},"
+            f"{GeomCrossSection._format_numeric(contraction)}\n"
+        )
+
+    @staticmethod
+    def _prepare_station_elevation_df(sta_elev_df: pd.DataFrame,
+                                      label: str = "sta_elev_df") -> pd.DataFrame:
+        """Validate and normalize station/elevation input for interpolation."""
+        if not isinstance(sta_elev_df, pd.DataFrame):
+            raise ValueError(f"{label} must be a pandas DataFrame")
+        if 'Station' not in sta_elev_df.columns or 'Elevation' not in sta_elev_df.columns:
+            raise ValueError(f"{label} must have 'Station' and 'Elevation' columns")
+        if len(sta_elev_df) < 2:
+            raise ValueError(f"{label} must contain at least two points")
+
+        df = sta_elev_df[['Station', 'Elevation']].copy()
+        df['Station'] = pd.to_numeric(df['Station'], errors='raise')
+        df['Elevation'] = pd.to_numeric(df['Elevation'], errors='raise')
+        df = df.sort_values('Station').reset_index(drop=True)
+
+        if df['Station'].duplicated().any():
+            raise ValueError(f"{label} contains duplicate Station values")
+        if float(df['Station'].iloc[0]) == float(df['Station'].iloc[-1]):
+            raise ValueError(f"{label} station range must be greater than zero")
+
+        return df
+
+    @staticmethod
+    def _station_fractions(stations: np.ndarray) -> np.ndarray:
+        """Map station values to normalized lateral fractions from 0 to 1."""
+        station_min = float(stations[0])
+        station_max = float(stations[-1])
+        return (stations - station_min) / (station_max - station_min)
 
     # ========== PUBLIC API METHODS ==========
 
@@ -549,7 +707,8 @@ class GeomCrossSection:
                              rs: str,
                              sta_elev_df: pd.DataFrame,
                              bank_left: Optional[float] = None,
-                             bank_right: Optional[float] = None):
+                             bank_right: Optional[float] = None,
+                             create_backup: bool = True) -> Optional[Path]:
         """
         Write station/elevation pairs to a cross section with automatic bank interpolation.
 
@@ -561,7 +720,7 @@ class GeomCrossSection:
         - This method automatically interpolates elevations at bank locations
         - Existing points within 0.005 units of a bank station are snapped to
           the exact bank value rather than inserting a near-duplicate point
-        - Maximum 450 points per cross section (HEC-RAS hard limit)
+        - Maximum 500 points per cross section (HEC-RAS hard limit)
 
         Parameters:
             geom_file (Union[str, Path]): Path to geometry file
@@ -572,10 +731,14 @@ class GeomCrossSection:
             bank_left (Optional[float]): Left bank station. If provided, updates bank in file.
                                          If None, reads existing banks and interpolates them.
             bank_right (Optional[float]): Right bank station. If provided, updates bank in file.
+            create_backup (bool): Whether to create a .bak backup before modification (default True).
+
+        Returns:
+            Optional[Path]: Backup path if create_backup=True, otherwise None.
 
         Raises:
-            FileNotFoundError: If geometry file doesn't exist
-            ValueError: If cross section not found, DataFrame invalid, or >450 points
+            FileNotFoundError: If geometry file does not exist
+            ValueError: If cross section not found, DataFrame invalid, or >500 points
             IOError: If file write fails
 
         Example:
@@ -603,22 +766,21 @@ class GeomCrossSection:
         if len(sta_elev_df) == 0:
             raise ValueError("DataFrame cannot be empty")
 
-        # Validate banks if provided
-        if bank_left is not None and bank_right is not None:
-            if bank_left >= bank_right:
-                raise ValueError(f"Left bank ({bank_left}) must be < right bank ({bank_right})")
-
         # Validate initial point count (before interpolation)
         if len(sta_elev_df) > GeomCrossSection.MAX_XS_POINTS:
             raise ValueError(
-                f"Cross section has {len(sta_elev_df)} points, exceeds HEC-RAS limit of {GeomCrossSection.MAX_XS_POINTS} points.\n"
+                f"Cross section has {len(sta_elev_df)} points, exceeds HEC-RAS "
+                f"limit of {GeomCrossSection.MAX_XS_POINTS} points.\n"
                 f"Reduce point count by decimating or simplifying the cross section geometry."
             )
 
+        backup_path = None
+
         try:
             # Create backup
-            backup_path = GeomParser.create_backup(geom_file)
-            logger.info(f"Created backup: {backup_path}")
+            if create_backup:
+                backup_path = GeomParser.create_backup(geom_file)
+                logger.info(f"Created backup: {backup_path}")
 
             with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
@@ -644,6 +806,20 @@ class GeomCrossSection:
 
             final_bank_left = bank_left if bank_left is not None else existing_bank_left
             final_bank_right = bank_right if bank_right is not None else existing_bank_right
+
+            if (bank_left is not None or bank_right is not None) and (
+                final_bank_left is None or final_bank_right is None
+            ):
+                raise ValueError(
+                    "Both bank_left and bank_right are required when no existing "
+                    "Bank Sta= line supplies the missing value"
+                )
+
+            if final_bank_left is not None and final_bank_right is not None:
+                if final_bank_left >= final_bank_right:
+                    raise ValueError(
+                        f"Left bank ({final_bank_left}) must be < right bank ({final_bank_right})"
+                    )
 
             # Interpolate at bank stations (HEC-RAS requirement)
             sta_elev_with_banks = GeomCrossSection._interpolate_at_banks(
@@ -679,7 +855,9 @@ class GeomCrossSection:
                     old_total_values = GeomParser.interpret_count("#Sta/Elev", old_count)
 
                     # Calculate old data line count
-                    old_data_lines = (old_total_values + GeomCrossSection.VALUES_PER_LINE - 1) // GeomCrossSection.VALUES_PER_LINE
+                    old_data_lines = (
+                        old_total_values + GeomCrossSection.VALUES_PER_LINE - 1
+                    ) // GeomCrossSection.VALUES_PER_LINE
 
                     # Prepare new data (using bank-interpolated DataFrame)
                     new_count = len(sta_elev_with_banks)
@@ -698,64 +876,42 @@ class GeomCrossSection:
                         precision=2
                     )
 
-                    # Update count line
-                    modified_lines[j] = f"#Sta/Elev= {new_count}\n"
+                    # Replace count and data lines as one block so longer
+                    # rewrites do not overwrite following geometry keywords.
+                    data_start = j + 1
+                    data_end = data_start + old_data_lines
+                    modified_lines = (
+                        modified_lines[:j]
+                        + [f"#Sta/Elev= {new_count}\n"]
+                        + new_data_lines
+                        + modified_lines[data_end:]
+                    )
 
-                    # Replace data lines
-                    # Remove old data lines
-                    for k in range(old_data_lines):
-                        if j + 1 + k < len(modified_lines):
-                            modified_lines[j + 1 + k] = None  # Mark for deletion
-
-                    # Insert new data lines
-                    for k, data_line in enumerate(new_data_lines):
-                        if j + 1 + k < len(modified_lines):
-                            modified_lines[j + 1 + k] = data_line
-                        else:
-                            # Append if needed
-                            modified_lines.append(data_line)
-
-                    # Clean up None entries
-                    modified_lines = [line for line in modified_lines if line is not None]
-
-                    # Update Bank Sta= line if new banks provided
-                    if bank_left is not None and bank_right is not None:
+                    # Update or insert Bank Sta= line when caller supplied bank values
+                    if bank_left is not None or bank_right is not None:
                         # Find Bank Sta= line in the modified lines
                         bank_sta_updated = False
                         for k in range(i, GeomCrossSection._find_xs_section_end(modified_lines, i)):
                             if modified_lines[k].startswith("Bank Sta="):
-                                # Preserve original precision from Bank Sta= line
-                                # Read existing values to match their format
-                                existing = GeomParser.extract_keyword_value(
-                                    modified_lines[k], "Bank Sta"
+                                modified_lines[k] = GeomCrossSection._bank_station_line(
+                                    final_bank_left, final_bank_right, modified_lines[k]
                                 )
-                                existing_vals = [v.strip() for v in existing.split(',')]
-
-                                # Format each bank station to match original precision
-                                def _format_bank(val, orig_str):
-                                    """Format bank station preserving original decimal precision."""
-                                    if '.' in orig_str:
-                                        decimals = len(orig_str.split('.')[1])
-                                        return f"{val:.{decimals}f}"
-                                    elif val == int(val):
-                                        return str(int(val))
-                                    else:
-                                        return f"{val:g}"
-
-                                if len(existing_vals) >= 2:
-                                    lb_fmt = _format_bank(bank_left, existing_vals[0])
-                                    rb_fmt = _format_bank(bank_right, existing_vals[1])
-                                else:
-                                    lb_fmt = f"{bank_left:g}"
-                                    rb_fmt = f"{bank_right:g}"
-
-                                modified_lines[k] = f"Bank Sta={lb_fmt},{rb_fmt}\n"
                                 bank_sta_updated = True
-                                logger.debug(f"Updated Bank Sta= line: {lb_fmt},{rb_fmt}")
+                                logger.debug(
+                                    f"Updated Bank Sta= line: {final_bank_left:g},{final_bank_right:g}"
+                                )
                                 break
 
                         if not bank_sta_updated:
-                            logger.warning(f"Bank Sta= line not found for XS {rs}, banks not updated in file")
+                            GeomCrossSection._insert_xs_keyword_line(
+                                modified_lines,
+                                i,
+                                GeomCrossSection._bank_station_line(final_bank_left, final_bank_right),
+                                prefer_before=["#Sta/Elev=", "#Mann="]
+                            )
+                            logger.debug(
+                                f"Inserted Bank Sta= line: {final_bank_left:g},{final_bank_right:g}"
+                            )
 
                     # Write modified file
                     with open(geom_file, 'w', encoding='utf-8') as f:
@@ -769,7 +925,7 @@ class GeomCrossSection:
                     if bank_left is not None and bank_right is not None:
                         logger.info(f"Updated bank stations: {bank_left:g}, {bank_right:g}")
 
-                    return
+                    return backup_path
 
             raise ValueError(
                 f"#Sta/Elev data not found for {river}/{reach}/RS {rs}"
@@ -787,6 +943,59 @@ class GeomCrossSection:
                 import shutil
                 shutil.copy2(backup_path, geom_file)
             raise IOError(f"Failed to write station/elevation: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def set_bank_stations(geom_file: Union[str, Path],
+                          river: str,
+                          reach: str,
+                          rs: str,
+                          bank_left: float,
+                          bank_right: float,
+                          create_backup: bool = True) -> Optional[Path]:
+        """
+        Set left and right bank stations for a cross section.
+
+        Updates or inserts the ``Bank Sta=`` line and rewrites the
+        ``#Sta/Elev`` block so both bank stations are exact station/elevation
+        points, as required by HEC-RAS. Missing bank points are linearly
+        interpolated from the existing station/elevation profile.
+
+        Parameters:
+            geom_file: Path to HEC-RAS geometry file
+            river: River name
+            reach: Reach name
+            rs: River station
+            bank_left: Left bank station
+            bank_right: Right bank station
+            create_backup: Whether to create a .bak backup before modification (default True)
+
+        Returns:
+            Optional[Path]: Backup path if create_backup=True, otherwise None.
+
+        Raises:
+            FileNotFoundError: If geometry file does not exist
+            ValueError: If cross section not found, bank stations are invalid,
+                        or bank interpolation would exceed the point limit
+            IOError: If file write fails
+        """
+        if bank_left >= bank_right:
+            raise ValueError(f"Left bank ({bank_left}) must be < right bank ({bank_right})")
+
+        sta_elev_df = GeomCrossSection.get_station_elevation(
+            geom_file, river, reach, rs
+        )
+
+        return GeomCrossSection.set_station_elevation(
+            geom_file,
+            river,
+            reach,
+            rs,
+            sta_elev_df,
+            bank_left=bank_left,
+            bank_right=bank_right,
+            create_backup=create_backup
+        )
 
     @staticmethod
     @log_call
@@ -920,6 +1129,335 @@ class GeomCrossSection:
         except Exception as e:
             logger.error(f"Error reading expansion/contraction: {str(e)}")
             raise IOError(f"Failed to read expansion/contraction: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def set_expansion_contraction(geom_file: Union[str, Path],
+                                  river: str,
+                                  reach: str,
+                                  rs: str,
+                                  expansion: float,
+                                  contraction: float,
+                                  create_backup: bool = True) -> Optional[Path]:
+        """
+        Set expansion and contraction coefficients for a cross section.
+
+        Updates an existing ``Exp/Cntr=`` line or inserts one into the target
+        cross-section block. Creates a ``.bak`` backup before modifying by
+        default.
+
+        Parameters:
+            geom_file: Path to HEC-RAS geometry file
+            river: River name
+            reach: Reach name
+            rs: River station
+            expansion: Expansion coefficient
+            contraction: Contraction coefficient
+            create_backup: Whether to create a .bak backup before modification (default True)
+
+        Returns:
+            Optional[Path]: Backup path if create_backup=True, otherwise None.
+
+        Raises:
+            FileNotFoundError: If geometry file does not exist
+            ValueError: If cross section not found or coefficients are invalid
+            IOError: If file write fails
+        """
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        expansion = float(expansion)
+        contraction = float(contraction)
+        if expansion < 0 or contraction < 0:
+            raise ValueError("Expansion and contraction coefficients must be non-negative")
+
+        try:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+
+            xs_idx = GeomCrossSection._find_cross_section(lines, river, reach, rs)
+            if xs_idx is None:
+                raise ValueError(f"Cross section not found: {river}/{reach}/RS {rs}")
+
+            modified_lines = lines.copy()
+            exp_idx = GeomCrossSection._find_keyword_index(modified_lines, xs_idx, "Exp/Cntr=")
+
+            if exp_idx is not None:
+                modified_lines[exp_idx] = GeomCrossSection._exp_cntr_line(
+                    expansion, contraction, modified_lines[exp_idx]
+                )
+            else:
+                GeomCrossSection._insert_xs_keyword_line(
+                    modified_lines,
+                    xs_idx,
+                    GeomCrossSection._exp_cntr_line(expansion, contraction),
+                    prefer_after=["Bank Sta="],
+                    prefer_before=["#Sta/Elev=", "#Mann="]
+                )
+
+            backup_path = GeomParser.safe_write_geometry(
+                geom_file,
+                modified_lines,
+                create_backup=create_backup
+            )
+
+            logger.info(
+                f"Updated expansion/contraction for {river}/{reach}/RS {rs}: "
+                f"{expansion:g}, {contraction:g}"
+            )
+            return backup_path
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error writing expansion/contraction: {str(e)}")
+            raise IOError(f"Failed to write expansion/contraction: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def interpolate_station_elevation(upstream_df: pd.DataFrame,
+                                      downstream_df: pd.DataFrame,
+                                      ratio: float = 0.5,
+                                      bank_left: Optional[float] = None,
+                                      bank_right: Optional[float] = None,
+                                      max_points: int = MAX_XS_POINTS) -> pd.DataFrame:
+        """
+        Interpolate a reviewable station/elevation profile between two cross sections.
+
+        The interpolation uses normalized lateral position so source cross
+        sections can have different station ranges and point spacing. The
+        returned DataFrame includes source station/elevation columns for review
+        and enforces the HEC-RAS cross-section point limit.
+
+        Parameters:
+            upstream_df: Upstream station/elevation DataFrame
+            downstream_df: Downstream station/elevation DataFrame
+            ratio: Fraction from upstream to downstream (0=upstream, 1=downstream)
+            bank_left: Optional left bank station to insert exactly
+            bank_right: Optional right bank station to insert exactly
+            max_points: Maximum output points, default HEC-RAS limit of 500
+
+        Returns:
+            pd.DataFrame: Reviewable interpolated profile with columns:
+                Station, Elevation, UpstreamStation, UpstreamElevation,
+                DownstreamStation, DownstreamElevation, InterpolationRatio,
+                SourceFraction, Source, IsBankPoint
+        """
+        ratio = float(ratio)
+        if ratio < 0.0 or ratio > 1.0:
+            raise ValueError("ratio must be between 0 and 1")
+        if bank_left is not None and bank_right is not None and bank_left >= bank_right:
+            raise ValueError(f"Left bank ({bank_left}) must be < right bank ({bank_right})")
+
+        max_points = int(max_points)
+        if max_points < 2:
+            raise ValueError("max_points must be at least 2")
+        if max_points > GeomCrossSection.MAX_XS_POINTS:
+            raise ValueError(
+                f"max_points ({max_points}) exceeds HEC-RAS limit of "
+                f"{GeomCrossSection.MAX_XS_POINTS}"
+            )
+
+        upstream = GeomCrossSection._prepare_station_elevation_df(upstream_df, "upstream_df")
+        downstream = GeomCrossSection._prepare_station_elevation_df(downstream_df, "downstream_df")
+
+        bank_values = []
+        for bank in (bank_left, bank_right):
+            if bank is not None and not any(
+                np.isclose(float(bank), existing, atol=0.005)
+                for existing in bank_values
+            ):
+                bank_values.append(float(bank))
+
+        base_limit = max_points - len(bank_values)
+        if base_limit < 2:
+            raise ValueError("max_points is too small for endpoint and bank-point requirements")
+
+        up_station = upstream['Station'].to_numpy(dtype=float)
+        up_elevation = upstream['Elevation'].to_numpy(dtype=float)
+        dn_station = downstream['Station'].to_numpy(dtype=float)
+        dn_elevation = downstream['Elevation'].to_numpy(dtype=float)
+        up_fraction = GeomCrossSection._station_fractions(up_station)
+        dn_fraction = GeomCrossSection._station_fractions(dn_station)
+
+        raw_fractions = np.unique(
+            np.concatenate((
+                np.array([0.0, 1.0]),
+                np.round(up_fraction, 12),
+                np.round(dn_fraction, 12)
+            ))
+        )
+        raw_fractions.sort()
+
+        if len(raw_fractions) > base_limit:
+            source_fractions = np.linspace(0.0, 1.0, base_limit)
+            source_labels = ["resampled"] * len(source_fractions)
+        else:
+            source_fractions = raw_fractions
+            up_set = {round(float(v), 12) for v in up_fraction}
+            dn_set = {round(float(v), 12) for v in dn_fraction}
+            source_labels = []
+            for value in source_fractions:
+                rounded = round(float(value), 12)
+                in_upstream = rounded in up_set
+                in_downstream = rounded in dn_set
+                if in_upstream and in_downstream:
+                    source_labels.append("both")
+                elif in_upstream:
+                    source_labels.append("upstream")
+                elif in_downstream:
+                    source_labels.append("downstream")
+                else:
+                    source_labels.append("resampled")
+
+        interp_up_station = np.interp(source_fractions, up_fraction, up_station)
+        interp_up_elevation = np.interp(source_fractions, up_fraction, up_elevation)
+        interp_dn_station = np.interp(source_fractions, dn_fraction, dn_station)
+        interp_dn_elevation = np.interp(source_fractions, dn_fraction, dn_elevation)
+
+        stations = interp_up_station + ratio * (interp_dn_station - interp_up_station)
+        elevations = interp_up_elevation + ratio * (interp_dn_elevation - interp_up_elevation)
+
+        result = pd.DataFrame({
+            'Station': stations,
+            'Elevation': elevations,
+            'UpstreamStation': interp_up_station,
+            'UpstreamElevation': interp_up_elevation,
+            'DownstreamStation': interp_dn_station,
+            'DownstreamElevation': interp_dn_elevation,
+            'InterpolationRatio': ratio,
+            'SourceFraction': source_fractions,
+            'Source': source_labels,
+            'IsBankPoint': False
+        })
+
+        result = result.sort_values('Station').reset_index(drop=True)
+
+        for bank_sta, label in ((bank_left, "left"), (bank_right, "right")):
+            if bank_sta is None:
+                continue
+
+            bank_sta = float(bank_sta)
+            stations_array = result['Station'].to_numpy(dtype=float)
+            min_station = float(stations_array[0])
+            max_station = float(stations_array[-1])
+            if bank_sta < min_station - 0.005 or bank_sta > max_station + 0.005:
+                raise ValueError(
+                    f"{label.title()} bank station ({bank_sta}) must be within "
+                    f"interpolated station range {min_station:g} to {max_station:g}"
+                )
+
+            diffs = np.abs(stations_array - bank_sta)
+            nearest_idx = int(np.argmin(diffs))
+            if diffs[nearest_idx] <= 0.005:
+                result.loc[nearest_idx, 'Station'] = bank_sta
+                result.loc[nearest_idx, 'IsBankPoint'] = True
+                continue
+
+            numeric_columns = [
+                'Elevation',
+                'UpstreamStation',
+                'UpstreamElevation',
+                'DownstreamStation',
+                'DownstreamElevation',
+                'SourceFraction'
+            ]
+            new_row = {
+                'Station': bank_sta,
+                'InterpolationRatio': ratio,
+                'Source': 'bank',
+                'IsBankPoint': True
+            }
+            for column in numeric_columns:
+                new_row[column] = float(np.interp(
+                    bank_sta,
+                    result['Station'].to_numpy(dtype=float),
+                    result[column].to_numpy(dtype=float)
+                ))
+
+            result = pd.concat([result, pd.DataFrame([new_row])], ignore_index=True)
+            result = result.sort_values('Station').reset_index(drop=True)
+
+        if len(result) > max_points:
+            raise ValueError(
+                f"Interpolated cross section has {len(result)} points, exceeds "
+                f"HEC-RAS limit of {max_points}"
+            )
+
+        return result
+
+    @staticmethod
+    @log_call
+    def interpolate_cross_section(geom_file: Union[str, Path],
+                                  river: str,
+                                  reach: str,
+                                  upstream_rs: str,
+                                  downstream_rs: str,
+                                  ratio: float = 0.5,
+                                  bank_left: Optional[float] = None,
+                                  bank_right: Optional[float] = None,
+                                  max_points: int = MAX_XS_POINTS,
+                                  interpolated_rs: Optional[str] = None) -> pd.DataFrame:
+        """
+        Read two cross sections from a geometry file and interpolate a reviewable profile.
+
+        If bank stations are not supplied, this helper linearly interpolates
+        them from the source cross sections when both source sections define
+        bank stations.
+        """
+        ratio = float(ratio)
+
+        upstream = GeomCrossSection.get_station_elevation(
+            geom_file, river, reach, upstream_rs
+        )
+        downstream = GeomCrossSection.get_station_elevation(
+            geom_file, river, reach, downstream_rs
+        )
+
+        final_bank_left = bank_left
+        final_bank_right = bank_right
+        upstream_banks = GeomCrossSection.get_bank_stations(
+            geom_file, river, reach, upstream_rs
+        )
+        downstream_banks = GeomCrossSection.get_bank_stations(
+            geom_file, river, reach, downstream_rs
+        )
+
+        if upstream_banks and downstream_banks:
+            if final_bank_left is None:
+                final_bank_left = (
+                    upstream_banks[0] + ratio * (downstream_banks[0] - upstream_banks[0])
+                )
+            if final_bank_right is None:
+                final_bank_right = (
+                    upstream_banks[1] + ratio * (downstream_banks[1] - upstream_banks[1])
+                )
+
+        result = GeomCrossSection.interpolate_station_elevation(
+            upstream,
+            downstream,
+            ratio=ratio,
+            bank_left=final_bank_left,
+            bank_right=final_bank_right,
+            max_points=max_points
+        )
+
+        result['River'] = river
+        result['Reach'] = reach
+        result['UpstreamRS'] = upstream_rs
+        result['DownstreamRS'] = downstream_rs
+        if interpolated_rs is not None:
+            result['InterpolatedRS'] = interpolated_rs
+        if final_bank_left is not None:
+            result['BankLeft'] = final_bank_left
+        if final_bank_right is not None:
+            result['BankRight'] = final_bank_right
+
+        return result
 
     @staticmethod
     @log_call
