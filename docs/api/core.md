@@ -285,6 +285,8 @@ The `get_comp_msgs()` method attempts to read computation messages from multiple
         - clone_plan
         - get_plan_path
         - get_results_path
+        - get_restart_output_settings
+        - set_restart_output_settings
         - set_geom
         - set_flow
         - set_num_cores
@@ -315,6 +317,7 @@ The `get_comp_msgs()` method attempts to read computation messages from multiple
       members:
         - clone_unsteady
         - get_unsteady_path
+        - get_restart_settings
         - set_flow_title
         - set_restart_settings
         - get_boundary_tables
