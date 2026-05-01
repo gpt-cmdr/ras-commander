@@ -1,6 +1,8 @@
 # Example Notebooks
 
+
 The repository currently ships **92 canonical notebooks** under `examples/`.
+ under `examples/`.
 This overview tracks the live notebook inventory in git. Executed copies such as
 `*_executed.ipynb` and local `_test_*.py` helpers are intentionally excluded.
 
@@ -25,7 +27,7 @@ jupyter notebook examples/
 |--------|---------------|
 | `100s` | project initialization, execution control, parameter sweeps, RASMapper review, results summaries |
 | `200s` | plaintext geometry parsing, structures, calibration setup, mesh generation |
-| `300s` | unsteady files, DSS workflows, HMS-to-RAS matching, boundary visualization |
+| `300s` | unsteady files, DSS workflows, HMS-to-RAS matching, reference-line generation, boundary visualization |
 | `400s` | 1D and 2D HDF extraction, reference-line queries, breach and channel-capacity analysis |
 | `500s` | remote, Linux, and ModPuls execution workflows |
 | `600s` | floodplain mapping, fluvial-pluvial analysis, map-layer validation |
@@ -92,6 +94,7 @@ These are the notebooks most directly tied to the April 2026 docs-drift sweep.
 `311_validating_dss_paths.ipynb`,
 `312_boundary_df_qmult_dss_paths.ipynb`,
 `313_hms_to_ras_boundary_matching.ipynb`,
+`314_reference_line_generation.ipynb`,
 `320_1d_boundary_condition_visualization.ipynb`
 
 ### 400s
