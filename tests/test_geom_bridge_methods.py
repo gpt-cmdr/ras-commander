@@ -69,6 +69,8 @@ def test_get_hydraulic_methods_parses_bridge_records(tmp_path):
         "yarnell": False,
         "wspro": False,
     }
+    assert methods["deck"]["weir_coefficient"] == pytest.approx(2.6)
+    assert methods["coefficients"]["weir_coefficient"] == pytest.approx(2.6)
     assert methods["coefficients"]["submerged_inlet_cd"] == pytest.approx(0.34)
     assert methods["coefficients"]["submerged_inlet_outlet_cd"] == pytest.approx(0.7)
     assert methods["wspro"]["abutment_type"] == pytest.approx(1.0)
@@ -82,6 +84,9 @@ def test_set_hydraulic_methods_exact_before_after_file_change(tmp_path):
     expected_after = before_text.replace(
         "BR Coef=-1 , 0 , 0 ,, 0 ,,0.34,0.7,0,,1,",
         "BR Coef=-1 , 0 , -1 ,1.05, 0 ,,0.36,0.72,-1,1.33,2,",
+    ).replace(
+        "30,40,2.6,0, 0, 0, , , 0.95, 0, 0,0,,",
+        "30,40,3.1,0, 0, 0, , , 0.95, 0, 0,0,,",
     )
 
     result = GeomBridge.set_hydraulic_methods(
@@ -95,13 +100,17 @@ def test_set_hydraulic_methods_exact_before_after_file_change(tmp_path):
         momentum_cd=1.33,
         pressure_flow_submerged_inlet_cd=0.36,
         pressure_flow_submerged_inlet_outlet_cd=0.72,
+        weir_coefficient=3.1,
     )
 
     assert geom_file.read_text(encoding="utf-8") == expected_after
     assert result["br_coef_before"] == "BR Coef=-1 , 0 , 0 ,, 0 ,,0.34,0.7,0,,1,"
     assert result["br_coef_after"] == "BR Coef=-1 , 0 , -1 ,1.05, 0 ,,0.36,0.72,-1,1.33,2,"
+    assert result["deck_line_before"] == "30,40,2.6,0, 0, 0, , , 0.95, 0, 0,0,,"
+    assert result["deck_line_after"] == "30,40,3.1,0, 0, 0, , , 0.95, 0, 0,0,,"
     assert result["low_flow_method"] == "yarnell"
     assert result["high_flow_method"] == "energy"
+    assert result["after"]["coefficients"]["weir_coefficient"] == pytest.approx(3.1)
 
     backup_path = Path(result["backup_path"])
     assert backup_path.exists()
@@ -128,6 +137,34 @@ def test_set_hydraulic_methods_rejects_unsupported_combinations(tmp_path):
             "5.4",
             low_flow_method="yarnell",
             use_yarnell=False,
+            yarnell_k=1.05,
+        )
+
+    with pytest.raises(ValueError, match="low_flow_method 'momentum' requires momentum_cd"):
+        GeomBridge.set_hydraulic_methods(
+            geom_file,
+            "Beaver Creek",
+            "Kentwood",
+            "5.4",
+            low_flow_method="momentum",
+        )
+
+    with pytest.raises(ValueError, match="low_flow_method 'yarnell' requires yarnell_k"):
+        GeomBridge.set_hydraulic_methods(
+            geom_file,
+            "Beaver Creek",
+            "Kentwood",
+            "5.4",
+            low_flow_method="yarnell",
+        )
+
+    with pytest.raises(ValueError, match="weir_coefficient must be positive"):
+        GeomBridge.set_hydraulic_methods(
+            geom_file,
+            "Beaver Creek",
+            "Kentwood",
+            "5.4",
+            weir_coefficient=0,
         )
 
 
@@ -153,5 +190,6 @@ def test_get_hydraulic_methods_reads_real_bridge_example():
     assert methods["raw"]["br_coef_line"].startswith("BR Coef=")
     assert methods["low_flow_method"] in {"energy", "momentum", "yarnell", "wspro"}
     assert methods["high_flow_method"] in {"energy", "pressure_weir"}
+    assert methods["coefficients"]["weir_coefficient"] == pytest.approx(2.6)
     assert methods["coefficients"]["submerged_inlet_cd"] == pytest.approx(0.34)
     assert methods["coefficients"]["submerged_inlet_outlet_cd"] == pytest.approx(0.7)
