@@ -2191,6 +2191,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="HDF and Time-Series Data Are Not Always DataFrames">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#profile-line-flow-outputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile-Line Flow Outputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3063,6 +3080,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="HDF and Time-Series Data Are Not Always DataFrames">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#profile-line-flow-outputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile-Line Flow Outputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3540,8 +3574,91 @@ not. Prefer the dedicated HDF readers and xarray-backed APIs for:</p>
 <li>1D cross-section time series</li>
 <li>2D mesh cell or face time series</li>
 <li>reference lines and reference points</li>
+<li>profile-line flow and peak-Q extraction</li>
 <li>large raster or mesh-derived result families</li>
 </ul>
+<h3 id="profile-line-flow-outputs">Profile-Line Flow Outputs<a class="headerlink" href="#profile-line-flow-outputs" title="Permanent link">&para;</a></h3>
+<p><code>HdfResultsMesh.get_profile_line_flow_timeseries()</code> returns a profile/reference
+line flow time series. The API uses native HDF reference-line internal faces
+when present, then falls back to RAS Mapper profile-line geometry.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>time</code></td>
+<td>Output timestamp</td>
+</tr>
+<tr>
+<td><code>flow</code></td>
+<td>Sum of selected face flows</td>
+</tr>
+<tr>
+<td><code>line_name</code></td>
+<td>Requested profile/reference line</td>
+</tr>
+<tr>
+<td><code>mesh_name</code></td>
+<td>2D flow area used for extraction</td>
+</tr>
+<tr>
+<td><code>direction</code></td>
+<td><code>absolute</code> or <code>signed</code> aggregation mode</td>
+</tr>
+<tr>
+<td><code>face_count</code></td>
+<td>Count of selected mesh faces</td>
+</tr>
+<tr>
+<td><code>selection_source</code></td>
+<td><code>reference_line_internal_faces</code> or <code>profile_lines_geometry</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>HdfResultsMesh.get_profile_line_peak_flow()</code> returns one peak-Q row derived
+from the time series.</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>line_name</code></td>
+<td>Requested profile/reference line</td>
+</tr>
+<tr>
+<td><code>mesh_name</code></td>
+<td>2D flow area used for extraction</td>
+</tr>
+<tr>
+<td><code>peak_time</code></td>
+<td>Timestamp of peak flow magnitude</td>
+</tr>
+<tr>
+<td><code>peak_flow</code></td>
+<td>Peak flow value; signed mode preserves native sign</td>
+</tr>
+<tr>
+<td><code>direction</code></td>
+<td><code>absolute</code> or <code>signed</code> aggregation mode</td>
+</tr>
+<tr>
+<td><code>face_count</code></td>
+<td>Count of selected mesh faces</td>
+</tr>
+<tr>
+<td><code>selection_source</code></td>
+<td><code>reference_line_internal_faces</code> or <code>profile_lines_geometry</code></td>
+</tr>
+</tbody>
+</table>
 <p>See:</p>
 <ul>
 <li><a href="../../user-guide/hdf-data-extraction/">HDF Data Extraction</a></li>
@@ -3580,7 +3697,7 @@ not. Prefer the dedicated HDF readers and xarray-backed APIs for:</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 1, 2026 02:23:52 UTC">May 1, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 1, 2026 17:01:53 UTC">May 1, 2026</span>
   </span>
 
     
