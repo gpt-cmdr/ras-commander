@@ -85,11 +85,9 @@ RasEbfeModels.available_models()
 
 !!! note "Current import paths"
     Use `from ras_commander.sources import RasEbfeModels` for model-source
-    organizers. The `ras_commander.sources` package intentionally exports model
-    sources only. Coastal forecast helpers now live under
-    `ras_commander.boundaries.CoastalBoundary`; the old
-    `ras_commander.sources.federal.CoastalBoundary` path remains a deprecated
-    compatibility shim for notebooks that have not been cleaned up yet.
+    organizers. The `ras_commander.sources` package exports model sources only.
+    Coastal forecast helpers live under
+    `ras_commander.boundaries.CoastalBoundary`.
 
 Current built-in organizers include:
 

@@ -10,7 +10,7 @@ operational surge and tide forecasts for the Atlantic coast.
 Data source: https://nomads.ncep.noaa.gov/pub/data/nccf/com/stofs/prod/
 
 Example:
-    >>> from ras_commander.sources.federal import CoastalBoundary
+    >>> from ras_commander.boundaries import CoastalBoundary
     >>>
     >>> # Download latest STOFS-3D forecast
     >>> files = CoastalBoundary.download_stofs3d("stofs_data")
@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 from datetime import datetime, timedelta, timezone
 
-from ...LoggingConfig import get_logger, log_call
+from ..LoggingConfig import get_logger, log_call
 
 logger = get_logger(__name__)
 
@@ -73,7 +73,7 @@ class CoastalBoundary:
     All methods are static - do not instantiate this class.
 
     Example:
-        >>> from ras_commander.sources.federal import CoastalBoundary
+        >>> from ras_commander.boundaries import CoastalBoundary
         >>> wse = CoastalBoundary.extract_wse_at_point(
         ...     "stofs_data", lat=29.35, lon=-94.77
         ... )
