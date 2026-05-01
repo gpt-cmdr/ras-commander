@@ -74,6 +74,7 @@ class RasTerrain:
     instantiation, following the ras-commander coding pattern.
 
     Primary Methods:
+        compute_bank_lines(): Generate bank lines from XS bank stations
         create_terrain_hdf(): Create HEC-RAS terrain HDF from input rasters
         vrt_to_tiff(): Convert VRT mosaic to single optimized TIFF
 
@@ -99,6 +100,354 @@ class RasTerrain:
         Path("C:/Program Files (x86)/HEC/HEC-RAS"),
         Path("C:/Program Files/HEC/HEC-RAS"),
     ]
+
+    @staticmethod
+    def _empty_bank_lines_gdf(crs=None):
+        """Return an empty bank-lines GeoDataFrame with the public schema."""
+        try:
+            import geopandas as gpd
+        except ImportError:
+            raise ImportError(
+                "geopandas is required for compute_bank_lines(). "
+                "Install with: pip install geopandas"
+            )
+
+        columns = [
+            "river",
+            "reach",
+            "bank_side",
+            "xs_count",
+            "rs_values",
+            "geometry",
+            "length",
+        ]
+        gdf = gpd.GeoDataFrame(columns=columns, geometry="geometry")
+        if crs is not None:
+            gdf = gdf.set_crs(crs, allow_override=True)
+        return gdf
+
+    @staticmethod
+    def _bank_point_from_stationed_xy(xs_coords, bank_station):
+        """
+        Interpolate a bank point from GeomCrossSection.get_xs_coords() output.
+        """
+        try:
+            import pandas as pd
+            from shapely.geometry import Point
+        except ImportError:
+            raise ImportError(
+                "pandas and shapely are required for compute_bank_lines(). "
+                "Install with: pip install pandas shapely"
+            )
+
+        if bank_station is None or pd.isna(bank_station):
+            return None
+
+        group = xs_coords.sort_values("station")
+        if group.empty:
+            return None
+
+        station = float(bank_station)
+        stations = group["station"].astype(float)
+        min_station = float(stations.min())
+        max_station = float(stations.max())
+        tolerance = 1e-8
+
+        if station < min_station - tolerance or station > max_station + tolerance:
+            logger.warning(
+                "Bank station %.3f is outside station range %.3f-%.3f; skipping",
+                station,
+                min_station,
+                max_station,
+            )
+            return None
+
+        exact = group[(stations - station).abs() <= tolerance]
+        if not exact.empty:
+            row = exact.iloc[0]
+            return Point(float(row["x"]), float(row["y"]))
+
+        before = group[stations < station]
+        after = group[stations > station]
+        if before.empty or after.empty:
+            return None
+
+        left = before.iloc[-1]
+        right = after.iloc[0]
+        left_station = float(left["station"])
+        right_station = float(right["station"])
+        if right_station == left_station:
+            return Point(float(left["x"]), float(left["y"]))
+
+        fraction = (station - left_station) / (right_station - left_station)
+        x = float(left["x"]) + fraction * (float(right["x"]) - float(left["x"]))
+        y = float(left["y"]) + fraction * (float(right["y"]) - float(left["y"]))
+        return Point(x, y)
+
+    @staticmethod
+    def _bank_point_from_xs_geometry(xs_geometry, station_elevation, bank_station):
+        """
+        Interpolate a bank point along an HDF cross-section LineString.
+        """
+        try:
+            import numpy as np
+            import pandas as pd
+        except ImportError:
+            raise ImportError(
+                "numpy and pandas are required for compute_bank_lines(). "
+                "Install with: pip install numpy pandas"
+            )
+
+        if bank_station is None or pd.isna(bank_station):
+            return None
+        if xs_geometry is None or xs_geometry.is_empty:
+            return None
+
+        stations = np.asarray(station_elevation, dtype=float)
+        if stations.ndim != 2 or stations.shape[1] < 1 or stations.shape[0] == 0:
+            return None
+
+        station_values = stations[:, 0]
+        min_station = float(np.nanmin(station_values))
+        max_station = float(np.nanmax(station_values))
+        station = float(bank_station)
+        tolerance = 1e-8
+
+        if station < min_station - tolerance or station > max_station + tolerance:
+            logger.warning(
+                "Bank station %.3f is outside station range %.3f-%.3f; skipping",
+                station,
+                min_station,
+                max_station,
+            )
+            return None
+
+        if max_station == min_station:
+            return xs_geometry.interpolate(0.5, normalized=True)
+
+        fraction = (station - min_station) / (max_station - min_station)
+        fraction = min(1.0, max(0.0, fraction))
+        return xs_geometry.interpolate(fraction, normalized=True)
+
+    @staticmethod
+    def _build_bank_lines_gdf(bank_points, crs=None):
+        """Build the public bank-line GeoDataFrame from ordered bank points."""
+        try:
+            import geopandas as gpd
+            from shapely.geometry import LineString
+        except ImportError:
+            raise ImportError(
+                "geopandas and shapely are required for compute_bank_lines(). "
+                "Install with: pip install geopandas shapely"
+            )
+
+        records = []
+        groups = {}
+        for point_record in bank_points:
+            key = (
+                point_record["river"],
+                point_record["reach"],
+                point_record["bank_side"],
+            )
+            groups.setdefault(key, []).append(point_record)
+
+        for (river, reach, bank_side), points in groups.items():
+            if len(points) < 2:
+                logger.warning(
+                    "Skipping %s/%s %s bank line with fewer than two points",
+                    river,
+                    reach,
+                    bank_side,
+                )
+                continue
+
+            line = LineString([
+                point_record["geometry"].coords[0]
+                for point_record in points
+            ])
+            records.append({
+                "river": river,
+                "reach": reach,
+                "bank_side": bank_side,
+                "xs_count": len(points),
+                "rs_values": [point_record["rs"] for point_record in points],
+                "geometry": line,
+                "length": line.length,
+            })
+
+        if not records:
+            return RasTerrain._empty_bank_lines_gdf(crs=crs)
+
+        return gpd.GeoDataFrame(records, geometry="geometry", crs=crs)
+
+    @staticmethod
+    def _compute_bank_lines_from_text(geom_path: Path, crs=None, ras_object=None):
+        """Compute bank lines from a plain-text HEC-RAS geometry file."""
+        from ..geom.GeomCrossSection import GeomCrossSection
+
+        xs_df = GeomCrossSection.get_cross_sections(geom_path)
+        if xs_df.empty:
+            return RasTerrain._empty_bank_lines_gdf(crs=crs)
+
+        if "Type" in xs_df.columns:
+            xs_df = xs_df[xs_df["Type"] == 1].reset_index(drop=True)
+        if xs_df.empty:
+            return RasTerrain._empty_bank_lines_gdf(crs=crs)
+
+        try:
+            xs_coords = GeomCrossSection.get_xs_coords(
+                geom_path,
+                ras_object=ras_object,
+            )
+        except ValueError:
+            return RasTerrain._empty_bank_lines_gdf(crs=crs)
+
+        if xs_coords.empty:
+            return RasTerrain._empty_bank_lines_gdf(crs=crs)
+
+        coord_groups = {
+            (river, reach, rs): group
+            for (river, reach, rs), group in xs_coords.groupby(["river", "reach", "RS"])
+        }
+
+        bank_points = []
+        for _, row in xs_df.iterrows():
+            river = row["River"]
+            reach = row["Reach"]
+            rs = str(row["RS"])
+            coords = coord_groups.get((river, reach, rs))
+            if coords is None or coords.empty:
+                logger.warning(
+                    "No XS coordinates found for %s/%s/RS %s",
+                    river,
+                    reach,
+                    rs,
+                )
+                continue
+
+            banks = GeomCrossSection.get_bank_stations(geom_path, river, reach, rs)
+            if banks is None:
+                logger.warning(
+                    "No bank stations found for %s/%s/RS %s",
+                    river,
+                    reach,
+                    rs,
+                )
+                continue
+
+            left_bank, right_bank = banks
+            for bank_side, bank_station in (
+                ("Left", left_bank),
+                ("Right", right_bank),
+            ):
+                point = RasTerrain._bank_point_from_stationed_xy(coords, bank_station)
+                if point is None:
+                    continue
+                bank_points.append({
+                    "river": river,
+                    "reach": reach,
+                    "bank_side": bank_side,
+                    "rs": rs,
+                    "geometry": point,
+                })
+
+        return RasTerrain._build_bank_lines_gdf(bank_points, crs=crs)
+
+    @staticmethod
+    def _compute_bank_lines_from_hdf(geom_path: Path, crs=None, ras_object=None):
+        """Compute bank lines from a compiled HEC-RAS geometry HDF file."""
+        from ..hdf.HdfXsec import HdfXsec
+
+        xs_gdf = HdfXsec.get_cross_sections(
+            str(geom_path),
+            ras_object=ras_object,
+        )
+        result_crs = crs if crs is not None else getattr(xs_gdf, "crs", None)
+        if xs_gdf.empty:
+            return RasTerrain._empty_bank_lines_gdf(crs=result_crs)
+
+        bank_points = []
+        for _, row in xs_gdf.iterrows():
+            river = row.get("River", "")
+            reach = row.get("Reach", "")
+            rs = str(row.get("RS", ""))
+            station_elevation = row.get("station_elevation")
+
+            for bank_side, column in (
+                ("Left", "Left Bank"),
+                ("Right", "Right Bank"),
+            ):
+                point = RasTerrain._bank_point_from_xs_geometry(
+                    row.geometry,
+                    station_elevation,
+                    row.get(column),
+                )
+                if point is None:
+                    continue
+                bank_points.append({
+                    "river": river,
+                    "reach": reach,
+                    "bank_side": bank_side,
+                    "rs": rs,
+                    "geometry": point,
+                })
+
+        return RasTerrain._build_bank_lines_gdf(bank_points, crs=result_crs)
+
+    @staticmethod
+    @log_call
+    def compute_bank_lines(
+        geom_path: Union[str, Path],
+        *,
+        crs=None,
+        ras_object=None,
+    ):
+        """
+        Generate bank-line geometry from cross-section bank stations.
+
+        This is a non-mutating API equivalent to RASMapper's
+        Bank Lines layer -> Compute Bank Lines from XS Bank Stations workflow.
+        It reads existing cross-section bank station metadata and returns
+        reviewable line geometry without modifying `.rasmap`, text geometry,
+        or compiled geometry HDF bank-line layers.
+
+        Parameters:
+            geom_path (Union[str, Path]): Path to a plain-text `.g##` geometry
+                file or compiled `.g##.hdf` geometry HDF file.
+            crs: Optional CRS to assign to the returned GeoDataFrame. If omitted
+                and an HDF input exposes a CRS, that CRS is preserved.
+            ras_object: Optional RasPrj instance for multi-project workflows.
+
+        Returns:
+            geopandas.GeoDataFrame: Bank lines with columns:
+                - river (str): River name
+                - reach (str): Reach name
+                - bank_side (str): "Left" or "Right"
+                - xs_count (int): Number of cross sections used
+                - rs_values (list[str]): River stations used in line order
+                - geometry (LineString): Generated bank line
+                - length (float): Line length in project coordinate units
+
+        Raises:
+            FileNotFoundError: If geom_path does not exist.
+            ImportError: If geopandas, shapely, pandas, or numpy are unavailable.
+        """
+        geom_path = Path(geom_path)
+        if not geom_path.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_path}")
+
+        if geom_path.suffix.lower() == ".hdf":
+            return RasTerrain._compute_bank_lines_from_hdf(
+                geom_path,
+                crs=crs,
+                ras_object=ras_object,
+            )
+
+        return RasTerrain._compute_bank_lines_from_text(
+            geom_path,
+            crs=crs,
+            ras_object=ras_object,
+        )
 
     @staticmethod
     @log_call
