@@ -50,7 +50,19 @@ from .RasBreach import RasBreach
 from .RasHydroCompare import RasHydroCompare
 from .RasModPuls import RasModPuls
 from .RasPermutation import RasPermutation, RangeSpec
-from .RasCalibrate import CalibrationPoint, RasCalibrate
+from .RasCalibrate import (
+    CalibrationPoint,
+    RasCalibrate,
+    compute_objective,
+    extract_modeled,
+    extract_steady_profile_modeled,
+    extract_steady_profile_observations,
+    make_composite_apply_fn,
+    make_infiltration_apply_fn,
+    make_mannings_apply_fn,
+    make_steady_profile_calibration_points,
+    make_xsec_mannings_apply_fn,
+)
 
 # Validation framework - core validation infrastructure
 from .RasValidation import ValidationSeverity, ValidationResult, ValidationReport
@@ -162,6 +174,11 @@ __all__ = [
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasModPuls', 'RasPermutation', 'RangeSpec',
     'CalibrationPoint', 'RasCalibrate',
+    'compute_objective', 'extract_modeled',
+    'extract_steady_profile_modeled', 'extract_steady_profile_observations',
+    'make_composite_apply_fn', 'make_infiltration_apply_fn',
+    'make_mannings_apply_fn', 'make_steady_profile_calibration_points',
+    'make_xsec_mannings_apply_fn',
 
     # Geometry handling (new in v0.86.0)
     'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
