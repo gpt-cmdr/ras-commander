@@ -70,8 +70,58 @@ Unsupported combinations, such as disabling the selected low-flow method or sele
 
 ### Culvert Methods
 
-- `get_culverts(geom)` - List culverts
-- `get_all_culverts(geom, river, reach, station)` - Get all culverts at location
+- `GeomCulvert.get_culverts(geom, river, reach, station)` - Get all culverts at a bridge/culvert structure
+- `GeomCulvert.get_all(geom, river=None, reach=None)` - Get all culverts in a geometry file
+- `GeomCulvert.set_culverts(geom, river, reach, station, culverts)` - Replace culvert records at an existing bridge/culvert structure
+- `GeomCulvert.set_culvert(geom, river, reach, station, culvert=None, culvert_index=None, culvert_name=None, **kwargs)` - Update one culvert by index/name or append a new one
+- `GeomCulvert.get_adjacent_cross_sections(geom, river, reach, station)` - Find the nearest upstream and downstream cross sections around a structure
+- `GeomCulvert.set_adjacent_ineffective_flow(geom, river, reach, station, upstream_ineffective=None, downstream_ineffective=None, ...)` - Coordinate ineffective-flow writes on adjacent cross sections
+
+`set_culverts()` accepts a DataFrame, list of dictionaries, or one dictionary. Shape can be supplied as `Shape` code or `ShapeName`. Required fields are `Shape`/`ShapeName`, `Span`, `Length`, `ManningsN`, `EntranceLoss`, `ExitLoss`, `InletType`, `OutletType`, `UpstreamInvert`, and `DownstreamInvert`; non-circular shapes also require `Rise`. Single-barrel records require `UpstreamStation` and `DownstreamStation`. Multi-barrel records require `NumBarrels` and matching `BarrelStations` pairs.
+
+```python
+from ras_commander.geom.GeomCulvert import GeomCulvert
+
+GeomCulvert.set_culverts(
+    "model.g01",
+    "River",
+    "Reach",
+    "1000",
+    [
+        {
+            "ShapeName": "Circular",
+            "Span": 6,
+            "Length": 50,
+            "ManningsN": 0.013,
+            "EntranceLoss": 0.5,
+            "ExitLoss": 1.0,
+            "InletType": 1,
+            "OutletType": 1,
+            "UpstreamInvert": 25.1,
+            "UpstreamStation": 996,
+            "DownstreamInvert": 25.0,
+            "DownstreamStation": 996,
+            "CulvertName": "Culvert #1",
+        },
+        {
+            "ShapeName": "Box",
+            "Span": 4,
+            "Rise": 4,
+            "Length": 55,
+            "ManningsN": 0.015,
+            "EntranceLoss": 0.3,
+            "ExitLoss": 1.0,
+            "InletType": 8,
+            "OutletType": 1,
+            "UpstreamInvert": 27.5,
+            "DownstreamInvert": 27.0,
+            "NumBarrels": 2,
+            "BarrelStations": [(980, 980), (1020, 1020)],
+            "CulvertName": "Twin Box",
+        },
+    ],
+)
+```
 
 ## RasBreach
 
