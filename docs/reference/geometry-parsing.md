@@ -220,8 +220,18 @@ END DECK/ROADWAY DATA
 
 ```
 Type RM Length L Ch R = 2 ,{rs},{lob_len},{ch_len},{rob_len}
-Culvert={name}
-Culvert Shape={shape_code}
+Bridge Culvert-{flags}
+Culvert={shape},{span},{rise},{length},{mannings_n},{entrance_loss},{exit_loss},{inlet_type},{outlet_type},{upstream_invert},{upstream_station},{downstream_invert},{downstream_station},{name},{culvert_code},{chart_number}
+Culvert Bottom n={bottom_n}
+Culvert Bottom Depth={bottom_depth}
+```
+
+Multi-barrel culverts use a related header with station pairs on fixed-width continuation lines:
+
+```
+Multiple Barrel Culv={shape},{span},{rise},{length},{mannings_n},{entrance_loss},{exit_loss},{inlet_type},{outlet_type},{upstream_invert},{downstream_invert},{num_barrels},{name},{culvert_code},{chart_number}
+{upstream_station_1}{downstream_station_1}{upstream_station_2}{downstream_station_2}...
+Culvert Bottom n={bottom_n}
 ```
 
 **Shape Codes:**
@@ -237,6 +247,12 @@ Culvert Shape={shape_code}
 | 7 | Low Profile Arch |
 | 8 | High Profile Arch |
 | 9 | Con Span |
+
+`GeomCulvert.get_culverts()` returns both record types with a common schema. Single-barrel `Culvert=` records populate `UpstreamStation`, `DownstreamStation`, and `BarrelStations=[(upstream, downstream)]`. `Multiple Barrel Culv=` records populate `NumBarrels`, `BarrelStations`, `UpstreamStations`, and `DownstreamStations`; `UpstreamStation` and `DownstreamStation` are only set when there is exactly one barrel pair.
+
+Use `GeomCulvert.set_culverts()` to replace the culvert records at an existing bridge/culvert structure. Use `GeomCulvert.set_culvert()` to update one record by `culvert_index` or `culvert_name`, or append a new record when no selector is supplied. Both methods validate shape codes/names, required fields, and multi-barrel station-pair counts before modifying the file. A `.bak` backup is created before writing.
+
+Adjacent ineffective-flow coordination is handled through `GeomCulvert.get_adjacent_cross_sections()` and `GeomCulvert.set_adjacent_ineffective_flow()`, which delegate the actual cross-section writes to `GeomCrossSection.set_ineffective_flow()`.
 
 ## Parsing Rules
 
