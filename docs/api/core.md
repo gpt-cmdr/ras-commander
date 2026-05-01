@@ -429,6 +429,9 @@ indices = RasUtils.perform_kdtree_query(
       members:
         - parse_rasmap
         - list_terrain_layers
+        - list_terrain_display_settings
+        - get_terrain_display_settings
+        - set_terrain_display_settings
         - list_land_classification_layers
         - list_landcover_layers
         - list_soils_layers
@@ -451,12 +454,31 @@ The layer-list methods read the `.rasmap` file and return one dataframe row per 
 from ras_commander import RasMap
 
 terrain_layers = RasMap.list_terrain_layers(project_path)
+terrain_display = RasMap.list_terrain_display_settings(project_path)
 landcover_layers = RasMap.list_landcover_layers(project_path)
 soils_layers = RasMap.list_soils_layers(project_path)
 infiltration_layers = RasMap.list_infiltration_layers(project_path)
 ```
 
 `list_land_classification_layers()` is the broad parser for RASMapper `Type="LandCoverLayer"` entries. The land-cover, soils, and infiltration methods are filtered convenience wrappers around that catalog.
+
+#### Terrain Display Settings
+
+`RasMap.list_terrain_display_settings()`, `RasMap.get_terrain_display_settings()`, and `RasMap.set_terrain_display_settings()` expose RASMapper terrain display controls persisted in `.rasmap` XML. They cover hillshade display and Z factor, contour display and interval, and terrain stitch-edge plot options such as `Plot stitch TIN edges`.
+
+```python
+RasMap.set_terrain_display_settings(
+    project_path,
+    terrain_name="TerrainWithChannel",
+    hillshade_enabled=True,
+    hillshade_z_factor=2.0,
+    contour_enabled=True,
+    contour_interval=5.0,
+    stitch_edges_enabled=True,
+)
+```
+
+CLB-272 owns these terrain display toggles. CLB-253 remains the separate terrain-modification gap for generating terrain changes such as channel modifications and interpolated cross-section terrain products.
 
 #### Geometry HDF Layer Associations
 

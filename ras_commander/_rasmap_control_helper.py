@@ -84,6 +84,27 @@ RESULT_LAYER_COLUMNS = [
     "profile_index",
 ]
 
+TERRAIN_DISPLAY_COLUMNS = [
+    "layer_id",
+    "name",
+    "filename",
+    "resolved_path",
+    "checked",
+    "surface_on",
+    "terrain_index",
+    "hillshade_enabled",
+    "hillshade_z_factor",
+    "contour_enabled",
+    "contour_interval",
+    "stitch_edges_enabled",
+    "stitch_tin_edges_enabled",
+    "level0_stitch_edges_enabled",
+    "level0_stitch_tin_edges_enabled",
+    "remove_stitch_rendering_enabled",
+    "plot_options",
+    "plot_options_off",
+]
+
 GEOMETRY_LAYER_DATASET_ALIASES: dict[str, tuple[str, ...]] = {
     "RASRiver": ("Geometry/River Centerlines/Polyline Points",),
     "RASXS": ("Geometry/Cross Sections/Polyline Points",),
@@ -109,6 +130,14 @@ GEOMETRY_LAYER_DATASET_ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 _GEOMETRY_NUMBER_PATTERN = re.compile(r"\.g(\d+)\.hdf", re.IGNORECASE)
+
+_HILLSHADE_ENABLED_ATTRS = ("On", "Checked", "Enabled", "Visible")
+_HILLSHADE_Z_FACTOR_ATTRS = ("ZFactor", "Z Factor", "Z_Factor")
+_CONTOUR_ENABLED_ATTRS = ("On", "Checked", "Enabled", "Visible")
+_CONTOUR_INTERVAL_ATTRS = ("Interval", "ContourInterval", "Contour Interval")
+_STITCH_EDGES_OPTION = "Plot stitch TIN edges"
+_LEVEL0_STITCH_EDGES_OPTION = "Plot Level0 stitch TIN edges"
+_REMOVE_STITCH_RENDERING_OPTION = "Remove Stitch Rendering"
 
 
 def get_current_view(ras_project_path: Union[str, Path]) -> dict[str, Any]:
@@ -222,6 +251,171 @@ def set_terrain_layer_visibility(
             if surface.attrib.get("On") != target_value:
                 surface.set("On", target_value)
                 modified += 1
+
+    if modified:
+        _write_rasmap_tree(tree, project_paths.rasmap_path)
+    return modified
+
+
+def list_terrain_display_settings(
+    ras_project_path: Union[str, Path],
+    *,
+    terrain_name: Optional[str] = None,
+) -> pd.DataFrame:
+    """List terrain display settings persisted in .rasmap XML."""
+    project_paths = _lch.resolve_project_paths(ras_project_path)
+    if not project_paths.rasmap_path.exists():
+        return pd.DataFrame(columns=TERRAIN_DISPLAY_COLUMNS)
+
+    root = ET.parse(project_paths.rasmap_path).getroot()
+    terrains_elem = root.find("Terrains")
+    if terrains_elem is None:
+        return pd.DataFrame(columns=TERRAIN_DISPLAY_COLUMNS)
+
+    terrain_name_key = terrain_name.casefold() if terrain_name is not None else None
+    records: list[dict[str, Any]] = []
+    for terrain_index, layer in enumerate(terrains_elem.findall("Layer")):
+        if layer.attrib.get("Type") != "TerrainLayer":
+            continue
+        if terrain_name_key is not None:
+            layer_name = layer.attrib.get("Name", "")
+            if layer_name.casefold() != terrain_name_key:
+                continue
+        records.append(_terrain_display_record(project_paths, layer, terrain_index))
+
+    return pd.DataFrame(records, columns=TERRAIN_DISPLAY_COLUMNS)
+
+
+def get_terrain_display_settings(
+    ras_project_path: Union[str, Path],
+    *,
+    terrain_name: Optional[str] = None,
+) -> dict[str, Any]:
+    """Return one terrain display-settings record from .rasmap XML."""
+    settings = list_terrain_display_settings(
+        ras_project_path,
+        terrain_name=terrain_name,
+    )
+    if settings.empty:
+        if terrain_name is None:
+            raise ValueError("No terrain layers were found in the project .rasmap.")
+        raise ValueError(f"Terrain layer '{terrain_name}' was not found in the project .rasmap.")
+    if len(settings) > 1:
+        raise ValueError("Multiple terrain layers were found. Provide terrain_name to select one.")
+    return settings.iloc[0].to_dict()
+
+
+def set_terrain_display_settings(
+    ras_project_path: Union[str, Path],
+    *,
+    terrain_name: Optional[str] = None,
+    hillshade_enabled: Optional[bool] = None,
+    hillshade_z_factor: Optional[float] = None,
+    contour_enabled: Optional[bool] = None,
+    contour_interval: Optional[float] = None,
+    stitch_edges_enabled: Optional[bool] = None,
+    stitch_tin_edges_enabled: Optional[bool] = None,
+    level0_stitch_edges_enabled: Optional[bool] = None,
+    level0_stitch_tin_edges_enabled: Optional[bool] = None,
+    remove_stitch_rendering_enabled: Optional[bool] = None,
+) -> int:
+    """Set terrain display settings persisted in .rasmap XML."""
+    stitch_edges_value = _coalesce_optional_bool(
+        "stitch_edges_enabled",
+        stitch_edges_enabled,
+        "stitch_tin_edges_enabled",
+        stitch_tin_edges_enabled,
+    )
+    level0_stitch_edges_value = _coalesce_optional_bool(
+        "level0_stitch_edges_enabled",
+        level0_stitch_edges_enabled,
+        "level0_stitch_tin_edges_enabled",
+        level0_stitch_tin_edges_enabled,
+    )
+    updates = (
+        hillshade_enabled,
+        hillshade_z_factor,
+        contour_enabled,
+        contour_interval,
+        stitch_edges_value,
+        level0_stitch_edges_value,
+        remove_stitch_rendering_enabled,
+    )
+    if all(value is None for value in updates):
+        raise ValueError("At least one terrain display setting must be provided.")
+
+    project_paths = _lch.resolve_project_paths(ras_project_path)
+    tree, root = _load_existing_rasmap_tree(project_paths.rasmap_path)
+    terrains_elem = root.find("Terrains")
+    if terrains_elem is None:
+        return 0
+
+    terrain_name_key = terrain_name.casefold() if terrain_name is not None else None
+    modified = 0
+    for layer in terrains_elem.findall("Layer"):
+        if layer.attrib.get("Type") != "TerrainLayer":
+            continue
+        if terrain_name_key is not None:
+            layer_name = layer.attrib.get("Name", "")
+            if layer_name.casefold() != terrain_name_key:
+                continue
+
+        symbology: Optional[ET.Element] = None
+        if hillshade_enabled is not None or hillshade_z_factor is not None:
+            symbology = _ensure_child(layer, "Symbology")
+            hillshade = _ensure_child(symbology, "HillShade")
+            if hillshade_enabled is not None:
+                modified += _set_bool_setting(
+                    hillshade,
+                    hillshade_enabled,
+                    _HILLSHADE_ENABLED_ATTRS,
+                    default_attr="On",
+                )
+            if hillshade_z_factor is not None:
+                modified += _set_float_setting(
+                    hillshade,
+                    hillshade_z_factor,
+                    _HILLSHADE_Z_FACTOR_ATTRS,
+                    default_attr="ZFactor",
+                )
+
+        if contour_enabled is not None or contour_interval is not None:
+            if symbology is None:
+                symbology = _ensure_child(layer, "Symbology")
+            contour = _ensure_child(symbology, "Contour")
+            if contour_enabled is not None:
+                modified += _set_bool_setting(
+                    contour,
+                    contour_enabled,
+                    _CONTOUR_ENABLED_ATTRS,
+                    default_attr="On",
+                )
+            if contour_interval is not None:
+                modified += _set_float_setting(
+                    contour,
+                    contour_interval,
+                    _CONTOUR_INTERVAL_ATTRS,
+                    default_attr="Interval",
+                )
+
+        if stitch_edges_value is not None:
+            modified += _set_plot_option(
+                layer,
+                _STITCH_EDGES_OPTION,
+                enabled=stitch_edges_value,
+            )
+        if level0_stitch_edges_value is not None:
+            modified += _set_plot_option(
+                layer,
+                _LEVEL0_STITCH_EDGES_OPTION,
+                enabled=level0_stitch_edges_value,
+            )
+        if remove_stitch_rendering_enabled is not None:
+            modified += _set_plot_option(
+                layer,
+                _REMOVE_STITCH_RENDERING_OPTION,
+                enabled=remove_stitch_rendering_enabled,
+            )
 
     if modified:
         _write_rasmap_tree(tree, project_paths.rasmap_path)
@@ -1639,6 +1833,213 @@ def _load_existing_rasmap_tree(rasmap_path: Path) -> tuple[ET.ElementTree, ET.El
 
 def _write_rasmap_tree(tree: ET.ElementTree, rasmap_path: Path) -> None:
     tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+
+
+def _terrain_display_record(
+    project_paths: Any,
+    terrain_layer: ET.Element,
+    terrain_index: int,
+) -> dict[str, Any]:
+    filename = terrain_layer.attrib.get("Filename")
+    resolved_path = _lch.resolve_rasmap_relative_path(
+        project_paths.project_folder,
+        filename,
+    )
+    surface = terrain_layer.find("Surface")
+    symbology = terrain_layer.find("Symbology")
+    hillshade = symbology.find("HillShade") if symbology is not None else None
+    contour = symbology.find("Contour") if symbology is not None else None
+    plot_options = _plot_option_names(terrain_layer, "PlotOption")
+    plot_options_off = _plot_option_names(terrain_layer, "PlotOptionOff")
+    stitch_edges_enabled = _plot_option_enabled(
+        plot_options,
+        plot_options_off,
+        _STITCH_EDGES_OPTION,
+    )
+    level0_stitch_edges_enabled = _plot_option_enabled(
+        plot_options,
+        plot_options_off,
+        _LEVEL0_STITCH_EDGES_OPTION,
+    )
+
+    return {
+        "layer_id": f"terrain:{terrain_index}",
+        "name": terrain_layer.attrib.get("Name", ""),
+        "filename": filename,
+        "resolved_path": str(resolved_path) if resolved_path is not None else None,
+        "checked": _bool_or_none(terrain_layer.attrib.get("Checked")),
+        "surface_on": (
+            _bool_or_none(surface.attrib.get("On")) if surface is not None else None
+        ),
+        "terrain_index": terrain_index,
+        "hillshade_enabled": _get_bool_setting(hillshade, _HILLSHADE_ENABLED_ATTRS),
+        "hillshade_z_factor": _get_float_setting(
+            hillshade,
+            _HILLSHADE_Z_FACTOR_ATTRS,
+        ),
+        "contour_enabled": _get_bool_setting(contour, _CONTOUR_ENABLED_ATTRS),
+        "contour_interval": _get_float_setting(contour, _CONTOUR_INTERVAL_ATTRS),
+        "stitch_edges_enabled": stitch_edges_enabled,
+        "stitch_tin_edges_enabled": stitch_edges_enabled,
+        "level0_stitch_edges_enabled": level0_stitch_edges_enabled,
+        "level0_stitch_tin_edges_enabled": level0_stitch_edges_enabled,
+        "remove_stitch_rendering_enabled": _plot_option_enabled(
+            plot_options,
+            plot_options_off,
+            _REMOVE_STITCH_RENDERING_OPTION,
+        ),
+        "plot_options": plot_options,
+        "plot_options_off": plot_options_off,
+    }
+
+
+def _ensure_child(parent: ET.Element, tag: str) -> ET.Element:
+    child = parent.find(tag)
+    if child is None:
+        child = ET.SubElement(parent, tag)
+    return child
+
+
+def _setting_attr_name(
+    element: Optional[ET.Element],
+    candidates: Sequence[str],
+) -> Optional[str]:
+    if element is None:
+        return None
+    normalized_candidates = {_normalize_setting_key(candidate) for candidate in candidates}
+    for attr_name in element.attrib:
+        if _normalize_setting_key(attr_name) in normalized_candidates:
+            return attr_name
+    return None
+
+
+def _get_bool_setting(
+    element: Optional[ET.Element],
+    candidates: Sequence[str],
+) -> Optional[bool]:
+    attr_name = _setting_attr_name(element, candidates)
+    if element is None or attr_name is None:
+        return None
+    return _bool_or_none(element.attrib.get(attr_name))
+
+
+def _set_bool_setting(
+    element: ET.Element,
+    value: bool,
+    candidates: Sequence[str],
+    *,
+    default_attr: str,
+) -> int:
+    attr_name = _setting_attr_name(element, candidates) or default_attr
+    target_value = _bool_attr(value)
+    if element.attrib.get(attr_name) == target_value:
+        return 0
+    element.set(attr_name, target_value)
+    return 1
+
+
+def _get_float_setting(
+    element: Optional[ET.Element],
+    candidates: Sequence[str],
+) -> Optional[float]:
+    attr_name = _setting_attr_name(element, candidates)
+    if element is None or attr_name is None:
+        return None
+    return _coerce_float(element.attrib.get(attr_name))
+
+
+def _set_float_setting(
+    element: ET.Element,
+    value: float,
+    candidates: Sequence[str],
+    *,
+    default_attr: str,
+) -> int:
+    attr_name = _setting_attr_name(element, candidates) or default_attr
+    target_value = _format_float(float(value))
+    if element.attrib.get(attr_name) == target_value:
+        return 0
+    element.set(attr_name, target_value)
+    return 1
+
+
+def _normalize_setting_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.casefold())
+
+
+def _plot_option_names(layer: ET.Element, tag: str) -> list[str]:
+    names: list[str] = []
+    for option in layer.findall(tag):
+        name = _plot_option_name(option)
+        if name:
+            names.append(name)
+    return names
+
+
+def _plot_option_name(option: ET.Element) -> str:
+    for attr_name in ("Name", "Option", "Text"):
+        value = option.attrib.get(attr_name)
+        if value:
+            return value.strip()
+    return (option.text or "").strip()
+
+
+def _plot_option_enabled(
+    plot_options: Sequence[str],
+    plot_options_off: Sequence[str],
+    option_name: str,
+) -> Optional[bool]:
+    option_key = option_name.casefold()
+    if any(option.casefold() == option_key for option in plot_options):
+        return True
+    if any(option.casefold() == option_key for option in plot_options_off):
+        return False
+    return None
+
+
+def _set_plot_option(layer: ET.Element, option_name: str, *, enabled: bool) -> int:
+    target_tag = "PlotOption" if enabled else "PlotOptionOff"
+    option_key = option_name.casefold()
+    matches: list[ET.Element] = []
+    for option in list(layer):
+        if option.tag not in {"PlotOption", "PlotOptionOff"}:
+            continue
+        if _plot_option_name(option).casefold() == option_key:
+            matches.append(option)
+
+    if matches:
+        target = matches[0]
+        modified = 0
+        if target.tag != target_tag:
+            target.tag = target_tag
+            modified += 1
+        for duplicate in matches[1:]:
+            layer.remove(duplicate)
+            modified += 1
+        return modified
+
+    option = ET.SubElement(layer, target_tag)
+    option.text = option_name
+    return 1
+
+
+def _coalesce_optional_bool(
+    first_name: str,
+    first_value: Optional[bool],
+    second_name: str,
+    second_value: Optional[bool],
+) -> Optional[bool]:
+    if (
+        first_value is not None
+        and second_value is not None
+        and bool(first_value) != bool(second_value)
+    ):
+        raise ValueError(f"{first_name} and {second_name} disagree.")
+    if first_value is not None:
+        return bool(first_value)
+    if second_value is not None:
+        return bool(second_value)
+    return None
 
 
 def _insert_current_view(root: ET.Element, view: ET.Element) -> None:
