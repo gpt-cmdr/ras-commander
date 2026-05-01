@@ -1511,18 +1511,21 @@ def _classification_sidecar_crs(hdf_path: Union[str, Path]) -> Optional[Any]:
     try:
         from pyproj import CRS
     except ImportError:
-        CRS = None
+        return None
 
     with h5py.File(hdf_path, "r") as hdf_file:
         projection = _read_hdf_string_attr(hdf_file, "Projection")
     if not projection:
         return None
-    if CRS is None:
-        return projection
     try:
         return CRS.from_user_input(projection)
-    except Exception:
-        return projection
+    except Exception as exc:
+        logger.warning(
+            "Could not parse classification sidecar projection from %s: %s",
+            hdf_path,
+            exc,
+        )
+        return None
 
 
 def read_land_classification_polygon_records(

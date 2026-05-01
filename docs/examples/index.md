@@ -1,8 +1,7 @@
 # Example Notebooks
 
 
-The repository currently ships **92 canonical notebooks** under `examples/`.
- under `examples/`.
+The repository currently ships **93 canonical notebooks** under `examples/`.
 This overview tracks the live notebook inventory in git. Executed copies such as
 `*_executed.ipynb` and local `_test_*.py` helpers are intentionally excluded.
 
@@ -47,6 +46,7 @@ These are the notebooks most directly tied to the April 2026 docs-drift sweep.
 | [123_rasmapper_geometry_layer_updates.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/123_rasmapper_geometry_layer_updates.ipynb) | Mutation-backed RASMapper geometry-layer update workflow |
 | [150_results_dataframe.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/150_results_dataframe.ipynb) | Current `results_df` / lightweight HDF summary workflow |
 | [212_landcover_mannings_n_write.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/212_landcover_mannings_n_write.ipynb) | HDF geometry association QA and land-cover update workflow |
+| [213_land_classification_polygon_authoring.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/213_land_classification_polygon_authoring.ipynb) | Executed land-classification polygon authoring workflow with sidecar HDF extraction and roughness map evidence |
 | [611_validating_map_layers.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/611_validating_map_layers.ipynb) | RASMapper layer and HDF asset validation |
 | [920_terrain_creation.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/920_terrain_creation.ipynb) | HEC-RAS terrain tutorial workflow: single-raster terrain, USGS 3DEP terrain, multi-source priority ordering, RASMapper registration, and geometry association |
 | [950_ebfe_spring_creek.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/950_ebfe_spring_creek.ipynb) through [957_ebfe_spring_river_validation.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/957_ebfe_spring_river_validation.ipynb) | Current eBFE delivery-validation notebook set |
@@ -82,6 +82,7 @@ These are the notebooks most directly tied to the April 2026 docs-drift sweep.
 `210_fixit_blocked_obstructions.ipynb`,
 `211_final_mannings_and_infiltration.ipynb`,
 `212_landcover_mannings_n_write.ipynb`,
+`213_land_classification_polygon_authoring.ipynb`,
 `220_calibration_workflow.ipynb`,
 `221_calibration_1d_workflow.ipynb`,
 `222_steady_flow_calibration.ipynb`,
