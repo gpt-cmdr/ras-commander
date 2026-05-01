@@ -219,8 +219,8 @@ The repository should continue to satisfy these rules:
 
 ## Related Files
 
-- [AGENTS.md](../../AGENTS.md)
-- [CLAUDE.md](../../CLAUDE.md)
-- [agent_tasks/2026-04-25_multi_harness_agent_framework_migration_plan.md](../../agent_tasks/2026-04-25_multi_harness_agent_framework_migration_plan.md)
+- [AGENTS.md](https://github.com/gpt-cmdr/ras-commander/blob/main/AGENTS.md)
+- [CLAUDE.md](https://github.com/gpt-cmdr/ras-commander/blob/main/CLAUDE.md)
+- [agent_tasks/2026-04-25_multi_harness_agent_framework_migration_plan.md](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-04-25_multi_harness_agent_framework_migration_plan.md)
 
 

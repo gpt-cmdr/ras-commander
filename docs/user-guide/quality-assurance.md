@@ -335,6 +335,6 @@ For comprehensive documentation of all validation checks and message IDs:
 
 ## See Also
 
-- [Example Notebook: RasCheck Validation](../notebooks/800_quality_assurance_rascheck.md)
+- [Example Notebook: RasCheck Validation](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/800_quality_assurance_rascheck.ipynb)
 - [Steady Flow Analysis](steady-flow-analysis.md)
 - [HDF Data Extraction](hdf-data-extraction.md)

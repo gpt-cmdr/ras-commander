@@ -445,6 +445,12 @@ checks, view metadata, and a findings template. Screenshot capture is optional
 so the same workflow can run headlessly in tests or with standalone RASMapper on
 a Windows review machine.
 
+The current worked examples for this workflow family are
+[122_rasmapper_spatial_review.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/122_rasmapper_spatial_review.ipynb)
+for review-bundle orchestration and
+[123_rasmapper_geometry_layer_updates.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/123_rasmapper_geometry_layer_updates.ipynb)
+for mutation-backed geometry refresh and validation.
+
 By default, review packages and screenshots are written to a project subfolder
 named `RASMapper Screenshots`. Pass `output_dir=` only when a workflow needs a
 different location.
