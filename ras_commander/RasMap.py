@@ -57,6 +57,10 @@ List of Functions in RasMap:
 - get_water_surface_render_mode(): Get the current water surface rendering mode
 - add_terrain_layer(): Add terrain layer to RASMapper configuration
 - list_results_plans(): List all plan result layers in the RASMapper configuration
+- ensure_results_plan_layer(): Register a plan HDF as a RASMapper result layer
+- ensure_2d_encroachment_plan_layers(): Register editable 2D encroachment plan layers
+- list_results_map_layers(): List RASMapper result map layers
+- add_results_map_layer(): Add a RASMapper result map layer
 - list_calculated_layers(): List all calculated layers across all plan results
 - add_calculated_layer(): Add a calculated layer with .rasscript to the RASMapper configuration
 - remove_calculated_layer(): Remove a calculated layer from the RASMapper configuration
@@ -123,6 +127,64 @@ def _sanitize_vbnet_identifier(name: str) -> str:
     if sanitized and sanitized[0].isdigit():
         sanitized = '_' + sanitized
     return sanitized
+
+
+def _resolve_plan_file_for_rasmap(
+    plan_number_or_path: Union[str, int, float, Path],
+    ras_object=None,
+) -> Path:
+    """Resolve a plan number or direct plan path for RASMapper XML helpers."""
+    candidate = Path(str(plan_number_or_path))
+    if candidate.exists() and re.search(r"\.p\d{2,3}$", candidate.name, re.IGNORECASE):
+        return RasUtils.safe_resolve(candidate)
+
+    ras_obj = ras_object or ras
+    ras_obj.check_initialized()
+    plan_path = RasPlan.get_plan_path(plan_number_or_path, ras_object=ras_obj)
+    if plan_path is None or not Path(plan_path).exists():
+        raise FileNotFoundError(f"Plan file not found for plan: {plan_number_or_path}")
+    return RasUtils.safe_resolve(Path(plan_path))
+
+
+def _project_name_from_plan_path(plan_path: Path) -> str:
+    return re.sub(r"\.p\d{2,3}$", "", plan_path.name, flags=re.IGNORECASE)
+
+
+def _read_plan_text_value(plan_path: Path, key: str) -> str:
+    if not plan_path.exists():
+        return ""
+    for line in plan_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        if line.startswith(f"{key}="):
+            return line.split("=", 1)[1].strip()
+    return ""
+
+
+def _plan_display_name_for_rasmap(plan_path: Path) -> str:
+    return (
+        _read_plan_text_value(plan_path, "Short Identifier")
+        or _read_plan_text_value(plan_path, "Plan Title")
+        or plan_path.stem
+    )
+
+
+def _infer_plan_geometry_hdf(plan_path: Path) -> Optional[Path]:
+    geom_file = _read_plan_text_value(plan_path, "Geom File")
+    if not geom_file:
+        return None
+    project_name = _project_name_from_plan_path(plan_path)
+    return plan_path.parent / f"{project_name}.{geom_file}.hdf"
+
+
+def _rasmap_relative_path(project_folder: Path, target_path: Union[str, Path]) -> str:
+    from . import _land_classification_helper as _lch
+
+    return _lch.to_rasmap_relative_path(project_folder, target_path)
+
+
+def _normalize_rasmap_filename(filename: Optional[str]) -> str:
+    if not filename:
+        return ""
+    return filename.replace("/", "\\").lower()
 
 
 # Default diverging color ramp for WSE comparison layers (blue=benefit, white=zero, red=adverse)
@@ -3912,6 +3974,309 @@ class RasMap:
 
     @staticmethod
     @log_call
+    def ensure_results_plan_layer(
+        plan_number_or_path: Union[str, int, float, Path],
+        *,
+        name: Optional[str] = None,
+        checked: bool = True,
+        expanded: bool = True,
+        ras_object=None,
+    ) -> Dict[str, Any]:
+        """
+        Ensure a plan HDF is registered in the RASMapper ``Results`` tree.
+
+        This is useful after cloning and computing a plan programmatically, when
+        command-line execution creates ``<project>.p##.hdf`` but does not add a
+        corresponding ``RASResults`` layer to the project ``.rasmap``.
+        """
+        plan_path = _resolve_plan_file_for_rasmap(
+            plan_number_or_path,
+            ras_object=ras_object,
+        )
+        project_folder = plan_path.parent
+        project_name = _project_name_from_plan_path(plan_path)
+        rasmap_path = project_folder / f"{project_name}.rasmap"
+        hdf_path = Path(str(plan_path) + ".hdf")
+
+        if not hdf_path.exists():
+            raise FileNotFoundError(f"Plan results HDF not found: {hdf_path}")
+
+        if rasmap_path.exists():
+            try:
+                tree = ET.parse(rasmap_path)
+                root = tree.getroot()
+            except ET.ParseError as e:
+                raise ValueError(f"Error parsing .rasmap XML: {e}") from e
+        else:
+            root = ET.Element("RASMapper")
+            tree = ET.ElementTree(root)
+
+        results = root.find("Results")
+        if results is None:
+            results = ET.Element("Results", {"Checked": "True", "Expanded": "True"})
+            root.append(results)
+        else:
+            results.set("Checked", results.get("Checked", "True"))
+            results.set("Expanded", results.get("Expanded", "True"))
+
+        rel_hdf = _rasmap_relative_path(project_folder, hdf_path)
+        rel_hdf_norm = _normalize_rasmap_filename(rel_hdf)
+        layer = None
+        for candidate in results.findall("Layer"):
+            if candidate.get("Type") != "RASResults":
+                continue
+            if _normalize_rasmap_filename(candidate.get("Filename")) == rel_hdf_norm:
+                layer = candidate
+                break
+
+        if layer is None:
+            layer = ET.SubElement(results, "Layer")
+
+        layer_name = name or _plan_display_name_for_rasmap(plan_path)
+        layer.set("Name", layer_name)
+        layer.set("Type", "RASResults")
+        layer.set("Checked", "True" if checked else "False")
+        layer.set("Expanded", "True" if expanded else "False")
+        layer.set("Filename", rel_hdf)
+
+        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        record = {
+            "name": layer_name,
+            "filename": rel_hdf,
+            "checked": checked,
+            "expanded": expanded,
+            "rasmap_path": rasmap_path,
+        }
+        logger.info("Ensured RASResults layer '%s' in %s", layer_name, rasmap_path)
+        return record
+
+    @staticmethod
+    @log_call
+    def ensure_2d_encroachment_plan_layers(
+        plan_number_or_path: Union[str, int, float, Path],
+        *,
+        geom_hdf_path: Optional[Union[str, Path]] = None,
+        checked: bool = True,
+        ras_object=None,
+    ) -> Path:
+        """
+        Register editable 2D encroachment plan layers in the RASMapper ``Plans`` tree.
+
+        Adds or updates the plan-level ``RASEncroachments`` parent plus the
+        ``RASEncroachmentZones`` and ``RASEncroachmentPolygons`` child layers
+        used by RASMapper for 2D floodway authoring.
+        """
+        plan_path = _resolve_plan_file_for_rasmap(
+            plan_number_or_path,
+            ras_object=ras_object,
+        )
+        project_folder = plan_path.parent
+        project_name = _project_name_from_plan_path(plan_path)
+        rasmap_path = project_folder / f"{project_name}.rasmap"
+
+        if rasmap_path.exists():
+            try:
+                tree = ET.parse(rasmap_path)
+                root = tree.getroot()
+            except ET.ParseError as e:
+                raise ValueError(f"Error parsing .rasmap XML: {e}") from e
+        else:
+            root = ET.Element("RASMapper")
+            tree = ET.ElementTree(root)
+
+        plans = root.find("Plans")
+        if plans is None:
+            plans = ET.Element("Plans", {"Checked": "True", "Expanded": "True"})
+            results = root.find("Results")
+            if results is not None:
+                root.insert(list(root).index(results), plans)
+            else:
+                root.append(plans)
+
+        rel_plan = _rasmap_relative_path(project_folder, plan_path)
+        geom_hdf = Path(geom_hdf_path) if geom_hdf_path is not None else _infer_plan_geometry_hdf(plan_path)
+        rel_geom = (
+            _rasmap_relative_path(project_folder, geom_hdf)
+            if geom_hdf is not None
+            else ""
+        )
+
+        plan_layer = None
+        rel_plan_norm = _normalize_rasmap_filename(rel_plan)
+        for layer in plans.findall("Layer"):
+            if layer.get("Type") != "RASPlan":
+                continue
+            if _normalize_rasmap_filename(layer.get("Filename")) == rel_plan_norm:
+                plan_layer = layer
+                break
+
+        if plan_layer is None:
+            plan_layer = ET.SubElement(plans, "Layer")
+
+        plan_layer.set("Name", _plan_display_name_for_rasmap(plan_path))
+        plan_layer.set("Type", "RASPlan")
+        plan_layer.set("Filename", rel_plan)
+        plan_layer.set("Checked", "True" if checked else "False")
+        if rel_geom:
+            plan_layer.set("GeometryHDF", rel_geom)
+
+        child_specs = [
+            ("Encroachments", "RASEncroachments"),
+            ("Zones", "RASEncroachmentZones"),
+            ("Regions", "RASEncroachmentPolygons"),
+        ]
+        for name, layer_type in child_specs:
+            child = None
+            for existing in plan_layer.findall("Layer"):
+                if existing.get("Type") == layer_type:
+                    child = existing
+                    break
+            if child is None:
+                child = ET.SubElement(plan_layer, "Layer")
+            child.set("Name", name)
+            child.set("Type", layer_type)
+            child.set("Filename", rel_plan)
+
+        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        logger.info("Ensured 2D encroachment plan layers in %s", rasmap_path)
+        return rasmap_path
+
+    @staticmethod
+    @log_call
+    def list_results_map_layers(ras_object=None) -> List[Dict[str, Any]]:
+        """
+        List ``RASResultsMap`` child layers under RASMapper result plans.
+
+        Returns dictionaries with the parent result plan name, layer name,
+        visibility, and raw ``MapParameters`` attributes.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        if not rasmap_path.exists():
+            logger.warning(f"RASMapper file not found: {rasmap_path}")
+            return []
+
+        try:
+            root = ET.parse(rasmap_path).getroot()
+        except ET.ParseError as e:
+            logger.error(f"Error parsing .rasmap XML: {e}")
+            return []
+
+        results = root.find("Results")
+        if results is None:
+            return []
+
+        layers = []
+        for results_layer in results.findall("Layer"):
+            if results_layer.get("Type") != "RASResults":
+                continue
+            for child in results_layer.findall("Layer"):
+                if child.get("Type") != "RASResultsMap":
+                    continue
+                map_parameters = child.find("MapParameters")
+                layers.append(
+                    {
+                        "name": child.get("Name", ""),
+                        "parent_plan": results_layer.get("Name", ""),
+                        "checked": child.get("Checked", "False").lower() == "true",
+                        "filename": child.get("Filename", ""),
+                        "map_parameters": (
+                            dict(map_parameters.attrib)
+                            if map_parameters is not None
+                            else {}
+                        ),
+                    }
+                )
+
+        logger.info(f"Found {len(layers)} result map layer(s) in .rasmap")
+        return layers
+
+    @staticmethod
+    @log_call
+    def add_results_map_layer(
+        host_plan_name: str,
+        layer_name: str,
+        map_type: str,
+        *,
+        terrain_name: Optional[str] = None,
+        profile_index: int = 2147483647,
+        profile_name: str = "Max",
+        checked: bool = True,
+        replace_existing: bool = True,
+        ras_object=None,
+    ) -> Dict[str, Any]:
+        """
+        Add a ``RASResultsMap`` child layer under an existing RASMapper result plan.
+
+        This is useful for tutorial workflows that need first-class map layers
+        such as ``Depth * Velocity`` before comparing floodway encroachment
+        results.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        if not rasmap_path.exists():
+            raise FileNotFoundError(f"RASMapper file not found: {rasmap_path}")
+
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            raise ValueError(f"Error parsing .rasmap XML: {e}") from e
+
+        results = root.find("Results")
+        if results is None:
+            raise ValueError("No Results section found in .rasmap")
+
+        host_layer = None
+        for layer in results.findall("Layer"):
+            if layer.get("Type") == "RASResults" and layer.get("Name") == host_plan_name:
+                host_layer = layer
+                break
+
+        if host_layer is None:
+            raise ValueError(
+                f"RASResults plan '{host_plan_name}' not found in .rasmap Results section"
+            )
+
+        if replace_existing:
+            for child in list(host_layer.findall("Layer")):
+                if child.get("Type") == "RASResultsMap" and child.get("Name") == layer_name:
+                    host_layer.remove(child)
+
+        result_map = ET.SubElement(
+            host_layer,
+            "Layer",
+            {
+                "Name": layer_name,
+                "Type": "RASResultsMap",
+                "Checked": "True" if checked else "False",
+            },
+        )
+        map_parameters = ET.SubElement(result_map, "MapParameters")
+        map_parameters.set("MapType", map_type)
+        map_parameters.set("LayerName", layer_name)
+        if terrain_name:
+            map_parameters.set("Terrain", terrain_name)
+        map_parameters.set("ProfileIndex", str(profile_index))
+        map_parameters.set("ProfileName", profile_name)
+        map_parameters.set("ArrivalDepth", "0")
+
+        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        record = {
+            "name": layer_name,
+            "parent_plan": host_plan_name,
+            "checked": checked,
+            "map_parameters": dict(map_parameters.attrib),
+        }
+        logger.info("Added result map layer '%s' to plan '%s'", layer_name, host_plan_name)
+        return record
+
+    @staticmethod
+    @log_call
     def list_calculated_layers(ras_object=None) -> List[Dict[str, Any]]:
         """
         List all calculated layers across all plan results in the RASMapper configuration.
@@ -4317,7 +4682,8 @@ class RasMap:
                 )
 
         # Validate terrain names exist
-        terrain_names = RasMap.get_terrain_names(ras_object=ras_obj)
+        rasmap_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
+        terrain_names = RasMap.get_terrain_names(rasmap_path)
         for t_name in (exist_terrain, prop_terrain):
             if t_name not in terrain_names:
                 raise ValueError(

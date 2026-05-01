@@ -774,3 +774,64 @@ def test_create_spatial_review_package_can_select_result_and_map_layers(tmp_path
     map_layers = pd.read_csv(state["artifacts"]["map_layers"])
     visible_maps = map_layers.loc[map_layers["checked"] == True]
     assert visible_maps["name"].tolist() == ["Land Cover"]
+
+
+def test_ensure_results_plan_layer_creates_and_updates_rasresults(tmp_path):
+    project_dir = _make_project(tmp_path)
+    plan_path = project_dir / "MapLayerProject.p03"
+    plan_path.write_text(
+        "Plan Title=Encroached Plan\nShort Identifier=Encroached\n",
+        encoding="utf-8",
+    )
+    (project_dir / "MapLayerProject.p03.hdf").write_bytes(b"")
+
+    record = RasMap.ensure_results_plan_layer(
+        plan_path,
+        name="Encroached Result",
+        checked=True,
+    )
+    assert record["name"] == "Encroached Result"
+    assert record["filename"] == r".\MapLayerProject.p03.hdf"
+
+    updated = RasMap.ensure_results_plan_layer(
+        plan_path,
+        checked=False,
+        expanded=False,
+    )
+    assert updated["name"] == "Encroached"
+
+    root = ET.parse(project_dir / "MapLayerProject.rasmap").getroot()
+    layers = root.findall("./Results/Layer[@Type='RASResults']")
+    assert len(layers) == 1
+    assert layers[0].get("Name") == "Encroached"
+    assert layers[0].get("Filename") == r".\MapLayerProject.p03.hdf"
+    assert layers[0].get("Checked") == "False"
+    assert layers[0].get("Expanded") == "False"
+
+
+def test_add_wse_comparison_layers_uses_project_rasmap_for_terrains(tmp_path):
+    project_dir = _make_geometry_project(tmp_path)
+
+    class DummyProject:
+        project_folder = project_dir
+        project_name = "GeometryLayerProject"
+
+        def check_initialized(self):
+            return None
+
+    created = RasMap.add_wse_comparison_layers(
+        plan_pairs=[{"exist_plan": "Plan A", "prop_plan": "Plan B", "tag": "A_B"}],
+        exist_terrain="Terrain",
+        prop_terrain="TerrainWithChannel",
+        ras_object=DummyProject(),
+    )
+
+    assert created == ["CompareWSE_A_B"]
+    script_path = project_dir / "Calculated Layers" / "CompareWSE_A_B.rasscript"
+    assert script_path.exists()
+
+    layers = RasMap.list_calculated_layers(ras_object=DummyProject())
+    assert len(layers) == 1
+    assert layers[0]["name"] == "CompareWSE_A_B"
+    assert layers[0]["parent_plan"] == "Plan B"
+    assert layers[0]["terrains"] == ["Terrain", "TerrainWithChannel"]
