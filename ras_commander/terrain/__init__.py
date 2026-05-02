@@ -5,6 +5,7 @@ This subpackage provides terrain capabilities for HEC-RAS projects:
 - Terrain HDF creation from rasters via RasProcess.exe CreateTerrain
 - VRT mosaic to single TIFF conversion via HEC-RAS GDAL tools
 - USGS 3DEP elevation data download from AWS
+- Terrain modification writing for channel, high-ground, and fill-surface layers
 - Terrain modification analysis (cut/fill, no-net-fill) via RasMapperLib.dll
 
 Main Classes:
@@ -23,6 +24,12 @@ Main Classes:
         - compare_terrain_volumes(): No-net-fill compliance checking
         - compute_modified_terrain_raster(): Full-resolution GeoTIFF of modified terrain
         Requires: pythonnet, HEC-RAS 6.6+ with bundled GDAL
+
+    RasTerrainModWriter: Terrain modification HDF and .rasmap writer
+        - add_channel_modification(): add TakeLower channel cuts
+        - add_high_ground_modification(): add TakeHigher levee/road lines
+        - add_fill_surface_modification(): add SetValue fill surfaces
+        - list_modifications(): inspect terrain modification sidecar groups
 
 Requirements:
     - HEC-RAS 6.3+ installed (for RasProcess.exe and GDAL tools)
