@@ -2223,6 +2223,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#hdflandcover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HdfLandCover
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#hdfbndry" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3476,6 +3487,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#hdflandcover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HdfLandCover
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#hdfbndry" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3710,6 +3732,7 @@
 <p><strong>Raster and Layer Operations:</strong></p>
 <ul>
 <li><code>get_infiltration_layer_data(hdf_path)</code> - Get infiltration layer data from HDF</li>
+<li><code>get_classification_polygons(hdf_path)</code> - Read infiltration sidecar classification polygon overrides</li>
 <li><code>get_infiltration_map(hdf_path)</code> - Read infiltration raster map</li>
 <li><code>calculate_soil_statistics(hdf_path)</code> - Process zonal statistics for soil analysis</li>
 </ul>
@@ -3723,6 +3746,13 @@
 <p><strong>Data Export:</strong></p>
 <ul>
 <li><code>save_statistics(data, path)</code> - Export soil statistics to CSV</li>
+</ul>
+<h3 id="hdflandcover">HdfLandCover<a class="headerlink" href="#hdflandcover" title="Permanent link">&para;</a></h3>
+<p>Land-cover sidecar and final Manning's n extraction.</p>
+<ul>
+<li><code>get_landcover_raster_map(hdf_path)</code> - Read land-cover class IDs, names, and Manning's n values</li>
+<li><code>get_classification_polygons(hdf_path)</code> - Read land-cover sidecar classification polygon overrides</li>
+<li><code>get_preprocessed_mannings_n(hdf_path)</code> - Read preprocessed cell-center Manning's n values from geometry HDF</li>
 </ul>
 <h3 id="hdfbndry">HdfBndry<a class="headerlink" href="#hdfbndry" title="Permanent link">&para;</a></h3>
 <p>Boundary condition geometry.</p>
@@ -3796,7 +3826,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 1, 2026 18:39:28 UTC">May 1, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 1, 2026 18:34:10 UTC">May 1, 2026</span>
   </span>
 
     
