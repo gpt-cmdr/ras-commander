@@ -51,6 +51,7 @@ DSS Boundary Condition Functions:
 - update_dss_run_identifier() - Update DSS path F-part for new scenarios
 - set_boundary_dss_link() - Convert inline BC to DSS-linked (complete state transition)
 - set_boundary_inline_hydrograph() - Write inline hydrograph, convert DSS to inline
+- set_normal_depth_boundary() - Add or update Normal Depth (Friction Slope=) for a 1D river or 2D BC line boundary
 - get_unique_dss_subbasins() - Get unique HMS subbasin names from DSS paths
 - update_dss_path_by_station() - Update DSS A-part for specific river station
 - update_flow_multiplier_by_station() - Update/insert QMult for specific river station
@@ -2641,6 +2642,382 @@ class RasUnsteady:
             f"peak={peak_value:.2f}"
         )
         return True
+
+    @staticmethod
+    @log_call
+    def set_normal_depth_boundary(
+        unsteady_file: Union[str, Path],
+        friction_slope: float,
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        station: Optional[str] = None,
+        area_2d: Optional[str] = None,
+        bc_line: Optional[str] = None,
+        use_critical_fallback: bool = False,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Add or update a Normal Depth boundary condition for a target boundary
+        in a HEC-RAS unsteady flow file (.u##).
+
+        The method writes a ``Friction Slope=<slope>,<flag>`` line into the
+        matching boundary block. If the block already has a ``Friction Slope=``
+        line it is updated in place. Otherwise the line is inserted immediately
+        after the ``Boundary Location=`` line, and any other inline-table BC
+        header (Flow Hydrograph, Stage Hydrograph, Lateral Inflow, Uniform
+        Lateral Inflow, Precipitation Hydrograph, Rating Curve, Gate Name)
+        plus its inline data and any DSS metadata lines (DSS File/DSS Path/
+        Use DSS/Interval) are stripped so the block ends up as a clean Normal
+        Depth boundary.
+
+        Target resolution
+        -----------------
+        Provide *exactly one* of:
+
+        - ``(river, reach, station)`` for a 1D river boundary, matched on the
+          first three comma-separated fields of ``Boundary Location=``.
+        - ``(area_2d, bc_line)`` (or just ``area_2d``) for a 2D BC line attached
+          to a 2D Flow Area or storage-area-level boundary, matched on the
+          ``Boundary Location=`` 2D Flow Area name (field index 5) and, when
+          provided, the BC line/SA name (field index 7).
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##), or a 1-2 character unsteady
+            number (e.g. ``"01"``) when a project-bound ``ras_object`` is
+            available.
+        friction_slope : float
+            Energy slope for the Normal Depth boundary (m/m or ft/ft). Must be
+            in the inclusive range ``[1e-7, 1.0]``.
+        river, reach, station : str, optional
+            1D location selector. All three must be provided together and only
+            when the 2D selectors are not used.
+        area_2d : str, optional
+            2D Flow Area name selector (or storage area name for SA boundaries).
+        bc_line : str, optional
+            BC line / SA boundary name selector. May be omitted when only
+            ``area_2d`` is needed to disambiguate.
+        use_critical_fallback : bool, default False
+            Sets the second value on the ``Friction Slope=`` line. ``False``
+            writes flag ``0`` (HEC-RAS default), ``True`` writes flag ``1``.
+        ras_object : optional
+            Custom RAS object to use instead of the global one. When the object
+            is initialized for a project, ``boundaries_df`` is refreshed after
+            the write.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Reviewable before/after metadata with keys:
+
+            - ``unsteady_file`` (str): absolute path written
+            - ``matched_location`` (str): the matched ``Boundary Location=``
+              line value (without the leading ``Boundary Location=``)
+            - ``previous_bc_type`` (str | None): boundary type before the edit,
+              or ``None`` if the block had no recognized type keyword
+            - ``previous_friction_slope`` (float | None): prior slope value,
+              or ``None`` if no Friction Slope line existed
+            - ``new_friction_slope`` (float): slope written
+            - ``flag`` (int): 0 or 1, the second value on the line
+            - ``lines_removed`` (int): count of old type-header / inline-data /
+              DSS-metadata lines stripped during a type conversion
+            - ``lines_inserted`` (int): 1 if a new ``Friction Slope=`` line was
+              inserted, otherwise 0
+            - ``updated_in_place`` (bool): True when an existing
+              ``Friction Slope=`` line was overwritten without insertion
+            - ``boundaries_df_refreshed`` (bool): True when ``ras_object``
+              ``boundaries_df`` was refreshed after the write
+            - ``block_before`` (str): the boundary block text before the edit
+            - ``block_after`` (str): the boundary block text after the edit
+
+        Raises
+        ------
+        ValueError
+            If ``friction_slope`` is non-numeric, non-finite, or outside
+            ``[1e-7, 1.0]``; if the target selectors are inconsistent (both
+            1D and 2D selectors provided, or neither); if a 1D selector is
+            partial; or if no boundary in the file matches the selectors.
+        FileNotFoundError
+            If the unsteady flow file does not exist.
+
+        Examples
+        --------
+        Set a Normal Depth boundary on a 2D BC line:
+
+        >>> from ras_commander import RasUnsteady
+        >>> result = RasUnsteady.set_normal_depth_boundary(
+        ...     "project.u01",
+        ...     friction_slope=0.0003,
+        ...     area_2d="DS Channel",
+        ...     bc_line="DS Normal",
+        ... )
+        >>> result["new_friction_slope"], result["updated_in_place"]
+        (0.0003, False)
+
+        Update an existing Normal Depth slope on a 1D downstream boundary:
+
+        >>> RasUnsteady.set_normal_depth_boundary(
+        ...     "project.u01",
+        ...     friction_slope=0.001,
+        ...     river="White",
+        ...     reach="Muncie",
+        ...     station="15696.24",
+        ... )
+
+        See Also
+        --------
+        set_boundary_dss_link : Convert inline BC to DSS-linked.
+        set_boundary_inline_hydrograph : Write inline hydrograph table.
+        ras_commander.RasPrj.get_boundary_conditions : Parse boundaries to
+            ``boundaries_df``.
+        """
+        # 1) Validate slope
+        if isinstance(friction_slope, bool) or not isinstance(friction_slope, (int, float)):
+            raise ValueError(
+                f"friction_slope must be a number, got {type(friction_slope).__name__}"
+            )
+        fs = float(friction_slope)
+        if not np.isfinite(fs):
+            raise ValueError(f"friction_slope must be finite, got {fs!r}")
+        if not (1e-7 <= fs <= 1.0):
+            raise ValueError(
+                f"friction_slope {fs!r} is outside the supported range [1e-7, 1.0]"
+            )
+
+        # 2) Validate target selectors
+        has_1d = any(x is not None for x in (river, reach, station))
+        has_2d = any(x is not None for x in (area_2d, bc_line))
+        if has_1d == has_2d:
+            raise ValueError(
+                "Provide exactly one selector group: (river, reach, station) "
+                "OR (area_2d[, bc_line])"
+            )
+        if has_1d and not (river and reach and station):
+            raise ValueError(
+                "1D selector requires all of river, reach, and station"
+            )
+        if has_2d and not area_2d:
+            raise ValueError("2D selector requires area_2d")
+
+        # 3) Resolve unsteady file path (allow short numbers when ras is set)
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except Exception:
+                pass
+
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            if ras_obj is None or getattr(ras_obj, 'project_folder', None) is None:
+                raise ValueError(
+                    "Cannot resolve unsteady number without an initialized ras_object"
+                )
+            num = unsteady_file.zfill(2)
+            unsteady_path = Path(ras_obj.project_folder) / f"{ras_obj.project_name}.u{num}"
+        else:
+            unsteady_path = Path(unsteady_file)
+
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        # 4) Read file and find target Boundary Location block
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        def _matches_location(loc_value: str) -> bool:
+            parts = [p.strip() for p in loc_value.split(',')]
+            if has_1d:
+                return (
+                    len(parts) >= 3
+                    and parts[0] == river
+                    and parts[1] == reach
+                    and parts[2] == station
+                )
+            # 2D layout: field 5 = 2D Flow Area name, field 7 = BC line / SA name
+            if len(parts) < 6 or parts[5] != area_2d:
+                return False
+            if bc_line is not None:
+                if len(parts) < 8 or parts[7] != bc_line:
+                    return False
+            return True
+
+        boundary_idx = None
+        matched_loc = None
+        for i, line in enumerate(lines):
+            if line.startswith('Boundary Location='):
+                loc_value = line[len('Boundary Location='):].rstrip('\r\n')
+                if _matches_location(loc_value):
+                    boundary_idx = i
+                    matched_loc = loc_value
+                    break
+
+        if boundary_idx is None:
+            sel = (
+                f"river={river!r}/reach={reach!r}/station={station!r}"
+                if has_1d
+                else f"area_2d={area_2d!r}/bc_line={bc_line!r}"
+            )
+            raise ValueError(
+                f"No boundary matched in {unsteady_path.name} for {sel}"
+            )
+
+        # 5) Walk the block to identify Friction Slope, other BC type, and
+        #    DSS metadata lines (Interval/DSS File/DSS Path/Use DSS).
+        OTHER_BC_KEYWORDS = {
+            'Flow Hydrograph=': 'Flow Hydrograph',
+            'Stage Hydrograph=': 'Stage Hydrograph',
+            'Lateral Inflow Hydrograph=': 'Lateral Inflow Hydrograph',
+            'Uniform Lateral Inflow=': 'Uniform Lateral Inflow',
+            'Uniform Lateral Inflow Hydrograph=': 'Uniform Lateral Inflow Hydrograph',
+            'Precipitation Hydrograph=': 'Precipitation Hydrograph',
+            'Rating Curve=': 'Rating Curve',
+            'Gate Name=': 'Gate Opening',
+        }
+        DSS_METADATA_KEYS = ('Interval=', 'DSS File=', 'DSS Path=', 'Use DSS=')
+
+        block_end = len(lines)
+        friction_idx = None
+        other_type_idx = None
+        other_type_keyword = None
+        inline_data_start = None
+        inline_data_end = None
+        dss_metadata_idxs: List[int] = []
+
+        j = boundary_idx + 1
+        while j < len(lines) and j < boundary_idx + 500:
+            line = lines[j]
+            if line.startswith('Boundary Location='):
+                block_end = j
+                break
+
+            if line.startswith('Friction Slope='):
+                friction_idx = j
+            else:
+                matched_other = False
+                for kw in OTHER_BC_KEYWORDS:
+                    if line.startswith(kw):
+                        if other_type_idx is None:
+                            other_type_idx = j
+                            other_type_keyword = kw
+                            try:
+                                count = int(line.replace(kw, '').split(',')[0].strip())
+                            except (ValueError, IndexError):
+                                count = 0
+                            if count > 0:
+                                inline_data_start = j + 1
+                                for k in range(inline_data_start, len(lines)):
+                                    data_line = lines[k]
+                                    if '=' in data_line or data_line.startswith(
+                                        'Boundary Location='
+                                    ):
+                                        inline_data_end = k
+                                        break
+                                else:
+                                    inline_data_end = len(lines)
+                        matched_other = True
+                        break
+                if not matched_other:
+                    for dss_kw in DSS_METADATA_KEYS:
+                        if line.startswith(dss_kw):
+                            dss_metadata_idxs.append(j)
+                            break
+            j += 1
+
+        block_before = ''.join(lines[boundary_idx:block_end])
+
+        previous_friction_slope: Optional[float] = None
+        if friction_idx is not None:
+            try:
+                payload = lines[friction_idx].replace('Friction Slope=', '').strip()
+                previous_friction_slope = float(payload.split(',')[0].strip())
+            except (ValueError, IndexError):
+                previous_friction_slope = None
+
+        if friction_idx is not None:
+            previous_bc_type = 'Normal Depth'
+        elif other_type_idx is not None:
+            previous_bc_type = OTHER_BC_KEYWORDS.get(other_type_keyword)
+        else:
+            previous_bc_type = None
+
+        # 6) Compose new line and apply edit
+        flag = 1 if use_critical_fallback else 0
+        new_fs_line = f'Friction Slope={fs},{flag}\n'
+
+        lines_removed = 0
+        lines_inserted = 0
+        updated_in_place = False
+
+        if friction_idx is not None:
+            # Already a Normal Depth boundary — overwrite slope/flag in place.
+            lines[friction_idx] = new_fs_line
+            updated_in_place = True
+        else:
+            # Strip any other BC-type keyword + its inline data + DSS metadata,
+            # then insert a fresh Friction Slope line right after the location.
+            delete_idxs: set = set()
+            if other_type_idx is not None:
+                delete_idxs.add(other_type_idx)
+                if inline_data_start is not None and inline_data_end is not None:
+                    for k in range(inline_data_start, inline_data_end):
+                        delete_idxs.add(k)
+            for d in dss_metadata_idxs:
+                delete_idxs.add(d)
+            for idx in sorted(delete_idxs, reverse=True):
+                del lines[idx]
+                lines_removed += 1
+            lines.insert(boundary_idx + 1, new_fs_line)
+            lines_inserted = 1
+
+        # Recompute end-of-block for the after-snapshot
+        new_block_end = boundary_idx + 1
+        while (
+            new_block_end < len(lines)
+            and not lines[new_block_end].startswith('Boundary Location=')
+        ):
+            new_block_end += 1
+        block_after = ''.join(lines[boundary_idx:new_block_end])
+
+        # 7) Persist file
+        with open(unsteady_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
+        # 8) Refresh boundaries_df where possible
+        boundaries_df_refreshed = False
+        if ras_obj is not None:
+            try:
+                ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+                boundaries_df_refreshed = True
+            except Exception as exc:
+                logger.debug(f"boundaries_df refresh skipped: {exc}")
+
+        logger.info(
+            "Set Normal Depth boundary in %s: matched=%s, slope=%s, flag=%s, "
+            "removed=%d, inserted=%d, updated_in_place=%s",
+            unsteady_path.name,
+            matched_loc.strip(),
+            fs,
+            flag,
+            lines_removed,
+            lines_inserted,
+            updated_in_place,
+        )
+
+        return {
+            'unsteady_file': str(unsteady_path),
+            'matched_location': matched_loc,
+            'previous_bc_type': previous_bc_type,
+            'previous_friction_slope': previous_friction_slope,
+            'new_friction_slope': fs,
+            'flag': flag,
+            'lines_removed': lines_removed,
+            'lines_inserted': lines_inserted,
+            'updated_in_place': updated_in_place,
+            'boundaries_df_refreshed': boundaries_df_refreshed,
+            'block_before': block_before,
+            'block_after': block_after,
+        }
 
     @staticmethod
     @log_call
