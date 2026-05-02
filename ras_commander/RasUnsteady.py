@@ -59,6 +59,7 @@ DSS Boundary Condition Functions:
         
 """
 import os
+import numbers
 from pathlib import Path
 from .RasPrj import ras
 from .LoggingConfig import get_logger
@@ -2786,10 +2787,13 @@ class RasUnsteady:
         set_boundary_dss_link : Convert inline BC to DSS-linked.
         set_boundary_inline_hydrograph : Write inline hydrograph table.
         """
-        # 1) Validate slope
-        if isinstance(eg_slope, bool) or not isinstance(eg_slope, (int, float)):
+        # 1) Validate slope. `numbers.Real` accepts Python int/float plus
+        # numpy scalars (e.g. np.float64 returned from `boundaries_df`
+        # columns), which `isinstance(x, (int, float))` does NOT under
+        # NumPy 2.x. The bool-subclass-of-int guard fires first.
+        if isinstance(eg_slope, bool) or not isinstance(eg_slope, numbers.Real):
             raise ValueError(
-                f"eg_slope must be a number, got {type(eg_slope).__name__}"
+                f"eg_slope must be a real number, got {type(eg_slope).__name__}"
             )
         slope = float(eg_slope)
         if not np.isfinite(slope):
@@ -2894,11 +2898,17 @@ class RasUnsteady:
         first_dss_keyword: Optional[str] = None
         # First post-data `=` line (used as last-resort insert anchor)
         first_post_data_eq_idx: Optional[int] = None
-        block_end = len(lines)
+        # Clamp the per-block scan range explicitly so sub-pass 2 cannot
+        # spill into the next boundary if sub-pass 1 hits the safety cap
+        # before finding the next `Boundary Location=`. Real blocks never
+        # exceed ~80 lines (Muncie + full Met BC trailer is ~70), but
+        # a hard clamp eliminates a silent-misplacement failure mode.
+        BLOCK_SCAN_CAP = 1000
+        block_end = min(boundary_idx + 1 + BLOCK_SCAN_CAP, len(lines))
 
         # Sub-pass 1: confirm the block is a Flow Hydrograph and locate header.
         j = boundary_idx + 1
-        while j < len(lines) and j < boundary_idx + 1000:
+        while j < block_end:
             line = lines[j]
             if line.startswith('Boundary Location='):
                 block_end = j

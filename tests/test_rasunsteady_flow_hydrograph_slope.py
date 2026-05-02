@@ -255,7 +255,7 @@ class TestValidation:
     def test_rejects_non_numeric(self, fh_2d_block_with_existing_slope):
         from ras_commander import RasUnsteady
 
-        with pytest.raises(ValueError, match="must be a number"):
+        with pytest.raises(ValueError, match="must be a real number"):
             RasUnsteady.set_flow_hydrograph_slope(
                 fh_2d_block_with_existing_slope,
                 eg_slope="0.001",  # type: ignore[arg-type]
@@ -611,3 +611,113 @@ class TestWeise2DRealProject:
         assert result["bc_type"] == "Flow Hydrograph"
         text = target_file.read_text(encoding="utf-8", errors="ignore")
         assert "Flow Hydrograph Slope= 0.0025 " in text
+
+
+# ---------------------------------------------------------------------------
+# Fix-coverage tests added 2026-05-02 in response to independent code review
+# (see H:/Symphony/ras-commander/CLB-311/REVIEW.md):
+#   - numpy scalar acceptance (numbers.Real)
+#   - Flow Hydrograph Slope value surfaced in boundaries_df
+# ---------------------------------------------------------------------------
+
+
+class TestNumpyScalarAcceptance:
+    """`numbers.Real` validation must accept numpy scalars from DataFrame
+    columns. Under NumPy 2.x, `np.float64` is no longer a subclass of
+    `float`, so `isinstance(x, (int, float))` rejects the most natural
+    call pattern (taking a slope value out of `boundaries_df` and passing
+    it back in)."""
+
+    def test_np_float64_is_accepted(self, fh_2d_block_with_existing_slope):
+        import numpy as np
+        from ras_commander import RasUnsteady
+
+        slope = np.float64(0.0009)
+        result = RasUnsteady.set_flow_hydrograph_slope(
+            fh_2d_block_with_existing_slope,
+            eg_slope=slope,
+            area_2d="BaldEagleCr",
+            bc_line="Upstream Inflow",
+        )
+        assert result["new_eg_slope"] == 0.0009
+        text = fh_2d_block_with_existing_slope.read_text(encoding="utf-8")
+        assert "Flow Hydrograph Slope= 0.0009 " in text
+
+    def test_np_float32_is_accepted(self, fh_2d_block_with_existing_slope):
+        import numpy as np
+        from ras_commander import RasUnsteady
+
+        slope = np.float32(0.0011)
+        result = RasUnsteady.set_flow_hydrograph_slope(
+            fh_2d_block_with_existing_slope,
+            eg_slope=slope,
+            area_2d="BaldEagleCr",
+            bc_line="Upstream Inflow",
+        )
+        # np.float32 → float() may have small precision drift; just confirm
+        # it converted and was written.
+        assert abs(result["new_eg_slope"] - 0.0011) < 1e-7
+
+    def test_bool_still_rejected(self, fh_2d_block_with_existing_slope):
+        from ras_commander import RasUnsteady
+
+        with pytest.raises(ValueError, match="must be a real number"):
+            RasUnsteady.set_flow_hydrograph_slope(
+                fh_2d_block_with_existing_slope,
+                eg_slope=True,  # type: ignore[arg-type]
+                area_2d="BaldEagleCr",
+                bc_line="Upstream Inflow",
+            )
+
+
+class TestBoundariesDfSurfacesFhSlope:
+    """`Flow Hydrograph Slope` must appear as a column in `boundaries_df`
+    after the writer succeeds — closes the AC partial on 'expose updated
+    metadata through boundary DataFrames'."""
+
+    @pytest.mark.slow
+    def test_flow_hydrograph_slope_column_in_boundaries_df(self, tmp_path):
+        """End-to-end: extract Chippewa_2D, run the setter on a real Flow
+        Hydrograph 2D BC, refresh boundaries_df, verify the
+        `Flow Hydrograph Slope` column carries the new value."""
+        try:
+            from ras_commander import RasExamples, RasUnsteady, RasPrj
+            project = RasExamples.extract_project(
+                "Chippewa_2D", output_path=tmp_path, suffix="_fhs_df"
+            )
+        except Exception:
+            pytest.skip("Chippewa_2D example not available")
+        if isinstance(project, list):
+            project = project[0]
+
+        prj_files = list(Path(project).glob("*.prj"))
+        prj_files = [p for p in prj_files if not p.name.endswith(".rasprj.json")]
+        if not prj_files:
+            pytest.skip("No .prj in Chippewa_2D")
+
+        ras_obj = RasPrj()
+        try:
+            ras_obj.initialize(prj_files[0].parent, "ras", suppress_logging=True)
+        except Exception:
+            pytest.skip("Could not initialize Chippewa_2D RasPrj")
+
+        result = RasUnsteady.set_flow_hydrograph_slope(
+            next(Path(project).glob("*.u04")),
+            eg_slope=0.002,
+            area_2d="Chippewa",
+            bc_line="Chippewa",
+            ras_object=ras_obj,
+        )
+        assert result["boundaries_df_refreshed"] is True
+
+        df = ras_obj.boundaries_df
+        assert "Flow Hydrograph Slope" in df.columns, (
+            "Flow Hydrograph Slope must be parsed into boundaries_df after "
+            "refresh (known_fields update in RasPrj._parse_boundary_condition)"
+        )
+        # The targeted Chippewa/Chippewa boundary should have the new value.
+        slope_strings = df["Flow Hydrograph Slope"].astype(str).tolist()
+        assert any("0.002" in s for s in slope_strings), (
+            f"Expected '0.002' in Flow Hydrograph Slope column; got "
+            f"{slope_strings}"
+        )
