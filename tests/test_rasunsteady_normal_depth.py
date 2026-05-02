@@ -306,7 +306,7 @@ class TestSetNormalDepthBoundaryValidation:
     def test_rejects_non_numeric_slope(self, unsteady_with_existing_normal_depth):
         from ras_commander import RasUnsteady
 
-        with pytest.raises(ValueError, match="must be a number"):
+        with pytest.raises(ValueError, match="must be a real number"):
             RasUnsteady.set_normal_depth_boundary(
                 unsteady_with_existing_normal_depth,
                 friction_slope="0.001",  # type: ignore[arg-type]
@@ -524,3 +524,272 @@ class TestSetNormalDepthBoundaryRealProjects:
         assert result["flag"] is None  # No flag preserved
         new_text = target_file.read_text(encoding="utf-8", errors="ignore")
         assert re.search(r"^Friction Slope=0\.0007\s*$", new_text, re.MULTILINE)
+
+
+# ---------------------------------------------------------------------------
+# Fix-coverage tests added 2026-05-02 in response to independent code review
+# (see H:/Symphony/ras-commander/CLB-310/REVIEW.md):
+#   - numpy scalar acceptance (numbers.Real)
+#   - flag integer value preservation on in-place update
+#   - type-conversion stripping of Flow-Hydrograph-specific extras
+#   - Friction Slope value surfaced in boundaries_df
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def realistic_flow_hydrograph_2d_block(tmp_path):
+    """A 2D Flow Hydrograph block that mirrors real HEC-RAS-emitted output.
+
+    Includes every line that ships with a real BaldEagleCrkMulti2D /
+    Muncie Flow Hydrograph block: Interval, count, inline data, then the
+    Flow-Hydrograph-specific tail (Stage Hydrograph TW Check,
+    Flow Hydrograph QMult, Flow Hydrograph Slope, DSS metadata,
+    Use Fixed Start Time, Fixed Start Date/Time, Is Critical Boundary,
+    Critical Boundary Flow). Used to verify type-conversion to Normal
+    Depth strips ALL of them, not just the obvious DSS metadata.
+    """
+    body = (
+        "Flow Title=Realistic FH conversion\n"
+        "Program Version=6.60\n"
+        "Use Restart= 0 \n"
+        "Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,Upstream Inflow                 ,                                \n"
+        "Interval=1HOUR\n"
+        "Flow Hydrograph= 3 \n"
+        "    1000    3000    6500\n"
+        "Stage Hydrograph TW Check=0\n"
+        "Flow Hydrograph QMult= 0.5 \n"
+        "Flow Hydrograph Slope= 0.005 \n"
+        "DSS Path=\n"
+        "Use DSS=False\n"
+        "Use Fixed Start Time=False\n"
+        "Fixed Start Date/Time=,\n"
+        "Is Critical Boundary=False\n"
+        "Critical Boundary Flow=\n"
+    )
+    return _write_unsteady(tmp_path / "project.u01", body)
+
+
+@pytest.fixture
+def unsteady_with_existing_normal_depth_flag_one(tmp_path):
+    """Normal Depth block with `Friction Slope=0.003,1` (critical fallback ON)."""
+    body = (
+        "Flow Title=Existing ND with flag=1\n"
+        "Boundary Location=                ,                ,        ,        ,                ,DS Channel      ,                ,DS Normal                       ,                                \n"
+        "Friction Slope=0.003,1\n"
+    )
+    return _write_unsteady(tmp_path / "project.u01", body)
+
+
+class TestRealisticFlowHydrographConversion:
+    """Verify that converting a real-shape Flow Hydrograph block to Normal
+    Depth strips every BC-type-specific line from the prior type."""
+
+    def test_conversion_strips_all_flow_hydrograph_extras(
+        self, realistic_flow_hydrograph_2d_block
+    ):
+        from ras_commander import RasUnsteady
+
+        result = RasUnsteady.set_normal_depth_boundary(
+            realistic_flow_hydrograph_2d_block,
+            friction_slope=0.0003,
+            area_2d="BaldEagleCr",
+            bc_line="Upstream Inflow",
+        )
+
+        assert result["previous_bc_type"] == "Flow Hydrograph"
+        assert result["new_friction_slope"] == 0.0003
+        assert result["lines_inserted"] == 1
+        # Lines stripped on conversion:
+        #   Interval=                       (1)
+        #   Flow Hydrograph= 3              (1)
+        #   inline data (1 row, 3 values)   (1)
+        #   Stage Hydrograph TW Check=0     (1)
+        #   Flow Hydrograph QMult=          (1)
+        #   Flow Hydrograph Slope=          (1)
+        #   DSS Path=                       (1)
+        #   Use DSS=False                   (1)
+        #   Use Fixed Start Time=False      (1)
+        #   Fixed Start Date/Time=,         (1)
+        #   Is Critical Boundary=False      (1)
+        #   Critical Boundary Flow=         (1)
+        # Total = 12 lines removed.
+        assert result["lines_removed"] == 12
+
+        text = realistic_flow_hydrograph_2d_block.read_text(encoding="utf-8")
+        # The block now contains ONLY Boundary Location + Friction Slope.
+        assert "Friction Slope=0.0003" in text
+        for orphaned_keyword in [
+            "Flow Hydrograph=",
+            "Flow Hydrograph Slope=",
+            "Flow Hydrograph QMult=",
+            "Stage Hydrograph TW Check=",
+            "Use Fixed Start Time=",
+            "Fixed Start Date/Time=",
+            "Is Critical Boundary=",
+            "Critical Boundary Flow=",
+            "Interval=",
+            "DSS Path=",
+            "Use DSS=",
+        ]:
+            assert orphaned_keyword not in text, (
+                f"{orphaned_keyword!r} should have been stripped on conversion "
+                f"to Normal Depth but is still present"
+            )
+
+
+class TestFlagIntegerValuePreserved:
+    """The flag VALUE (not just presence) must be preserved on in-place
+    update. Calling without `use_critical_fallback` on an existing
+    `Friction Slope=X,1` boundary must not silently clear the flag to 0."""
+
+    def test_existing_flag_one_is_preserved_on_update(
+        self, unsteady_with_existing_normal_depth_flag_one
+    ):
+        from ras_commander import RasUnsteady
+
+        result = RasUnsteady.set_normal_depth_boundary(
+            unsteady_with_existing_normal_depth_flag_one,
+            friction_slope=0.001,
+            area_2d="DS Channel",
+            bc_line="DS Normal",
+        )
+
+        assert result["updated_in_place"] is True
+        assert result["previous_friction_slope"] == 0.003
+        assert result["new_friction_slope"] == 0.001
+        # Flag value 1 from the original line must be preserved — NOT
+        # silently reset to 0.
+        assert result["flag"] == 1
+
+        text = unsteady_with_existing_normal_depth_flag_one.read_text(
+            encoding="utf-8"
+        )
+        assert "Friction Slope=0.001,1" in text
+        assert "Friction Slope=0.001,0" not in text
+
+    def test_existing_flag_zero_stays_zero_on_update(
+        self, unsteady_with_existing_normal_depth
+    ):
+        """Original flag=0 → preserved as 0 (no spurious change)."""
+        from ras_commander import RasUnsteady
+
+        result = RasUnsteady.set_normal_depth_boundary(
+            unsteady_with_existing_normal_depth,
+            friction_slope=0.0005,
+            area_2d="DS Channel",
+            bc_line="DS Normal",
+        )
+        assert result["flag"] == 0
+        text = unsteady_with_existing_normal_depth.read_text(encoding="utf-8")
+        assert "Friction Slope=0.0005,0" in text
+
+
+class TestNumpyScalarAcceptance:
+    """`numbers.Real` validation must accept numpy scalars from DataFrame
+    columns. Under NumPy 2.x, `np.float64` is no longer a subclass of
+    `float`, so `isinstance(x, (int, float))` rejects the most natural
+    call pattern (taking a slope value out of `boundaries_df` and passing
+    it back in)."""
+
+    def test_np_float64_is_accepted(self, unsteady_with_existing_normal_depth):
+        import numpy as np
+        from ras_commander import RasUnsteady
+
+        slope = np.float64(0.0007)
+        result = RasUnsteady.set_normal_depth_boundary(
+            unsteady_with_existing_normal_depth,
+            friction_slope=slope,
+            area_2d="DS Channel",
+            bc_line="DS Normal",
+        )
+        assert result["new_friction_slope"] == 0.0007
+
+    def test_np_float32_is_accepted(self, unsteady_with_existing_normal_depth):
+        import numpy as np
+        from ras_commander import RasUnsteady
+
+        slope = np.float32(0.0009)
+        result = RasUnsteady.set_normal_depth_boundary(
+            unsteady_with_existing_normal_depth,
+            friction_slope=slope,
+            area_2d="DS Channel",
+            bc_line="DS Normal",
+        )
+        # np.float32 → float() may have small precision drift; just check it
+        # converted and was written.
+        assert abs(result["new_friction_slope"] - 0.0009) < 1e-7
+
+    def test_bool_still_rejected(self, unsteady_with_existing_normal_depth):
+        from ras_commander import RasUnsteady
+
+        with pytest.raises(ValueError, match="must be a real number"):
+            RasUnsteady.set_normal_depth_boundary(
+                unsteady_with_existing_normal_depth,
+                friction_slope=True,  # type: ignore[arg-type]
+                area_2d="DS Channel",
+                bc_line="DS Normal",
+            )
+
+
+class TestBoundariesDfSurfacesFrictionSlope:
+    """`Friction Slope` must appear as a column in `boundaries_df` after
+    the writer succeeds — this closes the AC partial on 'reflects the
+    updated boundary type/value'."""
+
+    @pytest.mark.slow
+    def test_friction_slope_column_in_boundaries_df(self, tmp_path):
+        """End-to-end: use Muncie's real .u01, set a slope, refresh
+        boundaries_df, verify the Friction Slope column carries the value."""
+        try:
+            from ras_commander import RasExamples, RasUnsteady, RasPrj
+            project = RasExamples.extract_project(
+                "Muncie", output_path=tmp_path, suffix="_fs_df"
+            )
+        except Exception:
+            pytest.skip("Muncie example project not available")
+        if isinstance(project, list):
+            project = project[0]
+
+        prj_files = list(Path(project).glob("*.prj"))
+        prj_files = [p for p in prj_files if not p.name.endswith(".rasprj.json")]
+        if not prj_files:
+            pytest.skip("No .prj file in Muncie")
+
+        # Initialize a RasPrj for Muncie so we can refresh boundaries_df.
+        ras_obj = RasPrj()
+        try:
+            ras_obj.initialize(prj_files[0].parent, "ras", suppress_logging=True)
+        except Exception:
+            pytest.skip("Could not initialize Muncie RasPrj")
+
+        u_files = list(Path(project).glob("*.u01"))
+        if not u_files:
+            pytest.skip("No .u01 in Muncie")
+        u_file = u_files[0]
+        if "Friction Slope=" not in u_file.read_text(encoding="utf-8"):
+            pytest.skip("Muncie u01 has no Friction Slope")
+
+        result = RasUnsteady.set_normal_depth_boundary(
+            u_file,
+            friction_slope=0.001,
+            river="White",
+            reach="Muncie",
+            station="237.6455",
+            ras_object=ras_obj,
+        )
+        assert result["boundaries_df_refreshed"] is True
+
+        df = ras_obj.boundaries_df
+        assert "Friction Slope" in df.columns, (
+            "Friction Slope must be parsed into boundaries_df after refresh "
+            "(known_fields update in RasPrj._parse_boundary_condition)"
+        )
+        # The Normal Depth row in the DataFrame should carry the new value.
+        nd_rows = df[df["bc_type"] == "Normal Depth"]
+        assert not nd_rows.empty
+        # Friction Slope column value will be a string like "0.001,0"; just
+        # confirm the slope number is in there.
+        slope_values = nd_rows["Friction Slope"].astype(str).tolist()
+        assert any("0.001" in s for s in slope_values), (
+            f"Expected '0.001' in Friction Slope column; got {slope_values}"
+        )

@@ -59,6 +59,7 @@ DSS Boundary Condition Functions:
         
 """
 import os
+import numbers
 from pathlib import Path
 from .RasPrj import ras
 from .LoggingConfig import get_logger
@@ -2816,10 +2817,14 @@ class RasUnsteady:
         ticket so the contracts for placement order, geometry discovery, and
         1D-vs-2D field padding can be designed end-to-end.
         """
-        # 1) Validate slope
-        if isinstance(friction_slope, bool) or not isinstance(friction_slope, (int, float)):
+        # 1) Validate slope. `numbers.Real` accepts Python int/float plus
+        # numpy scalars (e.g. np.float64 returned from `boundaries_df`
+        # columns), which `isinstance(x, (int, float))` does NOT under
+        # NumPy 2.x. The bool-subclass-of-int guard fires first because
+        # bool would otherwise pass through both checks.
+        if isinstance(friction_slope, bool) or not isinstance(friction_slope, numbers.Real):
             raise ValueError(
-                f"friction_slope must be a number, got {type(friction_slope).__name__}"
+                f"friction_slope must be a real number, got {type(friction_slope).__name__}"
             )
         fs = float(friction_slope)
         if not np.isfinite(fs):
@@ -2916,8 +2921,9 @@ class RasUnsteady:
                 f"are tracked as a follow-up."
             )
 
-        # 5) Walk the block to identify Friction Slope, other BC type, and
-        #    DSS metadata lines (Interval/DSS File/DSS Path/Use DSS).
+        # 5) Walk the block to identify Friction Slope, other BC type,
+        #    DSS metadata lines, and BC-type-specific extra metadata that
+        #    must be stripped on type conversion to Normal Depth.
         OTHER_BC_KEYWORDS = {
             'Flow Hydrograph=': 'Flow Hydrograph',
             'Stage Hydrograph=': 'Stage Hydrograph',
@@ -2929,6 +2935,22 @@ class RasUnsteady:
             'Gate Name=': 'Gate Opening',
         }
         DSS_METADATA_KEYS = ('Interval=', 'DSS File=', 'DSS Path=', 'Use DSS=')
+        # Lines that real HEC-RAS Flow Hydrograph / Stage Hydrograph /
+        # Lateral Inflow blocks carry alongside their inline data and DSS
+        # metadata. Observed in Muncie.u01 and BaldEagleDamBrk.u02. These
+        # are meaningless on a Normal Depth boundary and must be stripped
+        # during type conversion or HEC-RAS will encounter unexpected
+        # keys in the converted block.
+        TYPE_SPECIFIC_EXTRAS = (
+            'Flow Hydrograph Slope=',
+            'Flow Hydrograph QMult=',
+            'Flow Hydrograph QMin=',
+            'Stage Hydrograph TW Check=',
+            'Use Fixed Start Time=',
+            'Fixed Start Date/Time=',
+            'Is Critical Boundary=',
+            'Critical Boundary Flow=',
+        )
 
         block_end = len(lines)
         friction_idx = None
@@ -2937,6 +2959,7 @@ class RasUnsteady:
         inline_data_start = None
         inline_data_end = None
         dss_metadata_idxs: List[int] = []
+        type_extra_idxs: List[int] = []
 
         j = boundary_idx + 1
         while j < len(lines) and j < boundary_idx + 500:
@@ -2972,16 +2995,23 @@ class RasUnsteady:
                         matched_other = True
                         break
                 if not matched_other:
+                    matched_dss = False
                     for dss_kw in DSS_METADATA_KEYS:
                         if line.startswith(dss_kw):
                             dss_metadata_idxs.append(j)
+                            matched_dss = True
                             break
+                    if not matched_dss:
+                        for extra_kw in TYPE_SPECIFIC_EXTRAS:
+                            if line.startswith(extra_kw):
+                                type_extra_idxs.append(j)
+                                break
             j += 1
 
         block_before = ''.join(lines[boundary_idx:block_end])
 
         previous_friction_slope: Optional[float] = None
-        previous_friction_had_flag: bool = False
+        previous_friction_flag: Optional[int] = None
         if friction_idx is not None:
             payload = lines[friction_idx].replace('Friction Slope=', '').strip()
             tokens = [t.strip() for t in payload.split(',')]
@@ -2989,7 +3019,11 @@ class RasUnsteady:
                 previous_friction_slope = float(tokens[0])
             except (ValueError, IndexError):
                 previous_friction_slope = None
-            previous_friction_had_flag = len(tokens) >= 2 and tokens[1] != ''
+            if len(tokens) >= 2 and tokens[1] != '':
+                try:
+                    previous_friction_flag = int(tokens[1])
+                except ValueError:
+                    previous_friction_flag = None
 
         if friction_idx is not None:
             previous_bc_type = 'Normal Depth'
@@ -3001,12 +3035,17 @@ class RasUnsteady:
         # 6) Compose new line and apply edit. HEC-RAS emits both
         # ``Friction Slope=<slope>`` (typical for 2D BC lines) and
         # ``Friction Slope=<slope>,<flag>`` (typical for 1D river NDs);
-        # preserve the form present on update, default to no-flag on insert,
-        # and force flag=1 only when ``use_critical_fallback=True``.
+        # preserve the form AND the flag value present on update, default
+        # to no-flag on insert, and force flag=1 only when
+        # ``use_critical_fallback=True``.
         if use_critical_fallback:
             flag: Optional[int] = 1
-        elif friction_idx is not None and previous_friction_had_flag:
-            flag = 0
+        elif friction_idx is not None and previous_friction_flag is not None:
+            # Preserve the existing flag value (e.g. an existing flag=1 is
+            # NOT silently reset to 0 when the user calls without
+            # use_critical_fallback). The user opts into changing the flag
+            # via the use_critical_fallback parameter.
+            flag = previous_friction_flag
         else:
             flag = None
         new_fs_line = (
@@ -3023,8 +3062,11 @@ class RasUnsteady:
             lines[friction_idx] = new_fs_line
             updated_in_place = True
         else:
-            # Strip any other BC-type keyword + its inline data + DSS metadata,
-            # then insert a fresh Friction Slope line right after the location.
+            # Convert from another BC type (or fill in a type-less block).
+            # Strip the prior type's header + inline data + DSS metadata
+            # + any BC-type-specific extras (Flow Hydrograph QMult/Slope,
+            # Stage Hydrograph TW Check, Use Fixed Start Time, etc.) so
+            # the resulting Normal Depth block is structurally clean.
             delete_idxs: set = set()
             if other_type_idx is not None:
                 delete_idxs.add(other_type_idx)
@@ -3032,6 +3074,8 @@ class RasUnsteady:
                     for k in range(inline_data_start, inline_data_end):
                         delete_idxs.add(k)
             for d in dss_metadata_idxs:
+                delete_idxs.add(d)
+            for d in type_extra_idxs:
                 delete_idxs.add(d)
             for idx in sorted(delete_idxs, reverse=True):
                 del lines[idx]
