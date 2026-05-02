@@ -332,93 +332,163 @@ class TestValidation:
 
 
 # ---------------------------------------------------------------------------
-# Real RasExamples projects
+# Synthetic 8-field Boundary Location (older HEC-RAS format)
 # ---------------------------------------------------------------------------
 
 
-class TestRealProjects:
+class TestEightFieldBoundaryLocation:
+    """HEC-RAS emits both 8-field and 9-field `Boundary Location=` forms.
+
+    Real example: BaldEagleCrkMulti2D ships with 8-field forms in some plans
+    while Chippewa_2D / Weise_2D use 9-field forms. The matcher must work on
+    both since field meaning is positional, not count-dependent.
+    """
+
+    def test_matches_and_updates_8_field_form(self, tmp_path):
+        from ras_commander import RasUnsteady
+
+        # 7 commas → 8 fields. BC line at index 7.
+        body = (
+            "Flow Title=8-field FH\n"
+            "Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,Upstream Inflow \n"
+            "Interval=1HOUR\n"
+            "Flow Hydrograph= 2 \n"
+            "  100.00  120.00\n"
+            "Stage Hydrograph TW Check=0\n"
+            "Flow Hydrograph QMult= 0.5 \n"
+            "Flow Hydrograph Slope= 0.0005 \n"
+            "DSS Path=\n"
+            "Use DSS=False\n"
+        )
+        f = _write_unsteady(tmp_path / "project.u01", body)
+
+        result = RasUnsteady.set_flow_hydrograph_slope(
+            f,
+            eg_slope=0.001,
+            area_2d="BaldEagleCr",
+            bc_line="Upstream Inflow",
+        )
+        assert result["updated_in_place"] is True
+        assert result["new_eg_slope"] == 0.001
+        text = f.read_text(encoding="utf-8")
+        assert "Flow Hydrograph Slope= 0.001 " in text
+
+
+# ---------------------------------------------------------------------------
+# Real RasExamples projects
+# ---------------------------------------------------------------------------
+#
+# Primary fixture is **Chippewa_2D** rather than BaldEagleCrkMulti2D:
+#
+# - Multiple 2D Flow Areas in a single .u## (`Chippewa` and `Perimeter 1`)
+#   exercise the multi-area requirement spelled out in CLB-311's AC.
+# - 9-field Boundary Location form (current HEC-RAS output) plus realistic
+#   field widths matching the literal name length (e.g. `Lake Pepin` is
+#   10 chars, not padded to 16) — confirms the matcher's positional logic.
+# - Realistic boundary names with spaces (`Lake Pepin`, `Perimeter 1`).
+# - Real DSS File path with backslashes (`..\..\2018\...\Chippewa.dss`)
+#   in one of the blocks — confirms DSS metadata is preserved verbatim.
+# - Block layout has `Stage Hydrograph TW Check=0` immediately followed by
+#   `Flow Hydrograph Slope=` (no `Flow Hydrograph QMult=`), which exercises
+#   the `Stage Hydrograph TW Check=` insert anchor branch.
+#
+# Weise_2D is included as a smaller cross-project smoke check.
+
+
+class TestChippewa2DRealProject:
     @pytest.mark.slow
-    def test_baldeagle_existing_slope_update_round_trip(self, tmp_path):
-        """Update an existing `Flow Hydrograph Slope=` on a 2D BC line and
-        verify nothing else in the surrounding block changed."""
+    def test_chippewa_multi_area_update_preserves_other_areas_and_dss_file(self, tmp_path):
+        """Updating one BC line on one 2D area must leave every other 2D
+        area's slope unchanged AND preserve the literal DSS File= path."""
         try:
             from ras_commander import RasExamples, RasUnsteady
             project = RasExamples.extract_project(
-                "BaldEagleCrkMulti2D", output_path=tmp_path, suffix="_fh_slope_update"
+                "Chippewa_2D", output_path=tmp_path, suffix="_fh_slope_update"
             )
         except Exception:
-            pytest.skip("BaldEagleCrkMulti2D example not available")
+            pytest.skip("Chippewa_2D example not available")
         if isinstance(project, list):
             project = project[0]
-        u_files = sorted(p for p in Path(project).glob("*.u*") if "hdf" not in p.name.lower())
-        # Find a (.u##, area, bc_line) where Flow Hydrograph Slope= already
-        # exists right after a Flow Hydrograph block.
-        target_file = None
-        target_area = None
-        target_bc = None
-        slope_pattern = re.compile(
-            r"^Boundary Location=(.+?)\nInterval=.+?\nFlow Hydrograph=.+?(?:\n.*)*?\nFlow Hydrograph Slope=\s*([\d.]+)",
-            re.MULTILINE,
+        u_files = sorted(
+            p for p in Path(project).glob("*.u*") if "hdf" not in p.name.lower()
         )
+        # Find the .u## that contains all three 2D Flow Hydrograph slope
+        # blocks (Chippewa/Chippewa, Chippewa/Lake Pepin, Perimeter 1/Upstream).
+        target_file = None
         for u in u_files:
             text = u.read_text(encoding="utf-8", errors="ignore")
-            m = slope_pattern.search(text)
-            if not m:
-                continue
-            parts = [p.strip() for p in m.group(1).split(",")]
-            if len(parts) >= 8 and parts[5] and parts[7]:
-                target_file, target_area, target_bc = u, parts[5], parts[7]
+            if (
+                "Chippewa        ,                ,Chippewa" in text
+                and "Lake Pepin" in text
+                and "Perimeter 1" in text
+                and text.count("Flow Hydrograph Slope=") >= 3
+            ):
+                target_file = u
                 break
         if target_file is None:
-            pytest.skip("No 2D Flow Hydrograph with existing slope found")
+            pytest.skip("Chippewa_2D shipped layout does not match expectations")
 
         before = target_file.read_text(encoding="utf-8", errors="ignore")
+        # Capture the other two slope lines verbatim — they must survive.
+        before_other_slopes = [
+            line for line in before.splitlines()
+            if line.startswith("Flow Hydrograph Slope=")
+        ]
+        assert len(before_other_slopes) >= 3
+
+        # Update the slope on Chippewa/Chippewa.
         result = RasUnsteady.set_flow_hydrograph_slope(
             target_file,
-            eg_slope=0.0009,
-            area_2d=target_area,
-            bc_line=target_bc,
+            eg_slope=0.001,
+            area_2d="Chippewa",
+            bc_line="Chippewa",
         )
         assert result["updated_in_place"] is True
-        assert result["new_eg_slope"] == 0.0009
+        assert result["previous_eg_slope"] == 0.00036
+        assert result["new_eg_slope"] == 0.001
 
         after = target_file.read_text(encoding="utf-8", errors="ignore")
-        # The only differences must be the changed slope line.
+        # Same file length (in-place update).
+        assert len(before.splitlines()) == len(after.splitlines())
+        # Exactly one differing line.
         diff = [
             (b, a) for b, a in zip(before.splitlines(), after.splitlines())
             if b != a
         ]
         assert len(diff) == 1
-        assert diff[0][1].startswith("Flow Hydrograph Slope=")
-        assert "0.0009" in diff[0][1]
-        # Same file length (in-place update).
-        assert len(before.splitlines()) == len(after.splitlines())
+        assert diff[0] == ("Flow Hydrograph Slope= 0.00036 ", "Flow Hydrograph Slope= 0.001 ")
+
+        # Other slope lines (Lake Pepin = 0.00016, Perimeter 1/Upstream = 0.00022)
+        # are still present and unchanged.
+        after_slopes = [
+            line for line in after.splitlines()
+            if line.startswith("Flow Hydrograph Slope=")
+        ]
+        assert "Flow Hydrograph Slope= 0.00016 " in after_slopes
+        assert "Flow Hydrograph Slope= 0.00022 " in after_slopes
+        # Realistic DSS File path with backslashes survived verbatim.
+        assert any(
+            "DSS File=..\\..\\2018" in line for line in after.splitlines()
+        )
 
     @pytest.mark.slow
-    def test_baldeagle_insert_when_no_slope_in_block(self, tmp_path):
-        """Insert a slope into a Flow Hydrograph block that lacks one.
-
-        Every BaldEagle 2D Flow Hydrograph block in the shipped dataset
-        already has a slope line, so this test deterministically constructs
-        a no-slope variant: extract BaldEagleCrkMulti2D, pick a 2D Flow
-        Hydrograph block, strip its `Flow Hydrograph Slope=` line in place,
-        and verify the writer re-inserts at the canonical anchor without
-        touching any other line.
-        """
+    def test_chippewa_insert_when_no_slope_in_block(self, tmp_path):
+        """Strip an existing Flow Hydrograph Slope= line from a Chippewa
+        block and verify the writer re-inserts it at the canonical anchor
+        with every other line preserved."""
         try:
             from ras_commander import RasExamples, RasUnsteady
             project = RasExamples.extract_project(
-                "BaldEagleCrkMulti2D", output_path=tmp_path, suffix="_fh_slope_insert"
+                "Chippewa_2D", output_path=tmp_path, suffix="_fh_slope_insert"
             )
         except Exception:
-            pytest.skip("BaldEagleCrkMulti2D example not available")
+            pytest.skip("Chippewa_2D example not available")
         if isinstance(project, list):
             project = project[0]
         u_files = sorted(
             p for p in Path(project).glob("*.u*") if "hdf" not in p.name.lower()
         )
 
-        # Find a 2D Flow Hydrograph block that already has a slope line.
         target_file = None
         target_area = None
         target_bc = None
@@ -431,12 +501,11 @@ class TestRealProjects:
                 re.MULTILINE | re.DOTALL,
             ):
                 block = m.group(0)
-                if "Flow Hydrograph=" not in block:
+                if (
+                    "Flow Hydrograph=" not in block
+                    or "Flow Hydrograph Slope=" not in block
+                ):
                     continue
-                if "Flow Hydrograph Slope=" not in block:
-                    continue
-                # Parse only the first (location) line — `m.group(1)` spans
-                # the whole block under DOTALL.
                 first_line = block.splitlines()[0]
                 loc_value = first_line[len("Boundary Location="):]
                 parts = [p.strip() for p in loc_value.split(",")]
@@ -453,38 +522,92 @@ class TestRealProjects:
             if target_file is not None:
                 break
         if target_file is None:
-            pytest.skip("No 2D Flow Hydrograph with slope found in BaldEagle")
+            pytest.skip("No suitable Chippewa 2D Flow Hydrograph block")
 
-        # Strip the slope line so we can validate the insert path.
+        # Strip the slope line to set up the insert path.
         original = target_file.read_text(encoding="utf-8", errors="ignore")
         stripped = original.replace(original_slope_line + "\n", "", 1)
         target_file.write_text(stripped, encoding="utf-8")
-
         before = target_file.read_text(encoding="utf-8", errors="ignore")
-        assert "Flow Hydrograph Slope=" not in before  # sanity
 
         result = RasUnsteady.set_flow_hydrograph_slope(
             target_file,
-            eg_slope=0.0011,
+            eg_slope=0.001,
             area_2d=target_area,
             bc_line=target_bc,
         )
         assert result["updated_in_place"] is False
         assert result["lines_inserted"] == 1
-        assert result["new_eg_slope"] == 0.0011
-        assert result["insert_anchor"] in {
-            "Flow Hydrograph QMult=",
-            "Stage Hydrograph TW Check=",
-            "DSS Path=",
-            "DSS File=",
-            "Use DSS=",
-            "<inline-data-tail>",
-        }
+        # Chippewa blocks have `Stage Hydrograph TW Check=0` but no QMult,
+        # so the canonical anchor here is `Stage Hydrograph TW Check=`.
+        assert result["insert_anchor"] == "Stage Hydrograph TW Check="
 
         after = target_file.read_text(encoding="utf-8", errors="ignore")
         assert len(after.splitlines()) == len(before.splitlines()) + 1
-        assert "Flow Hydrograph Slope= 0.0011 " in after
-        # Every line that was in the stripped file must still be there.
+        assert "Flow Hydrograph Slope= 0.001 " in after
+        # Every line that survived the stripping must still be present.
         before_lines = set(before.splitlines())
         after_lines = set(after.splitlines())
         assert before_lines - after_lines == set()
+
+
+class TestWeise2DRealProject:
+    @pytest.mark.slow
+    def test_weise_simple_update(self, tmp_path):
+        """Cross-project sanity check on Weise_2D (single 2D Area, simple
+        layout) — confirms the writer behaves identically across projects."""
+        try:
+            from ras_commander import RasExamples, RasUnsteady
+            project = RasExamples.extract_project(
+                "Weise_2D", output_path=tmp_path, suffix="_fh_slope"
+            )
+        except Exception:
+            pytest.skip("Weise_2D example not available")
+        if isinstance(project, list):
+            project = project[0]
+        u_files = sorted(
+            p for p in Path(project).glob("*.u*") if "hdf" not in p.name.lower()
+        )
+        target_file = None
+        target_area = None
+        target_bc = None
+        for u in u_files:
+            text = u.read_text(encoding="utf-8", errors="ignore")
+            if "Flow Hydrograph Slope=" not in text:
+                continue
+            for m in re.finditer(
+                r"^Boundary Location=(.+?)(?=\nBoundary Location=|\Z)",
+                text,
+                re.MULTILINE | re.DOTALL,
+            ):
+                block = m.group(0)
+                if (
+                    "Flow Hydrograph=" not in block
+                    or "Flow Hydrograph Slope=" not in block
+                ):
+                    continue
+                first_line = block.splitlines()[0]
+                loc_value = first_line[len("Boundary Location="):]
+                parts = [p.strip() for p in loc_value.split(",")]
+                if len(parts) < 8 or not (parts[5] and parts[7]):
+                    continue
+                target_file = u
+                target_area = parts[5]
+                target_bc = parts[7]
+                break
+            if target_file is not None:
+                break
+        if target_file is None:
+            pytest.skip("No suitable Weise 2D Flow Hydrograph block")
+
+        result = RasUnsteady.set_flow_hydrograph_slope(
+            target_file,
+            eg_slope=0.0025,
+            area_2d=target_area,
+            bc_line=target_bc,
+        )
+        assert result["updated_in_place"] is True
+        assert result["new_eg_slope"] == 0.0025
+        assert result["bc_type"] == "Flow Hydrograph"
+        text = target_file.read_text(encoding="utf-8", errors="ignore")
+        assert "Flow Hydrograph Slope= 0.0025 " in text
