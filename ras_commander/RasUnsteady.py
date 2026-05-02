@@ -2660,15 +2660,38 @@ class RasUnsteady:
         Add or update a Normal Depth boundary condition for a target boundary
         in a HEC-RAS unsteady flow file (.u##).
 
-        The method writes a ``Friction Slope=<slope>,<flag>`` line into the
-        matching boundary block. If the block already has a ``Friction Slope=``
-        line it is updated in place. Otherwise the line is inserted immediately
-        after the ``Boundary Location=`` line, and any other inline-table BC
-        header (Flow Hydrograph, Stage Hydrograph, Lateral Inflow, Uniform
-        Lateral Inflow, Precipitation Hydrograph, Rating Curve, Gate Name)
-        plus its inline data and any DSS metadata lines (DSS File/DSS Path/
-        Use DSS/Interval) are stripped so the block ends up as a clean Normal
-        Depth boundary.
+        The method writes a ``Friction Slope=<slope>`` line (or
+        ``Friction Slope=<slope>,<flag>`` when a flag is required, see below)
+        into the matching boundary block. If the block already has a
+        ``Friction Slope=`` line it is updated in place; otherwise the line is
+        inserted immediately after the ``Boundary Location=`` line, and any
+        other inline-table BC header (Flow Hydrograph, Stage Hydrograph,
+        Lateral Inflow, Uniform Lateral Inflow, Precipitation Hydrograph,
+        Rating Curve, Gate Name) plus its inline data and any DSS metadata
+        lines (``Interval=``, ``DSS File=``, ``DSS Path=``, ``Use DSS=``) are
+        stripped so the block ends up as a clean Normal Depth boundary.
+
+        The function ONLY edits a boundary that already exists in the .u## as
+        a ``Boundary Location=`` block. If the matched-by-name location is
+        absent, ``ValueError`` is raised. Authoring brand-new boundary blocks
+        from geometry definitions (``create-if-missing`` semantics with
+        geometry-file validation) is tracked separately as a follow-up; see
+        the *See Also* section.
+
+        Format conventions observed in real HEC-RAS .u## files
+        ------------------------------------------------------
+        Both ``Friction Slope=<slope>`` and ``Friction Slope=<slope>,<flag>``
+        forms appear in HEC-RAS-emitted files. 2D Normal Depth boundaries
+        (e.g. on 2D BC lines) are typically written without the flag, while
+        1D river Normal Depth boundaries usually include ``,0``. To stay
+        compatible with both:
+
+        - When **updating** an existing ``Friction Slope=`` line, the original
+          flag presence is preserved unless ``use_critical_fallback=True``
+          forces the flag to be present and set to ``1``.
+        - When **inserting** a new line (type conversion or the block had no
+          recognized type), the flag is omitted by default, and only emitted
+          (as ``,1``) when ``use_critical_fallback=True``.
 
         Target resolution
         -----------------
@@ -2676,10 +2699,12 @@ class RasUnsteady:
 
         - ``(river, reach, station)`` for a 1D river boundary, matched on the
           first three comma-separated fields of ``Boundary Location=``.
-        - ``(area_2d, bc_line)`` (or just ``area_2d``) for a 2D BC line attached
-          to a 2D Flow Area or storage-area-level boundary, matched on the
-          ``Boundary Location=`` 2D Flow Area name (field index 5) and, when
-          provided, the BC line/SA name (field index 7).
+        - ``(area_2d, bc_line)`` for a 2D BC line attached to a 2D Flow Area,
+          matched on the ``Boundary Location=`` 2D Flow Area name (field
+          index 5) and the BC line / SA name (field index 7). For Normal
+          Depth, ``bc_line`` is required: a Normal Depth boundary must attach
+          to a specific 2D Flow Area perimeter BC line, never to the area as
+          a whole.
 
         Parameters
         ----------
@@ -2694,13 +2719,16 @@ class RasUnsteady:
             1D location selector. All three must be provided together and only
             when the 2D selectors are not used.
         area_2d : str, optional
-            2D Flow Area name selector (or storage area name for SA boundaries).
+            2D Flow Area name selector. Required for 2D targeting, and must be
+            paired with ``bc_line``.
         bc_line : str, optional
-            BC line / SA boundary name selector. May be omitted when only
-            ``area_2d`` is needed to disambiguate.
+            BC line name on the 2D Flow Area perimeter. Required for 2D
+            targeting; Normal Depth never applies area-wide.
         use_critical_fallback : bool, default False
-            Sets the second value on the ``Friction Slope=`` line. ``False``
-            writes flag ``0`` (HEC-RAS default), ``True`` writes flag ``1``.
+            Forces the flag to be present and set to ``1`` on the
+            ``Friction Slope=`` line. When ``False`` (the default), the flag
+            is omitted from newly inserted lines and preserved as-was for
+            in-place updates. ``True`` writes ``Friction Slope=<slope>,1``.
         ras_object : optional
             Custom RAS object to use instead of the global one. When the object
             is initialized for a project, ``boundaries_df`` is refreshed after
@@ -2719,7 +2747,9 @@ class RasUnsteady:
             - ``previous_friction_slope`` (float | None): prior slope value,
               or ``None`` if no Friction Slope line existed
             - ``new_friction_slope`` (float): slope written
-            - ``flag`` (int): 0 or 1, the second value on the line
+            - ``flag`` (int | None): the integer flag written on the line
+              (typically ``0`` or ``1``), or ``None`` when the line was
+              written without a flag
             - ``lines_removed`` (int): count of old type-header / inline-data /
               DSS-metadata lines stripped during a type conversion
             - ``lines_inserted`` (int): 1 if a new ``Friction Slope=`` line was
@@ -2737,32 +2767,37 @@ class RasUnsteady:
             If ``friction_slope`` is non-numeric, non-finite, or outside
             ``[1e-7, 1.0]``; if the target selectors are inconsistent (both
             1D and 2D selectors provided, or neither); if a 1D selector is
-            partial; or if no boundary in the file matches the selectors.
+            partial; if a 2D selector is missing ``bc_line``; or if no
+            boundary in the file matches the selectors.
         FileNotFoundError
             If the unsteady flow file does not exist.
 
         Examples
         --------
-        Set a Normal Depth boundary on a 2D BC line:
+        Set a Normal Depth boundary on a 2D BC line (writes
+        ``Friction Slope=0.0003`` with no flag, matching the 2D format
+        emitted by HEC-RAS for examples like BaldEagleCrkMulti2D):
 
         >>> from ras_commander import RasUnsteady
         >>> result = RasUnsteady.set_normal_depth_boundary(
         ...     "project.u01",
         ...     friction_slope=0.0003,
-        ...     area_2d="DS Channel",
-        ...     bc_line="DS Normal",
+        ...     area_2d="BaldEagleCr",
+        ...     bc_line="DSNormalDepth",
         ... )
         >>> result["new_friction_slope"], result["updated_in_place"]
         (0.0003, False)
 
-        Update an existing Normal Depth slope on a 1D downstream boundary:
+        Update an existing Normal Depth slope on a 1D downstream boundary
+        (preserves the original ``,<flag>`` form when present, e.g.
+        ``Friction Slope=0.00064,0`` becomes ``Friction Slope=0.001,0``):
 
         >>> RasUnsteady.set_normal_depth_boundary(
         ...     "project.u01",
         ...     friction_slope=0.001,
         ...     river="White",
         ...     reach="Muncie",
-        ...     station="15696.24",
+        ...     station="237.6455",
         ... )
 
         See Also
@@ -2771,6 +2806,15 @@ class RasUnsteady:
         set_boundary_inline_hydrograph : Write inline hydrograph table.
         ras_commander.RasPrj.get_boundary_conditions : Parse boundaries to
             ``boundaries_df``.
+
+        Notes
+        -----
+        **Follow-up scope (out of this function)**: validation that the
+        selected boundary actually exists in the geometry file, and creating
+        a brand-new ``Boundary Location=`` block when the boundary exists in
+        geometry but is absent from the .u##. Tracked under a separate Linear
+        ticket so the contracts for placement order, geometry discovery, and
+        1D-vs-2D field padding can be designed end-to-end.
         """
         # 1) Validate slope
         if isinstance(friction_slope, bool) or not isinstance(friction_slope, (int, float)):
@@ -2791,14 +2835,20 @@ class RasUnsteady:
         if has_1d == has_2d:
             raise ValueError(
                 "Provide exactly one selector group: (river, reach, station) "
-                "OR (area_2d[, bc_line])"
+                "OR (area_2d, bc_line)"
             )
         if has_1d and not (river and reach and station):
             raise ValueError(
                 "1D selector requires all of river, reach, and station"
             )
-        if has_2d and not area_2d:
-            raise ValueError("2D selector requires area_2d")
+        if has_2d and not (area_2d and bc_line):
+            # Normal Depth on a 2D Flow Area perimeter must attach to a
+            # specific BC line. There is no "area-wide" Normal Depth — that
+            # only makes sense for area-wide types (e.g. Precipitation
+            # Hydrograph), not for Normal Depth.
+            raise ValueError(
+                "2D selector requires both area_2d and bc_line for Normal Depth"
+            )
 
         # 3) Resolve unsteady file path (allow short numbers when ras is set)
         ras_obj = ras_object or ras
@@ -2834,12 +2884,13 @@ class RasUnsteady:
                     and parts[1] == reach
                     and parts[2] == station
                 )
-            # 2D layout: field 5 = 2D Flow Area name, field 7 = BC line / SA name
+            # 2D layout: field 5 = 2D Flow Area name, field 7 = BC line name.
+            # HEC-RAS emits both 8-field and 9-field forms for Boundary
+            # Location; matching is keyed on field index, not field count.
             if len(parts) < 6 or parts[5] != area_2d:
                 return False
-            if bc_line is not None:
-                if len(parts) < 8 or parts[7] != bc_line:
-                    return False
+            if len(parts) < 8 or parts[7] != bc_line:
+                return False
             return True
 
         boundary_idx = None
@@ -2859,7 +2910,10 @@ class RasUnsteady:
                 else f"area_2d={area_2d!r}/bc_line={bc_line!r}"
             )
             raise ValueError(
-                f"No boundary matched in {unsteady_path.name} for {sel}"
+                f"No boundary matched in {unsteady_path.name} for {sel}. "
+                f"This function only edits boundaries that already exist as "
+                f"`Boundary Location=` blocks; create-if-missing semantics "
+                f"are tracked as a follow-up."
             )
 
         # 5) Walk the block to identify Friction Slope, other BC type, and
@@ -2927,12 +2981,15 @@ class RasUnsteady:
         block_before = ''.join(lines[boundary_idx:block_end])
 
         previous_friction_slope: Optional[float] = None
+        previous_friction_had_flag: bool = False
         if friction_idx is not None:
+            payload = lines[friction_idx].replace('Friction Slope=', '').strip()
+            tokens = [t.strip() for t in payload.split(',')]
             try:
-                payload = lines[friction_idx].replace('Friction Slope=', '').strip()
-                previous_friction_slope = float(payload.split(',')[0].strip())
+                previous_friction_slope = float(tokens[0])
             except (ValueError, IndexError):
                 previous_friction_slope = None
+            previous_friction_had_flag = len(tokens) >= 2 and tokens[1] != ''
 
         if friction_idx is not None:
             previous_bc_type = 'Normal Depth'
@@ -2941,9 +2998,21 @@ class RasUnsteady:
         else:
             previous_bc_type = None
 
-        # 6) Compose new line and apply edit
-        flag = 1 if use_critical_fallback else 0
-        new_fs_line = f'Friction Slope={fs},{flag}\n'
+        # 6) Compose new line and apply edit. HEC-RAS emits both
+        # ``Friction Slope=<slope>`` (typical for 2D BC lines) and
+        # ``Friction Slope=<slope>,<flag>`` (typical for 1D river NDs);
+        # preserve the form present on update, default to no-flag on insert,
+        # and force flag=1 only when ``use_critical_fallback=True``.
+        if use_critical_fallback:
+            flag: Optional[int] = 1
+        elif friction_idx is not None and previous_friction_had_flag:
+            flag = 0
+        else:
+            flag = None
+        new_fs_line = (
+            f'Friction Slope={fs},{flag}\n' if flag is not None
+            else f'Friction Slope={fs}\n'
+        )
 
         lines_removed = 0
         lines_inserted = 0
@@ -2998,7 +3067,7 @@ class RasUnsteady:
             unsteady_path.name,
             matched_loc.strip(),
             fs,
-            flag,
+            flag if flag is not None else 'omitted',
             lines_removed,
             lines_inserted,
             updated_in_place,

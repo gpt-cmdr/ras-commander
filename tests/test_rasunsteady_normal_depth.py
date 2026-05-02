@@ -116,7 +116,8 @@ class TestSetNormalDepthBoundaryAdd:
         )
 
         assert result["new_friction_slope"] == 0.0003
-        assert result["flag"] == 0
+        # Insert path with no fallback: flag is omitted (matches HEC-RAS 2D form).
+        assert result["flag"] is None
         assert result["updated_in_place"] is False
         assert result["lines_inserted"] == 1
         # 1 Flow Hydrograph header + 1 inline data line + 3 DSS metadata
@@ -133,7 +134,7 @@ class TestSetNormalDepthBoundaryAdd:
         # Snip to the next Boundary Location or end of file.
         ds_block_lines = ds_block.splitlines()
         # Line 0 is the rest of this Boundary Location line itself.
-        assert ds_block_lines[1].startswith("Friction Slope=0.0003,0")
+        assert ds_block_lines[1] == "Friction Slope=0.0003"
         # And no Flow Hydrograph / DSS metadata in this block anymore.
         for line in ds_block_lines[1:]:
             if line.startswith("Boundary Location="):
@@ -166,10 +167,29 @@ class TestSetNormalDepthBoundaryAdd:
         assert result["lines_inserted"] == 1
         # Flow Hydrograph header + 1 inline row + Interval + DSS Path + Use DSS = 5
         assert result["lines_removed"] == 5
+        # Insert path with no fallback: line is written without the flag.
+        assert result["flag"] is None
 
         text = unsteady_with_1d_flow_hydrograph.read_text(encoding="utf-8")
         assert "Flow Hydrograph=" not in text
-        assert re.search(r"^Friction Slope=0\.001,0\s*$", text, re.MULTILINE)
+        assert re.search(r"^Friction Slope=0\.001\s*$", text, re.MULTILINE)
+
+    def test_2d_bc_line_insert_with_critical_fallback_writes_flag(
+        self, unsteady_with_flow_hydrograph_2d
+    ):
+        from ras_commander import RasUnsteady
+
+        result = RasUnsteady.set_normal_depth_boundary(
+            unsteady_with_flow_hydrograph_2d,
+            friction_slope=0.0005,
+            area_2d="DS Channel",
+            bc_line="DS Normal",
+            use_critical_fallback=True,
+        )
+
+        assert result["flag"] == 1
+        text = unsteady_with_flow_hydrograph_2d.read_text(encoding="utf-8")
+        assert "Friction Slope=0.0005,1" in text
 
 
 # ---------------------------------------------------------------------------
@@ -178,9 +198,10 @@ class TestSetNormalDepthBoundaryAdd:
 
 
 class TestSetNormalDepthBoundaryUpdate:
-    def test_updates_existing_friction_slope_in_place(
+    def test_updates_existing_friction_slope_with_flag_preserved(
         self, unsteady_with_existing_normal_depth
     ):
+        """Existing line had `,0` flag → updated line keeps the `,0` form."""
         from ras_commander import RasUnsteady
 
         result = RasUnsteady.set_normal_depth_boundary(
@@ -196,14 +217,45 @@ class TestSetNormalDepthBoundaryUpdate:
         assert result["updated_in_place"] is True
         assert result["lines_inserted"] == 0
         assert result["lines_removed"] == 0
+        # The original line was `Friction Slope=0.003,0` (flag present) →
+        # the updated line preserves the flag form, defaulting flag value to 0.
+        assert result["flag"] == 0
 
         text = unsteady_with_existing_normal_depth.read_text(encoding="utf-8")
-        # The slope was overwritten and the second (unrelated) boundary still has
-        # its Precipitation Hydrograph data intact.
         assert "Friction Slope=0.0005,0" in text
         assert "Friction Slope=0.003,0" not in text
+        # Unrelated second boundary still has its Precipitation Hydrograph data.
         assert "Precipitation Hydrograph= 1" in text
         assert "    0.10" in text
+
+    def test_updates_existing_2d_friction_slope_without_flag(self, tmp_path):
+        """2D BC line existing line has no flag → updated line stays no-flag."""
+        from ras_commander import RasUnsteady
+
+        body = (
+            "Flow Title=BaldEagle-style 2D\n"
+            "Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,DSNormalDepth   \n"
+            "Friction Slope=0.0003\n"
+        )
+        f = _write_unsteady(tmp_path / "project.u01", body)
+
+        result = RasUnsteady.set_normal_depth_boundary(
+            f,
+            friction_slope=0.001,
+            area_2d="BaldEagleCr",
+            bc_line="DSNormalDepth",
+        )
+
+        assert result["updated_in_place"] is True
+        assert result["previous_friction_slope"] == 0.0003
+        assert result["new_friction_slope"] == 0.001
+        # No flag on previous line and no fallback request → no flag on output.
+        assert result["flag"] is None
+
+        text = f.read_text(encoding="utf-8")
+        # Use a regex anchored to line start so we don't accidentally match
+        # `Friction Slope=0.001,...` if a flag had crept in.
+        assert re.search(r"^Friction Slope=0\.001\s*$", text, re.MULTILINE)
 
     def test_use_critical_fallback_writes_flag_one(
         self, unsteady_with_existing_normal_depth
@@ -306,6 +358,7 @@ class TestSetNormalDepthBoundaryValidation:
                 unsteady_with_existing_normal_depth,
                 friction_slope=0.002,
                 area_2d="Nonexistent Area",
+                bc_line="Phantom BC",
             )
 
     def test_missing_unsteady_file_raises(self, tmp_path):
@@ -316,6 +369,7 @@ class TestSetNormalDepthBoundaryValidation:
                 tmp_path / "missing.u01",
                 friction_slope=0.001,
                 area_2d="DS Channel",
+                bc_line="DS Normal",
             )
 
 
@@ -325,21 +379,148 @@ class TestSetNormalDepthBoundaryValidation:
 
 
 class TestSetNormalDepthBoundary2DSelectors:
-    def test_area_only_selector_matches_when_unique(self, tmp_path):
+    def test_2d_selector_requires_bc_line(self, unsteady_with_existing_normal_depth):
+        """Normal Depth must attach to a specific BC line; area-only is invalid."""
         from ras_commander import RasUnsteady
 
+        with pytest.raises(ValueError, match="2D selector requires both area_2d and bc_line"):
+            RasUnsteady.set_normal_depth_boundary(
+                unsteady_with_existing_normal_depth,
+                friction_slope=0.001,
+                area_2d="DS Channel",
+                # bc_line missing
+            )
+
+    def test_2d_field_count_8_layout_matches(self, tmp_path):
+        """Real BaldEagleCrkMulti2D-style 8-field Boundary Location matches."""
+        from ras_commander import RasUnsteady
+
+        # 7 commas → 8 fields. BC line at index 7.
         body = (
-            "Flow Title=Area Only Match\n"
-            "Boundary Location=                ,                ,        ,        ,                ,area2           ,                ,                                ,                                \n"
-            "Flow Hydrograph= 2 \n"
-            "  100.00  120.00\n"
+            "Flow Title=BaldEagle-style 8-field\n"
+            "Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,DSNormalDepth   \n"
+            "Friction Slope=0.0003\n"
         )
         f = _write_unsteady(tmp_path / "project.u01", body)
 
         result = RasUnsteady.set_normal_depth_boundary(
-            f, friction_slope=0.0007, area_2d="area2"
+            f,
+            friction_slope=0.0007,
+            area_2d="BaldEagleCr",
+            bc_line="DSNormalDepth",
         )
+        assert result["updated_in_place"] is True
         assert result["new_friction_slope"] == 0.0007
-        text = f.read_text(encoding="utf-8")
-        assert "Friction Slope=0.0007,0" in text
-        assert "Flow Hydrograph=" not in text
+
+
+# ---------------------------------------------------------------------------
+# Real HEC-RAS example projects (RasExamples)
+# ---------------------------------------------------------------------------
+
+
+class TestSetNormalDepthBoundaryRealProjects:
+    @pytest.mark.slow
+    def test_muncie_1d_normal_depth_in_place_update(self, tmp_path):
+        """Update the existing 1D Normal Depth in the Muncie example project.
+
+        Muncie.u01 ships with `Friction Slope=0.00064,0` on the downstream
+        White/Muncie/237.6455 boundary. Updating the slope should preserve the
+        `,<flag>` form because it was present in the original file.
+        """
+        try:
+            from ras_commander import RasExamples, RasUnsteady
+            project = RasExamples.extract_project(
+                "Muncie", output_path=tmp_path, suffix="_nd_test"
+            )
+        except Exception:
+            pytest.skip("Muncie example project not available")
+
+        if isinstance(project, list):
+            project = project[0]
+        u_files = list(Path(project).glob("*.u01"))
+        if not u_files:
+            pytest.skip("No .u01 in Muncie project")
+        u_file = u_files[0]
+        original = u_file.read_text(encoding="utf-8", errors="ignore")
+        if "Friction Slope=" not in original:
+            pytest.skip("Muncie .u01 has no Friction Slope= line")
+
+        result = RasUnsteady.set_normal_depth_boundary(
+            u_file,
+            friction_slope=0.001,
+            river="White",
+            reach="Muncie",
+            station="237.6455",
+        )
+
+        assert result["updated_in_place"] is True
+        assert result["previous_bc_type"] == "Normal Depth"
+        # Real Muncie ships with 0.00064; preserving flag form yields `,0`.
+        assert result["flag"] == 0
+
+        new_text = u_file.read_text(encoding="utf-8", errors="ignore")
+        assert "Friction Slope=0.001,0" in new_text
+        assert "Friction Slope=0.00064" not in new_text
+
+    @pytest.mark.slow
+    def test_bald_eagle_2d_normal_depth_no_flag_preserved(self, tmp_path):
+        """Update the 2D BC line Normal Depth in BaldEagleCrkMulti2D.
+
+        That project's .u## ships with `Friction Slope=0.0003` (no flag).
+        After update the no-flag form must be preserved — losing it would
+        change the file's binary equivalence to HEC-RAS-emitted output.
+        """
+        try:
+            from ras_commander import RasExamples, RasUnsteady
+            project = RasExamples.extract_project(
+                "BaldEagleCrkMulti2D", output_path=tmp_path, suffix="_nd_2d_test"
+            )
+        except Exception:
+            pytest.skip("BaldEagleCrkMulti2D example project not available")
+
+        if isinstance(project, list):
+            project = project[0]
+        u_files = sorted(Path(project).glob("*.u*"))
+        u_files = [u for u in u_files if "hdf" not in u.name.lower()]
+        if not u_files:
+            pytest.skip("No .u## in BaldEagleCrkMulti2D project")
+
+        # Find a (.u##, area_2d, bc_line) combination that ships with a
+        # no-flag `Friction Slope=...` on a 2D BC line. We discover it
+        # dynamically so the test stays decoupled from which project plan
+        # ships which BC line names.
+        target_file = None
+        target_area = None
+        target_bc_line = None
+        nd_pattern = re.compile(
+            r"^Boundary Location=(.+?)\n(Friction Slope=\d+(?:\.\d+)?)\s*$",
+            re.MULTILINE,
+        )
+        for u in u_files:
+            text = u.read_text(encoding="utf-8", errors="ignore")
+            for m in nd_pattern.finditer(text):
+                parts = [p.strip() for p in m.group(1).split(",")]
+                if len(parts) < 8:
+                    continue
+                area_2d, bc_line = parts[5], parts[7]
+                if area_2d and bc_line:
+                    target_file, target_area, target_bc_line = u, area_2d, bc_line
+                    break
+            if target_file is not None:
+                break
+        if target_file is None:
+            pytest.skip(
+                "No no-flag 2D Friction Slope= line found in BaldEagleCrkMulti2D"
+            )
+
+        result = RasUnsteady.set_normal_depth_boundary(
+            target_file,
+            friction_slope=0.0007,
+            area_2d=target_area,
+            bc_line=target_bc_line,
+        )
+
+        assert result["updated_in_place"] is True
+        assert result["flag"] is None  # No flag preserved
+        new_text = target_file.read_text(encoding="utf-8", errors="ignore")
+        assert re.search(r"^Friction Slope=0\.0007\s*$", new_text, re.MULTILINE)
