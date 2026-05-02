@@ -462,6 +462,10 @@ indices = RasUtils.perform_kdtree_query(
         - list_landcover_layers
         - list_soils_layers
         - list_infiltration_layers
+        - list_land_classification_polygons
+        - add_land_classification_polygon
+        - update_land_classification_polygon
+        - delete_land_classification_polygon
         - get_terrain_path
         - get_landcover_path
         - associate_geometry_layers
@@ -487,6 +491,28 @@ infiltration_layers = RasMap.list_infiltration_layers(project_path)
 ```
 
 `list_land_classification_layers()` is the broad parser for RASMapper `Type="LandCoverLayer"` entries. The land-cover, soils, and infiltration methods are filtered convenience wrappers around that catalog.
+
+#### Classification Polygon Overrides
+
+`RasMap.add_land_classification_polygon()` authors the RAS Mapper `Classification Polygons` sidecar group used by land-cover, soils, and infiltration layers. It also upserts the affected `Raster Map` and `Variables` class rows when those datasets exist.
+
+```python
+from shapely.geometry import box
+from ras_commander import RasMap
+
+polygons = RasMap.add_land_classification_polygon(
+    "Land Classification/LandCover.hdf",
+    box(2083000, 370500, 2083500, 371000),
+    class_name="Parking Lot",
+    class_id=99,
+    variable_values={
+        "mannings_n": 0.105,
+        "percent_impervious": 95.0,
+    },
+)
+```
+
+Use `list_land_classification_polygons()`, `update_land_classification_polygon()`, and `delete_land_classification_polygon()` for extraction and maintenance. After editing sidecar polygons for an already-associated geometry, rerun preprocessing/property-table workflows so compiled geometry HDFs consume the new override.
 
 #### Terrain Display Settings
 

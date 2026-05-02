@@ -94,7 +94,7 @@ from .hdf import (
     HdfBase, HdfUtils, HdfPlan,
     HdfMesh, HdfXsec, HdfBndry, HdfStruc, HdfHydraulicTables,
     HdfResultsPlan, HdfResultsMesh, HdfResultsQuery, HdfResultsXsec, HdfResultsBreach,
-    HdfPipe, HdfPump, HdfInfiltration,
+    HdfPipe, HdfPump, HdfInfiltration, HdfLandCover,
     HdfPlot, HdfResultsPlot,
     HdfFluvialPluvial, HdfBenefitAreas, HdfChannelCapacity, HdfResultsAnalysis,
     HdfProject,
@@ -226,7 +226,7 @@ __all__ = [
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan', 'HdfProject',
     'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsQuery', 'HdfResultsXsec',
     'HdfStruc', 'HdfUtils', 'HdfXsec', 'HdfPump',
-    'HdfPipe', 'HdfInfiltration', 'HdfHydraulicTables', 'HdfResultsBreach', 'RasBreach',
+    'HdfPipe', 'HdfInfiltration', 'HdfLandCover', 'HdfHydraulicTables', 'HdfResultsBreach', 'RasBreach',
     'HdfBenefitAreas', 'HdfChannelCapacity', 'HdfResultsAnalysis',
 
     # Plotting functionality
