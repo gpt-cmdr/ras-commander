@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from ras_commander.ComputeResults import ComputeResult
 
@@ -283,3 +284,27 @@ def test_compute_parallel_dest_folder_keeps_fresh_outputs_when_workers_share_sta
     assert (dest_folder / "TestProject.p02.hdf").read_text(encoding="utf-8") == (
         "fresh hdf 02\n"
     )
+
+
+def test_filter_plan_entries_none_returns_all_plans():
+    plan_entries = pd.DataFrame({"plan_number": ["01", "02", "03"]})
+    result = RasCmdr._filter_plan_entries(plan_entries, None)
+    assert result["plan_number"].tolist() == ["01", "02", "03"]
+
+
+def test_filter_plan_entries_zero_raises():
+    plan_entries = pd.DataFrame({"plan_number": ["01", "02"]})
+    with pytest.raises(ValueError):
+        RasCmdr._filter_plan_entries(plan_entries, 0)
+
+
+def test_filter_plan_entries_empty_string_raises():
+    plan_entries = pd.DataFrame({"plan_number": ["01", "02"]})
+    with pytest.raises(ValueError):
+        RasCmdr._filter_plan_entries(plan_entries, "")
+
+
+def test_filter_plan_entries_empty_list_returns_empty():
+    plan_entries = pd.DataFrame({"plan_number": ["01", "02"]})
+    result = RasCmdr._filter_plan_entries(plan_entries, [])
+    assert result.empty
