@@ -176,3 +176,259 @@ def test_set_connection_profile_round_trips_legacy_profile_block(tmp_path):
     assert len(updated) == 3
     assert list(updated["Station"]) == [0.0, 25.0, 50.0]
     assert list(updated["Elevation"]) == [100.0, 100.5, 101.0]
+
+
+# ---------------------------------------------------------------------------
+# Connection line coordinate reading
+# ---------------------------------------------------------------------------
+
+
+def test_get_connection_line_coords(bald_eagle_project):
+    geom_file = bald_eagle_project / "BaldEagleDamBrk.g13"
+
+    coords = GeomLateral.get_connection_line_coords(geom_file, "Dam")
+
+    assert len(coords) == 18
+    assert coords.iloc[0]["X"] == pytest.approx(2002367.9)
+    assert coords.iloc[0]["Y"] == pytest.approx(323639.47)
+    assert coords.iloc[-1]["X"] == pytest.approx(2008369.13)
+    assert coords.iloc[-1]["Y"] == pytest.approx(320174.75)
+
+
+# ---------------------------------------------------------------------------
+# Connection authoring (set_connection)
+# ---------------------------------------------------------------------------
+
+
+def test_set_connection_creates_new(tmp_path, bald_eagle_project):
+    source_geom = bald_eagle_project / "BaldEagleDamBrk.g13"
+    geom_file = tmp_path / "BaldEagleDamBrk.g13"
+    shutil.copy2(source_geom, geom_file)
+
+    coords = [(100.0, 200.0), (150.0, 250.0), (200.0, 300.0)]
+    GeomLateral.set_connection(
+        geom_file,
+        "New Test Conn",
+        coords,
+        "Reservoir Pool",
+        "BaldEagleCr",
+        create_backup=False,
+    )
+
+    connections = GeomLateral.get_connections(geom_file)
+    assert "New Test Conn" in connections["Name"].values
+    assert len(connections) == 5
+
+    new_coords = GeomLateral.get_connection_line_coords(geom_file, "New Test Conn")
+    assert len(new_coords) == 3
+    assert new_coords.iloc[0]["X"] == pytest.approx(100.0)
+
+
+def test_set_connection_replaces_existing(tmp_path, bald_eagle_project):
+    source_geom = bald_eagle_project / "BaldEagleDamBrk.g13"
+    geom_file = tmp_path / "BaldEagleDamBrk.g13"
+    shutil.copy2(source_geom, geom_file)
+
+    new_coords = [(500.0, 600.0), (550.0, 650.0)]
+    GeomLateral.set_connection(
+        geom_file,
+        "Dam",
+        new_coords,
+        "Reservoir Pool",
+        "BaldEagleCr",
+        create_backup=False,
+    )
+
+    connections = GeomLateral.get_connections(geom_file)
+    assert len(connections) == 4
+    dam = connections.loc[connections["Name"] == "Dam"].iloc[0]
+    assert dam["LinePoints"] == 2
+
+    coords_df = GeomLateral.get_connection_line_coords(geom_file, "Dam")
+    assert len(coords_df) == 2
+    assert coords_df.iloc[0]["X"] == pytest.approx(500.0)
+
+
+def test_set_connection_default_profile(tmp_path):
+    geom_file = _write_geom_file(
+        tmp_path,
+        [
+            "Geom Title=Profile Test\n",
+            "Storage Area=PoolA,0,0\n",
+            "Storage Area=PoolB,0,0\n",
+        ],
+    )
+
+    coords = [(0.0, 0.0), (100.0, 0.0)]
+    GeomLateral.set_connection(
+        geom_file,
+        "TestConn",
+        coords,
+        "PoolA",
+        "PoolB",
+        create_backup=False,
+    )
+
+    profile = GeomLateral.get_connection_profile(geom_file, "TestConn")
+    assert len(profile) == 2
+    assert profile.iloc[0]["Station"] == pytest.approx(0.0)
+    assert profile.iloc[1]["Station"] == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
+# Connection gates authoring
+# ---------------------------------------------------------------------------
+
+
+def test_set_connection_gates_round_trip(tmp_path, bald_eagle_project):
+    source_geom = bald_eagle_project / "BaldEagleDamBrk.g13"
+    geom_file = tmp_path / "BaldEagleDamBrk.g13"
+    shutil.copy2(source_geom, geom_file)
+
+    new_gates = [
+        {
+            "GateName": "TestGate",
+            "Width": 5.0,
+            "Height": 10.0,
+            "InvertElevation": 600.0,
+            "GateCoefficient": 0.7,
+            "NumOpenings": 1,
+            "OpeningStations": [3000.0],
+        }
+    ]
+
+    GeomLateral.set_connection_gates(
+        geom_file,
+        "Lower Levee",
+        new_gates,
+        create_backup=False,
+    )
+
+    gates = GeomLateral.get_connection_gates(geom_file, "Lower Levee")
+    assert len(gates) == 1
+    assert gates.iloc[0]["GateName"] == "TestGate"
+    assert gates.iloc[0]["Width"] == pytest.approx(5.0)
+
+
+def test_set_connection_gates_replaces_existing(tmp_path, bald_eagle_project):
+    source_geom = bald_eagle_project / "BaldEagleDamBrk.g13"
+    geom_file = tmp_path / "BaldEagleDamBrk.g13"
+    shutil.copy2(source_geom, geom_file)
+
+    replacement = [
+        {
+            "GateName": "Replaced",
+            "Width": 12.0,
+            "Height": 20.0,
+            "InvertElevation": 580.0,
+            "GateCoefficient": 0.6,
+            "NumOpenings": 3,
+            "OpeningStations": [5000.0, 5020.0, 5040.0],
+        }
+    ]
+
+    GeomLateral.set_connection_gates(
+        geom_file,
+        "Dam",
+        replacement,
+        create_backup=False,
+    )
+
+    gates = GeomLateral.get_connection_gates(geom_file, "Dam")
+    assert len(gates) == 1
+    assert gates.iloc[0]["GateName"] == "Replaced"
+    assert gates.iloc[0]["NumOpenings"] == 3
+
+    old_gates_present = any(g == "Gate #1" for g in gates["GateName"])
+    assert not old_gates_present
+
+
+# ---------------------------------------------------------------------------
+# Connection deletion
+# ---------------------------------------------------------------------------
+
+
+def test_delete_connection(tmp_path, bald_eagle_project):
+    source_geom = bald_eagle_project / "BaldEagleDamBrk.g13"
+    geom_file = tmp_path / "BaldEagleDamBrk.g13"
+    shutil.copy2(source_geom, geom_file)
+
+    GeomLateral.delete_connection(geom_file, "Upper Levee", create_backup=False)
+
+    connections = GeomLateral.get_connections(geom_file)
+    assert len(connections) == 3
+    assert "Upper Levee" not in connections["Name"].values
+
+
+# ---------------------------------------------------------------------------
+# Coordinate overflow
+# ---------------------------------------------------------------------------
+
+
+def test_connection_line_overflow(tmp_path):
+    """Coordinates > 10M (state plane) should round-trip through 16-char fields."""
+    geom_file = _write_geom_file(
+        tmp_path,
+        [
+            "Geom Title=Overflow Test\n",
+            "Connection=BigCoords        ,12345678.5,98765432.5\n",
+            "Connection Desc=\n",
+            "Connection Line=2\n",
+            "    12345678.123    98765432.456    12345679.789    98765433.012\n",
+            "Connection Up SA=PoolA           \n",
+            "Connection Dn SA=PoolB           \n",
+            "Conn Routing Type= 1 \n",
+            "Conn Weir SE= 2 \n",
+            "   0.000   0.000   1.000   0.000\n",
+            "Conn Outlet Rating Curve= 0 ,False,,\n",
+        ],
+    )
+
+    coords = GeomLateral.get_connection_line_coords(geom_file, "BigCoords")
+    assert len(coords) == 2
+    assert coords.iloc[0]["X"] == pytest.approx(12345678.123, rel=1e-3)
+    assert coords.iloc[0]["Y"] == pytest.approx(98765432.456, rel=1e-3)
+
+
+# ---------------------------------------------------------------------------
+# Insertion order
+# ---------------------------------------------------------------------------
+
+
+def test_set_connection_insert_order(tmp_path):
+    """New connection goes after existing connections, before BC Line blocks."""
+    geom_file = _write_geom_file(
+        tmp_path,
+        [
+            "Geom Title=Insert Order Test\n",
+            "Connection=Existing         ,100,200\n",
+            "Connection Desc=\n",
+            "Connection Line=2\n",
+            "             100             200             300             400\n",
+            "Connection Up SA=PoolA           \n",
+            "Connection Dn SA=PoolB           \n",
+            "Conn Routing Type= 1 \n",
+            "Conn Weir SE= 2 \n",
+            "   0.000   0.000   1.000   0.000\n",
+            "Conn Outlet Rating Curve= 0 ,False,,\n",
+            "BC Line Name=Downstream\n",
+        ],
+    )
+
+    GeomLateral.set_connection(
+        geom_file,
+        "NewConn",
+        [(500.0, 600.0), (700.0, 800.0)],
+        "PoolA",
+        "PoolB",
+        create_backup=False,
+    )
+
+    with open(geom_file, 'r', encoding='utf-8') as f:
+        text = f.read()
+
+    existing_pos = text.index("Connection=Existing")
+    new_pos = text.index("Connection=NewConn")
+    bc_pos = text.index("BC Line Name=Downstream")
+
+    assert existing_pos < new_pos < bc_pos

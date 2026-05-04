@@ -10,9 +10,14 @@ List of Functions:
 - get_lateral_structures() - List all lateral weir structures
 - get_weir_profile() - Read station/elevation profile for lateral weir
 - get_connections() - List all SA/2D area connections
+- get_connection_line_coords() - Read polyline XY coords for connection
 - get_connection_profile() - Read dam/weir crest profile for connection
 - set_connection_profile() - Write dam/weir crest profile for connection
+- set_connection() - Create or replace a SA/2D connection block
 - get_connection_gates() - Read gate definitions for connection
+- set_connection_gates() - Write gate definitions for connection
+- delete_connection() - Remove a connection block
+- set_connection_profile_from_terrain() - Sample terrain and write profile
 
 Example Usage:
     >>> from ras_commander import GeomLateral
@@ -35,6 +40,7 @@ import pandas as pd
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 from .GeomParser import GeomParser
+from .GeomStorage import GeomStorage
 
 logger = get_logger(__name__)
 
@@ -265,6 +271,125 @@ class GeomLateral:
             return float(value.strip())
         except (TypeError, ValueError):
             return None
+
+    CONN_LINE_COLUMN = 16
+    CONN_LINE_VALUES_PER_LINE = 4
+
+    @staticmethod
+    def _polyline_centroid(coords: List[Tuple[float, float]]) -> Tuple[float, float]:
+        """Return the average XY of a polyline for the connection header."""
+        xs = [c[0] for c in coords]
+        ys = [c[1] for c in coords]
+        return sum(xs) / len(xs), sum(ys) / len(ys)
+
+    @staticmethod
+    def _pad_name(name: str, width: int = 16) -> str:
+        """Left-justify *name* and pad or truncate to *width* characters."""
+        return name.ljust(width)[:width]
+
+    @staticmethod
+    def _connection_insert_index(lines: List[str]) -> int:
+        """Return the line index where a new connection block should be inserted.
+
+        Inserts after the last existing connection block, or before the first
+        ``BC Line Name=`` block.  Falls back to end-of-file.
+        """
+        last_conn_end = None
+        for start_idx, end_idx, _, _ in GeomLateral._iter_connection_blocks(lines):
+            last_conn_end = end_idx
+
+        if last_conn_end is not None:
+            return last_conn_end
+
+        for i, line in enumerate(lines):
+            if line.startswith("BC Line Name="):
+                return i
+
+        return len(lines)
+
+    @staticmethod
+    def _build_connection_block(
+        name: str,
+        coords: List[Tuple[float, float]],
+        upstream: str,
+        downstream: str,
+        *,
+        routing_type: int = 1,
+        weir_width: float = 100.0,
+        weir_coef: float = 3.0,
+        overflow_method_2d: bool = True,
+    ) -> List[str]:
+        """Assemble a complete modern ``Connection=`` block as a list of lines."""
+        cx, cy = GeomLateral._polyline_centroid(coords)
+        up_padded = GeomLateral._pad_name(upstream)
+        dn_padded = GeomLateral._pad_name(downstream)
+
+        lines: List[str] = []
+        lines.append(f"Connection={GeomLateral._pad_name(name)},{cx},{cy}\n")
+        lines.append("Connection Desc=\n")
+        lines.append(f"Connection Line={len(coords)}\n")
+        lines.extend(GeomStorage._format_breakline_coord_lines(coords))
+        lines.append(f"Connection Up SA={up_padded}\n")
+        lines.append(f"Connection Dn SA={dn_padded}\n")
+        lines.append(f"Conn Routing Type= {routing_type} \n")
+        lines.append("Conn Use RC Family=False\n")
+        lines.append(f"Conn OverFlow Method 2D={'True' if overflow_method_2d else 'False'}\n")
+        lines.append(f"Conn Weir WD={weir_width}\n")
+        lines.append(f"Conn Weir Coef={weir_coef}\n")
+        # Default 2-point flat weir profile at elevation 0
+        lines.append("Conn Weir SE= 2 \n")
+        lines.append(
+            GeomParser.format_fixed_width(
+                [0.0, 0.0, 1.0, 0.0],
+                column_width=GeomLateral.FIXED_WIDTH_COLUMN,
+                values_per_line=GeomLateral.VALUES_PER_LINE,
+                precision=3,
+            )[0]
+        )
+        lines.append("Conn Outlet Rating Curve= 0 ,False,,\n")
+        return lines
+
+    @staticmethod
+    def _format_gate_block(gates) -> List[str]:
+        """Format gate definitions as HEC-RAS connection gate lines.
+
+        *gates* may be a DataFrame or list of dicts with keys:
+        GateName, Width, Height, InvertElevation, GateCoefficient, NumOpenings,
+        OpeningStations.
+        """
+        if isinstance(gates, pd.DataFrame):
+            gate_rows = gates.to_dict('records')
+        else:
+            gate_rows = list(gates)
+
+        lines: List[str] = []
+        for g in gate_rows:
+            name = g.get('GateName', 'Gate')
+            width = g.get('Width', 1.0)
+            height = g.get('Height', 1.0)
+            invert = g.get('InvertElevation', 0.0)
+            coef = g.get('GateCoefficient', 0.65)
+            num_openings = int(g.get('NumOpenings', 1))
+            stations = g.get('OpeningStations', [])
+
+            lines.append(
+                "Conn Gate Name Wd,H,Inv,GCoef,Exp_T,Exp_O,Exp_H,Type,WCoef,Is_Ogee,SpillHt,DesHd,#Openings\n"
+            )
+            lines.append(
+                f"{name},{width},{height},{invert},{coef},0,1,0.5, 0 ,3, 0 ,,, {num_openings} ,0,0.8, 0 ,{coef},,0,0,0, 0 \n"
+            )
+            if stations:
+                station_lines = GeomParser.format_fixed_width(
+                    [float(s) for s in stations],
+                    column_width=GeomLateral.FIXED_WIDTH_COLUMN,
+                    values_per_line=GeomLateral.VALUES_PER_LINE,
+                )
+                lines.extend(station_lines)
+            for idx in range(num_openings):
+                lines.append(f"Conn Gate Opening={idx + 1},Opening #{idx + 1},0\n")
+            lines.append("\n")
+
+        return lines
 
     @staticmethod
     @log_call
@@ -583,6 +708,94 @@ class GeomLateral:
 
     @staticmethod
     @log_call
+    def get_connection_line_coords(
+        geom_file: Union[str, Path],
+        connection_name: str,
+    ) -> pd.DataFrame:
+        """
+        Extract the polyline XY coordinates of a SA/2D connection line.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name
+
+        Returns:
+            pd.DataFrame: DataFrame with columns X, Y
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If connection not found or has no line coordinates
+        """
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        try:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+
+            block = GeomLateral._find_connection_block(lines, connection_name)
+            if block is None:
+                raise ValueError(f"Connection not found: {connection_name}")
+
+            start_idx, end_idx, block_lines, _ = block
+
+            line_idx = None
+            num_points = 0
+            for bi, bline in enumerate(block_lines):
+                if bline.startswith("Connection Line="):
+                    num_points = GeomLateral._parse_optional_int(
+                        GeomParser.extract_keyword_value(bline, "Connection Line")
+                    ) or 0
+                    line_idx = bi
+                    break
+
+            if line_idx is None or num_points == 0:
+                raise ValueError(f"No connection line data for {connection_name}")
+
+            total_values = num_points * 2
+            values_fw: List[float] = []
+            values_ws: List[float] = []
+            data_start = line_idx + 1
+
+            i = data_start
+            while len(values_fw) < total_values and i < len(block_lines):
+                if '=' in block_lines[i]:
+                    break
+                raw = block_lines[i].rstrip('\n')
+                for j in range(0, len(raw), GeomLateral.CONN_LINE_COLUMN):
+                    chunk = raw[j:j + GeomLateral.CONN_LINE_COLUMN].strip()
+                    if chunk:
+                        try:
+                            values_fw.append(float(chunk))
+                        except ValueError:
+                            pass
+                parts = raw.split()
+                for p in parts:
+                    try:
+                        values_ws.append(float(p))
+                    except ValueError:
+                        pass
+                i += 1
+
+            values = values_fw if len(values_fw) >= len(values_ws) else values_ws
+
+            xs = values[0::2]
+            ys = values[1::2]
+
+            return pd.DataFrame({'X': xs[:num_points], 'Y': ys[:num_points]})
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error reading connection line coords: {str(e)}")
+            raise IOError(f"Failed to read connection line coords: {str(e)}")
+
+    @staticmethod
+    @log_call
     def get_connection_profile(geom_file: Union[str, Path],
                               connection_name: str) -> pd.DataFrame:
         """
@@ -725,6 +938,83 @@ class GeomLateral:
 
     @staticmethod
     @log_call
+    def set_connection(
+        geom_file: Union[str, Path],
+        connection_name: str,
+        coordinates: List[Tuple[float, float]],
+        upstream_area: str,
+        downstream_area: str,
+        *,
+        routing_type: int = 1,
+        weir_width: float = 100.0,
+        weir_coef: float = 3.0,
+        overflow_method_2d: bool = True,
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """
+        Create or replace a SA/2D connection block in a geometry file.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name
+            coordinates: List of (x, y) tuples defining the connection line
+            upstream_area: Upstream storage/2D area name
+            downstream_area: Downstream storage/2D area name
+            routing_type: Routing type (1 = 2D structure, default)
+            weir_width: Weir width in model units (default 100)
+            weir_coef: Weir discharge coefficient (default 3.0)
+            overflow_method_2d: Use 2D overflow method (default True)
+            create_backup: Create .bak backup before writing (default True)
+
+        Returns:
+            Optional[Path]: Backup path when create_backup=True, else None
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If coordinates are empty
+        """
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+        if not coordinates or len(coordinates) < 2:
+            raise ValueError("coordinates must contain at least 2 (x, y) points")
+
+        try:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+
+            new_block = GeomLateral._build_connection_block(
+                connection_name,
+                coordinates,
+                upstream_area,
+                downstream_area,
+                routing_type=routing_type,
+                weir_width=weir_width,
+                weir_coef=weir_coef,
+                overflow_method_2d=overflow_method_2d,
+            )
+
+            existing = GeomLateral._find_connection_block(lines, connection_name)
+            if existing is not None:
+                start_idx, end_idx, _, _ = existing
+                lines[start_idx:end_idx] = new_block
+            else:
+                insert_at = GeomLateral._connection_insert_index(lines)
+                lines[insert_at:insert_at] = new_block
+
+            return GeomParser.safe_write_geometry(geom_file, lines, create_backup=create_backup)
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error writing connection: {str(e)}")
+            raise IOError(f"Failed to write connection: {str(e)}")
+
+    @staticmethod
+    @log_call
     def get_connection_gates(geom_file: Union[str, Path],
                             connection_name: str) -> pd.DataFrame:
         """
@@ -826,3 +1116,179 @@ class GeomLateral:
         except Exception as e:
             logger.error(f"Error reading connection gates: {str(e)}")
             raise IOError(f"Failed to read connection gates: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def set_connection_gates(
+        geom_file: Union[str, Path],
+        connection_name: str,
+        gates,
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """
+        Write gate definitions into an existing connection block.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name (must already exist)
+            gates: DataFrame or list of dicts with gate parameters:
+                GateName, Width, Height, InvertElevation, GateCoefficient,
+                NumOpenings, OpeningStations
+            create_backup: Create .bak backup before writing (default True)
+
+        Returns:
+            Optional[Path]: Backup path when create_backup=True, else None
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If connection not found or gates are empty
+        """
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        try:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+
+            block = GeomLateral._find_connection_block(lines, connection_name)
+            if block is None:
+                raise ValueError(f"Connection not found: {connection_name}")
+
+            start_idx, end_idx, block_lines, _ = block
+
+            gate_start = None
+            gate_end = None
+            for bi, bline in enumerate(block_lines):
+                if bline.startswith("Conn Gate Name"):
+                    if gate_start is None:
+                        gate_start = bi
+                elif bline.startswith("Conn Outlet Rating Curve="):
+                    gate_end = bi
+                    break
+
+            new_gate_lines = GeomLateral._format_gate_block(gates)
+
+            if gate_start is not None:
+                abs_gate_start = start_idx + gate_start
+                abs_gate_end = start_idx + (gate_end if gate_end is not None else len(block_lines))
+                lines[abs_gate_start:abs_gate_end] = new_gate_lines
+            else:
+                insert_before = None
+                for bi, bline in enumerate(block_lines):
+                    if bline.startswith("Conn Outlet Rating Curve="):
+                        insert_before = start_idx + bi
+                        break
+                if insert_before is None:
+                    insert_before = end_idx
+                lines[insert_before:insert_before] = new_gate_lines
+
+            return GeomParser.safe_write_geometry(geom_file, lines, create_backup=create_backup)
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error writing connection gates: {str(e)}")
+            raise IOError(f"Failed to write connection gates: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def delete_connection(
+        geom_file: Union[str, Path],
+        connection_name: str,
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """
+        Remove a connection block entirely from a geometry file.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name to delete
+            create_backup: Create .bak backup before writing (default True)
+
+        Returns:
+            Optional[Path]: Backup path when create_backup=True, else None
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If connection not found
+        """
+        geom_file = Path(geom_file)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        try:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+
+            block = GeomLateral._find_connection_block(lines, connection_name)
+            if block is None:
+                raise ValueError(f"Connection not found: {connection_name}")
+
+            start_idx, end_idx, _, _ = block
+            del lines[start_idx:end_idx]
+
+            return GeomParser.safe_write_geometry(geom_file, lines, create_backup=create_backup)
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error deleting connection: {str(e)}")
+            raise IOError(f"Failed to delete connection: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def set_connection_profile_from_terrain(
+        geom_file: Union[str, Path],
+        connection_name: str,
+        rasmap_path: Union[str, Path],
+        geom_hdf_path: Union[str, Path],
+        *,
+        create_backup: bool = True,
+    ) -> pd.DataFrame:
+        """
+        Sample terrain along the connection line and write as weir crest profile.
+
+        Chains ``get_connection_line_coords()`` ->
+        ``RasTerrainMod.get_terrain_profile()`` ->
+        ``set_connection_profile()``.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name
+            rasmap_path: Path to .rasmap file (for terrain layer discovery)
+            geom_hdf_path: Path to geometry HDF file
+            create_backup: Create .bak backup before writing (default True)
+
+        Returns:
+            pd.DataFrame: The sampled terrain profile (Station, Elevation)
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If connection not found or has no line data
+        """
+        from ..RasTerrainMod import RasTerrainMod
+
+        coords_df = GeomLateral.get_connection_line_coords(geom_file, connection_name)
+        coords = list(zip(coords_df['X'].tolist(), coords_df['Y'].tolist()))
+
+        profile_df = RasTerrainMod.get_terrain_profile(
+            rasmap_path,
+            geom_hdf_path,
+            coords,
+        )
+
+        GeomLateral.set_connection_profile(
+            geom_file,
+            connection_name,
+            profile_df,
+            create_backup=create_backup,
+        )
+
+        return profile_df
