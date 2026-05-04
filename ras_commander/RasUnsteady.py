@@ -52,6 +52,7 @@ DSS Boundary Condition Functions:
 - set_boundary_dss_link() - Convert inline BC to DSS-linked (complete state transition)
 - set_boundary_inline_hydrograph() - Write inline hydrograph, convert DSS to inline
 - set_flow_hydrograph_slope() - Add or update `Flow Hydrograph Slope=` (EG slope) for a Flow Hydrograph BC
+- set_normal_depth_boundary() - Add or update Normal Depth (Friction Slope=) for a 1D river or 2D BC line boundary
 - get_unique_dss_subbasins() - Get unique HMS subbasin names from DSS paths
 - update_dss_path_by_station() - Update DSS A-part for specific river station
 - update_flow_multiplier_by_station() - Update/insert QMult for specific river station
@@ -3041,6 +3042,494 @@ class RasUnsteady:
             'updated_in_place': updated_in_place,
             'lines_inserted': lines_inserted,
             'insert_anchor': insert_anchor,
+            'boundaries_df_refreshed': boundaries_df_refreshed,
+            'block_before': block_before,
+            'block_after': block_after,
+        }
+
+    @staticmethod
+    @log_call
+    def set_normal_depth_boundary(
+        unsteady_file: Union[str, Path],
+        friction_slope: float,
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        station: Optional[str] = None,
+        area_2d: Optional[str] = None,
+        bc_line: Optional[str] = None,
+        use_critical_fallback: bool = False,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Add or update a Normal Depth boundary condition for a target boundary
+        in a HEC-RAS unsteady flow file (.u##).
+
+        The method writes a ``Friction Slope=<slope>`` line (or
+        ``Friction Slope=<slope>,<flag>`` when a flag is required, see below)
+        into the matching boundary block. If the block already has a
+        ``Friction Slope=`` line it is updated in place; otherwise the line is
+        inserted immediately after the ``Boundary Location=`` line, and any
+        other inline-table BC header (Flow Hydrograph, Stage Hydrograph,
+        Lateral Inflow, Uniform Lateral Inflow, Precipitation Hydrograph,
+        Rating Curve, Gate Name) plus its inline data and any DSS metadata
+        lines (``Interval=``, ``DSS File=``, ``DSS Path=``, ``Use DSS=``) are
+        stripped so the block ends up as a clean Normal Depth boundary.
+
+        The function ONLY edits a boundary that already exists in the .u## as
+        a ``Boundary Location=`` block. If the matched-by-name location is
+        absent, ``ValueError`` is raised. Authoring brand-new boundary blocks
+        from geometry definitions (``create-if-missing`` semantics with
+        geometry-file validation) is tracked separately as a follow-up; see
+        the *See Also* section.
+
+        Format conventions observed in real HEC-RAS .u## files
+        ------------------------------------------------------
+        Both ``Friction Slope=<slope>`` and ``Friction Slope=<slope>,<flag>``
+        forms appear in HEC-RAS-emitted files. 2D Normal Depth boundaries
+        (e.g. on 2D BC lines) are typically written without the flag, while
+        1D river Normal Depth boundaries usually include ``,0``. To stay
+        compatible with both:
+
+        - When **updating** an existing ``Friction Slope=`` line, the original
+          flag presence is preserved unless ``use_critical_fallback=True``
+          forces the flag to be present and set to ``1``.
+        - When **inserting** a new line (type conversion or the block had no
+          recognized type), the flag is omitted by default, and only emitted
+          (as ``,1``) when ``use_critical_fallback=True``.
+
+        Target resolution
+        -----------------
+        Provide *exactly one* of:
+
+        - ``(river, reach, station)`` for a 1D river boundary, matched on the
+          first three comma-separated fields of ``Boundary Location=``.
+        - ``(area_2d, bc_line)`` for a 2D BC line attached to a 2D Flow Area,
+          matched on the ``Boundary Location=`` 2D Flow Area name (field
+          index 5) and the BC line / SA name (field index 7). For Normal
+          Depth, ``bc_line`` is required: a Normal Depth boundary must attach
+          to a specific 2D Flow Area perimeter BC line, never to the area as
+          a whole.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##), or a 1-2 character unsteady
+            number (e.g. ``"01"``) when a project-bound ``ras_object`` is
+            available.
+        friction_slope : float
+            Energy slope for the Normal Depth boundary (m/m or ft/ft). Must be
+            in the inclusive range ``[1e-7, 1.0]``.
+        river, reach, station : str, optional
+            1D location selector. All three must be provided together and only
+            when the 2D selectors are not used.
+        area_2d : str, optional
+            2D Flow Area name selector. Required for 2D targeting, and must be
+            paired with ``bc_line``.
+        bc_line : str, optional
+            BC line name on the 2D Flow Area perimeter. Required for 2D
+            targeting; Normal Depth never applies area-wide.
+        use_critical_fallback : bool, default False
+            Forces the flag to be present and set to ``1`` on the
+            ``Friction Slope=`` line. When ``False`` (the default), the flag
+            is omitted from newly inserted lines and preserved as-was for
+            in-place updates. ``True`` writes ``Friction Slope=<slope>,1``.
+        ras_object : optional
+            Custom RAS object to use instead of the global one. When the object
+            is initialized for a project, ``boundaries_df`` is refreshed after
+            the write.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Reviewable before/after metadata with keys:
+
+            - ``unsteady_file`` (str): absolute path written
+            - ``matched_location`` (str): the matched ``Boundary Location=``
+              line value (without the leading ``Boundary Location=``)
+            - ``previous_bc_type`` (str | None): boundary type before the edit,
+              or ``None`` if the block had no recognized type keyword
+            - ``previous_friction_slope`` (float | None): prior slope value,
+              or ``None`` if no Friction Slope line existed
+            - ``new_friction_slope`` (float): slope written
+            - ``flag`` (int | None): the integer flag written on the line
+              (typically ``0`` or ``1``), or ``None`` when the line was
+              written without a flag
+            - ``lines_removed`` (int): count of old type-header / inline-data /
+              DSS-metadata lines stripped during a type conversion
+            - ``lines_inserted`` (int): 1 if a new ``Friction Slope=`` line was
+              inserted, otherwise 0
+            - ``updated_in_place`` (bool): True when an existing
+              ``Friction Slope=`` line was overwritten without insertion
+            - ``boundaries_df_refreshed`` (bool): True when ``ras_object``
+              ``boundaries_df`` was refreshed after the write
+            - ``block_before`` (str): the boundary block text before the edit
+            - ``block_after`` (str): the boundary block text after the edit
+
+        Raises
+        ------
+        ValueError
+            If ``friction_slope`` is non-numeric, non-finite, or outside
+            ``[1e-7, 1.0]``; if the target selectors are inconsistent (both
+            1D and 2D selectors provided, or neither); if a 1D selector is
+            partial; if a 2D selector is missing ``bc_line``; or if no
+            boundary in the file matches the selectors.
+        FileNotFoundError
+            If the unsteady flow file does not exist.
+
+        Examples
+        --------
+        Set a Normal Depth boundary on a 2D BC line (writes
+        ``Friction Slope=0.0003`` with no flag, matching the 2D format
+        emitted by HEC-RAS for examples like BaldEagleCrkMulti2D):
+
+        >>> from ras_commander import RasUnsteady
+        >>> result = RasUnsteady.set_normal_depth_boundary(
+        ...     "project.u01",
+        ...     friction_slope=0.0003,
+        ...     area_2d="BaldEagleCr",
+        ...     bc_line="DSNormalDepth",
+        ... )
+        >>> result["new_friction_slope"], result["updated_in_place"]
+        (0.0003, False)
+
+        Update an existing Normal Depth slope on a 1D downstream boundary
+        (preserves the original ``,<flag>`` form when present, e.g.
+        ``Friction Slope=0.00064,0`` becomes ``Friction Slope=0.001,0``):
+
+        >>> RasUnsteady.set_normal_depth_boundary(
+        ...     "project.u01",
+        ...     friction_slope=0.001,
+        ...     river="White",
+        ...     reach="Muncie",
+        ...     station="237.6455",
+        ... )
+
+        See Also
+        --------
+        set_boundary_dss_link : Convert inline BC to DSS-linked.
+        set_boundary_inline_hydrograph : Write inline hydrograph table.
+        ras_commander.RasPrj.get_boundary_conditions : Parse boundaries to
+            ``boundaries_df``.
+
+        Notes
+        -----
+        **Follow-up scope (out of this function)**: validation that the
+        selected boundary actually exists in the geometry file, and creating
+        a brand-new ``Boundary Location=`` block when the boundary exists in
+        geometry but is absent from the .u##. Tracked under a separate Linear
+        ticket so the contracts for placement order, geometry discovery, and
+        1D-vs-2D field padding can be designed end-to-end.
+        """
+        # 1) Validate slope. `numbers.Real` accepts Python int/float plus
+        # numpy scalars (e.g. np.float64 returned from `boundaries_df`
+        # columns), which `isinstance(x, (int, float))` does NOT under
+        # NumPy 2.x. The bool-subclass-of-int guard fires first because
+        # bool would otherwise pass through both checks.
+        if isinstance(friction_slope, bool) or not isinstance(friction_slope, numbers.Real):
+            raise ValueError(
+                f"friction_slope must be a real number, got {type(friction_slope).__name__}"
+            )
+        fs = float(friction_slope)
+        if not np.isfinite(fs):
+            raise ValueError(f"friction_slope must be finite, got {fs!r}")
+        if not (1e-7 <= fs <= 1.0):
+            raise ValueError(
+                f"friction_slope {fs!r} is outside the supported range [1e-7, 1.0]"
+            )
+
+        # 2) Validate target selectors
+        has_1d = any(x is not None for x in (river, reach, station))
+        has_2d = any(x is not None for x in (area_2d, bc_line))
+        if has_1d == has_2d:
+            raise ValueError(
+                "Provide exactly one selector group: (river, reach, station) "
+                "OR (area_2d, bc_line)"
+            )
+        if has_1d and not (river and reach and station):
+            raise ValueError(
+                "1D selector requires all of river, reach, and station"
+            )
+        if has_2d and not (area_2d and bc_line):
+            # Normal Depth on a 2D Flow Area perimeter must attach to a
+            # specific BC line. There is no "area-wide" Normal Depth — that
+            # only makes sense for area-wide types (e.g. Precipitation
+            # Hydrograph), not for Normal Depth.
+            raise ValueError(
+                "2D selector requires both area_2d and bc_line for Normal Depth"
+            )
+
+        # 3) Resolve unsteady file path (allow short numbers when ras is set)
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except Exception:
+                pass
+
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            if ras_obj is None or getattr(ras_obj, 'project_folder', None) is None:
+                raise ValueError(
+                    "Cannot resolve unsteady number without an initialized ras_object"
+                )
+            num = unsteady_file.zfill(2)
+            unsteady_path = Path(ras_obj.project_folder) / f"{ras_obj.project_name}.u{num}"
+        else:
+            unsteady_path = Path(unsteady_file)
+
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        # 4) Read file and find target Boundary Location block
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        def _matches_location(loc_value: str) -> bool:
+            parts = [p.strip() for p in loc_value.split(',')]
+            if has_1d:
+                return (
+                    len(parts) >= 3
+                    and parts[0] == river
+                    and parts[1] == reach
+                    and parts[2] == station
+                )
+            # 2D layout: field 5 = 2D Flow Area name, field 7 = BC line name.
+            # HEC-RAS emits both 8-field and 9-field forms for Boundary
+            # Location; matching is keyed on field index, not field count.
+            if len(parts) < 6 or parts[5] != area_2d:
+                return False
+            if len(parts) < 8 or parts[7] != bc_line:
+                return False
+            return True
+
+        boundary_idx = None
+        matched_loc = None
+        for i, line in enumerate(lines):
+            if line.startswith('Boundary Location='):
+                loc_value = line[len('Boundary Location='):].rstrip('\r\n')
+                if _matches_location(loc_value):
+                    boundary_idx = i
+                    matched_loc = loc_value
+                    break
+
+        if boundary_idx is None:
+            sel = (
+                f"river={river!r}/reach={reach!r}/station={station!r}"
+                if has_1d
+                else f"area_2d={area_2d!r}/bc_line={bc_line!r}"
+            )
+            raise ValueError(
+                f"No boundary matched in {unsteady_path.name} for {sel}. "
+                f"This function only edits boundaries that already exist as "
+                f"`Boundary Location=` blocks; create-if-missing semantics "
+                f"are tracked as a follow-up."
+            )
+
+        # 5) Walk the block to identify Friction Slope, other BC type,
+        #    DSS metadata lines, and BC-type-specific extra metadata that
+        #    must be stripped on type conversion to Normal Depth.
+        OTHER_BC_KEYWORDS = {
+            'Flow Hydrograph=': 'Flow Hydrograph',
+            'Stage Hydrograph=': 'Stage Hydrograph',
+            'Lateral Inflow Hydrograph=': 'Lateral Inflow Hydrograph',
+            'Uniform Lateral Inflow=': 'Uniform Lateral Inflow',
+            'Uniform Lateral Inflow Hydrograph=': 'Uniform Lateral Inflow Hydrograph',
+            'Precipitation Hydrograph=': 'Precipitation Hydrograph',
+            'Rating Curve=': 'Rating Curve',
+            'Gate Name=': 'Gate Opening',
+        }
+        DSS_METADATA_KEYS = ('Interval=', 'DSS File=', 'DSS Path=', 'Use DSS=')
+        # Lines that real HEC-RAS Flow Hydrograph / Stage Hydrograph /
+        # Lateral Inflow blocks carry alongside their inline data and DSS
+        # metadata. Observed in Muncie.u01 and BaldEagleDamBrk.u02. These
+        # are meaningless on a Normal Depth boundary and must be stripped
+        # during type conversion or HEC-RAS will encounter unexpected
+        # keys in the converted block.
+        TYPE_SPECIFIC_EXTRAS = (
+            'Flow Hydrograph Slope=',
+            'Flow Hydrograph QMult=',
+            'Flow Hydrograph QMin=',
+            'Stage Hydrograph TW Check=',
+            'Use Fixed Start Time=',
+            'Fixed Start Date/Time=',
+            'Is Critical Boundary=',
+            'Critical Boundary Flow=',
+        )
+
+        block_end = len(lines)
+        friction_idx = None
+        other_type_idx = None
+        other_type_keyword = None
+        inline_data_start = None
+        inline_data_end = None
+        dss_metadata_idxs: List[int] = []
+        type_extra_idxs: List[int] = []
+
+        j = boundary_idx + 1
+        while j < len(lines) and j < boundary_idx + 500:
+            line = lines[j]
+            if line.startswith('Boundary Location='):
+                block_end = j
+                break
+
+            if line.startswith('Friction Slope='):
+                friction_idx = j
+            else:
+                matched_other = False
+                for kw in OTHER_BC_KEYWORDS:
+                    if line.startswith(kw):
+                        if other_type_idx is None:
+                            other_type_idx = j
+                            other_type_keyword = kw
+                            try:
+                                count = int(line.replace(kw, '').split(',')[0].strip())
+                            except (ValueError, IndexError):
+                                count = 0
+                            if count > 0:
+                                inline_data_start = j + 1
+                                for k in range(inline_data_start, len(lines)):
+                                    data_line = lines[k]
+                                    if '=' in data_line or data_line.startswith(
+                                        'Boundary Location='
+                                    ):
+                                        inline_data_end = k
+                                        break
+                                else:
+                                    inline_data_end = len(lines)
+                        matched_other = True
+                        break
+                if not matched_other:
+                    matched_dss = False
+                    for dss_kw in DSS_METADATA_KEYS:
+                        if line.startswith(dss_kw):
+                            dss_metadata_idxs.append(j)
+                            matched_dss = True
+                            break
+                    if not matched_dss:
+                        for extra_kw in TYPE_SPECIFIC_EXTRAS:
+                            if line.startswith(extra_kw):
+                                type_extra_idxs.append(j)
+                                break
+            j += 1
+
+        block_before = ''.join(lines[boundary_idx:block_end])
+
+        previous_friction_slope: Optional[float] = None
+        previous_friction_flag: Optional[int] = None
+        if friction_idx is not None:
+            payload = lines[friction_idx].replace('Friction Slope=', '').strip()
+            tokens = [t.strip() for t in payload.split(',')]
+            try:
+                previous_friction_slope = float(tokens[0])
+            except (ValueError, IndexError):
+                previous_friction_slope = None
+            if len(tokens) >= 2 and tokens[1] != '':
+                try:
+                    previous_friction_flag = int(tokens[1])
+                except ValueError:
+                    previous_friction_flag = None
+
+        if friction_idx is not None:
+            previous_bc_type = 'Normal Depth'
+        elif other_type_idx is not None:
+            previous_bc_type = OTHER_BC_KEYWORDS.get(other_type_keyword)
+        else:
+            previous_bc_type = None
+
+        # 6) Compose new line and apply edit. HEC-RAS emits both
+        # ``Friction Slope=<slope>`` (typical for 2D BC lines) and
+        # ``Friction Slope=<slope>,<flag>`` (typical for 1D river NDs);
+        # preserve the form AND the flag value present on update, default
+        # to no-flag on insert, and force flag=1 only when
+        # ``use_critical_fallback=True``.
+        if use_critical_fallback:
+            flag: Optional[int] = 1
+        elif friction_idx is not None and previous_friction_flag is not None:
+            # Preserve the existing flag value (e.g. an existing flag=1 is
+            # NOT silently reset to 0 when the user calls without
+            # use_critical_fallback). The user opts into changing the flag
+            # via the use_critical_fallback parameter.
+            flag = previous_friction_flag
+        else:
+            flag = None
+        new_fs_line = (
+            f'Friction Slope={fs},{flag}\n' if flag is not None
+            else f'Friction Slope={fs}\n'
+        )
+
+        lines_removed = 0
+        lines_inserted = 0
+        updated_in_place = False
+
+        if friction_idx is not None:
+            # Already a Normal Depth boundary — overwrite slope/flag in place.
+            lines[friction_idx] = new_fs_line
+            updated_in_place = True
+        else:
+            # Convert from another BC type (or fill in a type-less block).
+            # Strip the prior type's header + inline data + DSS metadata
+            # + any BC-type-specific extras (Flow Hydrograph QMult/Slope,
+            # Stage Hydrograph TW Check, Use Fixed Start Time, etc.) so
+            # the resulting Normal Depth block is structurally clean.
+            delete_idxs: set = set()
+            if other_type_idx is not None:
+                delete_idxs.add(other_type_idx)
+                if inline_data_start is not None and inline_data_end is not None:
+                    for k in range(inline_data_start, inline_data_end):
+                        delete_idxs.add(k)
+            for d in dss_metadata_idxs:
+                delete_idxs.add(d)
+            for d in type_extra_idxs:
+                delete_idxs.add(d)
+            for idx in sorted(delete_idxs, reverse=True):
+                del lines[idx]
+                lines_removed += 1
+            lines.insert(boundary_idx + 1, new_fs_line)
+            lines_inserted = 1
+
+        # Recompute end-of-block for the after-snapshot
+        new_block_end = boundary_idx + 1
+        while (
+            new_block_end < len(lines)
+            and not lines[new_block_end].startswith('Boundary Location=')
+        ):
+            new_block_end += 1
+        block_after = ''.join(lines[boundary_idx:new_block_end])
+
+        # 7) Persist file
+        with open(unsteady_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
+        # 8) Refresh boundaries_df where possible
+        boundaries_df_refreshed = False
+        if ras_obj is not None:
+            try:
+                ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+                boundaries_df_refreshed = True
+            except Exception as exc:
+                logger.debug(f"boundaries_df refresh skipped: {exc}")
+
+        logger.info(
+            "Set Normal Depth boundary in %s: matched=%s, slope=%s, flag=%s, "
+            "removed=%d, inserted=%d, updated_in_place=%s",
+            unsteady_path.name,
+            matched_loc.strip(),
+            fs,
+            flag if flag is not None else 'omitted',
+            lines_removed,
+            lines_inserted,
+            updated_in_place,
+        )
+
+        return {
+            'unsteady_file': str(unsteady_path),
+            'matched_location': matched_loc,
+            'previous_bc_type': previous_bc_type,
+            'previous_friction_slope': previous_friction_slope,
+            'new_friction_slope': fs,
+            'flag': flag,
+            'lines_removed': lines_removed,
+            'lines_inserted': lines_inserted,
+            'updated_in_place': updated_in_place,
             'boundaries_df_refreshed': boundaries_df_refreshed,
             'block_before': block_before,
             'block_after': block_after,

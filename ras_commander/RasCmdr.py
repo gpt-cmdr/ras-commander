@@ -135,7 +135,7 @@ class RasCmdr:
         """
         Filter plan entries using normalized two-digit plan numbers.
         """
-        if not plan_number:
+        if plan_number is None:
             return plan_entries
 
         requested_plan_numbers = RasCmdr._normalize_requested_plan_numbers(
