@@ -85,7 +85,7 @@ from .geom import (
     GeomParser, GeomPreprocessor, GeomLandCover,
     GeomCrossSection, GeomStorage, GeomLateral,
     GeomInlineWeir, GeomBridge, GeomCulvert,
-    GeomReferenceFeatures, GeomMesh,
+    GeomReferenceFeatures, GeomBcLines, GeomMesh,
     MeshResult, BCConflict, BCFixResult,
 )
 
@@ -187,7 +187,7 @@ __all__ = [
     'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
     'GeomCrossSection', 'GeomStorage', 'GeomLateral',
     'GeomInlineWeir', 'GeomBridge', 'GeomCulvert',
-    'GeomReferenceFeatures',
+    'GeomReferenceFeatures', 'GeomBcLines',
 
     # Deprecated geometry classes (will be removed before v1.0)
     'RasGeo', 'RasGeometry', 'RasGeometryUtils',

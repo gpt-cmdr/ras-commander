@@ -55,6 +55,7 @@ from .GeomHtabUtils import GeomHtabUtils
 from .GeomHtab import GeomHtab
 from .GeomMetadata import GeomMetadata
 from .GeomReferenceFeatures import GeomReferenceFeatures
+from .GeomBcLines import GeomBcLines
 from .GeomMesh import GeomMesh
 from .GeomMeshDataclasses import MeshResult, BCConflict, BCFixResult
 
@@ -72,6 +73,7 @@ __all__ = [
     'GeomHtab',
     'GeomMetadata',
     'GeomReferenceFeatures',
+    'GeomBcLines',
     'GeomMesh',
     'MeshResult',
     'BCConflict',
