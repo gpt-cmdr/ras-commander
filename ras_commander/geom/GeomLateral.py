@@ -18,6 +18,16 @@ List of Functions:
 - set_connection_gates() - Write gate definitions for connection
 - delete_connection() - Remove a connection block
 - set_connection_profile_from_terrain() - Sample terrain and write profile
+- get_bridge_data() - Read all bridge sub-records for a connection
+- get_bridge_deck() - Read deck geometry for bridge connection
+- get_bridge_piers() - Read pier definitions for bridge connection
+- get_bridge_xs() - Read bridge cross-section
+- get_bridge_approach_xs() - Read approach cross-section
+- set_bridge_deck() - Write deck geometry for bridge connection
+- set_bridge_piers() - Write pier definitions for bridge connection
+- set_bridge_xs() - Write bridge cross-section
+- set_bridge_approach_xs() - Write approach cross-section
+- set_bridge_coefficients() - Write bridge hydraulic coefficients
 
 Example Usage:
     >>> from ras_commander import GeomLateral
@@ -605,15 +615,22 @@ class GeomLateral:
                 - From (str): Upstream area name
                 - To (str): Downstream area name
                 - NumPoints (int): Number of station/elevation points in weir profile
+                - Conn Routing Type (int): Routing method from the geometry file.
+                  1 = standard connection (weir/weir-with-gates).
+                  32 = bridge connection with full hydraulic sub-records
+                  (deck, bridge opening cross-sections, piers, approach
+                  cross-sections, and hydraulic coefficients in ``Conn BR:``
+                  blocks).
+                - HasGate (bool): Whether the connection has gate definitions
+                - HasCulvert (bool): Whether the connection has culvert definitions
 
         Raises:
             FileNotFoundError: If geometry file doesn't exist
 
         Example:
             >>> connections = GeomLateral.get_connections("model.g01")
-            >>> print(f"Found {len(connections)} connections")
-            >>> for _, row in connections.iterrows():
-            ...     print(f"{row['Name']}: {row['From']} -> {row['To']}")
+            >>> bridges = connections[connections["Conn Routing Type"] == 32]
+            >>> print(f"Found {len(bridges)} bridge connections")
         """
         geom_file = Path(geom_file)
 
@@ -689,7 +706,7 @@ class GeomLateral:
                     'CenterX': header_data['CenterX'],
                     'CenterY': header_data['CenterY'],
                     'LinePoints': line_points,
-                    'RoutingType': routing_type,
+                    'Conn Routing Type': routing_type,
                     'HasGate': has_gate,
                     'HasCulvert': has_culvert,
                     'StartLine': start_idx + 1,
@@ -1292,3 +1309,825 @@ class GeomLateral:
         )
 
         return profile_df
+
+    # ------------------------------------------------------------------
+    # Bridge connection sub-record helpers (Conn BR:)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _find_bridge_subrecord_range(block_lines: List[str]) -> Optional[Tuple[int, int]]:
+        """Return (start, end) local indices for Conn BR: sub-records in a block."""
+        start = None
+        end = None
+        for i, line in enumerate(block_lines):
+            if line.startswith("Conn BR:"):
+                if start is None:
+                    start = i
+                end = i + 1
+                while end < len(block_lines) and not block_lines[end].startswith(("Conn BR:", "Connection=", "SA/2D Area Conn=", "Storage Area=")):
+                    if '=' in block_lines[end]:
+                        break
+                    end += 1
+        if start is None:
+            return None
+        return start, end
+
+    @staticmethod
+    def _parse_conn_br_deck(block_lines: List[str], start_idx: int) -> Tuple[Dict[str, Any], int]:
+        """Parse Conn BR: Deck header and endpoint data. Returns (deck_dict, next_idx)."""
+        i = start_idx
+        deck: Dict[str, Any] = {
+            'Distance': 0.0, 'Width': 0.0, 'WeirCoef': 0.0, 'Skew': 0.0,
+            'NumUp': 0, 'NumDn': 0, 'MinLoCord': None, 'MaxHiCord': None,
+            'MaxSubmerge': 0.0, 'IsOgee': 0,
+        }
+
+        if i >= len(block_lines) or not block_lines[i].startswith("Conn BR: Deck"):
+            return deck, i
+
+        i += 1
+        if i < len(block_lines):
+            parts = [p.strip() for p in block_lines[i].split(',')]
+            if len(parts) > 0 and parts[0]: deck['Distance'] = GeomLateral._parse_optional_float(parts[0]) or 0.0
+            if len(parts) > 1 and parts[1]: deck['Width'] = GeomLateral._parse_optional_float(parts[1]) or 0.0
+            if len(parts) > 2 and parts[2]: deck['WeirCoef'] = GeomLateral._parse_optional_float(parts[2]) or 0.0
+            if len(parts) > 3 and parts[3]: deck['Skew'] = GeomLateral._parse_optional_float(parts[3]) or 0.0
+            if len(parts) > 4: deck['NumUp'] = GeomLateral._parse_optional_int(parts[4]) or 0
+            if len(parts) > 5: deck['NumDn'] = GeomLateral._parse_optional_int(parts[5]) or 0
+            if len(parts) > 8 and parts[8]: deck['MaxSubmerge'] = GeomLateral._parse_optional_float(parts[8]) or 0.0
+            if len(parts) > 9: deck['IsOgee'] = GeomLateral._parse_optional_int(parts[9]) or 0
+            i += 1
+
+        num_up = deck['NumUp']
+        num_dn = deck['NumDn']
+        total_deck_values = (num_up + num_dn) * 3
+        deck_values: List[float] = []
+
+        while len(deck_values) < total_deck_values and i < len(block_lines):
+            if block_lines[i].startswith("Conn BR:") or '=' in block_lines[i]:
+                break
+            deck_values.extend(GeomParser.parse_fixed_width(block_lines[i], GeomLateral.FIXED_WIDTH_COLUMN))
+            i += 1
+
+        up_vals = deck_values[:num_up * 3]
+        dn_vals = deck_values[num_up * 3:(num_up + num_dn) * 3]
+
+        up_data = []
+        if num_up > 0 and len(up_vals) >= num_up * 3:
+            for j in range(num_up):
+                up_data.append({'Location': 'upstream', 'Station': up_vals[j],
+                                'Elevation': up_vals[num_up + j], 'LowChord': up_vals[num_up * 2 + j]})
+
+        dn_data = []
+        if num_dn > 0 and len(dn_vals) >= num_dn * 3:
+            for j in range(num_dn):
+                dn_data.append({'Location': 'downstream', 'Station': dn_vals[j],
+                                'Elevation': dn_vals[num_dn + j], 'LowChord': dn_vals[num_dn * 2 + j]})
+
+        deck['Points'] = up_data + dn_data
+        return deck, i
+
+    @staticmethod
+    def _parse_conn_br_xs(block_lines: List[str], start_idx: int, prefix: str, side: int) -> Tuple[Dict[str, Any], int]:
+        """Parse a Conn BR: BR SE= or XS SE= record with bank stations and Manning's n."""
+        keyword = f"Conn BR: {prefix} SE={side},"
+        xs_data: Dict[str, Any] = {'Side': side, 'Prefix': prefix, 'NumPoints': 0,
+                                    'Stations': [], 'Elevations': [],
+                                    'BankStationLeft': None, 'BankStationRight': None,
+                                    'ManningsN': []}
+        i = start_idx
+
+        if i >= len(block_lines) or not block_lines[i].startswith(keyword):
+            return xs_data, i
+
+        count_str = block_lines[i][len(keyword):].strip()
+        num_points = GeomLateral._parse_optional_int(count_str) or 0
+        xs_data['NumPoints'] = num_points
+        i += 1
+
+        if num_points > 0:
+            total_values = num_points * 2
+            values: List[float] = []
+            while len(values) < total_values and i < len(block_lines):
+                if block_lines[i].startswith("Conn BR:") or '=' in block_lines[i]:
+                    break
+                values.extend(GeomParser.parse_fixed_width(block_lines[i], GeomLateral.FIXED_WIDTH_COLUMN))
+                i += 1
+            xs_data['Stations'] = values[0::2][:num_points]
+            xs_data['Elevations'] = values[1::2][:num_points]
+
+        bank_keyword = f"Conn BR: {prefix} Bank Stations={side},"
+        if i < len(block_lines) and block_lines[i].startswith(bank_keyword):
+            bank_parts = block_lines[i][len(bank_keyword):].split(',')
+            if len(bank_parts) >= 1:
+                xs_data['BankStationLeft'] = GeomLateral._parse_optional_float(bank_parts[0])
+            if len(bank_parts) >= 2:
+                xs_data['BankStationRight'] = GeomLateral._parse_optional_float(bank_parts[1])
+            i += 1
+
+        mann_keyword = f"Conn BR: {prefix} Mann={side},"
+        if i < len(block_lines) and block_lines[i].startswith(mann_keyword):
+            mann_count_str = block_lines[i][len(mann_keyword):].strip()
+            mann_count = GeomLateral._parse_optional_int(mann_count_str) or 0
+            i += 1
+            mann_values: List[float] = []
+            while len(mann_values) < mann_count * 2 and i < len(block_lines):
+                if block_lines[i].startswith("Conn BR:") or '=' in block_lines[i]:
+                    break
+                mann_values.extend(GeomParser.parse_fixed_width(block_lines[i], GeomLateral.FIXED_WIDTH_COLUMN))
+                i += 1
+            xs_data['ManningsN'] = list(zip(mann_values[0::2], mann_values[1::2]))
+
+        return xs_data, i
+
+    @staticmethod
+    def _parse_conn_br_piers(block_lines: List[str], start_idx: int) -> Tuple[List[Dict[str, Any]], int]:
+        """Parse all consecutive Conn BR: Pier records. Returns (pier_list, next_idx)."""
+        piers: List[Dict[str, Any]] = []
+        i = start_idx
+        pier_keyword = "Conn BR: Pier Skew, UpSta & Num, DnSta & Num="
+
+        while i < len(block_lines) and block_lines[i].startswith(pier_keyword):
+            value_str = block_lines[i][len(pier_keyword):].strip()
+            parts = [p.strip() for p in value_str.split(',')]
+
+            pier: Dict[str, Any] = {
+                'PierIndex': len(piers) + 1,
+                'Skew': GeomLateral._parse_optional_float(parts[0]) if len(parts) > 0 else None,
+                'UpstreamStation': GeomLateral._parse_optional_float(parts[1]) if len(parts) > 1 else None,
+                'NumUpstreamPoints': GeomLateral._parse_optional_int(parts[2]) if len(parts) > 2 else 0,
+                'DownstreamStation': GeomLateral._parse_optional_float(parts[3]) if len(parts) > 3 else None,
+                'NumDownstreamPoints': GeomLateral._parse_optional_int(parts[4]) if len(parts) > 4 else 0,
+                'UpstreamWidths': [], 'UpstreamElevations': [],
+                'DownstreamWidths': [], 'DownstreamElevations': [],
+            }
+            i += 1
+            num_up = pier['NumUpstreamPoints'] or 0
+            num_dn = pier['NumDownstreamPoints'] or 0
+
+            if num_up > 0 and i + 1 < len(block_lines):
+                if '=' not in block_lines[i]:
+                    pier['UpstreamWidths'] = GeomParser.parse_fixed_width(block_lines[i], GeomLateral.FIXED_WIDTH_COLUMN)[:num_up]
+                    i += 1
+                if i < len(block_lines) and '=' not in block_lines[i]:
+                    pier['UpstreamElevations'] = GeomParser.parse_fixed_width(block_lines[i], GeomLateral.FIXED_WIDTH_COLUMN)[:num_up]
+                    i += 1
+
+            if num_dn > 0 and i + 1 < len(block_lines):
+                if '=' not in block_lines[i]:
+                    pier['DownstreamWidths'] = GeomParser.parse_fixed_width(block_lines[i], GeomLateral.FIXED_WIDTH_COLUMN)[:num_dn]
+                    i += 1
+                if i < len(block_lines) and '=' not in block_lines[i]:
+                    pier['DownstreamElevations'] = GeomParser.parse_fixed_width(block_lines[i], GeomLateral.FIXED_WIDTH_COLUMN)[:num_dn]
+                    i += 1
+
+            piers.append(pier)
+
+        return piers, i
+
+    @staticmethod
+    def _parse_bridge_subrecords(block_lines: List[str]) -> Dict[str, Any]:
+        """Parse all Conn BR: sub-records in a connection block into a structured dict."""
+        result: Dict[str, Any] = {
+            'bridge_params': None,
+            'deck': None,
+            'bridge_xs': [None, None],
+            'piers': [],
+            'coefficients': None,
+            'approach_xs': [None, None],
+        }
+
+        br_range = GeomLateral._find_bridge_subrecord_range(block_lines)
+        if br_range is None:
+            return result
+
+        i = br_range[0]
+
+        if i < len(block_lines) and block_lines[i].startswith("Conn BR: Bridge="):
+            param_str = block_lines[i][len("Conn BR: Bridge="):].strip()
+            result['bridge_params'] = [p.strip() for p in param_str.split(',')]
+            i += 1
+
+        if i < len(block_lines) and block_lines[i].startswith("Conn BR: Deck"):
+            result['deck'], i = GeomLateral._parse_conn_br_deck(block_lines, i)
+
+        for side in (1, 2):
+            keyword = f"Conn BR: BR SE={side},"
+            if i < len(block_lines) and block_lines[i].startswith(keyword):
+                xs_data, i = GeomLateral._parse_conn_br_xs(block_lines, i, "BR", side)
+                result['bridge_xs'][side - 1] = xs_data
+
+        if i < len(block_lines) and block_lines[i].startswith("Conn BR: Pier Skew"):
+            result['piers'], i = GeomLateral._parse_conn_br_piers(block_lines, i)
+
+        if i < len(block_lines) and block_lines[i].startswith("Conn BR: BR Coef="):
+            coef_str = block_lines[i][len("Conn BR: BR Coef="):].strip()
+            result['coefficients'] = [p.strip() for p in coef_str.split(',')]
+            i += 1
+
+        for side in (1, 2):
+            keyword = f"Conn BR: XS SE={side},"
+            if i < len(block_lines) and block_lines[i].startswith(keyword):
+                xs_data, i = GeomLateral._parse_conn_br_xs(block_lines, i, "XS", side)
+                result['approach_xs'][side - 1] = xs_data
+
+        return result
+
+    # ------------------------------------------------------------------
+    # Bridge connection public read methods
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @log_call
+    def get_bridge_data(
+        geom_file: Union[str, Path],
+        connection_name: str,
+    ) -> Dict[str, Any]:
+        """
+        Extract all bridge sub-record data for a connection.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name
+
+        Returns:
+            dict with keys: bridge_params, deck, bridge_xs, piers, coefficients, approach_xs
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If connection not found or has no bridge sub-records
+        """
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        try:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+
+            block = GeomLateral._find_connection_block(lines, connection_name)
+            if block is None:
+                raise ValueError(f"Connection not found: {connection_name}")
+
+            _, _, block_lines, _ = block
+            data = GeomLateral._parse_bridge_subrecords(block_lines)
+
+            if data['bridge_params'] is None:
+                raise ValueError(f"No bridge sub-records for connection {connection_name}")
+
+            return data
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error reading bridge data: {str(e)}")
+            raise IOError(f"Failed to read bridge data: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def get_bridge_deck(
+        geom_file: Union[str, Path],
+        connection_name: str,
+    ) -> pd.DataFrame:
+        """
+        Extract deck geometry for a bridge connection.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name
+
+        Returns:
+            pd.DataFrame with columns: Location, Station, Elevation, LowChord
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If connection or deck not found
+        """
+        data = GeomLateral.get_bridge_data(geom_file, connection_name)
+        deck = data.get('deck')
+        if deck is None or not deck.get('Points'):
+            raise ValueError(f"No deck data for connection {connection_name}")
+
+        return pd.DataFrame(deck['Points'])
+
+    @staticmethod
+    @log_call
+    def get_bridge_piers(
+        geom_file: Union[str, Path],
+        connection_name: str,
+    ) -> pd.DataFrame:
+        """
+        Extract pier definitions for a bridge connection.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name
+
+        Returns:
+            pd.DataFrame with columns: PierIndex, Skew, UpstreamStation,
+            NumUpstreamPoints, DownstreamStation, NumDownstreamPoints,
+            UpstreamWidths, UpstreamElevations, DownstreamWidths, DownstreamElevations
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If connection not found or has no piers
+        """
+        data = GeomLateral.get_bridge_data(geom_file, connection_name)
+        piers = data.get('piers', [])
+        if not piers:
+            raise ValueError(f"No piers found for connection {connection_name}")
+
+        return pd.DataFrame(piers)
+
+    @staticmethod
+    @log_call
+    def get_bridge_xs(
+        geom_file: Union[str, Path],
+        connection_name: str,
+        side: int = 1,
+    ) -> pd.DataFrame:
+        """
+        Extract bridge cross-section for a connection.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name
+            side: 1 for upstream, 2 for downstream
+
+        Returns:
+            pd.DataFrame with columns: Station, Elevation
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If connection or cross-section not found
+        """
+        data = GeomLateral.get_bridge_data(geom_file, connection_name)
+        xs = data['bridge_xs'][side - 1]
+        if xs is None or xs['NumPoints'] == 0:
+            raise ValueError(f"No bridge XS (side {side}) for connection {connection_name}")
+
+        return pd.DataFrame({'Station': xs['Stations'], 'Elevation': xs['Elevations']})
+
+    @staticmethod
+    @log_call
+    def get_bridge_approach_xs(
+        geom_file: Union[str, Path],
+        connection_name: str,
+        side: int = 1,
+    ) -> pd.DataFrame:
+        """
+        Extract approach cross-section for a bridge connection.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name
+            side: 1 for upstream, 2 for downstream
+
+        Returns:
+            pd.DataFrame with columns: Station, Elevation
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If connection or approach XS not found
+        """
+        data = GeomLateral.get_bridge_data(geom_file, connection_name)
+        xs = data['approach_xs'][side - 1]
+        if xs is None or xs['NumPoints'] == 0:
+            raise ValueError(f"No approach XS (side {side}) for connection {connection_name}")
+
+        return pd.DataFrame({'Station': xs['Stations'], 'Elevation': xs['Elevations']})
+
+    # ------------------------------------------------------------------
+    # Bridge sub-record formatters
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _format_conn_br_deck(deck: Dict[str, Any]) -> List[str]:
+        """Format deck definition as Conn BR: lines."""
+        lines: List[str] = []
+        lines.append("Conn BR: Deck Dist Width WeirC Skew NumUp NumDn MinLoCord MaxHiCord MaxSubmerge Is_Ogee\n")
+        num_up = deck.get('NumUp', 0)
+        num_dn = deck.get('NumDn', 0)
+        min_lo = deck.get('MinLoCord') or ''
+        max_hi = deck.get('MaxHiCord') or ''
+        lines.append(
+            f"{deck.get('Distance', 0)},{deck.get('Width', 0)},{deck.get('WeirCoef', 0)},"
+            f"{deck.get('Skew', 0)}, {num_up}, {num_dn}, {min_lo}, {max_hi}, "
+            f"{deck.get('MaxSubmerge', 0.98)}, {deck.get('IsOgee', 0)}, 0,0,,\n"
+        )
+
+        points = deck.get('Points', [])
+        up_pts = [p for p in points if p['Location'] == 'upstream']
+        dn_pts = [p for p in points if p['Location'] == 'downstream']
+
+        for group in (up_pts, dn_pts):
+            if group:
+                stations = [p['Station'] for p in group]
+                elevations = [p['Elevation'] for p in group]
+                lowchords = [p['LowChord'] for p in group]
+                lines.extend(GeomParser.format_fixed_width(stations, GeomLateral.FIXED_WIDTH_COLUMN, GeomLateral.VALUES_PER_LINE))
+                lines.extend(GeomParser.format_fixed_width(elevations, GeomLateral.FIXED_WIDTH_COLUMN, GeomLateral.VALUES_PER_LINE))
+                lines.extend(GeomParser.format_fixed_width(lowchords, GeomLateral.FIXED_WIDTH_COLUMN, GeomLateral.VALUES_PER_LINE))
+
+        return lines
+
+    @staticmethod
+    def _format_conn_br_xs(xs_data: Dict[str, Any], prefix: str) -> List[str]:
+        """Format a bridge or approach cross-section (BR or XS) as Conn BR: lines."""
+        side = xs_data.get('Side', 1)
+        num_points = xs_data.get('NumPoints', 0)
+        lines: List[str] = []
+
+        lines.append(f"Conn BR: {prefix} SE={side},{num_points}\n")
+        if num_points > 0:
+            values = []
+            for s, e in zip(xs_data.get('Stations', []), xs_data.get('Elevations', [])):
+                values.extend([s, e])
+            lines.extend(GeomParser.format_fixed_width(values, GeomLateral.FIXED_WIDTH_COLUMN, GeomLateral.VALUES_PER_LINE))
+
+        left = xs_data.get('BankStationLeft')
+        right = xs_data.get('BankStationRight')
+        left_str = '' if left is None else str(left)
+        right_str = '' if right is None else str(right)
+        lines.append(f"Conn BR: {prefix} Bank Stations={side},{left_str},{right_str}\n")
+
+        mann_n = xs_data.get('ManningsN', [])
+        lines.append(f"Conn BR: {prefix} Mann={side},{len(mann_n)}\n")
+        if mann_n:
+            mann_values = []
+            for station, n_val in mann_n:
+                mann_values.extend([station, n_val])
+            lines.extend(GeomParser.format_fixed_width(mann_values, GeomLateral.FIXED_WIDTH_COLUMN, GeomLateral.VALUES_PER_LINE, precision=3))
+
+        return lines
+
+    @staticmethod
+    def _format_conn_br_piers(piers: List[Dict[str, Any]]) -> List[str]:
+        """Format pier records as Conn BR: lines."""
+        lines: List[str] = []
+        for p in piers:
+            skew = p.get('Skew')
+            skew_str = '' if skew is None else str(skew)
+            up_sta = p.get('UpstreamStation', 0)
+            num_up = p.get('NumUpstreamPoints', 0)
+            dn_sta = p.get('DownstreamStation', 0)
+            num_dn = p.get('NumDownstreamPoints', 0)
+            lines.append(
+                f"Conn BR: Pier Skew, UpSta & Num, DnSta & Num="
+                f"  ,{up_sta}, {num_up} ,{dn_sta}, {num_dn} , 0 , 0 , 0 ,,\n"
+            )
+            if num_up > 0:
+                lines.extend(GeomParser.format_fixed_width(
+                    p.get('UpstreamWidths', []), GeomLateral.FIXED_WIDTH_COLUMN, GeomLateral.VALUES_PER_LINE))
+                lines.extend(GeomParser.format_fixed_width(
+                    p.get('UpstreamElevations', []), GeomLateral.FIXED_WIDTH_COLUMN, GeomLateral.VALUES_PER_LINE))
+            if num_dn > 0:
+                lines.extend(GeomParser.format_fixed_width(
+                    p.get('DownstreamWidths', []), GeomLateral.FIXED_WIDTH_COLUMN, GeomLateral.VALUES_PER_LINE))
+                lines.extend(GeomParser.format_fixed_width(
+                    p.get('DownstreamElevations', []), GeomLateral.FIXED_WIDTH_COLUMN, GeomLateral.VALUES_PER_LINE))
+        return lines
+
+    @staticmethod
+    def _format_bridge_subrecords(bridge_data: Dict[str, Any]) -> List[str]:
+        """Format a complete set of Conn BR: sub-records."""
+        lines: List[str] = []
+
+        params = bridge_data.get('bridge_params', ['-1', '0', '-1', '-1', '0'])
+        lines.append(f"Conn BR: Bridge={','.join(str(p) for p in params)}\n")
+
+        deck = bridge_data.get('deck')
+        if deck is not None:
+            lines.extend(GeomLateral._format_conn_br_deck(deck))
+        else:
+            lines.append("Conn BR: Deck Dist Width WeirC Skew NumUp NumDn MinLoCord MaxHiCord MaxSubmerge Is_Ogee\n")
+            lines.append("0,0,0,0, 0, 0, , , 0.98, 0, 0,0,,\n")
+
+        for side_idx in range(2):
+            xs = bridge_data.get('bridge_xs', [None, None])[side_idx]
+            if xs is not None:
+                lines.extend(GeomLateral._format_conn_br_xs(xs, "BR"))
+            else:
+                side = side_idx + 1
+                lines.append(f"Conn BR: BR SE={side},0\n")
+                lines.append(f"Conn BR: BR Bank Stations={side},,\n")
+                lines.append(f"Conn BR: BR Mann={side},0\n")
+
+        piers = bridge_data.get('piers', [])
+        if piers:
+            lines.extend(GeomLateral._format_conn_br_piers(piers))
+
+        coefs = bridge_data.get('coefficients', ['-1', '0', '0', '', '', '0.8', '0', '', '0', ''])
+        lines.append(f"Conn BR: BR Coef={','.join(str(c) for c in coefs)}\n")
+
+        for side_idx in range(2):
+            xs = bridge_data.get('approach_xs', [None, None])[side_idx]
+            if xs is not None:
+                lines.extend(GeomLateral._format_conn_br_xs(xs, "XS"))
+            else:
+                side = side_idx + 1
+                lines.append(f"Conn BR: XS SE={side},0\n")
+                lines.append(f"Conn BR: XS Bank Stations={side},,\n")
+                lines.append(f"Conn BR: XS Mann={side},0\n")
+
+        return lines
+
+    @staticmethod
+    def _build_empty_bridge_skeleton() -> List[str]:
+        """Generate the minimal empty Conn BR: skeleton."""
+        return GeomLateral._format_bridge_subrecords({})
+
+    # ------------------------------------------------------------------
+    # Bridge connection public write methods
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _replace_bridge_subrecords(
+        geom_file: Path,
+        connection_name: str,
+        new_bridge_lines: List[str],
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """Replace bridge sub-records in an existing connection block."""
+        with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+            lines = f.readlines()
+
+        block = GeomLateral._find_connection_block(lines, connection_name)
+        if block is None:
+            raise ValueError(f"Connection not found: {connection_name}")
+
+        start_idx, end_idx, block_lines, _ = block
+        br_range = GeomLateral._find_bridge_subrecord_range(block_lines)
+
+        if br_range is not None:
+            abs_start = start_idx + br_range[0]
+            abs_end = start_idx + br_range[1]
+            lines[abs_start:abs_end] = new_bridge_lines
+        else:
+            lines[end_idx:end_idx] = new_bridge_lines
+
+        return GeomParser.safe_write_geometry(geom_file, lines, create_backup=create_backup)
+
+    @staticmethod
+    @log_call
+    def set_bridge_deck(
+        geom_file: Union[str, Path],
+        connection_name: str,
+        deck_df: pd.DataFrame,
+        *,
+        deck_distance: float = 50.0,
+        weir_coef: float = 2.6,
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """
+        Write deck geometry for a bridge connection.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name
+            deck_df: DataFrame with columns Location, Station, Elevation, LowChord
+            deck_distance: Distance between upstream and downstream faces
+            weir_coef: Weir discharge coefficient for deck overflow
+            create_backup: Create .bak backup before writing (default True)
+
+        Returns:
+            Optional[Path]: Backup path when create_backup=True, else None
+        """
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        try:
+            data = GeomLateral.get_bridge_data(geom_file, connection_name)
+            up_pts = deck_df[deck_df['Location'] == 'upstream'].to_dict('records')
+            dn_pts = deck_df[deck_df['Location'] == 'downstream'].to_dict('records')
+
+            data['deck'] = {
+                'Distance': deck_distance,
+                'Width': data['deck']['Width'] if data['deck'] else 0.0,
+                'WeirCoef': weir_coef,
+                'Skew': data['deck']['Skew'] if data['deck'] else 0.0,
+                'NumUp': len(up_pts),
+                'NumDn': len(dn_pts),
+                'MaxSubmerge': data['deck']['MaxSubmerge'] if data['deck'] else 0.98,
+                'IsOgee': data['deck']['IsOgee'] if data['deck'] else 0,
+                'Points': up_pts + dn_pts,
+            }
+
+            new_lines = GeomLateral._format_bridge_subrecords(data)
+            return GeomLateral._replace_bridge_subrecords(geom_file, connection_name, new_lines, create_backup)
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error writing bridge deck: {str(e)}")
+            raise IOError(f"Failed to write bridge deck: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def set_bridge_piers(
+        geom_file: Union[str, Path],
+        connection_name: str,
+        piers,
+        *,
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """
+        Write pier definitions for a bridge connection.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name
+            piers: DataFrame or list of dicts with pier data
+            create_backup: Create .bak backup before writing (default True)
+
+        Returns:
+            Optional[Path]: Backup path when create_backup=True, else None
+        """
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        try:
+            if isinstance(piers, pd.DataFrame):
+                pier_list = piers.to_dict('records')
+            else:
+                pier_list = list(piers)
+
+            data = GeomLateral.get_bridge_data(geom_file, connection_name)
+            data['piers'] = pier_list
+
+            new_lines = GeomLateral._format_bridge_subrecords(data)
+            return GeomLateral._replace_bridge_subrecords(geom_file, connection_name, new_lines, create_backup)
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error writing bridge piers: {str(e)}")
+            raise IOError(f"Failed to write bridge piers: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def set_bridge_xs(
+        geom_file: Union[str, Path],
+        connection_name: str,
+        sta_elev_df: pd.DataFrame,
+        side: int = 1,
+        *,
+        bank_stations: Optional[Tuple[float, float]] = None,
+        mannings_n: Optional[List[Tuple[float, float]]] = None,
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """
+        Write bridge cross-section for a connection.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name
+            sta_elev_df: DataFrame with Station and Elevation columns
+            side: 1 for upstream, 2 for downstream
+            bank_stations: (left, right) bank station tuple
+            mannings_n: List of (station, n_value) tuples
+            create_backup: Create .bak backup before writing (default True)
+
+        Returns:
+            Optional[Path]: Backup path when create_backup=True, else None
+        """
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        try:
+            data = GeomLateral.get_bridge_data(geom_file, connection_name)
+
+            xs_data = {
+                'Side': side,
+                'Prefix': 'BR',
+                'NumPoints': len(sta_elev_df),
+                'Stations': sta_elev_df['Station'].tolist(),
+                'Elevations': sta_elev_df['Elevation'].tolist(),
+                'BankStationLeft': bank_stations[0] if bank_stations else (
+                    data['bridge_xs'][side - 1]['BankStationLeft'] if data['bridge_xs'][side - 1] else None),
+                'BankStationRight': bank_stations[1] if bank_stations else (
+                    data['bridge_xs'][side - 1]['BankStationRight'] if data['bridge_xs'][side - 1] else None),
+                'ManningsN': mannings_n if mannings_n is not None else (
+                    data['bridge_xs'][side - 1]['ManningsN'] if data['bridge_xs'][side - 1] else []),
+            }
+            data['bridge_xs'][side - 1] = xs_data
+
+            new_lines = GeomLateral._format_bridge_subrecords(data)
+            return GeomLateral._replace_bridge_subrecords(geom_file, connection_name, new_lines, create_backup)
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error writing bridge XS: {str(e)}")
+            raise IOError(f"Failed to write bridge XS: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def set_bridge_approach_xs(
+        geom_file: Union[str, Path],
+        connection_name: str,
+        sta_elev_df: pd.DataFrame,
+        side: int = 1,
+        *,
+        bank_stations: Optional[Tuple[float, float]] = None,
+        mannings_n: Optional[List[Tuple[float, float]]] = None,
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """
+        Write approach cross-section for a bridge connection.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name
+            sta_elev_df: DataFrame with Station and Elevation columns
+            side: 1 for upstream, 2 for downstream
+            bank_stations: (left, right) bank station tuple
+            mannings_n: List of (station, n_value) tuples
+            create_backup: Create .bak backup before writing (default True)
+
+        Returns:
+            Optional[Path]: Backup path when create_backup=True, else None
+        """
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        try:
+            data = GeomLateral.get_bridge_data(geom_file, connection_name)
+
+            xs_data = {
+                'Side': side,
+                'Prefix': 'XS',
+                'NumPoints': len(sta_elev_df),
+                'Stations': sta_elev_df['Station'].tolist(),
+                'Elevations': sta_elev_df['Elevation'].tolist(),
+                'BankStationLeft': bank_stations[0] if bank_stations else (
+                    data['approach_xs'][side - 1]['BankStationLeft'] if data['approach_xs'][side - 1] else None),
+                'BankStationRight': bank_stations[1] if bank_stations else (
+                    data['approach_xs'][side - 1]['BankStationRight'] if data['approach_xs'][side - 1] else None),
+                'ManningsN': mannings_n if mannings_n is not None else (
+                    data['approach_xs'][side - 1]['ManningsN'] if data['approach_xs'][side - 1] else []),
+            }
+            data['approach_xs'][side - 1] = xs_data
+
+            new_lines = GeomLateral._format_bridge_subrecords(data)
+            return GeomLateral._replace_bridge_subrecords(geom_file, connection_name, new_lines, create_backup)
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error writing bridge approach XS: {str(e)}")
+            raise IOError(f"Failed to write bridge approach XS: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def set_bridge_coefficients(
+        geom_file: Union[str, Path],
+        connection_name: str,
+        coefficients: List[str],
+        *,
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """
+        Write bridge hydraulic coefficients for a connection.
+
+        Parameters:
+            geom_file: Path to geometry file
+            connection_name: Connection name
+            coefficients: List of coefficient strings matching Conn BR: BR Coef= format
+            create_backup: Create .bak backup before writing (default True)
+
+        Returns:
+            Optional[Path]: Backup path when create_backup=True, else None
+        """
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        try:
+            data = GeomLateral.get_bridge_data(geom_file, connection_name)
+            data['coefficients'] = coefficients
+
+            new_lines = GeomLateral._format_bridge_subrecords(data)
+            return GeomLateral._replace_bridge_subrecords(geom_file, connection_name, new_lines, create_backup)
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error writing bridge coefficients: {str(e)}")
+            raise IOError(f"Failed to write bridge coefficients: {str(e)}")
