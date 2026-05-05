@@ -114,7 +114,9 @@ class RasSteady:
         "Dn Slope=",
         "Friction Slope=",
         "Up Rating Curve=",
+        "Up Rating Curve # Pts=",
         "Dn Rating Curve=",
+        "Dn Rating Curve # Pts=",
         "Rating Curve=",
         "Critical Depth=",
         "DSS Import ",
@@ -442,7 +444,13 @@ class RasSteady:
     @staticmethod
     @log_call
     def rating_curve(points: Any) -> dict[str, Any]:
-        """Return a rating-curve boundary specification."""
+        """
+        Return a rating-curve boundary specification.
+
+        Tuple/list points use HEC-RAS steady-flow file order:
+        ``(flow, water_surface)``. Mapping points may use ``flow`` plus
+        ``stage``, ``elevation``, or ``wse`` keys.
+        """
         return {"type": RasSteady.RATING_CURVE, "rating_curve": points}
 
     @staticmethod
@@ -666,7 +674,7 @@ class RasSteady:
         if key == "Slope":
             return side, {"slope": RasSteady._first_number(rhs)}, index + 1
 
-        if key == "Rating Curve":
+        if key.startswith("Rating Curve"):
             count = int(RasSteady._first_number(rhs, default=0))
             values, next_index = RasSteady._parse_numeric_block(
                 lines, index + 1, count * 2
@@ -696,7 +704,7 @@ class RasSteady:
                 RasSteady._extract_side_value(side, "rating_curve")
             )
             flat_values = [value for pair in curve for value in pair]
-            lines.append(f"{prefix} Rating Curve= {len(curve)}\n")
+            lines.append(f"{prefix} Rating Curve # Pts= {len(curve)}\n")
             lines.extend(RasSteady._format_numeric_lines(flat_values))
 
         return lines
@@ -850,6 +858,7 @@ class RasSteady:
 
     @staticmethod
     def _normalize_rating_curve(value: Any) -> list[tuple[float, float]]:
+        """Normalize rating curve points as ``(flow, water_surface)`` pairs."""
         if not RasSteady._is_sequence(value):
             raise ValueError("Rating Curve boundary requires a sequence of pairs")
 
@@ -868,13 +877,13 @@ class RasSteady:
         pairs: list[tuple[float, float]] = []
         for point in values:
             if isinstance(point, Mapping):
-                stage = point.get("stage", point.get("elevation", point.get("wse")))
                 flow = point.get("flow", point.get("discharge", point.get("q")))
-                if stage is None or flow is None:
+                stage = point.get("stage", point.get("elevation", point.get("wse")))
+                if flow is None or stage is None:
                     raise ValueError(
-                        "Rating Curve mapping points require stage/elevation and flow"
+                        "Rating Curve mapping points require flow and stage/elevation"
                     )
-                pairs.append((float(stage), float(flow)))
+                pairs.append((float(flow), float(stage)))
                 continue
 
             if not RasSteady._is_sequence(point) or len(point) != 2:

@@ -26,11 +26,11 @@ Dn Type= 1
 Dn Known WS=98.25
 Boundary for River Rch & Prof#=Main River,Upper Reach, 3
 Up Type= 4
-Up Rating Curve= 3
-      90      50      95     100     100     200
+Up Rating Curve # Pts= 3
+      50      90     100      95     200     100
 Dn Type= 4
-Dn Rating Curve= 3
-      80      40      85     120      90     300
+Dn Rating Curve # Pts= 3
+      40      80     120      85     300      90
 DSS Import StartDate=
 DSS Import StartTime=
 DSS Import EndDate=
@@ -55,12 +55,16 @@ def test_read_write_round_trip_multiple_profiles(tmp_path: Path):
     assert parsed["boundaries"][0]["upstream"]["type"] == RasSteady.CRITICAL_DEPTH
     assert parsed["boundaries"][0]["downstream"]["slope"] == pytest.approx(0.001)
     assert parsed["boundaries"][2]["upstream"]["rating_curve"] == [
-        (90.0, 50.0),
-        (95.0, 100.0),
-        (100.0, 200.0),
+        (50.0, 90.0),
+        (100.0, 95.0),
+        (200.0, 100.0),
     ]
 
     RasSteady.write_flow_file(output, parsed)
+    written_text = output.read_text(encoding="utf-8")
+    assert "Up Rating Curve # Pts= 3" in written_text
+    assert "Dn Rating Curve # Pts= 3" in written_text
+
     reparsed = RasSteady.read_flow_file(output)
 
     assert reparsed == parsed
@@ -98,7 +102,7 @@ def test_create_and_update_flow_file_with_compact_boundaries(tmp_path: Path):
                 "Tributary",
                 "Lower Reach",
                 upstream=RasSteady.known_water_surface([100.5, 101.5]),
-                downstream=RasSteady.rating_curve([(95.0, 100.0), (100.0, 500.0)]),
+                downstream=RasSteady.rating_curve([(100.0, 95.0), (500.0, 100.0)]),
             ),
         ],
     )
@@ -108,8 +112,8 @@ def test_create_and_update_flow_file_with_compact_boundaries(tmp_path: Path):
     assert created["boundaries"][1]["downstream"]["slope"] == pytest.approx(0.002)
     assert created["boundaries"][3]["upstream"]["known_ws"] == pytest.approx(101.5)
     assert created["boundaries"][3]["downstream"]["rating_curve"] == [
-        (95.0, 100.0),
-        (100.0, 500.0),
+        (100.0, 95.0),
+        (500.0, 100.0),
     ]
 
     RasSteady.update_flow_file(

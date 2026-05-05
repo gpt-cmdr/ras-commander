@@ -77,12 +77,13 @@ Dn Known WS=   98.25
 | `RasSteady.NORMAL_DEPTH` | `3` | Normal depth using friction slope |
 | `RasSteady.RATING_CURVE` | `4` | Rating curve |
 
-Rating curves are written as a counted block of stage-flow pairs:
+Rating curves are written as a counted block of flow-water-surface pairs, which
+matches the HEC-RAS `.f##` file order:
 
 ```text
 Dn Type= 4
-Dn Rating Curve= 3
-      80      40      85     120      90     300
+Dn Rating Curve # Pts= 3
+      40      80     120      85     300      90
 ```
 
 ## API Usage
@@ -160,7 +161,11 @@ boundaries = [
         "Tributary",
         "Lower Reach",
         downstream=RasSteady.rating_curve(
-            [(95.0, 100.0), (100.0, 500.0), (105.0, 1200.0)]
+            [
+                {"flow": 100.0, "stage": 95.0},
+                {"flow": 500.0, "stage": 100.0},
+                {"flow": 1200.0, "stage": 105.0},
+            ]
         ),
     ),
 ]
