@@ -1376,6 +1376,44 @@ class GeomBridge:
                             'RightBank': None
                         })
 
+                # Upstream Manning's n
+                elif line.startswith("BR U #Mann="):
+                    value_str = GeomParser.extract_keyword_value(line, "BR U #Mann")
+                    count_values = [v.strip() for v in value_str.split(',')]
+                    count = int(count_values[0]) if count_values and count_values[0] else 0
+
+                    values, _ = GeomBridge._read_fixed_width_values(lines, j + 1, count * 3)
+                    for idx in range(0, len(values), 3):
+                        if idx + 1 < len(values):
+                            approach_data.append({
+                                'Location': 'upstream',
+                                'DataType': 'mannings_n',
+                                'Station': values[idx],
+                                'Elevation': None,
+                                'N_Value': values[idx + 1],
+                                'LeftBank': None,
+                                'RightBank': None
+                            })
+
+                # Downstream Manning's n
+                elif line.startswith("BR D #Mann="):
+                    value_str = GeomParser.extract_keyword_value(line, "BR D #Mann")
+                    count_values = [v.strip() for v in value_str.split(',')]
+                    count = int(count_values[0]) if count_values and count_values[0] else 0
+
+                    values, _ = GeomBridge._read_fixed_width_values(lines, j + 1, count * 3)
+                    for idx in range(0, len(values), 3):
+                        if idx + 1 < len(values):
+                            approach_data.append({
+                                'Location': 'downstream',
+                                'DataType': 'mannings_n',
+                                'Station': values[idx],
+                                'Elevation': None,
+                                'N_Value': values[idx + 1],
+                                'LeftBank': None,
+                                'RightBank': None
+                            })
+
                 # Upstream banks
                 elif line.startswith("BR U Banks="):
                     val = GeomParser.extract_keyword_value(line, "BR U Banks")
@@ -2757,6 +2795,25 @@ class GeomBridge:
                         values.extend([row['Station'], row['Elevation']])
                     block_lines.append(f"{prefix} #Sta/Elev= {len(se_df)}\n")
                     block_lines.extend(GeomBridge._format_fixed_width_values(values, precision=2))
+
+                mann_df = loc_df[
+                    loc_df.get('DataType', pd.Series(dtype=object)).astype(str).str.lower().eq('mannings_n')
+                ] if 'DataType' in loc_df.columns else pd.DataFrame()
+                if not mann_df.empty:
+                    if 'N_Value' in mann_df.columns:
+                        n_col = 'N_Value'
+                    elif 'n_value' in mann_df.columns:
+                        n_col = 'n_value'
+                    else:
+                        raise ValueError("mannings_n approach rows require Station and N_Value columns")
+                    if 'Station' not in mann_df.columns:
+                        raise ValueError("mannings_n approach rows require Station and N_Value columns")
+
+                    values = []
+                    for _, row in mann_df.iterrows():
+                        values.extend([row['Station'], row[n_col], 0])
+                    block_lines.append(f"{prefix} #Mann= {len(mann_df)} , 0 , 0\n")
+                    block_lines.extend(GeomBridge._format_fixed_width_values(values, precision=3))
 
                 bank_df = loc_df[
                     loc_df.get('DataType', pd.Series(dtype=object)).astype(str).str.lower().eq('banks')

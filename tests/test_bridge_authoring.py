@@ -124,8 +124,12 @@ def test_bridge_authoring_round_trips_piers_abutments_coefficients_approach_and_
     approach = pd.DataFrame([
         {'Location': 'upstream', 'DataType': 'station_elevation', 'Station': 0, 'Elevation': 341},
         {'Location': 'upstream', 'DataType': 'station_elevation', 'Station': 10, 'Elevation': 342},
+        {'Location': 'upstream', 'DataType': 'mannings_n', 'Station': 0, 'N_Value': 0.05},
+        {'Location': 'upstream', 'DataType': 'mannings_n', 'Station': 10, 'N_Value': 0.035},
         {'Location': 'downstream', 'DataType': 'station_elevation', 'Station': 0, 'Elevation': 340},
         {'Location': 'downstream', 'DataType': 'station_elevation', 'Station': 10, 'Elevation': 341},
+        {'Location': 'downstream', 'DataType': 'mannings_n', 'Station': 0, 'N_Value': 0.05},
+        {'Location': 'downstream', 'DataType': 'mannings_n', 'Station': 10, 'N_Value': 0.035},
     ])
     backup = GeomBridge.set_approach_sections(
         geom_file,
@@ -139,7 +143,11 @@ def test_bridge_authoring_round_trips_piers_abutments_coefficients_approach_and_
     assert backup.exists()
     approach_roundtrip = GeomBridge.get_approach_sections(geom_file, river, reach, rs)
     assert len(approach_roundtrip[approach_roundtrip['DataType'].eq('station_elevation')]) == 4
+    assert len(approach_roundtrip[approach_roundtrip['DataType'].eq('mannings_n')]) == 4
     assert len(approach_roundtrip[approach_roundtrip['DataType'].eq('banks')]) == 2
+    written_text = geom_file.read_text(encoding='utf-8', errors='replace')
+    assert "BR U #Mann= 2 , 0 , 0" in written_text
+    assert "BR D #Mann= 2 , 0 , 0" in written_text
 
     result = GeomBridge.set_htab(
         geom_file,
