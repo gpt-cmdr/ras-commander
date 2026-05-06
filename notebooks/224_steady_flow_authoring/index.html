@@ -12,7 +12,7 @@
         <meta name="author" content="William Katzenmeyer, P.E., C.F.M.">
       
       
-        <link rel="canonical" href="https://gpt-cmdr.github.io/ras-commander/notebooks/413_profile_line_flow_extraction/">
+        <link rel="canonical" href="https://gpt-cmdr.github.io/ras-commander/notebooks/224_steady_flow_authoring/">
       
       
       
@@ -25,7 +25,7 @@
     
     
       
-        <title>413 profile line flow extraction - RAS Commander Documentation</title>
+        <title>224 steady flow authoring - RAS Commander Documentation</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#profile-line-flow-extraction" class="md-skip">
+        <a href="#development-mode" class="md-skip">
           Skip to content
         </a>
       
@@ -143,7 +143,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              413 profile line flow extraction
+              224 steady flow authoring
             
           </span>
         </div>
@@ -2791,8 +2791,36 @@
   
   
   
-    
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#development-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development Mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#steady-flow-file-authoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Steady Flow File Authoring
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
   
 </nav>
                   </div>
@@ -2813,434 +2841,166 @@
 
 
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfResultsMesh</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">IPython.display</span><span class="w"> </span><span class="kn">import</span> <span class="n">display</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">HdfResultsPlan</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">RasCmdr</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">RasExamples</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">RasPlan</span><span class="p">,</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">RasPrj</span><span class="p">,</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">RasSteady</span><span class="p">,</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">init_ras_project</span><span class="p">,</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="p">)</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ras-commander: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="n">__version__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Loaded from: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p>Development mode: run this notebook with <code>PYTHONPATH</code> pointed at the repository root when testing local source changes. The committed import cell above intentionally uses the installed/importable package form.</p>
-<h1 id="profile-line-flow-extraction">Profile-Line Flow Extraction<a class="headerlink" href="#profile-line-flow-extraction" title="Permanent link">&para;</a></h1>
-<p>This workflow extracts a modeled flow time series and peak Q across a RAS Mapper profile/reference line from completed 2D plan HDF results.</p>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">validation_root</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>        <span class="s2">&quot;CLB214_PROFILE_LINE_VALIDATION&quot;</span><span class="p">,</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>        <span class="sa">r</span><span class="s2">&quot;H:/Symphony/ras-commander/CLB-214/profile_line_flow_validation&quot;</span><span class="p">,</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="p">)</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">)</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">project_dir</span> <span class="o">=</span> <span class="n">validation_root</span> <span class="o">/</span> <span class="s2">&quot;project&quot;</span> <span class="o">/</span> <span class="s2">&quot;Chippewa_2D_profile_line_flow&quot;</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">plan_hdf</span> <span class="o">=</span> <span class="n">project_dir</span> <span class="o">/</span> <span class="s2">&quot;Chippewa_2D.p02.hdf&quot;</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">profile_lines_path</span> <span class="o">=</span> <span class="n">validation_root</span> <span class="o">/</span> <span class="s2">&quot;profile_line_input&quot;</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">line_name</span> <span class="o">=</span> <span class="s2">&quot;Upstream&quot;</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">mesh_name</span> <span class="o">=</span> <span class="s2">&quot;Perimeter 1&quot;</span>
+<h2 id="development-mode">Development Mode<a class="headerlink" href="#development-mode" title="Permanent link">&para;</a></h2>
+<p>When running this notebook from a source checkout instead of an installed package, start Jupyter from the repository root or add the repository root to <code>PYTHONPATH</code> before launching Jupyter. Generated example projects and run outputs are written under <code>working/</code>.</p>
+<h1 id="steady-flow-file-authoring">Steady Flow File Authoring<a class="headerlink" href="#steady-flow-file-authoring" title="Permanent link">&para;</a></h1>
+<p>This notebook validates <code>RasSteady.create_flow_file()</code> and <code>RasSteady.update_flow_file()</code> against a real HEC-RAS steady-flow model. Each boundary-condition type is written to an extracted copy of the Beaver Creek example, computed with HEC-RAS, and checked through plan HDF compute messages.</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">find_repo_root</span><span class="p">(</span><span class="n">start</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="k">for</span> <span class="n">candidate</span> <span class="ow">in</span> <span class="p">[</span><span class="n">start</span><span class="p">,</span> <span class="o">*</span><span class="n">start</span><span class="o">.</span><span class="n">parents</span><span class="p">]:</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>        <span class="k">if</span> <span class="p">(</span><span class="n">candidate</span> <span class="o">/</span> <span class="s2">&quot;pyproject.toml&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="p">(</span><span class="n">candidate</span> <span class="o">/</span> <span class="s2">&quot;ras_commander&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>            <span class="k">return</span> <span class="n">candidate</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="k">return</span> <span class="n">start</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">REPO_ROOT</span> <span class="o">=</span> <span class="n">find_repo_root</span><span class="p">(</span><span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">())</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">WORK_ROOT</span> <span class="o">=</span> <span class="n">REPO_ROOT</span> <span class="o">/</span> <span class="s2">&quot;working&quot;</span> <span class="o">/</span> <span class="s2">&quot;steady_flow_authoring&quot;</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;Example 2 - Beaver Creek&quot;</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">PLAN_NUMBER</span> <span class="o">=</span> <span class="s2">&quot;01&quot;</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">RAS_VERSION</span> <span class="o">=</span> <span class="s2">&quot;7.0&quot;</span>
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">plan_hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>        <span class="sa">f</span><span class="s2">&quot;Completed plan HDF not found: </span><span class="si">{</span><span class="n">plan_hdf</span><span class="si">}</span><span class="s2">. &quot;</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>        <span class="s2">&quot;Set CLB214_PROFILE_LINE_VALIDATION or replace plan_hdf/profile_lines_path &quot;</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>        <span class="s2">&quot;with a completed project that outputs Face Flow.&quot;</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="p">)</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
-</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan HDF: </span><span class="si">{</span><span class="n">plan_hdf</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Profile line source: </span><span class="si">{</span><span class="n">profile_lines_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="n">WORK_ROOT</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working root: </span><span class="si">{</span><span class="n">WORK_ROOT</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Plan HDF: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-Profile line source: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\profile_line_input
-</code></pre></div>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">flow_ts</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_profile_line_flow_timeseries</span><span class="p">(</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">plan_hdf</span><span class="p">,</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">line_name</span><span class="p">,</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">mesh_name</span><span class="o">=</span><span class="n">mesh_name</span><span class="p">,</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">profile_lines_path</span><span class="o">=</span><span class="n">profile_lines_path</span><span class="p">,</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">direction</span><span class="o">=</span><span class="s2">&quot;absolute&quot;</span><span class="p">,</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">peak_q</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_profile_line_peak_flow</span><span class="p">(</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">plan_hdf</span><span class="p">,</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">line_name</span><span class="p">,</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">mesh_name</span><span class="o">=</span><span class="n">mesh_name</span><span class="p">,</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="n">profile_lines_path</span><span class="o">=</span><span class="n">profile_lines_path</span><span class="p">,</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="p">)</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="n">display</span><span class="p">(</span><span class="n">flow_ts</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="n">display</span><span class="p">(</span><span class="n">peak_q</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">BOUNDARY_VARIANTS</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="p">{</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;known_ws&quot;</span><span class="p">,</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>        <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Known WS&quot;</span><span class="p">,</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>        <span class="s2">&quot;boundary&quot;</span><span class="p">:</span> <span class="n">RasSteady</span><span class="o">.</span><span class="n">known_water_surface</span><span class="p">(</span><span class="mf">210.5</span><span class="p">),</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="p">},</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="p">{</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;normal_depth&quot;</span><span class="p">,</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>        <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Normal Depth&quot;</span><span class="p">,</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>        <span class="s2">&quot;boundary&quot;</span><span class="p">:</span> <span class="n">RasSteady</span><span class="o">.</span><span class="n">normal_depth</span><span class="p">(</span><span class="mf">0.0012</span><span class="p">),</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="p">},</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="p">{</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;critical_depth&quot;</span><span class="p">,</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>        <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Critical Depth&quot;</span><span class="p">,</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>        <span class="s2">&quot;boundary&quot;</span><span class="p">:</span> <span class="n">RasSteady</span><span class="o">.</span><span class="n">critical_depth</span><span class="p">(),</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    <span class="p">},</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="p">{</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;rating_curve&quot;</span><span class="p">,</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>        <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Rating Curve&quot;</span><span class="p">,</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>        <span class="s2">&quot;boundary&quot;</span><span class="p">:</span> <span class="n">RasSteady</span><span class="o">.</span><span class="n">rating_curve</span><span class="p">(</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>            <span class="p">[</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>                <span class="p">{</span><span class="s2">&quot;flow&quot;</span><span class="p">:</span> <span class="mf">4000.0</span><span class="p">,</span> <span class="s2">&quot;stage&quot;</span><span class="p">:</span> <span class="mf">208.0</span><span class="p">},</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>                <span class="p">{</span><span class="s2">&quot;flow&quot;</span><span class="p">:</span> <span class="mf">9000.0</span><span class="p">,</span> <span class="s2">&quot;stage&quot;</span><span class="p">:</span> <span class="mf">210.0</span><span class="p">},</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>                <span class="p">{</span><span class="s2">&quot;flow&quot;</span><span class="p">:</span> <span class="mf">16000.0</span><span class="p">,</span> <span class="s2">&quot;stage&quot;</span><span class="p">:</span> <span class="mf">212.0</span><span class="p">},</span>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>            <span class="p">]</span>
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>        <span class="p">),</span>
+</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>    <span class="p">},</span>
+</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="p">]</span>
+</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>
+</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>
+</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="k">def</span><span class="w"> </span><span class="nf">boundary_problem_lines</span><span class="p">(</span><span class="n">messages</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>    <span class="n">problem_words</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">,</span> <span class="s2">&quot;warning&quot;</span><span class="p">,</span> <span class="s2">&quot;fatal&quot;</span><span class="p">,</span> <span class="s2">&quot;failed&quot;</span><span class="p">,</span> <span class="s2">&quot;invalid&quot;</span><span class="p">)</span>
+</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>    <span class="k">return</span> <span class="p">[</span>
+</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>        <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a>        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">messages</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a>        <span class="k">if</span> <span class="s2">&quot;bound&quot;</span> <span class="ow">in</span> <span class="n">line</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a>        <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">word</span> <span class="ow">in</span> <span class="n">line</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">problem_words</span><span class="p">)</span>
+</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a>    <span class="p">]</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-05-01 12:58:20 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.g01.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.g01.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
-1. HDF file projection attribute: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-2. RASMapper projection file H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
-To fix this:
-1. Open RASMapper
-2. Click Map &gt; Set Projection
-3. Select an appropriate projection file or coordinate system
-4. Save the RASMapper project
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfMesh - INFO - Found 6 faces along profile line
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.g01.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.g01.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
-1. HDF file projection attribute: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-2. RASMapper projection file H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
-To fix this:
-1. Open RASMapper
-2. Click Map &gt; Set Projection
-3. Select an appropriate projection file or coordinate system
-4. Save the RASMapper project
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Found 6 faces along profile line
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-</code></pre></div>
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>time</th>
-      <th>flow</th>
-      <th>line_name</th>
-      <th>mesh_name</th>
-      <th>direction</th>
-      <th>face_count</th>
-      <th>selection_source</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>2019-04-02 00:00:00</td>
-      <td>1948.334485</td>
-      <td>Upstream</td>
-      <td>Perimeter 1</td>
-      <td>absolute</td>
-      <td>6</td>
-      <td>profile_lines_geometry</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>2019-04-02 00:30:00</td>
-      <td>1945.119192</td>
-      <td>Upstream</td>
-      <td>Perimeter 1</td>
-      <td>absolute</td>
-      <td>6</td>
-      <td>profile_lines_geometry</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>2019-04-02 01:00:00</td>
-      <td>1919.116215</td>
-      <td>Upstream</td>
-      <td>Perimeter 1</td>
-      <td>absolute</td>
-      <td>6</td>
-      <td>profile_lines_geometry</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>2019-04-02 01:30:00</td>
-      <td>1881.967214</td>
-      <td>Upstream</td>
-      <td>Perimeter 1</td>
-      <td>absolute</td>
-      <td>6</td>
-      <td>profile_lines_geometry</td>
-    </tr>
-    <tr>
-      <th>4</th>
-      <td>2019-04-02 02:00:00</td>
-      <td>1849.279263</td>
-      <td>Upstream</td>
-      <td>Perimeter 1</td>
-      <td>absolute</td>
-      <td>6</td>
-      <td>profile_lines_geometry</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>line_name</th>
-      <th>mesh_name</th>
-      <th>peak_time</th>
-      <th>peak_flow</th>
-      <th>direction</th>
-      <th>face_count</th>
-      <th>selection_source</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>Upstream</td>
-      <td>Perimeter 1</td>
-      <td>2019-04-21 01:00:00</td>
-      <td>2316.140572</td>
-      <td>absolute</td>
-      <td>6</td>
-      <td>profile_lines_geometry</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">signed_flow_ts</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_profile_line_flow_timeseries</span><span class="p">(</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">plan_hdf</span><span class="p">,</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">line_name</span><span class="p">,</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">mesh_name</span><span class="o">=</span><span class="n">mesh_name</span><span class="p">,</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">profile_lines_path</span><span class="o">=</span><span class="n">profile_lines_path</span><span class="p">,</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">direction</span><span class="o">=</span><span class="s2">&quot;signed&quot;</span><span class="p">,</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="p">)</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">comparison</span> <span class="o">=</span> <span class="n">flow_ts</span><span class="p">[[</span><span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="s2">&quot;flow&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;flow&quot;</span><span class="p">:</span> <span class="s2">&quot;absolute_flow&quot;</span><span class="p">})</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">signed_flow_ts</span><span class="p">[[</span><span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="s2">&quot;flow&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;flow&quot;</span><span class="p">:</span> <span class="s2">&quot;signed_flow&quot;</span><span class="p">}),</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">on</span><span class="o">=</span><span class="s2">&quot;time&quot;</span><span class="p">,</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="p">)</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">display</span><span class="p">(</span><span class="n">comparison</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">author_and_compute_boundary</span><span class="p">(</span><span class="n">variant</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">project_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>        <span class="n">PROJECT_NAME</span><span class="p">,</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>        <span class="n">output_path</span><span class="o">=</span><span class="n">WORK_ROOT</span> <span class="o">/</span> <span class="n">variant</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="p">)</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">ras_project</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_project</span><span class="p">)</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">flow_path</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_flow_path</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_project</span><span class="p">)</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="k">assert</span> <span class="n">flow_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;Expected Beaver Creek steady flow file f01&quot;</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="n">RasSteady</span><span class="o">.</span><span class="n">create_flow_file</span><span class="p">(</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>        <span class="n">flow_path</span><span class="p">,</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>        <span class="n">flow_title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;CLB-300 </span><span class="si">{</span><span class="n">variant</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> authored flow&quot;</span><span class="p">,</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>        <span class="n">profile_names</span><span class="o">=</span><span class="p">[</span><span class="n">variant</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]],</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>        <span class="n">flow_changes</span><span class="o">=</span><span class="p">[</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>            <span class="p">{</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>                <span class="s2">&quot;river&quot;</span><span class="p">:</span> <span class="s2">&quot;Beaver Creek&quot;</span><span class="p">,</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>                <span class="s2">&quot;reach&quot;</span><span class="p">:</span> <span class="s2">&quot;Kentwood&quot;</span><span class="p">,</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>                <span class="s2">&quot;station&quot;</span><span class="p">:</span> <span class="s2">&quot;5.99&quot;</span><span class="p">,</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>                <span class="s2">&quot;flows&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">10000</span><span class="p">],</span>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>            <span class="p">}</span>
+</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>        <span class="p">],</span>
+</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>        <span class="n">boundaries</span><span class="o">=</span><span class="p">[</span>
+</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>            <span class="n">RasSteady</span><span class="o">.</span><span class="n">boundary</span><span class="p">(</span>
+</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>                <span class="s2">&quot;Beaver Creek&quot;</span><span class="p">,</span>
+</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>                <span class="s2">&quot;Kentwood&quot;</span><span class="p">,</span>
+</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>                <span class="n">profile</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>                <span class="n">downstream</span><span class="o">=</span><span class="n">variant</span><span class="p">[</span><span class="s2">&quot;boundary&quot;</span><span class="p">],</span>
+</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>            <span class="p">)</span>
+</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>        <span class="p">],</span>
+</span><span id="__span-3-32"><a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a>        <span class="n">program_version</span><span class="o">=</span><span class="s2">&quot;7.00&quot;</span><span class="p">,</span>
+</span><span id="__span-3-33"><a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>    <span class="p">)</span>
+</span><span id="__span-3-34"><a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a>    <span class="n">RasSteady</span><span class="o">.</span><span class="n">update_flow_file</span><span class="p">(</span>
+</span><span id="__span-3-35"><a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>        <span class="n">flow_path</span><span class="p">,</span>
+</span><span id="__span-3-36"><a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a>        <span class="n">flow_title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;CLB-300 </span><span class="si">{</span><span class="n">variant</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> authored and updated flow&quot;</span><span class="p">,</span>
+</span><span id="__span-3-37"><a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>    <span class="p">)</span>
+</span><span id="__span-3-38"><a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a>
+</span><span id="__span-3-39"><a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a>    <span class="n">authored</span> <span class="o">=</span> <span class="n">RasSteady</span><span class="o">.</span><span class="n">read_flow_file</span><span class="p">(</span><span class="n">flow_path</span><span class="p">)</span>
+</span><span id="__span-3-40"><a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a>    <span class="k">assert</span> <span class="n">authored</span><span class="p">[</span><span class="s2">&quot;profile_names&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="n">variant</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]]</span>
+</span><span id="__span-3-41"><a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a>    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">authored</span><span class="p">[</span><span class="s2">&quot;flow_changes&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;flows&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="mi">1</span>
+</span><span id="__span-3-42"><a id="__codelineno-3-42" name="__codelineno-3-42" href="#__codelineno-3-42"></a>    <span class="k">assert</span> <span class="n">authored</span><span class="p">[</span><span class="s2">&quot;boundaries&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;downstream&quot;</span><span class="p">][</span><span class="s2">&quot;type_name&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">variant</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
+</span><span id="__span-3-43"><a id="__codelineno-3-43" name="__codelineno-3-43" href="#__codelineno-3-43"></a>
+</span><span id="__span-3-44"><a id="__codelineno-3-44" name="__codelineno-3-44" href="#__codelineno-3-44"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span>
+</span><span id="__span-3-45"><a id="__codelineno-3-45" name="__codelineno-3-45" href="#__codelineno-3-45"></a>        <span class="n">PLAN_NUMBER</span><span class="p">,</span>
+</span><span id="__span-3-46"><a id="__codelineno-3-46" name="__codelineno-3-46" href="#__codelineno-3-46"></a>        <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_project</span><span class="p">,</span>
+</span><span id="__span-3-47"><a id="__codelineno-3-47" name="__codelineno-3-47" href="#__codelineno-3-47"></a>        <span class="n">num_cores</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+</span><span id="__span-3-48"><a id="__codelineno-3-48" name="__codelineno-3-48" href="#__codelineno-3-48"></a>        <span class="n">verify</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-3-49"><a id="__codelineno-3-49" name="__codelineno-3-49" href="#__codelineno-3-49"></a>        <span class="n">force_rerun</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-3-50"><a id="__codelineno-3-50" name="__codelineno-3-50" href="#__codelineno-3-50"></a>        <span class="n">use_optimal_hdf_settings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-3-51"><a id="__codelineno-3-51" name="__codelineno-3-51" href="#__codelineno-3-51"></a>    <span class="p">)</span>
+</span><span id="__span-3-52"><a id="__codelineno-3-52" name="__codelineno-3-52" href="#__codelineno-3-52"></a>    <span class="k">assert</span> <span class="n">result</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;HEC-RAS compute failed for </span><span class="si">{</span><span class="n">variant</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-3-53"><a id="__codelineno-3-53" name="__codelineno-3-53" href="#__codelineno-3-53"></a>
+</span><span id="__span-3-54"><a id="__codelineno-3-54" name="__codelineno-3-54" href="#__codelineno-3-54"></a>    <span class="n">plan_hdf</span> <span class="o">=</span> <span class="n">project_path</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras_project</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.p</span><span class="si">{</span><span class="n">PLAN_NUMBER</span><span class="si">}</span><span class="s2">.hdf&quot;</span>
+</span><span id="__span-3-55"><a id="__codelineno-3-55" name="__codelineno-3-55" href="#__codelineno-3-55"></a>    <span class="k">assert</span> <span class="n">plan_hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">(),</span> <span class="sa">f</span><span class="s2">&quot;Expected plan HDF at </span><span class="si">{</span><span class="n">plan_hdf</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-3-56"><a id="__codelineno-3-56" name="__codelineno-3-56" href="#__codelineno-3-56"></a>    <span class="n">messages</span> <span class="o">=</span> <span class="n">HdfResultsPlan</span><span class="o">.</span><span class="n">get_compute_messages_hdf_only</span><span class="p">(</span><span class="n">plan_hdf</span><span class="p">)</span>
+</span><span id="__span-3-57"><a id="__codelineno-3-57" name="__codelineno-3-57" href="#__codelineno-3-57"></a>    <span class="k">assert</span> <span class="s2">&quot;Complete Process&quot;</span> <span class="ow">in</span> <span class="n">messages</span>
+</span><span id="__span-3-58"><a id="__codelineno-3-58" name="__codelineno-3-58" href="#__codelineno-3-58"></a>    <span class="k">assert</span> <span class="s2">&quot;Finished Steady Flow Simulation&quot;</span> <span class="ow">in</span> <span class="n">messages</span>
+</span><span id="__span-3-59"><a id="__codelineno-3-59" name="__codelineno-3-59" href="#__codelineno-3-59"></a>
+</span><span id="__span-3-60"><a id="__codelineno-3-60" name="__codelineno-3-60" href="#__codelineno-3-60"></a>    <span class="n">boundary_problems</span> <span class="o">=</span> <span class="n">boundary_problem_lines</span><span class="p">(</span><span class="n">messages</span><span class="p">)</span>
+</span><span id="__span-3-61"><a id="__codelineno-3-61" name="__codelineno-3-61" href="#__codelineno-3-61"></a>    <span class="k">assert</span> <span class="ow">not</span> <span class="n">boundary_problems</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">boundary_problems</span><span class="p">)</span>
+</span><span id="__span-3-62"><a id="__codelineno-3-62" name="__codelineno-3-62" href="#__codelineno-3-62"></a>
+</span><span id="__span-3-63"><a id="__codelineno-3-63" name="__codelineno-3-63" href="#__codelineno-3-63"></a>    <span class="k">return</span> <span class="p">{</span>
+</span><span id="__span-3-64"><a id="__codelineno-3-64" name="__codelineno-3-64" href="#__codelineno-3-64"></a>        <span class="s2">&quot;boundary&quot;</span><span class="p">:</span> <span class="n">variant</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">],</span>
+</span><span id="__span-3-65"><a id="__codelineno-3-65" name="__codelineno-3-65" href="#__codelineno-3-65"></a>        <span class="s2">&quot;project&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">project_path</span><span class="p">),</span>
+</span><span id="__span-3-66"><a id="__codelineno-3-66" name="__codelineno-3-66" href="#__codelineno-3-66"></a>        <span class="s2">&quot;flow_file&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">flow_path</span><span class="p">),</span>
+</span><span id="__span-3-67"><a id="__codelineno-3-67" name="__codelineno-3-67" href="#__codelineno-3-67"></a>        <span class="s2">&quot;plan_hdf&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">plan_hdf</span><span class="p">),</span>
+</span><span id="__span-3-68"><a id="__codelineno-3-68" name="__codelineno-3-68" href="#__codelineno-3-68"></a>        <span class="s2">&quot;message_chars&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">messages</span><span class="p">),</span>
+</span><span id="__span-3-69"><a id="__codelineno-3-69" name="__codelineno-3-69" href="#__codelineno-3-69"></a>        <span class="s2">&quot;compute_success&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="n">result</span><span class="p">),</span>
+</span><span id="__span-3-70"><a id="__codelineno-3-70" name="__codelineno-3-70" href="#__codelineno-3-70"></a>    <span class="p">}</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-05-01 12:58:21 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.g01.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.g01.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
-1. HDF file projection attribute: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-2. RASMapper projection file H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
-To fix this:
-1. Open RASMapper
-2. Click Map &gt; Set Projection
-3. Select an appropriate projection file or coordinate system
-4. Save the RASMapper project
-
-
-2026-05-01 12:58:22 - ras_commander.hdf.HdfMesh - INFO - Found 6 faces along profile line
-
-
-2026-05-01 12:58:22 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:22 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-</code></pre></div>
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>time</th>
-      <th>absolute_flow</th>
-      <th>signed_flow</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>2019-04-02 00:00:00</td>
-      <td>1948.334485</td>
-      <td>494.805432</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>2019-04-02 00:30:00</td>
-      <td>1945.119192</td>
-      <td>490.561087</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>2019-04-02 01:00:00</td>
-      <td>1919.116215</td>
-      <td>466.979741</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>2019-04-02 01:30:00</td>
-      <td>1881.967214</td>
-      <td>432.740896</td>
-    </tr>
-    <tr>
-      <th>4</th>
-      <td>2019-04-02 02:00:00</td>
-      <td>1849.279263</td>
-      <td>406.301601</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">manual_validation_csv</span> <span class="o">=</span> <span class="n">validation_root</span> <span class="o">/</span> <span class="s2">&quot;manual_face_flow_validation.csv&quot;</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">if</span> <span class="n">manual_validation_csv</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">manual</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">manual_validation_csv</span><span class="p">,</span> <span class="n">parse_dates</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;time&quot;</span><span class="p">])</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">validation</span> <span class="o">=</span> <span class="n">comparison</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">manual</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;time&quot;</span><span class="p">)</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="nb">print</span><span class="p">(</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>        <span class="s2">&quot;Max absolute-flow difference:&quot;</span><span class="p">,</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>        <span class="n">validation</span><span class="p">[</span><span class="s2">&quot;absolute_difference&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">abs</span><span class="p">()</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="p">)</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="nb">print</span><span class="p">(</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>        <span class="s2">&quot;Max signed-flow difference:&quot;</span><span class="p">,</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>        <span class="n">validation</span><span class="p">[</span><span class="s2">&quot;signed_difference&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">abs</span><span class="p">()</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>    <span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">author_and_compute_boundary</span><span class="p">(</span><span class="n">variant</span><span class="p">)</span> <span class="k">for</span> <span class="n">variant</span> <span class="ow">in</span> <span class="n">BOUNDARY_VARIANTS</span><span class="p">]</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">summary</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">display</span><span class="p">(</span><span class="n">summary</span><span class="p">)</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">assert</span> <span class="n">summary</span><span class="p">[</span><span class="s2">&quot;compute_success&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">summary</span><span class="p">[</span><span class="s2">&quot;boundary&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="p">{</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="s2">&quot;Known WS&quot;</span><span class="p">,</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="s2">&quot;Normal Depth&quot;</span><span class="p">,</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="s2">&quot;Critical Depth&quot;</span><span class="p">,</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="s2">&quot;Rating Curve&quot;</span><span class="p">,</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="p">}</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Max absolute-flow difference: 0.0
-Max signed-flow difference: 0.0
-</code></pre></div>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">flow_ts</span><span class="p">[</span><span class="s2">&quot;time&quot;</span><span class="p">],</span> <span class="n">flow_ts</span><span class="p">[</span><span class="s2">&quot;flow&quot;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;Absolute flow&quot;</span><span class="p">)</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">signed_flow_ts</span><span class="p">[</span><span class="s2">&quot;time&quot;</span><span class="p">],</span> <span class="n">signed_flow_ts</span><span class="p">[</span><span class="s2">&quot;flow&quot;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;Signed flow&quot;</span><span class="p">)</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Flow (cfs)&quot;</span><span class="p">)</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">line_name</span><span class="si">}</span><span class="s2"> profile-line flow&quot;</span><span class="p">)</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">ax</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">fig</span><span class="o">.</span><span class="n">autofmt_xdate</span><span class="p">()</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
-</span></code></pre></div>
-<p><img alt="png" src="../413_profile_line_flow_extraction_files/413_profile_line_flow_extraction_7_0.png" /></p>
 
 
 
