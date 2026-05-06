@@ -3,6 +3,7 @@
 import pytest
 
 from ras_commander.gui.workflows.xsec_update import (
+    RasMapperBankLineWorkflow,
     RasMapperLayerCommandWorkflow,
     RasMapperXsecUpdateWorkflow,
 )
@@ -45,6 +46,18 @@ def test_generic_layer_command_aliases_cover_structure_and_storage_updates():
     assert workflow._normalize_command_path("blocked_obstructions") == [
         "Update Blocked Obstructions on XSs"
     ]
+    assert workflow._normalize_command_path("bank_points") == [
+        "Generate Layers",
+        "Bank Points on XS",
+    ]
+    assert workflow._normalize_command_path("create_bank_lines") == [
+        "Create Bank Lines from XS Bank Stations"
+    ]
+    assert workflow._normalize_target_node("river_bank_lines") == [
+        "Rivers",
+        "Bank Lines",
+    ]
+    assert workflow._normalize_target_node("flow_paths") == ["Rivers", "Flow Paths"]
 
 
 def test_generic_layer_command_accepts_explicit_menu_paths():
@@ -78,6 +91,74 @@ def test_workflow_classes_are_static_namespaces():
 
     with pytest.raises(TypeError, match="static namespace"):
         RasMapperXsecUpdateWorkflow()
+
+    with pytest.raises(TypeError, match="static namespace"):
+        RasMapperBankLineWorkflow()
+
+
+def test_bank_line_workflow_exposes_requested_mapper_commands():
+    workflow = RasMapperBankLineWorkflow
+
+    assert workflow.XS_GENERATE_LAYER_COMMANDS["intersections_with_rivers"] == (
+        "Generate Layers",
+        "XS Intersections with Rivers",
+    )
+    assert workflow.XS_GENERATE_LAYER_COMMANDS["bank_points_on_xs"] == (
+        "Generate Layers",
+        "Bank Points on XS",
+    )
+    assert workflow.XS_GENERATE_LAYER_COMMANDS["levee_points_on_xs"] == (
+        "Generate Layers",
+        "Levee Points on XS",
+    )
+    assert workflow.XS_GENERATE_LAYER_COMMANDS["encroachment_points_on_xs"] == (
+        "Generate Layers",
+        "Encroachment Points on XS",
+    )
+    assert workflow.BANK_LINE_COMMANDS["update_bank_stations_on_xss"] == (
+        "Update Bank Stations on XSs",
+    )
+    assert workflow.BANK_LINE_COMMANDS["create_from_xs_bank_stations"] == (
+        "Create Bank Lines from XS Bank Stations",
+    )
+    assert workflow.BANK_LINE_COMMANDS["pull_to_xs_bank_stations"] == (
+        "Pull Bank Lines to XS Bank Stations",
+    )
+
+
+def test_bank_line_wrappers_route_to_generic_layer_workflow(monkeypatch):
+    calls = []
+
+    def fake_run_command(**kwargs):
+        calls.append(kwargs)
+        return "workflow-result"
+
+    monkeypatch.setattr(
+        RasMapperLayerCommandWorkflow,
+        "run_command",
+        staticmethod(fake_run_command),
+    )
+
+    result = RasMapperBankLineWorkflow.create_bank_lines_from_xs_bank_stations(
+        "01",
+        ras_object="fake-ras",
+        timeout=123,
+    )
+
+    assert result == "workflow-result"
+    assert calls == [
+        {
+            "target_node": "Bank Lines",
+            "command": "bank_lines_create_from_xs_bank_stations",
+            "geom_number": "01",
+            "ras_object": "fake-ras",
+            "timeout": 123,
+        }
+    ]
+
+    RasMapperBankLineWorkflow.generate_xs_intersections_with_rivers("02")
+    assert calls[-1]["target_node"] == "Cross Sections"
+    assert calls[-1]["command"] == "xs_intersections_with_rivers"
 
 
 def test_target_node_is_prefixed_with_geometry_when_geom_number_is_given(monkeypatch):
