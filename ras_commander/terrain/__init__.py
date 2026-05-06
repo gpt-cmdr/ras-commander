@@ -6,6 +6,7 @@ This subpackage provides terrain capabilities for HEC-RAS projects:
 - VRT mosaic to single TIFF conversion via HEC-RAS GDAL tools
 - USGS 3DEP elevation data download from AWS
 - Terrain modification writing for channel, high-ground, and fill-surface layers
+- Polygon multipoint terrain modification writing for pond/wetland grading
 - Terrain modification analysis (cut/fill, no-net-fill) via RasMapperLib.dll
 
 Main Classes:
@@ -29,6 +30,7 @@ Main Classes:
         - add_channel_modification(): add TakeLower channel cuts
         - add_high_ground_modification(): add TakeHigher levee/road lines
         - add_fill_surface_modification(): add SetValue fill surfaces
+        - add_modification_polygon(): add polygon multipoint modifications
         - list_modifications(): inspect terrain modification sidecar groups
 
 Requirements:
@@ -60,11 +62,22 @@ See Also:
 
 from .RasTerrain import RasTerrain
 from .Usgs3depAws import Usgs3depAws
-from .RasTerrainModWriter import RasTerrainModWriter
+from .RasTerrainModWriter import RasTerrainModification, RasTerrainModWriter
 
 # Conditional import - RasTerrainMod requires pythonnet (Windows only)
 try:
     from .RasTerrainMod import RasTerrainMod
-    __all__ = ['RasTerrain', 'Usgs3depAws', 'RasTerrainMod', 'RasTerrainModWriter']
+    __all__ = [
+        'RasTerrain',
+        'Usgs3depAws',
+        'RasTerrainMod',
+        'RasTerrainModification',
+        'RasTerrainModWriter',
+    ]
 except ImportError:
-    __all__ = ['RasTerrain', 'Usgs3depAws', 'RasTerrainModWriter']
+    __all__ = [
+        'RasTerrain',
+        'Usgs3depAws',
+        'RasTerrainModification',
+        'RasTerrainModWriter',
+    ]

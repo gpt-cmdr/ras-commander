@@ -49,7 +49,7 @@ Classes for terrain creation, modification writing, and terrain-modification
 analysis:
 
 - `RasTerrain` - Terrain HDF creation from rasters
-- `RasTerrainModWriter` - Channel, high-ground, and fill-surface terrain modification HDF/.rasmap writing
+- `RasTerrainModWriter` / `RasTerrainModification` - Line and polygon terrain modification HDF/.rasmap writing
 - `RasTerrainMod` - Terrain profile and volume comparison with modifications applied
 
 ## Fixit Module

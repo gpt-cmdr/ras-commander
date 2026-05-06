@@ -9,6 +9,7 @@ Supports:
     - Channel modifications (TakeLower) along polylines
     - High-ground levee/road modifications (TakeHigher) along polylines
     - Fill-surface encroachment modifications (SetValue) along polylines
+    - Polygon multipoint modifications with boundary and interior elevations
     - Modification groups for organizing multiple modifications
     - Writing to both terrain HDF and .rasmap XML
 
@@ -21,7 +22,7 @@ Requirements:
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 import xml.etree.ElementTree as ET
 
 import numpy as np
@@ -75,6 +76,17 @@ _MODIFICATION_TYPE_BY_DISK_NAME = {
     "add": MODIFICATION_ADD_VALUE,
     "addvalue": MODIFICATION_ADD_VALUE,
     "add_value": MODIFICATION_ADD_VALUE,
+}
+
+_RASTER_SOURCE_SUFFIXES = {
+    ".adf",
+    ".asc",
+    ".bil",
+    ".flt",
+    ".img",
+    ".tif",
+    ".tiff",
+    ".vrt",
 }
 
 
@@ -257,6 +269,127 @@ class RasTerrainModWriter:
             transition_fraction=transition_fraction,
             group_name=group_name,
         )
+
+    @staticmethod
+    @log_call
+    def add_modification_polygon(
+        terrain_hdf_path: Union[str, Path],
+        name: str,
+        polygon_coords: Any,
+        elevation_method: str = "boundary_from_terrain",
+        control_points: Optional[Sequence[Any]] = None,
+        rasmap_path: Optional[Union[str, Path]] = None,
+        boundary_elevations: Optional[Union[np.ndarray, Sequence[float]]] = None,
+        mode: Union[str, int] = "set_value",
+        elev_pt_tolerance: float = 50.0,
+        group_name: str = "Modifications",
+    ) -> Path:
+        """
+        Add a polygon multipoint terrain modification.
+
+        This writes the RAS Mapper ``Polygons | Multipoint`` style sidecar
+        data. Boundary elevations can be sampled from the terrain source raster
+        references stored in the terrain HDF, supplied from polygon Z values, or
+        passed explicitly. Interior control points are persisted as point
+        features with their elevations for detention pond and wetland grading
+        workflows.
+
+        Parameters
+        ----------
+        terrain_hdf_path : Path
+            Path to the copied terrain HDF file to modify.
+        name : str
+            Name for this terrain modification layer.
+        polygon_coords : array-like or GeoJSON-like
+            Polygon boundary as an Nx2/Nx3 ring or a sequence of rings. Rings
+            are closed automatically when needed.
+        elevation_method : {"boundary_from_terrain", "shape_z", "provided"}
+            Source for polygon boundary elevations. ``boundary_from_terrain``
+            samples the terrain source raster(s); ``shape_z`` uses the third
+            coordinate from ``polygon_coords``; ``provided`` uses
+            ``boundary_elevations``.
+        control_points : sequence, optional
+            Interior elevation points as ``(x, y, elevation)`` tuples or dicts
+            with ``x``, ``y``, and ``elevation``/``z`` keys.
+        rasmap_path : Path, optional
+            Path to the .rasmap XML file. When omitted, the writer searches the
+            terrain folder and project folder for a .rasmap referencing this
+            terrain HDF.
+        boundary_elevations : array-like, optional
+            Explicit boundary elevations matching the closed polygon point
+            count. Used with ``elevation_method="provided"``.
+        mode : str or int
+            Terrain merge mode. Multipoint polygon pond workflows typically use
+            ``set_value``.
+        elev_pt_tolerance : float
+            Elevation point tolerance written to HDF and .rasmap metadata.
+        group_name : str
+            Name of the modification group in .rasmap.
+
+        Returns
+        -------
+        Path
+            Path to the modified terrain HDF file.
+        """
+        terrain_hdf_path = Path(terrain_hdf_path)
+        if rasmap_path is None:
+            rasmap_path = RasTerrainModWriter._infer_rasmap_path(terrain_hdf_path)
+        else:
+            rasmap_path = Path(rasmap_path)
+
+        modification_type = RasTerrainModWriter._resolve_modification_type(mode)
+        RasTerrainModWriter._validate_non_negative(
+            "elev_pt_tolerance", elev_pt_tolerance
+        )
+
+        rings_xy, rings_z = RasTerrainModWriter._validate_polygon_rings(polygon_coords)
+        control_xy, control_elevations, control_names = (
+            RasTerrainModWriter._validate_control_points(control_points)
+        )
+        RasTerrainModWriter._validate_control_points_inside_polygon(
+            control_xy, rings_xy[0]
+        )
+
+        boundary_xy = np.vstack(rings_xy)
+        boundary_values = RasTerrainModWriter._boundary_elevations_for_polygon(
+            terrain_hdf_path=terrain_hdf_path,
+            boundary_xy=boundary_xy,
+            rings_z=rings_z,
+            elevation_method=elevation_method,
+            boundary_elevations=boundary_elevations,
+        )
+
+        logger.info(
+            "Adding polygon multipoint terrain modification '%s' to %s",
+            name,
+            terrain_hdf_path.name,
+        )
+
+        RasTerrainModWriter._write_polygon_to_hdf(
+            terrain_hdf_path=terrain_hdf_path,
+            name=name,
+            rings_xy=rings_xy,
+            boundary_elevations=boundary_values,
+            control_xy=control_xy,
+            control_elevations=control_elevations,
+            control_names=control_names,
+            modification_type=modification_type,
+            elevation_method=elevation_method,
+            elev_pt_tolerance=elev_pt_tolerance,
+        )
+
+        RasTerrainModWriter._update_rasmap_xml(
+            rasmap_path,
+            terrain_hdf_path,
+            name,
+            mod_type="PolygonElevationModificationLayer",
+            default_mod_type=modification_type,
+            elev_pt_tolerance=elev_pt_tolerance,
+            group_name=group_name,
+        )
+
+        logger.info("Polygon terrain modification '%s' added successfully", name)
+        return terrain_hdf_path
 
     @staticmethod
     @log_call
@@ -814,6 +947,637 @@ class RasTerrainModWriter:
                        f"width={width}, mode={modification_type}")
 
     @staticmethod
+    def _write_polygon_to_hdf(
+        terrain_hdf_path: Path,
+        name: str,
+        rings_xy: Sequence[np.ndarray],
+        boundary_elevations: np.ndarray,
+        control_xy: np.ndarray,
+        control_elevations: np.ndarray,
+        control_names: Sequence[str],
+        modification_type: int,
+        elevation_method: str,
+        elev_pt_tolerance: float,
+    ) -> None:
+        """Write a polygon multipoint modification to a terrain HDF file."""
+        import h5py
+
+        polygon_parts: List[List[int]] = []
+        all_points: List[np.ndarray] = []
+        point_start = 0
+        for ring in rings_xy:
+            ring_count = int(len(ring))
+            polygon_parts.append([point_start, ring_count])
+            all_points.append(ring)
+            point_start += ring_count
+
+        polygon_points = np.vstack(all_points).astype(np.float64)
+        polygon_info = np.array(
+            [[0, len(polygon_points), 0, len(polygon_parts)]],
+            dtype=np.int32,
+        )
+        polygon_parts_array = np.asarray(polygon_parts, dtype=np.int32)
+        profile_values = RasTerrainModWriter._polygon_profile_values(
+            rings_xy, boundary_elevations
+        )
+        profile_info = np.array([[0, len(profile_values)]], dtype=np.int32)
+        boundary_points = np.column_stack(
+            [polygon_points, boundary_elevations.astype(np.float64)]
+        )
+
+        if len(control_xy):
+            control_points_xyz = np.column_stack(
+                [control_xy, control_elevations.astype(np.float64)]
+            )
+            elevation_points = np.vstack([boundary_points, control_points_xyz])
+        else:
+            control_points_xyz = np.empty((0, 3), dtype=np.float64)
+            elevation_points = boundary_points.copy()
+
+        with h5py.File(terrain_hdf_path, "a") as f:
+            mods = f.require_group("Modifications")
+
+            if name in mods:
+                logger.warning("Modification '%s' already exists, overwriting", name)
+                del mods[name]
+
+            mod_grp = mods.create_group(name)
+            mod_grp.attrs["Type"] = np.bytes_("Polygon")
+            mod_grp.attrs["Subtype"] = np.bytes_("Multipoint")
+            mod_grp.attrs["Priority"] = np.int32(0)
+            mod_grp.attrs["Boundary Elevation Method"] = np.bytes_(
+                str(elevation_method)[:64]
+            )
+
+            polygon_info_ds = RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Polygon Info", polygon_info
+            )
+            polygon_parts_ds = RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Polygon Parts", polygon_parts_array
+            )
+            polygon_points_ds = RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Polygon Points", polygon_points
+            )
+            polygon_info_ds.attrs["Column"] = np.asarray(
+                [
+                    "Point Starting Index",
+                    "Point Count",
+                    "Part Starting Index",
+                    "Part Count",
+                ],
+                dtype="S32",
+            )
+            polygon_info_ds.attrs["Feature Type"] = np.bytes_("Polygon")
+            polygon_info_ds.attrs["Row"] = np.bytes_("Feature")
+            polygon_parts_ds.attrs["Column"] = np.asarray(
+                ["Point Starting Index", "Point Count"], dtype="S32"
+            )
+            polygon_parts_ds.attrs["Row"] = np.bytes_("Part")
+            polygon_points_ds.attrs["Column"] = np.asarray(["X", "Y"], dtype="S8")
+            polygon_points_ds.attrs["Row"] = np.bytes_("Points")
+
+            profile_info_ds = RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Profile Info", profile_info
+            )
+            profile_values_ds = RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Profile Values", profile_values.astype(np.float32)
+            )
+            profile_info_ds.attrs["Column"] = np.asarray(
+                ["Starting Index", "Count"], dtype="S16"
+            )
+            profile_info_ds.attrs["Row"] = np.bytes_("Feature")
+            profile_values_ds.attrs["Column"] = np.asarray(["X", "Y"], dtype="S8")
+            profile_values_ds.attrs["Row"] = np.bytes_("Values")
+
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Boundary Points", boundary_points
+            )
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Boundary Elevations", boundary_elevations.astype(np.float32)
+            )
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Elevation Points", elevation_points
+            )
+
+            method_key = (
+                str(elevation_method)
+                .strip()
+                .lower()
+                .replace("-", "_")
+                .replace(" ", "_")
+            )
+            generate_boundary = method_key in {
+                "boundary_from_terrain",
+                "terrain",
+                "from_terrain",
+            }
+            attr_dtype = np.dtype(
+                [
+                    ("Name", "S128"),
+                    ("Elevation Value", "<f4"),
+                    ("Elevation Type", "S11"),
+                    ("Elev Pt Tolerance", "<f4"),
+                    ("Generate Boundary Elevations", "u1"),
+                    ("Use ShapeFile Z Elevations", "u1"),
+                ]
+            )
+            attrs_data = np.array(
+                [
+                    (
+                        name.encode("utf-8")[:128],
+                        np.float32(0.0),
+                        RasTerrainModWriter._modification_type_disk_name(
+                            modification_type
+                        ).encode("utf-8")[:11],
+                        np.float32(elev_pt_tolerance),
+                        np.uint8(1 if generate_boundary else 0),
+                        np.uint8(1 if method_key in {"shape_z", "polygon_z", "z"} else 0),
+                    )
+                ],
+                dtype=attr_dtype,
+            )
+            RasTerrainModWriter._create_hdf_dataset(
+                mod_grp, "Attributes", attrs_data
+            )
+
+            cp_grp = mod_grp.create_group("Control Points")
+            cp_grp.attrs["Type"] = np.bytes_("ElevationControlPointLayer")
+            cp_points_ds = RasTerrainModWriter._create_hdf_dataset(
+                cp_grp, "Points", control_xy.astype(np.float64)
+            )
+            cp_points_ds.attrs["Column"] = np.asarray(["X", "Y"], dtype="S8")
+            cp_points_ds.attrs["Feature Type"] = np.bytes_("Point")
+            cp_points_ds.attrs["Row"] = np.bytes_("Points")
+            RasTerrainModWriter._create_hdf_dataset(
+                cp_grp, "Elevations", control_elevations.astype(np.float32)
+            )
+            RasTerrainModWriter._create_hdf_dataset(
+                cp_grp, "Elevation Points", control_points_xyz
+            )
+
+            cp_attr_dtype = np.dtype([("Name", "S128"), ("Elevation", "<f4")])
+            cp_attrs = np.zeros(len(control_xy), dtype=cp_attr_dtype)
+            for idx, (point_name, elevation) in enumerate(
+                zip(control_names, control_elevations)
+            ):
+                cp_attrs[idx]["Name"] = str(point_name).encode("utf-8")[:128]
+                cp_attrs[idx]["Elevation"] = np.float32(elevation)
+            RasTerrainModWriter._create_hdf_dataset(cp_grp, "Attributes", cp_attrs)
+
+            logger.info(
+                "Wrote polygon multipoint modification '%s' to HDF: "
+                "%d boundary pts, %d control pts, mode=%d",
+                name,
+                len(boundary_points),
+                len(control_xy),
+                modification_type,
+            )
+
+    @staticmethod
+    def _polygon_profile_values(
+        rings_xy: Sequence[np.ndarray],
+        boundary_elevations: np.ndarray,
+    ) -> np.ndarray:
+        """Build RasMapper polygon perimeter profile values from boundary elevations."""
+        rows: List[np.ndarray] = []
+        elev_start = 0
+        station_offset = 0.0
+        for ring in rings_xy:
+            elev_end = elev_start + len(ring)
+            ring_elevations = boundary_elevations[elev_start:elev_end]
+            stations = RasTerrainModWriter._station_values(ring)
+            if rows:
+                stations = stations + station_offset
+            rows.append(np.column_stack([stations, ring_elevations]))
+            station_offset = float(stations[-1])
+            elev_start = elev_end
+
+        if not rows:
+            return np.empty((0, 2), dtype=np.float64)
+        return np.vstack(rows).astype(np.float64)
+
+    @staticmethod
+    def _validate_polygon_rings(polygon_coords: Any) -> tuple[List[np.ndarray], List[np.ndarray]]:
+        """Normalize polygon input to closed XY rings and optional Z arrays."""
+        coords = RasTerrainModWriter._geojson_polygon_coordinates(polygon_coords)
+        if RasTerrainModWriter._is_ring_like(coords):
+            raw_rings = [coords]
+        else:
+            if not isinstance(coords, Sequence) or isinstance(coords, (str, bytes)):
+                raise ValueError(
+                    "polygon_coords must be a coordinate ring or sequence of rings"
+                )
+            raw_rings = list(coords)
+
+        if len(raw_rings) == 0:
+            raise ValueError("polygon_coords must contain at least one ring")
+
+        rings_xy: List[np.ndarray] = []
+        rings_z: List[np.ndarray] = []
+        for ring_index, raw_ring in enumerate(raw_rings):
+            if not RasTerrainModWriter._is_ring_like(raw_ring):
+                raise ValueError("Each polygon ring must be a sequence of XY points")
+
+            xy_rows: List[List[float]] = []
+            z_rows: List[float] = []
+            for point in raw_ring:
+                x, y, z = RasTerrainModWriter._coordinate_to_xy_z(point)
+                xy_rows.append([x, y])
+                z_rows.append(z)
+
+            if len(xy_rows) < 3:
+                raise ValueError("Each polygon ring must contain at least three points")
+
+            if xy_rows[0] != xy_rows[-1]:
+                xy_rows.append(xy_rows[0].copy())
+                z_rows.append(z_rows[0])
+
+            if len(xy_rows) < 4:
+                raise ValueError(
+                    "Each polygon ring must contain at least four closed points"
+                )
+
+            xy = np.asarray(xy_rows, dtype=np.float64)
+            z = np.asarray(z_rows, dtype=np.float64)
+            if not np.all(np.isfinite(xy)):
+                raise ValueError("polygon_coords XY values must be finite")
+
+            area = RasTerrainModWriter._ring_signed_area(xy)
+            if abs(area) <= 0.0:
+                raise ValueError("Each polygon ring must enclose a non-zero area")
+
+            if ring_index > 0:
+                logger.debug("Writing polygon interior ring %d", ring_index)
+            rings_xy.append(xy)
+            rings_z.append(z)
+
+        return rings_xy, rings_z
+
+    @staticmethod
+    def _geojson_polygon_coordinates(polygon_coords: Any) -> Any:
+        if hasattr(polygon_coords, "__geo_interface__"):
+            polygon_coords = polygon_coords.__geo_interface__
+
+        if not isinstance(polygon_coords, dict):
+            return polygon_coords
+
+        geometry = polygon_coords
+        if str(geometry.get("type", "")).lower() == "feature":
+            geometry = geometry.get("geometry") or {}
+
+        geometry_type = str(geometry.get("type", "")).lower()
+        coordinates = geometry.get("coordinates")
+        if geometry_type == "polygon":
+            return coordinates
+        if geometry_type == "multipolygon":
+            return [ring for polygon in coordinates for ring in polygon]
+
+        raise ValueError(
+            "polygon_coords GeoJSON input must be Polygon or MultiPolygon geometry"
+        )
+
+    @staticmethod
+    def _is_ring_like(value: Any) -> bool:
+        if isinstance(value, np.ndarray):
+            return value.ndim == 2 and value.shape[0] > 0 and value.shape[1] >= 2
+        if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+            return False
+        return len(value) > 0 and RasTerrainModWriter._is_coordinate_like(value[0])
+
+    @staticmethod
+    def _is_coordinate_like(value: Any) -> bool:
+        if isinstance(value, np.ndarray):
+            if value.ndim != 1 or value.shape[0] < 2:
+                return False
+        elif not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+            return False
+        elif len(value) < 2:
+            return False
+
+        try:
+            float(value[0])
+            float(value[1])
+        except (TypeError, ValueError):
+            return False
+        return True
+
+    @staticmethod
+    def _coordinate_to_xy_z(value: Any) -> tuple[float, float, float]:
+        if not RasTerrainModWriter._is_coordinate_like(value):
+            raise ValueError(f"Invalid polygon coordinate: {value!r}")
+        x = float(value[0])
+        y = float(value[1])
+        z = np.nan
+        if len(value) >= 3 and value[2] is not None:
+            z = float(value[2])
+        return x, y, z
+
+    @staticmethod
+    def _ring_signed_area(ring_xy: np.ndarray) -> float:
+        x = ring_xy[:, 0]
+        y = ring_xy[:, 1]
+        return float(0.5 * np.sum(x[:-1] * y[1:] - x[1:] * y[:-1]))
+
+    @staticmethod
+    def _validate_control_points(
+        control_points: Optional[Sequence[Any]],
+    ) -> tuple[np.ndarray, np.ndarray, List[str]]:
+        if control_points is None:
+            return (
+                np.empty((0, 2), dtype=np.float64),
+                np.empty((0,), dtype=np.float64),
+                [],
+            )
+
+        xy_rows: List[List[float]] = []
+        elevations: List[float] = []
+        names: List[str] = []
+        for idx, point in enumerate(control_points):
+            if isinstance(point, dict):
+                x = RasTerrainModWriter._mapping_value(point, "x", "X")
+                y = RasTerrainModWriter._mapping_value(point, "y", "Y")
+                elevation = RasTerrainModWriter._mapping_value(
+                    point, "elevation", "Elevation", "z", "Z"
+                )
+                point_name = point.get("name", point.get("Name", f"Control Point {idx + 1}"))
+            else:
+                if not isinstance(point, Sequence) or isinstance(point, (str, bytes)):
+                    raise ValueError("control_points entries must be sequences or dicts")
+                if len(point) < 3:
+                    raise ValueError(
+                        "control_points entries must include x, y, and elevation"
+                    )
+                x, y, elevation = point[:3]
+                point_name = point[3] if len(point) >= 4 else f"Control Point {idx + 1}"
+
+            x = float(x)
+            y = float(y)
+            elevation = float(elevation)
+            if not np.isfinite([x, y, elevation]).all():
+                raise ValueError("control_points must contain finite x/y/elevation values")
+
+            xy_rows.append([x, y])
+            elevations.append(elevation)
+            names.append(str(point_name))
+
+        if not xy_rows:
+            return (
+                np.empty((0, 2), dtype=np.float64),
+                np.empty((0,), dtype=np.float64),
+                [],
+            )
+
+        return (
+            np.asarray(xy_rows, dtype=np.float64),
+            np.asarray(elevations, dtype=np.float64),
+            names,
+        )
+
+    @staticmethod
+    def _mapping_value(mapping: Dict[str, Any], *keys: str) -> Any:
+        for key in keys:
+            if key in mapping:
+                return mapping[key]
+        raise ValueError(f"control point is missing one of: {', '.join(keys)}")
+
+    @staticmethod
+    def _validate_control_points_inside_polygon(
+        control_xy: np.ndarray,
+        exterior_ring: np.ndarray,
+    ) -> None:
+        if len(control_xy) == 0:
+            return
+
+        outside = [
+            idx
+            for idx, point in enumerate(control_xy)
+            if not RasTerrainModWriter._point_in_or_on_ring(point, exterior_ring)
+        ]
+        if outside:
+            raise ValueError(
+                "control_points must fall inside the polygon exterior; "
+                f"outside point indices: {outside}"
+            )
+
+    @staticmethod
+    def _point_in_or_on_ring(point: np.ndarray, ring: np.ndarray) -> bool:
+        x = float(point[0])
+        y = float(point[1])
+        tolerance = 1e-9
+
+        for start, end in zip(ring[:-1], ring[1:]):
+            vector = end - start
+            rel = point - start
+            length2 = float(vector @ vector)
+            if length2 <= 0:
+                continue
+            t = float((rel @ vector) / length2)
+            if -tolerance <= t <= 1.0 + tolerance:
+                closest = start + np.clip(t, 0.0, 1.0) * vector
+                if np.linalg.norm(point - closest) <= tolerance:
+                    return True
+
+        inside = False
+        for start, end in zip(ring[:-1], ring[1:]):
+            xi, yi = start
+            xj, yj = end
+            intersects = (yi > y) != (yj > y)
+            if intersects:
+                x_intersect = (xj - xi) * (y - yi) / (yj - yi) + xi
+                if x < x_intersect:
+                    inside = not inside
+        return inside
+
+    @staticmethod
+    def _boundary_elevations_for_polygon(
+        terrain_hdf_path: Path,
+        boundary_xy: np.ndarray,
+        rings_z: Sequence[np.ndarray],
+        elevation_method: str,
+        boundary_elevations: Optional[Union[np.ndarray, Sequence[float]]],
+    ) -> np.ndarray:
+        method = str(elevation_method).strip().lower().replace("-", "_").replace(" ", "_")
+        if boundary_elevations is not None:
+            method = "provided"
+
+        if method in {"provided", "explicit", "boundary_elevations"}:
+            if boundary_elevations is None:
+                raise ValueError(
+                    "boundary_elevations is required when elevation_method='provided'"
+                )
+            elevations = np.asarray(boundary_elevations, dtype=np.float64)
+            if elevations.ndim != 1 or len(elevations) != len(boundary_xy):
+                raise ValueError(
+                    "boundary_elevations must be a 1D array matching the closed "
+                    "polygon boundary point count"
+                )
+            if not np.all(np.isfinite(elevations)):
+                raise ValueError("boundary_elevations must contain finite values")
+            return elevations
+
+        if method in {"shape_z", "polygon_z", "z"}:
+            elevations = np.concatenate(rings_z).astype(np.float64)
+            if elevations.ndim != 1 or len(elevations) != len(boundary_xy):
+                raise ValueError("polygon Z values do not match boundary point count")
+            if not np.all(np.isfinite(elevations)):
+                raise ValueError(
+                    "polygon_coords must include finite Z values when "
+                    "elevation_method='shape_z'"
+                )
+            return elevations
+
+        if method in {"boundary_from_terrain", "terrain", "from_terrain"}:
+            return RasTerrainModWriter._sample_terrain_elevations(
+                terrain_hdf_path, boundary_xy
+            )
+
+        raise ValueError(
+            "Unsupported elevation_method. Use 'boundary_from_terrain', "
+            "'shape_z', or 'provided'."
+        )
+
+    @staticmethod
+    def _sample_terrain_elevations(
+        terrain_hdf_path: Path,
+        xy: np.ndarray,
+    ) -> np.ndarray:
+        try:
+            import rasterio
+        except ImportError as exc:
+            raise ImportError(
+                "rasterio is required for elevation_method='boundary_from_terrain'."
+            ) from exc
+
+        raster_paths = RasTerrainModWriter._terrain_source_raster_paths(terrain_hdf_path)
+        if not raster_paths:
+            raise FileNotFoundError(
+                "No source raster paths were found in or beside terrain HDF "
+                f"{terrain_hdf_path}"
+            )
+
+        elevations = np.full(len(xy), np.nan, dtype=np.float64)
+        for raster_path in raster_paths:
+            pending = np.where(~np.isfinite(elevations))[0]
+            if len(pending) == 0:
+                break
+
+            with rasterio.open(raster_path) as src:
+                nodata = getattr(src, "nodata", None)
+                sampled_values: List[float] = []
+                for sample in src.sample(
+                    [(float(x), float(y)) for x, y in xy[pending]]
+                ):
+                    if np.ma.is_masked(sample):
+                        mask = np.ma.getmaskarray(sample)
+                        value = np.nan if mask.size and mask.flat[0] else sample.data[0]
+                    else:
+                        sample_array = np.asarray(sample)
+                        value = sample_array.flat[0] if sample_array.size else np.nan
+                    sampled_values.append(float(value))
+
+                sampled = np.asarray(sampled_values, dtype=np.float64)
+                valid = np.isfinite(sampled)
+                if nodata is not None and np.isfinite(float(nodata)):
+                    valid &= sampled != float(nodata)
+                elevations[pending[valid]] = sampled[valid]
+
+        if not np.all(np.isfinite(elevations)):
+            missing = np.where(~np.isfinite(elevations))[0].tolist()
+            raise ValueError(
+                "Could not sample finite terrain elevations for polygon boundary "
+                f"point indices {missing} from source rasters: "
+                f"{[str(path) for path in raster_paths]}"
+            )
+
+        return elevations
+
+    @staticmethod
+    def _terrain_source_raster_paths(terrain_hdf_path: Path) -> List[Path]:
+        import h5py
+
+        terrain_hdf_path = Path(terrain_hdf_path)
+        candidates: List[Path] = []
+
+        def add_candidate(text: str) -> None:
+            cleaned = text.strip().strip("\"'").rstrip("\x00")
+            if not cleaned:
+                return
+            normalized = cleaned.replace("\\", "/")
+            if Path(normalized).suffix.lower() not in _RASTER_SOURCE_SUFFIXES:
+                return
+
+            raw_path = Path(normalized)
+            search_bases = [terrain_hdf_path.parent, terrain_hdf_path.parent.parent]
+            possible = [raw_path] if raw_path.is_absolute() else [
+                base / raw_path for base in search_bases
+            ]
+            for candidate in possible:
+                if candidate.exists():
+                    candidates.append(candidate)
+                    return
+
+        with h5py.File(terrain_hdf_path, "r") as f:
+            for value in f.attrs.values():
+                for text in RasTerrainModWriter._iter_hdf_strings(value):
+                    add_candidate(text)
+
+            def visitor(_name, obj):
+                for value in obj.attrs.values():
+                    for text in RasTerrainModWriter._iter_hdf_strings(value):
+                        add_candidate(text)
+                if isinstance(obj, h5py.Dataset):
+                    if obj.size <= 10000 and (
+                        obj.dtype.names is not None or obj.dtype.kind in {"S", "U", "O"}
+                    ):
+                        for text in RasTerrainModWriter._iter_hdf_strings(obj[()]):
+                            add_candidate(text)
+
+            f.visititems(visitor)
+
+        for suffix in (".tif", ".tiff", ".vrt"):
+            fallback = terrain_hdf_path.with_suffix(suffix)
+            if fallback.exists():
+                candidates.append(fallback)
+
+        unique: List[Path] = []
+        seen = set()
+        for candidate in candidates:
+            key = str(candidate.resolve()).lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(candidate)
+        return unique
+
+    @staticmethod
+    def _iter_hdf_strings(value: Any):
+        if isinstance(value, str):
+            yield value
+            return
+        if isinstance(value, (bytes, np.bytes_)):
+            yield bytes(value).decode("utf-8", errors="ignore")
+            return
+        if isinstance(value, np.void) and value.dtype.names:
+            for field_name in value.dtype.names:
+                yield from RasTerrainModWriter._iter_hdf_strings(value[field_name])
+            return
+        if isinstance(value, np.ndarray):
+            if value.dtype.names:
+                for field_name in value.dtype.names:
+                    yield from RasTerrainModWriter._iter_hdf_strings(value[field_name])
+                return
+            if value.dtype.kind in {"S", "U", "O"}:
+                for item in value.reshape(-1):
+                    yield from RasTerrainModWriter._iter_hdf_strings(item)
+            return
+        if isinstance(value, np.generic):
+            yield from RasTerrainModWriter._iter_hdf_strings(value.item())
+            return
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            for item in value:
+                yield from RasTerrainModWriter._iter_hdf_strings(item)
+
+    @staticmethod
     def _validate_polyline_points(
         polyline_points: Union[np.ndarray, Sequence[Sequence[float]]],
     ) -> np.ndarray:
@@ -1280,6 +2044,61 @@ class RasTerrainModWriter:
         return value
 
     @staticmethod
+    def _infer_rasmap_path(terrain_hdf_path: Path) -> Path:
+        """Find a project .rasmap file that references a terrain HDF."""
+        terrain_hdf_path = Path(terrain_hdf_path)
+        search_roots: List[Path] = []
+        for root in (terrain_hdf_path.parent, terrain_hdf_path.parent.parent):
+            if root not in search_roots and root.exists():
+                search_roots.append(root)
+
+        candidates: List[Path] = []
+        for root in search_roots:
+            candidates.extend(sorted(root.glob("*.rasmap")))
+
+        unique_candidates: List[Path] = []
+        seen = set()
+        for candidate in candidates:
+            key = str(candidate.resolve()).lower()
+            if key not in seen:
+                seen.add(key)
+                unique_candidates.append(candidate)
+
+        referencing: List[Path] = []
+        for candidate in unique_candidates:
+            try:
+                root = ET.parse(candidate).getroot()
+            except ET.ParseError:
+                continue
+            for layer in root.findall(".//Terrains/Layer"):
+                if RasTerrainModWriter._layer_references_path(
+                    layer.get("Filename", ""), candidate, terrain_hdf_path
+                ):
+                    referencing.append(candidate)
+                    break
+
+        if len(referencing) == 1:
+            return referencing[0]
+        if len(referencing) > 1:
+            raise ValueError(
+                "Multiple .rasmap files reference this terrain HDF; pass "
+                f"rasmap_path explicitly: {[str(path) for path in referencing]}"
+            )
+        if len(unique_candidates) == 1:
+            return unique_candidates[0]
+
+        if unique_candidates:
+            raise ValueError(
+                "Could not infer rasmap_path because multiple .rasmap files were "
+                f"found and none referenced {terrain_hdf_path.name}: "
+                f"{[str(path) for path in unique_candidates]}"
+            )
+        raise FileNotFoundError(
+            f"Could not infer rasmap_path for terrain HDF {terrain_hdf_path}; "
+            "pass rasmap_path explicitly."
+        )
+
+    @staticmethod
     def _find_terrain_layer(
         root: ET.Element,
         rasmap_path: Path,
@@ -1345,6 +2164,8 @@ class RasTerrainModWriter:
             mod_group.set('Name', group_name)
             mod_group.set('Type', 'ElevationModificationGroup')
             logger.info(f"Created modification group '{group_name}' in .rasmap")
+        mod_group.set('Checked', 'True')
+        mod_group.set('Expanded', 'True')
 
         tree.write(rasmap_path, xml_declaration=False, encoding='unicode')
         return mod_group
@@ -1390,6 +2211,8 @@ class RasTerrainModWriter:
         mod_layer = ET.SubElement(mod_group, 'Layer')
         mod_layer.set('Name', name)
         mod_layer.set('Type', mod_type)
+        mod_layer.set('Checked', 'True')
+        mod_layer.set('Expanded', 'True')
 
         default_type_el = ET.SubElement(mod_layer, 'DefaultModificationType')
         default_type_el.set('Value', str(default_mod_type))
@@ -1401,6 +2224,11 @@ class RasTerrainModWriter:
         cp_layer = ET.SubElement(mod_layer, 'Layer')
         cp_layer.set('Name', 'Control Points')
         cp_layer.set('Type', 'ElevationControlPointLayer')
+        cp_layer.set('Checked', 'True')
 
         tree.write(rasmap_path, xml_declaration=False, encoding='unicode')
         logger.info(f"Added modification layer '{name}' to .rasmap")
+
+
+class RasTerrainModification(RasTerrainModWriter):
+    """User-facing alias for terrain modification writer APIs."""
