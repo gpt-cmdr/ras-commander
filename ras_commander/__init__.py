@@ -126,7 +126,7 @@ _FIXIT_EXPORTS = {
 }
 
 # Terrain module - HEC-RAS terrain creation and manipulation
-_TERRAIN_EXPORTS = {'RasTerrain'}
+_TERRAIN_EXPORTS = {'RasTerrain', 'RasTerrainModification', 'RasTerrainModWriter'}
 
 # Results module - Compute message parsing and execution summary
 _RESULTS_EXPORTS = {'ResultsParser', 'ResultsSummary'}
@@ -209,8 +209,8 @@ __all__ = [
     # Fixit module - Automated geometry repair (lazy loaded)
     'RasFixit', 'FixResults', 'FixMessage', 'FixAction', 'BlockedObstruction',
 
-    # Terrain module - HEC-RAS terrain creation (lazy loaded)
-    'RasTerrain',
+    # Terrain module - HEC-RAS terrain creation and modification (lazy loaded)
+    'RasTerrain', 'RasTerrainModification', 'RasTerrainModWriter',
 
     # Results module - Compute message parsing and execution summary (lazy loaded)
     'ResultsParser', 'ResultsSummary',
