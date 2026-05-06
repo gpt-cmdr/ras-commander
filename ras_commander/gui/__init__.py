@@ -11,6 +11,7 @@ Layers:
 
 Workflows:
     MeshRegenerationWorkflow: Regenerate 2D mesh via RASMapper
+    RasMapperBankLineWorkflow: Generate bank-line and XS point layers
     OpenAndComputeWorkflow: Open project, set plan, compute
     RunMultiplePlansWorkflow: Batch plan execution
     OpenRasMapperWorkflow: Open RASMapper for viewing
@@ -37,6 +38,7 @@ from .workflows import (
     RunMultiplePlansWorkflow,
     OpenRasMapperWorkflow,
     MeshRegenerationWorkflow,
+    RasMapperBankLineWorkflow,
     RasMapperLayerCommandWorkflow,
     RasMapperXsecUpdateWorkflow,
 )
@@ -59,6 +61,7 @@ __all__ = [
     'RunMultiplePlansWorkflow',
     'OpenRasMapperWorkflow',
     'MeshRegenerationWorkflow',
+    'RasMapperBankLineWorkflow',
     'RasMapperLayerCommandWorkflow',
     'RasMapperXsecUpdateWorkflow',
     # Screenshots

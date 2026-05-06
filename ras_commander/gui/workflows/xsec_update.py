@@ -3,6 +3,8 @@ RASMapper geometry layer command workflows.
 
 Runs RASMapper TreeView context-menu commands such as:
 - Cross Sections > Update Cross Sections
+- Cross Sections > Generate Layers
+- Bank Lines > Create Bank Lines from XS Bank Stations
 - Storage Areas > Compute Elevation-Volume Data
 - SA/2D Connections > Update SA/2D Connections
 - Inline/Lateral Structures > Update Structures
@@ -65,6 +67,11 @@ class RasMapperLayerCommandWorkflow:
         "blocked_obstructions": ("Cross Sections", "Blocked Obstructions"),
         "edge_lines": ("Cross Sections", "Edge Lines"),
         "interpolation_surface": ("Cross Sections", "Interpolation Surface"),
+        "bank_lines": ("Rivers", "Bank Lines"),
+        "banks": ("Rivers", "Bank Lines"),
+        "river_bank_lines": ("Rivers", "Bank Lines"),
+        "flow_paths": ("Rivers", "Flow Paths"),
+        "river_flow_paths": ("Rivers", "Flow Paths"),
     }
 
     COMMANDS: Dict[str, Tuple[str, ...]] = {
@@ -97,6 +104,16 @@ class RasMapperLayerCommandWorkflow:
             "Elevation Profiles from Points",
         ),
         "xs_interpolation_surface": ("Compute XS Interpolation Surface",),
+        "xs_intersections_with_rivers": (
+            "Generate Layers",
+            "XS Intersections with Rivers",
+        ),
+        "xs_bank_points_on_xs": ("Generate Layers", "Bank Points on XS"),
+        "xs_levee_points_on_xs": ("Generate Layers", "Levee Points on XS"),
+        "xs_encroachment_points_on_xs": (
+            "Generate Layers",
+            "Encroachment Points on XS",
+        ),
         # Storage areas
         "storage_area_elevation_volume": ("Compute Elevation-Volume Data",),
         "storage_area_extract_elevation_volume_curve": ("Extract Elevation-Volume Curve",),
@@ -131,6 +148,14 @@ class RasMapperLayerCommandWorkflow:
         "blocked_obstructions_create_polygons_from_xs": (
             "Create Blocked Obstruction Polygons from XS Blocked Obstructions",
         ),
+        # Bank lines
+        "bank_lines_update_bank_stations_on_xss": ("Update Bank Stations on XSs",),
+        "bank_lines_create_from_xs_bank_stations": (
+            "Create Bank Lines from XS Bank Stations",
+        ),
+        "bank_lines_pull_to_xs_bank_stations": (
+            "Pull Bank Lines to XS Bank Stations",
+        ),
     }
 
     ALIASES: Dict[str, str] = {
@@ -153,6 +178,15 @@ class RasMapperLayerCommandWorkflow:
         "points": "xs_elevation_profiles_from_points",
         "compute_interpolation_surface": "xs_interpolation_surface",
         "interpolation_surface": "xs_interpolation_surface",
+        "xs_intersections": "xs_intersections_with_rivers",
+        "intersections_with_rivers": "xs_intersections_with_rivers",
+        "xs_intersections_with_rivers": "xs_intersections_with_rivers",
+        "bank_points": "xs_bank_points_on_xs",
+        "bank_points_on_xs": "xs_bank_points_on_xs",
+        "levee_points": "xs_levee_points_on_xs",
+        "levee_points_on_xs": "xs_levee_points_on_xs",
+        "encroachment_points": "xs_encroachment_points_on_xs",
+        "encroachment_points_on_xs": "xs_encroachment_points_on_xs",
         "compute_edge_lines": "edge_lines_compute",
         "edge_lines": "edge_lines_compute",
         "storage_area_curves": "storage_area_elevation_volume",
@@ -163,6 +197,14 @@ class RasMapperLayerCommandWorkflow:
         "from_to": "sa2d_connection_from_to",
         "sa2d_terrain": "sa2d_elevation_profiles_from_terrain",
         "blocked_obstructions": "blocked_obstructions_update_on_xss",
+        "update_bank_stations_on_xss": "bank_lines_update_bank_stations_on_xss",
+        "update_bank_stations": "bank_lines_update_bank_stations_on_xss",
+        "create_bank_lines": "bank_lines_create_from_xs_bank_stations",
+        "create_bank_lines_from_xs_bank_stations": (
+            "bank_lines_create_from_xs_bank_stations"
+        ),
+        "pull_bank_lines": "bank_lines_pull_to_xs_bank_stations",
+        "pull_bank_lines_to_xs_bank_stations": "bank_lines_pull_to_xs_bank_stations",
     }
 
     @staticmethod
@@ -742,3 +784,161 @@ class RasMapperXsecUpdateWorkflow:
                 f"Unknown cross-section update command '{command}'. Options: {options}"
             )
         return key
+
+
+class RasMapperBankLineWorkflow:
+    """
+    Convenience wrappers for RASMapper bank-line and XS point layer commands.
+
+    These methods route through ``RasMapperLayerCommandWorkflow.run_command()``
+    and therefore use the same Ras.exe-hosted RASMapper lifecycle, TreeView
+    context-menu automation, save step, and cleanup behavior.
+    """
+
+    def __new__(cls, *args, **kwargs):
+        raise TypeError(f"{cls.__name__} is a static namespace; call class methods directly")
+
+    XS_GENERATE_LAYER_COMMANDS: Dict[str, Tuple[str, ...]] = {
+        key.removeprefix("xs_"): value
+        for key, value in RasMapperLayerCommandWorkflow.COMMANDS.items()
+        if key
+        in {
+            "xs_intersections_with_rivers",
+            "xs_bank_points_on_xs",
+            "xs_levee_points_on_xs",
+            "xs_encroachment_points_on_xs",
+        }
+    }
+
+    BANK_LINE_COMMANDS: Dict[str, Tuple[str, ...]] = {
+        key.removeprefix("bank_lines_"): value
+        for key, value in RasMapperLayerCommandWorkflow.COMMANDS.items()
+        if key.startswith("bank_lines_")
+    }
+
+    @staticmethod
+    def available_xs_generate_layer_commands() -> Iterable[str]:
+        return RasMapperBankLineWorkflow.XS_GENERATE_LAYER_COMMANDS.keys()
+
+    @staticmethod
+    def available_bank_line_commands() -> Iterable[str]:
+        return RasMapperBankLineWorkflow.BANK_LINE_COMMANDS.keys()
+
+    @staticmethod
+    @log_call
+    def generate_xs_intersections_with_rivers(
+        geom_number: Union[str, int],
+        target_node: NodeRef = "Cross Sections",
+        ras_object=None,
+        timeout: int = 600,
+    ) -> WorkflowResult:
+        """Generate the Cross Sections layer's XS Intersections with Rivers."""
+        return RasMapperLayerCommandWorkflow.run_command(
+            target_node=target_node,
+            command="xs_intersections_with_rivers",
+            geom_number=geom_number,
+            ras_object=ras_object,
+            timeout=timeout,
+        )
+
+    @staticmethod
+    @log_call
+    def generate_bank_points_on_xs(
+        geom_number: Union[str, int],
+        target_node: NodeRef = "Cross Sections",
+        ras_object=None,
+        timeout: int = 600,
+    ) -> WorkflowResult:
+        """Generate the Cross Sections layer's Bank Points on XS layer."""
+        return RasMapperLayerCommandWorkflow.run_command(
+            target_node=target_node,
+            command="xs_bank_points_on_xs",
+            geom_number=geom_number,
+            ras_object=ras_object,
+            timeout=timeout,
+        )
+
+    @staticmethod
+    @log_call
+    def generate_levee_points_on_xs(
+        geom_number: Union[str, int],
+        target_node: NodeRef = "Cross Sections",
+        ras_object=None,
+        timeout: int = 600,
+    ) -> WorkflowResult:
+        """Generate the Cross Sections layer's Levee Points on XS layer."""
+        return RasMapperLayerCommandWorkflow.run_command(
+            target_node=target_node,
+            command="xs_levee_points_on_xs",
+            geom_number=geom_number,
+            ras_object=ras_object,
+            timeout=timeout,
+        )
+
+    @staticmethod
+    @log_call
+    def generate_encroachment_points_on_xs(
+        geom_number: Union[str, int],
+        target_node: NodeRef = "Cross Sections",
+        ras_object=None,
+        timeout: int = 600,
+    ) -> WorkflowResult:
+        """Generate the Cross Sections layer's Encroachment Points on XS layer."""
+        return RasMapperLayerCommandWorkflow.run_command(
+            target_node=target_node,
+            command="xs_encroachment_points_on_xs",
+            geom_number=geom_number,
+            ras_object=ras_object,
+            timeout=timeout,
+        )
+
+    @staticmethod
+    @log_call
+    def update_bank_stations_on_xss(
+        geom_number: Union[str, int],
+        target_node: NodeRef = "Bank Lines",
+        ras_object=None,
+        timeout: int = 600,
+    ) -> WorkflowResult:
+        """Run Bank Lines > Update Bank Stations on XSs."""
+        return RasMapperLayerCommandWorkflow.run_command(
+            target_node=target_node,
+            command="bank_lines_update_bank_stations_on_xss",
+            geom_number=geom_number,
+            ras_object=ras_object,
+            timeout=timeout,
+        )
+
+    @staticmethod
+    @log_call
+    def create_bank_lines_from_xs_bank_stations(
+        geom_number: Union[str, int],
+        target_node: NodeRef = "Bank Lines",
+        ras_object=None,
+        timeout: int = 600,
+    ) -> WorkflowResult:
+        """Run Bank Lines > Create Bank Lines from XS Bank Stations."""
+        return RasMapperLayerCommandWorkflow.run_command(
+            target_node=target_node,
+            command="bank_lines_create_from_xs_bank_stations",
+            geom_number=geom_number,
+            ras_object=ras_object,
+            timeout=timeout,
+        )
+
+    @staticmethod
+    @log_call
+    def pull_bank_lines_to_xs_bank_stations(
+        geom_number: Union[str, int],
+        target_node: NodeRef = "Bank Lines",
+        ras_object=None,
+        timeout: int = 600,
+    ) -> WorkflowResult:
+        """Run Bank Lines > Pull Bank Lines to XS Bank Stations."""
+        return RasMapperLayerCommandWorkflow.run_command(
+            target_node=target_node,
+            command="bank_lines_pull_to_xs_bank_stations",
+            geom_number=geom_number,
+            ras_object=ras_object,
+            timeout=timeout,
+        )
