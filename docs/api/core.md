@@ -345,6 +345,24 @@ The `get_comp_msgs()` method attempts to read computation messages from multiple
         - set_initial_conditions
         - get_boundary_tables
 
+### RasSteady
+
+::: ras_commander.RasSteady
+    options:
+      show_root_heading: true
+      heading_level: 3
+      members:
+        - read_flow_file
+        - write_flow_file
+        - create_flow_file
+        - update_flow_file
+        - validate_flow_file_data
+        - boundary
+        - known_water_surface
+        - normal_depth
+        - critical_depth
+        - rating_curve
+
 ## Utilities
 
 ### RasUtils

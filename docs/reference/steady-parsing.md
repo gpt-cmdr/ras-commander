@@ -1,19 +1,23 @@
 # Steady Flow File Parsing Reference
 
-Reference for HEC-RAS steady flow file (.f##) structure and parsing.
+Reference for HEC-RAS steady flow file (`.f##`) structure and the
+`RasSteady` authoring API.
 
 ## Overview
 
-Steady flow files contain **constant flow conditions** for steady flow analysis. They define:
+Steady flow files define the constant profile inputs used by 1D steady plans:
 
-- Multiple flow profiles (e.g., 10-year, 50-year, 100-year)
-- Flow values at each river station
-- Boundary conditions (known water surface, normal depth, rating curves)
-- Change locations for flow values
+- Profile names, such as `Q10`, `Q50`, and `Q100`
+- Flow values at each flow-change station
+- Profile-specific upstream and downstream boundary conditions
+- Optional DSS import metadata used by the HEC-RAS steady flow editor
+
+Use `RasPlan.get_flow_path("01")` or `ras.flow_df` to discover existing files,
+then use `RasSteady` to read, create, update, and write the `.f##` content.
 
 ## File Location
 
-```
+```text
 {project_folder}/{project_name}.f{number}
 ```
 
@@ -21,364 +25,179 @@ Example: `C:\Projects\Muncie\Muncie.f01`
 
 ## File Structure
 
-### Header Section
+### Header
 
-```
-Flow Title=Steady Flow Analysis
-Program Version=6.50
-Number of Profiles= 3
-Profile Names=10-Year,50-Year,100-Year
-```
-
-| Key | Description |
-|-----|-------------|
-| `Flow Title=` | Display name (max 24 chars) |
-| `Program Version=` | HEC-RAS version |
-| `Number of Profiles=` | Count of flow profiles |
-| `Profile Names=` | Comma-separated profile names |
-
-### River/Reach Section
-
-Flow data is organized by river and reach:
-
-```
-River Rch & RM=Big Creek,Upper,1000
-```
-
-**Format:** `River Rch & RM={river},{reach},{station}`
-
-### Flow Change Locations
-
-Flow values change at specific stations:
-
-```
-Flow Change Location= 1
-         1000
-```
-
-- Count indicates number of change locations
-- Stations are listed in fixed-width format
-
-### Flow Values
-
-```
-Flow= 3
-        1000       2500       5000
-```
-
-- Count matches `Number of Profiles`
-- One value per profile at each change location
-- Fixed-width 8-character format
-
-### Boundary Conditions
-
-#### Known Water Surface
-
-```
-Known WS= 3
-       102       105       108
-```
-
-Fixed downstream water surface elevation for each profile.
-
-#### Normal Depth
-
-```
-Friction Slope= 3
-     0.001     0.001     0.001
-```
-
-Energy slope for normal depth calculation at downstream boundary.
-
-#### Rating Curve
-
-```
-Rating Curve={reach},{station}
-Rating Curve= 6
-     100     102     500     104    1000     106
-```
-
-Stage-discharge relationship: (Q, WSE) pairs.
-
-### Critical Depth
-
-```
-Critical Depth={reach},{station}
-```
-
-Forces critical depth at the specified location.
-
-## Complete Example File
-
-```
+```text
 Flow Title=Multi-Profile Analysis
-Program Version=6.50
+Program Version=6.60
 Number of Profiles= 3
-Profile Names=10-Year,50-Year,100-Year
+Profile Names=Q10,Q50,Q100
+```
+
+`Number of Profiles=` must match the number of names in `Profile Names=` and
+the number of flow values in every flow-change block.
+
+### Flow Change Blocks
+
+HEC-RAS stores each flow-change location as a `River Rch & RM=` line followed
+by one fixed-width row or block of flow values:
+
+```text
 River Rch & RM=Main River,Upper Reach,5000
-Flow Change Location= 1
-         5000
-Flow= 3
-        2000       5000      10000
+    2000    5000   10000
 River Rch & RM=Main River,Upper Reach,2500
-Flow= 3
-        2200       5500      11000
-River Rch & RM=Main River,Upper Reach,0
-Flow= 3
-        2400       6000      12000
-Boundary for River Rch & RM=Main River,Upper Reach,0
-Friction Slope= 3
-     0.002     0.002     0.002
+    2200    5500   11000
 ```
 
-## Fixed-Width Format Details
+Each numeric block has one value per profile, in profile order.
 
-### 8-Character Fields
+### Boundary Blocks
 
-Steady flow files use the same FORTRAN-style fixed-width format as geometry and unsteady files:
+Boundary conditions are written per reach and per profile:
 
+```text
+Boundary for River Rch & Prof#=Main River,Upper Reach, 1
+Up Type= 2
+Dn Type= 3
+Dn Slope=   0.001
+Boundary for River Rch & Prof#=Main River,Upper Reach, 2
+Up Type= 1
+Up Known WS=   101.5
+Dn Type= 1
+Dn Known WS=   98.25
 ```
-Columns:  0-7      8-15     16-23    24-31    32-39
-Values:   val1     val2     val3     val4     val5
+
+`RasSteady` exposes the HEC-RAS type codes as constants:
+
+| Constant | Code | Meaning |
+|----------|------|---------|
+| `RasSteady.NO_BOUNDARY` | `0` | No boundary on that side |
+| `RasSteady.KNOWN_WS` | `1` | Known water surface |
+| `RasSteady.CRITICAL_DEPTH` | `2` | Critical depth |
+| `RasSteady.NORMAL_DEPTH` | `3` | Normal depth using friction slope |
+| `RasSteady.RATING_CURVE` | `4` | Rating curve |
+
+Rating curves are written as a counted block of flow-water-surface pairs, which
+matches the HEC-RAS `.f##` file order:
+
+```text
+Dn Type= 4
+Dn Rating Curve # Pts= 3
+      40      80     120      85     300      90
+```
+
+## API Usage
+
+### Read and Round Trip
+
+```python
+from ras_commander import RasPlan, RasSteady
+
+flow_path = RasPlan.get_flow_path("01")
+flow_data = RasSteady.read_flow_file(flow_path)
+
+print(flow_data["profile_names"])
+print(flow_data["flow_changes"][0]["flows"])
+
+RasSteady.write_flow_file("Working.f02", flow_data)
+```
+
+### Create a New Steady Flow File
+
+This pattern replaces notebook cells that previously required opening the
+HEC-RAS steady flow editor by hand.
+
+```python
+from ras_commander import RasPlan, RasSteady
+
+new_flow_path = project_folder / f"{project_name}.f02"
+
+RasSteady.create_flow_file(
+    new_flow_path,
+    flow_title="Calibration Profiles",
+    profile_names=["Base", "High"],
+    flow_changes=[
+        {
+            "river": "Main River",
+            "reach": "Upper Reach",
+            "station": "5000",
+            "flows": [1000, 2500],
+        },
+        {
+            "river": "Main River",
+            "reach": "Upper Reach",
+            "station": "2500",
+            "flows": [1250, 2750],
+        },
+    ],
+    boundaries=[
+        RasSteady.boundary(
+            "Main River",
+            "Upper Reach",
+            upstream=RasSteady.critical_depth(),
+            downstream=RasSteady.normal_depth([0.001, 0.002]),
+        ),
+    ],
+)
+
+# Apply the authored steady flow file to a plan after registering it in the
+# project file or cloning an existing flow entry through RasPlan.
+RasPlan.set_steady("02", "02")
+```
+
+### Known Water Surface and Rating Curve
+
+Compact boundary definitions can provide one value per profile. `RasSteady`
+expands them into profile-specific HEC-RAS boundary blocks when writing.
+
+```python
+boundaries = [
+    RasSteady.boundary(
+        "Main River",
+        "Upper Reach",
+        downstream=RasSteady.known_water_surface([98.5, 100.0, 101.2]),
+    ),
+    RasSteady.boundary(
+        "Tributary",
+        "Lower Reach",
+        downstream=RasSteady.rating_curve(
+            [
+                {"flow": 100.0, "stage": 95.0},
+                {"flow": 500.0, "stage": 100.0},
+                {"flow": 1200.0, "stage": 105.0},
+            ]
+        ),
+    ),
+]
+```
+
+## Validation Rules
+
+`RasSteady.validate_flow_file_data()` runs before every write and raises a
+`ValueError` when:
+
+- The profile name count does not match `Number of Profiles=`
+- Any flow-change block has a flow count that differs from the profile count
+- A compact known-water-surface or normal-depth boundary list has the wrong
+  number of profile-specific values
+- A profile-specific boundary references a profile outside `1..N`
+- A rating curve is empty or does not form stage-flow pairs
+
+## Fixed-Width Numeric Blocks
+
+HEC-RAS uses 8-character fixed-width numeric columns for flow and rating curve
+values. `RasSteady` parses by column position and writes right-aligned values:
+
+```text
+Columns:  0-7      8-15     16-23
+Values:   value1   value2   value3
 Example:  "    2000    5000   10000"
 ```
 
-- **Width**: 8 characters per value
-- **Alignment**: Right-justified
-- **Values per line**: Typically 5-10
-
-### Parsing Example
-
-```python
-def parse_flow_values(line, num_profiles):
-    """Parse flow values from fixed-width line."""
-    values = []
-    for i in range(0, len(line.rstrip()), 8):
-        field = line[i:i+8].strip()
-        if field:
-            try:
-                values.append(float(field))
-            except ValueError:
-                continue
-    return values[:num_profiles]
-```
-
-## Parsing Implementation
-
-### Manual Parsing
-
-```python
-import re
-from pathlib import Path
-
-def parse_steady_flow_file(flow_path):
-    """Parse steady flow file into structured data."""
-    with open(flow_path, 'r') as f:
-        content = f.read()
-        lines = content.split('\n')
-
-    data = {
-        'title': None,
-        'num_profiles': 0,
-        'profile_names': [],
-        'flows': {},
-        'boundaries': {}
-    }
-
-    # Extract header info
-    title_match = re.search(r'Flow Title=(.+)', content)
-    if title_match:
-        data['title'] = title_match.group(1).strip()
-
-    profiles_match = re.search(r'Number of Profiles=\s*(\d+)', content)
-    if profiles_match:
-        data['num_profiles'] = int(profiles_match.group(1))
-
-    names_match = re.search(r'Profile Names=(.+)', content)
-    if names_match:
-        data['profile_names'] = [n.strip() for n in names_match.group(1).split(',')]
-
-    # Parse flow values per reach
-    reach_pattern = r'River Rch & RM=([^,]+),([^,]+),([^\n]+)'
-    flow_pattern = r'Flow=\s*(\d+)\s*\n([\d\s.]+)'
-
-    for match in re.finditer(reach_pattern, content):
-        river, reach, station = match.groups()
-        key = (river.strip(), reach.strip(), float(station.strip()))
-
-        # Find associated flow values
-        pos = match.end()
-        flow_match = re.search(flow_pattern, content[pos:pos+500])
-        if flow_match:
-            values = [float(v) for v in flow_match.group(2).split()]
-            data['flows'][key] = values
-
-    return data
-```
-
-### Using RasPrj
-
-```python
-from ras_commander import init_ras_project, ras
-
-# Initialize project
-init_ras_project(r"C:\Projects\MyProject", "6.5")
-
-# Access flow entries
-print(ras.flow_df)
-
-# Get specific flow file path
-flow_path = ras.project_folder / f"{ras.project_name}.f01"
-```
-
-### HDF Steady Results
-
-For executed steady plans, results are in HDF format:
-
-```python
-from ras_commander import HdfResultsPlan
-
-# Check if plan has steady results
-hdf_path = Path("MyProject.p01.hdf")
-if HdfResultsPlan.is_steady_plan(hdf_path):
-    # Get profile names
-    profiles = HdfResultsPlan.get_steady_profile_names(hdf_path)
-    print(f"Profiles: {profiles}")
-
-    # Get water surface elevations
-    wse_df = HdfResultsPlan.get_steady_wse(hdf_path)
-    print(wse_df.head())
-
-    # Get steady flow metadata
-    info_df = HdfResultsPlan.get_steady_info(hdf_path)
-    print(info_df)
-```
-
-## Profile Data Structure
-
-### Flow Organization
-
-Steady flow files organize data hierarchically:
-
-```
-Number of Profiles= 3
-Profile Names=Q10,Q50,Q100
-│
-├── River 1, Reach 1
-│   ├── Station 1000: [Q10_flow, Q50_flow, Q100_flow]
-│   ├── Station 500:  [Q10_flow, Q50_flow, Q100_flow]
-│   └── Station 0:    [Q10_flow, Q50_flow, Q100_flow]
-│
-└── River 1, Reach 2
-    ├── Station 2000: [Q10_flow, Q50_flow, Q100_flow]
-    └── Station 0:    [Q10_flow, Q50_flow, Q100_flow]
-```
-
-### Flow Change Locations
-
-Flow typically changes at:
-- Tributary junctions
-- Lateral inflow points
-- User-specified locations
-
-Between change locations, flow remains constant.
-
-## Boundary Condition Types
-
-### Downstream Boundaries
-
-| Type | Keyword | Description |
-|------|---------|-------------|
-| Known WS | `Known WS=` | Fixed water surface elevation |
-| Normal Depth | `Friction Slope=` | Uses energy slope |
-| Critical Depth | `Critical Depth=` | Forces critical depth |
-| Rating Curve | `Rating Curve=` | Stage-discharge relationship |
-
-### Multiple Profiles
-
-Each boundary type needs values for **all profiles**:
-
-```
-# For 3 profiles, need 3 values
-Friction Slope= 3
-     0.001     0.0015     0.002
-```
-
-## Count Interpretation
-
-| Keyword | Count Meaning |
-|---------|---------------|
-| `Number of Profiles=` | Total profile count |
-| `Flow Change Location=` | Number of change stations |
-| `Flow=` | Number of profiles (must match header) |
-| `Known WS=` | Number of profiles |
-| `Friction Slope=` | Number of profiles |
-| `Rating Curve=` | Number of value pairs |
-
-## Validation
-
-### Check Profile Consistency
-
-```python
-def validate_steady_flow(data):
-    """Validate steady flow file structure."""
-    issues = []
-    num_profiles = data['num_profiles']
-
-    # Check profile names match count
-    if len(data['profile_names']) != num_profiles:
-        issues.append(f"Profile names ({len(data['profile_names'])}) "
-                     f"doesn't match count ({num_profiles})")
-
-    # Check flow values at each station
-    for location, flows in data['flows'].items():
-        if len(flows) != num_profiles:
-            issues.append(f"Station {location}: {len(flows)} flows, "
-                         f"expected {num_profiles}")
-
-    return issues
-```
-
-### Verify Boundary Conditions
-
-```python
-def check_boundaries(flow_path, plan_path):
-    """Verify downstream boundaries are defined."""
-    # Parse plan to find downstream stations
-    # Check flow file has boundary at each downstream station
-    pass
-```
-
-## Comparison with Unsteady
-
-| Aspect | Steady (.f##) | Unsteady (.u##) |
-|--------|---------------|-----------------|
-| Time dimension | No | Yes |
-| Profile concept | Multiple discrete profiles | Single time series |
-| Boundary data | Per-profile values | Time-value pairs |
-| File complexity | Simpler | More complex |
-| Output format | Profile tables | Time series |
-
-## HDF Results Structure
-
-Steady flow results in HDF:
-
-```
-/Results/Steady/Output/
-├── Geometry/
-│   └── Cross Sections/
-│       └── {river}_{reach}/
-│           ├── Water Surface      # (n_profiles, n_xs)
-│           ├── Energy Grade Line  # (n_profiles, n_xs)
-│           ├── Flow               # (n_profiles, n_xs)
-│           └── Velocity Channel   # (n_profiles, n_xs)
-└── Output Profiles/
-    └── Profile Names              # Profile name strings
-```
+Avoid parsing these rows with whitespace-only splitting in reusable code.
 
 ## See Also
 
-- [HEC-RAS File Formats](file-formats.md) - Overview of all file types
-- [Steady Flow Analysis](../user-guide/steady-flow-analysis.md) - Using steady flow features
-- [HDF Structure](hdf-structure.md) - HDF output organization
-- [Unsteady File Parsing](unsteady-parsing.md) - Compare with unsteady format
+- [HEC-RAS File Formats](file-formats.md)
+- [Unsteady File Parsing](unsteady-parsing.md)
+- [Steady Flow Analysis](../user-guide/steady-flow-analysis.md)
