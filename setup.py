@@ -34,7 +34,7 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.96.1",
+    version="0.96.2",
     packages=find_packages(),
     include_package_data=True,
     package_data={
@@ -72,7 +72,7 @@ setup(
         'fsspec>=2023.0.0',  # Required for Atlas14Grid remote HTTP access
         'pywin32>=227; sys_platform == "win32"',    # Required for RasControl COM interface (Windows only)
         'psutil>=5.6.6',   # Required for RasControl process management
-        'hms-commander>=0.2.0',  # Atlas 14 DataFrame API with standardized return format
+        'hms-commander>=0.3.1',  # Storm generator updates and Atlas 14 DataFrame API
     ],
     extras_require={
         # Remote execution backends (PsExec worker has no extra deps)
