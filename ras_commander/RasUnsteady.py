@@ -991,7 +991,8 @@ class RasUnsteady:
         **Fixed-Width Format**:
         - Values formatted as 8-character fixed-width fields (8.2f)
         - 10 values per line
-        - HEC-RAS uses (time, depth) pairs, so count = len(hyetograph) × 2
+        - Precipitation Hydrograph uses sequential depth values (not time-depth pairs)
+        - Count = number of depth values; timing from Interval= line
 
         **Depth Conservation**:
         - Total depth is logged for verification
@@ -1058,19 +1059,14 @@ class RasUnsteady:
         # Calculate total depth for logging
         total_depth = hyetograph_df['cumulative_depth'].iloc[-1]
 
-        # Format values as (time, depth) pairs in HEC-RAS fixed-width format
-        # HEC-RAS expects paired values: time, value, time, value, ...
-        paired_values = []
-        for i, (hour, depth) in enumerate(zip(hours, precip_values)):
-            paired_values.append(hour)
-            paired_values.append(depth)
-
-        num_pairs = len(precip_values)
+        # Precipitation Hydrograph uses sequential depth values (NOT time-depth pairs).
+        # Timing is determined by the Interval= line. Count = number of depth values.
+        num_values = len(precip_values)
 
         # Format into fixed-width lines (8 chars each, 10 values per line)
         formatted_lines = []
-        for i in range(0, len(paired_values), 10):
-            row_values = paired_values[i:i+10]
+        for i in range(0, len(precip_values), 10):
+            row_values = precip_values[i:i+10]
             formatted_row = ''.join(f'{value:8.2f}' for value in row_values)
             formatted_lines.append(formatted_row + '\n')
 
@@ -1136,7 +1132,7 @@ class RasUnsteady:
             old_data_end = len(lines)
 
         # Update the Precipitation Hydrograph header line with new count
-        new_precip_line = f"Precipitation Hydrograph= {num_pairs} \n"
+        new_precip_line = f"Precipitation Hydrograph= {num_values} \n"
 
         # Search backwards from Precipitation Hydrograph line for Interval line
         interval_updated = False
@@ -1167,7 +1163,7 @@ class RasUnsteady:
 
         logger.info(
             f"Updated Precipitation Hydrograph in {unsteady_path.name}: "
-            f"{num_pairs} time steps, interval={interval_str}, "
+            f"{num_values} time steps, interval={interval_str}, "
             f"total depth={total_depth:.4f} inches"
         )
 
