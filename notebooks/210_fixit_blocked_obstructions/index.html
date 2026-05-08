@@ -2900,10 +2900,71 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#9-cleanup-optional" class="md-nav__link">
+  <a href="#9-geomcrosssection-blocked-obstruction-api" class="md-nav__link">
     <span class="md-ellipsis">
       
-        9. Cleanup (Optional)
+        9. GeomCrossSection Blocked Obstruction API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. GeomCrossSection Blocked Obstruction API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#9a-read-blocked-obstructions-as-a-dataframe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9a. Read Blocked Obstructions as a DataFrame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9b-write-blocked-obstructions-round-trip" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9b. Write Blocked Obstructions (Round-Trip)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9c-insert-new-obstructions-and-remove-existing-ones" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9c. Insert New Obstructions and Remove Existing Ones
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9d-hdf-cross-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9d. HDF Cross-Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-cleanup-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Cleanup (Optional)
       
     </span>
   </a>
@@ -3011,18 +3072,25 @@
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="c1"># Import ras-commander</span>
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasFixit</span><span class="p">,</span> <span class="n">FixResults</span><span class="p">,</span> <span class="n">FixMessage</span><span class="p">,</span> <span class="n">FixAction</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.fixit</span><span class="w"> </span><span class="kn">import</span> <span class="n">log_parser</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1"># Additional imports for this notebook</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="c1"># Verify which version loaded</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.geom.GeomCrossSection</span><span class="w"> </span><span class="kn">import</span> <span class="n">GeomCrossSection</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.fixit</span><span class="w"> </span><span class="kn">import</span> <span class="n">log_parser</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="c1"># Additional imports for this notebook</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="c1"># Verify which version loaded</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>📁 LOCAL SOURCE MODE: Loading from c:\GH\ras-commander/ras_commander
-✓ Loaded: c:\GH\ras-commander\ras_commander\__init__.py
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>📁 LOCAL SOURCE MODE: Loading from G:\GH\ras-commander/ras_commander
+
+
+2026-05-08 11:26:07 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+
+
+✓ Loaded: G:\GH\ras-commander\ras_commander\__init__.py
 </code></pre></div>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
@@ -3070,6 +3138,25 @@
 </span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Project folder: </span><span class="si">{</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometry file exists: </span><span class="si">{</span><span class="n">geom_file</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-05-08 11:26:09 - ras_commander.sources.county.m3_model - INFO - ----- M3Model Extracting Model -----
+
+
+2026-05-08 11:26:09 - ras_commander.sources.county.m3_model - INFO - Extracting model &#39;A&#39; - Clear Creek
+
+
+2026-05-08 11:26:09 - ras_commander.sources.county.m3_model - INFO - Model &#39;Clear Creek&#39; already exists at G:\GH\ras-commander\examples\m3_models\Clear Creek
+
+
+2026-05-08 11:26:09 - ras_commander.sources.county.m3_model - INFO - Use overwrite=True to re-download
+
+
+Extracting M3 Model &#39;A&#39; (Clear Creek)...
+✓ M3 Model extracted to: G:\GH\ras-commander\examples\m3_models\Clear Creek
+✓ Project already exists: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00
+
+Project folder: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00
+Geometry file exists: True
+</code></pre></div>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Detect overlaps without modifying the file</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">results</span> <span class="o">=</span> <span class="n">RasFixit</span><span class="o">.</span><span class="n">detect_obstruction_overlaps</span><span class="p">(</span><span class="n">geom_file</span><span class="p">)</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
@@ -3082,7 +3169,13 @@
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="k">for</span> <span class="n">msg</span> <span class="ow">in</span> <span class="n">results</span><span class="o">.</span><span class="n">messages</span><span class="p">:</span>
 </span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  RS </span><span class="si">{</span><span class="n">msg</span><span class="o">.</span><span class="n">station</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">msg</span><span class="o">.</span><span class="n">original_count</span><span class="si">}</span><span class="s2"> obstructions -&gt; would become </span><span class="si">{</span><span class="n">msg</span><span class="o">.</span><span class="n">fixed_count</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Geometry File: A120_00_00.g01
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-05-08 11:26:09 - ras_commander.geom.GeomCrossSection - WARNING - Expected 2 blocked obstructions, parsed 1
+
+
+2026-05-08 11:26:09 - ras_commander.geom.GeomCrossSection - WARNING - Expected 3 blocked obstructions, parsed 2
+
+
+Geometry File: A120_00_00.g01
 Cross Sections Checked: 91
 Cross Sections with Overlaps: 15
 
@@ -3161,22 +3254,120 @@ Fixed Obstructions (6) - using max elevation envelope:
 </span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Backup Created: </span><span class="si">{</span><span class="n">fix_results</span><span class="o">.</span><span class="n">backup_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Visualizations: </span><span class="si">{</span><span class="n">fix_results</span><span class="o">.</span><span class="n">visualization_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2025-12-28 22:42:08 - ras_commander.fixit.RasFixit - INFO - Created backup: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01.backup_20251228_224208
-2025-12-28 22:42:08 - ras_commander.fixit.RasFixit - INFO - Saving visualizations to: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy_g01_Obstructions_Fixed
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-05-08 11:26:09 - ras_commander.fixit.RasFixit - INFO - Created backup: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01.backup_20260508_112609
+
+
+2026-05-08 11:26:09 - ras_commander.fixit.RasFixit - INFO - Saving visualizations to: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy_g01_Obstructions_Fixed
 
 
 Created working copy: A120_00_00_test_copy.g01
 
 
-2025-12-28 22:42:13 - ras_commander.fixit.RasFixit - INFO - Fixed 15 cross sections in A120_00_00_test_copy.g01
+2026-05-08 11:26:09 - ras_commander.geom.GeomCrossSection - WARNING - Expected 2 blocked obstructions, parsed 1
+
+
+2026-05-08 11:26:09 - ras_commander.geom.GeomCrossSection - WARNING - Expected 3 blocked obstructions, parsed 2
+
+
+2026-05-08 11:26:09 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:09 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 20262.89: 6 obstructions written
+
+
+2026-05-08 11:26:09 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:09 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 17853.49: 2 obstructions written
+
+
+2026-05-08 11:26:10 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:10 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 17833.49: 2 obstructions written
+
+
+2026-05-08 11:26:10 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:10 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 17612.53: 3 obstructions written
+
+
+2026-05-08 11:26:10 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:10 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 15831.37: 2 obstructions written
+
+
+2026-05-08 11:26:11 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:11 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 15136.2: 8 obstructions written
+
+
+2026-05-08 11:26:11 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:11 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 14284.07: 4 obstructions written
+
+
+2026-05-08 11:26:11 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:11 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 11422.31: 4 obstructions written
+
+
+2026-05-08 11:26:11 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:11 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 11181.99: 4 obstructions written
+
+
+2026-05-08 11:26:12 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:12 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 10150.51: 5 obstructions written
+
+
+2026-05-08 11:26:12 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:12 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 10040.42: 5 obstructions written
+
+
+2026-05-08 11:26:12 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:12 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 9960.36: 4 obstructions written
+
+
+2026-05-08 11:26:13 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:13 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 5714.48: 3 obstructions written
+
+
+2026-05-08 11:26:13 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:13 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 4894.121: 2 obstructions written
+
+
+2026-05-08 11:26:13 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01
+
+
+2026-05-08 11:26:13 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 4053.094: 2 obstructions written
+
+
+2026-05-08 11:26:13 - ras_commander.fixit.RasFixit - INFO - Fixed 15 cross sections in A120_00_00_test_copy.g01
 
 
 
 === Fix Results ===
 Cross Sections Checked: 91
 Cross Sections Fixed: 15
-Backup Created: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01.backup_20251228_224208
-Visualizations: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy_g01_Obstructions_Fixed
+Backup Created: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy.g01.backup_20260508_112609
+Visualizations: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy_g01_Obstructions_Fixed
 </code></pre></div>
 <h2 id="5-review-fix-results">5. Review Fix Results<a class="headerlink" href="#5-review-fix-results" title="Permanent link">&para;</a></h2>
 <p>The <code>FixResults</code> object contains detailed information about every fix applied. Let's examine it.</p>
@@ -3208,7 +3399,7 @@ Visualizations: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">csv_path</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Fix report exported to: </span><span class="si">{</span><span class="n">csv_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Fix report exported to: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\obstruction_fix_report.csv
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Fix report exported to: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\obstruction_fix_report.csv
 </code></pre></div>
 <h2 id="6-view-visualizations">6. View Visualizations<a class="headerlink" href="#6-view-visualizations" title="Permanent link">&para;</a></h2>
 <p>The PNG visualizations show before/after comparisons for each fixed cross section. They are critical for engineering review.</p>
@@ -3238,7 +3429,7 @@ Visualizations: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-
 </span></code></pre></div>
 <p><img alt="png" src="../210_fixit_blocked_obstructions_files/210_fixit_blocked_obstructions_16_0.png" /></p>
 <div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Total visualizations generated: 15
-Location: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy_g01_Obstructions_Fixed
+Location: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_test_copy_g01_Obstructions_Fixed
 </code></pre></div>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Display all visualizations (optional - may be slow for many cross sections)</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">show_all</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># Set to True to view all</span>
@@ -3267,7 +3458,13 @@ Location: c:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;WARNING: </span><span class="si">{</span><span class="n">verify_results</span><span class="o">.</span><span class="n">total_xs_fixed</span><span class="si">}</span><span class="s2"> cross sections still have overlaps.&quot;</span><span class="p">)</span>
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Please review the file manually.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>SUCCESS: No overlapping obstructions remaining!
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-05-08 11:26:14 - ras_commander.geom.GeomCrossSection - WARNING - Expected 2 blocked obstructions, parsed 1
+
+
+2026-05-08 11:26:14 - ras_commander.geom.GeomCrossSection - WARNING - Expected 3 blocked obstructions, parsed 2
+
+
+SUCCESS: No overlapping obstructions remaining!
 Verified 91 cross sections.
 </code></pre></div>
 <h2 id="8-log-parsing-for-automated-workflows">8. Log Parsing for Automated Workflows<a class="headerlink" href="#8-log-parsing-for-automated-workflows" title="Permanent link">&para;</a></h2>
@@ -3357,52 +3554,581 @@ ADJACENT (1 occurrences):
 <div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>auto_fix_workflow() function defined.
 Usage: auto_fix_workflow(&#39;compute.log&#39;, &#39;path/to/project&#39;)
 </code></pre></div>
-<h2 id="9-cleanup-optional">9. Cleanup (Optional)<a class="headerlink" href="#9-cleanup-optional" title="Permanent link">&para;</a></h2>
-<p>Remove test files after verification.</p>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Optional: Clean up test files</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">cleanup</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># Set to False to keep test files</span>
+<h2 id="9-geomcrosssection-blocked-obstruction-api">9. GeomCrossSection Blocked Obstruction API<a class="headerlink" href="#9-geomcrosssection-blocked-obstruction-api" title="Permanent link">&para;</a></h2>
+<p>The <code>GeomCrossSection</code> class exposes low-level read/write methods for blocked obstructions, independent of the <code>RasFixit</code> repair workflow. Use these when you need to:</p>
+<ul>
+<li><strong>Inspect</strong> obstruction data across all cross sections as a DataFrame</li>
+<li><strong>Programmatically write</strong> new or modified obstructions to a <code>.g##</code> file</li>
+<li><strong>Cross-validate</strong> text-parsed obstructions against HDF geometry flags</li>
+</ul>
+<p>These methods follow ras-commander API conventions: <code>@staticmethod</code>, <code>@log_call</code>, and accept either a geometry number with <code>ras_object</code> or a direct file path.</p>
+<h3 id="9a-read-blocked-obstructions-as-a-dataframe">9a. Read Blocked Obstructions as a DataFrame<a class="headerlink" href="#9a-read-blocked-obstructions-as-a-dataframe" title="Permanent link">&para;</a></h3>
+<p><code>get_blocked_obstructions()</code> returns a DataFrame with <code>xs_id</code>, <code>River</code>, <code>Reach</code>, <code>RS</code>, <code>obstruction_index</code>, <code>start_sta</code>, <code>end_sta</code>, and <code>elevation</code> columns. Pass no <code>xs_id</code> to read all cross sections, or pass a specific identifier to filter.</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Read all blocked obstructions from the original geometry file</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">all_obs</span> <span class="o">=</span> <span class="n">GeomCrossSection</span><span class="o">.</span><span class="n">get_blocked_obstructions</span><span class="p">(</span><span class="n">geom_file</span><span class="p">)</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="k">if</span> <span class="n">cleanup</span><span class="p">:</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="c1"># Remove working copy</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="k">if</span> <span class="n">working_copy</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>        <span class="n">working_copy</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed: </span><span class="si">{</span><span class="n">working_copy</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>    <span class="c1"># Remove backup</span>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>    <span class="k">if</span> <span class="n">fix_results</span><span class="o">.</span><span class="n">backup_path</span> <span class="ow">and</span> <span class="n">fix_results</span><span class="o">.</span><span class="n">backup_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>        <span class="n">fix_results</span><span class="o">.</span><span class="n">backup_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed backup: </span><span class="si">{</span><span class="n">fix_results</span><span class="o">.</span><span class="n">backup_path</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>
-</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>    <span class="c1"># Remove visualization folder</span>
-</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>    <span class="k">if</span> <span class="n">fix_results</span><span class="o">.</span><span class="n">visualization_folder</span> <span class="ow">and</span> <span class="n">fix_results</span><span class="o">.</span><span class="n">visualization_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">fix_results</span><span class="o">.</span><span class="n">visualization_folder</span><span class="p">)</span>
-</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed visualization folder: </span><span class="si">{</span><span class="n">fix_results</span><span class="o">.</span><span class="n">visualization_folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a>
-</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a>    <span class="c1"># Remove CSV report</span>
-</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a>    <span class="k">if</span> <span class="n">csv_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a>        <span class="n">csv_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
-</span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed: </span><span class="si">{</span><span class="n">csv_path</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a>
-</span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Cleanup complete!&quot;</span><span class="p">)</span>
-</span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-13-27"><a id="__codelineno-13-27" name="__codelineno-13-27" href="#__codelineno-13-27"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Cleanup skipped. Set cleanup=True to remove test files.&quot;</span><span class="p">)</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total obstructions across all cross sections: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">all_obs</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cross sections with obstructions: </span><span class="si">{</span><span class="n">all_obs</span><span class="p">[</span><span class="s1">&#39;xs_id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">nunique</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Columns: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">all_obs</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">First 10 rows:&quot;</span><span class="p">)</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="n">all_obs</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-05-08 11:26:14 - ras_commander.geom.GeomCrossSection - WARNING - Expected 2 blocked obstructions, parsed 1
+
+
+2026-05-08 11:26:14 - ras_commander.geom.GeomCrossSection - WARNING - Expected 3 blocked obstructions, parsed 2
+
+
+Total obstructions across all cross sections: 178
+Cross sections with obstructions: 72
+
+Columns: [&#39;xs_id&#39;, &#39;River&#39;, &#39;Reach&#39;, &#39;RS&#39;, &#39;obstruction_index&#39;, &#39;start_sta&#39;, &#39;end_sta&#39;, &#39;elevation&#39;]
+
+First 10 rows:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>xs_id</th>
+      <th>River</th>
+      <th>Reach</th>
+      <th>RS</th>
+      <th>obstruction_index</th>
+      <th>start_sta</th>
+      <th>end_sta</th>
+      <th>elevation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>A120-00-00|A120-00-00_0008|29113.3</td>
+      <td>A120-00-00</td>
+      <td>A120-00-00_0008</td>
+      <td>29113.3</td>
+      <td>0</td>
+      <td>5240.00</td>
+      <td>5875.00</td>
+      <td>40.5</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>A120-00-00|A120-00-00_0008|28913.21</td>
+      <td>A120-00-00</td>
+      <td>A120-00-00_0008</td>
+      <td>28913.21</td>
+      <td>0</td>
+      <td>5193.17</td>
+      <td>5481.91</td>
+      <td>41.0</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>A120-00-00|A120-00-00_0008|28022.89</td>
+      <td>A120-00-00</td>
+      <td>A120-00-00_0008</td>
+      <td>28022.89</td>
+      <td>0</td>
+      <td>3200.00</td>
+      <td>3400.00</td>
+      <td>41.0</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>A120-00-00|A120-00-00_0008|28022.89</td>
+      <td>A120-00-00</td>
+      <td>A120-00-00_0008</td>
+      <td>28022.89</td>
+      <td>1</td>
+      <td>3571.00</td>
+      <td>4500.00</td>
+      <td>39.6</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>A120-00-00|A120-00-00_0008|28022.89</td>
+      <td>A120-00-00</td>
+      <td>A120-00-00_0008</td>
+      <td>28022.89</td>
+      <td>2</td>
+      <td>5200.00</td>
+      <td>5900.00</td>
+      <td>41.0</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>A120-00-00|A120-00-00_0008|27857.47</td>
+      <td>A120-00-00</td>
+      <td>A120-00-00_0008</td>
+      <td>27857.47</td>
+      <td>0</td>
+      <td>2900.00</td>
+      <td>3150.00</td>
+      <td>41.0</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>A120-00-00|A120-00-00_0008|27857.47</td>
+      <td>A120-00-00</td>
+      <td>A120-00-00_0008</td>
+      <td>27857.47</td>
+      <td>1</td>
+      <td>3151.00</td>
+      <td>4300.00</td>
+      <td>39.5</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>A120-00-00|A120-00-00_0008|26578.6</td>
+      <td>A120-00-00</td>
+      <td>A120-00-00_0008</td>
+      <td>26578.6</td>
+      <td>0</td>
+      <td>-500.00</td>
+      <td>-180.00</td>
+      <td>41.0</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>A120-00-00|A120-00-00_0008|26578.6</td>
+      <td>A120-00-00</td>
+      <td>A120-00-00_0008</td>
+      <td>26578.6</td>
+      <td>1</td>
+      <td>-150.00</td>
+      <td>2300.00</td>
+      <td>39.4</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>A120-00-00|A120-00-00_0008|25646.24</td>
+      <td>A120-00-00</td>
+      <td>A120-00-00_0008</td>
+      <td>25646.24</td>
+      <td>0</td>
+      <td>-350.00</td>
+      <td>0.00</td>
+      <td>40.5</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Read obstructions for a single cross section using xs_id</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">target_xs</span> <span class="o">=</span> <span class="n">all_obs</span><span class="p">[</span><span class="s2">&quot;xs_id&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">single_xs_obs</span> <span class="o">=</span> <span class="n">GeomCrossSection</span><span class="o">.</span><span class="n">get_blocked_obstructions</span><span class="p">(</span><span class="n">geom_file</span><span class="p">,</span> <span class="n">xs_id</span><span class="o">=</span><span class="n">target_xs</span><span class="p">)</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Obstructions for </span><span class="si">{</span><span class="n">target_xs</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">single_xs_obs</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  [</span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;obstruction_index&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">] Station </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;start_sta&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">8.2f</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;end_sta&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">8.2f</span><span class="si">}</span><span class="s2">, Elevation: </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;elevation&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="c1"># Summary statistics</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Summary across all cross sections:&quot;</span><span class="p">)</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="n">summary</span> <span class="o">=</span> <span class="n">all_obs</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">&quot;xs_id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>    <span class="n">count</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;obstruction_index&quot;</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">),</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a>    <span class="n">min_sta</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;start_sta&quot;</span><span class="p">,</span> <span class="s2">&quot;min&quot;</span><span class="p">),</span>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>    <span class="n">max_sta</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;end_sta&quot;</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">),</span>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a>    <span class="n">min_elev</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;elevation&quot;</span><span class="p">,</span> <span class="s2">&quot;min&quot;</span><span class="p">),</span>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>    <span class="n">max_elev</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;elevation&quot;</span><span class="p">,</span> <span class="s2">&quot;max&quot;</span><span class="p">),</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="n">summary</span>
+</span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Obstructions for A120-00-00|A120-00-00_0008|29113.3:
+  [0] Station  5240.00 to  5875.00, Elevation: 40.50
+
+Summary across all cross sections:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>xs_id</th>
+      <th>count</th>
+      <th>min_sta</th>
+      <th>max_sta</th>
+      <th>min_elev</th>
+      <th>max_elev</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>A120-00-00|A120-00-00_0008|10040.42</td>
+      <td>4</td>
+      <td>1685.00</td>
+      <td>9522.18</td>
+      <td>30.95</td>
+      <td>32.50</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>A120-00-00|A120-00-00_0008|10150.51</td>
+      <td>4</td>
+      <td>898.75</td>
+      <td>9450.97</td>
+      <td>31.00</td>
+      <td>32.67</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>A120-00-00|A120-00-00_0008|10170.53</td>
+      <td>4</td>
+      <td>1205.92</td>
+      <td>9350.00</td>
+      <td>31.00</td>
+      <td>32.99</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>A120-00-00|A120-00-00_0008|11181.99</td>
+      <td>3</td>
+      <td>1200.00</td>
+      <td>11118.41</td>
+      <td>31.25</td>
+      <td>32.70</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>A120-00-00|A120-00-00_0008|11422.31</td>
+      <td>3</td>
+      <td>1200.00</td>
+      <td>11836.18</td>
+      <td>31.35</td>
+      <td>33.10</td>
+    </tr>
+    <tr>
+      <th>...</th>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+    </tr>
+    <tr>
+      <th>67</th>
+      <td>A120-00-00|A120-00-00_0008|9291.765</td>
+      <td>2</td>
+      <td>2650.00</td>
+      <td>8000.00</td>
+      <td>30.65</td>
+      <td>30.65</td>
+    </tr>
+    <tr>
+      <th>68</th>
+      <td>A120-00-00|A120-00-00_0008|9331.771</td>
+      <td>3</td>
+      <td>2350.00</td>
+      <td>8700.00</td>
+      <td>30.70</td>
+      <td>30.70</td>
+    </tr>
+    <tr>
+      <th>69</th>
+      <td>A120-00-00|A120-00-00_0008|9392.3</td>
+      <td>4</td>
+      <td>2450.00</td>
+      <td>9608.65</td>
+      <td>30.80</td>
+      <td>32.67</td>
+    </tr>
+    <tr>
+      <th>70</th>
+      <td>A120-00-00|A120-00-00_0008|9402.438</td>
+      <td>5</td>
+      <td>2500.00</td>
+      <td>9900.00</td>
+      <td>30.80</td>
+      <td>32.85</td>
+    </tr>
+    <tr>
+      <th>71</th>
+      <td>A120-00-00|A120-00-00_0008|9960.36</td>
+      <td>3</td>
+      <td>1730.00</td>
+      <td>9397.04</td>
+      <td>30.90</td>
+      <td>32.70</td>
+    </tr>
+  </tbody>
+</table>
+<p>72 rows × 6 columns</p>
+</div>
+
+<h3 id="9b-write-blocked-obstructions-round-trip">9b. Write Blocked Obstructions (Round-Trip)<a class="headerlink" href="#9b-write-blocked-obstructions-round-trip" title="Permanent link">&para;</a></h3>
+<p><code>set_blocked_obstructions()</code> writes obstruction data to a specific cross section. It accepts <code>BlockedObstruction</code> objects, DataFrames, dicts, or <code>(start_sta, end_sta, elevation)</code> tuples. A backup is created by default.</p>
+<p>Here we demonstrate a read-modify-write round trip: read the original obstructions, shift elevations up by 1 foot, write them back, and verify the round trip.</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Create a fresh working copy for the write demo</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">write_demo_copy</span> <span class="o">=</span> <span class="n">project_folder</span> <span class="o">/</span> <span class="s2">&quot;A120_00_00_write_demo.g01&quot;</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">geom_file</span><span class="p">,</span> <span class="n">write_demo_copy</span><span class="p">)</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="c1"># Read original obstructions for a specific cross section</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="n">target_xs</span> <span class="o">=</span> <span class="n">all_obs</span><span class="p">[</span><span class="s2">&quot;xs_id&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="n">original</span> <span class="o">=</span> <span class="n">GeomCrossSection</span><span class="o">.</span><span class="n">get_blocked_obstructions</span><span class="p">(</span><span class="n">write_demo_copy</span><span class="p">,</span> <span class="n">xs_id</span><span class="o">=</span><span class="n">target_xs</span><span class="p">)</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Original obstructions for </span><span class="si">{</span><span class="n">target_xs</span><span class="si">}</span><span class="s2">:&quot;</span><span class="p">)</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="nb">print</span><span class="p">(</span><span class="n">original</span><span class="p">[[</span><span class="s2">&quot;start_sta&quot;</span><span class="p">,</span> <span class="s2">&quot;end_sta&quot;</span><span class="p">,</span> <span class="s2">&quot;elevation&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">to_string</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="c1"># Modify: shift all elevations up by 1 foot</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="n">modified</span> <span class="o">=</span> <span class="n">original</span><span class="p">[[</span><span class="s2">&quot;start_sta&quot;</span><span class="p">,</span> <span class="s2">&quot;end_sta&quot;</span><span class="p">,</span> <span class="s2">&quot;elevation&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="n">modified</span><span class="p">[</span><span class="s2">&quot;elevation&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">modified</span><span class="p">[</span><span class="s2">&quot;elevation&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="mf">1.0</span>
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>
+</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Modified obstructions (elevation + 1.0 ft):&quot;</span><span class="p">)</span>
+</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a><span class="nb">print</span><span class="p">(</span><span class="n">modified</span><span class="o">.</span><span class="n">to_string</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a>
+</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a><span class="c1"># Write the modified obstructions back</span>
+</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a><span class="n">backup_path</span> <span class="o">=</span> <span class="n">GeomCrossSection</span><span class="o">.</span><span class="n">set_blocked_obstructions</span><span class="p">(</span>
+</span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a>    <span class="n">write_demo_copy</span><span class="p">,</span>
+</span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a>    <span class="n">xs_id</span><span class="o">=</span><span class="n">target_xs</span><span class="p">,</span>
+</span><span id="__span-15-22"><a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a>    <span class="n">obstructions</span><span class="o">=</span><span class="n">modified</span><span class="p">,</span>
+</span><span id="__span-15-23"><a id="__codelineno-15-23" name="__codelineno-15-23" href="#__codelineno-15-23"></a><span class="p">)</span>
+</span><span id="__span-15-24"><a id="__codelineno-15-24" name="__codelineno-15-24" href="#__codelineno-15-24"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Backup created: </span><span class="si">{</span><span class="n">backup_path</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Original obstructions for A120-00-00|A120-00-00_0008|29113.3:
+
+
+2026-05-08 11:26:14 - ras_commander.geom.GeomParser - INFO - Created backup: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_write_demo.g01.bak
+
+
+ start_sta  end_sta  elevation
+    5240.0   5875.0       40.5
+
+Modified obstructions (elevation + 1.0 ft):
+ start_sta  end_sta  elevation
+    5240.0   5875.0       41.5
+
+
+2026-05-08 11:26:14 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_write_demo.g01
+
+
+2026-05-08 11:26:14 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 29113.3: 1 obstructions written
+
+
+
+Backup created: A120_00_00_write_demo.g01.bak
+</code></pre></div>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Verify the round trip: re-read and compare</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">roundtrip</span> <span class="o">=</span> <span class="n">GeomCrossSection</span><span class="o">.</span><span class="n">get_blocked_obstructions</span><span class="p">(</span><span class="n">write_demo_copy</span><span class="p">,</span> <span class="n">xs_id</span><span class="o">=</span><span class="n">target_xs</span><span class="p">)</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Round-trip verification:&quot;</span><span class="p">)</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">roundtrip</span><span class="p">[[</span><span class="s2">&quot;start_sta&quot;</span><span class="p">,</span> <span class="s2">&quot;end_sta&quot;</span><span class="p">,</span> <span class="s2">&quot;elevation&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">to_string</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># Check values match</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">roundtrip</span><span class="p">[</span><span class="s2">&quot;start_sta&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">modified</span><span class="p">[</span><span class="s2">&quot;start_sta&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">),</span> <span class="s2">&quot;start_sta mismatch&quot;</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">roundtrip</span><span class="p">[</span><span class="s2">&quot;end_sta&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">modified</span><span class="p">[</span><span class="s2">&quot;end_sta&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">),</span> <span class="s2">&quot;end_sta mismatch&quot;</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">roundtrip</span><span class="p">[</span><span class="s2">&quot;elevation&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">modified</span><span class="p">[</span><span class="s2">&quot;elevation&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">),</span> <span class="s2">&quot;elevation mismatch&quot;</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">✓ Round trip verified: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">roundtrip</span><span class="p">)</span><span class="si">}</span><span class="s2"> obstructions match&quot;</span><span class="p">)</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="c1"># Verify other cross sections were not affected</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="n">all_obs_after</span> <span class="o">=</span> <span class="n">GeomCrossSection</span><span class="o">.</span><span class="n">get_blocked_obstructions</span><span class="p">(</span><span class="n">write_demo_copy</span><span class="p">)</span>
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="n">other_xs_before</span> <span class="o">=</span> <span class="n">all_obs</span><span class="p">[</span><span class="n">all_obs</span><span class="p">[</span><span class="s2">&quot;xs_id&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">target_xs</span><span class="p">]</span>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a><span class="n">other_xs_after</span> <span class="o">=</span> <span class="n">all_obs_after</span><span class="p">[</span><span class="n">all_obs_after</span><span class="p">[</span><span class="s2">&quot;xs_id&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">target_xs</span><span class="p">]</span>
+</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a>
+</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">other_xs_before</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">other_xs_after</span><span class="p">),</span> <span class="s2">&quot;Other XS obstruction count changed!&quot;</span>
+</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span>
+</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a>    <span class="n">other_xs_before</span><span class="p">[</span><span class="s2">&quot;elevation&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+</span><span id="__span-16-21"><a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a>    <span class="n">other_xs_after</span><span class="p">[</span><span class="s2">&quot;elevation&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+</span><span id="__span-16-22"><a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a><span class="p">),</span> <span class="s2">&quot;Other XS elevations changed!&quot;</span>
+</span><span id="__span-16-23"><a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Other cross sections unaffected (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">other_xs_after</span><span class="p">)</span><span class="si">}</span><span class="s2"> obstructions unchanged)&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-05-08 11:26:14 - ras_commander.geom.GeomCrossSection - WARNING - Expected 2 blocked obstructions, parsed 1
+
+
+2026-05-08 11:26:14 - ras_commander.geom.GeomCrossSection - WARNING - Expected 3 blocked obstructions, parsed 2
+
+
+Round-trip verification:
+ start_sta  end_sta  elevation
+    5240.0   5875.0       41.5
+
+✓ Round trip verified: 1 obstructions match
+✓ Other cross sections unaffected (177 obstructions unchanged)
+</code></pre></div>
+<h3 id="9c-insert-new-obstructions-and-remove-existing-ones">9c. Insert New Obstructions and Remove Existing Ones<a class="headerlink" href="#9c-insert-new-obstructions-and-remove-existing-ones" title="Permanent link">&para;</a></h3>
+<p><code>set_blocked_obstructions()</code> can also insert a new obstruction block into a cross section that has none, or remove all obstructions by passing an empty list.</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Find a cross section that has NO obstructions</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">xs_df</span> <span class="o">=</span> <span class="n">GeomCrossSection</span><span class="o">.</span><span class="n">get_cross_sections</span><span class="p">(</span><span class="n">write_demo_copy</span><span class="p">)</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">xs_with_obs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">all_obs</span><span class="p">[</span><span class="s2">&quot;xs_id&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">())</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">all_xs_ids</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="n">GeomCrossSection</span><span class="o">.</span><span class="n">_make_xs_id</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;River&quot;</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="s2">&quot;Reach&quot;</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="s2">&quot;RS&quot;</span><span class="p">])</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">xs_df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">()</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="p">]</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="n">xs_without_obs</span> <span class="o">=</span> <span class="p">[</span><span class="n">xid</span> <span class="k">for</span> <span class="n">xid</span> <span class="ow">in</span> <span class="n">all_xs_ids</span> <span class="k">if</span> <span class="n">xid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">xs_with_obs</span><span class="p">]</span>
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>
+</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="k">if</span> <span class="n">xs_without_obs</span><span class="p">:</span>
+</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>    <span class="n">insert_target</span> <span class="o">=</span> <span class="n">xs_without_obs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cross section with no obstructions: </span><span class="si">{</span><span class="n">insert_target</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a>
+</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>    <span class="c1"># Insert new obstructions using tuples</span>
+</span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a>    <span class="n">new_obs</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-17-16"><a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a>        <span class="p">(</span><span class="mf">100.0</span><span class="p">,</span> <span class="mf">200.0</span><span class="p">,</span> <span class="mf">50.0</span><span class="p">),</span>
+</span><span id="__span-17-17"><a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a>        <span class="p">(</span><span class="mf">300.0</span><span class="p">,</span> <span class="mf">400.0</span><span class="p">,</span> <span class="mf">55.0</span><span class="p">),</span>
+</span><span id="__span-17-18"><a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a>    <span class="p">]</span>
+</span><span id="__span-17-19"><a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a>    <span class="n">GeomCrossSection</span><span class="o">.</span><span class="n">set_blocked_obstructions</span><span class="p">(</span>
+</span><span id="__span-17-20"><a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a>        <span class="n">write_demo_copy</span><span class="p">,</span> <span class="n">xs_id</span><span class="o">=</span><span class="n">insert_target</span><span class="p">,</span> <span class="n">obstructions</span><span class="o">=</span><span class="n">new_obs</span><span class="p">,</span> <span class="n">create_backup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-17-21"><a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a>    <span class="p">)</span>
+</span><span id="__span-17-22"><a id="__codelineno-17-22" name="__codelineno-17-22" href="#__codelineno-17-22"></a>
+</span><span id="__span-17-23"><a id="__codelineno-17-23" name="__codelineno-17-23" href="#__codelineno-17-23"></a>    <span class="c1"># Verify insertion</span>
+</span><span id="__span-17-24"><a id="__codelineno-17-24" name="__codelineno-17-24" href="#__codelineno-17-24"></a>    <span class="n">inserted</span> <span class="o">=</span> <span class="n">GeomCrossSection</span><span class="o">.</span><span class="n">get_blocked_obstructions</span><span class="p">(</span><span class="n">write_demo_copy</span><span class="p">,</span> <span class="n">xs_id</span><span class="o">=</span><span class="n">insert_target</span><span class="p">)</span>
+</span><span id="__span-17-25"><a id="__codelineno-17-25" name="__codelineno-17-25" href="#__codelineno-17-25"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Inserted </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">inserted</span><span class="p">)</span><span class="si">}</span><span class="s2"> obstructions:&quot;</span><span class="p">)</span>
+</span><span id="__span-17-26"><a id="__codelineno-17-26" name="__codelineno-17-26" href="#__codelineno-17-26"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">inserted</span><span class="p">[[</span><span class="s2">&quot;start_sta&quot;</span><span class="p">,</span> <span class="s2">&quot;end_sta&quot;</span><span class="p">,</span> <span class="s2">&quot;elevation&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">to_string</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+</span><span id="__span-17-27"><a id="__codelineno-17-27" name="__codelineno-17-27" href="#__codelineno-17-27"></a>
+</span><span id="__span-17-28"><a id="__codelineno-17-28" name="__codelineno-17-28" href="#__codelineno-17-28"></a>    <span class="c1"># Now remove them by passing an empty list</span>
+</span><span id="__span-17-29"><a id="__codelineno-17-29" name="__codelineno-17-29" href="#__codelineno-17-29"></a>    <span class="n">GeomCrossSection</span><span class="o">.</span><span class="n">set_blocked_obstructions</span><span class="p">(</span>
+</span><span id="__span-17-30"><a id="__codelineno-17-30" name="__codelineno-17-30" href="#__codelineno-17-30"></a>        <span class="n">write_demo_copy</span><span class="p">,</span> <span class="n">xs_id</span><span class="o">=</span><span class="n">insert_target</span><span class="p">,</span> <span class="n">obstructions</span><span class="o">=</span><span class="p">[],</span> <span class="n">create_backup</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-17-31"><a id="__codelineno-17-31" name="__codelineno-17-31" href="#__codelineno-17-31"></a>    <span class="p">)</span>
+</span><span id="__span-17-32"><a id="__codelineno-17-32" name="__codelineno-17-32" href="#__codelineno-17-32"></a>    <span class="n">removed</span> <span class="o">=</span> <span class="n">GeomCrossSection</span><span class="o">.</span><span class="n">get_blocked_obstructions</span><span class="p">(</span><span class="n">write_demo_copy</span><span class="p">,</span> <span class="n">xs_id</span><span class="o">=</span><span class="n">insert_target</span><span class="p">)</span>
+</span><span id="__span-17-33"><a id="__codelineno-17-33" name="__codelineno-17-33" href="#__codelineno-17-33"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">After removal: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">removed</span><span class="p">)</span><span class="si">}</span><span class="s2"> obstructions (block deleted from file)&quot;</span><span class="p">)</span>
+</span><span id="__span-17-34"><a id="__codelineno-17-34" name="__codelineno-17-34" href="#__codelineno-17-34"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-17-35"><a id="__codelineno-17-35" name="__codelineno-17-35" href="#__codelineno-17-35"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;All cross sections have obstructions in this geometry.&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-05-08 11:26:14 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_write_demo.g01
+
+
+2026-05-08 11:26:14 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 25548: 2 obstructions written
+
+
+2026-05-08 11:26:14 - ras_commander.geom.GeomParser - INFO - Successfully wrote geometry file: G:\GH\ras-commander\examples\m3_models\Clear Creek\HEC-RAS\A120-00-00\A120_00_00_write_demo.g01
+
+
+2026-05-08 11:26:14 - ras_commander.geom.GeomCrossSection - INFO - Updated blocked obstructions for A120-00-00/A120-00-00_0008/RS 25548: 0 obstructions written
+
+
+Cross section with no obstructions: A120-00-00|A120-00-00_0008|25548
+Inserted 2 obstructions:
+ start_sta  end_sta  elevation
+     100.0    200.0       50.0
+     300.0    400.0       55.0
+
+After removal: 0 obstructions (block deleted from file)
+</code></pre></div>
+<h3 id="9d-hdf-cross-validation">9d. HDF Cross-Validation<a class="headerlink" href="#9d-hdf-cross-validation" title="Permanent link">&para;</a></h3>
+<p><code>validate_blocked_obstructions_hdf()</code> compares text-parsed <code>#Block Obstruct=</code> presence against the HDF geometry's <code>Obstr Block Mode</code> flag per cross section. This catches text/HDF drift after manual edits.</p>
+<p><strong>Note:</strong> This requires a preprocessed <code>.g##.hdf</code> file alongside the text geometry. The M3 model used in this notebook does not include a preprocessed HDF, so we show the API signature below.</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># HDF cross-validation (requires preprocessed .g##.hdf file)</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">hdf_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">geom_file</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.hdf&quot;</span><span class="p">)</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="k">if</span> <span class="n">hdf_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>    <span class="n">validation</span> <span class="o">=</span> <span class="n">GeomCrossSection</span><span class="o">.</span><span class="n">validate_blocked_obstructions_hdf</span><span class="p">(</span><span class="n">geom_file</span><span class="p">)</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>    <span class="n">mismatches</span> <span class="o">=</span> <span class="n">validation</span><span class="p">[</span><span class="o">~</span><span class="n">validation</span><span class="p">[</span><span class="s2">&quot;matches_hdf&quot;</span><span class="p">]]</span>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Validated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">validation</span><span class="p">)</span><span class="si">}</span><span class="s2"> cross sections against HDF&quot;</span><span class="p">)</span>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Mismatches: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">mismatches</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">mismatches</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>        <span class="nb">print</span><span class="p">(</span><span class="n">mismatches</span><span class="p">[[</span><span class="s2">&quot;xs_id&quot;</span><span class="p">,</span> <span class="s2">&quot;text_obstruction_count&quot;</span><span class="p">,</span> <span class="s2">&quot;hdf_obstr_block_mode&quot;</span><span class="p">,</span> <span class="s2">&quot;matches_hdf&quot;</span><span class="p">]])</span>
+</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;All text/HDF obstruction flags agree.&quot;</span><span class="p">)</span>
+</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No HDF file found at </span><span class="si">{</span><span class="n">hdf_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;To use HDF validation, preprocess the geometry in HEC-RAS first.&quot;</span><span class="p">)</span>
+</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a>    <span class="nb">print</span><span class="p">()</span>
+</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Usage:&quot;</span><span class="p">)</span>
+</span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  validation = GeomCrossSection.validate_blocked_obstructions_hdf(geom_file)&quot;</span><span class="p">)</span>
+</span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  validation = GeomCrossSection.validate_blocked_obstructions_hdf(geom_file, hdf_path=&#39;custom.hdf&#39;)&quot;</span><span class="p">)</span>
+</span><span id="__span-18-20"><a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a>    <span class="nb">print</span><span class="p">()</span>
+</span><span id="__span-18-21"><a id="__codelineno-18-21" name="__codelineno-18-21" href="#__codelineno-18-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Returns a DataFrame with columns:&quot;</span><span class="p">)</span>
+</span><span id="__span-18-22"><a id="__codelineno-18-22" name="__codelineno-18-22" href="#__codelineno-18-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  xs_id, River, Reach, RS, text_obstruction_count,&quot;</span><span class="p">)</span>
+</span><span id="__span-18-23"><a id="__codelineno-18-23" name="__codelineno-18-23" href="#__codelineno-18-23"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  text_has_blocked_obstructions, hdf_obstr_block_mode,&quot;</span><span class="p">)</span>
+</span><span id="__span-18-24"><a id="__codelineno-18-24" name="__codelineno-18-24" href="#__codelineno-18-24"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  hdf_has_blocked_obstructions, matches_hdf&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>No HDF file found at A120_00_00.g01.hdf
+To use HDF validation, preprocess the geometry in HEC-RAS first.
+
+Usage:
+  validation = GeomCrossSection.validate_blocked_obstructions_hdf(geom_file)
+  validation = GeomCrossSection.validate_blocked_obstructions_hdf(geom_file, hdf_path=&#39;custom.hdf&#39;)
+
+Returns a DataFrame with columns:
+  xs_id, River, Reach, RS, text_obstruction_count,
+  text_has_blocked_obstructions, hdf_obstr_block_mode,
+  hdf_has_blocked_obstructions, matches_hdf
+</code></pre></div>
+<h2 id="10-cleanup-optional">10. Cleanup (Optional)<a class="headerlink" href="#10-cleanup-optional" title="Permanent link">&para;</a></h2>
+<p>Remove test files after verification.</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Optional: Clean up test files</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">cleanup</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># Set to False to keep test files</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="k">if</span> <span class="n">cleanup</span><span class="p">:</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="c1"># Remove working copy</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>    <span class="k">if</span> <span class="n">working_copy</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>        <span class="n">working_copy</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed: </span><span class="si">{</span><span class="n">working_copy</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>    <span class="c1"># Remove backup</span>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a>    <span class="k">if</span> <span class="n">fix_results</span><span class="o">.</span><span class="n">backup_path</span> <span class="ow">and</span> <span class="n">fix_results</span><span class="o">.</span><span class="n">backup_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>        <span class="n">fix_results</span><span class="o">.</span><span class="n">backup_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed backup: </span><span class="si">{</span><span class="n">fix_results</span><span class="o">.</span><span class="n">backup_path</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-19-14"><a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a>
+</span><span id="__span-19-15"><a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a>    <span class="c1"># Remove visualization folder</span>
+</span><span id="__span-19-16"><a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a>    <span class="k">if</span> <span class="n">fix_results</span><span class="o">.</span><span class="n">visualization_folder</span> <span class="ow">and</span> <span class="n">fix_results</span><span class="o">.</span><span class="n">visualization_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-19-17"><a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a>        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">fix_results</span><span class="o">.</span><span class="n">visualization_folder</span><span class="p">)</span>
+</span><span id="__span-19-18"><a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed visualization folder: </span><span class="si">{</span><span class="n">fix_results</span><span class="o">.</span><span class="n">visualization_folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-19-19"><a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a>
+</span><span id="__span-19-20"><a id="__codelineno-19-20" name="__codelineno-19-20" href="#__codelineno-19-20"></a>    <span class="c1"># Remove CSV report</span>
+</span><span id="__span-19-21"><a id="__codelineno-19-21" name="__codelineno-19-21" href="#__codelineno-19-21"></a>    <span class="k">if</span> <span class="n">csv_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-19-22"><a id="__codelineno-19-22" name="__codelineno-19-22" href="#__codelineno-19-22"></a>        <span class="n">csv_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+</span><span id="__span-19-23"><a id="__codelineno-19-23" name="__codelineno-19-23" href="#__codelineno-19-23"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed: </span><span class="si">{</span><span class="n">csv_path</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-19-24"><a id="__codelineno-19-24" name="__codelineno-19-24" href="#__codelineno-19-24"></a>
+</span><span id="__span-19-25"><a id="__codelineno-19-25" name="__codelineno-19-25" href="#__codelineno-19-25"></a>    <span class="c1"># Remove write demo copy and its backup</span>
+</span><span id="__span-19-26"><a id="__codelineno-19-26" name="__codelineno-19-26" href="#__codelineno-19-26"></a>    <span class="k">if</span> <span class="n">write_demo_copy</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-19-27"><a id="__codelineno-19-27" name="__codelineno-19-27" href="#__codelineno-19-27"></a>        <span class="n">write_demo_copy</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+</span><span id="__span-19-28"><a id="__codelineno-19-28" name="__codelineno-19-28" href="#__codelineno-19-28"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed: </span><span class="si">{</span><span class="n">write_demo_copy</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-19-29"><a id="__codelineno-19-29" name="__codelineno-19-29" href="#__codelineno-19-29"></a>    <span class="k">for</span> <span class="n">bak</span> <span class="ow">in</span> <span class="n">project_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;A120_00_00_write_demo.g01.bak*&quot;</span><span class="p">):</span>
+</span><span id="__span-19-30"><a id="__codelineno-19-30" name="__codelineno-19-30" href="#__codelineno-19-30"></a>        <span class="n">bak</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+</span><span id="__span-19-31"><a id="__codelineno-19-31" name="__codelineno-19-31" href="#__codelineno-19-31"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed backup: </span><span class="si">{</span><span class="n">bak</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-19-32"><a id="__codelineno-19-32" name="__codelineno-19-32" href="#__codelineno-19-32"></a>
+</span><span id="__span-19-33"><a id="__codelineno-19-33" name="__codelineno-19-33" href="#__codelineno-19-33"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Cleanup complete!&quot;</span><span class="p">)</span>
+</span><span id="__span-19-34"><a id="__codelineno-19-34" name="__codelineno-19-34" href="#__codelineno-19-34"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-19-35"><a id="__codelineno-19-35" name="__codelineno-19-35" href="#__codelineno-19-35"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Cleanup skipped. Set cleanup=True to remove test files.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Removed: A120_00_00_test_copy.g01
-Removed backup: A120_00_00_test_copy.g01.backup_20251228_224208
+Removed backup: A120_00_00_test_copy.g01.backup_20260508_112609
 Removed visualization folder: A120_00_00_test_copy_g01_Obstructions_Fixed
 Removed: obstruction_fix_report.csv
+Removed: A120_00_00_write_demo.g01
+Removed backup: A120_00_00_write_demo.g01.bak
 
 Cleanup complete!
 </code></pre></div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated:</p>
-<p><strong>Detection:</strong>
-- <code>RasFixit.detect_obstruction_overlaps()</code> - Non-destructive scan for overlaps</p>
-<p><strong>Fixing:</strong>
+<p><strong>Detection &amp; Repair (RasFixit):</strong>
+- <code>RasFixit.detect_obstruction_overlaps()</code> - Non-destructive scan for overlaps
 - <code>RasFixit.fix_blocked_obstructions()</code> - Apply elevation envelope algorithm
   - <code>backup=True</code> creates timestamped backups
   - <code>visualize=True</code> generates before/after PNGs
   - <code>dry_run=True</code> detects without modifying</p>
+<p><strong>Low-Level Read/Write (GeomCrossSection):</strong>
+- <code>GeomCrossSection.get_blocked_obstructions()</code> - Read obstructions as DataFrame (all XS or filtered)
+- <code>GeomCrossSection.set_blocked_obstructions()</code> - Write/update/insert/remove obstructions per XS
+- <code>GeomCrossSection.validate_blocked_obstructions_hdf()</code> - Cross-check text vs HDF flags</p>
 <p><strong>Log Parsing:</strong>
 - <code>log_parser.detect_obstruction_errors()</code> - Parse HEC-RAS logs
 - <code>log_parser.find_geometry_files_in_directory()</code> - Find .g## files
@@ -3447,7 +4173,7 @@ Cleanup complete!
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 7, 2026 16:18:24 UTC">May 7, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 8, 2026 15:45:38 UTC">May 8, 2026</span>
   </span>
 
     
@@ -3457,7 +4183,7 @@ Cleanup complete!
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 7, 2026 16:18:24 UTC">May 7, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 8, 2026 15:45:38 UTC">May 8, 2026</span>
   </span>
 
     
