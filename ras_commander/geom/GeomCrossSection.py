@@ -20,6 +20,8 @@ List of Functions:
 - interpolate_station_elevation() - Interpolate between two station/elevation profiles
 - interpolate_cross_section() - Read two cross sections and interpolate a reviewable profile
 - get_mannings_n() - Read Manning's roughness values with LOB/Channel/ROB classification
+- get_levees() - Read left/right levee station-elevation points
+- set_levees() - Write left/right levee station-elevation points
 - get_ineffective_flow() - Read ineffective flow area triplets (left_sta, right_sta, elevation)
 - set_ineffective_flow() - Write corrected ineffective flow area data
 - set_mannings_n() - Write Manning's n breakpoints (station, n_value triplets)
@@ -665,6 +667,103 @@ class GeomCrossSection:
             f"Exp/Cntr={GeomCrossSection._format_numeric(expansion)},"
             f"{GeomCrossSection._format_numeric(contraction)}\n"
         )
+
+
+    @staticmethod
+    def _is_missing_number(value) -> bool:
+        """Return True for scalar missing numeric inputs."""
+        if value is None:
+            return True
+        try:
+            return bool(pd.isna(value))
+        except TypeError:
+            return False
+
+    @staticmethod
+    def _parse_levee_line(line: str) -> Tuple[float, float, float, float]:
+        """
+        Parse a HEC-RAS cross-section Levee= line.
+
+        The observed XS format is:
+        ``Levee=<left_flag>,<left_sta>,<left_elev>,<right_flag>,<right_sta>,<right_elev>,,``.
+        A flag of ``-1`` means active; ``0`` or blank means the side is absent.
+        """
+        value_str = GeomParser.extract_keyword_value(line, "Levee")
+        values = [v.strip() for v in value_str.split(',')]
+        values.extend([''] * (8 - len(values)))
+
+        def parse_side(flag_idx: int, sta_idx: int, elev_idx: int) -> Tuple[float, float]:
+            flag = values[flag_idx]
+            if not flag or flag == '0':
+                return (math.nan, math.nan)
+
+            station = values[sta_idx]
+            elevation = values[elev_idx]
+            if not station:
+                return (math.nan, math.nan)
+
+            return (float(station), float(elevation) if elevation else math.nan)
+
+        left_station, left_elevation = parse_side(0, 1, 2)
+        right_station, right_elevation = parse_side(3, 4, 5)
+        return left_station, left_elevation, right_station, right_elevation
+
+    @staticmethod
+    def _levee_line(left_station: Optional[float] = None,
+                    left_elevation: Optional[float] = None,
+                    right_station: Optional[float] = None,
+                    right_elevation: Optional[float] = None,
+                    existing_line: Optional[str] = None) -> str:
+        """Build a Levee= line, preserving existing numeric precision when possible."""
+        existing_vals = []
+        if existing_line:
+            existing = GeomParser.extract_keyword_value(existing_line, "Levee")
+            existing_vals = [v.strip() for v in existing.split(',')]
+        existing_vals.extend([''] * (8 - len(existing_vals)))
+
+        def format_value(value: float, original: str) -> str:
+            min_decimals = GeomCrossSection._decimal_places_for_value(float(value))
+            if original:
+                return GeomCrossSection._format_numeric_like(
+                    value,
+                    original,
+                    min_decimals=min_decimals
+                )
+            return GeomCrossSection._format_numeric(value)
+
+        def side_tokens(station, elevation, sta_idx: int, elev_idx: int) -> List[str]:
+            station_missing = GeomCrossSection._is_missing_number(station)
+            elevation_missing = GeomCrossSection._is_missing_number(elevation)
+            if station_missing and elevation_missing:
+                return ['0', '', '']
+            if station_missing:
+                raise ValueError("Levee elevation requires a station")
+            sta_str = format_value(float(station), existing_vals[sta_idx])
+            elev_str = format_value(float(elevation), existing_vals[elev_idx]) if not elevation_missing else ''
+            return ['-1', sta_str, elev_str]
+
+        values = (
+            side_tokens(left_station, left_elevation, 1, 2)
+            + side_tokens(right_station, right_elevation, 4, 5)
+            + ['', '']
+        )
+        return f"Levee={','.join(values)}\n"
+
+    @staticmethod
+    def _find_mann_block_end(lines: List[str], xs_idx: int) -> Optional[int]:
+        """Return the insertion index immediately after the #Mann= data block."""
+        section_end = GeomCrossSection._find_xs_section_end(lines, xs_idx)
+
+        for idx in range(xs_idx, section_end):
+            if lines[idx].startswith("#Mann="):
+                value_str = GeomParser.extract_keyword_value(lines[idx], "#Mann")
+                parts = [p.strip() for p in value_str.split(',')]
+                count = int(parts[0]) if parts and parts[0] else 0
+                total_values = count * 3
+                data_lines = math.ceil(total_values / GeomCrossSection.VALUES_PER_LINE)
+                return min(idx + 1 + data_lines, section_end)
+
+        return None
 
     @staticmethod
     def _prepare_station_elevation_df(sta_elev_df: pd.DataFrame,
@@ -1828,6 +1927,248 @@ class GeomCrossSection:
         except Exception as e:
             logger.error(f"Error writing expansion/contraction: {str(e)}")
             raise IOError(f"Failed to write expansion/contraction: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def get_levees(geom_number: Union[str, Path],
+                   river: Optional[str] = None,
+                   reach: Optional[str] = None,
+                   rs: Optional[str] = None,
+                   xs_id: Optional[str] = None,
+                   ras_object=None) -> pd.DataFrame:
+        """
+        Read left and right levee station-elevation points from cross sections.
+
+        Cross-section levees are stored in plain-text geometry files as a
+        single ``Levee=`` line with left and right triplets:
+        ``flag, station, elevation``. Active sides use flag ``-1``; inactive
+        sides use flag ``0`` and blank station/elevation fields.
+
+        Parameters:
+            geom_number: Geometry number or direct path to a .g## text file
+            river: Optional river filter
+            reach: Optional reach filter. If supplied, ``river`` is required.
+            rs: Optional river-station filter. If supplied, ``river`` and
+                ``reach`` are required.
+            xs_id: Optional exact ID from the returned ``xs_id`` column.
+            ras_object: Optional RasPrj instance for API consistency (unused)
+
+        Returns:
+            pd.DataFrame: Columns ``xs_id``, ``left_station``,
+            ``left_elevation``, ``right_station``, ``right_elevation``.
+            Matching cross sections without levees are included with NaN values.
+        """
+        geom_file = GeomCrossSection._resolve_geom_text_path(geom_number, ras_object=ras_object)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+        if reach is not None and river is None:
+            raise ValueError("If reach is specified, river must also be specified")
+        if rs is not None and (river is None or reach is None):
+            raise ValueError("If rs is specified, river and reach must also be specified")
+
+        columns = [
+            'xs_id',
+            'River',
+            'Reach',
+            'RS',
+            'left_station',
+            'left_elevation',
+            'right_station',
+            'right_elevation'
+        ]
+
+        try:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+
+            rows = []
+            current_river = None
+            current_reach = None
+
+            i = 0
+            while i < len(lines):
+                line = lines[i]
+                if line.startswith("River Reach="):
+                    values = GeomParser.extract_comma_list(line, "River Reach")
+                    if len(values) >= 2:
+                        current_river = values[0]
+                        current_reach = values[1]
+
+                elif line.startswith("Type RM Length L Ch R ="):
+                    value_str = GeomParser.extract_keyword_value(line, "Type RM Length L Ch R")
+                    values = [v.strip() for v in value_str.split(',')]
+                    if len(values) < 2 or current_river is None or current_reach is None:
+                        i += 1
+                        continue
+
+                    current_rs = values[1]
+                    current_xs_id = GeomCrossSection._make_xs_id(
+                        current_river,
+                        current_reach,
+                        current_rs
+                    )
+
+                    if river is not None and current_river != river:
+                        i += 1
+                        continue
+                    if reach is not None and current_reach != reach:
+                        i += 1
+                        continue
+                    if rs is not None and current_rs != rs:
+                        i += 1
+                        continue
+                    if xs_id is not None and current_xs_id != xs_id:
+                        i += 1
+                        continue
+
+                    levee_values = (math.nan, math.nan, math.nan, math.nan)
+                    section_end = GeomCrossSection._find_xs_section_end(lines, i)
+                    for j in range(i, section_end):
+                        if lines[j].startswith("Levee="):
+                            levee_values = GeomCrossSection._parse_levee_line(lines[j])
+                            break
+
+                    rows.append({
+                        'xs_id': current_xs_id,
+                        'River': current_river,
+                        'Reach': current_reach,
+                        'RS': current_rs,
+                        'left_station': levee_values[0],
+                        'left_elevation': levee_values[1],
+                        'right_station': levee_values[2],
+                        'right_elevation': levee_values[3],
+                    })
+
+                    i = section_end
+                    continue
+
+                i += 1
+
+            df = pd.DataFrame(rows, columns=columns)
+            logger.info(f"Read levee data for {len(df)} cross sections from {geom_file}")
+            return df
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error reading levees: {str(e)}")
+            raise IOError(f"Failed to read levees: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def set_levees(geom_number: Union[str, Path],
+                   xs_id: Optional[str] = None,
+                   left_station: Optional[float] = None,
+                   left_elevation: Optional[float] = None,
+                   right_station: Optional[float] = None,
+                   right_elevation: Optional[float] = None,
+                   *,
+                   river: Optional[str] = None,
+                   reach: Optional[str] = None,
+                   rs: Optional[str] = None,
+                   create_backup: bool = True,
+                   ras_object=None) -> Optional[Path]:
+        """
+        Write left and right levee station-elevation points for a cross section.
+
+        Updates an existing ``Levee=`` line or inserts one immediately after the
+        target cross section's ``#Mann=`` data block. Pass station/elevation
+        together for each side; omit both values for a side to write it as
+        inactive.
+
+        Parameters:
+            geom_number: Geometry number or direct path to a .g## text file
+            xs_id: Cross-section ID emitted by ``get_levees()``. Optional if
+                ``river``, ``reach``, and ``rs`` are provided.
+            left_station: Optional left levee station
+            left_elevation: Optional left levee elevation
+            right_station: Optional right levee station
+            right_elevation: Optional right levee elevation
+            river: Optional target river, used with ``reach`` and ``rs``
+            reach: Optional target reach
+            rs: Optional target river station
+            create_backup: Whether to create a .bak backup before modification
+            ras_object: Optional RasPrj instance for API consistency (unused)
+
+        Returns:
+            Optional[Path]: Backup path if ``create_backup=True``, otherwise None.
+        """
+        geom_file = GeomCrossSection._resolve_geom_text_path(geom_number, ras_object=ras_object)
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+        if xs_id is None and (river is None or reach is None or rs is None):
+            raise ValueError("Provide xs_id or all of river, reach, and rs")
+        if xs_id is not None and any(v is not None for v in (river, reach, rs)):
+            raise ValueError("Provide either xs_id or river/reach/rs, not both")
+
+        try:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+
+            xs_df = GeomCrossSection.get_cross_sections(geom_file)
+            if xs_id is not None:
+                target_river, target_reach, target_rs = GeomCrossSection._resolve_xs_identifier(xs_id, xs_df)
+            else:
+                target_river, target_reach, target_rs = river, reach, rs
+
+            xs_idx = GeomCrossSection._find_cross_section(lines, target_river, target_reach, target_rs)
+            if xs_idx is None:
+                raise ValueError(f"Cross section not found: {target_river}/{target_reach}/RS {target_rs}")
+
+            modified_lines = lines.copy()
+            levee_idx = GeomCrossSection._find_keyword_index(modified_lines, xs_idx, "Levee=")
+            new_line = GeomCrossSection._levee_line(
+                left_station=left_station,
+                left_elevation=left_elevation,
+                right_station=right_station,
+                right_elevation=right_elevation,
+                existing_line=modified_lines[levee_idx] if levee_idx is not None else None
+            )
+
+            if levee_idx is not None:
+                modified_lines[levee_idx] = new_line
+            else:
+                insert_idx = GeomCrossSection._find_mann_block_end(modified_lines, xs_idx)
+                if insert_idx is not None:
+                    modified_lines.insert(insert_idx, new_line)
+                else:
+                    GeomCrossSection._insert_xs_keyword_line(
+                        modified_lines,
+                        xs_idx,
+                        new_line,
+                        prefer_before=[
+                            "#XS Ineff=",
+                            "#Block Obstruct=",
+                            "Bank Sta=",
+                            "XS Rating Curve=",
+                            "XS HTab Starting El and Incr=",
+                            "XS HTab Horizontal Distribution=",
+                            "Exp/Cntr="
+                        ]
+                    )
+
+            backup_path = GeomParser.safe_write_geometry(
+                geom_file,
+                modified_lines,
+                create_backup=create_backup
+            )
+
+            logger.info(
+                f"Updated levees for {target_river}/{target_reach}/RS {target_rs}"
+            )
+            return backup_path
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error writing levees: {str(e)}")
+            raise IOError(f"Failed to write levees: {str(e)}")
 
     @staticmethod
     @log_call

@@ -33,6 +33,7 @@ def _xs_block(
     bank_line=None,
     exp_cntr_line=None,
     blocked_obstructions=None,
+    levee_line=None,
 ):
     lines = [
         f"Type RM Length L Ch R = 1 ,{rs},     0.0,     0.0,     0.0\n",
@@ -50,6 +51,8 @@ def _xs_block(
         "#Mann= 2 , 0 , 0\n",
         _sta_elev_line([0.0, 0.04, 0.0, 500.0, 0.04, 0.0]) + "\n",
     ])
+    if levee_line:
+        lines.append(levee_line)
     return "".join(lines)
 
 
@@ -365,3 +368,115 @@ def test_interpolate_cross_section_reads_banks_from_geometry(tmp_path):
     assert {225.0, 825.0}.issubset(
         set(interpolated.loc[interpolated["IsBankPoint"], "Station"])
     )
+
+
+def _write_geom_with_levees(tmp_path: Path):
+    text = (
+        "Geom Title=CLB-639 Test\n"
+        "Program Version=6.50\n"
+        f"River Reach={RIVER}    ,{REACH}\n"
+        "Reach XY= 2\n"
+        "         0.00         0.00\n"
+        "      3000.00         0.00\n"
+        + _xs_block(
+            "1000",
+            [0.0, 100.0, 500.0, 90.0, 1000.0, 100.0],
+            bank_line="Bank Sta=200,800\n",
+            levee_line="Levee=-1,125.5,105.25,-1,875.25,106.5,,\n",
+        )
+        + _xs_block(
+            "2000",
+            [0.0, 102.0, 250.0, 95.0, 750.0, 95.0, 1000.0, 102.0],
+            bank_line="Bank Sta=250,850\n",
+            levee_line="Levee=0,,,-1,900,103.75,,\n",
+        )
+        + _xs_block(
+            "3000",
+            [0.0, 103.0, 300.0, 96.0, 900.0, 97.0, 1000.0, 104.0],
+            bank_line="Bank Sta=300,900\n",
+        )
+    )
+
+    geom_file = tmp_path / "clb639.g01"
+    geom_file.write_text(text, encoding="utf-8")
+    return geom_file
+
+
+def test_get_levees_reads_multiple_xs_and_missing_values(tmp_path):
+    geom_file = _write_geom_with_levees(tmp_path)
+
+    levees = GeomCrossSection.get_levees(geom_file, river=RIVER, reach=REACH)
+
+    assert {
+        "xs_id", "River", "Reach", "RS",
+        "left_station", "left_elevation",
+        "right_station", "right_elevation",
+    }.issubset(levees.columns)
+    assert list(levees["xs_id"]) == [
+        f"{RIVER}|{REACH}|1000",
+        f"{RIVER}|{REACH}|2000",
+        f"{RIVER}|{REACH}|3000",
+    ]
+
+    xs_1000 = levees.loc[levees["xs_id"].eq(f"{RIVER}|{REACH}|1000")].iloc[0]
+    assert np.isclose(xs_1000["left_station"], 125.5)
+    assert np.isclose(xs_1000["left_elevation"], 105.25)
+    assert np.isclose(xs_1000["right_station"], 875.25)
+    assert np.isclose(xs_1000["right_elevation"], 106.5)
+
+    xs_2000 = levees.loc[levees["xs_id"].eq(f"{RIVER}|{REACH}|2000")].iloc[0]
+    assert np.isnan(xs_2000["left_station"])
+    assert np.isnan(xs_2000["left_elevation"])
+    assert np.isclose(xs_2000["right_station"], 900.0)
+    assert np.isclose(xs_2000["right_elevation"], 103.75)
+
+    xs_3000 = levees.loc[levees["xs_id"].eq(f"{RIVER}|{REACH}|3000")].iloc[0]
+    assert np.isnan(xs_3000["left_station"])
+    assert np.isnan(xs_3000["right_station"])
+
+
+def test_set_levees_updates_and_inserts_round_trip(tmp_path):
+    geom_file = _write_geom_with_levees(tmp_path)
+
+    backup_path = GeomCrossSection.set_levees(
+        geom_file,
+        f"{RIVER}|{REACH}|1000",
+        left_station=150.0,
+        left_elevation=108.5,
+        right_station=None,
+        right_elevation=None,
+    )
+    assert backup_path is not None
+    assert backup_path.exists()
+
+    GeomCrossSection.set_levees(
+        geom_file,
+        left_station=None,
+        left_elevation=None,
+        right_station=920.25,
+        right_elevation=109.75,
+        river=RIVER,
+        reach=REACH,
+        rs="3000",
+        create_backup=False,
+    )
+
+    levees = GeomCrossSection.get_levees(geom_file, river=RIVER, reach=REACH)
+    xs_1000 = levees.loc[levees["xs_id"].eq(f"{RIVER}|{REACH}|1000")].iloc[0]
+    assert np.isclose(xs_1000["left_station"], 150.0)
+    assert np.isclose(xs_1000["left_elevation"], 108.5)
+    assert np.isnan(xs_1000["right_station"])
+    assert np.isnan(xs_1000["right_elevation"])
+
+    xs_3000 = levees.loc[levees["xs_id"].eq(f"{RIVER}|{REACH}|3000")].iloc[0]
+    assert np.isnan(xs_3000["left_station"])
+    assert np.isclose(xs_3000["right_station"], 920.25)
+    assert np.isclose(xs_3000["right_elevation"], 109.75)
+
+    text = geom_file.read_text(encoding="utf-8")
+    assert "Levee=-1,150.0,108.50,0,,,,\n" in text
+
+    target_block = text.split("Type RM Length L Ch R = 1 ,3000", 1)[1]
+    mann_idx = target_block.index("#Mann= 2 , 0 , 0\n")
+    levee_idx = target_block.index("Levee=0,,,-1,920.25,109.75,,\n")
+    assert mann_idx < levee_idx
