@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 
 from ras_commander.geom.GeomCrossSection import GeomCrossSection
+from ras_commander.fixit.RasFixit import RasFixit
+from ras_commander.fixit.obstructions import BlockedObstruction, has_overlaps
 
 
 RIVER = "TestRiver"
@@ -14,11 +16,30 @@ def _sta_elev_line(values):
     return "".join(f"{value:8.2f}" for value in values)
 
 
-def _xs_block(rs, sta_elev_values, bank_line=None, exp_cntr_line=None):
+def _blocked_obstruction_lines(obstructions):
+    values = []
+    for start_sta, end_sta, elevation in obstructions:
+        values.extend([start_sta, end_sta, elevation])
+
+    lines = [f"#Block Obstruct= {len(obstructions)}\n"]
+    for idx in range(0, len(values), GeomCrossSection.BLOCKED_OBSTRUCTION_VALUES_PER_LINE):
+        lines.append(_sta_elev_line(values[idx:idx + 9]) + "\n")
+    return lines
+
+
+def _xs_block(
+    rs,
+    sta_elev_values,
+    bank_line=None,
+    exp_cntr_line=None,
+    blocked_obstructions=None,
+):
     lines = [
         f"Type RM Length L Ch R = 1 ,{rs},     0.0,     0.0,     0.0\n",
         "Node Last Edited Time=Jan/01/2025 00:00:00\n",
     ]
+    if blocked_obstructions:
+        lines.extend(_blocked_obstruction_lines(blocked_obstructions))
     if bank_line:
         lines.append(bank_line)
     if exp_cntr_line:
@@ -32,7 +53,12 @@ def _xs_block(rs, sta_elev_values, bank_line=None, exp_cntr_line=None):
     return "".join(lines)
 
 
-def _write_geom(tmp_path: Path, include_banks=True, include_exp_cntr=False):
+def _write_geom(
+    tmp_path: Path,
+    include_banks=True,
+    include_exp_cntr=False,
+    blocked_obstructions=None,
+):
     bank_1000 = "Bank Sta=200,800\n" if include_banks else None
     bank_2000 = "Bank Sta=250,850\n" if include_banks else None
     exp_line = "Exp/Cntr=0.30,0.10\n" if include_exp_cntr else None
@@ -49,6 +75,7 @@ def _write_geom(tmp_path: Path, include_banks=True, include_exp_cntr=False):
             [0.0, 100.0, 500.0, 90.0, 1000.0, 100.0],
             bank_line=bank_1000,
             exp_cntr_line=exp_line,
+            blocked_obstructions=blocked_obstructions,
         )
         + _xs_block(
             "2000",
@@ -60,6 +87,138 @@ def _write_geom(tmp_path: Path, include_banks=True, include_exp_cntr=False):
     geom_file = tmp_path / "clb306.g01"
     geom_file.write_text(text, encoding="utf-8")
     return geom_file
+
+
+def test_get_blocked_obstructions_reads_dataframe(tmp_path):
+    geom_file = _write_geom(
+        tmp_path,
+        blocked_obstructions=[
+            (100.0, 200.0, 91.5),
+            (250.0, 300.0, 92.0),
+        ],
+    )
+
+    obstructions = GeomCrossSection.get_blocked_obstructions(geom_file)
+
+    assert {
+        "xs_id",
+        "start_sta",
+        "end_sta",
+        "elevation",
+    }.issubset(obstructions.columns)
+    assert list(obstructions["xs_id"].unique()) == [f"{RIVER}|{REACH}|1000"]
+    assert np.allclose(obstructions["start_sta"], [100.0, 250.0])
+    assert np.allclose(obstructions["end_sta"], [200.0, 300.0])
+    assert np.allclose(obstructions["elevation"], [91.5, 92.0])
+
+
+def test_set_blocked_obstructions_round_trip_and_preserves_following_xs(tmp_path):
+    geom_file = _write_geom(tmp_path, include_banks=True)
+    new_obstructions = pd.DataFrame({
+        "start_sta": [100.0, 210.0, 320.0, 430.0],
+        "end_sta": [150.0, 260.0, 370.0, 480.0],
+        "elevation": [91.0, 92.0, 93.0, 94.0],
+    })
+
+    backup_path = GeomCrossSection.set_blocked_obstructions(
+        geom_file,
+        "1000",
+        new_obstructions,
+    )
+
+    assert backup_path is not None
+    assert backup_path.exists()
+    roundtrip = GeomCrossSection.get_blocked_obstructions(geom_file, "1000")
+    assert np.allclose(roundtrip["start_sta"], new_obstructions["start_sta"])
+    assert np.allclose(roundtrip["end_sta"], new_obstructions["end_sta"])
+    assert np.allclose(roundtrip["elevation"], new_obstructions["elevation"])
+
+    xs_df = GeomCrossSection.get_cross_sections(geom_file)
+    assert list(xs_df["RS"]) == ["1000", "2000"]
+
+    text = geom_file.read_text(encoding="utf-8")
+    target_block = text.split("#Block Obstruct= 4\n", 1)[1].split("Bank Sta=", 1)[0]
+    data_lines = [line for line in target_block.splitlines() if line.strip()]
+    assert len(data_lines) == 2
+
+
+def test_set_blocked_obstructions_updates_existing_block(tmp_path):
+    geom_file = _write_geom(
+        tmp_path,
+        blocked_obstructions=[
+            (111.0, 222.0, 91.0),
+            (333.0, 444.0, 92.0),
+        ],
+    )
+
+    GeomCrossSection.set_blocked_obstructions(
+        geom_file,
+        f"{RIVER}|{REACH}|1000",
+        [(555.0, 666.0, 93.0)],
+        create_backup=False,
+    )
+
+    roundtrip = GeomCrossSection.get_blocked_obstructions(geom_file, "1000")
+    assert len(roundtrip) == 1
+    assert np.isclose(roundtrip["start_sta"].iloc[0], 555.0)
+    assert "#Block Obstruct= 1" in geom_file.read_text(encoding="utf-8")
+
+
+def test_validate_blocked_obstructions_hdf_compares_text_counts_to_mode(tmp_path, monkeypatch):
+    geom_file = _write_geom(
+        tmp_path,
+        blocked_obstructions=[
+            (100.0, 200.0, 91.5),
+        ],
+    )
+    hdf_file = tmp_path / "clb306.g01.hdf"
+    hdf_file.write_text("stub", encoding="utf-8")
+
+    from ras_commander.hdf.HdfXsec import HdfXsec
+
+    def fake_get_cross_sections(hdf_path, datetime_to_str=True, ras_object=None):
+        return pd.DataFrame({
+            "River": [RIVER, RIVER],
+            "Reach": [REACH, REACH],
+            "RS": ["1000", "2000"],
+            "Obstr Block Mode": [1, 0],
+        })
+
+    monkeypatch.setattr(HdfXsec, "get_cross_sections", staticmethod(fake_get_cross_sections))
+
+    validation = GeomCrossSection.validate_blocked_obstructions_hdf(
+        geom_file,
+        hdf_path=hdf_file,
+    )
+
+    assert list(validation["text_obstruction_count"]) == [1, 0]
+    assert list(validation["hdf_has_blocked_obstructions"]) == [True, False]
+    assert validation["matches_hdf"].all()
+
+
+def test_rasfixit_repairs_blocked_obstructions_through_geom_api(tmp_path):
+    geom_file = _write_geom(
+        tmp_path,
+        blocked_obstructions=[
+            (100.0, 200.0, 91.0),
+            (150.0, 250.0, 90.0),
+        ],
+    )
+
+    results = RasFixit.fix_blocked_obstructions(
+        geom_file,
+        backup=False,
+        dry_run=False,
+    )
+
+    assert results.total_xs_fixed == 1
+    fixed_df = GeomCrossSection.get_blocked_obstructions(geom_file, "1000")
+    fixed = [
+        BlockedObstruction(row.start_sta, row.end_sta, row.elevation)
+        for row in fixed_df.itertuples()
+    ]
+    assert not has_overlaps(fixed)
+    assert np.isclose(fixed_df["start_sta"].iloc[1], 200.02)
 
 
 def test_set_bank_stations_inserts_bank_points_and_backup(tmp_path):
