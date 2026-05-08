@@ -33,7 +33,7 @@ Example:
 import re
 import shutil
 from pathlib import Path
-from typing import Union, Optional, List, Tuple
+from typing import Union, Optional, List
 from datetime import datetime
 
 from ..Decorators import log_call
@@ -41,8 +41,6 @@ from ..LoggingConfig import get_logger
 from .results import FixResults, FixMessage, FixAction
 from .obstructions import (
     BlockedObstruction,
-    parse_obstructions,
-    format_obstructions,
     create_elevation_envelope,
     has_overlaps,
 )
@@ -79,10 +77,6 @@ class RasFixit:
         ...     )
         ...     print(f"Fixed {fix_results.total_xs_fixed} cross sections")
     """
-
-    # Geometry file section terminators (marks end of obstruction data block)
-    _TERMINATORS = ('Bank Sta=', '#XS Ineff=', '#Mann=',
-                    'XS Rating Curve=', 'XS HTab', 'Exp/Cntr=')
 
     @staticmethod
     @log_call
@@ -138,16 +132,10 @@ class RasFixit:
             results.backup_path = backup_path
             logger.info(f"Created backup: {backup_path}")
 
-        # Read geometry file
-        with open(geom_path, 'r') as f:
-            content = f.read()
+        from ..geom.GeomCrossSection import GeomCrossSection
 
-        # Split into cross section blocks
-        sections = re.split(r'(?=^Type RM Length)', content, flags=re.MULTILINE)
-        header = sections[0]
-        xs_sections = sections[1:]
-
-        results.total_xs_checked = len(xs_sections)
+        xs_df = GeomCrossSection.get_cross_sections(geom_path)
+        results.total_xs_checked = len(xs_df)
 
         # Setup visualization folder if needed
         viz_folder = None
@@ -156,26 +144,64 @@ class RasFixit:
             results.visualization_folder = viz_folder
             logger.info(f"Saving visualizations to: {viz_folder}")
 
-        # Process each cross section
-        modified_sections = []
-        for xs_content in xs_sections:
-            processed, msg = RasFixit._process_xs_obstructions(
-                xs_content, viz_folder, dry_run
+        obs_df = GeomCrossSection.get_blocked_obstructions(geom_path)
+        if obs_df.empty:
+            return results
+
+        for xs_id, group in obs_df.groupby("xs_id", sort=False):
+            original = [
+                BlockedObstruction(row.start_sta, row.end_sta, row.elevation)
+                for row in group.itertuples()
+            ]
+
+            if len(original) < 2 or not has_overlaps(original):
+                continue
+
+            fixed = create_elevation_envelope(original)
+            first = group.iloc[0]
+            river = str(first["River"])
+            reach = str(first["Reach"])
+            rs_id = str(first["RS"])
+
+            msg = FixMessage(
+                message_id="FX_BO_01",
+                fix_type="OBSTRUCTION",
+                river=river,
+                reach=reach,
+                station=rs_id,
+                action=FixAction.OVERLAP_RESOLVED,
+                message=(
+                    f"Resolved {len(original)} overlapping obstructions to "
+                    f"{len(fixed)} non-overlapping"
+                ),
+                original_count=len(original),
+                fixed_count=len(fixed),
+                original_data=[o.to_tuple() for o in original],
+                fixed_data=[o.to_tuple() for o in fixed],
             )
 
-            if msg is not None:
-                results.messages.append(msg)
-                if msg.action != FixAction.NO_ACTION:
-                    results.total_xs_fixed += 1
+            logger.debug(f"RS {rs_id}: {len(original)} -> {len(fixed)} obstructions")
 
-            modified_sections.append(processed)
+            if viz_folder and not dry_run:
+                viz_path = viz_folder / f"RS_{rs_id.replace('.', '_')}.png"
+                msg.visualization_path = viz_path
+                RasFixit._visualize(original, fixed, rs_id, viz_path)
 
-        # Write modified file if not dry run and changes were made
+            results.messages.append(msg)
+            results.total_xs_fixed += 1
+
+            if not dry_run:
+                GeomCrossSection.set_blocked_obstructions(
+                    geom_path,
+                    xs_id,
+                    fixed,
+                    create_backup=False,
+                )
+
         if not dry_run and results.total_xs_fixed > 0:
-            final_content = header + "".join(modified_sections)
-            with open(geom_path, 'w') as f:
-                f.write(final_content)
-            logger.info(f"Fixed {results.total_xs_fixed} cross sections in {geom_path.name}")
+            logger.info(
+                f"Fixed {results.total_xs_fixed} cross sections in {geom_path.name}"
+            )
 
         return results
 
@@ -227,109 +253,6 @@ class RasFixit:
         viz_folder.mkdir(exist_ok=True)
 
         return viz_folder
-
-    @staticmethod
-    def _process_xs_obstructions(
-        xs_content: str,
-        viz_folder: Optional[Path],
-        dry_run: bool
-    ) -> Tuple[str, Optional[FixMessage]]:
-        """
-        Process single cross section for obstruction overlaps.
-
-        Args:
-            xs_content: Full content of cross section block.
-            viz_folder: Folder for visualization output (or None).
-            dry_run: If True, don't modify content.
-
-        Returns:
-            Tuple of (processed_content, FixMessage or None).
-        """
-        xs_lines = xs_content.split('\n')
-
-        # Extract river station ID from first line
-        rs_match = re.search(r'RM\s*Length[^=]*=\s*[\d.]+\s*,([\d.]+)', xs_lines[0])
-        rs_id = rs_match.group(1).strip() if rs_match else "Unknown"
-
-        # Find obstruction header
-        header_idx = -1
-        for i, line in enumerate(xs_lines):
-            if line.strip().startswith('#Block Obstruct='):
-                header_idx = i
-                break
-
-        if header_idx == -1:
-            return "\n".join(xs_lines), None  # No obstructions
-
-        # Parse obstruction count
-        header_line = xs_lines[header_idx]
-        match = re.search(r'=\s*(\d+)', header_line)
-        if not match:
-            return "\n".join(xs_lines), None
-
-        expected_count = int(match.group(1))
-        if expected_count == 0:
-            return "\n".join(xs_lines), None
-
-        # Find data block boundaries
-        table_start = header_idx + 1
-        table_end = len(xs_lines)
-
-        for i in range(table_start, len(xs_lines)):
-            if xs_lines[i].strip().startswith(RasFixit._TERMINATORS):
-                table_end = i
-                break
-
-        # Parse obstructions
-        data_lines = [l for l in xs_lines[table_start:table_end] if l.strip()]
-        original = parse_obstructions(data_lines, expected_count)
-
-        if len(original) < 2:
-            return "\n".join(xs_lines), None  # Need 2+ to have overlap
-
-        # Check for overlaps
-        if not has_overlaps(original):
-            return "\n".join(xs_lines), None
-
-        # Fix overlaps
-        fixed = create_elevation_envelope(original)
-
-        # Create fix message
-        msg = FixMessage(
-            message_id="FX_BO_01",
-            fix_type="OBSTRUCTION",
-            station=rs_id,
-            action=FixAction.OVERLAP_RESOLVED,
-            message=f"Resolved {len(original)} overlapping obstructions to {len(fixed)} non-overlapping",
-            original_count=len(original),
-            fixed_count=len(fixed),
-            original_data=[o.to_tuple() for o in original],
-            fixed_data=[o.to_tuple() for o in fixed]
-        )
-
-        logger.debug(f"RS {rs_id}: {len(original)} -> {len(fixed)} obstructions")
-
-        # Generate visualization if requested
-        if viz_folder and not dry_run:
-            viz_path = viz_folder / f"RS_{rs_id.replace('.', '_')}.png"
-            msg.visualization_path = viz_path
-            RasFixit._visualize(original, fixed, rs_id, viz_path)
-
-        # If dry run, return original content
-        if dry_run:
-            return "\n".join(xs_lines), msg
-
-        # Update geometry content
-        new_header = re.sub(r'=\s*\d+', f'= {len(fixed)}', header_line)
-        xs_lines[header_idx] = new_header
-
-        new_data_lines = format_obstructions(fixed)
-
-        del xs_lines[table_start:table_end]
-        for i, new_line in enumerate(new_data_lines):
-            xs_lines.insert(table_start + i, new_line)
-
-        return "\n".join(xs_lines), msg
 
     @staticmethod
     def _visualize(

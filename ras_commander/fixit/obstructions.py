@@ -69,7 +69,10 @@ class BlockedObstruction:
         Returns:
             True if obstructions overlap or touch, False otherwise.
         """
-        return self.start_sta < other.end_sta and self.end_sta > other.start_sta
+        return (
+            self.start_sta <= other.end_sta + TOLERANCE and
+            self.end_sta >= other.start_sta - TOLERANCE
+        )
 
     def to_tuple(self) -> Tuple[float, float, float]:
         """
@@ -183,8 +186,8 @@ def parse_obstructions(data_lines: List[str], expected_count: int) -> List[Block
     """
     Parse obstruction data from fixed-width 8-character columns.
 
-    HEC-RAS geometry files use FORTRAN-style fixed-width formatting with
-    8 characters per value, right-justified.
+    Deprecated compatibility wrapper. New code should use
+    ``GeomCrossSection.parse_blocked_obstructions()``.
 
     Args:
         data_lines: Lines containing obstruction data (after header).
@@ -194,50 +197,19 @@ def parse_obstructions(data_lines: List[str], expected_count: int) -> List[Block
         List of BlockedObstruction objects.
 
     Note:
-        This function is tolerant of data count mismatches - it will use
-        only complete triplets (start, end, elevation) regardless of the
-        expected count.
+        This compatibility wrapper follows the GeomCrossSection parser and
+        returns at most the header-declared number of complete triplets.
     """
-    if expected_count == 0:
-        return []
-
-    all_values = []
-
-    for line in data_lines:
-        line = line.rstrip()
-        # Process the line in 8-character chunks
-        for i in range(0, len(line), FIELD_WIDTH):
-            chunk = line[i:i + FIELD_WIDTH]
-            stripped_chunk = chunk.strip()
-            if stripped_chunk:
-                try:
-                    value = float(stripped_chunk)
-                    all_values.append(value)
-                except ValueError:
-                    pass  # Skip non-numeric chunks
-
-    # Use only the number of values that form complete triplets
-    num_triplets = len(all_values) // 3
-
-    obstructions = []
-    for i in range(num_triplets):
-        idx = i * 3
-        obstruction = BlockedObstruction(
-            start_sta=all_values[idx],
-            end_sta=all_values[idx + 1],
-            elevation=all_values[idx + 2]
-        )
-        obstructions.append(obstruction)
-
-    return obstructions
+    from ..geom.GeomCrossSection import GeomCrossSection
+    return GeomCrossSection.parse_blocked_obstructions(data_lines, expected_count)
 
 
 def format_obstructions(obstructions: List[BlockedObstruction]) -> List[str]:
     """
     Format obstructions back to HEC-RAS fixed-width format.
 
-    Outputs 3 obstructions per line (9 values = 3 * 3), with each value
-    occupying exactly 8 characters, right-justified.
+    Deprecated compatibility wrapper. New code should use
+    ``GeomCrossSection.format_blocked_obstructions()``.
 
     Args:
         obstructions: List of obstructions to format.
@@ -249,20 +221,11 @@ def format_obstructions(obstructions: List[BlockedObstruction]) -> List[str]:
         Values that exceed 8 characters are replaced with asterisks ('********')
         following FORTRAN overflow convention.
     """
-    all_values = []
-    for obs in obstructions:
-        all_values.extend([obs.start_sta, obs.end_sta, obs.elevation])
-
-    output_lines = []
-
-    for i in range(0, len(all_values), VALUES_PER_LINE):
-        line_values = all_values[i:i + VALUES_PER_LINE]
-        # Use robust formatter for each value
-        formatted_values = [_format_value(v, FIELD_WIDTH) for v in line_values]
-        line_str = "".join(formatted_values)
-        output_lines.append(line_str)
-
-    return output_lines
+    from ..geom.GeomCrossSection import GeomCrossSection
+    return [
+        line.rstrip("\n")
+        for line in GeomCrossSection.format_blocked_obstructions(obstructions)
+    ]
 
 
 def _format_value(value: float, width: int) -> str:
