@@ -15,6 +15,7 @@ Geometry:
     - HdfMesh: 2D mesh operations (cells, faces, areas)
     - HdfXsec: Cross-section geometry extraction
     - HdfBndry: Boundary features (BC lines, breaklines, reference features)
+    - HdfStorageArea: Storage-area polygons, properties, terrain volume curves
     - HdfStruc: Structure geometry (2D structures)
     - HdfHydraulicTables: Hydraulic property tables (HTAB)
 
@@ -65,6 +66,7 @@ from .HdfMesh import HdfMesh
 from .HdfXsec import HdfXsec
 from .HdfBndry import HdfBndry
 from .HdfStruc import HdfStruc
+from .HdfStorageArea import HdfStorageArea
 from .HdfStruc1D import HdfStruc1D
 from .HdfHydraulicTables import HdfHydraulicTables
 
@@ -98,7 +100,7 @@ __all__ = [
     # Core
     'HdfBase', 'HdfUtils', 'HdfPlan',
     # Geometry
-    'HdfMesh', 'HdfXsec', 'HdfBndry', 'HdfStruc', 'HdfStruc1D', 'HdfHydraulicTables',
+    'HdfMesh', 'HdfXsec', 'HdfBndry', 'HdfStruc', 'HdfStorageArea', 'HdfStruc1D', 'HdfHydraulicTables',
     # Results
     'HdfResultsPlan', 'HdfResultsMesh', 'HdfResultsQuery', 'HdfResultsXsec', 'HdfResultsBreach',
     # Infrastructure
