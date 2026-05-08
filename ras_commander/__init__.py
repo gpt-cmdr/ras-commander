@@ -14,7 +14,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.96.1"
+    __version__ = "0.96.2"
 
 # Set up logging
 setup_logging()
@@ -93,7 +93,7 @@ from .geom import (
 # HDF handling - imported from hdf subpackage
 from .hdf import (
     HdfBase, HdfUtils, HdfPlan,
-    HdfMesh, HdfXsec, HdfBndry, HdfStruc, HdfHydraulicTables,
+    HdfMesh, HdfXsec, HdfBndry, HdfStruc, HdfStorageArea, HdfHydraulicTables,
     HdfResultsPlan, HdfResultsMesh, HdfResultsQuery, HdfResultsXsec, HdfResultsBreach,
     HdfPipe, HdfPump, HdfInfiltration, HdfLandCover,
     HdfPlot, HdfResultsPlot,
@@ -226,7 +226,7 @@ __all__ = [
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan', 'HdfProject',
     'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsQuery', 'HdfResultsXsec',
-    'HdfStruc', 'HdfUtils', 'HdfXsec', 'HdfPump',
+    'HdfStruc', 'HdfStorageArea', 'HdfUtils', 'HdfXsec', 'HdfPump',
     'HdfPipe', 'HdfInfiltration', 'HdfLandCover', 'HdfHydraulicTables', 'HdfResultsBreach', 'RasBreach',
     'HdfBenefitAreas', 'HdfChannelCapacity', 'HdfResultsAnalysis',
 
