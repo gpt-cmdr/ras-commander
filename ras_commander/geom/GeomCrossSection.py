@@ -78,6 +78,7 @@ class GeomCrossSection:
     # HEC-RAS format constants
     FIXED_WIDTH_COLUMN = 8      # Character width for numeric data in geometry files
     VALUES_PER_LINE = 10        # Number of values per line in fixed-width format
+    MANNINGS_N_VALUES_PER_LINE = 9  # 3 Manning's n triplets per line
     BLOCKED_OBSTRUCTION_VALUES_PER_LINE = 9  # 3 obstructions x 3 values
     MAX_XS_POINTS = 500         # HEC-RAS computational limit on cross section points
 
@@ -2860,7 +2861,7 @@ class GeomCrossSection:
                     new_data_lines = GeomParser.format_fixed_width(
                         new_values,
                         column_width=GeomCrossSection.FIXED_WIDTH_COLUMN,
-                        values_per_line=GeomCrossSection.VALUES_PER_LINE,
+                        values_per_line=GeomCrossSection.MANNINGS_N_VALUES_PER_LINE,
                         precision=2
                     )
 
@@ -2869,20 +2870,10 @@ class GeomCrossSection:
                     # Update header
                     modified_lines[j] = f"#Mann= {count} ,{format_flag} ,{change_flag} \n"
 
-                    # Mark old data lines for deletion
-                    for k in range(old_data_lines):
-                        if j + 1 + k < len(modified_lines):
-                            modified_lines[j + 1 + k] = None
-
-                    # Insert new data lines
-                    for k, data_line in enumerate(new_data_lines):
-                        if j + 1 + k < len(modified_lines):
-                            modified_lines[j + 1 + k] = data_line
-                        else:
-                            modified_lines.append(data_line)
-
-                    # Clean up None entries
-                    modified_lines = [ln for ln in modified_lines if ln is not None]
+                    # Replace the old data block as a slice so increasing the
+                    # number of lines inserts data instead of overwriting the
+                    # following cross-section records.
+                    modified_lines[j + 1:j + 1 + old_data_lines] = new_data_lines
 
                     with open(geom_file, 'w', encoding='utf-8') as f:
                         f.writelines(modified_lines)
