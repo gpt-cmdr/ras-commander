@@ -75,7 +75,10 @@ class UsgsGaugeSpatial:
         site_type: str = 'ST',
         parameter_codes: Optional[Union[str, List[str]]] = None,
         active_only: bool = True,
-        project_crs: Optional[str] = None
+        project_crs: Optional[str] = None,
+        include_1d: bool = True,
+        include_2d: bool = True,
+        include_storage: bool = True
     ) -> 'gpd.GeoDataFrame':
         """
         Query USGS gauges within HEC-RAS project bounds.
@@ -112,6 +115,13 @@ class UsgsGaugeSpatial:
             Override CRS for projects without embedded projection. Use EPSG codes
             like "EPSG:26918" (UTM Zone 18N) or "EPSG:2271" (PA State Plane North).
             Required for Bald Eagle Creek and other example projects without CRS.
+        include_1d : bool, default True
+            Include 1D cross sections and river centerlines when calculating
+            the query extent.
+        include_2d : bool, default True
+            Include 2D flow area perimeters when calculating the query extent.
+        include_storage : bool, default True
+            Include storage areas when calculating the query extent.
 
         Returns
         -------
@@ -197,6 +207,9 @@ class UsgsGaugeSpatial:
         west, south, east, north = HdfProject.get_project_bounds_latlon(
             hdf_path,
             buffer_percent=buffer_percent,
+            include_1d=include_1d,
+            include_2d=include_2d,
+            include_storage=include_storage,
             project_crs=project_crs
         )
 
@@ -522,7 +535,10 @@ def find_gauges_in_project(
     site_type: str = 'ST',
     parameter_codes: Optional[Union[str, List[str]]] = None,
     active_only: bool = True,
-    project_crs: Optional[str] = None
+    project_crs: Optional[str] = None,
+    include_1d: bool = True,
+    include_2d: bool = True,
+    include_storage: bool = True
 ) -> 'gpd.GeoDataFrame':
     """
     Query USGS gauges within HEC-RAS project bounds.
@@ -534,9 +550,19 @@ def find_gauges_in_project(
     ----------
     project_crs : str, optional
         Override CRS for projects without embedded projection (e.g., "EPSG:26918").
+    include_1d, include_2d, include_storage : bool, default True
+        Select which HEC-RAS geometry elements contribute to the query extent.
     """
     return UsgsGaugeSpatial.find_gauges_in_project(
-        hdf_path, buffer_percent, site_type, parameter_codes, active_only, project_crs
+        hdf_path,
+        buffer_percent,
+        site_type,
+        parameter_codes,
+        active_only,
+        project_crs,
+        include_1d,
+        include_2d,
+        include_storage,
     )
 
 
