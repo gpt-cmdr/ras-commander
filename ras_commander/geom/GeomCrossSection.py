@@ -184,6 +184,7 @@ class GeomCrossSection:
     # HEC-RAS format constants
     FIXED_WIDTH_COLUMN = 8      # Character width for numeric data in geometry files
     VALUES_PER_LINE = 10        # Number of values per line in fixed-width format
+    MANNINGS_VALUES_PER_LINE = 9  # 3 Manning's n triplets per line
     BLOCKED_OBSTRUCTION_VALUES_PER_LINE = 9  # 3 obstructions x 3 values
     MAX_XS_POINTS = 500         # HEC-RAS computational limit on cross section points
 
@@ -865,11 +866,68 @@ class GeomCrossSection:
                 value_str = GeomParser.extract_keyword_value(lines[idx], "#Mann")
                 parts = [p.strip() for p in value_str.split(',')]
                 count = int(parts[0]) if parts and parts[0] else 0
-                total_values = count * 3
-                data_lines = math.ceil(total_values / GeomCrossSection.VALUES_PER_LINE)
-                return min(idx + 1 + data_lines, section_end)
+                return GeomCrossSection._find_mann_data_end(lines, idx, section_end, count)
 
         return None
+
+    @staticmethod
+    def _find_mann_data_end(
+        lines: List[str],
+        mann_idx: int,
+        section_end: int,
+        count: int,
+    ) -> int:
+        """Find the first line after a Manning's n fixed-width data block."""
+        expected_values = max(int(count), 0) * 3
+        if expected_values == 0:
+            return mann_idx + 1
+
+        values_read = 0
+        data_end = mann_idx + 1
+        for idx in range(mann_idx + 1, section_end):
+            stripped = lines[idx].strip()
+            if stripped and (
+                stripped.startswith("Type RM Length L Ch R =")
+                or stripped.startswith("River Reach=")
+                or "=" in stripped
+            ):
+                break
+
+            parsed_values = GeomParser.parse_fixed_width(
+                lines[idx],
+                column_width=GeomCrossSection.FIXED_WIDTH_COLUMN,
+            )
+            values_read += len(parsed_values)
+            data_end = idx + 1
+            if values_read >= expected_values:
+                break
+
+        return min(data_end, section_end)
+
+    @staticmethod
+    def _format_mannings_n_lines(mann_df: pd.DataFrame) -> List[str]:
+        """
+        Format Manning's n triplets using HEC-RAS-compatible 3-triplet wrapping.
+
+        Station fields keep two decimals, n-values keep three decimals, and the
+        per-triplet change flag is written as zero unless a ChangeFlag column is
+        supplied.
+        """
+        lines = []
+        fields = []
+        for _, row in mann_df.iterrows():
+            change = row["ChangeFlag"] if "ChangeFlag" in mann_df.columns else 0.0
+            fields.extend([
+                f"{float(row['Station']):8.2f}",
+                f"{float(row['n_value']):8.3f}",
+                f"{float(change):8.0f}",
+            ])
+
+        for idx in range(0, len(fields), GeomCrossSection.MANNINGS_VALUES_PER_LINE):
+            row_fields = fields[idx:idx + GeomCrossSection.MANNINGS_VALUES_PER_LINE]
+            lines.append("".join(row_fields) + "\n")
+
+        return lines
 
     @staticmethod
     def _prepare_station_elevation_df(sta_elev_df: pd.DataFrame,
@@ -4047,41 +4105,21 @@ class GeomCrossSection:
                     parts = [p.strip() for p in value_str.split(',')]
                     old_count = int(parts[0]) if parts[0] else 0
 
-                    # Calculate old data line count
-                    old_total = old_count * 3
-                    old_data_lines = math.ceil(old_total / GeomCrossSection.VALUES_PER_LINE) if old_total > 0 else 0
-
-                    # Build new value list: station, n_value, change_flag per row
-                    new_values = []
-                    for _, row in mann_df.iterrows():
-                        new_values.extend([row['Station'], row['n_value'], 0.0])
-
-                    new_data_lines = GeomParser.format_fixed_width(
-                        new_values,
-                        column_width=GeomCrossSection.FIXED_WIDTH_COLUMN,
-                        values_per_line=GeomCrossSection.VALUES_PER_LINE,
-                        precision=2
+                    old_data_end = GeomCrossSection._find_mann_data_end(
+                        lines,
+                        j,
+                        end_idx,
+                        old_count,
                     )
+                    new_data_lines = GeomCrossSection._format_mannings_n_lines(mann_df)
+                    new_header = f"#Mann= {count} ,{format_flag} ,{change_flag} \n"
 
-                    modified_lines = lines.copy()
-
-                    # Update header
-                    modified_lines[j] = f"#Mann= {count} ,{format_flag} ,{change_flag} \n"
-
-                    # Mark old data lines for deletion
-                    for k in range(old_data_lines):
-                        if j + 1 + k < len(modified_lines):
-                            modified_lines[j + 1 + k] = None
-
-                    # Insert new data lines
-                    for k, data_line in enumerate(new_data_lines):
-                        if j + 1 + k < len(modified_lines):
-                            modified_lines[j + 1 + k] = data_line
-                        else:
-                            modified_lines.append(data_line)
-
-                    # Clean up None entries
-                    modified_lines = [ln for ln in modified_lines if ln is not None]
+                    modified_lines = (
+                        lines[:j]
+                        + [new_header]
+                        + new_data_lines
+                        + lines[old_data_end:]
+                    )
 
                     with open(geom_file, 'w', encoding='utf-8') as f:
                         f.writelines(modified_lines)

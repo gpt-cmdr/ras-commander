@@ -91,6 +91,12 @@ from .geom import (
     GeomReferenceFeatures, GeomBcLines, GeomMesh,
     MeshResult, BCConflict, BCFixResult,
 )
+    GeomParser, GeomPreprocessor, GeomLandCover, ManningsFromLandCover,
+    GeomCrossSection, GeomStorage, GeomLateral,
+    GeomInlineWeir, GeomBridge, GeomCulvert,
+    GeomReferenceFeatures, GeomBcLines, GeomMesh,
+    MeshResult, BCConflict, BCFixResult,
+)
 
 # HDF handling - imported from hdf subpackage
 from .hdf import (
@@ -191,6 +197,8 @@ __all__ = [
     'GeomCrossSection', 'CrossSectionBankStations', 'CrossSectionBuildInput',
     'CrossSectionBuildResult', 'CrossSectionManningsN', 'CrossSectionReachLengths',
     'GeomStorage', 'GeomLateral',
+    'GeomParser', 'GeomPreprocessor', 'GeomLandCover', 'ManningsFromLandCover',
+    'GeomCrossSection', 'GeomStorage', 'GeomLateral',
     'GeomInlineWeir', 'GeomBridge', 'GeomCulvert',
     'GeomReferenceFeatures', 'GeomBcLines',
 
@@ -252,10 +260,8 @@ __all__ = [
     'BcoMonitor',
 ]
 
-# =============================================================================
-# BACKWARD COMPATIBILITY - DEPRECATED MODULE PATHS (DEPRECATED in v0.89.0)
-# =============================================================================
-# These aliases provide backward compatibility for old import paths.
+# ======================================================================# BACKWARD COMPATIBILITY - DEPRECATED MODULE PATHS (DEPRECATED in v0.89.0)
+# ======================================================================# These aliases provide backward compatibility for old import paths.
 # Users should migrate to new paths. Old paths will show DeprecationWarning.
 #
 # Migration:
@@ -264,8 +270,7 @@ __all__ = [
 #
 #   OLD: from ras_commander.validation_base import ValidationSeverity, ...
 #   NEW: from ras_commander.RasValidation import ValidationSeverity, ...
-# =============================================================================
-
+# ======================================================================
 import sys
 import warnings
 

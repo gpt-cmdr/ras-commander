@@ -53,6 +53,8 @@ from .GeomCrossSection import (
     CrossSectionReachLengths,
     GeomCrossSection,
 )
+from .ManningsFromLandCover import ManningsFromLandCover
+from .GeomCrossSection import GeomCrossSection
 from .GeomStorage import GeomStorage
 from .GeomLateral import GeomLateral
 from .GeomInlineWeir import GeomInlineWeir
@@ -70,6 +72,7 @@ __all__ = [
     'GeomParser',
     'GeomPreprocessor',
     'GeomLandCover',
+    'ManningsFromLandCover',
     'GeomCrossSection',
     'CrossSectionBankStations',
     'CrossSectionBuildInput',
