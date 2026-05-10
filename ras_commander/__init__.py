@@ -84,7 +84,9 @@ from .RasBco import BcoMonitor
 # Geometry handling - imported from geom subpackage
 from .geom import (
     GeomParser, GeomPreprocessor, GeomLandCover,
-    GeomCrossSection, GeomStorage, GeomLateral,
+    GeomCrossSection, CrossSectionBankStations, CrossSectionBuildInput,
+    CrossSectionBuildResult, CrossSectionManningsN, CrossSectionReachLengths,
+    GeomStorage, GeomLateral,
     GeomInlineWeir, GeomBridge, GeomCulvert,
     GeomReferenceFeatures, GeomBcLines, GeomMesh,
     MeshResult, BCConflict, BCFixResult,
@@ -186,7 +188,9 @@ __all__ = [
 
     # Geometry handling (new in v0.86.0)
     'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
-    'GeomCrossSection', 'GeomStorage', 'GeomLateral',
+    'GeomCrossSection', 'CrossSectionBankStations', 'CrossSectionBuildInput',
+    'CrossSectionBuildResult', 'CrossSectionManningsN', 'CrossSectionReachLengths',
+    'GeomStorage', 'GeomLateral',
     'GeomInlineWeir', 'GeomBridge', 'GeomCulvert',
     'GeomReferenceFeatures', 'GeomBcLines',
 

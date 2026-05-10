@@ -9,10 +9,73 @@ Comprehensive 1D geometry parsing and modification.
 ### Cross Section Methods
 
 - `get_cross_sections(geom)` - List all cross sections
+- `build_cross_section(input_spec=None, **kwargs)` - Build a complete Type 1 cross-section geometry entry from station/elevation, terrain, adjacent XS, bank, Manning's n, and reach-length inputs
 - `get_station_elevation(geom, river, reach, station)` - Get station-elevation pairs
 - `set_station_elevation(geom, river, reach, station, sta_elev)` - Modify station-elevation
 - `get_mannings_n(geom, river, reach, station)` - Get Manning's n values
 - `get_bank_stations(geom, river, reach, station)` - Get bank station locations
+
+### Cross Section Builder
+
+`GeomCrossSection.build_cross_section()` returns a `CrossSectionBuildResult`
+with resolved station/elevation, bank stations, Manning's n breakpoints, reach
+lengths, fallback messages, and formatted `.g##` geometry lines. The method
+accepts either keyword arguments or a `CrossSectionBuildInput` dataclass.
+
+```python
+from ras_commander import (
+    CrossSectionBankStations,
+    CrossSectionManningsN,
+    CrossSectionReachLengths,
+    GeomCrossSection,
+)
+
+result = GeomCrossSection.build_cross_section(
+    river="Example River",
+    reach="Main",
+    rs="1000",
+    terrain_profile=terrain_df,  # columns: station/elevation or Station/Elevation
+    cut_line=[(0.0, 0.0), (500.0, 0.0)],
+    river_centerline=[(250.0, -50.0), (250.0, 50.0)],
+)
+
+entry_text = result.text
+```
+
+Fallback behavior is intentionally visible. Every fallback logs at `ERROR`
+level with `river|reach|RS` and also appears in `result.fallback_messages`.
+The builder always writes required `Bank Sta=`, `#Sta/Elev=`, and `#Mann=`
+records when enough station/elevation data can be resolved.
+
+Resolution order:
+
+- Station/elevation: explicit `station_elevation`, terrain profile or
+  `RasTerrainMod.get_terrain_profile()`, then adjacent XS interpolation.
+- Bank stations: explicit station/elevation, explicit stations with terrain
+  elevations, river-centerline intersection with default 20-unit main-channel
+  width, then profile-interpolated bank elevations when terrain is unavailable.
+- Manning's n: controlled by `mannings_strategy`. `auto` prefers land cover,
+  neighboring XS interpolation, user values, then defaults (`MC=0.06`,
+  `LOB=ROB=0.08`). Strategies `landcover`, `neighbor`, `user`, and `default`
+  make a source preferred.
+- Point count: station/elevation output is capped at 500 points using a
+  Douglas-Peucker-style reducer that preserves endpoints, banks, the thalweg,
+  and major slope breaks.
+
+Fully specified inputs avoid fallbacks:
+
+```python
+result = GeomCrossSection.build_cross_section(
+    river="Example River",
+    reach="Main",
+    rs="1000",
+    station_elevation=survey_df,
+    bank_stations=CrossSectionBankStations(120.0, 180.0, 534.2, 533.8),
+    mannings_n=CrossSectionManningsN(lob=0.08, channel=0.05, rob=0.08),
+    reach_lengths=CrossSectionReachLengths(left=400.0, channel=390.0, right=410.0),
+)
+assert result.fallback_messages == []
+```
 
 ### Storage Area Methods
 

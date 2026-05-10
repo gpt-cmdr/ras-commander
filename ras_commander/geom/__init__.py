@@ -45,7 +45,14 @@ Example:
 from .GeomParser import GeomParser
 from .GeomPreprocessor import GeomPreprocessor
 from .GeomLandCover import GeomLandCover
-from .GeomCrossSection import GeomCrossSection
+from .GeomCrossSection import (
+    CrossSectionBankStations,
+    CrossSectionBuildInput,
+    CrossSectionBuildResult,
+    CrossSectionManningsN,
+    CrossSectionReachLengths,
+    GeomCrossSection,
+)
 from .GeomStorage import GeomStorage
 from .GeomLateral import GeomLateral
 from .GeomInlineWeir import GeomInlineWeir
@@ -64,6 +71,11 @@ __all__ = [
     'GeomPreprocessor',
     'GeomLandCover',
     'GeomCrossSection',
+    'CrossSectionBankStations',
+    'CrossSectionBuildInput',
+    'CrossSectionBuildResult',
+    'CrossSectionManningsN',
+    'CrossSectionReachLengths',
     'GeomStorage',
     'GeomLateral',
     'GeomInlineWeir',
