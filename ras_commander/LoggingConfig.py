@@ -14,11 +14,52 @@ CRITICAL = logging.CRITICAL
 
 
 _logging_setup_done = False
+_RAS_CONSOLE_HANDLER_ATTR = "_ras_commander_console_handler"
+
+
+def _dedupe_root_handlers(root_logger: logging.Logger) -> None:
+    """Remove duplicate stream/file handlers registered on the root logger."""
+    seen = set()
+    for handler in list(root_logger.handlers):
+        if isinstance(handler, logging.FileHandler):
+            identity = ("file", getattr(handler, "baseFilename", None))
+        elif isinstance(handler, logging.StreamHandler):
+            identity = ("stream", id(getattr(handler, "stream", None)))
+        else:
+            identity = (type(handler), id(handler))
+
+        if identity in seen:
+            root_logger.removeHandler(handler)
+            try:
+                handler.close()
+            except Exception:
+                pass
+            continue
+        seen.add(identity)
+
+    stream_handlers = [
+        handler for handler in root_logger.handlers
+        if isinstance(handler, logging.StreamHandler)
+        and not isinstance(handler, logging.FileHandler)
+    ]
+    external_stream_handlers = [
+        handler for handler in stream_handlers
+        if not getattr(handler, _RAS_CONSOLE_HANDLER_ATTR, False)
+    ]
+    if external_stream_handlers:
+        for handler in stream_handlers:
+            if getattr(handler, _RAS_CONSOLE_HANDLER_ATTR, False):
+                root_logger.removeHandler(handler)
+                try:
+                    handler.close()
+                except Exception:
+                    pass
 
 def setup_logging(log_file=None, log_level=logging.INFO):
     """Set up logging configuration for the ras-commander library."""
     global _logging_setup_done
     if _logging_setup_done:
+        _dedupe_root_handlers(logging.getLogger())
         return
     
     # Define log format
@@ -39,6 +80,7 @@ def setup_logging(log_file=None, log_level=logging.INFO):
     )
     if not has_stream_handler:
         console_handler = logging.StreamHandler()
+        setattr(console_handler, _RAS_CONSOLE_HANDLER_ATTR, True)
         console_handler.setFormatter(log_format)
         root_logger.addHandler(console_handler)
 
@@ -53,6 +95,8 @@ def setup_logging(log_file=None, log_level=logging.INFO):
         )
         file_handler.setFormatter(log_format)
         root_logger.addHandler(file_handler)
+
+    _dedupe_root_handlers(root_logger)
     
     _logging_setup_done = True
 

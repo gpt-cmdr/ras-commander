@@ -51,6 +51,72 @@ def _create_synthetic_face_results_hdf(path):
         )
 
 
+def _create_synthetic_depth_results_hdf(path):
+    with h5py.File(path, "w") as hdf:
+        plan_info = hdf.require_group("Plan Data/Plan Information")
+        plan_info.attrs["Simulation Start Time"] = np.bytes_("01Jan2024 00:00:00")
+
+        hdf.create_dataset(
+            f"{BASE_TS_PATH}/Time",
+            data=np.array([0.0, 1.0 / 24.0]),
+        )
+        hdf.create_dataset(
+            f"{BASE_TS_PATH}/Time Date Stamp (ms)",
+            data=np.array(
+                [
+                    b"01Jan2024 00:00:00.000",
+                    b"01Jan2024 01:00:00.000",
+                ]
+            ),
+        )
+
+        attrs_dtype = np.dtype([("Name", "S64")])
+        hdf.create_dataset(
+            "Geometry/2D Flow Areas/Attributes",
+            data=np.array([(MESH_NAME.encode("utf-8"),)], dtype=attrs_dtype),
+        )
+        geom_group = hdf.require_group(f"Geometry/2D Flow Areas/{MESH_NAME}")
+        geom_group.create_dataset(
+            "Perimeter",
+            data=np.array(
+                [
+                    [0.0, 0.0],
+                    [2.0, 0.0],
+                    [2.0, 2.0],
+                    [0.0, 2.0],
+                ],
+                dtype=float,
+            ),
+        )
+        geom_group.create_dataset(
+            "Cells Center Coordinate",
+            data=np.array(
+                [
+                    [0.5, 0.5],
+                    [1.5, 0.5],
+                    [0.5, 1.5],
+                    [1.5, 1.5],
+                ],
+                dtype=float,
+            ),
+        )
+        geom_group.create_dataset(
+            "Cells Minimum Elevation",
+            data=np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float32),
+        )
+
+        mesh_group = hdf.require_group(f"{BASE_TS_PATH}/2D Flow Areas/{MESH_NAME}")
+        _write_face_variable(
+            mesh_group,
+            "Water Surface",
+            [
+                [1.0, 1.0, 1.0, 1.0],
+                [2.0, 2.0, 5.0, 7.0],
+            ],
+            "ft",
+        )
+
+
 def test_get_mesh_faces_timeseries_returns_optional_face_outputs(tmp_path):
     hdf_path = tmp_path / "synthetic.p01.hdf"
     _create_synthetic_face_results_hdf(hdf_path)
@@ -68,6 +134,39 @@ def test_get_mesh_faces_timeseries_returns_optional_face_outputs(tmp_path):
     np.testing.assert_allclose(
         result["face_mannings_n"].values,
         np.array([[0.030, 0.040], [0.031, 0.041], [0.032, 0.042]]),
+    )
+
+
+def test_export_depth_rasters_at_times_computes_depth_from_wse(tmp_path):
+    import rasterio
+
+    hdf_path = tmp_path / "synthetic.p01.hdf"
+    _create_synthetic_depth_results_hdf(hdf_path)
+
+    result = HdfResultsMesh.export_depth_rasters_at_times(
+        hdf_path,
+        ["01Jan2024 01:00:00"],
+        tmp_path / "rasters",
+        mesh_name=MESH_NAME,
+        resolution=1.0,
+    )
+
+    raster_path = result["01Jan2024 01:00:00"]
+    assert raster_path.exists()
+    with rasterio.open(raster_path) as src:
+        data = src.read(1)
+        assert src.nodata == -9999.0
+        assert src.tags()["mesh_name"] == MESH_NAME
+
+    np.testing.assert_allclose(
+        data,
+        np.array(
+            [
+                [3.0, 4.0],
+                [2.0, 1.0],
+            ],
+            dtype=np.float32,
+        ),
     )
 
 

@@ -1190,6 +1190,292 @@ class HdfResultsMesh:
 
     @staticmethod
     @log_call
+    @standardize_input(file_type='plan_hdf')
+    def export_depth_rasters_at_times(
+        hdf_path: Path,
+        timestamps: Union[str, pd.Timestamp, List[Union[str, pd.Timestamp]]],
+        output_dir: Union[str, Path],
+        mesh_name: Optional[str] = None,
+        geom_hdf_path: Optional[Union[str, Path]] = None,
+        resolution: Optional[float] = None,
+        max_dimension: int = 600,
+        method: str = "nearest",
+        nodata: float = -9999.0,
+    ) -> Dict[str, Path]:
+        """
+        Export per-timestep 2D depth rasters from a computed plan HDF.
+
+        The method reads cell-centered HEC-RAS results through the plan HDF.
+        If the Depth dataset is not present, it computes depth as Water
+        Surface minus Cells Minimum Elevation and clips negative values to
+        zero. This is useful when RAS Mapper stored-map export cannot create
+        GeoTIFFs for every requested timestep but the plan HDF contains the
+        needed hydraulic results.
+
+        Args:
+            hdf_path: Plan HDF path.
+            timestamps: One or more simulation timestamps. Strings may use
+                RAS format such as ``10Apr2024 12:00:00``.
+            output_dir: Folder where GeoTIFFs will be written.
+            mesh_name: 2D flow area name. Required when the plan has multiple
+                2D flow areas.
+            geom_hdf_path: Optional geometry HDF path. Defaults to ``hdf_path``
+                because plan HDFs normally contain embedded geometry.
+            resolution: Optional output cell size in the model CRS units. If
+                omitted, a resolution is chosen so the longest raster dimension
+                is approximately ``max_dimension`` pixels.
+            max_dimension: Target maximum raster width/height when
+                ``resolution`` is omitted.
+            method: Rasterization method. ``nearest`` uses a precomputed cell
+                center nearest-neighbor lookup. ``linear`` and ``cubic`` use
+                scipy grid interpolation.
+            nodata: GeoTIFF nodata value.
+
+        Returns:
+            Dict[str, Path]: Mapping from the original timestamp label to the
+            exported GeoTIFF path.
+        """
+        from datetime import datetime
+
+        import rasterio
+        from rasterio.features import geometry_mask
+        from rasterio.transform import from_bounds
+
+        if isinstance(timestamps, (str, pd.Timestamp, datetime)):
+            timestamp_values = [timestamps]
+        else:
+            timestamp_values = list(timestamps)
+        if not timestamp_values:
+            raise ValueError("timestamps must contain at least one value")
+
+        method = method.lower()
+        if method not in {"nearest", "linear", "cubic"}:
+            raise ValueError("method must be one of: nearest, linear, cubic")
+
+        if max_dimension <= 1:
+            raise ValueError("max_dimension must be greater than 1")
+
+        hdf_path = Path(hdf_path)
+        geom_source = Path(geom_hdf_path) if geom_hdf_path is not None else hdf_path
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        def _parse_timestamp(value: Union[str, pd.Timestamp, datetime]) -> pd.Timestamp:
+            if isinstance(value, pd.Timestamp):
+                return value.round("s")
+            if isinstance(value, datetime):
+                return pd.Timestamp(value).round("s")
+
+            text = str(value).strip()
+            formats = [
+                "%d%b%Y %H:%M:%S",
+                "%d%b%Y %H:%M:%S:%f",
+                "%d%b%Y %H:%M:%S.%f",
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%dT%H:%M:%S",
+            ]
+            for fmt in formats:
+                try:
+                    return pd.Timestamp(datetime.strptime(text.upper(), fmt)).round("s")
+                except ValueError:
+                    continue
+            return pd.Timestamp(text).round("s")
+
+        def _safe_timestamp_label(value: object, parsed: pd.Timestamp) -> str:
+            if isinstance(value, str):
+                label = value
+            else:
+                label = parsed.strftime("%d%b%Y %H:%M:%S")
+            return (
+                label.replace(":", " ")
+                .replace("/", "_")
+                .replace("\\", "_")
+                .replace(".", "_")
+            )
+
+        mesh_names = HdfMesh.get_mesh_area_names(geom_source)
+        if mesh_name is None:
+            if len(mesh_names) != 1:
+                raise ValueError(
+                    "mesh_name is required when the HDF contains "
+                    f"{len(mesh_names)} 2D flow areas: {mesh_names}"
+                )
+            mesh_name = mesh_names[0]
+        elif mesh_name not in mesh_names:
+            raise ValueError(f"Mesh '{mesh_name}' not found. Available meshes: {mesh_names}")
+
+        cell_points = HdfMesh.get_mesh_cell_points(geom_source)
+        if cell_points.empty:
+            raise ValueError(f"No 2D mesh cell centers found in {geom_source}")
+        cell_points = cell_points[cell_points["mesh_name"] == mesh_name].copy()
+        if cell_points.empty:
+            raise ValueError(f"No 2D mesh cell centers found for mesh '{mesh_name}'")
+
+        x = cell_points.geometry.x.to_numpy(dtype=float)
+        y = cell_points.geometry.y.to_numpy(dtype=float)
+        x_min, y_min, x_max, y_max = cell_points.total_bounds
+        if resolution is None:
+            longest_side = max(float(x_max - x_min), float(y_max - y_min))
+            resolution = longest_side / float(max_dimension)
+        if resolution <= 0:
+            raise ValueError("resolution must be positive")
+
+        cols = max(2, int(np.ceil((x_max - x_min) / resolution)))
+        rows = max(2, int(np.ceil((y_max - y_min) / resolution)))
+        transform = from_bounds(x_min, y_min, x_max, y_max, cols, rows)
+
+        x_res = (x_max - x_min) / cols
+        y_res = (y_max - y_min) / rows
+        grid_x = np.linspace(x_min + x_res / 2.0, x_max - x_res / 2.0, cols)
+        grid_y = np.linspace(y_max - y_res / 2.0, y_min + y_res / 2.0, rows)
+        gx, gy = np.meshgrid(grid_x, grid_y)
+        grid_points = np.column_stack([gx.ravel(), gy.ravel()])
+
+        if method == "nearest":
+            from scipy.spatial import cKDTree
+
+            tree = cKDTree(np.column_stack([x, y]))
+            _, nearest_indices = tree.query(grid_points)
+        else:
+            from scipy.interpolate import griddata as scipy_griddata
+
+            nearest_indices = None
+
+        mesh_areas = HdfMesh.get_mesh_areas(geom_source)
+        mesh_areas = mesh_areas[mesh_areas["mesh_name"] == mesh_name] if not mesh_areas.empty else mesh_areas
+        if mesh_areas.empty:
+            mesh_mask = np.ones((rows, cols), dtype=bool)
+        else:
+            mesh_mask = geometry_mask(
+                list(mesh_areas.geometry),
+                out_shape=(rows, cols),
+                transform=transform,
+                invert=True,
+            )
+
+        target_times = [_parse_timestamp(value) for value in timestamp_values]
+        output_paths: Dict[str, Path] = {}
+
+        time_stamp_path = (
+            "Results/Unsteady/Output/Output Blocks/Base Output/"
+            "Unsteady Time Series/Time Date Stamp (ms)"
+        )
+        time_path = (
+            "Results/Unsteady/Output/Output Blocks/Base Output/"
+            "Unsteady Time Series/Time"
+        )
+        depth_path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, "Depth")
+        wse_path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, "Water Surface")
+        min_elev_path = f"Geometry/2D Flow Areas/{mesh_name}/Cells Minimum Elevation"
+
+        with h5py.File(hdf_path, "r") as result_hdf, h5py.File(geom_source, "r") as geom_hdf:
+            if time_stamp_path in result_hdf:
+                raw_times = result_hdf[time_stamp_path][()]
+                hdf_times = pd.DatetimeIndex(
+                    [_parse_timestamp(value.decode("utf-8")) for value in raw_times]
+                ).round("s")
+            elif time_path in result_hdf:
+                start_time = HdfBase.get_simulation_start_time(result_hdf)
+                hdf_times = HdfUtils.convert_timesteps_to_datetimes(
+                    np.asarray(result_hdf[time_path][()]),
+                    start_time,
+                    round_to="s",
+                )
+            else:
+                raise ValueError(f"No unsteady timestep dataset found in {hdf_path}")
+
+            if depth_path not in result_hdf and wse_path not in result_hdf:
+                raise ValueError(
+                    f"Neither Depth nor Water Surface time series exists for mesh '{mesh_name}'"
+                )
+            if depth_path not in result_hdf and min_elev_path not in geom_hdf:
+                raise ValueError(
+                    f"Depth is absent and Cells Minimum Elevation is missing from {geom_source}"
+                )
+
+            min_elev = (
+                np.asarray(geom_hdf[min_elev_path][()], dtype=np.float32)
+                if depth_path not in result_hdf
+                else None
+            )
+
+            for original_value, target_time in zip(timestamp_values, target_times):
+                exact_matches = np.flatnonzero(hdf_times == target_time)
+                if len(exact_matches):
+                    time_index = int(exact_matches[0])
+                else:
+                    deltas = np.abs(hdf_times - target_time)
+                    nearest_position = int(np.argmin(deltas))
+                    if deltas[nearest_position] > pd.Timedelta(seconds=30):
+                        raise ValueError(
+                            f"Timestamp {target_time} not found in {hdf_path}; "
+                            f"nearest is {hdf_times[nearest_position]}"
+                        )
+                    time_index = nearest_position
+
+                if depth_path in result_hdf:
+                    values = np.asarray(result_hdf[depth_path][time_index], dtype=np.float32)
+                else:
+                    wse = np.asarray(result_hdf[wse_path][time_index], dtype=np.float32)
+                    values = np.maximum(wse - min_elev, 0.0).astype(np.float32)
+                values = np.where(np.isfinite(values), values, 0.0).astype(np.float32)
+
+                if len(values) != len(cell_points):
+                    raise ValueError(
+                        f"Depth value count ({len(values)}) does not match cell count "
+                        f"({len(cell_points)}) for mesh '{mesh_name}'"
+                    )
+
+                if method == "nearest":
+                    grid_values = values[nearest_indices].reshape(rows, cols)
+                else:
+                    grid_values = scipy_griddata(
+                        points=np.column_stack([x, y]),
+                        values=values.astype(np.float64),
+                        xi=(gx, gy),
+                        method=method,
+                        fill_value=nodata,
+                    ).astype(np.float32)
+                    grid_values = np.where(np.isnan(grid_values), nodata, grid_values)
+
+                grid_values = np.where(mesh_mask, grid_values, nodata).astype(np.float32)
+                safe_label = _safe_timestamp_label(original_value, target_time)
+                raster_path = output_dir / f"Depth ({safe_label}).hdf.tif"
+
+                with rasterio.open(
+                    raster_path,
+                    "w",
+                    driver="GTiff",
+                    height=rows,
+                    width=cols,
+                    count=1,
+                    dtype=np.float32,
+                    crs=cell_points.crs,
+                    transform=transform,
+                    nodata=nodata,
+                    compress="lzw",
+                    BIGTIFF="IF_SAFER",
+                ) as dst:
+                    dst.write(grid_values, 1)
+                    dst.update_tags(
+                        mesh_name=mesh_name,
+                        timestamp=target_time.strftime("%d%b%Y %H:%M:%S"),
+                        source="HEC-RAS plan HDF",
+                        units="ft",
+                    )
+
+                output_paths[str(original_value)] = raster_path
+
+        logger.info(
+            "Wrote %s depth raster(s) for mesh '%s' to %s",
+            len(output_paths),
+            mesh_name,
+            output_dir,
+        )
+        return output_paths
+
+    @staticmethod
+    @log_call
     def get_flood_extent_polygon(
         plan_number: str,
         profile: str = "Max",
