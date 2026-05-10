@@ -2114,9 +2114,17 @@ class PrecipMrms:
             ax,
             mesh_boundary,
             target_crs=data_crs,
-            color="#111111",
-            linewidth=0.8,
+            color="white",
+            linewidth=2.4,
             zorder=5,
+        )
+        PrecipMrms._plot_boundary(
+            ax,
+            mesh_boundary,
+            target_crs=data_crs,
+            color="#111111",
+            linewidth=1.1,
+            zorder=6,
         )
         PrecipMrms._plot_pump_stations(ax, pump_stations, target_crs=data_crs)
 
