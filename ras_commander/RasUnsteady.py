@@ -33,6 +33,7 @@ List of Functions in RasUnsteady:
 - update_restart_settings()
 - set_restart_settings()
 - get_restart_settings()
+- set_hydrograph_fixed_start_time()
 - extract_boundary_and_tables()
 - print_boundaries_and_tables()
 - identify_tables()
@@ -61,6 +62,7 @@ DSS Boundary Condition Functions:
 """
 import os
 import numbers
+from datetime import datetime
 from pathlib import Path
 from .RasPrj import ras
 from .LoggingConfig import get_logger
@@ -460,6 +462,167 @@ class RasUnsteady:
                 "Write IC File keys in HEC-RAS 5.x through 7.0."
             ),
         }
+
+    @staticmethod
+    @log_call
+    def set_hydrograph_fixed_start_time(
+        unsteady_number_or_path: Union[str, Path],
+        use_fixed_start_time: bool,
+        fixed_start_datetime: Optional[Union[str, Tuple[str, str], datetime, pd.Timestamp]] = None,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Set fixed-start timing for inline hydrograph boundary conditions.
+
+        HEC-RAS inline Flow/Stage/Lateral hydrographs are commonly stored as
+        values relative to the simulation start. For warm-start continuation
+        plans that begin after the original event start, the copied unsteady
+        file needs ``Use Fixed Start Time`` enabled so the same hydrograph
+        values remain aligned to the source-run clock.
+
+        Args:
+            unsteady_number_or_path: Unsteady flow number or path to a .u## file.
+            use_fixed_start_time: Whether to enable fixed-start hydrograph timing.
+            fixed_start_datetime: Fixed hydrograph start as a datetime,
+                pandas Timestamp, ``(DDMMMYYYY, hhmm)`` pair, or
+                ``"DDMMMYYYY,hhmm"`` string. Required when enabling fixed-start
+                timing. Ignored when disabling.
+            ras_object: Optional RAS project object. If None, uses global ``ras``.
+
+        Returns:
+            Dict[str, Any]: Updated file path, target settings, and line counts.
+
+        Raises:
+            ValueError: If enabling without a fixed start date/time, or if the
+                unsteady file does not contain ``Use Fixed Start Time`` lines.
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except Exception:
+                pass
+
+        if use_fixed_start_time:
+            if fixed_start_datetime is None:
+                raise ValueError(
+                    "fixed_start_datetime is required when use_fixed_start_time=True"
+                )
+            fixed_start_value = RasUnsteady._format_fixed_start_datetime(
+                fixed_start_datetime
+            )
+        else:
+            fixed_start_value = ","
+
+        unsteady_path = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path,
+            ras_object=ras_obj,
+        )
+
+        with open(unsteady_path, "r", encoding="utf-8", errors="ignore") as file:
+            lines = file.readlines()
+
+        original_lines = list(lines)
+        flag_value = "True" if use_fixed_start_time else "False"
+        updated_lines = []
+        updated_use_lines = 0
+        updated_fixed_lines = 0
+        inserted_fixed_lines = 0
+        index = 0
+
+        while index < len(lines):
+            line = lines[index]
+            if line.startswith("Use Fixed Start Time="):
+                updated_lines.append(f"Use Fixed Start Time={flag_value}\n")
+                updated_use_lines += 1
+                next_index = index + 1
+                if (
+                    next_index < len(lines)
+                    and lines[next_index].startswith("Fixed Start Date/Time=")
+                ):
+                    updated_lines.append(
+                        f"Fixed Start Date/Time={fixed_start_value}\n"
+                    )
+                    updated_fixed_lines += 1
+                    index += 2
+                else:
+                    updated_lines.append(
+                        f"Fixed Start Date/Time={fixed_start_value}\n"
+                    )
+                    inserted_fixed_lines += 1
+                    index += 1
+                continue
+
+            if line.startswith("Fixed Start Date/Time="):
+                updated_lines.append(f"Fixed Start Date/Time={fixed_start_value}\n")
+                updated_fixed_lines += 1
+            else:
+                updated_lines.append(line)
+            index += 1
+
+        if updated_use_lines == 0:
+            raise ValueError(
+                f"No 'Use Fixed Start Time=' lines found in {unsteady_path.name}"
+            )
+
+        if updated_lines != original_lines:
+            with open(unsteady_path, "w", encoding="utf-8") as file:
+                file.writelines(updated_lines)
+
+            if hasattr(ras_obj, "get_boundary_conditions"):
+                try:
+                    ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+                except Exception as exc:
+                    logger.debug(f"boundaries_df refresh skipped: {exc}")
+
+        logger.info(
+            "Set hydrograph fixed start timing in %s: use_fixed_start_time=%s, "
+            "fixed_start_datetime=%s, updated_use_lines=%d, "
+            "updated_fixed_lines=%d, inserted_fixed_lines=%d",
+            unsteady_path.name,
+            use_fixed_start_time,
+            fixed_start_value,
+            updated_use_lines,
+            updated_fixed_lines,
+            inserted_fixed_lines,
+        )
+
+        return {
+            "unsteady_file": str(unsteady_path),
+            "use_fixed_start_time": use_fixed_start_time,
+            "fixed_start_datetime": fixed_start_value,
+            "updated_use_fixed_start_time_lines": updated_use_lines,
+            "updated_fixed_start_datetime_lines": updated_fixed_lines,
+            "inserted_fixed_start_datetime_lines": inserted_fixed_lines,
+        }
+
+    @staticmethod
+    def _format_fixed_start_datetime(
+        value: Union[str, Tuple[str, str], datetime, pd.Timestamp]
+    ) -> str:
+        """
+        Format a HEC-RAS fixed hydrograph start date/time value.
+        """
+        if isinstance(value, pd.Timestamp):
+            value = value.to_pydatetime()
+
+        if isinstance(value, datetime):
+            return f"{value.strftime('%d%b%Y').upper()},{value.strftime('%H%M')}"
+
+        if isinstance(value, (tuple, list)) and len(value) == 2:
+            date_part, time_part = value
+            return f"{str(date_part).strip().upper()},{str(time_part).strip()}"
+
+        if isinstance(value, str):
+            raw = value.strip()
+            parts = [part for part in re.split(r"[,\s]+", raw) if part]
+            if len(parts) == 2:
+                return f"{parts[0].upper()},{parts[1]}"
+
+        raise ValueError(
+            "fixed_start_datetime must be a datetime, pandas Timestamp, "
+            "a (date, time) pair, or a 'DDMMMYYYY,hhmm' string"
+        )
 
     @staticmethod
     @log_call
