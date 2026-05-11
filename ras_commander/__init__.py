@@ -187,14 +187,13 @@ __all__ = [
     'make_xsec_mannings_apply_fn',
 
     # Geometry handling (new in v0.86.0)
-    'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
+    'GeomParser', 'GeomPreprocessor', 'GeomLandCover', 'ManningsFromLandCover',
     'GeomCrossSection', 'CrossSectionBankStations', 'CrossSectionBuildInput',
     'CrossSectionBuildResult', 'CrossSectionManningsN', 'CrossSectionReachLengths',
     'GeomStorage', 'GeomLateral',
-    'GeomParser', 'GeomPreprocessor', 'GeomLandCover', 'ManningsFromLandCover',
-    'GeomCrossSection', 'GeomStorage', 'GeomLateral',
     'GeomInlineWeir', 'GeomBridge', 'GeomCulvert',
-    'GeomReferenceFeatures', 'GeomBcLines',
+    'GeomReferenceFeatures', 'GeomBcLines', 'GeomMesh',
+    'MeshResult', 'BCConflict', 'BCFixResult',
 
     # Deprecated geometry classes (will be removed before v1.0)
     'RasGeo', 'RasGeometry', 'RasGeometryUtils',
