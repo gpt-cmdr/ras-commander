@@ -1,0 +1,200 @@
+Flow Title=Gridded Precipitation
+Program Version=6.00
+Use Restart= 0
+Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,DSNormalDepth
+Friction Slope=0.0003,0
+Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,Upstream Inflow
+Interval=1HOUR
+Flow Hydrograph= 1000
+    1000    1800    2600    3400    4200    5000    6000    7000    8000    9000
+   10000   12000   14000   16000   18000   20000   21200   22400   23600   24800
+   26000   27000   28000   29000   3000029333.3328666.67   2800027333.3326666.67
+   26000   25400   24800   24200   23600   23000   22400   21800   21200   20600
+   20000   19500   19000   18500   18000   17500   17000   16500   16000   15500
+   1500014833.3314666.67   1450014333.3314166.67   1400013833.3313666.67   13500
+13333.3313166.67   1300012833.3312666.67   1250012333.3312166.67   1200011833.33
+11666.67   1150011333.3311166.67   1100010833.3310666.67   1050010333.3310166.67
+   10000 9957.98 9915.97 9873.95 9831.93 9789.92  9747.9 9705.88 9663.87 9621.85
+ 9579.83 9537.82  9495.8 9453.78 9411.77 9369.75 9327.73 9285.71  9243.7 9201.68
+ 9159.66 9117.65 9075.63 9033.61  8991.6 8949.58 8907.56 8865.55 8823.53 8781.51
+  8739.5 8697.48 8655.46 8613.45 8571.43 8529.41  8487.4 8445.38 8403.36 8361.35
+ 8319.33 8277.31 8235.29 8193.28 8151.26 8109.24 8067.23 8025.21 7983.19 7941.18
+ 7899.16 7857.14 7815.13 7773.11 7731.09 7689.08 7647.06 7605.04 7563.03 7521.01
+ 7478.99 7436.98 7394.96 7352.94 7310.92 7268.91 7226.89 7184.87 7142.86 7100.84
+ 7058.82 7016.81 6974.79 6932.77 6890.76 6848.74 6806.72 6764.71 6722.69 6680.67
+ 6638.66 6596.64 6554.62 6512.61 6470.59 6428.57 6386.56 6344.54 6302.52  6260.5
+ 6218.49 6176.47 6134.45 6092.44 6050.42  6008.4 5966.39 5924.37 5882.35 5840.34
+ 5798.32  5756.3 5714.29 5672.27 5630.25 5588.24 5546.22  5504.2 5462.19 5420.17
+ 5378.15 5336.13 5294.12  5252.1 5210.08 5168.07 5126.05 5084.03 5042.02    5000
+    4995    4990    4985    4980    4975    4970    4965    4960    4955    4950
+    4945    4940    4935    4930    4925    4920    4915    4910    4905    4900
+    4895    4890    4885    4880    4875    4870    4865    4860    4855    4850
+    4845    4840    4835    4830    4825    4820    4815    4810    4805    4800
+    4795    4790    4785    4780    4775    4770    4765    4760    4755    4750
+    4745    4740    4735    4730    4725    4720    4715    4710    4705    4700
+    4695    4690    4685    4680    4675    4670    4665    4660    4655    4650
+    4645    4640    4635    4630    4625    4620    4615    4610    4605    4600
+    4595    4590    4585    4580    4575    4570    4565    4560    4555    4550
+    4545    4540    4535    4530    4525    4520    4515    4510    4505    4500
+    4495    4490    4485    4480    4475    4470    4465    4460    4455    4450
+    4445    4440    4435    4430    4425    4420    4415    4410    4405    4400
+    4395    4390    4385    4380    4375    4370    4365    4360    4355    4350
+    4345    4340    4335    4330    4325    4320    4315    4310    4305    4300
+    4295    4290    4285    4280    4275    4270    4265    4260    4255    4250
+    4245    4240    4235    4230    4225    4220    4215    4210    4205    4200
+    4195    4190    4185    4180    4175    4170    4165    4160    4155    4150
+    4145    4140    4135    4130    4125    4120    4115    4110    4105    4100
+    4095    4090    4085    4080    4075    4070    4065    4060    4055    4050
+    4045    4040    4035    4030    4025    4020    4015    4010    4005    4000
+    3995    3990    3985    3980    3975    3970    3965    3960    3955    3950
+    3945    3940    3935    3930    3925    3920    3915    3910    3905    3900
+    3895    3890    3885    3880    3875    3870    3865    3860    3855    3850
+    3845    3840    3835    3830    3825    3820    3815    3810    3805    3800
+    3795    3790    3785    3780    3775    3770    3765    3760    3755    3750
+    3745    3740    3735    3730    3725    3720    3715    3710    3705    3700
+    3695    3690    3685    3680    3675    3670    3665    3660    3655    3650
+    3645    3640    3635    3630    3625    3620    3615    3610    3605    3600
+    3595    3590    3585    3580    3575    3570    3565    3560    3555    3550
+    3545    3540    3535    3530    3525    3520    3515    3510    3505    3500
+    3495    3490    3485    3480    3475    3470    3465    3460    3455    3450
+    3445    3440    3435    3430    3425    3420    3415    3410    3405    3400
+    3395    3390    3385    3380    3375    3370    3365    3360    3355    3350
+    3345    3340    3335    3330    3325    3320    3315    3310    3305    3300
+    3295    3290    3285    3280    3275    3270    3265    3260    3255    3250
+    3245    3240    3235    3230    3225    3220    3215    3210    3205    3200
+    3195    3190    3185    3180    3175    3170    3165    3160    3155    3150
+    3145    3140    3135    3130    3125    3120    3115    3110    3105    3100
+    3095    3090    3085    3080    3075    3070    3065    3060    3055    3050
+    3045    3040    3035    3030    3025    3020    3015    3010    3005    3000
+    2995    2990    2985    2980    2975    2970    2965    2960    2955    2950
+    2945    2940    2935    2930    2925    2920    2915    2910    2905    2900
+    2895    2890    2885    2880    2875    2870    2865    2860    2855    2850
+    2845    2840    2835    2830    2825    2820    2815    2810    2805    2800
+    2795    2790    2785    2780    2775    2770    2765    2760    2755    2750
+    2745    2740    2735    2730    2725    2720    2715    2710    2705    2700
+    2695    2690    2685    2680    2675    2670    2665    2660    2655    2650
+    2645    2640    2635    2630    2625    2620    2615    2610    2605    2600
+    2595    2590    2585    2580    2575    2570    2565    2560    2555    2550
+    2545    2540    2535    2530    2525    2520    2515    2510    2505    2500
+    2495    2490    2485    2480    2475    2470    2465    2460    2455    2450
+    2445    2440    2435    2430    2425    2420    2415    2410    2405    2400
+    2395    2390    2385    2380    2375    2370    2365    2360    2355    2350
+    2345    2340    2335    2330    2325    2320    2315    2310    2305    2300
+    2295    2290    2285    2280    2275    2270    2265    2260    2255    2250
+    2245    2240    2235    2230    2225    2220    2215    2210    2205    2200
+    2195    2190    2185    2180    2175    2170    2165    2160    2155    2150
+    2145    2140    2135    2130    2125    2120    2115    2110    2105    2100
+    2095    2090    2085    2080    2075    2070    2065    2060    2055    2050
+    2045    2040    2035    2030    2025    2020    2015    2010    2005    2000
+    1995    1990    1985    1980    1975    1970    1965    1960    1955    1950
+    1945    1940    1935    1930    1925    1920    1915    1910    1905    1900
+    1895    1890    1885    1880    1875    1870    1865    1860    1855    1850
+    1845    1840    1835    1830    1825    1820    1815    1810    1805    1800
+    1795    1790    1785    1780    1775    1770    1765    1760    1755    1750
+    1745    1740    1735    1730    1725    1720    1715    1710    1705    1700
+    1695    1690    1685    1680    1675    1670    1665    1660    1655    1650
+    1645    1640    1635    1630    1625    1620    1615    1610    1605    1600
+    1595    1590    1585    1580    1575    1570    1565    1560    1555    1550
+    1545    1540    1535    1530    1525    1520    1515    1510    1505    1500
+    1495    1490    1485    1480    1475    1470    1465    1460    1455    1450
+    1445    1440    1435    1430    1425    1420    1415    1410    1405    1400
+    1395    1390    1385    1380    1375    1370    1365    1360    1355    1350
+    1345    1340    1335    1330    1325    1320    1315    1310    1305    1300
+    1295    1290    1285    1280    1275    1270    1265    1260    1255    1250
+    1245    1240    1235    1230    1225    1220    1215    1210    1205    1200
+    1195    1190    1185    1180    1175    1170    1165    1160    1155    1150
+    1145    1140    1135    1130    1125    1120    1115    1110    1105    1100
+    1095    1090    1085    1080    1075    1070    1065    1060    1055    1050
+    1045    1040    1035    1030    1025    1020    1015    1010    1005    1000
+Stage Hydrograph TW Check=0
+Flow Hydrograph Slope= 0.0005
+DSS Path=
+Use DSS=False
+Use Fixed Start Time=False
+Fixed Start Date/Time=,
+Is Critical Boundary=False
+Critical Boundary Flow=
+Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,DS2NormalD
+Friction Slope=0.0003,0
+Boundary Location=                ,                ,        ,        ,Sayers Dam      ,                ,                ,
+Gate Name=Gate #1
+Gate DSS Path=
+Gate Use DSS=False
+Gate Time Interval=6HOUR
+Gate Use Fixed Start Time=False
+Gate Fixed Start Date/Time=,
+Gate Openings= 100
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+       2       2       2       2       2       2       2       2       2       2
+Met Point Raster Parameters=,,,,2000
+Precipitation Mode=Enable
+Wind Mode=No Wind Forces
+Air Density Mode=Specified
+Met BC=Precipitation|Mode=Gridded
+Met BC=Precipitation|Expanded View=-1
+Met BC=Precipitation|Constant Units=mm/hr
+Met BC=Precipitation|Point Interpolation=
+Met BC=Precipitation|Gridded Source=DSS
+Met BC=Precipitation|Gridded DSS Filename=.\Precipitation\precip.2018.09.dss
+Met BC=Precipitation|Gridded DSS Pathname=/SHG/MARFC/PRECIP/01SEP2018:0200/01SEP2018:0300/NEXRAD/
+Met BC=Evapotranspiration|Mode=None
+Met BC=Evapotranspiration|Expanded View=0
+Met BC=Evapotranspiration|Constant Units=mm/hr
+Met BC=Evapotranspiration|Point Interpolation=Nearest
+Met BC=Evapotranspiration|Gridded Source=DSS
+Met BC=Wind Speed|Expanded View=0
+Met BC=Wind Speed|Constant Units=ft/s
+Met BC=Wind Speed|Point Interpolation=Nearest
+Met BC=Wind Speed|Gridded Source=DSS
+Met BC=Wind Direction|Expanded View=0
+Met BC=Wind Direction|Point Interpolation=Nearest
+Met BC=Wind Direction|Gridded Source=DSS
+Met BC=Wind Velocity X|Expanded View=0
+Met BC=Wind Velocity X|Constant Units=ft/s
+Met BC=Wind Velocity X|Point Interpolation=Nearest
+Met BC=Wind Velocity X|Gridded Source=DSS
+Met BC=Wind Velocity Y|Expanded View=0
+Met BC=Wind Velocity Y|Constant Units=ft/s
+Met BC=Wind Velocity Y|Point Interpolation=Nearest
+Met BC=Wind Velocity Y|Gridded Source=DSS
+Met BC=Air Density|Mode=Constant
+Met BC=Air Density|Expanded View=0
+Met BC=Air Density|Constant Value=1.225
+Met BC=Air Density|Point Interpolation=Nearest
+Met BC=Air Density|Gridded Source=DSS
+Met BC=Air Temperature|Expanded View=0
+Met BC=Air Temperature|Point Interpolation=Nearest
+Met BC=Air Temperature|Gridded Source=DSS
+Met BC=Humidity|Expanded View=0
+Met BC=Humidity|Point Interpolation=Nearest
+Met BC=Humidity|Gridded Source=DSS
+Met BC=Air Pressure|Expanded View=0
+Met BC=Air Pressure|Point Interpolation=Nearest
+Met BC=Air Pressure|Gridded Source=DSS
+Non-Newtonian Method= 0
+Non-Newtonian Constant Vol Conc=0
+Non-Newtonian Yield Method= 0
+Non-Newtonian Yield Coef=0, 0
+User Yeild=   0
+Non-Newtonian Sed Visc= 0
+Non-Newtonian Obrian B=0
+User Viscosity=0
+User Viscosity Ratio=0
+Herschel-Bulkley Coef=0, 0
+Clastic Method= 0
+Coulomb Phi=0
+Voellmy X=0
+Non-Newtonian Hindered FV= 0
+Non-Newtonian FV K=0
+Non-Newtonian ds=0
+Non-Newtonian Max Cv=0
+Non-Newtonian Bulking Method= 0
+Non-Newtonian High C Transport= 0

@@ -39,11 +39,13 @@ List of Functions in RasUnsteady:
 - parse_fixed_width_table()
 - extract_tables()
 - write_table_to_file()
+- get_met_precipitation_config()
 - set_precipitation_hyetograph()
 - set_gridded_precipitation()
 - configure_gridded_dss_precipitation()
 
 Precipitation Functions:
+- get_met_precipitation_config() - Read Meteorological Data tab precipitation settings
 - set_precipitation_hyetograph() - Write hyetograph DataFrame to unsteady file
 - set_gridded_precipitation() - Configure GDAL raster precipitation
 - configure_gridded_dss_precipitation() - Configure gridded DSS precipitation
@@ -464,6 +466,143 @@ class RasUnsteady:
                 "Write IC File keys in HEC-RAS 5.x through 7.0."
             ),
         }
+
+    @staticmethod
+    def _empty_to_none(value: Optional[str]) -> Optional[str]:
+        """Return stripped text, or None for missing/blank values."""
+        if value is None:
+            return None
+        value = value.strip()
+        return value if value else None
+
+    @staticmethod
+    def _parse_optional_float(value: Optional[str]) -> Optional[float]:
+        """Parse a RAS text value as float when present."""
+        value = RasUnsteady._empty_to_none(value)
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except ValueError:
+            logger.debug("Could not parse meteorology numeric value: %s", value)
+            return None
+
+    @staticmethod
+    @log_call
+    def get_met_precipitation_config(
+        unsteady_file: Union[str, Path],
+        ras_object: Optional[Any] = None
+    ) -> Dict[str, Optional[Any]]:
+        """
+        Parse Meteorological Data tab precipitation settings from a .u## file.
+
+        HEC-RAS persists inactive precipitation settings in ``Met BC`` lines.
+        This reader returns the active configuration implied by the top-level
+        ``Precipitation Mode`` switch and ``Met BC=Precipitation|Mode`` value.
+
+        Args:
+            unsteady_file: Path to a .u## file or an unsteady flow number.
+            ras_object: Optional RAS project object used when resolving a flow number.
+
+        Returns:
+            Dict[str, Optional[Any]]: Structured precipitation configuration.
+        """
+        unsteady_path = Path(unsteady_file)
+        if not unsteady_path.is_file():
+            unsteady_path = RasUnsteady._resolve_unsteady_file_path(
+                unsteady_file,
+                ras_object=ras_object,
+            )
+
+        config: Dict[str, Optional[Any]] = {
+            "enabled": False,
+            "mode": None,
+            "source": None,
+            "dss_filename": None,
+            "dss_pathname": None,
+            "interpolation": None,
+            "constant_value": None,
+            "constant_units": None,
+            "gdal_filename": None,
+            "gdal_group": None,
+            "gdal_folder": None,
+            "gdal_filter": None,
+            "point_interpolation": None,
+        }
+
+        met_values: Dict[str, str] = {}
+        precipitation_mode: Optional[str] = None
+
+        try:
+            with open(unsteady_path, "r", encoding="utf-8", errors="ignore") as file:
+                for line in file:
+                    stripped = line.strip()
+                    met_prefix = "Met BC=Precipitation|"
+                    if stripped.startswith("Precipitation Mode="):
+                        precipitation_mode = stripped.split("=", 1)[1].strip()
+                    elif stripped.startswith(met_prefix):
+                        met_entry = stripped[len(met_prefix):]
+                        if "=" not in met_entry:
+                            continue
+                        met_key, value = met_entry.split("=", 1)
+                        met_values[met_key] = value.strip()
+        except FileNotFoundError:
+            logger.error(f"Unsteady flow file not found: {unsteady_path}")
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+        except PermissionError:
+            logger.error(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+            raise PermissionError(f"Permission denied when reading unsteady flow file: {unsteady_path}")
+
+        enabled = (precipitation_mode or "").strip().lower() == "enable"
+        config["enabled"] = enabled
+        if not enabled:
+            return config
+
+        mode = RasUnsteady._empty_to_none(met_values.get("Mode"))
+        if mode is not None and mode.lower() == "none":
+            mode = None
+        config["mode"] = mode
+
+        if mode == "Constant":
+            config["constant_value"] = RasUnsteady._parse_optional_float(
+                met_values.get("Constant Value")
+            )
+            config["constant_units"] = RasUnsteady._empty_to_none(
+                met_values.get("Constant Units")
+            )
+        elif mode == "Point":
+            config["point_interpolation"] = RasUnsteady._empty_to_none(
+                met_values.get("Point Interpolation")
+            )
+        elif mode == "Gridded":
+            source = RasUnsteady._empty_to_none(met_values.get("Gridded Source"))
+            config["source"] = source
+            if "Gridded Interpolation" in met_values:
+                config["interpolation"] = met_values["Gridded Interpolation"].strip()
+
+            if source == "DSS":
+                config["dss_filename"] = RasUnsteady._empty_to_none(
+                    met_values.get("Gridded DSS Filename")
+                )
+                config["dss_pathname"] = RasUnsteady._empty_to_none(
+                    met_values.get("Gridded DSS Pathname")
+                )
+            elif source == "GDAL Raster File(s)":
+                config["gdal_filename"] = RasUnsteady._empty_to_none(
+                    met_values.get("Gridded GDAL Filename")
+                )
+                config["gdal_group"] = (
+                    RasUnsteady._empty_to_none(met_values.get("Gridded GDAL Group"))
+                    or RasUnsteady._empty_to_none(met_values.get("Gridded GDAL Datasetname"))
+                )
+                config["gdal_folder"] = RasUnsteady._empty_to_none(
+                    met_values.get("Gridded GDAL Folder")
+                )
+                config["gdal_filter"] = RasUnsteady._empty_to_none(
+                    met_values.get("Gridded GDAL Filter")
+                )
+
+        return config
 
     @staticmethod
     @log_call
