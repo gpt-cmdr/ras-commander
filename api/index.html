@@ -2125,6 +2125,34 @@
   
   
     <li class="md-nav__item">
+      <a href="terrain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="fixit/" class="md-nav__link">
         
   
@@ -3160,13 +3188,22 @@
 <li><a href="hdf/#hdfstruc"><code>HdfStruc</code></a> - Structure data</li>
 <li><a href="hdf/#hdfresultsbreach"><code>HdfResultsBreach</code></a> - Dam breach results</li>
 <li><a href="hdf/#hdfhydraulictables"><code>HdfHydraulicTables</code></a> - Cross section HTAB data</li>
+<li><a href="hdf/#hdfstoragearea"><code>HdfStorageArea</code></a> - Storage area volume-elevation curves</li>
+<li><a href="hdf/#hdfchannelcapacity"><code>HdfChannelCapacity</code></a> - 1D channel capacity analysis</li>
+<li><a href="hdf/#hdfstruc1d"><code>HdfStruc1D</code></a> - 1D inline structure data</li>
 <li><a href="hdf/#hdfpipe"><code>HdfPipe</code></a> - Pipe network analysis</li>
 <li><a href="hdf/#hdfpump"><code>HdfPump</code></a> - Pump station analysis</li>
 </ul>
 <h2 id="geometry-modules">Geometry Modules<a class="headerlink" href="#geometry-modules" title="Permanent link">&para;</a></h2>
-<p>Classes for parsing geometry files:</p>
+<p>Classes for parsing and authoring geometry files:</p>
 <ul>
 <li><a href="geometry/#rasgeometry"><code>RasGeometry</code></a> - Cross sections, storage, connections</li>
+<li><a href="geometry/#geomcrosssection"><code>GeomCrossSection</code></a> - Cross-section builder and blocked obstructions</li>
+<li><a href="geometry/#geombridge"><code>GeomBridge</code></a> - Bridge geometry authoring</li>
+<li><a href="geometry/#geombclines"><code>GeomBcLines</code></a> - 2D boundary condition line authoring</li>
+<li><a href="geometry/#geomlateral"><code>GeomLateral</code></a> - Lateral structure parsing</li>
+<li><a href="geometry/#geomstorage"><code>GeomStorage</code></a> - Storage area and 2D flow area writing</li>
+<li><a href="geometry/#geomlevee"><code>GeomLevee</code></a> - Levee read/write</li>
 <li><a href="geometry/#rasgeometryutils"><code>RasGeometryUtils</code></a> - Parsing utilities</li>
 <li><a href="geometry/#rasstruct"><code>RasStruct</code></a> - Inline structures</li>
 <li><a href="geometry/#rasbreach"><code>RasBreach</code></a> - Breach parameters</li>
@@ -3175,9 +3212,9 @@
 <p>Classes for terrain creation, modification writing, and terrain-modification
 analysis:</p>
 <ul>
-<li><code>RasTerrain</code> - Terrain HDF creation from rasters</li>
-<li><code>RasTerrainModWriter</code> / <code>RasTerrainModification</code> - Line and polygon terrain modification HDF/.rasmap writing</li>
-<li><code>RasTerrainMod</code> - Terrain profile and volume comparison with modifications applied</li>
+<li><a href="terrain/#rasterrain"><code>RasTerrain</code></a> - Terrain HDF creation from rasters</li>
+<li><a href="terrain/#rasterrainmodwriter"><code>RasTerrainModWriter</code></a> / <code>RasTerrainModification</code> - Line and polygon terrain modification HDF/.rasmap writing</li>
+<li><a href="terrain/#rasterrainmod"><code>RasTerrainMod</code></a> - Terrain profile and volume comparison with modifications applied</li>
 </ul>
 <h2 id="fixit-module">Fixit Module<a class="headerlink" href="#fixit-module" title="Permanent link">&para;</a></h2>
 <p>Automated geometry repair:</p>
@@ -3306,7 +3343,7 @@ analysis:</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 6, 2026 02:37:07 UTC">May 6, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 11, 2026 20:09:50 UTC">May 11, 2026</span>
   </span>
 
     

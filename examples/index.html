@@ -2180,6 +2180,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../api/terrain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/fixit/" class="md-nav__link">
         
   
@@ -3241,7 +3269,7 @@
 
 
 <h1 id="example-notebooks">Example Notebooks<a class="headerlink" href="#example-notebooks" title="Permanent link">&para;</a></h1>
-<p>The repository currently ships <strong>93 canonical notebooks</strong> under <code>examples/</code>.
+<p>The repository currently ships <strong>108 canonical notebooks</strong> under <code>examples/</code>.
 This overview tracks the live notebook inventory in git. Executed copies such as
 <code>*_executed.ipynb</code> and local <code>_test_*.py</code> helpers are intentionally excluded.</p>
 <div class="admonition note">
@@ -3268,15 +3296,15 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 <tbody>
 <tr>
 <td><code>100s</code></td>
-<td>project initialization, execution control, parameter sweeps, RASMapper review, results summaries</td>
+<td>project initialization, execution control, parameter sweeps, RASMapper review, bank line generation, results summaries</td>
 </tr>
 <tr>
 <td><code>200s</code></td>
-<td>plaintext geometry parsing, structures, calibration setup, mesh generation</td>
+<td>plaintext geometry parsing, structures, XS interpolation, connections, bridges, levees, steady flow authoring, floodway encroachment, calibration, mesh generation</td>
 </tr>
 <tr>
 <td><code>300s</code></td>
-<td>unsteady files, DSS workflows, HMS-to-RAS matching, reference-line generation, boundary visualization</td>
+<td>unsteady files, DSS workflows, HMS-to-RAS matching, reference-line generation, 2D floodway encroachment, 2D computation options, terrain modifications, boundary visualization</td>
 </tr>
 <tr>
 <td><code>400s</code></td>
@@ -3374,6 +3402,7 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 <code>121_legacy_hecrascontroller_and_rascontrol.ipynb</code>,
 <code>122_rasmapper_spatial_review.ipynb</code>,
 <code>123_rasmapper_geometry_layer_updates.ipynb</code>,
+<code>124_rasmapper_bank_lines.ipynb</code>,
 <code>150_results_dataframe.ipynb</code></p>
 <h3 id="200s">200s<a class="headerlink" href="#200s" title="Permanent link">&para;</a></h3>
 <p><code>201_1d_plaintext_geometry.ipynb</code>, <code>202_2d_plaintext_geometry.ipynb</code>,
@@ -3384,12 +3413,19 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 <code>208_bridge_method_comparison.ipynb</code>,
 <code>209_culvert_authoring.ipynb</code>,
 <code>210_fixit_blocked_obstructions.ipynb</code>,
+<code>210_xs_interpolation_settings.ipynb</code>,
 <code>211_final_mannings_and_infiltration.ipynb</code>,
 <code>212_landcover_mannings_n_write.ipynb</code>,
 <code>213_land_classification_polygon_authoring.ipynb</code>,
+<code>214_connection_authoring.ipynb</code>,
+<code>215_bridge_connection_authoring.ipynb</code>,
+<code>216_bridge_authoring.ipynb</code>,
+<code>217_levee_read_write.ipynb</code>,
 <code>220_calibration_workflow.ipynb</code>,
 <code>221_calibration_1d_workflow.ipynb</code>,
 <code>222_steady_flow_calibration.ipynb</code>,
+<code>223_steady_floodway_encroachment.ipynb</code>,
+<code>224_steady_flow_authoring.ipynb</code>,
 <code>230_mesh_sensitivity_analysis.ipynb</code>,
 <code>231_pipe_network_mesh_generation.ipynb</code></p>
 <h3 id="300s">300s<a class="headerlink" href="#300s" title="Permanent link">&para;</a></h3>
@@ -3397,9 +3433,12 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 <code>301_flow_hydrograph_optimization.ipynb</code>,
 <code>310_dss_boundary_extraction.ipynb</code>,
 <code>311_validating_dss_paths.ipynb</code>,
+<code>311_2d_floodway_encroachment.ipynb</code>,
 <code>312_boundary_df_qmult_dss_paths.ipynb</code>,
 <code>313_hms_to_ras_boundary_matching.ipynb</code>,
 <code>314_reference_line_generation.ipynb</code>,
+<code>315_2d_computation_options.ipynb</code>,
+<code>316_terrain_modifications.ipynb</code>,
 <code>317_restart_file_settings.ipynb</code>,
 <code>320_1d_boundary_condition_visualization.ipynb</code></p>
 <h3 id="400s">400s<a class="headerlink" href="#400s" title="Permanent link">&para;</a></h3>
@@ -3426,6 +3465,7 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 <code>720_precipitation_methods_comprehensive.ipynb</code>,
 <code>721_Precipitation_Hyetograph_Comparison.ipynb</code>,
 <code>722_gridded_precipitation_atlas14.ipynb</code>,
+<code>723_storm_generator_abm_validation.ipynb</code>,
 <code>725_atlas14_spatial_variance.ipynb</code>,
 <code>726_abm_hyetograph_grid.ipynb</code></p>
 <h3 id="800s">800s<a class="headerlink" href="#800s" title="Permanent link">&para;</a></h3>
@@ -3489,7 +3529,7 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 10, 2026 02:10:28 UTC">May 10, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 11, 2026 20:09:50 UTC">May 11, 2026</span>
   </span>
 
     

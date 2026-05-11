@@ -12,9 +12,13 @@
         <meta name="author" content="William Katzenmeyer, P.E., C.F.M.">
       
       
-        <link rel="canonical" href="https://gpt-cmdr.github.io/ras-commander/notebooks/224_steady_flow_authoring/">
+        <link rel="canonical" href="https://gpt-cmdr.github.io/ras-commander/api/terrain/">
       
       
+        <link rel="prev" href="../geometry/">
+      
+      
+        <link rel="next" href="../fixit/">
       
       
         
@@ -25,7 +29,7 @@
     
     
       
-        <title>224 steady flow authoring - RAS Commander Documentation</title>
+        <title>Terrain Modules - RAS Commander Documentation</title>
       
     
     
@@ -80,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#development-mode" class="md-skip">
+        <a href="#terrain-modules" class="md-skip">
           Skip to content
         </a>
       
@@ -143,7 +147,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              224 steady flow authoring
+              Terrain Modules
             
           </span>
         </div>
@@ -343,11 +347,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../api/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -1773,28 +1779,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
-        
-          
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -1812,7 +1821,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1830,7 +1839,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/" class="md-nav__link">
+      <a href="../" class="md-nav__link">
         
   
   
@@ -1858,7 +1867,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/core/" class="md-nav__link">
+      <a href="../core/" class="md-nav__link">
         
   
   
@@ -1886,7 +1895,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/hdf/" class="md-nav__link">
+      <a href="../hdf/" class="md-nav__link">
         
   
   
@@ -1914,7 +1923,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/geometry/" class="md-nav__link">
+      <a href="../geometry/" class="md-nav__link">
         
   
   
@@ -1939,10 +1948,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../api/terrain/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain Modules
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1958,6 +1994,253 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#rasterrain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RasTerrain
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RasTerrain">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#terrain-creation-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terrain Creation Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#utility-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Utility Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bank-line-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bank Line Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rasterrainmodwriter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RasTerrainModWriter
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RasTerrainModWriter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#line-modification-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Line Modification Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#polygon-modification-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Polygon Modification Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#group-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Group Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Query Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analysis-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Analysis Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rasterrainmod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RasTerrainMod
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RasTerrainMod">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#terrain-sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terrain Sampling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comparison-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#raster-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Raster Export
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1970,7 +2253,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/fixit/" class="md-nav__link">
+      <a href="../fixit/" class="md-nav__link">
         
   
   
@@ -1998,7 +2281,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/dss/" class="md-nav__link">
+      <a href="../dss/" class="md-nav__link">
         
   
   
@@ -2026,7 +2309,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/remote/" class="md-nav__link">
+      <a href="../remote/" class="md-nav__link">
         
   
   
@@ -2819,6 +3102,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -2827,21 +3112,226 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#development-mode" class="md-nav__link">
+  <a href="#rasterrain" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Development Mode
+        RasTerrain
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RasTerrain">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#terrain-creation-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terrain Creation Methods
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#steady-flow-file-authoring" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#utility-methods" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Steady Flow File Authoring
+        Utility Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bank-line-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bank Line Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rasterrainmodwriter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RasTerrainModWriter
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RasTerrainModWriter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#line-modification-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Line Modification Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#polygon-modification-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Polygon Modification Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#group-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Group Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Query Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analysis-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Analysis Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rasterrainmod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RasTerrainMod
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RasTerrainMod">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#terrain-sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terrain Sampling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comparison-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#raster-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Raster Export
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Examples
       
     </span>
   </a>
@@ -2868,167 +3358,155 @@
   
 
 
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<h1 id="terrain-modules">Terrain Modules<a class="headerlink" href="#terrain-modules" title="Permanent link">&para;</a></h1>
+<p>Classes for terrain creation, terrain modification writing, and terrain modification analysis.</p>
+<div class="admonition note">
+<p class="admonition-title">Platform Requirements</p>
+<p><code>RasTerrainMod</code> requires Windows with pythonnet and a HEC-RAS installation (uses RasMapperLib.dll via .NET interop). <code>RasTerrain</code> and <code>RasTerrainModWriter</code> work on all platforms.</p>
+</div>
+<h2 id="rasterrain">RasTerrain<a class="headerlink" href="#rasterrain" title="Permanent link">&para;</a></h2>
+<p>Terrain HDF creation from rasters using <code>RasProcess.exe CreateTerrain</code>.</p>
+<h3 id="terrain-creation-methods">Terrain Creation Methods<a class="headerlink" href="#terrain-creation-methods" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>create_terrain_hdf(input_rasters, output_hdf, projection_prj, units="Feet", stitch=True, hecras_version="7.0", timeout_seconds=600)</code> - Create HEC-RAS terrain HDF from input rasters</li>
+<li><code>create_terrain_from_rasters(input_rasters, output_folder, terrain_name="Terrain", units="Feet", stitch=True, hecras_version="7.0", generate_prj=True)</code> - Convenience wrapper with automatic PRJ generation</li>
+</ul>
+<h3 id="utility-methods">Utility Methods<a class="headerlink" href="#utility-methods" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>vrt_to_tiff(vrt_path, output_path, compression="LZW", create_overviews=True, overview_levels=None, nodata_value=None, hecras_version="7.0")</code> - Convert VRT to single optimized TIFF using HEC-RAS bundled GDAL</li>
+<li><code>get_available_versions()</code> - List installed HEC-RAS versions with terrain creation support</li>
+</ul>
+<h3 id="bank-line-generation">Bank Line Generation<a class="headerlink" href="#bank-line-generation" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>compute_bank_lines(geom_path, crs=None, ras_object=None)</code> - Generate bank-line geometry from cross-section bank stations</li>
+</ul>
+<h3 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasTerrain</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">IPython.display</span><span class="w"> </span><span class="kn">import</span> <span class="n">display</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">HdfResultsPlan</span><span class="p">,</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">RasCmdr</span><span class="p">,</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">RasExamples</span><span class="p">,</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">RasPlan</span><span class="p">,</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">RasPrj</span><span class="p">,</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">RasSteady</span><span class="p">,</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">init_ras_project</span><span class="p">,</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="p">)</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ras-commander: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="n">__version__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Loaded from: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Create terrain from rasters</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">terrain_hdf</span> <span class="o">=</span> <span class="n">RasTerrain</span><span class="o">.</span><span class="n">create_terrain_from_rasters</span><span class="p">(</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">input_rasters</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;dem_north.tif&quot;</span><span class="p">,</span> <span class="s2">&quot;dem_south.tif&quot;</span><span class="p">],</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">output_folder</span><span class="o">=</span><span class="s2">&quot;terrain/&quot;</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">terrain_name</span><span class="o">=</span><span class="s2">&quot;Project_Terrain&quot;</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">units</span><span class="o">=</span><span class="s2">&quot;Feet&quot;</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">hecras_version</span><span class="o">=</span><span class="s2">&quot;7.0&quot;</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">)</span>
 </span></code></pre></div>
-<h2 id="development-mode">Development Mode<a class="headerlink" href="#development-mode" title="Permanent link">&para;</a></h2>
-<p>When running this notebook from a source checkout instead of an installed package, start Jupyter from the repository root or add the repository root to <code>PYTHONPATH</code> before launching Jupyter. Generated example projects and run outputs are written under <code>working/</code>.</p>
-<h1 id="steady-flow-file-authoring">Steady Flow File Authoring<a class="headerlink" href="#steady-flow-file-authoring" title="Permanent link">&para;</a></h1>
-<p>This notebook validates <code>RasSteady.create_flow_file()</code> and <code>RasSteady.update_flow_file()</code> against a real HEC-RAS steady-flow model. Each boundary-condition type is written to an extracted copy of the Beaver Creek example, computed with HEC-RAS, and checked through plan HDF compute messages.</p>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">find_repo_root</span><span class="p">(</span><span class="n">start</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="k">for</span> <span class="n">candidate</span> <span class="ow">in</span> <span class="p">[</span><span class="n">start</span><span class="p">,</span> <span class="o">*</span><span class="n">start</span><span class="o">.</span><span class="n">parents</span><span class="p">]:</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>        <span class="k">if</span> <span class="p">(</span><span class="n">candidate</span> <span class="o">/</span> <span class="s2">&quot;pyproject.toml&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="p">(</span><span class="n">candidate</span> <span class="o">/</span> <span class="s2">&quot;ras_commander&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>            <span class="k">return</span> <span class="n">candidate</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="k">return</span> <span class="n">start</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">REPO_ROOT</span> <span class="o">=</span> <span class="n">find_repo_root</span><span class="p">(</span><span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">())</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">WORK_ROOT</span> <span class="o">=</span> <span class="n">REPO_ROOT</span> <span class="o">/</span> <span class="s2">&quot;working&quot;</span> <span class="o">/</span> <span class="s2">&quot;steady_flow_authoring&quot;</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">PROJECT_NAME</span> <span class="o">=</span> <span class="s2">&quot;Example 2 - Beaver Creek&quot;</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">PLAN_NUMBER</span> <span class="o">=</span> <span class="s2">&quot;01&quot;</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">RAS_VERSION</span> <span class="o">=</span> <span class="s2">&quot;7.0&quot;</span>
+<h2 id="rasterrainmodwriter">RasTerrainModWriter<a class="headerlink" href="#rasterrainmodwriter" title="Permanent link">&para;</a></h2>
+<p>Line and polygon terrain modification HDF/<code>.rasmap</code> writing. Also available as the alias <code>RasTerrainModification</code>.</p>
+<h3 id="line-modification-methods">Line Modification Methods<a class="headerlink" href="#line-modification-methods" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>add_high_ground_modification(terrain_hdf_path, rasmap_path, name, polyline_points, top_width=20.0, side_slope=2.0, ...)</code> - Add levee/road terrain modification with trapezoidal profile along polyline (TakeHigher mode)</li>
+<li><code>add_fill_surface_modification(terrain_hdf_path, rasmap_path, name, polyline_points, top_width=20.0, side_slope=2.0, ...)</code> - Add fill-surface (SetValue) modification along polyline</li>
+<li><code>add_channel_modification(terrain_hdf_path, rasmap_path, name, polyline_points, width=50.0, depth=10.0, left_slope=3.0, right_slope=3.0, ...)</code> - Add trapezoidal channel modification (TakeLower mode)</li>
+</ul>
+<h3 id="polygon-modification-methods">Polygon Modification Methods<a class="headerlink" href="#polygon-modification-methods" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>add_modification_polygon(terrain_hdf_path, name, polygon_coords, elevation_method="boundary_from_terrain", control_points=None, ...)</code> - Add polygon multipoint modification (detention pond/wetland grading)</li>
+</ul>
+<h3 id="group-management">Group Management<a class="headerlink" href="#group-management" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>add_modification_group(terrain_hdf_path, rasmap_path, group_name="Modifications")</code> - Add empty modification group to terrain HDF and <code>.rasmap</code></li>
+</ul>
+<h3 id="query-methods">Query Methods<a class="headerlink" href="#query-methods" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>list_modifications(terrain_hdf_path)</code> - List all terrain modifications stored in HDF sidecar group</li>
+<li><code>get_modification_profile(terrain_hdf_path, name)</code> - Read modification station/elevation profile</li>
+</ul>
+<h3 id="analysis-methods">Analysis Methods<a class="headerlink" href="#analysis-methods" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>sample_modification_surface(terrain_hdf_path, name, points, existing_elevations=None, ...)</code> - Evaluate line modification surface at XY points</li>
+<li><code>apply_modification_to_profile(terrain_hdf_path, name, profile, ...)</code> - Apply line modification to existing terrain profile</li>
+<li><code>compare_before_after_profiles(rasmap_existing, rasmap_modified, geom_hdf_path, x_coords, y_coords, ...)</code> - Compare terrain profiles before/after modification</li>
+</ul>
+<h3 id="usage_1">Usage<a class="headerlink" href="#usage_1" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasTerrainModWriter</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># Add a levee (high ground)</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">RasTerrainModWriter</span><span class="o">.</span><span class="n">add_high_ground_modification</span><span class="p">(</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">terrain_hdf_path</span><span class="o">=</span><span class="s2">&quot;Terrain/Terrain.hdf&quot;</span><span class="p">,</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">rasmap_path</span><span class="o">=</span><span class="s2">&quot;Project.rasmap&quot;</span><span class="p">,</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Proposed Levee&quot;</span><span class="p">,</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">polyline_points</span><span class="o">=</span><span class="p">[(</span><span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">),</span> <span class="p">(</span><span class="n">x2</span><span class="p">,</span> <span class="n">y2</span><span class="p">),</span> <span class="p">(</span><span class="n">x3</span><span class="p">,</span> <span class="n">y3</span><span class="p">)],</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">top_width</span><span class="o">=</span><span class="mf">20.0</span><span class="p">,</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">side_slope</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">elevation</span><span class="o">=</span><span class="mf">25.0</span><span class="p">,</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="p">)</span>
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="n">WORK_ROOT</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working root: </span><span class="si">{</span><span class="n">WORK_ROOT</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1"># Add a detention pond (polygon)</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">RasTerrainModWriter</span><span class="o">.</span><span class="n">add_modification_polygon</span><span class="p">(</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="n">terrain_hdf_path</span><span class="o">=</span><span class="s2">&quot;Terrain/Terrain.hdf&quot;</span><span class="p">,</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Detention Pond&quot;</span><span class="p">,</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    <span class="n">polygon_coords</span><span class="o">=</span><span class="p">[(</span><span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">),</span> <span class="p">(</span><span class="n">x2</span><span class="p">,</span> <span class="n">y2</span><span class="p">),</span> <span class="p">(</span><span class="n">x3</span><span class="p">,</span> <span class="n">y3</span><span class="p">),</span> <span class="p">(</span><span class="n">x4</span><span class="p">,</span> <span class="n">y4</span><span class="p">)],</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="n">control_points</span><span class="o">=</span><span class="p">[(</span><span class="n">cx</span><span class="p">,</span> <span class="n">cy</span><span class="p">,</span> <span class="n">target_elev</span><span class="p">)],</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;set_value&quot;</span><span class="p">,</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    <span class="n">rasmap_path</span><span class="o">=</span><span class="s2">&quot;Project.rasmap&quot;</span><span class="p">,</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">BOUNDARY_VARIANTS</span> <span class="o">=</span> <span class="p">[</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="p">{</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;known_ws&quot;</span><span class="p">,</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>        <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Known WS&quot;</span><span class="p">,</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>        <span class="s2">&quot;boundary&quot;</span><span class="p">:</span> <span class="n">RasSteady</span><span class="o">.</span><span class="n">known_water_surface</span><span class="p">(</span><span class="mf">210.5</span><span class="p">),</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="p">},</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="p">{</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;normal_depth&quot;</span><span class="p">,</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>        <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Normal Depth&quot;</span><span class="p">,</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>        <span class="s2">&quot;boundary&quot;</span><span class="p">:</span> <span class="n">RasSteady</span><span class="o">.</span><span class="n">normal_depth</span><span class="p">(</span><span class="mf">0.0012</span><span class="p">),</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="p">},</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="p">{</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;critical_depth&quot;</span><span class="p">,</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>        <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Critical Depth&quot;</span><span class="p">,</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>        <span class="s2">&quot;boundary&quot;</span><span class="p">:</span> <span class="n">RasSteady</span><span class="o">.</span><span class="n">critical_depth</span><span class="p">(),</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    <span class="p">},</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="p">{</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;rating_curve&quot;</span><span class="p">,</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>        <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="s2">&quot;Rating Curve&quot;</span><span class="p">,</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>        <span class="s2">&quot;boundary&quot;</span><span class="p">:</span> <span class="n">RasSteady</span><span class="o">.</span><span class="n">rating_curve</span><span class="p">(</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>            <span class="p">[</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>                <span class="p">{</span><span class="s2">&quot;flow&quot;</span><span class="p">:</span> <span class="mf">4000.0</span><span class="p">,</span> <span class="s2">&quot;stage&quot;</span><span class="p">:</span> <span class="mf">208.0</span><span class="p">},</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>                <span class="p">{</span><span class="s2">&quot;flow&quot;</span><span class="p">:</span> <span class="mf">9000.0</span><span class="p">,</span> <span class="s2">&quot;stage&quot;</span><span class="p">:</span> <span class="mf">210.0</span><span class="p">},</span>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>                <span class="p">{</span><span class="s2">&quot;flow&quot;</span><span class="p">:</span> <span class="mf">16000.0</span><span class="p">,</span> <span class="s2">&quot;stage&quot;</span><span class="p">:</span> <span class="mf">212.0</span><span class="p">},</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>            <span class="p">]</span>
-</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>        <span class="p">),</span>
-</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>    <span class="p">},</span>
-</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="p">]</span>
-</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>
-</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>
-</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="k">def</span><span class="w"> </span><span class="nf">boundary_problem_lines</span><span class="p">(</span><span class="n">messages</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>    <span class="n">problem_words</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">,</span> <span class="s2">&quot;warning&quot;</span><span class="p">,</span> <span class="s2">&quot;fatal&quot;</span><span class="p">,</span> <span class="s2">&quot;failed&quot;</span><span class="p">,</span> <span class="s2">&quot;invalid&quot;</span><span class="p">)</span>
-</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>    <span class="k">return</span> <span class="p">[</span>
-</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>        <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a>        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">messages</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
-</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a>        <span class="k">if</span> <span class="s2">&quot;bound&quot;</span> <span class="ow">in</span> <span class="n">line</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
-</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a>        <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">word</span> <span class="ow">in</span> <span class="n">line</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">problem_words</span><span class="p">)</span>
-</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a>    <span class="p">]</span>
+<h2 id="rasterrainmod">RasTerrainMod<a class="headerlink" href="#rasterrainmod" title="Permanent link">&para;</a></h2>
+<p>Terrain profile and volume comparison with modifications applied. Uses RasMapperLib.dll via pythonnet to sample the actual modified terrain surface.</p>
+<div class="admonition warning">
+<p class="admonition-title">Windows Only</p>
+<p>Requires Windows, pythonnet, and an installed HEC-RAS version. Call <code>setup_gdal_bridge()</code> once before other methods.</p>
+</div>
+<h3 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>setup_gdal_bridge(hecras_version="7.0", python_dir=None, create_junction=True)</code> - Configure HEC-RAS GDAL runtime for pythonnet before loading</li>
+</ul>
+<h3 id="terrain-sampling">Terrain Sampling<a class="headerlink" href="#terrain-sampling" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>get_terrain_extent(rasmap_path, geom_hdf_path, ras_object=None)</code> - Get terrain bounding box with modifications applied</li>
+<li><code>get_terrain_profile(rasmap_path, geom_hdf_path, x_coords, y_coords, filter_tolerance=0.01, ras_object=None)</code> - Sample terrain elevation along polyline</li>
+<li><code>get_terrain_volume_elevation(rasmap_path, geom_hdf_path, x_coords, y_coords, ...)</code> - Compute elevation-volume curve for polygon</li>
+</ul>
+<h3 id="comparison-methods">Comparison Methods<a class="headerlink" href="#comparison-methods" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>compare_terrain_profiles(rasmap_existing, rasmap_proposed, geom_hdf_path, x_coords, y_coords, ...)</code> - Compare terrain profiles between existing and proposed (cut/fill analysis)</li>
+<li><code>compare_terrain_volumes(rasmap_existing, rasmap_proposed, geom_hdf_path, x_coords, y_coords, ...)</code> - Compare elevation-volume curves for no-net-fill analysis</li>
+</ul>
+<h3 id="raster-export">Raster Export<a class="headerlink" href="#raster-export" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>compute_modified_terrain_raster(rasmap_path, geom_hdf_path, terrain_tif_path, output_tif_path=None, ...)</code> - Compute full-resolution raster of terrain with modifications applied</li>
+</ul>
+<h3 id="usage_2">Usage<a class="headerlink" href="#usage_2" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.terrain</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasTerrainMod</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># One-time setup</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">RasTerrainMod</span><span class="o">.</span><span class="n">setup_gdal_bridge</span><span class="p">(</span><span class="s2">&quot;7.0&quot;</span><span class="p">)</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># Compare existing vs proposed terrain along a profile</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">comparison</span> <span class="o">=</span> <span class="n">RasTerrainMod</span><span class="o">.</span><span class="n">compare_terrain_profiles</span><span class="p">(</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">rasmap_existing</span><span class="o">=</span><span class="s2">&quot;Existing.rasmap&quot;</span><span class="p">,</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">rasmap_proposed</span><span class="o">=</span><span class="s2">&quot;Proposed.rasmap&quot;</span><span class="p">,</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">geom_hdf_path</span><span class="o">=</span><span class="s2">&quot;Model.g01.hdf&quot;</span><span class="p">,</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">x_coords</span><span class="o">=</span><span class="p">[</span><span class="n">x1</span><span class="p">,</span> <span class="n">x2</span><span class="p">,</span> <span class="n">x3</span><span class="p">],</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">y_coords</span><span class="o">=</span><span class="p">[</span><span class="n">y1</span><span class="p">,</span> <span class="n">y2</span><span class="p">,</span> <span class="n">y3</span><span class="p">],</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="p">)</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="nb">print</span><span class="p">(</span><span class="n">comparison</span><span class="p">[[</span><span class="s1">&#39;station&#39;</span><span class="p">,</span> <span class="s1">&#39;existing_elevation&#39;</span><span class="p">,</span> <span class="s1">&#39;proposed_elevation&#39;</span><span class="p">,</span> <span class="s1">&#39;difference&#39;</span><span class="p">]])</span>
 </span></code></pre></div>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">author_and_compute_boundary</span><span class="p">(</span><span class="n">variant</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">project_path</span> <span class="o">=</span> <span class="n">RasExamples</span><span class="o">.</span><span class="n">extract_project</span><span class="p">(</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>        <span class="n">PROJECT_NAME</span><span class="p">,</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>        <span class="n">output_path</span><span class="o">=</span><span class="n">WORK_ROOT</span> <span class="o">/</span> <span class="n">variant</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="p">)</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">ras_project</span> <span class="o">=</span> <span class="n">RasPrj</span><span class="p">()</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_project</span><span class="p">)</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">flow_path</span> <span class="o">=</span> <span class="n">RasPlan</span><span class="o">.</span><span class="n">get_flow_path</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_project</span><span class="p">)</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="k">assert</span> <span class="n">flow_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;Expected Beaver Creek steady flow file f01&quot;</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="n">RasSteady</span><span class="o">.</span><span class="n">create_flow_file</span><span class="p">(</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>        <span class="n">flow_path</span><span class="p">,</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>        <span class="n">flow_title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;CLB-300 </span><span class="si">{</span><span class="n">variant</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> authored flow&quot;</span><span class="p">,</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>        <span class="n">profile_names</span><span class="o">=</span><span class="p">[</span><span class="n">variant</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]],</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>        <span class="n">flow_changes</span><span class="o">=</span><span class="p">[</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>            <span class="p">{</span>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>                <span class="s2">&quot;river&quot;</span><span class="p">:</span> <span class="s2">&quot;Beaver Creek&quot;</span><span class="p">,</span>
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>                <span class="s2">&quot;reach&quot;</span><span class="p">:</span> <span class="s2">&quot;Kentwood&quot;</span><span class="p">,</span>
-</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>                <span class="s2">&quot;station&quot;</span><span class="p">:</span> <span class="s2">&quot;5.99&quot;</span><span class="p">,</span>
-</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>                <span class="s2">&quot;flows&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">10000</span><span class="p">],</span>
-</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>            <span class="p">}</span>
-</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>        <span class="p">],</span>
-</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>        <span class="n">boundaries</span><span class="o">=</span><span class="p">[</span>
-</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>            <span class="n">RasSteady</span><span class="o">.</span><span class="n">boundary</span><span class="p">(</span>
-</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>                <span class="s2">&quot;Beaver Creek&quot;</span><span class="p">,</span>
-</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>                <span class="s2">&quot;Kentwood&quot;</span><span class="p">,</span>
-</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>                <span class="n">profile</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>                <span class="n">downstream</span><span class="o">=</span><span class="n">variant</span><span class="p">[</span><span class="s2">&quot;boundary&quot;</span><span class="p">],</span>
-</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>            <span class="p">)</span>
-</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>        <span class="p">],</span>
-</span><span id="__span-3-32"><a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a>        <span class="n">program_version</span><span class="o">=</span><span class="s2">&quot;7.00&quot;</span><span class="p">,</span>
-</span><span id="__span-3-33"><a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>    <span class="p">)</span>
-</span><span id="__span-3-34"><a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a>    <span class="n">RasSteady</span><span class="o">.</span><span class="n">update_flow_file</span><span class="p">(</span>
-</span><span id="__span-3-35"><a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>        <span class="n">flow_path</span><span class="p">,</span>
-</span><span id="__span-3-36"><a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a>        <span class="n">flow_title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;CLB-300 </span><span class="si">{</span><span class="n">variant</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> authored and updated flow&quot;</span><span class="p">,</span>
-</span><span id="__span-3-37"><a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>    <span class="p">)</span>
-</span><span id="__span-3-38"><a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a>
-</span><span id="__span-3-39"><a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a>    <span class="n">authored</span> <span class="o">=</span> <span class="n">RasSteady</span><span class="o">.</span><span class="n">read_flow_file</span><span class="p">(</span><span class="n">flow_path</span><span class="p">)</span>
-</span><span id="__span-3-40"><a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a>    <span class="k">assert</span> <span class="n">authored</span><span class="p">[</span><span class="s2">&quot;profile_names&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="n">variant</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]]</span>
-</span><span id="__span-3-41"><a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a>    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">authored</span><span class="p">[</span><span class="s2">&quot;flow_changes&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;flows&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="mi">1</span>
-</span><span id="__span-3-42"><a id="__codelineno-3-42" name="__codelineno-3-42" href="#__codelineno-3-42"></a>    <span class="k">assert</span> <span class="n">authored</span><span class="p">[</span><span class="s2">&quot;boundaries&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;downstream&quot;</span><span class="p">][</span><span class="s2">&quot;type_name&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">variant</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
-</span><span id="__span-3-43"><a id="__codelineno-3-43" name="__codelineno-3-43" href="#__codelineno-3-43"></a>
-</span><span id="__span-3-44"><a id="__codelineno-3-44" name="__codelineno-3-44" href="#__codelineno-3-44"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span>
-</span><span id="__span-3-45"><a id="__codelineno-3-45" name="__codelineno-3-45" href="#__codelineno-3-45"></a>        <span class="n">PLAN_NUMBER</span><span class="p">,</span>
-</span><span id="__span-3-46"><a id="__codelineno-3-46" name="__codelineno-3-46" href="#__codelineno-3-46"></a>        <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_project</span><span class="p">,</span>
-</span><span id="__span-3-47"><a id="__codelineno-3-47" name="__codelineno-3-47" href="#__codelineno-3-47"></a>        <span class="n">num_cores</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-</span><span id="__span-3-48"><a id="__codelineno-3-48" name="__codelineno-3-48" href="#__codelineno-3-48"></a>        <span class="n">verify</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-3-49"><a id="__codelineno-3-49" name="__codelineno-3-49" href="#__codelineno-3-49"></a>        <span class="n">force_rerun</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-3-50"><a id="__codelineno-3-50" name="__codelineno-3-50" href="#__codelineno-3-50"></a>        <span class="n">use_optimal_hdf_settings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-3-51"><a id="__codelineno-3-51" name="__codelineno-3-51" href="#__codelineno-3-51"></a>    <span class="p">)</span>
-</span><span id="__span-3-52"><a id="__codelineno-3-52" name="__codelineno-3-52" href="#__codelineno-3-52"></a>    <span class="k">assert</span> <span class="n">result</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;HEC-RAS compute failed for </span><span class="si">{</span><span class="n">variant</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="__span-3-53"><a id="__codelineno-3-53" name="__codelineno-3-53" href="#__codelineno-3-53"></a>
-</span><span id="__span-3-54"><a id="__codelineno-3-54" name="__codelineno-3-54" href="#__codelineno-3-54"></a>    <span class="n">plan_hdf</span> <span class="o">=</span> <span class="n">project_path</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras_project</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.p</span><span class="si">{</span><span class="n">PLAN_NUMBER</span><span class="si">}</span><span class="s2">.hdf&quot;</span>
-</span><span id="__span-3-55"><a id="__codelineno-3-55" name="__codelineno-3-55" href="#__codelineno-3-55"></a>    <span class="k">assert</span> <span class="n">plan_hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">(),</span> <span class="sa">f</span><span class="s2">&quot;Expected plan HDF at </span><span class="si">{</span><span class="n">plan_hdf</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="__span-3-56"><a id="__codelineno-3-56" name="__codelineno-3-56" href="#__codelineno-3-56"></a>    <span class="n">messages</span> <span class="o">=</span> <span class="n">HdfResultsPlan</span><span class="o">.</span><span class="n">get_compute_messages_hdf_only</span><span class="p">(</span><span class="n">plan_hdf</span><span class="p">)</span>
-</span><span id="__span-3-57"><a id="__codelineno-3-57" name="__codelineno-3-57" href="#__codelineno-3-57"></a>    <span class="k">assert</span> <span class="s2">&quot;Complete Process&quot;</span> <span class="ow">in</span> <span class="n">messages</span>
-</span><span id="__span-3-58"><a id="__codelineno-3-58" name="__codelineno-3-58" href="#__codelineno-3-58"></a>    <span class="k">assert</span> <span class="s2">&quot;Finished Steady Flow Simulation&quot;</span> <span class="ow">in</span> <span class="n">messages</span>
-</span><span id="__span-3-59"><a id="__codelineno-3-59" name="__codelineno-3-59" href="#__codelineno-3-59"></a>
-</span><span id="__span-3-60"><a id="__codelineno-3-60" name="__codelineno-3-60" href="#__codelineno-3-60"></a>    <span class="n">boundary_problems</span> <span class="o">=</span> <span class="n">boundary_problem_lines</span><span class="p">(</span><span class="n">messages</span><span class="p">)</span>
-</span><span id="__span-3-61"><a id="__codelineno-3-61" name="__codelineno-3-61" href="#__codelineno-3-61"></a>    <span class="k">assert</span> <span class="ow">not</span> <span class="n">boundary_problems</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">boundary_problems</span><span class="p">)</span>
-</span><span id="__span-3-62"><a id="__codelineno-3-62" name="__codelineno-3-62" href="#__codelineno-3-62"></a>
-</span><span id="__span-3-63"><a id="__codelineno-3-63" name="__codelineno-3-63" href="#__codelineno-3-63"></a>    <span class="k">return</span> <span class="p">{</span>
-</span><span id="__span-3-64"><a id="__codelineno-3-64" name="__codelineno-3-64" href="#__codelineno-3-64"></a>        <span class="s2">&quot;boundary&quot;</span><span class="p">:</span> <span class="n">variant</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">],</span>
-</span><span id="__span-3-65"><a id="__codelineno-3-65" name="__codelineno-3-65" href="#__codelineno-3-65"></a>        <span class="s2">&quot;project&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">project_path</span><span class="p">),</span>
-</span><span id="__span-3-66"><a id="__codelineno-3-66" name="__codelineno-3-66" href="#__codelineno-3-66"></a>        <span class="s2">&quot;flow_file&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">flow_path</span><span class="p">),</span>
-</span><span id="__span-3-67"><a id="__codelineno-3-67" name="__codelineno-3-67" href="#__codelineno-3-67"></a>        <span class="s2">&quot;plan_hdf&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">plan_hdf</span><span class="p">),</span>
-</span><span id="__span-3-68"><a id="__codelineno-3-68" name="__codelineno-3-68" href="#__codelineno-3-68"></a>        <span class="s2">&quot;message_chars&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">messages</span><span class="p">),</span>
-</span><span id="__span-3-69"><a id="__codelineno-3-69" name="__codelineno-3-69" href="#__codelineno-3-69"></a>        <span class="s2">&quot;compute_success&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="n">result</span><span class="p">),</span>
-</span><span id="__span-3-70"><a id="__codelineno-3-70" name="__codelineno-3-70" href="#__codelineno-3-70"></a>    <span class="p">}</span>
-</span></code></pre></div>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">author_and_compute_boundary</span><span class="p">(</span><span class="n">variant</span><span class="p">)</span> <span class="k">for</span> <span class="n">variant</span> <span class="ow">in</span> <span class="n">BOUNDARY_VARIANTS</span><span class="p">]</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">summary</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">display</span><span class="p">(</span><span class="n">summary</span><span class="p">)</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">assert</span> <span class="n">summary</span><span class="p">[</span><span class="s2">&quot;compute_success&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">summary</span><span class="p">[</span><span class="s2">&quot;boundary&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="p">{</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="s2">&quot;Known WS&quot;</span><span class="p">,</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="s2">&quot;Normal Depth&quot;</span><span class="p">,</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="s2">&quot;Critical Depth&quot;</span><span class="p">,</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="s2">&quot;Rating Curve&quot;</span><span class="p">,</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="p">}</span>
-</span></code></pre></div>
+<h2 id="related-examples">Related Examples<a class="headerlink" href="#related-examples" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Notebook</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>316_terrain_modifications.ipynb</code></td>
+<td>Terrain modification writer: high ground, channel, polygon</td>
+</tr>
+<tr>
+<td><code>920_terrain_creation.ipynb</code></td>
+<td>Terrain HDF creation from rasters</td>
+</tr>
+<tr>
+<td><code>930_terrain_modification_analysis.ipynb</code></td>
+<td>Cut/fill analysis with RasTerrainMod</td>
+</tr>
+</tbody>
+</table>
 
 
 
@@ -3051,7 +3529,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 11, 2026 20:23:38 UTC">May 11, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 11, 2026 20:09:50 UTC">May 11, 2026</span>
   </span>
 
     
@@ -3061,7 +3539,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 11, 2026 20:23:38 UTC">May 11, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 11, 2026 20:09:50 UTC">May 11, 2026</span>
   </span>
 
     
