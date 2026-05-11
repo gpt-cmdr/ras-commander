@@ -83,16 +83,10 @@ from .RasBco import BcoMonitor
 
 # Geometry handling - imported from geom subpackage
 from .geom import (
-    GeomParser, GeomPreprocessor, GeomLandCover,
+    GeomParser, GeomPreprocessor, GeomLandCover, ManningsFromLandCover,
     GeomCrossSection, CrossSectionBankStations, CrossSectionBuildInput,
     CrossSectionBuildResult, CrossSectionManningsN, CrossSectionReachLengths,
     GeomStorage, GeomLateral,
-    GeomInlineWeir, GeomBridge, GeomCulvert,
-    GeomReferenceFeatures, GeomBcLines, GeomMesh,
-    MeshResult, BCConflict, BCFixResult,
-)
-    GeomParser, GeomPreprocessor, GeomLandCover, ManningsFromLandCover,
-    GeomCrossSection, GeomStorage, GeomLateral,
     GeomInlineWeir, GeomBridge, GeomCulvert,
     GeomReferenceFeatures, GeomBcLines, GeomMesh,
     MeshResult, BCConflict, BCFixResult,
@@ -193,14 +187,13 @@ __all__ = [
     'make_xsec_mannings_apply_fn',
 
     # Geometry handling (new in v0.86.0)
-    'GeomParser', 'GeomPreprocessor', 'GeomLandCover',
+    'GeomParser', 'GeomPreprocessor', 'GeomLandCover', 'ManningsFromLandCover',
     'GeomCrossSection', 'CrossSectionBankStations', 'CrossSectionBuildInput',
     'CrossSectionBuildResult', 'CrossSectionManningsN', 'CrossSectionReachLengths',
     'GeomStorage', 'GeomLateral',
-    'GeomParser', 'GeomPreprocessor', 'GeomLandCover', 'ManningsFromLandCover',
-    'GeomCrossSection', 'GeomStorage', 'GeomLateral',
     'GeomInlineWeir', 'GeomBridge', 'GeomCulvert',
-    'GeomReferenceFeatures', 'GeomBcLines',
+    'GeomReferenceFeatures', 'GeomBcLines', 'GeomMesh',
+    'MeshResult', 'BCConflict', 'BCFixResult',
 
     # Deprecated geometry classes (will be removed before v1.0)
     'RasGeo', 'RasGeometry', 'RasGeometryUtils',
