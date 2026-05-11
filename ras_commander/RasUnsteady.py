@@ -41,9 +41,13 @@ List of Functions in RasUnsteady:
 - write_table_to_file()
 - set_precipitation_hyetograph()
 - set_gridded_precipitation()
+- configure_gridded_dss_precipitation()
 
-Precipitation Hyetograph Functions:
+Precipitation Functions:
 - set_precipitation_hyetograph() - Write hyetograph DataFrame to unsteady file
+- set_gridded_precipitation() - Configure GDAL raster precipitation
+- configure_gridded_dss_precipitation() - Configure gridded DSS precipitation
+- get_met_precipitation_config() - Read meteorologic precipitation configuration
 
 DSS Boundary Condition Functions:
 - get_dss_boundaries() - Extract all DSS-linked BCs with full path info
@@ -1395,6 +1399,382 @@ class RasUnsteady:
         except Exception as e:
             logger.error(f"Error updating HDF file: {e}")
             raise
+
+    @staticmethod
+    def _format_met_dss_filename(dss_filename: Union[str, Path], unsteady_path: Path) -> str:
+        """
+        Normalize a DSS filename for RAS meteorology text/HDF attributes.
+
+        Relative paths are written with RAS' conventional ``.\\`` prefix. Absolute
+        paths under the unsteady file folder are converted to project-relative
+        paths; absolute paths elsewhere are preserved.
+        """
+        raw_filename = str(dss_filename).strip()
+        if not raw_filename:
+            raise ValueError("dss_filename must not be empty")
+
+        dss_path = Path(raw_filename)
+        if dss_path.is_absolute():
+            try:
+                relative_path = dss_path.relative_to(unsteady_path.parent)
+                return f".\\{relative_path}".replace("/", "\\")
+            except ValueError:
+                return str(dss_path)
+
+        normalized = raw_filename.replace("/", "\\")
+        if normalized.startswith((".\\", "..\\", "\\")):
+            return normalized
+        return f".\\{normalized}"
+
+    @staticmethod
+    def _normalize_gridded_interpolation(interpolation: str) -> str:
+        """Normalize optional gridded interpolation names used by HEC-RAS."""
+        interpolation_value = str(interpolation or "").strip()
+        if not interpolation_value:
+            return ""
+
+        valid_values = {
+            "nearest": "Nearest",
+            "bilinear": "Bilinear",
+        }
+        normalized = valid_values.get(interpolation_value.lower())
+        if normalized is None:
+            raise ValueError(
+                "interpolation must be '', 'Nearest', or 'Bilinear'"
+            )
+        return normalized
+
+    @staticmethod
+    def _get_default_met_insert_index(lines: List[str]) -> int:
+        """Choose a stable insertion point for meteorologic BC metadata."""
+        for i, line in enumerate(lines):
+            if line.startswith("Boundary Location="):
+                return i
+        for i, line in enumerate(lines):
+            if line.startswith("Program Version="):
+                return i + 1
+        for i, line in enumerate(lines):
+            if line.startswith("Flow Title="):
+                return i + 1
+        return len(lines)
+
+    @staticmethod
+    def _ensure_meteorology_attributes_dataset(hdf_file: Any, met_path: str) -> None:
+        """Ensure HEC-RAS' Meteorology/Attributes dataset indexes precipitation."""
+        attrs_path = f"{met_path}/Attributes"
+        attr_dtype = np.dtype([("Variable", "S32"), ("Group", "S42")])
+        precip_row = np.array(
+            [(b"Precipitation", b"Event Conditions/Meteorology/Precipitation")],
+            dtype=attr_dtype,
+        )
+
+        if attrs_path not in hdf_file:
+            hdf_file.create_dataset(
+                attrs_path,
+                data=precip_row,
+                chunks=(1,),
+                maxshape=(None,),
+                compression="gzip",
+            )
+            return
+
+        attrs_ds = hdf_file[attrs_path]
+        if attrs_ds.dtype.names is None or "Variable" not in attrs_ds.dtype.names:
+            logger.debug(
+                "Meteorology/Attributes dataset has unexpected dtype; "
+                "leaving existing dataset unchanged"
+            )
+            return
+
+        existing = attrs_ds[...]
+        for row in existing:
+            variable = bytes(row["Variable"]).decode("utf-8", errors="ignore").rstrip("\x00")
+            if variable == "Precipitation":
+                return
+
+        new_data = np.empty(len(existing) + 1, dtype=attr_dtype)
+        for i, row in enumerate(existing):
+            group_value = row["Group"] if "Group" in existing.dtype.names else b""
+            new_data[i] = (bytes(row["Variable"]), bytes(group_value))
+        new_data[-1] = precip_row[0]
+
+        del hdf_file[attrs_path]
+        hdf_file.create_dataset(
+            attrs_path,
+            data=new_data,
+            chunks=(len(new_data),),
+            maxshape=(None,),
+            compression="gzip",
+        )
+
+    @staticmethod
+    def _update_gridded_dss_precipitation_hdf(
+        unsteady_path: Path,
+        dss_filename: str,
+        dss_pathname: str,
+        interpolation: str = "",
+    ) -> Path:
+        """
+        Write gridded DSS precipitation metadata to the unsteady sidecar HDF.
+
+        This writes only configuration attributes. It does not write DSS grid
+        records or import raster precipitation values.
+        """
+        import h5py
+
+        hdf_path = Path(str(unsteady_path) + ".hdf")
+        met_path = "Event Conditions/Meteorology"
+        precip_grp_path = f"{met_path}/Precipitation"
+
+        with h5py.File(hdf_path, "a") as hdf_file:
+            if "Event Conditions" not in hdf_file:
+                hdf_file.create_group("Event Conditions")
+            if met_path not in hdf_file:
+                hdf_file.create_group(met_path)
+            if precip_grp_path not in hdf_file:
+                hdf_file.create_group(precip_grp_path)
+
+            precip_grp = hdf_file[precip_grp_path]
+            precip_grp.attrs["Enabled"] = np.uint8(1)
+            precip_grp.attrs["Mode"] = np.bytes_("Gridded")
+            precip_grp.attrs["Source"] = np.bytes_("DSS")
+            precip_grp.attrs["DSS Filename"] = np.bytes_(dss_filename)
+            precip_grp.attrs["DSS Pathname"] = np.bytes_(dss_pathname)
+            if interpolation:
+                precip_grp.attrs["Interpolation Method"] = np.bytes_(interpolation)
+            elif "Interpolation Method" in precip_grp.attrs:
+                del precip_grp.attrs["Interpolation Method"]
+
+            for stale_attr in (
+                "GDAL Filename",
+                "GDAL Datasetname",
+                "GDAL Filter",
+                "GDAL Folder",
+            ):
+                if stale_attr in precip_grp.attrs:
+                    del precip_grp.attrs[stale_attr]
+
+            RasUnsteady._ensure_meteorology_attributes_dataset(hdf_file, met_path)
+
+        return hdf_path
+
+    @staticmethod
+    @log_call
+    def configure_gridded_dss_precipitation(
+        unsteady_file: Path,
+        dss_filename: str,
+        dss_pathname: str,
+        interpolation: str = "",
+    ) -> None:
+        """
+        Configure a .u## file to reference gridded DSS precipitation.
+
+        This helper wires an existing DSS grid file into the HEC-RAS unsteady
+        flow configuration. It does not write DSS data.
+
+        Parameters
+        ----------
+        unsteady_file : Path
+            Path to the unsteady flow file (.u##).
+        dss_filename : str
+            DSS filename for the gridded precipitation source. Relative values
+            are written using RAS-style backslashes (for example,
+            ``.\\Precipitation\\precip.dss``). Absolute paths inside the
+            unsteady file folder are converted to that relative form; absolute
+            paths elsewhere are preserved.
+        dss_pathname : str
+            DSS pathname for the precipitation grid record.
+        interpolation : str, optional
+            Spatial interpolation method. Use ``"Nearest"`` or ``"Bilinear"``.
+            The default empty string leaves the RAS default unset in the .u##.
+
+        Returns
+        -------
+        None
+            The .u## file and its .u##.hdf sidecar metadata are updated in place.
+        """
+        unsteady_path = Path(unsteady_file)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+        unsteady_path = unsteady_path.resolve()
+
+        dss_pathname = str(dss_pathname).strip()
+        if not dss_pathname:
+            raise ValueError("dss_pathname must not be empty")
+
+        dss_filename_str = RasUnsteady._format_met_dss_filename(
+            dss_filename,
+            unsteady_path,
+        )
+        interpolation_value = RasUnsteady._normalize_gridded_interpolation(interpolation)
+
+        desired_lines = [
+            "Precipitation Mode=Enable\n",
+            "Met BC=Precipitation|Mode=Gridded\n",
+            "Met BC=Precipitation|Gridded Source=DSS\n",
+        ]
+        if interpolation_value:
+            desired_lines.append(
+                f"Met BC=Precipitation|Gridded Interpolation={interpolation_value}\n"
+            )
+        desired_lines.extend([
+            f"Met BC=Precipitation|Gridded DSS Filename={dss_filename_str}\n",
+            f"Met BC=Precipitation|Gridded DSS Pathname={dss_pathname}\n",
+        ])
+
+        remove_prefixes = (
+            "Precipitation Mode=",
+            "Met BC=Precipitation|Mode=",
+            "Met BC=Precipitation|Gridded Source=",
+            "Met BC=Precipitation|Gridded Interpolation=",
+            "Met BC=Precipitation|Gridded DSS Filename=",
+            "Met BC=Precipitation|Gridded DSS Pathname=",
+            "Met BC=Precipitation|Gridded GDAL Filename=",
+            "Met BC=Precipitation|Gridded GDAL Datasetname=",
+            "Met BC=Precipitation|Gridded GDAL Filter=",
+            "Met BC=Precipitation|Gridded GDAL Folder=",
+        )
+        anchor_prefixes = remove_prefixes + ("Met BC=Precipitation|",)
+
+        with open(unsteady_path, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+
+        insert_index = None
+        for i, line in enumerate(lines):
+            if line.startswith(anchor_prefixes):
+                insert_index = i
+                break
+        if insert_index is None:
+            insert_index = RasUnsteady._get_default_met_insert_index(lines)
+
+        filtered_lines = []
+        removed_before_insert = 0
+        for i, line in enumerate(lines):
+            if line.startswith(remove_prefixes):
+                if i < insert_index:
+                    removed_before_insert += 1
+                continue
+            filtered_lines.append(line)
+
+        insert_index = max(0, insert_index - removed_before_insert)
+        if insert_index == len(filtered_lines) and filtered_lines:
+            if not filtered_lines[-1].endswith(("\n", "\r")):
+                filtered_lines[-1] = f"{filtered_lines[-1]}\n"
+
+        updated_lines = (
+            filtered_lines[:insert_index]
+            + desired_lines
+            + filtered_lines[insert_index:]
+        )
+
+        with open(unsteady_path, "w", encoding="utf-8") as f:
+            f.writelines(updated_lines)
+
+        hdf_path = RasUnsteady._update_gridded_dss_precipitation_hdf(
+            unsteady_path=unsteady_path,
+            dss_filename=dss_filename_str,
+            dss_pathname=dss_pathname,
+            interpolation=interpolation_value,
+        )
+
+        logger.info(
+            f"Configured gridded DSS precipitation in {unsteady_path.name}: "
+            f"{dss_filename_str}, {dss_pathname}; HDF metadata={hdf_path.name}"
+        )
+
+    @staticmethod
+    def _decode_hdf_attr_value(value: Any) -> Any:
+        """Decode scalar HDF attribute values to plain Python objects."""
+        if isinstance(value, np.bytes_):
+            return value.decode("utf-8", errors="ignore")
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="ignore")
+        if isinstance(value, np.generic):
+            return value.item()
+        if isinstance(value, np.ndarray):
+            return [RasUnsteady._decode_hdf_attr_value(item) for item in value]
+        return value
+
+    @staticmethod
+    @log_call
+    def get_met_precipitation_config(
+        unsteady_file: Union[str, Path],
+    ) -> Dict[str, Any]:
+        """
+        Read the meteorologic precipitation configuration from a .u## file.
+
+        Returns a flat dictionary with normalized convenience keys plus the raw
+        ``Met BC=Precipitation|...`` values and any sidecar HDF precipitation
+        attributes when ``<unsteady_file>.hdf`` exists.
+        """
+        unsteady_path = Path(unsteady_file)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        config: Dict[str, Any] = {
+            "unsteady_file": str(unsteady_path),
+            "precipitation_mode": "",
+            "mode": "",
+            "source": "",
+            "interpolation": "",
+            "dss_filename": "",
+            "dss_pathname": "",
+            "gdal_filename": "",
+            "raw": {},
+            "hdf_path": str(Path(str(unsteady_path) + ".hdf")),
+            "hdf_attributes": {},
+        }
+
+        with open(unsteady_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                stripped = line.rstrip("\r\n")
+                if stripped.startswith("Precipitation Mode="):
+                    config["precipitation_mode"] = stripped.split("=", 1)[1].strip()
+                    continue
+
+                met_prefix = "Met BC=Precipitation|"
+                if not stripped.startswith(met_prefix):
+                    continue
+
+                met_payload = stripped[len(met_prefix):]
+                if "=" not in met_payload:
+                    continue
+
+                met_key, value = met_payload.split("=", 1)
+                value = value.strip()
+                config["raw"][met_key] = value
+                if met_key == "Mode":
+                    config["mode"] = value
+                elif met_key == "Gridded Source":
+                    config["source"] = value
+                elif met_key == "Gridded Interpolation":
+                    config["interpolation"] = value
+                elif met_key == "Gridded DSS Filename":
+                    config["dss_filename"] = value
+                elif met_key == "Gridded DSS Pathname":
+                    config["dss_pathname"] = value
+                elif met_key == "Gridded GDAL Filename":
+                    config["gdal_filename"] = value
+
+        config["gridded_source"] = config["source"]
+        config["gridded_interpolation"] = config["interpolation"]
+        config["gridded_dss_filename"] = config["dss_filename"]
+        config["gridded_dss_pathname"] = config["dss_pathname"]
+        config["gridded_gdal_filename"] = config["gdal_filename"]
+
+        hdf_path = Path(config["hdf_path"])
+        if hdf_path.exists():
+            import h5py
+
+            precip_path = "Event Conditions/Meteorology/Precipitation"
+            with h5py.File(hdf_path, "r") as hdf_file:
+                if precip_path in hdf_file:
+                    config["hdf_attributes"] = {
+                        key: RasUnsteady._decode_hdf_attr_value(value)
+                        for key, value in hdf_file[precip_path].attrs.items()
+                    }
+
+        return config
 
     @staticmethod
     @log_call
