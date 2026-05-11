@@ -75,6 +75,10 @@ research/**/*.pyc
 research/**/__pycache__/
 /feature_dev_notes
 /research
+!/research/
+!/research/fixtures/
+!/research/fixtures/met_data/
+!/research/fixtures/met_data/**
 /docs_old
 /examples/working
 /examples/hyetographs
@@ -223,6 +227,7 @@ OUTPUT.md
 COMMIT_READY.md
 TASK.md
 VALIDATION_MATRIX.md
+terminal-logs/
 
 # Environment variables and API keys
 .env
