@@ -5,8 +5,10 @@ Converts GRIB2, NetCDF, and other gridded meteorological formats to HEC-DSS
 using HEC-Vortex's BatchImporter via Jython scripts.
 
 This module wraps HEC-Vortex's command-line interface, generating temporary
-Jython scripts that use Vortex's Java API (mil.army.usace.hec.vortex.io.BatchImporter)
-and executing them via `vortex.bat -s script.py`.
+Jython scripts that use Vortex's Java API
+(mil.army.usace.hec.vortex.io.BatchImporter) and executing them through a
+local Jython runtime. This supports both older `vortex.bat` distributions and
+current HEC-Vortex 0.13.x installations that ship `importer.bat`.
 
 HEC-Vortex is a free tool from USACE that handles:
 - GRIB2 (HRRR, GFS, MRMS, QPF)
@@ -25,7 +27,7 @@ Platform:
     Windows only (HEC-Vortex is a Windows application)
 
 Requirements:
-    - HEC-Vortex 3.x installed (free from https://www.hec.usace.army.mil/software/hec-vortex/)
+    - HEC-Vortex installed (free from https://www.hec.usace.army.mil/software/hec-vortex/)
     - Windows OS
 
 Example:
@@ -52,6 +54,7 @@ See Also:
     - https://www.hec.usace.army.mil/software/hec-vortex/ for HEC-Vortex documentation
 """
 
+import os
 import subprocess
 import tempfile
 import textwrap
@@ -69,6 +72,11 @@ _VORTEX_BASE_PATHS = [
     Path("C:/Program Files/HEC/HEC-Vortex"),
     Path("C:/Program Files (x86)/HEC/HEC-Vortex"),
     Path("C:/HEC/HEC-Vortex"),
+]
+
+_JYTHON_JAR_CANDIDATES = [
+    Path("C:/Program Files/HEC/HEC-DSSVue/jar/jython-standalone-2.7.3.jar"),
+    Path("C:/Program Files/HEC/HEC-DSSVue/jar/jython-standalone-2.7.2.jar"),
 ]
 
 # Common GRIB2 variable names for meteorological data
@@ -139,18 +147,12 @@ class VortexCli:
         # If explicit path provided, validate it
         if vortex_path is not None:
             vortex_path = Path(vortex_path)
-            vortex_bat = vortex_path / "bin" / "vortex.bat"
-            if vortex_bat.exists():
-                logger.info(f"Found HEC-Vortex at: {vortex_path}")
-                return vortex_path
-            # Also check if vortex.bat is directly in the path
-            vortex_bat = vortex_path / "vortex.bat"
-            if vortex_bat.exists():
+            if VortexCli._has_vortex_runtime(vortex_path):
                 logger.info(f"Found HEC-Vortex at: {vortex_path}")
                 return vortex_path
             raise FileNotFoundError(
                 f"HEC-Vortex not found at specified path: {vortex_path}. "
-                f"Expected vortex.bat at {vortex_path / 'bin' / 'vortex.bat'}"
+                f"Expected Vortex libraries or launcher under {vortex_path}"
             )
 
         # Search standard installation paths
@@ -164,16 +166,14 @@ class VortexCli:
                     reverse=True  # Latest version first
                 )
                 for subdir in subdirs:
-                    vortex_bat = subdir / "bin" / "vortex.bat"
-                    if vortex_bat.exists():
+                    if VortexCli._has_vortex_runtime(subdir):
                         logger.info(f"Found HEC-Vortex {subdir.name} at: {subdir}")
                         return subdir
             except PermissionError:
                 continue
 
-            # Check if vortex.bat is directly in base path
-            vortex_bat = base_path / "bin" / "vortex.bat"
-            if vortex_bat.exists():
+            # Check if the base path itself is a Vortex distribution
+            if VortexCli._has_vortex_runtime(base_path):
                 logger.info(f"Found HEC-Vortex at: {base_path}")
                 return base_path
 
@@ -193,15 +193,104 @@ class VortexCli:
         )
 
     @staticmethod
+    def _has_vortex_runtime(vortex_path: Path) -> bool:
+        """Return True when a path looks like a HEC-Vortex distribution."""
+        return any(
+            candidate.exists()
+            for candidate in (
+                vortex_path / "bin" / "vortex.bat",
+                vortex_path / "vortex.bat",
+                vortex_path / "bin" / "importer.bat",
+                vortex_path / "importer.bat",
+            )
+        ) or bool(list((vortex_path / "lib").glob("vortex-*.jar")))
+
+    @staticmethod
     def _get_vortex_bat(vortex_path: Path) -> Path:
-        """Get path to vortex.bat executable."""
-        vortex_bat = vortex_path / "bin" / "vortex.bat"
-        if vortex_bat.exists():
-            return vortex_bat
-        vortex_bat = vortex_path / "vortex.bat"
-        if vortex_bat.exists():
-            return vortex_bat
-        raise FileNotFoundError(f"vortex.bat not found in {vortex_path}")
+        """Get a Vortex launcher path for legacy callers."""
+        for launcher in (
+            vortex_path / "bin" / "vortex.bat",
+            vortex_path / "vortex.bat",
+            vortex_path / "bin" / "importer.bat",
+            vortex_path / "importer.bat",
+        ):
+            if launcher.exists():
+                return launcher
+        raise FileNotFoundError(f"Vortex launcher not found in {vortex_path}")
+
+    @staticmethod
+    def _find_jython_jar(jython_jar: Optional[Union[str, Path]] = None) -> Path:
+        """Find a Jython standalone jar for calling the Vortex Java API."""
+        if jython_jar is not None:
+            jar_path = Path(jython_jar)
+            if jar_path.exists():
+                return jar_path
+            raise FileNotFoundError(f"Jython standalone jar not found: {jar_path}")
+
+        for env_name in ("JYTHON_STANDALONE_JAR", "JYTHON_JAR"):
+            env_path = os.environ.get(env_name)
+            if env_path and Path(env_path).exists():
+                return Path(env_path)
+
+        candidates = list(_JYTHON_JAR_CANDIDATES)
+        hms_root = Path("C:/Program Files/HEC/HEC-HMS")
+        if hms_root.exists():
+            candidates.extend(sorted(hms_root.glob("*/lib/jython-standalone*.jar"), reverse=True))
+
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+
+        raise FileNotFoundError(
+            "Jython standalone jar not found. Install HEC-DSSVue/HEC-HMS or pass "
+            "jython_jar= with a path to jython-standalone-2.7.x.jar."
+        )
+
+    @staticmethod
+    def _build_jython_command(
+        vortex_path: Path,
+        script_file: Path,
+        jython_jar: Optional[Union[str, Path]] = None,
+        max_heap: str = "4g",
+        include_add_opens: bool = True,
+    ) -> List[str]:
+        """Build the Java/Jython command used to call Vortex BatchImporter."""
+        jython_path = VortexCli._find_jython_jar(jython_jar)
+        java_exe = vortex_path / "jre" / "bin" / "java.exe"
+        if not java_exe.exists():
+            java_exe = Path("java")
+
+        bin_dir = vortex_path / "bin"
+        classpath = f"{jython_path};{vortex_path / 'lib' / '*'}"
+        library_path = f"{bin_dir};{bin_dir / 'gdal'}"
+
+        command = [
+            str(java_exe),
+            f"-Xmx{max_heap}",
+            f"-Djava.library.path={library_path}",
+        ]
+        if include_add_opens:
+            command.append("--add-opens=java.desktop/sun.awt.shell=ALL-UNNAMED")
+        command.extend(
+            [
+                "-cp",
+                classpath,
+                "org.python.util.jython",
+                str(script_file),
+            ]
+        )
+        return command
+
+    @staticmethod
+    def _vortex_environment(vortex_path: Path) -> Dict[str, str]:
+        """Return environment variables required by Vortex GDAL/NetCDF libraries."""
+        env = os.environ.copy()
+        bin_dir = vortex_path / "bin"
+        path_entries = [bin_dir, bin_dir / "gdal", bin_dir / "netcdf"]
+        env["PATH"] = os.pathsep.join(str(path) for path in path_entries) + os.pathsep + env.get("PATH", "")
+        env["GDAL_DATA"] = str(bin_dir / "gdal" / "gdal-data")
+        env["PROJ_LIB"] = str(bin_dir / "gdal" / "projlib")
+        return env
 
     @staticmethod
     def _generate_import_script(
@@ -231,9 +320,8 @@ class VortexCli:
             str: Jython script content.
         """
         # Escape backslashes for Java string literals
-        input_paths_java = ", ".join(
-            f'r"{str(f)}"' for f in input_files
-        )
+        input_paths = [str(f).replace("\\", "/") for f in input_files]
+        input_paths_java = ", ".join(f'r"{path}"' for path in input_paths)
         output_dss_java = str(output_dss).replace("\\", "/")
 
         # Build variables list
@@ -265,54 +353,53 @@ class VortexCli:
                     )
         write_options_block = "\n".join(write_options_lines)
 
-        script = textwrap.dedent(f"""\
-            # Auto-generated HEC-Vortex import script
-            # Generated by ras-commander VortexCli at {datetime.now().isoformat()}
+        script = f"""# Auto-generated HEC-Vortex import script
+# Generated by ras-commander VortexCli at {datetime.now().isoformat()}
 
-            from mil.army.usace.hec.vortex.io import BatchImporter
-            from mil.army.usace.hec.vortex.geo import WktFactory
-            import java.util.ArrayList as ArrayList
-            import java.util.HashMap as HashMap
+from mil.army.usace.hec.vortex.io import BatchImporter
+from mil.army.usace.hec.vortex.geo import WktFactory
+import java.util.ArrayList as ArrayList
+import java.util.HashMap as HashMap
 
-            # Input files
-            inFiles = [{input_paths_java}]
+# Input files
+inFiles = [{input_paths_java}]
 
-            # Variables to extract
-            variables = ArrayList()
-            {variables_block}
+# Variables to extract
+variables = ArrayList()
+{variables_block}
 
-            # Geo-processing options
-            geoOptions = HashMap()
-            geoOptionsDict = {{
-            {geo_options_block}
-            }}
-            for key, val in geoOptionsDict.items():
-                geoOptions.put(key, str(val) if not isinstance(val, str) else val)
+# Geo-processing options
+geoOptions = HashMap()
+geoOptionsDict = {{
+{geo_options_block}
+}}
+for key, val in geoOptionsDict.items():
+    geoOptions.put(key, str(val) if not isinstance(val, str) else val)
 
-            # Write options (DSS pathname parts)
-            writeOptions = HashMap()
-            writeOptionsDict = {{
-            {write_options_block}
-            }}
-            for key, val in writeOptionsDict.items():
-                writeOptions.put(key, val)
+# Write options (DSS pathname parts)
+writeOptions = HashMap()
+writeOptionsDict = {{
+{write_options_block}
+}}
+for key, val in writeOptionsDict.items():
+    writeOptions.put(key, val)
 
-            # Destination
-            destination = r"{output_dss_java}"
+# Destination
+destination = r"{output_dss_java}"
 
-            # Build and execute importer
-            importer = BatchImporter.builder() \\
-                .inFiles(inFiles) \\
-                .variables(variables) \\
-                .geoOptions(geoOptions) \\
-                .writeOptions(writeOptions) \\
-                .destination(destination) \\
-                .build()
+# Build and execute importer
+importer = BatchImporter.builder() \\
+    .inFiles(inFiles) \\
+    .variables(variables) \\
+    .geoOptions(geoOptions) \\
+    .writeOptions(writeOptions) \\
+    .destination(destination) \\
+    .build()
 
-            importer.process()
+importer.process()
 
-            print("VORTEX_IMPORT_COMPLETE")
-        """)
+print("VORTEX_IMPORT_COMPLETE")
+"""
         return script
 
     @staticmethod
@@ -327,6 +414,8 @@ class VortexCli:
         resampling_method: str = "Bilinear",
         dss_parts: Optional[Dict[str, str]] = None,
         vortex_path: Optional[Union[str, Path]] = None,
+        jython_jar: Optional[Union[str, Path]] = None,
+        max_heap: str = "4g",
         timeout: int = 600,
     ) -> Path:
         """
@@ -356,6 +445,10 @@ class VortexCli:
                 single letters A-F. Example: {"A": "SHG", "B": "BASIN", "F": "HRRR"}.
             vortex_path: Optional explicit path to HEC-Vortex installation.
                 If None, searches standard locations.
+            jython_jar: Optional path to jython-standalone-2.7.x.jar. If None,
+                searches HEC-DSSVue, HEC-HMS, and JYTHON_STANDALONE_JAR.
+            max_heap: Maximum Java heap for the Vortex import process.
+                Default: "4g".
             timeout: Maximum execution time in seconds. Default: 600 (10 min).
 
         Returns:
@@ -380,24 +473,23 @@ class VortexCli:
         # Normalize input_files to list of Paths
         if isinstance(input_files, (str, Path)):
             input_files = [input_files]
-        input_files = [Path(f) for f in input_files]
+        input_files = [Path(f).resolve() for f in input_files]
 
         # Validate input files exist
         for f in input_files:
             if not f.exists():
                 raise FileNotFoundError(f"Input file not found: {f}")
 
-        output_dss = Path(output_dss)
+        output_dss = Path(output_dss).resolve()
 
         # Validate clip shapefile if provided
         if clip_shp is not None:
-            clip_shp = Path(clip_shp)
+            clip_shp = Path(clip_shp).resolve()
             if not clip_shp.exists():
                 raise FileNotFoundError(f"Clip shapefile not found: {clip_shp}")
 
         # Find Vortex installation
         vortex_dir = VortexCli.find_vortex(vortex_path)
-        vortex_bat = VortexCli._get_vortex_bat(vortex_dir)
 
         # Create output directory if needed
         output_dss.parent.mkdir(parents=True, exist_ok=True)
@@ -434,18 +526,46 @@ class VortexCli:
             logger.debug(f"Vortex script: {script_file}")
             logger.debug(f"Variables: {variables}")
 
-            # Execute: vortex.bat -s script.py
-            cmd_str = f'"{vortex_bat}" -s "{script_file}"'
-            logger.debug(f"Executing: {cmd_str}")
+            # Execute the Vortex Java API through Jython. HEC-Vortex 0.13.x
+            # ships importer.bat for the GUI, not the older vortex.bat -s
+            # script runner, so the API invocation is assembled directly.
+            cmd = VortexCli._build_jython_command(
+                vortex_path=vortex_dir,
+                script_file=script_file,
+                jython_jar=jython_jar,
+                max_heap=max_heap,
+                include_add_opens=True,
+            )
+            logger.debug("Executing Vortex Jython command: %s", " ".join(cmd))
 
             result = subprocess.run(
-                cmd_str,
-                shell=True,
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                cwd=str(output_dss.parent),
+                cwd=str(vortex_dir / "bin"),
+                env=VortexCli._vortex_environment(vortex_dir),
             )
+            if (
+                result.returncode != 0
+                and "Unrecognized option: --add-opens" in (result.stderr or "")
+            ):
+                cmd = VortexCli._build_jython_command(
+                    vortex_path=vortex_dir,
+                    script_file=script_file,
+                    jython_jar=jython_jar,
+                    max_heap=max_heap,
+                    include_add_opens=False,
+                )
+                logger.debug("Retrying Vortex Jython command without --add-opens")
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    cwd=str(vortex_dir / "bin"),
+                    env=VortexCli._vortex_environment(vortex_dir),
+                )
 
             # Check execution result
             if result.returncode != 0:
@@ -470,8 +590,12 @@ class VortexCli:
 
             # Validate output DSS file exists
             if not output_dss.exists():
+                stdout_tail = (result.stdout or "").strip()[-2000:]
+                stderr_tail = (result.stderr or "").strip()[-2000:]
                 raise RuntimeError(
-                    f"Vortex execution completed but DSS file not created: {output_dss}"
+                    f"Vortex execution completed but DSS file not created: {output_dss}\n"
+                    f"stdout: {stdout_tail or '<empty>'}\n"
+                    f"stderr: {stderr_tail or '<empty>'}"
                 )
 
             file_size = output_dss.stat().st_size
@@ -657,16 +781,20 @@ class VortexCli:
             raise FileNotFoundError(f"GRIB2 file not found: {grib_file}")
 
         vortex_dir = VortexCli.find_vortex(vortex_path)
-        vortex_bat = VortexCli._get_vortex_bat(vortex_dir)
 
         grib_path_java = str(grib_file).replace("\\", "/")
 
         script_content = textwrap.dedent(f"""\
             # Auto-generated HEC-Vortex variable listing script
-            from mil.army.usace.hec.vortex.io import DataReader
+            try:
+                from mil.army.usace.hec.vortex.io import NetcdfDataReader
+                reader_class = NetcdfDataReader
+            except ImportError:
+                from mil.army.usace.hec.vortex.io import DataReader
+                reader_class = DataReader
 
             source = r"{grib_path_java}"
-            variables = DataReader.getVariables(source)
+            variables = reader_class.getVariables(source)
 
             print("VORTEX_VARIABLES_START")
             for v in variables:
@@ -685,14 +813,36 @@ class VortexCli:
                 f.write(script_content)
                 script_file = Path(f.name)
 
-            cmd_str = f'"{vortex_bat}" -s "{script_file}"'
+            cmd = VortexCli._build_jython_command(
+                vortex_path=vortex_dir,
+                script_file=script_file,
+                include_add_opens=True,
+            )
             result = subprocess.run(
-                cmd_str,
-                shell=True,
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                cwd=str(vortex_dir / "bin"),
+                env=VortexCli._vortex_environment(vortex_dir),
             )
+            if (
+                result.returncode != 0
+                and "Unrecognized option: --add-opens" in (result.stderr or "")
+            ):
+                cmd = VortexCli._build_jython_command(
+                    vortex_path=vortex_dir,
+                    script_file=script_file,
+                    include_add_opens=False,
+                )
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    cwd=str(vortex_dir / "bin"),
+                    env=VortexCli._vortex_environment(vortex_dir),
+                )
 
             if result.returncode != 0:
                 raise RuntimeError(

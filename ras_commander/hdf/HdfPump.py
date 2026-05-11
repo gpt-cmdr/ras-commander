@@ -201,17 +201,23 @@ class HdfPump:
                     logger.warning(f"Timestamp count ({len(time)}) doesn't match data time dimension ({data.shape[0]}). Using numeric index.")
                     time = list(range(data.shape[0]))
 
+                variable_units = hdf[data_path].attrs.get('Variable_Unit', None)
+                variable_names, unit_by_variable = HdfPump._pump_variable_columns(
+                    variable_units,
+                    data.shape[1],
+                )
+
                 # Create DataArray
                 da = xr.DataArray(
                     data=data,
                     dims=['time', 'variable'],
-                    coords={'time': time, 'variable': ['Flow', 'Stage HW', 'Stage TW', 'Pump Station', 'Pumps on']},
+                    coords={'time': time, 'variable': variable_names},
                     name=pump_station
                 )
 
                 # Add attributes and decode byte strings
-                units = hdf[data_path].attrs.get('Variable_Unit', b'')
-                da.attrs['units'] = units.decode('utf-8') if isinstance(units, bytes) else units
+                da.attrs['units'] = variable_units
+                da.attrs['unit_by_variable'] = unit_by_variable
                 da.attrs['pump_station'] = pump_station
 
                 return da
@@ -309,13 +315,20 @@ class HdfPump:
                 # Extract time information - Updated to use new method name
                 time = HdfBase.get_unsteady_timestamps(hdf)
 
+                variable_units = hdf[data_path].attrs.get('Variable_Unit', None)
+                variable_names, unit_by_variable = HdfPump._pump_variable_columns(
+                    variable_units,
+                    data.shape[1],
+                )
+
                 # Create DataFrame and decode byte strings
-                df = pd.DataFrame(data, columns=['Flow', 'Stage HW', 'Stage TW', 'Pump Station', 'Pumps on'])
+                df = pd.DataFrame(data, columns=variable_names)
                 string_columns = df.select_dtypes([object]).columns
                 for col in string_columns:
                     df[col] = df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
                     
                 df['Time'] = time
+                df.attrs['unit_by_variable'] = unit_by_variable
 
                 return df
 
@@ -328,3 +341,78 @@ class HdfPump:
         except Exception as e:
             logger.error(f"Error extracting pump operation data: {e}")
             raise
+
+    @staticmethod
+    def _pump_variable_columns(variable_units: Any, column_count: int) -> tuple[List[str], Dict[str, str]]:
+        """
+        Build unique pump result column names from the HEC-RAS Variable_Unit attr.
+
+        HEC-RAS writes five columns for simple pump stations and additional
+        flow/on columns for each pump group. Older ras-commander releases
+        assumed exactly five columns, which fails for multi-group stations.
+        """
+        fallback_names = ['Flow', 'Stage HW', 'Stage TW', 'Pump Station', 'Pumps on']
+        if variable_units is None:
+            names = fallback_names[:column_count]
+            names.extend([f"Variable {idx + 1}" for idx in range(len(names), column_count)])
+            return names, {name: "" for name in names}
+
+        rows = np.asarray(variable_units)
+        if rows.ndim != 2 or rows.shape[1] < 2:
+            names = fallback_names[:column_count]
+            names.extend([f"Variable {idx + 1}" for idx in range(len(names), column_count)])
+            return names, {name: "" for name in names}
+
+        decoded_rows = [
+            (
+                HdfPump._decode_hdf_text(row[0]),
+                HdfPump._decode_hdf_text(row[1]),
+            )
+            for row in rows[:column_count]
+        ]
+
+        if column_count == 5 and len(decoded_rows) >= 5:
+            names = fallback_names.copy()
+        else:
+            names = []
+            for label, unit in decoded_rows:
+                unit_lower = unit.lower()
+                if label in {'Flow', 'Stage HW', 'Stage TW'}:
+                    column_name = label
+                elif unit_lower == 'pumps on':
+                    column_name = f"{label} Pumps on"
+                elif unit_lower == 'cfs':
+                    column_name = f"{label} Flow"
+                elif unit:
+                    column_name = f"{label} ({unit})"
+                else:
+                    column_name = label
+                names.append(column_name)
+
+        if len(names) < column_count:
+            names.extend([f"Variable {idx + 1}" for idx in range(len(names), column_count)])
+
+        names = HdfPump._dedupe_names(names[:column_count])
+        unit_by_variable = {
+            name: decoded_rows[idx][1] if idx < len(decoded_rows) else ""
+            for idx, name in enumerate(names)
+        }
+        return names, unit_by_variable
+
+    @staticmethod
+    def _decode_hdf_text(value: Any) -> str:
+        if isinstance(value, (bytes, np.bytes_)):
+            return value.decode('utf-8').strip()
+        return str(value).strip()
+
+    @staticmethod
+    def _dedupe_names(names: List[str]) -> List[str]:
+        counts: Dict[str, int] = {}
+        result: List[str] = []
+        for name in names:
+            counts[name] = counts.get(name, 0) + 1
+            if counts[name] == 1:
+                result.append(name)
+            else:
+                result.append(f"{name} {counts[name]}")
+        return result

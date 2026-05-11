@@ -1316,11 +1316,17 @@ class RasPrj:
         geom_entries = []
 
         try:
-            with open(self.prj_file, 'r') as f:
-                for line in f:
-                    match = geom_pattern.search(line)
-                    if match:
-                        geom_entries.append(match.group(1))
+            content, encoding = read_file_with_fallback_encoding(self.prj_file)
+            if content is None:
+                raise IOError(
+                    f"Could not read project file {self.prj_file} with any supported encoding"
+                )
+            logger.debug("Parsed geometry entries from %s using %s encoding", self.prj_file, encoding)
+
+            for line in content.splitlines():
+                match = geom_pattern.search(line)
+                if match:
+                    geom_entries.append(match.group(1))
         
             geom_df = pd.DataFrame({'geom_file': geom_entries})
             if geom_df.empty:

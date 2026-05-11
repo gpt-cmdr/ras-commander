@@ -195,3 +195,117 @@ def test_store_maps_leaves_unchanged_files_in_default_folder(monkeypatch, tmp_pa
     assert benchmark_path.exists()
     assert benchmark_path.read_text(encoding="utf-8") == "keep-me"
     assert not (custom_output_dir / "manual_benchmark.tif").exists()
+
+
+def test_store_maps_at_timesteps_routes_each_timestamp(monkeypatch, tmp_path):
+    ras_obj = _DummyRas(project_folder=tmp_path)
+    available = [
+        "04FEB2024 00:00:00",
+        "04FEB2024 01:00:00",
+        "04FEB2024 02:00:00",
+    ]
+    calls = []
+
+    monkeypatch.setattr(
+        RasProcess,
+        "get_plan_timestamps",
+        staticmethod(lambda plan_number, ras_object=None: available),
+    )
+
+    def fake_store_maps(**kwargs):
+        calls.append(kwargs)
+        return {"depth": [tmp_path / f"{kwargs['profile']}.tif"]}
+
+    monkeypatch.setattr(RasProcess, "store_maps", staticmethod(fake_store_maps))
+
+    results = RasProcess.store_maps_at_timesteps(
+        plan_number="02",
+        output_path=tmp_path / "depth_frames",
+        timesteps=[0, "2024-02-04 02:00"],
+        depth=True,
+        velocity=False,
+        fix_georef=False,
+        ras_object=ras_obj,
+    )
+
+    assert list(results) == ["04FEB2024 00:00:00", "04FEB2024 02:00:00"]
+    assert [call["profile"] for call in calls] == list(results)
+    assert all(call["plan_number"] == "02" for call in calls)
+    assert all(call["depth"] is True and call["velocity"] is False for call in calls)
+
+
+def test_fix_georeferencing_rewrites_compressed_tiff(tmp_path):
+    rasterio = __import__("pytest").importorskip("rasterio")
+    np = __import__("pytest").importorskip("numpy")
+    from rasterio.crs import CRS
+    from rasterio.transform import from_origin
+
+    terrain_path = tmp_path / "terrain.tif"
+    depth_path = tmp_path / "depth.tif"
+    terrain_transform = from_origin(1000, 2000, 10, 10)
+    raw_transform = from_origin(0, 0, 1, 1)
+    data = np.arange(9, dtype="float32").reshape(3, 3)
+
+    terrain_profile = {
+        "driver": "GTiff",
+        "height": 3,
+        "width": 3,
+        "count": 1,
+        "dtype": "float32",
+        "crs": CRS.from_epsg(2871),
+        "transform": terrain_transform,
+    }
+    with rasterio.open(terrain_path, "w", **terrain_profile) as dst:
+        dst.write(data, 1)
+
+    depth_profile = dict(terrain_profile)
+    depth_profile.update(
+        crs=None,
+        transform=raw_transform,
+        compress="deflate",
+        tiled=True,
+        blockxsize=16,
+        blockysize=16,
+        nodata=-9999.0,
+    )
+    with rasterio.open(depth_path, "w", **depth_profile) as dst:
+        dst.write(data, 1)
+
+    assert RasProcess._fix_georeferencing(depth_path, None, terrain_path)
+
+    with rasterio.open(depth_path) as src:
+        assert src.crs == CRS.from_epsg(2871)
+        assert src.transform == terrain_transform
+        assert np.array_equal(src.read(1), data)
+
+
+def test_drop_unreadable_tifs_removes_corrupt_stored_map(tmp_path):
+    pytest = __import__("pytest")
+    rasterio = pytest.importorskip("rasterio")
+    np = pytest.importorskip("numpy")
+    from rasterio.transform import from_origin
+
+    valid_path = tmp_path / "Depth (04FEB2024 00 00 00).tif"
+    corrupt_path = tmp_path / "Depth (04FEB2024 01 00 00).tif"
+
+    with rasterio.open(
+        valid_path,
+        "w",
+        driver="GTiff",
+        height=2,
+        width=2,
+        count=1,
+        dtype="float32",
+        transform=from_origin(1000, 2000, 10, 10),
+    ) as dst:
+        dst.write(np.ones((2, 2), dtype="float32"), 1)
+
+    corrupt_path.write_bytes(b"not a readable tiff")
+
+    results = RasProcess._drop_unreadable_tifs(
+        {"depth": [valid_path, corrupt_path]}
+    )
+
+    assert results["depth"] == [valid_path]
+    assert valid_path.exists()
+    assert not corrupt_path.exists()

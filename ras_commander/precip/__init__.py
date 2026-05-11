@@ -10,13 +10,13 @@ from various sources for use in HEC-RAS rain-on-grid 2D models:
 - Atlas14Variance - Spatial variance analysis for uniform vs. distributed rainfall decisions
 - AbmHyetographGrid - Per-pixel Alternating Block Method hyetograph grids (NetCDF for HEC-RAS rain-on-grid)
 - VortexCli - HEC-Vortex CLI wrapper for converting GRIB2/NetCDF to HEC-DSS
-- MRMS (Multi-Radar Multi-Sensor) - Real-time and historical radar (future)
+- PrecipMrms - MRMS QPE catalog, download, HEC-Vortex DSS conversion, direct hyetograph/NetCDF, and MP4 animation helpers
 - QPF (Quantitative Precipitation Forecast) - NWS forecasts (future)
 
 The primary workflow is:
 1. Extract project extent from HEC-RAS HDF file using HdfProject
 2. Download precipitation data for the extent and time period
-3. Export as NetCDF for direct import into HEC-RAS
+3. Export as HEC-DSS through HEC-Vortex or NetCDF/direct hyetograph inputs for HEC-RAS
 
 Design Storm Generation:
 Four HMS-validated methods are available for design storm hyetograph generation:
@@ -170,6 +170,23 @@ Example (AORC - Historical Data):
     ...     output_path="Precipitation/aorc_precip.nc"
     ... )
 
+Example (MRMS - Historical QPE):
+    >>> from ras_commander.precip import PrecipMrms
+    >>>
+    >>> files = PrecipMrms.download(
+    ...     bounds=(-121.79, 38.52, -121.71, 38.59),
+    ...     start_time="2022-12-31 00:00",
+    ...     end_time="2023-01-01 12:00",
+    ...     output_dir="Precipitation/mrms",
+    ... )
+    >>> mrms_dss = PrecipMrms.to_dss(
+    ...     files,
+    ...     "Precipitation/mrms_qpe.dss",
+    ...     clip_shp="Precipitation/study_area.shp",
+    ... )
+    >>> hyetograph = PrecipMrms.to_hyetograph(files, bounds=(-121.79, 38.52, -121.71, 38.59))
+    >>> PrecipMrms.to_ras_netcdf(files, "Precipitation/mrms_qpe.nc")
+
 Dependencies:
     Install with: pip install ras-commander[precip]
 
@@ -184,8 +201,10 @@ Dependencies:
     - pygeohydro (optional, for HUC12 watershed boundaries in Atlas14Variance)
 """
 
+from ..LoggingConfig import setup_logging as _setup_logging
 from .PrecipAorc import PrecipAorc
 from .PrecipHrrr import PrecipHrrr
+from .PrecipMrms import PrecipMrms
 from .StormGenerator import StormGenerator
 from .Atlas14Grid import Atlas14Grid
 from .Atlas14Variance import Atlas14Variance
@@ -208,9 +227,14 @@ except ImportError:
     FrequencyStorm = None
     ScsTypeStorm = None
 
+# hms-commander has its own logging bootstrap. Re-run ras-commander setup so
+# notebook imports do not retain duplicate root stream handlers.
+_setup_logging()
+
 __all__ = [
     'PrecipAorc',
     'PrecipHrrr',                  # HRRR real-time forecast download
+    'PrecipMrms',                  # MRMS QPE catalog, download, DSS/direct processing, and animation
     'StormGenerator',
     'VortexCli',                   # HEC-Vortex CLI wrapper for GRIB2/NetCDF → DSS conversion
     'Atlas14Grid',                 # Remote access to NOAA Atlas 14 CONUS grids

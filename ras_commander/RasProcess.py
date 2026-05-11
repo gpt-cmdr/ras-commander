@@ -1043,9 +1043,20 @@ Step 5: Configure (optional — auto-detection usually works)
                 )
                 return False
 
-            with rasterio.open(tif_path, 'r+') as dst:
-                dst.transform = transform
-                dst.crs = crs
+            tif_path = Path(tif_path)
+            tmp_path = tif_path.with_name(f"{tif_path.stem}.georef_tmp{tif_path.suffix}")
+            with rasterio.open(tif_path) as src:
+                data = src.read()
+                profile = src.profile.copy()
+                tags = src.tags()
+
+            profile.update(crs=crs, transform=transform)
+            with rasterio.open(tmp_path, "w", **profile) as dst:
+                dst.write(data)
+                if tags:
+                    dst.update_tags(**tags)
+
+            tmp_path.replace(tif_path)
 
             logger.info(f"Fixed georeferencing: {tif_path}")
             return True
@@ -1053,6 +1064,44 @@ Step 5: Configure (optional — auto-detection usually works)
         except Exception as e:
             logger.error(f"Failed to fix georeferencing for {tif_path}: {e}")
             return False
+
+    @staticmethod
+    def _drop_unreadable_tifs(
+        generated_files: Dict[str, List[Path]],
+    ) -> Dict[str, List[Path]]:
+        """
+        Remove invalid GeoTIFFs from StoreAllMaps results.
+
+        HEC-RAS can occasionally emit a partial or corrupt TIFF for a single
+        stored-map timestep. Downstream animation code treats a missing timestep
+        as dry/no-data, but it cannot recover from a path that exists and then
+        fails during raster read.
+        """
+        if not HAS_RASTERIO:
+            return generated_files
+
+        for map_key, tif_list in list(generated_files.items()):
+            readable_tifs: List[Path] = []
+            for tif_path in tif_list:
+                try:
+                    with rasterio.open(tif_path) as src:
+                        if src.count < 1 or src.width < 1 or src.height < 1:
+                            raise ValueError("GeoTIFF has no readable raster band")
+                        src.read(1)
+                    readable_tifs.append(tif_path)
+                except Exception as exc:
+                    logger.warning(
+                        "Dropping unreadable stored-map TIFF %s: %s",
+                        tif_path,
+                        exc,
+                    )
+                    try:
+                        Path(tif_path).unlink(missing_ok=True)
+                    except OSError:
+                        logger.debug("Could not delete unreadable TIFF: %s", tif_path)
+            generated_files[map_key] = readable_tifs
+
+        return generated_files
 
     @staticmethod
     def _get_plan_short_id(hdf_path: Path) -> Optional[str]:
@@ -1629,6 +1678,7 @@ Step 5: Configure (optional — auto-detection usually works)
                             )
                 else:
                     logger.warning("Could not find terrain for georef fix")
+                RasProcess._drop_unreadable_tifs(generated_files)
 
             return generated_files
 
@@ -1637,6 +1687,132 @@ Step 5: Configure (optional — auto-detection usually works)
             if rasmap_backup.exists():
                 shutil.copy2(rasmap_backup, rasmap_path)
                 rasmap_backup.unlink()
+
+    @staticmethod
+    @log_call
+    def store_maps_at_timesteps(
+        plan_number: str,
+        output_path: Union[str, Path] = None,
+        timesteps: Optional[Union[int, str, datetime, List[Union[int, str, datetime]]]] = None,
+        max_timesteps: Optional[int] = None,
+        wse: bool = False,
+        depth: bool = True,
+        velocity: bool = False,
+        froude: bool = False,
+        shear_stress: bool = False,
+        depth_x_velocity: bool = False,
+        depth_x_velocity_sq: bool = False,
+        render_mode: str = None,
+        clear_existing: bool = True,
+        fix_georef: bool = True,
+        ras_object=None,
+        ras_version: str = None,
+        timeout: int = 600,
+    ) -> Dict[str, Dict[str, List[Path]]]:
+        """
+        Generate stored maps for one or more output timesteps.
+
+        This convenience wrapper routes each selected timestep through
+        ``store_maps(profile=<timestamp>)`` so callers can export a sequence of
+        rasters suitable for animation.
+
+        Args:
+            plan_number: Plan number (e.g., "02").
+            output_path: Optional directory for generated rasters.
+            timesteps: Optional timestep selector. Items may be zero-based
+                integer indices, exact RASMapper timestamp strings, or datetimes.
+                If omitted, all available output timesteps are used.
+            max_timesteps: Optional cap applied after timestep selection.
+            wse, depth, velocity, froude, shear_stress, depth_x_velocity,
+                depth_x_velocity_sq: Map types to export. Defaults to Depth only.
+            render_mode, clear_existing, fix_georef, ras_object, ras_version,
+                timeout: Passed through to ``store_maps``.
+
+        Returns:
+            Dict keyed by RASMapper timestamp string. Each value is the
+            ``store_maps`` result for that timestep.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        available = RasProcess.get_plan_timestamps(plan_number, ras_obj)
+        if not available:
+            raise ValueError(f"No output timesteps found for plan {plan_number}")
+
+        selected = RasProcess._select_store_map_timesteps(available, timesteps)
+        if max_timesteps is not None:
+            selected = selected[: int(max_timesteps)]
+        if not selected:
+            raise ValueError("No timesteps selected for stored map export")
+
+        results: Dict[str, Dict[str, List[Path]]] = {}
+        for timestamp in selected:
+            results[timestamp] = RasProcess.store_maps(
+                plan_number=plan_number,
+                output_path=output_path,
+                profile=timestamp,
+                render_mode=render_mode,
+                wse=wse,
+                depth=depth,
+                velocity=velocity,
+                froude=froude,
+                shear_stress=shear_stress,
+                depth_x_velocity=depth_x_velocity,
+                depth_x_velocity_sq=depth_x_velocity_sq,
+                clear_existing=clear_existing,
+                fix_georef=fix_georef,
+                ras_object=ras_obj,
+                ras_version=ras_version,
+                timeout=timeout,
+            )
+        return results
+
+    @staticmethod
+    def _select_store_map_timesteps(
+        available: List[str],
+        timesteps: Optional[Union[int, str, datetime, List[Union[int, str, datetime]]]],
+    ) -> List[str]:
+        if timesteps is None:
+            return list(available)
+        if isinstance(timesteps, (int, str, datetime, pd.Timestamp)):
+            requested = [timesteps]
+        else:
+            requested = list(timesteps)
+
+        selected: List[str] = []
+        for item in requested:
+            if isinstance(item, int):
+                try:
+                    selected.append(available[item])
+                except IndexError as exc:
+                    raise ValueError(
+                        f"Timestep index {item} out of range for {len(available)} timesteps"
+                    ) from exc
+                continue
+
+            if isinstance(item, (datetime, pd.Timestamp)):
+                item_text = pd.Timestamp(item).strftime("%d%b%Y %H:%M:%S").upper()
+            else:
+                item_text = str(item).strip()
+
+            if item_text in available:
+                selected.append(item_text)
+                continue
+
+            parsed_text = None
+            try:
+                parsed_text = pd.Timestamp(item_text).strftime("%d%b%Y %H:%M:%S").upper()
+            except Exception:
+                pass
+            if parsed_text in available:
+                selected.append(parsed_text)
+                continue
+
+            raise ValueError(
+                f"Timestep {item!r} not found. First available timesteps: {available[:5]}"
+            )
+
+        return selected
 
     @staticmethod
     @log_call
