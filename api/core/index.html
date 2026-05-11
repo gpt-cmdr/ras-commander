@@ -11209,9 +11209,13 @@ def my_function():
 - extract_tables()
 - write_table_to_file()
 - set_precipitation_hyetograph()
-- set_gridded_precipitation()</p>
-<p>Precipitation Hyetograph Functions:
-- set_precipitation_hyetograph() - Write hyetograph DataFrame to unsteady file</p>
+- set_gridded_precipitation()
+- configure_gridded_dss_precipitation()</p>
+<p>Precipitation Functions:
+- set_precipitation_hyetograph() - Write hyetograph DataFrame to unsteady file
+- set_gridded_precipitation() - Configure GDAL raster precipitation
+- configure_gridded_dss_precipitation() - Configure gridded DSS precipitation
+- get_met_precipitation_config() - Read meteorologic precipitation configuration</p>
 <p>DSS Boundary Condition Functions:
 - get_dss_boundaries() - Extract all DSS-linked BCs with full path info
 - get_inline_hydrograph_boundaries() - Extract inline table BCs with time series data
