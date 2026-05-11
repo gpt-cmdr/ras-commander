@@ -226,6 +226,68 @@ GeomCulvert.set_culverts(
 )
 ```
 
+## GeomCrossSection
+
+Cross-section authoring and blocked-obstruction management.
+
+### Cross Section Builder
+
+- `build_cross_section(input_spec=None, **kwargs)` - Build complete cross-section geometry entry from terrain, survey, or adjacent XS data
+- `get_blocked_obstructions(geom_file, river, reach, rs)` - Read blocked obstructions for a cross section
+- `set_blocked_obstructions(geom_file, river, reach, rs, obstructions)` - Write blocked obstructions
+
+See the [Cross Section Builder](#cross-section-builder) section above for resolution order and fallback behavior.
+
+## GeomBridge
+
+Bridge geometry authoring (deck profiles, piers, abutments, approach sections).
+
+### Methods
+
+- `build_bridge(geom_file, river, reach, rs, **bridge_params)` - Author complete bridge geometry
+- `get_bridge_deck(geom_file, river, reach, rs)` - Read bridge deck profile
+- `set_bridge_deck(geom_file, river, reach, rs, deck_data)` - Write bridge deck profile
+
+## GeomBcLines
+
+2D boundary condition line geometry authoring.
+
+### Methods
+
+- `add_bc_line(geom_file, flow_area, name, coordinates, bc_type)` - Add BC line to 2D flow area
+- `get_bc_lines(geom_file, flow_area=None)` - Read existing BC lines
+- `remove_bc_line(geom_file, flow_area, name)` - Remove a BC line
+
+## GeomLateral
+
+Lateral structure parsing and modification.
+
+### Methods
+
+- `get_lateral_structures(geom_file)` - List lateral structures
+- `get_lateral_weir_profile(geom_file, name)` - Get weir profile data
+
+## GeomStorage
+
+Storage area and 2D flow area geometry parsing and writing.
+
+### Methods
+
+- `get_storage_areas(geom_file)` - List storage areas with elevation-volume data
+- `get_2d_flow_areas(geom_file)` - List 2D flow areas with settings
+- `get_2d_flow_area_settings(geom_file)` - Read 2D flow area computation settings
+- `set_2d_flow_area_settings(geom_file, area_name, **settings)` - Write 2D flow area settings (subgrid sampling, composite classification)
+- `write_2d_flow_area_perimeter(geom_file, area_name, coordinates, ...)` - Write 2D flow area perimeter
+
+## GeomLevee
+
+Levee station-elevation parsing and modification.
+
+### Methods
+
+- `get_levees(geom_file, river=None, reach=None, rs=None)` - Read levee data for cross sections
+- `set_levees(geom_file, river, reach, rs, levee_data)` - Write levee station-elevation data
+
 ## RasBreach
 
 Breach parameter modification in plan files.

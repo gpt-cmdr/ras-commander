@@ -167,6 +167,7 @@ nav:
     - Core Classes: api/core.md
     - HDF Modules: api/hdf.md
     - Geometry Modules: api/geometry.md
+    - Terrain Modules: api/terrain.md
     - Fixit Module: api/fixit.md
     - DSS Modules: api/dss.md
     - Remote Modules: api/remote.md

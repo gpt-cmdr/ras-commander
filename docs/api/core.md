@@ -344,6 +344,9 @@ The `get_comp_msgs()` method attempts to read computation messages from multiple
         - get_initial_conditions
         - set_initial_conditions
         - get_boundary_tables
+        - set_normal_depth_boundary
+        - set_flow_hydrograph_slope
+        - set_precipitation_hyetograph
 
 ### RasSteady
 

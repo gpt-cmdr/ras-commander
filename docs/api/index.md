@@ -32,14 +32,23 @@ Classes for reading HDF result files:
 - [`HdfStruc`](hdf.md#hdfstruc) - Structure data
 - [`HdfResultsBreach`](hdf.md#hdfresultsbreach) - Dam breach results
 - [`HdfHydraulicTables`](hdf.md#hdfhydraulictables) - Cross section HTAB data
+- [`HdfStorageArea`](hdf.md#hdfstoragearea) - Storage area volume-elevation curves
+- [`HdfChannelCapacity`](hdf.md#hdfchannelcapacity) - 1D channel capacity analysis
+- [`HdfStruc1D`](hdf.md#hdfstruc1d) - 1D inline structure data
 - [`HdfPipe`](hdf.md#hdfpipe) - Pipe network analysis
 - [`HdfPump`](hdf.md#hdfpump) - Pump station analysis
 
 ## Geometry Modules
 
-Classes for parsing geometry files:
+Classes for parsing and authoring geometry files:
 
 - [`RasGeometry`](geometry.md#rasgeometry) - Cross sections, storage, connections
+- [`GeomCrossSection`](geometry.md#geomcrosssection) - Cross-section builder and blocked obstructions
+- [`GeomBridge`](geometry.md#geombridge) - Bridge geometry authoring
+- [`GeomBcLines`](geometry.md#geombclines) - 2D boundary condition line authoring
+- [`GeomLateral`](geometry.md#geomlateral) - Lateral structure parsing
+- [`GeomStorage`](geometry.md#geomstorage) - Storage area and 2D flow area writing
+- [`GeomLevee`](geometry.md#geomlevee) - Levee read/write
 - [`RasGeometryUtils`](geometry.md#rasgeometryutils) - Parsing utilities
 - [`RasStruct`](geometry.md#rasstruct) - Inline structures
 - [`RasBreach`](geometry.md#rasbreach) - Breach parameters
@@ -49,9 +58,9 @@ Classes for parsing geometry files:
 Classes for terrain creation, modification writing, and terrain-modification
 analysis:
 
-- `RasTerrain` - Terrain HDF creation from rasters
-- `RasTerrainModWriter` / `RasTerrainModification` - Line and polygon terrain modification HDF/.rasmap writing
-- `RasTerrainMod` - Terrain profile and volume comparison with modifications applied
+- [`RasTerrain`](terrain.md#rasterrain) - Terrain HDF creation from rasters
+- [`RasTerrainModWriter`](terrain.md#rasterrainmodwriter) / `RasTerrainModification` - Line and polygon terrain modification HDF/.rasmap writing
+- [`RasTerrainMod`](terrain.md#rasterrainmod) - Terrain profile and volume comparison with modifications applied
 
 ## Fixit Module
 

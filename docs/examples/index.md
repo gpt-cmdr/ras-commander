@@ -1,7 +1,7 @@
 # Example Notebooks
 
 
-The repository currently ships **93 canonical notebooks** under `examples/`.
+The repository currently ships **108 canonical notebooks** under `examples/`.
 This overview tracks the live notebook inventory in git. Executed copies such as
 `*_executed.ipynb` and local `_test_*.py` helpers are intentionally excluded.
 
@@ -24,9 +24,9 @@ jupyter notebook examples/
 
 | Family | Current focus |
 |--------|---------------|
-| `100s` | project initialization, execution control, parameter sweeps, RASMapper review, results summaries |
-| `200s` | plaintext geometry parsing, structures, calibration setup, mesh generation |
-| `300s` | unsteady files, DSS workflows, HMS-to-RAS matching, reference-line generation, boundary visualization |
+| `100s` | project initialization, execution control, parameter sweeps, RASMapper review, bank line generation, results summaries |
+| `200s` | plaintext geometry parsing, structures, XS interpolation, connections, bridges, levees, steady flow authoring, floodway encroachment, calibration, mesh generation |
+| `300s` | unsteady files, DSS workflows, HMS-to-RAS matching, reference-line generation, 2D floodway encroachment, 2D computation options, terrain modifications, boundary visualization |
 | `400s` | 1D and 2D HDF extraction, reference-line queries, breach and channel-capacity analysis |
 | `500s` | remote, Linux, and ModPuls execution workflows |
 | `600s` | floodplain mapping, fluvial-pluvial analysis, map-layer validation |
@@ -68,6 +68,7 @@ These are the notebooks most directly tied to the April 2026 docs-drift sweep.
 `121_legacy_hecrascontroller_and_rascontrol.ipynb`,
 `122_rasmapper_spatial_review.ipynb`,
 `123_rasmapper_geometry_layer_updates.ipynb`,
+`124_rasmapper_bank_lines.ipynb`,
 `150_results_dataframe.ipynb`
 
 ### 200s
@@ -80,12 +81,19 @@ These are the notebooks most directly tied to the April 2026 docs-drift sweep.
 `208_bridge_method_comparison.ipynb`,
 `209_culvert_authoring.ipynb`,
 `210_fixit_blocked_obstructions.ipynb`,
+`210_xs_interpolation_settings.ipynb`,
 `211_final_mannings_and_infiltration.ipynb`,
 `212_landcover_mannings_n_write.ipynb`,
 `213_land_classification_polygon_authoring.ipynb`,
+`214_connection_authoring.ipynb`,
+`215_bridge_connection_authoring.ipynb`,
+`216_bridge_authoring.ipynb`,
+`217_levee_read_write.ipynb`,
 `220_calibration_workflow.ipynb`,
 `221_calibration_1d_workflow.ipynb`,
 `222_steady_flow_calibration.ipynb`,
+`223_steady_floodway_encroachment.ipynb`,
+`224_steady_flow_authoring.ipynb`,
 `230_mesh_sensitivity_analysis.ipynb`,
 `231_pipe_network_mesh_generation.ipynb`
 
@@ -95,9 +103,12 @@ These are the notebooks most directly tied to the April 2026 docs-drift sweep.
 `301_flow_hydrograph_optimization.ipynb`,
 `310_dss_boundary_extraction.ipynb`,
 `311_validating_dss_paths.ipynb`,
+`311_2d_floodway_encroachment.ipynb`,
 `312_boundary_df_qmult_dss_paths.ipynb`,
 `313_hms_to_ras_boundary_matching.ipynb`,
 `314_reference_line_generation.ipynb`,
+`315_2d_computation_options.ipynb`,
+`316_terrain_modifications.ipynb`,
 `317_restart_file_settings.ipynb`,
 `320_1d_boundary_condition_visualization.ipynb`
 
@@ -132,6 +143,7 @@ These are the notebooks most directly tied to the April 2026 docs-drift sweep.
 `720_precipitation_methods_comprehensive.ipynb`,
 `721_Precipitation_Hyetograph_Comparison.ipynb`,
 `722_gridded_precipitation_atlas14.ipynb`,
+`723_storm_generator_abm_validation.ipynb`,
 `725_atlas14_spatial_variance.ipynb`,
 `726_abm_hyetograph_grid.ipynb`
 

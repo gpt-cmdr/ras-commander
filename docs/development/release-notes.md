@@ -2,7 +2,123 @@
 
 ## Version History
 
-### v0.85.0 (Current Development)
+### v0.96.2 (Current — May 2026)
+
+**Precipitation & Dependencies**
+
+- Bump hms-commander dependency to >=0.3.1 (probability_column support)
+- Add ABM textbook validation notebook (723) with hms-commander integration
+- Fix precipitation hydrograph sequential depth values in RasUnsteady
+- Fix Plan 07 uniform precipitation and mode conflict in 722 notebook
+
+### v0.96.0
+
+**1D Geometry Authoring Sprint**
+
+- **GeomCrossSection**: Robust 1D cross-section builder API with terrain sampling, NLCD Manning's n, Douglas-Peucker reduction
+- **GeomBridge**: Bridge geometry authoring API (deck, piers, abutments, approach sections)
+- **GeomLevee**: Levee read/write API with station-only parsing support
+- **GeomCrossSection**: Blocked obstruction read/write exposed as public API
+- **HdfStorageArea**: Volume-elevation curve extraction from HDF
+- **ManningsFromLandCover**: NLCD-to-Manning's n assignment with block limit enforcement
+- **Breaking**: `CoastalBoundary` moved to `ras_commander.boundaries` subpackage
+
+### v0.95.0
+
+**Mesh Generation & Land Classification**
+
+- **GeomMesh**: Headless 2D mesh generation via RasMapperLib.dll (text-first architecture, auto GDAL, cell size sync)
+- **GeomStorage**: 2D flow area perimeter writer with breakline spacing, refinement regions, property tables
+- **RasPermutation**: Parameter sweep framework with Cartesian product generation
+- **HdfResultsQuery**: Spatial query class for 2D mesh results
+- **HdfLandCover**: `set_landcover_raster_map()` for sidecar HDF writes
+- **RasCalibrate**: Calibration framework with grid search and scipy optimize
+- **GeomReferenceFeatures**: Reference lines and points for 2D calibration
+- Cloud-native export notebooks (960–962) with GeoParquet and COG workflows
+- eBFE delivery validation notebook suite (950–957)
+
+### v0.94.0
+
+**HEC-RAS 7.0 Support**
+
+- Default HEC-RAS version bumped from 6.6 to 7.0 across repo
+- Release tag mapping for HEC-RAS 7.0 in RasExamples
+- Blank HEC-RAS 7.0 template project scaffold
+- `RasUtils.discover_ras_versions()` with Registry and Wine/Linux support
+- `UsgsObservations` and `UsgsDrainageAreaComparison` study primitives
+- STOFS-3D coastal boundary notebook rewrite (917)
+
+### v0.93.0
+
+**Notebook QAQC & Stability**
+
+- QAQC all 69 example notebooks — 59 pass, 15 issues fixed
+- Filter non-XS types in HTAB/check consumers
+- GeomStorage Round 2 QAQC (precision overflow, control chars)
+- `RasProcess`: Honor configured Wine executable for Linux builds
+- Papermill as primary notebook execution engine
+
+### v0.92.0
+
+**Plan Management & Map Storage**
+
+- `RasPlan.delete()` and `renumber()` for plans, geometries, and flow files
+- `RasMap.add_calculated_layer()` for WSE comparison layers
+- `compute_modified_terrain_raster()` for full-resolution terrain mod export
+- `RasCmdr`: Scope parallel consolidation to plan outputs
+- `RasProcess`: Adaptive render mode for cross-version compatibility
+- `GeomStorage`: 2D subgrid sampling options API (spatially varied Manning's on faces, composite classification)
+- Fix `RasCheck` HTAB defaults and surface notebook errors
+
+### v0.91.0
+
+**Terrain Modifications & GUI Automation**
+
+- `RasTerrainModWriter`: Line and polygon terrain modification HDF/rasmap writing (high ground, channel, fill surface, detention pond)
+- `RasTerrainMod`: Terrain profile and volume comparison via RasMapperLib.dll
+- `HdfInfiltration`: Final Manning's n and infiltration APIs
+- `HdfLandCover`: Land-cover sidecar extraction
+- GUI floodplain mapping automation with HDF completion detection
+- `RasPreprocess`: Public API for Linux preprocessing (Phase 1)
+
+### v0.90.1
+
+**Linux Execution & Agent Integration**
+
+- `RasCmdr.compute_plan_linux()` for native Linux HEC-RAS execution
+- `RasProcess`: Output path parameter and `store_all_maps()` method
+- SA polygon extraction from geometry HDF
+- GUI subpackage extracted from monolithic `RasGuiAutomation`
+- Linux execution notebook (510)
+
+### v0.89.0–v0.89.2
+
+**DSS ReLink, File Operations, XYZ Extraction**
+
+- DSS ReLink primitives for HMS-RAS boundary matching
+- `RasPlan.delete()` and `renumber()` operations for all file types
+- `RasProcess`: Linux/Wine support for headless map generation
+- `GeomCrossSection.get_xs_coords()` for plain-text XYZ extraction
+- Description read/write for all HEC-RAS file types
+- `results_df` returned from compute functions
+- Dynamic section-end search (replace fixed `DEFAULT_SEARCH_RANGE`)
+
+### v0.88.0–v0.88.6
+
+**Precipitation, Callbacks, USGS, Remote**
+
+- `StormGenerator`: Static API for Atlas 14 DDF download and hyetograph generation
+- `Atlas14Storm`, `FrequencyStorm`, `ScsTypeStorm`: HMS-equivalent precipitation methods
+- `stream_callback` parameter for real-time execution monitoring
+- `ConsoleCallback`, `FileLoggerCallback`, `ProgressBarCallback`, `SynchronizedCallback`
+- USGS gauge integration (spatial discovery, data retrieval, gauge matching, BC generation)
+- `RasModPuls`: Modified Puls routing extraction from 2D simulations
+- `HdfChannelCapacity`: 1D channel capacity analysis (multi-AEP)
+- `AbmHyetographGrid`: ABM hyetograph grid generation
+- `results_df` fallback for HEC-RAS pre-6.4 versions
+- Remote execution subpackage reorganization
+
+### v0.85.0
 
 **Remote Execution Subpackage**
 
@@ -11,94 +127,63 @@
 - Lazy loading for remote dependencies
 - Optional extras: `[remote-ssh]`, `[remote-aws]`, `[remote-all]`
 
-### v0.84.0
-
-**Inline Structure Parsing**
-
-- New `RasStruct` class for parsing inline structures
-- Support for inline weirs, bridges, and culverts
-- Bridge deck, pier, and abutment extraction
-- Culvert shape code support (9 types)
-
-### v0.82.0
-
-**DSS File Operations**
-
-- New `RasDss` class for reading HEC-DSS files
-- Support for DSS V6 and V7
-- HEC Monolith library integration
-- Boundary condition extraction workflow
-
-### v0.81.0
-
-**Geometry Parsing and Dam Breach**
-
-- New `RasGeometry` class for 1D geometry parsing
-- Cross section station-elevation modification
-- Storage area and connection parsing
-- New `RasBreach` for breach parameter modification
-- New `HdfResultsBreach` for breach results extraction
-- Automatic bank station interpolation
-
-### v0.80.3
-
-**Steady Flow Support**
-
-- `HdfResultsPlan.is_steady_plan()` detection
-- `get_steady_profile_names()` extraction
-- `get_steady_wse()` water surface retrieval
-- `get_steady_info()` metadata access
-
-### v0.80.0
-
-**Legacy COM Interface**
-
-- New `RasControl` class for HEC-RAS 3.x-6.x
-- Steady state profile extraction
-- Unsteady time series extraction
-- Version migration validation support
-
 ### Earlier Versions
 
 See [GitHub Releases](https://github.com/gpt-cmdr/ras-commander/releases) for complete history.
 
 ## Upgrade Guide
 
-### From v0.80 to v0.81+
+### From v0.95 to v0.96+
+
+**Breaking Changes**:
+
+- `CoastalBoundary` moved from `ras_commander` to `ras_commander.boundaries`
+
+**Migration**:
+```python
+# Old
+from ras_commander import CoastalBoundary
+
+# New
+from ras_commander.boundaries import CoastalBoundary
+```
+
+**New Features**:
+- Import `GeomCrossSection` for the cross-section builder
+- Import `GeomBridge` for bridge authoring
+- Import `HdfStorageArea` for volume-elevation curves
+- Import `ManningsFromLandCover` for NLCD Manning's n
+
+### From v0.93 to v0.94+
 
 **Breaking Changes**: None
 
 **New Features**:
-- Import `RasGeometry` for geometry parsing
-- Import `RasBreach`, `HdfResultsBreach` for breach operations
+- Default version is now HEC-RAS 7.0 (pass `"6.6"` explicitly for older versions)
+- Import `RasPermutation` for parameter sweeps
+- Import `RasCalibrate` for calibration workflows
+- Import `HdfResultsQuery` for spatial queries
 
-### From v0.7x to v0.80+
+### From v0.90 to v0.91+
 
 **Breaking Changes**: None
 
 **New Features**:
-- Import `RasControl` for legacy version support
-- Steady flow methods in `HdfResultsPlan`
+- Import `RasTerrainModWriter` for terrain modifications
+- Import `RasTerrainMod` for terrain comparison (Windows only)
+- Import `HdfInfiltration`, `HdfLandCover` for land-cover APIs
+
+### From v0.88 to v0.89+
+
+**Breaking Changes**: None
+
+**New Features**:
+- `StormGenerator` instance API deprecated (use static methods with `ddf_data=`)
+- Import `RasModPuls` for Modified Puls routing
+- `stream_callback` parameter on all compute methods
 
 ## Deprecation Policy
 
 - Deprecated features marked with warnings
 - Removed after two minor versions
 - Breaking changes only in major versions
-
-## Roadmap
-
-### Planned Features
-
-- SshWorker for Linux remote execution
-- AWS EC2 and Azure VM workers
-- Write support for DSS files
-- Enhanced 1D geometry modification
-- Cloud storage integration
-
-### Under Consideration
-
-- GUI application
-- REST API wrapper
-- HEC-HMS integration
-- Model validation tools

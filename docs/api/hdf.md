@@ -106,6 +106,27 @@ Dam breach results.
 - `get_breaching_variables(hdf_path, structure)` - Breach geometry evolution
 - `get_structure_variables(hdf_path, structure)` - Structure flow variables
 
+### HdfStorageArea
+
+Storage area volume-elevation curve extraction from HDF.
+
+- `get_volume_elevation_curve(hdf_path, sa_name)` - Get volume-elevation curve for a storage area
+- `get_storage_area_names(hdf_path)` - List storage areas in HDF
+
+### HdfChannelCapacity
+
+1D channel capacity analysis (multi-AEP).
+
+- `get_channel_capacity(hdf_path, river=None, reach=None)` - Compute channel capacity from cross-section geometry and results
+- `get_multi_aep_capacity(hdf_paths, aep_labels)` - Compare capacity across multiple AEP simulations
+
+### HdfStruc1D
+
+1D inline structure data extraction from HDF.
+
+- `get_inline_structure_data(hdf_path)` - Extract inline structure geometry and results
+- `get_structure_flow_timeseries(hdf_path, structure_name)` - Get flow time series through a structure
+
 ### HdfHydraulicTables
 
 Cross section property tables (HTAB).
