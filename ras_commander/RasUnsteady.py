@@ -74,6 +74,10 @@ Lateral Inflow Hydrograph Functions:
 - get_lateral_inflow_hydrograph() - Read lateral inflow hydrograph data from a boundary
 - set_lateral_inflow_hydrograph() - Write lateral inflow hydrograph data to a boundary
 
+Uniform Lateral Inflow Hydrograph Functions:
+- get_uniform_lateral_inflow_hydrograph() - Read uniform lateral inflow data (reach-based BC)
+- set_uniform_lateral_inflow_hydrograph() - Write uniform lateral inflow data (reach-based BC)
+
 """
 import os
 import numbers
@@ -6502,6 +6506,413 @@ class RasUnsteady:
 
         logger.info(
             "Set Lateral Inflow Hydrograph in %s: matched=%s, values=%d, "
+            "flow=[%.1f, %.1f], slope=%s",
+            unsteady_path.name,
+            matched_loc.strip() if matched_loc else "?",
+            value_count,
+            float(flow_values.min()), float(flow_values.max()),
+            slope_written,
+        )
+
+        return {
+            'unsteady_file': str(unsteady_path),
+            'matched_location': matched_loc,
+            'value_count': value_count,
+            'flow_range': [float(flow_values.min()), float(flow_values.max())],
+            'previous_value_count': previous_value_count,
+            'slope_written': slope_written,
+            'boundaries_df_refreshed': boundaries_df_refreshed,
+        }
+
+    # ------------------------------------------------------------------
+    # Uniform Lateral Inflow Hydrograph Methods
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @log_call
+    def get_uniform_lateral_inflow_hydrograph(
+        unsteady_file: Union[str, Path],
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        station: Optional[str] = None,
+        ras_object: Optional[Any] = None,
+    ) -> Optional[pd.DataFrame]:
+        """
+        Read a Uniform Lateral Inflow Hydrograph from a boundary condition.
+
+        Parses the ``Uniform Lateral Inflow Hydrograph= <count>`` header and
+        the fixed-width flow values that follow it.  Also reads the optional
+        ``Flow Hydrograph Slope=`` and ``Interval=`` fields from the same
+        boundary block and attaches them as DataFrame ``attrs``.
+
+        Uniform lateral inflow is a **reach-based** BC type: the inflow is
+        applied uniformly across a reach segment (between two river stations),
+        unlike a point Lateral Inflow Hydrograph.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##), or a 1-2 character
+            unsteady number (e.g. ``"01"``).
+        river, reach, station : str, optional
+            1D location selector.  When all three are ``None`` the first
+            Uniform Lateral Inflow Hydrograph boundary in the file is
+            returned.
+        ras_object : optional
+            Custom RAS object to use instead of the global one.
+
+        Returns
+        -------
+        pd.DataFrame or None
+            DataFrame with columns ``['flow']`` and integer index
+            representing ordinal time steps, or ``None`` if no matching
+            boundary was found or count is 0 (DSS-linked).
+
+            DataFrame ``attrs`` include:
+
+            - ``interval`` (str): e.g. ``"1HOUR"``
+            - ``slope`` (float or None): ``Flow Hydrograph Slope`` value
+            - ``matched_location`` (str): raw ``Boundary Location=`` value
+            - ``value_count`` (int): number of flow values
+
+        Raises
+        ------
+        FileNotFoundError
+            If the unsteady flow file does not exist.
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except Exception:
+                pass
+
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            if ras_obj is None or getattr(ras_obj, 'project_folder', None) is None:
+                raise ValueError(
+                    "Cannot resolve unsteady number without an initialized ras_object"
+                )
+            num = unsteady_file.zfill(2)
+            unsteady_path = Path(ras_obj.project_folder) / f"{ras_obj.project_name}.u{num}"
+        else:
+            unsteady_path = Path(unsteady_file)
+
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        HEADER = 'Uniform Lateral Inflow Hydrograph='
+        SLOPE_KEY = 'Flow Hydrograph Slope='
+
+        target_idx = None
+        matched_loc = None
+        for i, line in enumerate(lines):
+            if line.startswith('Boundary Location='):
+                loc_value = line[len('Boundary Location='):].rstrip('\r\n')
+                parts = [p.strip() for p in loc_value.split(',')]
+
+                if river is not None or reach is not None or station is not None:
+                    if not (
+                        len(parts) >= 3
+                        and (river is None or parts[0] == river)
+                        and (reach is None or parts[1] == reach)
+                        and (station is None or parts[2] == station)
+                    ):
+                        continue
+
+                block_end = len(lines)
+                uni_header_idx = None
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    if lines[j].startswith('Boundary Location='):
+                        block_end = j
+                        break
+                    if lines[j].startswith(HEADER):
+                        uni_header_idx = j
+
+                if uni_header_idx is not None:
+                    target_idx = uni_header_idx
+                    matched_loc = loc_value
+                    break
+
+        if target_idx is None:
+            logger.debug("No Uniform Lateral Inflow Hydrograph boundary found matching selectors")
+            return None
+
+        try:
+            value_count = int(lines[target_idx].replace(HEADER, '').strip())
+        except ValueError:
+            logger.warning(f"Could not parse value count from: {lines[target_idx].strip()}")
+            return None
+
+        if value_count == 0:
+            logger.debug("Uniform Lateral Inflow Hydrograph has count=0 (DSS-linked, no inline data)")
+            return None
+
+        block_end = len(lines)
+        for j in range(target_idx + 1, len(lines)):
+            if lines[j].startswith('Boundary Location='):
+                block_end = j
+                break
+
+        values = []
+        line_idx = target_idx + 1
+        while len(values) < value_count and line_idx < block_end:
+            data_line = lines[line_idx]
+            if '=' in data_line:
+                break
+            for k in range(0, len(data_line.rstrip('\r\n')), 8):
+                field = data_line[k:k + 8].strip()
+                if field:
+                    try:
+                        values.append(float(field))
+                    except ValueError:
+                        pass
+            line_idx += 1
+
+        interval = None
+        slope = None
+        bc_start = target_idx
+        for j in range(target_idx - 1, -1, -1):
+            if lines[j].startswith('Boundary Location='):
+                bc_start = j
+                break
+        for j in range(bc_start, block_end):
+            stripped = lines[j].strip()
+            if stripped.startswith('Interval='):
+                interval = stripped.replace('Interval=', '').strip()
+            if stripped.startswith(SLOPE_KEY):
+                try:
+                    slope = float(stripped.replace(SLOPE_KEY, '').strip())
+                except ValueError:
+                    pass
+
+        df = pd.DataFrame({'flow': values[:value_count]})
+        df.attrs['interval'] = interval
+        df.attrs['slope'] = slope
+        df.attrs['matched_location'] = matched_loc.strip() if matched_loc else None
+        df.attrs['value_count'] = len(df)
+
+        logger.info(
+            f"Read Uniform Lateral Inflow Hydrograph from {unsteady_path.name}: "
+            f"{len(df)} values, peak={df['flow'].max():.1f}, "
+            f"interval={interval}, slope={slope}"
+        )
+        return df
+
+    @staticmethod
+    @log_call
+    def set_uniform_lateral_inflow_hydrograph(
+        unsteady_file: Union[str, Path],
+        hydrograph_df: pd.DataFrame,
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        station: Optional[str] = None,
+        slope: Optional[float] = None,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Write or replace a Uniform Lateral Inflow Hydrograph on a boundary.
+
+        If the matched boundary already has a
+        ``Uniform Lateral Inflow Hydrograph=`` header and inline data, the
+        existing data is replaced.  Optionally updates
+        ``Flow Hydrograph Slope=`` in the same call.
+
+        Uniform lateral inflow is a **reach-based** BC type: the inflow is
+        applied uniformly across a reach segment (between two river stations).
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##), or a 1-2 character
+            unsteady number (e.g. ``"01"``).
+        hydrograph_df : pd.DataFrame
+            DataFrame with a ``'flow'`` column containing uniform lateral
+            inflow values.  Must have at least 1 row.
+        river, reach, station : str, optional
+            1D location selector.  When all three are ``None`` the first
+            Uniform Lateral Inflow Hydrograph boundary in the file is
+            updated.
+        slope : float, optional
+            If provided, sets ``Flow Hydrograph Slope=`` for this boundary.
+        ras_object : optional
+            Custom RAS object to use instead of the global one.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Metadata with keys:
+
+            - ``unsteady_file`` (str): absolute path written
+            - ``matched_location`` (str): matched ``Boundary Location=`` value
+            - ``value_count`` (int): number of flow values written
+            - ``flow_range`` (list): ``[min_flow, max_flow]``
+            - ``previous_value_count`` (int or None): prior count
+            - ``slope_written`` (float or None): slope value written
+            - ``boundaries_df_refreshed`` (bool): True when refreshed
+
+        Raises
+        ------
+        ValueError
+            If DataFrame is missing ``'flow'`` column, is empty, or no
+            matching boundary is found.
+        FileNotFoundError
+            If the unsteady flow file does not exist.
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except Exception:
+                pass
+
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            if ras_obj is None or getattr(ras_obj, 'project_folder', None) is None:
+                raise ValueError(
+                    "Cannot resolve unsteady number without an initialized ras_object"
+                )
+            num = unsteady_file.zfill(2)
+            unsteady_path = Path(ras_obj.project_folder) / f"{ras_obj.project_name}.u{num}"
+        else:
+            unsteady_path = Path(unsteady_file)
+
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        if 'flow' not in hydrograph_df.columns:
+            raise ValueError(
+                "DataFrame missing required column: 'flow'. "
+                "Provide a DataFrame with a 'flow' column."
+            )
+        if len(hydrograph_df) == 0:
+            raise ValueError("DataFrame is empty")
+
+        flow_values = hydrograph_df['flow'].values
+        value_count = len(flow_values)
+
+        formatted_lines = []
+        for k in range(0, value_count, 10):
+            row_vals = flow_values[k:k + 10]
+            row_str = ''
+            for v in row_vals:
+                fv = float(v)
+                if abs(fv) < 1e7:
+                    row_str += f'{fv:8.1f}' if fv != int(fv) or abs(fv) > 99999 else f'{int(fv):>8}'
+                else:
+                    row_str += f'{fv:8.0f}'
+            formatted_lines.append(row_str + '\n')
+
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        HEADER = 'Uniform Lateral Inflow Hydrograph='
+        SLOPE_KEY = 'Flow Hydrograph Slope='
+
+        boundary_idx = None
+        matched_loc = None
+        uni_header_idx = None
+        block_end = None
+
+        for i, line in enumerate(lines):
+            if line.startswith('Boundary Location='):
+                loc_value = line[len('Boundary Location='):].rstrip('\r\n')
+                parts = [p.strip() for p in loc_value.split(',')]
+
+                if river is not None or reach is not None or station is not None:
+                    if not (
+                        len(parts) >= 3
+                        and (river is None or parts[0] == river)
+                        and (reach is None or parts[1] == reach)
+                        and (station is None or parts[2] == station)
+                    ):
+                        continue
+
+                blk_end = len(lines)
+                found_uni = None
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    if lines[j].startswith('Boundary Location='):
+                        blk_end = j
+                        break
+                    if lines[j].startswith(HEADER):
+                        found_uni = j
+
+                if found_uni is not None:
+                    boundary_idx = i
+                    matched_loc = loc_value
+                    uni_header_idx = found_uni
+                    block_end = blk_end
+                    break
+
+        if boundary_idx is None:
+            sel = f"river={river!r}/reach={reach!r}/station={station!r}" if river else "first matching"
+            raise ValueError(
+                f"No Uniform Lateral Inflow Hydrograph boundary found in "
+                f"{unsteady_path.name} for {sel}"
+            )
+
+        previous_value_count = None
+        try:
+            previous_value_count = int(
+                lines[uni_header_idx].replace(HEADER, '').strip()
+            )
+        except ValueError:
+            pass
+
+        old_data_start = uni_header_idx + 1
+        old_data_end = old_data_start
+        for k in range(old_data_start, block_end):
+            if '=' in lines[k] or lines[k].startswith('Boundary Location='):
+                old_data_end = k
+                break
+        else:
+            old_data_end = block_end
+
+        if old_data_end > old_data_start:
+            del lines[old_data_start:old_data_end]
+
+        lines[uni_header_idx] = f'{HEADER} {value_count} \n'
+
+        insert_pos = uni_header_idx + 1
+        for idx, data_line in enumerate(formatted_lines):
+            lines.insert(insert_pos + idx, data_line)
+
+        slope_written = None
+        if slope is not None:
+            new_block_end = len(lines)
+            for j in range(boundary_idx + 1, len(lines)):
+                if lines[j].startswith('Boundary Location='):
+                    new_block_end = j
+                    break
+
+            existing_slope_idx = None
+            for j in range(boundary_idx, new_block_end):
+                if lines[j].startswith(SLOPE_KEY):
+                    existing_slope_idx = j
+                    break
+
+            slope_line = f'{SLOPE_KEY} {slope} \n'
+            if existing_slope_idx is not None:
+                lines[existing_slope_idx] = slope_line
+            else:
+                insert_after = uni_header_idx + 1 + len(formatted_lines)
+                lines.insert(insert_after, slope_line)
+            slope_written = slope
+
+        with open(unsteady_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
+        boundaries_df_refreshed = False
+        if ras_obj is not None:
+            try:
+                ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+                boundaries_df_refreshed = True
+            except Exception as exc:
+                logger.debug(f"boundaries_df refresh skipped: {exc}")
+
+        logger.info(
+            "Set Uniform Lateral Inflow Hydrograph in %s: matched=%s, values=%d, "
             "flow=[%.1f, %.1f], slope=%s",
             unsteady_path.name,
             matched_loc.strip() if matched_loc else "?",
