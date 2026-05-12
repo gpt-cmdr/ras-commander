@@ -466,6 +466,132 @@ class RasUnsteady:
             'geom_xs_count': len(geom_stations),
         }
 
+    # -------------------------------------------------------------------------
+    # Storage Area / 2D Flow Area Initial Elevation helpers
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    @log_call
+    def get_initial_storage_elevations(
+        unsteady_number_or_path: Union[str, Path],
+        ras_object: Optional[Any] = None,
+    ) -> pd.DataFrame:
+        """Return only the storage/2D-area IC entries from the unsteady file.
+
+        Convenience wrapper around ``get_initial_conditions()`` that filters
+        to ``type == 'storage'`` rows.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number or path to a ``.u##`` file.
+        ras_object : RasPrj, optional
+            RAS project object.
+
+        Returns
+        -------
+        pd.DataFrame
+            Columns: ``type``, ``area_name``, ``value``.
+        """
+        ic_df = RasUnsteady.get_initial_conditions(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        if len(ic_df) == 0:
+            return ic_df
+        return ic_df[ic_df['type'] == 'storage'].reset_index(drop=True)
+
+    @staticmethod
+    @log_call
+    def set_initial_storage_elevation(
+        unsteady_number_or_path: Union[str, Path],
+        area_name: str,
+        elevation: float,
+        ras_object: Optional[Any] = None,
+    ) -> None:
+        """Add or update a single storage/2D-area initial elevation.
+
+        Reads the current IC table, replaces the entry for *area_name* (or
+        appends it if absent), and writes the table back.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number or path to a ``.u##`` file.
+        area_name : str
+            Storage area or 2D flow area name (as stored in the geometry).
+        elevation : float
+            Initial water-surface elevation for this area.
+        ras_object : RasPrj, optional
+            RAS project object.
+        """
+        ic_df = RasUnsteady.get_initial_conditions(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        entries = ic_df.to_dict('records') if len(ic_df) > 0 else []
+
+        replaced = False
+        for entry in entries:
+            if entry.get('type') == 'storage' and str(entry.get('area_name', '')).strip() == str(area_name).strip():
+                entry['value'] = elevation
+                replaced = True
+                break
+        if not replaced:
+            entries.append({
+                'type': 'storage',
+                'area_name': area_name,
+                'value': elevation,
+                'river': None,
+                'reach': None,
+                'station': None,
+            })
+
+        RasUnsteady.set_initial_conditions(
+            unsteady_number_or_path, entries, ras_object=ras_object,
+        )
+        logger.info(f"Set initial elevation for '{area_name}' = {elevation}")
+
+    @staticmethod
+    @log_call
+    def get_min_storage_elevations(
+        geom_hdf_path: Union[str, Path],
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, float]:
+        """Read minimum elevations for all storage/2D areas from geometry HDF.
+
+        Equivalent to the HEC-RAS GUI *Import Min SA Elevation(s)* button.
+        Uses ``HdfStorageArea.get_storage_area_names()`` and
+        ``HdfStorageArea.get_storage_area_properties()`` to extract the
+        ``Min Elev`` attribute from the preprocessed geometry HDF.
+
+        Parameters
+        ----------
+        geom_hdf_path : str or Path
+            Path to a geometry HDF file (e.g. ``"model.g01.hdf"``).
+        ras_object : RasPrj, optional
+            RAS project object.
+
+        Returns
+        -------
+        dict[str, float]
+            Mapping of area name to minimum elevation.
+        """
+        from .hdf.HdfStorageArea import HdfStorageArea
+
+        geom_hdf_path = Path(geom_hdf_path)
+        sa_names = HdfStorageArea.get_storage_area_names(
+            geom_hdf_path, ras_object=ras_object,
+        )
+        result: Dict[str, float] = {}
+        for sa_name in sa_names:
+            props = HdfStorageArea.get_storage_area_properties(
+                geom_hdf_path, sa_name, ras_object=ras_object,
+            )
+            min_elev = props.get('min_elev') or props.get('Min Elev')
+            if min_elev is not None:
+                result[sa_name] = float(min_elev)
+        logger.info(f"Read min elevations for {len(result)} storage areas from {geom_hdf_path.name}")
+        return result
+
     NON_NEWTONIAN_METHODS = {
         0: "Newtonian Assumptions",
         1: "Bingham",
