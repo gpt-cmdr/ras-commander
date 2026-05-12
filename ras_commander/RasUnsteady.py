@@ -89,6 +89,10 @@ Initial Flow Distribution Table:
 - set_initial_conditions() - Write IC entries from list of dicts or DataFrame (auto-sets IC method)
 - validate_initial_flow_stations() - Check IC flow stations match geometry cross sections
 
+Non-Newtonian Method Selection:
+- get_non_newtonian_method() - Read the Non-Newtonian method integer and return name
+- set_non_newtonian_method() - Set the Non-Newtonian method by integer or name
+
 """
 import os
 import numbers
@@ -461,6 +465,130 @@ class RasUnsteady:
             'ic_count': len(flow_ics),
             'geom_xs_count': len(geom_stations),
         }
+
+    NON_NEWTONIAN_METHODS = {
+        0: "Newtonian Assumptions",
+        1: "Bulking Only",
+        2: "Bingham",
+        3: "O'Brien (Quadratic)",
+        4: "Herschel-Bulkley",
+        5: "Voellmy",
+    }
+
+    @staticmethod
+    @log_call
+    def get_non_newtonian_method(
+        unsteady_number_or_path: Union[str, Path],
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Read the Non-Newtonian method from an unsteady flow file.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"03"``) or path to a ``.u##`` file.
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses the global ``ras`` object.
+
+        Returns
+        -------
+        dict
+            ``method_id`` (int): Integer method code (0-5).
+            ``method_name`` (str): Human-readable method name.
+        """
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        with open(unsteady_file, 'r') as f:
+            for line in f:
+                if line.startswith("Non-Newtonian Method="):
+                    value_str = line.split('=', 1)[1].strip().rstrip(',').strip()
+                    method_id = int(value_str)
+                    method_name = RasUnsteady.NON_NEWTONIAN_METHODS.get(
+                        method_id, f"Unknown ({method_id})"
+                    )
+                    return {'method_id': method_id, 'method_name': method_name}
+        return {'method_id': 0, 'method_name': 'Newtonian Assumptions'}
+
+    @staticmethod
+    @log_call
+    def set_non_newtonian_method(
+        unsteady_number_or_path: Union[str, Path],
+        method: Union[int, str],
+        ras_object: Optional[Any] = None,
+    ) -> None:
+        """
+        Set the Non-Newtonian method in an unsteady flow file.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"03"``) or path to a ``.u##`` file.
+        method : int or str
+            Method to set. Accepts integer (0-5) or name string:
+            ``0``/``"Newtonian Assumptions"``, ``1``/``"Bulking Only"``,
+            ``2``/``"Bingham"``, ``3``/``"O'Brien (Quadratic)"``,
+            ``4``/``"Herschel-Bulkley"``, ``5``/``"Voellmy"``.
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses the global ``ras`` object.
+
+        Raises
+        ------
+        ValueError
+            If the method is not a valid integer (0-5) or recognized name.
+        """
+        if isinstance(method, int):
+            method_id = method
+        elif isinstance(method, str):
+            name_to_id = {v.lower(): k for k, v in RasUnsteady.NON_NEWTONIAN_METHODS.items()}
+            method_lower = method.lower().strip()
+            if method_lower in name_to_id:
+                method_id = name_to_id[method_lower]
+            elif method.strip().isdigit():
+                method_id = int(method.strip())
+            else:
+                raise ValueError(
+                    f"Unknown Non-Newtonian method: '{method}'. "
+                    f"Valid names: {list(RasUnsteady.NON_NEWTONIAN_METHODS.values())}"
+                )
+        else:
+            raise ValueError(f"method must be int or str, got {type(method)}")
+
+        if method_id not in RasUnsteady.NON_NEWTONIAN_METHODS:
+            raise ValueError(
+                f"Invalid method_id {method_id}. Must be 0-5: "
+                f"{RasUnsteady.NON_NEWTONIAN_METHODS}"
+            )
+
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        with open(unsteady_file, 'r') as f:
+            lines = f.readlines()
+
+        found = False
+        for i, line in enumerate(lines):
+            if line.startswith("Non-Newtonian Method="):
+                lines[i] = f"Non-Newtonian Method= {method_id} ,\n"
+                found = True
+                break
+
+        if not found:
+            logger.warning(
+                f"No 'Non-Newtonian Method=' line found in {unsteady_file.name}; "
+                "line not written"
+            )
+            return
+
+        with open(unsteady_file, 'w') as f:
+            f.writelines(lines)
+
+        logger.info(
+            f"Set Non-Newtonian method to {method_id} "
+            f"({RasUnsteady.NON_NEWTONIAN_METHODS[method_id]}) "
+            f"in {unsteady_file.name}"
+        )
 
     @staticmethod
     @log_call
