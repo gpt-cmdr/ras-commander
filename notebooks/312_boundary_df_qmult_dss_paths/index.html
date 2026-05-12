@@ -3110,6 +3110,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#step-20-clastic-grain-flow-auxiliary-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 20: Clastic Grain-Flow &amp; Auxiliary Parameters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#summary" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5204,6 +5215,96 @@ API reads and writes these two values individually or together.</p>
 </span><span id="__span-46-15"><a id="__codelineno-46-15" name="__codelineno-46-15" href="#__codelineno-46-15"></a><span class="c1"># Clean up copy</span>
 </span><span id="__span-46-16"><a id="__codelineno-46-16" name="__codelineno-46-16" href="#__codelineno-46-16"></a><span class="n">u02_copy</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">missing_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span></code></pre></div>
+<h2 id="step-20-clastic-grain-flow-auxiliary-parameters">Step 20: Clastic Grain-Flow &amp; Auxiliary Parameters<a class="headerlink" href="#step-20-clastic-grain-flow-auxiliary-parameters" title="Permanent link">&para;</a></h2>
+<p>When <code>Non-Newtonian Method= 3</code> (Clastic Grain-Flow), additional parameters
+control the frictional/granular flow model:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Clastic Method</code></td>
+<td>int</td>
+<td>0=Coulomb, 1=Voellmy</td>
+</tr>
+<tr>
+<td><code>Coulomb Phi</code></td>
+<td>float</td>
+<td>Friction angle phi (degrees) — both methods</td>
+</tr>
+<tr>
+<td><code>Voellmy X</code></td>
+<td>float</td>
+<td>Turbulence parameter Xi — Voellmy only</td>
+</tr>
+<tr>
+<td><code>Non-Newtonian Hindered FV</code></td>
+<td>int</td>
+<td>0=No Hindered Settling, 1=User Specified K</td>
+</tr>
+<tr>
+<td><code>Non-Newtonian FV K</code></td>
+<td>float</td>
+<td>k power for hindered settling</td>
+</tr>
+<tr>
+<td><code>Non-Newtonian ds</code></td>
+<td>float</td>
+<td>Representative grain size (mm)</td>
+</tr>
+<tr>
+<td><code>Non-Newtonian High C Transport</code></td>
+<td>int</td>
+<td>Transport equation selector</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Note</strong>: <code>Voellmy Phi=</code> is a legacy key synonym for <code>Coulomb Phi=</code>.
+The getter accepts both; the setter always writes <code>Coulomb Phi=</code>.</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a><span class="c1"># --- Step 20a: Read clastic/auxiliary parameters from .u02 ---</span>
+</span><span id="__span-47-2"><a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a><span class="n">clastic</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_non_newtonian_clastic</span><span class="p">(</span><span class="n">u02_orig</span><span class="p">)</span>
+</span><span id="__span-47-3"><a id="__codelineno-47-3" name="__codelineno-47-3" href="#__codelineno-47-3"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Clastic and auxiliary parameters:&quot;</span><span class="p">)</span>
+</span><span id="__span-47-4"><a id="__codelineno-47-4" name="__codelineno-47-4" href="#__codelineno-47-4"></a><span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">clastic</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="__span-47-5"><a id="__codelineno-47-5" name="__codelineno-47-5" href="#__codelineno-47-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-47-6"><a id="__codelineno-47-6" name="__codelineno-47-6" href="#__codelineno-47-6"></a>
+</span><span id="__span-47-7"><a id="__codelineno-47-7" name="__codelineno-47-7" href="#__codelineno-47-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span>
+</span><span id="__span-47-8"><a id="__codelineno-47-8" name="__codelineno-47-8" href="#__codelineno-47-8"></a><span class="n">Clastic</span> <span class="n">methods</span><span class="p">:</span> <span class="p">{</span><span class="n">RasUnsteady</span><span class="o">.</span><span class="n">CLASTIC_METHODS</span><span class="p">}</span><span class="s2">&quot;)</span>
+</span><span id="__span-47-9"><a id="__codelineno-47-9" name="__codelineno-47-9" href="#__codelineno-47-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Hindered FV methods: </span><span class="si">{</span><span class="n">RasUnsteady</span><span class="o">.</span><span class="n">HINDERED_FV_METHODS</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-47-10"><a id="__codelineno-47-10" name="__codelineno-47-10" href="#__codelineno-47-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;High-C transport: </span><span class="si">{</span><span class="n">RasUnsteady</span><span class="o">.</span><span class="n">HIGH_C_TRANSPORT_METHODS</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a><span class="c1"># --- Step 20b: Round-trip set_non_newtonian_clastic() ---</span>
+</span><span id="__span-48-2"><a id="__codelineno-48-2" name="__codelineno-48-2" href="#__codelineno-48-2"></a><span class="n">shutil</span><span class="o">.</span><span class="n">copy2</span><span class="p">(</span><span class="n">u02_orig</span><span class="p">,</span> <span class="n">u02_copy</span><span class="p">)</span>
+</span><span id="__span-48-3"><a id="__codelineno-48-3" name="__codelineno-48-3" href="#__codelineno-48-3"></a>
+</span><span id="__span-48-4"><a id="__codelineno-48-4" name="__codelineno-48-4" href="#__codelineno-48-4"></a><span class="c1"># Configure Voellmy clastic method</span>
+</span><span id="__span-48-5"><a id="__codelineno-48-5" name="__codelineno-48-5" href="#__codelineno-48-5"></a><span class="n">RasUnsteady</span><span class="o">.</span><span class="n">set_non_newtonian_clastic</span><span class="p">(</span>
+</span><span id="__span-48-6"><a id="__codelineno-48-6" name="__codelineno-48-6" href="#__codelineno-48-6"></a>    <span class="n">u02_copy</span><span class="p">,</span>
+</span><span id="__span-48-7"><a id="__codelineno-48-7" name="__codelineno-48-7" href="#__codelineno-48-7"></a>    <span class="n">clastic_method</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>     <span class="c1"># Voellmy</span>
+</span><span id="__span-48-8"><a id="__codelineno-48-8" name="__codelineno-48-8" href="#__codelineno-48-8"></a>    <span class="n">coulomb_phi</span><span class="o">=</span><span class="mf">25.0</span><span class="p">,</span>     <span class="c1"># degrees</span>
+</span><span id="__span-48-9"><a id="__codelineno-48-9" name="__codelineno-48-9" href="#__codelineno-48-9"></a>    <span class="n">voellmy_x</span><span class="o">=</span><span class="mf">500.0</span><span class="p">,</span>     <span class="c1"># turbulence parameter</span>
+</span><span id="__span-48-10"><a id="__codelineno-48-10" name="__codelineno-48-10" href="#__codelineno-48-10"></a>    <span class="n">hindered_fv</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>        <span class="c1"># User Specified K</span>
+</span><span id="__span-48-11"><a id="__codelineno-48-11" name="__codelineno-48-11" href="#__codelineno-48-11"></a>    <span class="n">fv_k</span><span class="o">=</span><span class="mf">4.65</span><span class="p">,</span>           <span class="c1"># Richardson-Zaki power</span>
+</span><span id="__span-48-12"><a id="__codelineno-48-12" name="__codelineno-48-12" href="#__codelineno-48-12"></a>    <span class="n">ds</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>              <span class="c1"># 2 mm grain size</span>
+</span><span id="__span-48-13"><a id="__codelineno-48-13" name="__codelineno-48-13" href="#__codelineno-48-13"></a><span class="p">)</span>
+</span><span id="__span-48-14"><a id="__codelineno-48-14" name="__codelineno-48-14" href="#__codelineno-48-14"></a>
+</span><span id="__span-48-15"><a id="__codelineno-48-15" name="__codelineno-48-15" href="#__codelineno-48-15"></a><span class="c1"># Verify round-trip</span>
+</span><span id="__span-48-16"><a id="__codelineno-48-16" name="__codelineno-48-16" href="#__codelineno-48-16"></a><span class="n">after</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_non_newtonian_clastic</span><span class="p">(</span><span class="n">u02_copy</span><span class="p">)</span>
+</span><span id="__span-48-17"><a id="__codelineno-48-17" name="__codelineno-48-17" href="#__codelineno-48-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Clastic method: </span><span class="si">{</span><span class="n">after</span><span class="p">[</span><span class="s1">&#39;clastic_method&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">after</span><span class="p">[</span><span class="s1">&#39;clastic_method_name&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+</span><span id="__span-48-18"><a id="__codelineno-48-18" name="__codelineno-48-18" href="#__codelineno-48-18"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Coulomb Phi: </span><span class="si">{</span><span class="n">after</span><span class="p">[</span><span class="s1">&#39;coulomb_phi&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> degrees&quot;</span><span class="p">)</span>
+</span><span id="__span-48-19"><a id="__codelineno-48-19" name="__codelineno-48-19" href="#__codelineno-48-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Voellmy X: </span><span class="si">{</span><span class="n">after</span><span class="p">[</span><span class="s1">&#39;voellmy_x&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-48-20"><a id="__codelineno-48-20" name="__codelineno-48-20" href="#__codelineno-48-20"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Hindered FV: </span><span class="si">{</span><span class="n">after</span><span class="p">[</span><span class="s1">&#39;hindered_fv&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">after</span><span class="p">[</span><span class="s1">&#39;hindered_fv_name&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+</span><span id="__span-48-21"><a id="__codelineno-48-21" name="__codelineno-48-21" href="#__codelineno-48-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;FV K: </span><span class="si">{</span><span class="n">after</span><span class="p">[</span><span class="s1">&#39;fv_k&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-48-22"><a id="__codelineno-48-22" name="__codelineno-48-22" href="#__codelineno-48-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ds: </span><span class="si">{</span><span class="n">after</span><span class="p">[</span><span class="s1">&#39;ds&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> mm&quot;</span><span class="p">)</span>
+</span><span id="__span-48-23"><a id="__codelineno-48-23" name="__codelineno-48-23" href="#__codelineno-48-23"></a>
+</span><span id="__span-48-24"><a id="__codelineno-48-24" name="__codelineno-48-24" href="#__codelineno-48-24"></a><span class="c1"># Clean up copy</span>
+</span><span id="__span-48-25"><a id="__codelineno-48-25" name="__codelineno-48-25" href="#__codelineno-48-25"></a><span class="n">u02_copy</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">missing_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-48-26"><a id="__codelineno-48-26" name="__codelineno-48-26" href="#__codelineno-48-26"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span>
+</span><span id="__span-48-27"><a id="__codelineno-48-27" name="__codelineno-48-27" href="#__codelineno-48-27"></a><span class="n">Round</span><span class="o">-</span><span class="n">trip</span> <span class="n">verified</span><span class="o">.</span><span class="s2">&quot;)</span>
+</span></code></pre></div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated the enhanced <code>boundaries_df</code> features:</p>
 <h3 id="new-dataframe-columns">New DataFrame Columns<a class="headerlink" href="#new-dataframe-columns" title="Permanent link">&para;</a></h3>
@@ -5523,11 +5624,11 @@ API reads and writes these two values individually or together.</p>
 </tbody>
 </table>
 <p>Method enum verified via binary analysis of Ras.exe (0=Newtonian, 1=Bingham, 2=O'Brien, 3=Clastic, 4=Herschel-Bulkley).</p>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a><span class="c1"># Cleanup (optional)</span>
-</span><span id="__span-47-2"><a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
-</span><span id="__span-47-3"><a id="__codelineno-47-3" name="__codelineno-47-3" href="#__codelineno-47-3"></a><span class="c1"># import shutil</span>
-</span><span id="__span-47-4"><a id="__codelineno-47-4" name="__codelineno-47-4" href="#__codelineno-47-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
-</span><span id="__span-47-5"><a id="__codelineno-47-5" name="__codelineno-47-5" href="#__codelineno-47-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a><span class="c1"># Cleanup (optional)</span>
+</span><span id="__span-49-2"><a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
+</span><span id="__span-49-3"><a id="__codelineno-49-3" name="__codelineno-49-3" href="#__codelineno-49-3"></a><span class="c1"># import shutil</span>
+</span><span id="__span-49-4"><a id="__codelineno-49-4" name="__codelineno-49-4" href="#__codelineno-49-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
+</span><span id="__span-49-5"><a id="__codelineno-49-5" name="__codelineno-49-5" href="#__codelineno-49-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
 </span></code></pre></div>
 
 
@@ -5551,7 +5652,7 @@ API reads and writes these two values individually or together.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:19:17 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:22:36 UTC">May 12, 2026</span>
   </span>
 
     
@@ -5561,7 +5662,7 @@ API reads and writes these two values individually or together.</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:19:17 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:22:36 UTC">May 12, 2026</span>
   </span>
 
     
