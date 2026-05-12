@@ -3154,6 +3154,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#step-24-generate-ic-from-usgs-gauge-snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 24: Generate IC from USGS Gauge Snapshot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#summary" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3368,6 +3379,17 @@
     <span class="md-ellipsis">
       
         IC from Output Profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usgs-driven-ic-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        USGS-Driven IC Generation
       
     </span>
   </a>
@@ -5498,6 +5520,56 @@ conditions in an unsteady file. This replicates the HEC-RAS GUI action
 </span><span id="__span-53-38"><a id="__codelineno-53-38" name="__codelineno-53-38" href="#__codelineno-53-38"></a><span class="n">backup_u01</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
 </span><span id="__span-53-39"><a id="__codelineno-53-39" name="__codelineno-53-39" href="#__codelineno-53-39"></a><span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Restored original .u01 file&#39;</span><span class="p">)</span>
 </span></code></pre></div>
+<h2 id="step-24-generate-ic-from-usgs-gauge-snapshot">Step 24: Generate IC from USGS Gauge Snapshot<a class="headerlink" href="#step-24-generate-ic-from-usgs-gauge-snapshot" title="Permanent link">&para;</a></h2>
+<p>The <code>generate_ic_from_usgs()</code> method automates the full USGS-to-IC workflow:</p>
+<ol>
+<li><strong>Discover</strong> USGS gauges near the model (via <code>UsgsGaugeSpatial</code>)</li>
+<li><strong>Match</strong> gauges to 1D cross sections (via <code>GaugeMatcher</code>)</li>
+<li><strong>Retrieve</strong> flow values at a target datetime (via USGS NWIS)</li>
+<li><strong>Assemble</strong> an IC table ready for <code>set_initial_conditions()</code></li>
+</ol>
+<p>This requires internet access to USGS NWIS services.</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a><span class="c1"># --- Step 24a: Generate IC from USGS gauge data ---</span>
+</span><span id="__span-54-2"><a id="__codelineno-54-2" name="__codelineno-54-2" href="#__codelineno-54-2"></a><span class="c1"># This demonstrates the automated gauge discovery + matching + retrieval pipeline.</span>
+</span><span id="__span-54-3"><a id="__codelineno-54-3" name="__codelineno-54-3" href="#__codelineno-54-3"></a><span class="c1"># Requires: internet access, dataretrieval, geopandas, pyproj packages.</span>
+</span><span id="__span-54-4"><a id="__codelineno-54-4" name="__codelineno-54-4" href="#__codelineno-54-4"></a>
+</span><span id="__span-54-5"><a id="__codelineno-54-5" name="__codelineno-54-5" href="#__codelineno-54-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.usgs</span><span class="w"> </span><span class="kn">import</span> <span class="n">InitialConditions</span>
+</span><span id="__span-54-6"><a id="__codelineno-54-6" name="__codelineno-54-6" href="#__codelineno-54-6"></a>
+</span><span id="__span-54-7"><a id="__codelineno-54-7" name="__codelineno-54-7" href="#__codelineno-54-7"></a><span class="c1"># Use the Muncie geometry HDF for gauge discovery</span>
+</span><span id="__span-54-8"><a id="__codelineno-54-8" name="__codelineno-54-8" href="#__codelineno-54-8"></a><span class="n">muncie_geom_hdf</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;example_projects/Muncie_wine_test/Muncie.g01.hdf&quot;</span><span class="p">)</span>
+</span><span id="__span-54-9"><a id="__codelineno-54-9" name="__codelineno-54-9" href="#__codelineno-54-9"></a>
+</span><span id="__span-54-10"><a id="__codelineno-54-10" name="__codelineno-54-10" href="#__codelineno-54-10"></a><span class="c1"># Choose a realistic historical datetime for IC snapshot</span>
+</span><span id="__span-54-11"><a id="__codelineno-54-11" name="__codelineno-54-11" href="#__codelineno-54-11"></a><span class="n">target_dt</span> <span class="o">=</span> <span class="s2">&quot;2024-06-15T12:00:00&quot;</span>
+</span><span id="__span-54-12"><a id="__codelineno-54-12" name="__codelineno-54-12" href="#__codelineno-54-12"></a>
+</span><span id="__span-54-13"><a id="__codelineno-54-13" name="__codelineno-54-13" href="#__codelineno-54-13"></a><span class="k">try</span><span class="p">:</span>
+</span><span id="__span-54-14"><a id="__codelineno-54-14" name="__codelineno-54-14" href="#__codelineno-54-14"></a>    <span class="n">ic_from_usgs</span> <span class="o">=</span> <span class="n">InitialConditions</span><span class="o">.</span><span class="n">generate_ic_from_usgs</span><span class="p">(</span>
+</span><span id="__span-54-15"><a id="__codelineno-54-15" name="__codelineno-54-15" href="#__codelineno-54-15"></a>        <span class="n">geom_hdf_path</span><span class="o">=</span><span class="n">muncie_geom_hdf</span><span class="p">,</span>
+</span><span id="__span-54-16"><a id="__codelineno-54-16" name="__codelineno-54-16" href="#__codelineno-54-16"></a>        <span class="n">target_datetime</span><span class="o">=</span><span class="n">target_dt</span><span class="p">,</span>
+</span><span id="__span-54-17"><a id="__codelineno-54-17" name="__codelineno-54-17" href="#__codelineno-54-17"></a>        <span class="n">parameter</span><span class="o">=</span><span class="s2">&quot;flow&quot;</span><span class="p">,</span>
+</span><span id="__span-54-18"><a id="__codelineno-54-18" name="__codelineno-54-18" href="#__codelineno-54-18"></a>        <span class="n">max_distance_m</span><span class="o">=</span><span class="mf">2000.0</span><span class="p">,</span>       <span class="c1"># search radius for gauge-to-XS match</span>
+</span><span id="__span-54-19"><a id="__codelineno-54-19" name="__codelineno-54-19" href="#__codelineno-54-19"></a>        <span class="n">tolerance_hours</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>            <span class="c1"># time window for nearest USGS value</span>
+</span><span id="__span-54-20"><a id="__codelineno-54-20" name="__codelineno-54-20" href="#__codelineno-54-20"></a>        <span class="n">buffer_percent</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>         <span class="c1"># expand search area to find gauges</span>
+</span><span id="__span-54-21"><a id="__codelineno-54-21" name="__codelineno-54-21" href="#__codelineno-54-21"></a>        <span class="n">min_match_quality</span><span class="o">=</span><span class="s2">&quot;fair&quot;</span><span class="p">,</span>     <span class="c1"># minimum match quality to include</span>
+</span><span id="__span-54-22"><a id="__codelineno-54-22" name="__codelineno-54-22" href="#__codelineno-54-22"></a>        <span class="n">write_to_file</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>          <span class="c1"># inspect before writing</span>
+</span><span id="__span-54-23"><a id="__codelineno-54-23" name="__codelineno-54-23" href="#__codelineno-54-23"></a>    <span class="p">)</span>
+</span><span id="__span-54-24"><a id="__codelineno-54-24" name="__codelineno-54-24" href="#__codelineno-54-24"></a>
+</span><span id="__span-54-25"><a id="__codelineno-54-25" name="__codelineno-54-25" href="#__codelineno-54-25"></a>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">ic_from_usgs</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="__span-54-26"><a id="__codelineno-54-26" name="__codelineno-54-26" href="#__codelineno-54-26"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ic_from_usgs</span><span class="p">)</span><span class="si">}</span><span class="s2"> IC entries from USGS gauges at </span><span class="si">{</span><span class="n">target_dt</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-54-27"><a id="__codelineno-54-27" name="__codelineno-54-27" href="#__codelineno-54-27"></a>        <span class="nb">print</span><span class="p">(</span><span class="n">ic_from_usgs</span><span class="p">[[</span>
+</span><span id="__span-54-28"><a id="__codelineno-54-28" name="__codelineno-54-28" href="#__codelineno-54-28"></a>            <span class="s2">&quot;river&quot;</span><span class="p">,</span> <span class="s2">&quot;reach&quot;</span><span class="p">,</span> <span class="s2">&quot;station&quot;</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">,</span>
+</span><span id="__span-54-29"><a id="__codelineno-54-29" name="__codelineno-54-29" href="#__codelineno-54-29"></a>            <span class="s2">&quot;site_no&quot;</span><span class="p">,</span> <span class="s2">&quot;match_quality&quot;</span><span class="p">,</span> <span class="s2">&quot;time_offset_minutes&quot;</span>
+</span><span id="__span-54-30"><a id="__codelineno-54-30" name="__codelineno-54-30" href="#__codelineno-54-30"></a>        <span class="p">]]</span><span class="o">.</span><span class="n">to_string</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+</span><span id="__span-54-31"><a id="__codelineno-54-31" name="__codelineno-54-31" href="#__codelineno-54-31"></a>    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-54-32"><a id="__codelineno-54-32" name="__codelineno-54-32" href="#__codelineno-54-32"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No gauges found/matched near Muncie model (expected for small model domain)&quot;</span><span class="p">)</span>
+</span><span id="__span-54-33"><a id="__codelineno-54-33" name="__codelineno-54-33" href="#__codelineno-54-33"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;This method works best for larger models near active USGS gauges.&quot;</span><span class="p">)</span>
+</span><span id="__span-54-34"><a id="__codelineno-54-34" name="__codelineno-54-34" href="#__codelineno-54-34"></a>
+</span><span id="__span-54-35"><a id="__codelineno-54-35" name="__codelineno-54-35" href="#__codelineno-54-35"></a><span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-54-36"><a id="__codelineno-54-36" name="__codelineno-54-36" href="#__codelineno-54-36"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Optional dependency not available: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-54-37"><a id="__codelineno-54-37" name="__codelineno-54-37" href="#__codelineno-54-37"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Install with: pip install dataretrieval geopandas pyproj&quot;</span><span class="p">)</span>
+</span><span id="__span-54-38"><a id="__codelineno-54-38" name="__codelineno-54-38" href="#__codelineno-54-38"></a><span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-54-39"><a id="__codelineno-54-39" name="__codelineno-54-39" href="#__codelineno-54-39"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;USGS query failed (internet required): </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-54-40"><a id="__codelineno-54-40" name="__codelineno-54-40" href="#__codelineno-54-40"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;This step requires internet access to USGS NWIS services.&quot;</span><span class="p">)</span>
+</span></code></pre></div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated the enhanced <code>boundaries_df</code> features:</p>
 <h3 id="new-dataframe-columns">New DataFrame Columns<a class="headerlink" href="#new-dataframe-columns" title="Permanent link">&para;</a></h3>
@@ -5874,11 +5946,26 @@ conditions in an unsteady file. This replicates the HEC-RAS GUI action
 </tr>
 </tbody>
 </table>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a><span class="c1"># Cleanup (optional)</span>
-</span><span id="__span-54-2"><a id="__codelineno-54-2" name="__codelineno-54-2" href="#__codelineno-54-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
-</span><span id="__span-54-3"><a id="__codelineno-54-3" name="__codelineno-54-3" href="#__codelineno-54-3"></a><span class="c1"># import shutil</span>
-</span><span id="__span-54-4"><a id="__codelineno-54-4" name="__codelineno-54-4" href="#__codelineno-54-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
-</span><span id="__span-54-5"><a id="__codelineno-54-5" name="__codelineno-54-5" href="#__codelineno-54-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
+<h3 id="usgs-driven-ic-generation">USGS-Driven IC Generation<a class="headerlink" href="#usgs-driven-ic-generation" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>generate_ic_from_usgs()</code></td>
+<td>Auto-discover gauges, match to XS, retrieve USGS values, assemble IC table</td>
+</tr>
+</tbody>
+</table>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-55-1"><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a><span class="c1"># Cleanup (optional)</span>
+</span><span id="__span-55-2"><a id="__codelineno-55-2" name="__codelineno-55-2" href="#__codelineno-55-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
+</span><span id="__span-55-3"><a id="__codelineno-55-3" name="__codelineno-55-3" href="#__codelineno-55-3"></a><span class="c1"># import shutil</span>
+</span><span id="__span-55-4"><a id="__codelineno-55-4" name="__codelineno-55-4" href="#__codelineno-55-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
+</span><span id="__span-55-5"><a id="__codelineno-55-5" name="__codelineno-55-5" href="#__codelineno-55-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
 </span></code></pre></div>
 
 
@@ -5902,7 +5989,7 @@ conditions in an unsteady file. This replicates the HEC-RAS GUI action
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:44:33 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:52:57 UTC">May 12, 2026</span>
   </span>
 
     
@@ -5912,7 +5999,7 @@ conditions in an unsteady file. This replicates the HEC-RAS GUI action
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:44:33 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:52:57 UTC">May 12, 2026</span>
   </span>
 
     
