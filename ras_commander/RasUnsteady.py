@@ -63,7 +63,9 @@ DSS Boundary Condition Functions:
 - update_dss_path_by_station() - Update DSS A-part for specific river station
 - update_flow_multiplier_by_station() - Update/insert QMult for specific river station
 - update_boundary_dss_paths() - Batch update DSS paths and multipliers
-        
+- get_rating_curve() - Read Rating Curve (stage, discharge) pairs from a boundary
+- set_rating_curve() - Write or replace Rating Curve data on a boundary
+
 """
 import os
 import numbers
@@ -5391,4 +5393,375 @@ class RasUnsteady:
             logger.info(f"Applied: {n_updates} DSS paths updated")
 
         return report
+
+    @staticmethod
+    @log_call
+    def get_rating_curve(
+        unsteady_file: Union[str, Path],
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        station: Optional[str] = None,
+        ras_object: Optional[Any] = None,
+    ) -> Optional[pd.DataFrame]:
+        """
+        Read a Rating Curve from a boundary condition in a HEC-RAS unsteady flow file.
+
+        Parses the ``Rating Curve= <pair_count>`` header and the fixed-width
+        (stage, discharge) pair table that follows it.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##), or a 1-2 character unsteady
+            number (e.g. ``"01"``) when a project-bound ``ras_object`` is
+            available.
+        river, reach, station : str, optional
+            1D location selector.  When all three are ``None`` the first
+            Rating Curve boundary in the file is returned.
+        ras_object : optional
+            Custom RAS object to use instead of the global one.
+
+        Returns
+        -------
+        pd.DataFrame or None
+            DataFrame with columns ``['stage', 'discharge']`` containing the
+            rating curve pairs, or ``None`` if no Rating Curve boundary was
+            found matching the selectors.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the unsteady flow file does not exist.
+
+        Examples
+        --------
+        >>> from ras_commander import RasUnsteady
+        >>> rc = RasUnsteady.get_rating_curve(
+        ...     "Manning'snCalibra.u01",
+        ...     river="Mississippi", reach="Lower Miss.", station="846",
+        ... )
+        >>> rc.head()
+           stage  discharge
+        0  211.0        0.0
+        1  225.8    80000.0
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except Exception:
+                pass
+
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            if ras_obj is None or getattr(ras_obj, 'project_folder', None) is None:
+                raise ValueError(
+                    "Cannot resolve unsteady number without an initialized ras_object"
+                )
+            num = unsteady_file.zfill(2)
+            unsteady_path = Path(ras_obj.project_folder) / f"{ras_obj.project_name}.u{num}"
+        else:
+            unsteady_path = Path(unsteady_file)
+
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        RATING_CURVE_HEADER = 'Rating Curve='
+
+        target_idx = None
+        for i, line in enumerate(lines):
+            if line.startswith('Boundary Location='):
+                loc_value = line[len('Boundary Location='):].rstrip('\r\n')
+                parts = [p.strip() for p in loc_value.split(',')]
+
+                if river is not None or reach is not None or station is not None:
+                    if not (
+                        len(parts) >= 3
+                        and (river is None or parts[0] == river)
+                        and (reach is None or parts[1] == reach)
+                        and (station is None or parts[2] == station)
+                    ):
+                        continue
+
+                block_end = len(lines)
+                rc_header_idx = None
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    if lines[j].startswith('Boundary Location='):
+                        block_end = j
+                        break
+                    if lines[j].startswith(RATING_CURVE_HEADER):
+                        rc_header_idx = j
+                        break
+
+                if rc_header_idx is not None:
+                    target_idx = rc_header_idx
+                    break
+
+        if target_idx is None:
+            logger.debug("No Rating Curve boundary found matching selectors")
+            return None
+
+        header_line = lines[target_idx]
+        try:
+            pair_count = int(header_line.replace(RATING_CURVE_HEADER, '').strip())
+        except ValueError:
+            logger.warning(f"Could not parse pair count from: {header_line.strip()}")
+            return None
+
+        values = []
+        line_idx = target_idx + 1
+        while len(values) < pair_count * 2 and line_idx < len(lines):
+            data_line = lines[line_idx]
+            if '=' in data_line or data_line.startswith('Boundary Location='):
+                break
+            for k in range(0, len(data_line.rstrip('\r\n')), 8):
+                field = data_line[k:k + 8].strip()
+                if field:
+                    try:
+                        values.append(float(field))
+                    except ValueError:
+                        pass
+            line_idx += 1
+
+        stages = values[0::2]
+        discharges = values[1::2]
+        n = min(len(stages), len(discharges))
+
+        df = pd.DataFrame({
+            'stage': stages[:n],
+            'discharge': discharges[:n],
+        })
+        logger.info(
+            f"Read Rating Curve from {unsteady_path.name}: "
+            f"{len(df)} pairs, stage range [{df['stage'].min():.1f}, {df['stage'].max():.1f}]"
+        )
+        return df
+
+    @staticmethod
+    @log_call
+    def set_rating_curve(
+        unsteady_file: Union[str, Path],
+        rating_curve_df: pd.DataFrame,
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        station: Optional[str] = None,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Write or replace a Rating Curve table on a boundary condition.
+
+        If the matched boundary already has a ``Rating Curve=`` header and
+        inline data, the existing data is replaced.  If the boundary exists
+        but has no rating curve data yet, a ``Rating Curve=`` header and data
+        lines are inserted.
+
+        Rating Curves are static stage-discharge relationships and have no
+        ``Interval=`` line.  The data is stored as (stage, discharge) pairs in
+        8-character fixed-width format, 10 values per line (5 pairs).
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##), or a 1-2 character unsteady
+            number (e.g. ``"01"``) when a project-bound ``ras_object`` is
+            available.
+        rating_curve_df : pd.DataFrame
+            DataFrame with columns ``['stage', 'discharge']``.  Must have at
+            least 2 rows and be sorted by ascending stage.
+        river, reach, station : str, optional
+            1D location selector.  When all three are ``None`` the first
+            Rating Curve boundary in the file is updated.
+        ras_object : optional
+            Custom RAS object to use instead of the global one.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Reviewable metadata with keys:
+
+            - ``unsteady_file`` (str): absolute path written
+            - ``matched_location`` (str): matched ``Boundary Location=`` value
+            - ``pair_count`` (int): number of (stage, discharge) pairs written
+            - ``stage_range`` (list): ``[min_stage, max_stage]``
+            - ``discharge_range`` (list): ``[min_discharge, max_discharge]``
+            - ``previous_pair_count`` (int or None): prior pair count, or
+              ``None`` if no Rating Curve data existed
+            - ``boundaries_df_refreshed`` (bool): True when ``ras_object``
+              ``boundaries_df`` was refreshed after the write
+
+        Raises
+        ------
+        ValueError
+            If DataFrame is missing required columns, has fewer than 2 rows,
+            or no matching boundary is found.
+        FileNotFoundError
+            If the unsteady flow file does not exist.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> from ras_commander import RasUnsteady
+        >>> rc = pd.DataFrame({
+        ...     'stage': [210, 220, 230, 240, 250],
+        ...     'discharge': [0, 50000, 200000, 500000, 1000000],
+        ... })
+        >>> result = RasUnsteady.set_rating_curve(
+        ...     "Manning'snCalibra.u01", rc,
+        ...     river="Mississippi", reach="Lower Miss.", station="846",
+        ... )
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except Exception:
+                pass
+
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            if ras_obj is None or getattr(ras_obj, 'project_folder', None) is None:
+                raise ValueError(
+                    "Cannot resolve unsteady number without an initialized ras_object"
+                )
+            num = unsteady_file.zfill(2)
+            unsteady_path = Path(ras_obj.project_folder) / f"{ras_obj.project_name}.u{num}"
+        else:
+            unsteady_path = Path(unsteady_file)
+
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        required_columns = ['stage', 'discharge']
+        missing = [c for c in required_columns if c not in rating_curve_df.columns]
+        if missing:
+            raise ValueError(
+                f"DataFrame missing required columns: {missing}. "
+                f"Required: {required_columns}"
+            )
+        if len(rating_curve_df) < 2:
+            raise ValueError("Rating curve DataFrame must have at least 2 rows")
+
+        stages = rating_curve_df['stage'].values
+        discharges = rating_curve_df['discharge'].values
+        pair_count = len(stages)
+
+        interleaved = []
+        for s, q in zip(stages, discharges):
+            interleaved.append(float(s))
+            interleaved.append(float(q))
+
+        formatted_lines = []
+        for k in range(0, len(interleaved), 10):
+            row_vals = interleaved[k:k + 10]
+            formatted_row = ''
+            for v in row_vals:
+                if abs(v) < 1e7:
+                    formatted_row += f'{v:8.1f}' if v != int(v) or abs(v) > 99999 else f'{int(v):>8}'
+                else:
+                    formatted_row += f'{v:8.0f}'
+            formatted_lines.append(formatted_row + '\n')
+
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        RATING_CURVE_HEADER = 'Rating Curve='
+
+        boundary_idx = None
+        matched_loc = None
+        rc_header_idx = None
+        block_end = None
+
+        for i, line in enumerate(lines):
+            if line.startswith('Boundary Location='):
+                loc_value = line[len('Boundary Location='):].rstrip('\r\n')
+                parts = [p.strip() for p in loc_value.split(',')]
+
+                if river is not None or reach is not None or station is not None:
+                    if not (
+                        len(parts) >= 3
+                        and (river is None or parts[0] == river)
+                        and (reach is None or parts[1] == reach)
+                        and (station is None or parts[2] == station)
+                    ):
+                        continue
+
+                blk_end = len(lines)
+                found_rc = None
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    if lines[j].startswith('Boundary Location='):
+                        blk_end = j
+                        break
+                    if lines[j].startswith(RATING_CURVE_HEADER):
+                        found_rc = j
+
+                if found_rc is not None:
+                    boundary_idx = i
+                    matched_loc = loc_value
+                    rc_header_idx = found_rc
+                    block_end = blk_end
+                    break
+
+        if boundary_idx is None:
+            sel = f"river={river!r}/reach={reach!r}/station={station!r}" if river else "first matching"
+            raise ValueError(
+                f"No Rating Curve boundary found in {unsteady_path.name} for {sel}"
+            )
+
+        previous_pair_count = None
+        try:
+            previous_pair_count = int(
+                lines[rc_header_idx].replace(RATING_CURVE_HEADER, '').strip()
+            )
+        except ValueError:
+            pass
+
+        old_data_start = rc_header_idx + 1
+        old_data_end = old_data_start
+        for k in range(old_data_start, block_end):
+            if '=' in lines[k] or lines[k].startswith('Boundary Location='):
+                old_data_end = k
+                break
+        else:
+            old_data_end = block_end
+
+        if old_data_end > old_data_start:
+            del lines[old_data_start:old_data_end]
+
+        lines[rc_header_idx] = f'{RATING_CURVE_HEADER} {pair_count} \n'
+
+        insert_pos = rc_header_idx + 1
+        for idx, data_line in enumerate(formatted_lines):
+            lines.insert(insert_pos + idx, data_line)
+
+        with open(unsteady_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
+        boundaries_df_refreshed = False
+        if ras_obj is not None:
+            try:
+                ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+                boundaries_df_refreshed = True
+            except Exception as exc:
+                logger.debug(f"boundaries_df refresh skipped: {exc}")
+
+        logger.info(
+            "Set Rating Curve in %s: matched=%s, pairs=%d, "
+            "stage=[%.1f, %.1f], discharge=[%.0f, %.0f]",
+            unsteady_path.name,
+            matched_loc.strip() if matched_loc else "?",
+            pair_count,
+            float(stages[0]), float(stages[-1]),
+            float(discharges[0]), float(discharges[-1]),
+        )
+
+        return {
+            'unsteady_file': str(unsteady_path),
+            'matched_location': matched_loc,
+            'pair_count': pair_count,
+            'stage_range': [float(stages[0]), float(stages[-1])],
+            'discharge_range': [float(discharges[0]), float(discharges[-1])],
+            'previous_pair_count': previous_pair_count,
+            'boundaries_df_refreshed': boundaries_df_refreshed,
+        }
 
