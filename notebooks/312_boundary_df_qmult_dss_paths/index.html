@@ -3143,6 +3143,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#step-23-set-ic-from-previous-output-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 23: Set IC from Previous Output Profile
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#summary" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3346,6 +3357,17 @@
     <span class="md-ellipsis">
       
         Storage Area IC Helpers (Step 22)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ic-from-output-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IC from Output Profile
       
     </span>
   </a>
@@ -5431,6 +5453,51 @@ methods provide targeted access:</p>
 </span><span id="__span-52-17"><a id="__codelineno-52-17" name="__codelineno-52-17" href="#__codelineno-52-17"></a><span class="k">assert</span> <span class="n">rest_values</span> <span class="o">==</span> <span class="n">orig_values</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Restore failed: </span><span class="si">{</span><span class="n">rest_values</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="n">orig_values</span><span class="si">}</span><span class="s2">&quot;</span>
 </span><span id="__span-52-18"><a id="__codelineno-52-18" name="__codelineno-52-18" href="#__codelineno-52-18"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Round-trip restore verified.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<h2 id="step-23-set-ic-from-previous-output-profile">Step 23: Set IC from Previous Output Profile<a class="headerlink" href="#step-23-set-ic-from-previous-output-profile" title="Permanent link">&para;</a></h2>
+<p>The <code>set_ic_from_output_profile()</code> method reads a completed simulation's output
+(flow at 1D cross sections, WSE at storage areas) and writes them as initial
+conditions in an unsteady file. This replicates the HEC-RAS GUI action
+<em>Set Initial Conditions from Output File</em> - commonly used for warmup runs.</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a><span class="c1"># --- Step 23a: Read IC from completed Muncie simulation output ---</span>
+</span><span id="__span-53-2"><a id="__codelineno-53-2" name="__codelineno-53-2" href="#__codelineno-53-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-53-3"><a id="__codelineno-53-3" name="__codelineno-53-3" href="#__codelineno-53-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+</span><span id="__span-53-4"><a id="__codelineno-53-4" name="__codelineno-53-4" href="#__codelineno-53-4"></a>
+</span><span id="__span-53-5"><a id="__codelineno-53-5" name="__codelineno-53-5" href="#__codelineno-53-5"></a><span class="c1"># Source HDF: completed Muncie simulation with 1D XS + storage area results</span>
+</span><span id="__span-53-6"><a id="__codelineno-53-6" name="__codelineno-53-6" href="#__codelineno-53-6"></a><span class="n">muncie_hdf</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;example_projects/Muncie_wine_test/Muncie.p01.hdf&#39;</span><span class="p">)</span>
+</span><span id="__span-53-7"><a id="__codelineno-53-7" name="__codelineno-53-7" href="#__codelineno-53-7"></a><span class="n">muncie_u01</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;example_projects/Muncie_wine_test/Muncie.u01&#39;</span><span class="p">)</span>
+</span><span id="__span-53-8"><a id="__codelineno-53-8" name="__codelineno-53-8" href="#__codelineno-53-8"></a>
+</span><span id="__span-53-9"><a id="__codelineno-53-9" name="__codelineno-53-9" href="#__codelineno-53-9"></a><span class="c1"># Back up original unsteady file</span>
+</span><span id="__span-53-10"><a id="__codelineno-53-10" name="__codelineno-53-10" href="#__codelineno-53-10"></a><span class="n">backup_u01</span> <span class="o">=</span> <span class="n">muncie_u01</span><span class="o">.</span><span class="n">with_suffix</span><span class="p">(</span><span class="s1">&#39;.u01.bak_step23&#39;</span><span class="p">)</span>
+</span><span id="__span-53-11"><a id="__codelineno-53-11" name="__codelineno-53-11" href="#__codelineno-53-11"></a><span class="n">shutil</span><span class="o">.</span><span class="n">copy2</span><span class="p">(</span><span class="n">muncie_u01</span><span class="p">,</span> <span class="n">backup_u01</span><span class="p">)</span>
+</span><span id="__span-53-12"><a id="__codelineno-53-12" name="__codelineno-53-12" href="#__codelineno-53-12"></a>
+</span><span id="__span-53-13"><a id="__codelineno-53-13" name="__codelineno-53-13" href="#__codelineno-53-13"></a><span class="c1"># Extract IC from last time step and write to .u01</span>
+</span><span id="__span-53-14"><a id="__codelineno-53-14" name="__codelineno-53-14" href="#__codelineno-53-14"></a><span class="n">ic_df</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">set_ic_from_output_profile</span><span class="p">(</span>
+</span><span id="__span-53-15"><a id="__codelineno-53-15" name="__codelineno-53-15" href="#__codelineno-53-15"></a>    <span class="n">muncie_u01</span><span class="p">,</span>
+</span><span id="__span-53-16"><a id="__codelineno-53-16" name="__codelineno-53-16" href="#__codelineno-53-16"></a>    <span class="n">source_plan_hdf</span><span class="o">=</span><span class="n">muncie_hdf</span><span class="p">,</span>
+</span><span id="__span-53-17"><a id="__codelineno-53-17" name="__codelineno-53-17" href="#__codelineno-53-17"></a>    <span class="n">time_index</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span>   <span class="c1"># last time step</span>
+</span><span id="__span-53-18"><a id="__codelineno-53-18" name="__codelineno-53-18" href="#__codelineno-53-18"></a><span class="p">)</span>
+</span><span id="__span-53-19"><a id="__codelineno-53-19" name="__codelineno-53-19" href="#__codelineno-53-19"></a>
+</span><span id="__span-53-20"><a id="__codelineno-53-20" name="__codelineno-53-20" href="#__codelineno-53-20"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Extracted </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ic_df</span><span class="p">)</span><span class="si">}</span><span class="s1"> IC entries from output profile:&#39;</span><span class="p">)</span>
+</span><span id="__span-53-21"><a id="__codelineno-53-21" name="__codelineno-53-21" href="#__codelineno-53-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  1D flow entries: </span><span class="si">{</span><span class="p">(</span><span class="n">ic_df</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s2">&quot;flow&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</span><span id="__span-53-22"><a id="__codelineno-53-22" name="__codelineno-53-22" href="#__codelineno-53-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  Storage area entries: </span><span class="si">{</span><span class="p">(</span><span class="n">ic_df</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s2">&quot;storage&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</span><span id="__span-53-23"><a id="__codelineno-53-23" name="__codelineno-53-23" href="#__codelineno-53-23"></a><span class="nb">print</span><span class="p">()</span>
+</span><span id="__span-53-24"><a id="__codelineno-53-24" name="__codelineno-53-24" href="#__codelineno-53-24"></a><span class="nb">print</span><span class="p">(</span><span class="s1">&#39;First 5 flow entries:&#39;</span><span class="p">)</span>
+</span><span id="__span-53-25"><a id="__codelineno-53-25" name="__codelineno-53-25" href="#__codelineno-53-25"></a><span class="nb">print</span><span class="p">(</span><span class="n">ic_df</span><span class="p">[</span><span class="n">ic_df</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;flow&#39;</span><span class="p">][[</span><span class="s1">&#39;river&#39;</span><span class="p">,</span> <span class="s1">&#39;reach&#39;</span><span class="p">,</span> <span class="s1">&#39;station&#39;</span><span class="p">,</span> <span class="s1">&#39;value&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
+</span><span id="__span-53-26"><a id="__codelineno-53-26" name="__codelineno-53-26" href="#__codelineno-53-26"></a><span class="nb">print</span><span class="p">()</span>
+</span><span id="__span-53-27"><a id="__codelineno-53-27" name="__codelineno-53-27" href="#__codelineno-53-27"></a><span class="k">if</span> <span class="p">(</span><span class="n">ic_df</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;storage&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+</span><span id="__span-53-28"><a id="__codelineno-53-28" name="__codelineno-53-28" href="#__codelineno-53-28"></a>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Storage area entries:&#39;</span><span class="p">)</span>
+</span><span id="__span-53-29"><a id="__codelineno-53-29" name="__codelineno-53-29" href="#__codelineno-53-29"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">ic_df</span><span class="p">[</span><span class="n">ic_df</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;storage&#39;</span><span class="p">][[</span><span class="s1">&#39;area_name&#39;</span><span class="p">,</span> <span class="s1">&#39;value&#39;</span><span class="p">]])</span>
+</span><span id="__span-53-30"><a id="__codelineno-53-30" name="__codelineno-53-30" href="#__codelineno-53-30"></a>
+</span><span id="__span-53-31"><a id="__codelineno-53-31" name="__codelineno-53-31" href="#__codelineno-53-31"></a><span class="c1"># Verify the IC was written</span>
+</span><span id="__span-53-32"><a id="__codelineno-53-32" name="__codelineno-53-32" href="#__codelineno-53-32"></a><span class="n">ic_check</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_initial_conditions</span><span class="p">(</span><span class="n">muncie_u01</span><span class="p">)</span>
+</span><span id="__span-53-33"><a id="__codelineno-53-33" name="__codelineno-53-33" href="#__codelineno-53-33"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span>
+</span><span id="__span-53-34"><a id="__codelineno-53-34" name="__codelineno-53-34" href="#__codelineno-53-34"></a><span class="n">Verification</span><span class="p">:</span> <span class="p">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ic_check</span><span class="p">)}</span> <span class="n">IC</span> <span class="n">entries</span> <span class="ow">in</span> <span class="o">.</span><span class="n">u01</span> <span class="n">file</span><span class="s1">&#39;)</span>
+</span><span id="__span-53-35"><a id="__codelineno-53-35" name="__codelineno-53-35" href="#__codelineno-53-35"></a>
+</span><span id="__span-53-36"><a id="__codelineno-53-36" name="__codelineno-53-36" href="#__codelineno-53-36"></a><span class="c1"># Restore original</span>
+</span><span id="__span-53-37"><a id="__codelineno-53-37" name="__codelineno-53-37" href="#__codelineno-53-37"></a><span class="n">shutil</span><span class="o">.</span><span class="n">copy2</span><span class="p">(</span><span class="n">backup_u01</span><span class="p">,</span> <span class="n">muncie_u01</span><span class="p">)</span>
+</span><span id="__span-53-38"><a id="__codelineno-53-38" name="__codelineno-53-38" href="#__codelineno-53-38"></a><span class="n">backup_u01</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+</span><span id="__span-53-39"><a id="__codelineno-53-39" name="__codelineno-53-39" href="#__codelineno-53-39"></a><span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Restored original .u01 file&#39;</span><span class="p">)</span>
+</span></code></pre></div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated the enhanced <code>boundaries_df</code> features:</p>
 <h3 id="new-dataframe-columns">New DataFrame Columns<a class="headerlink" href="#new-dataframe-columns" title="Permanent link">&para;</a></h3>
@@ -5792,11 +5859,26 @@ methods provide targeted access:</p>
 </tr>
 </tbody>
 </table>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a><span class="c1"># Cleanup (optional)</span>
-</span><span id="__span-53-2"><a id="__codelineno-53-2" name="__codelineno-53-2" href="#__codelineno-53-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
-</span><span id="__span-53-3"><a id="__codelineno-53-3" name="__codelineno-53-3" href="#__codelineno-53-3"></a><span class="c1"># import shutil</span>
-</span><span id="__span-53-4"><a id="__codelineno-53-4" name="__codelineno-53-4" href="#__codelineno-53-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
-</span><span id="__span-53-5"><a id="__codelineno-53-5" name="__codelineno-53-5" href="#__codelineno-53-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
+<h3 id="ic-from-output-profile">IC from Output Profile<a class="headerlink" href="#ic-from-output-profile" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>set_ic_from_output_profile()</code></td>
+<td>Populate IC table from completed simulation output</td>
+</tr>
+</tbody>
+</table>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a><span class="c1"># Cleanup (optional)</span>
+</span><span id="__span-54-2"><a id="__codelineno-54-2" name="__codelineno-54-2" href="#__codelineno-54-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
+</span><span id="__span-54-3"><a id="__codelineno-54-3" name="__codelineno-54-3" href="#__codelineno-54-3"></a><span class="c1"># import shutil</span>
+</span><span id="__span-54-4"><a id="__codelineno-54-4" name="__codelineno-54-4" href="#__codelineno-54-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
+</span><span id="__span-54-5"><a id="__codelineno-54-5" name="__codelineno-54-5" href="#__codelineno-54-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
 </span></code></pre></div>
 
 
@@ -5820,7 +5902,7 @@ methods provide targeted access:</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:37:08 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:44:33 UTC">May 12, 2026</span>
   </span>
 
     
@@ -5830,7 +5912,7 @@ methods provide targeted access:</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:37:08 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:44:33 UTC">May 12, 2026</span>
   </span>
 
     
