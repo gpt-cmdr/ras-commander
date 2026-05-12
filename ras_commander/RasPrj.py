@@ -1583,7 +1583,9 @@ class RasPrj:
             'river_reach_name': fields[0] if len(fields) > 0 else '',
             'river_station': fields[1] if len(fields) > 1 else '',
             'storage_area_name': fields[2] if len(fields) > 2 else '',
-            'pump_station_name': fields[3] if len(fields) > 3 else ''
+            'pump_station_name': fields[3] if len(fields) > 3 else '',
+            'area_2d': fields[5] if len(fields) > 5 else '',
+            'bc_line_name': fields[7] if len(fields) > 7 else ''
         })
         parsed_lines.add(0)
         
@@ -1623,6 +1625,22 @@ class RasPrj:
                 if key in known_fields:
                     bc_info[key] = value.strip()
                     parsed_lines.add(i)
+
+        # Parse Friction Slope into typed columns
+        if 'Friction Slope' in bc_info:
+            fs_raw = bc_info['Friction Slope']
+            fs_parts = [p.strip() for p in fs_raw.split(',')]
+            try:
+                bc_info['friction_slope_value'] = float(fs_parts[0])
+            except (ValueError, IndexError):
+                bc_info['friction_slope_value'] = None
+            if len(fs_parts) > 1:
+                try:
+                    bc_info['critical_fallback_flag'] = int(fs_parts[1])
+                except ValueError:
+                    bc_info['critical_fallback_flag'] = None
+            else:
+                bc_info['critical_fallback_flag'] = None
 
         # Parse DSS Path components if available
         if 'DSS Path' in bc_info and bc_info['DSS Path']:

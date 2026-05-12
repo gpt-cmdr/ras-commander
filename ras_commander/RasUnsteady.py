@@ -3728,6 +3728,12 @@ class RasUnsteady:
 
         Notes
         -----
+        **1D applicability**: Normal Depth is a downstream-only boundary
+        condition for 1D reaches. HEC-RAS uses the Manning equation with
+        the specified friction slope to compute the stage at the most
+        downstream cross section. Do not apply this to upstream 1D
+        boundaries — use Flow Hydrograph or Stage Hydrograph instead.
+
         **Follow-up scope (out of this function)**: validation that the
         selected boundary actually exists in the geometry file, and creating
         a brand-new ``Boundary Location=`` block when the boundary exists in
