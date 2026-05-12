@@ -1600,6 +1600,7 @@ class RasPrj:
             'Friction Slope=': 'Normal Depth',
             'Gate Name=': 'Gate Opening',
             'Observed Stage and Flow Hydrograph=': 'Observed Stage and Flow',
+            'Ground Water Interflow=': 'Ground Water Interflow',
         }
         
         bc_info['bc_type'] = 'Unknown'
@@ -1619,7 +1620,8 @@ class RasPrj:
         known_fields = ['Interval', 'DSS Path', 'Use DSS', 'Use Fixed Start Time', 'Fixed Start Date/Time',
                         'Is Critical Boundary', 'Critical Boundary Flow', 'DSS File',
                         'Flow Hydrograph QMult', 'Flow Hydrograph QMin', 'Flow Hydrograph Slope',
-                        'Stage Hydrograph TW Check', 'Friction Slope']
+                        'Stage Hydrograph TW Check', 'Friction Slope',
+                        'Ground Water Darcy K', 'Ground Water Darcy K/day', 'Ground Water Darcy Distance']
         for i, line in enumerate(lines):
             if '=' in line:
                 key, value = line.split('=', 1)
