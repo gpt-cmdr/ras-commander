@@ -3000,6 +3000,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#step-10-observed-stage-and-flow-hydrograph-internal-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 10: Observed Stage and Flow Hydrograph (Internal Boundary)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#summary" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3045,10 +3056,32 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#stageflow-hydrograph-methods-internal-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage/Flow Hydrograph Methods (Internal Boundaries)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#computational-verification-step-9" class="md-nav__link">
     <span class="md-ellipsis">
       
         Computational Verification (Step 9)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stageflow-hydrograph-verification-step-10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage/Flow Hydrograph Verification (Step 10)
       
     </span>
   </a>
@@ -4012,6 +4045,100 @@
 </span><span id="__span-23-70"><a id="__codelineno-23-70" name="__codelineno-23-70" href="#__codelineno-23-70"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;- time/cross_section coordinates did not match exactly&quot;</span><span class="p">)</span>
 </span><span id="__span-23-71"><a id="__codelineno-23-71" name="__codelineno-23-71" href="#__codelineno-23-71"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;- some cross sections did not show lower max WSE&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<h2 id="step-10-observed-stage-and-flow-hydrograph-internal-boundary">Step 10: Observed Stage and Flow Hydrograph (Internal Boundary)<a class="headerlink" href="#step-10-observed-stage-and-flow-hydrograph-internal-boundary" title="Permanent link">&para;</a></h2>
+<p>HEC-RAS supports <strong>Observed Stage and Flow Hydrograph</strong> boundary conditions for internal boundaries (e.g., weirs or inline structures). These store interleaved (stage, flow) pairs in 8-character fixed-width format.</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RasUnsteady.get_stage_flow_hydrograph()</code></td>
+<td>Read stage/flow pairs from a <code>.u##</code> file</td>
+</tr>
+<tr>
+<td><code>RasUnsteady.set_stage_flow_hydrograph()</code></td>
+<td>Write or replace stage/flow pairs in a <code>.u##</code> file</td>
+</tr>
+</tbody>
+</table>
+<p>This step demonstrates reading, modifying, and round-trip verifying these internal boundary conditions using the <strong>Internal Stage and Flow Boundary Condition</strong> example project.</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># --- Step 10a: Extract the Internal Stage and Flow Boundary Condition project ---</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="c1"># The fixture lives under example_projects/ (committed with the repo)</span>
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="n">fixture_src</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;../example_projects/Internal Stage and Flow Boundary Condition&quot;</span><span class="p">)</span>
+</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="n">ib_project_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;example_projects&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="s2">&quot;IBStageFlowTest_312&quot;</span>
+</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="k">if</span> <span class="n">ib_project_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>    <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">ib_project_path</span><span class="p">)</span>
+</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="n">shutil</span><span class="o">.</span><span class="n">copytree</span><span class="p">(</span><span class="n">fixture_src</span><span class="p">,</span> <span class="n">ib_project_path</span><span class="p">)</span>
+</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a>
+</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a><span class="n">ras_ib</span> <span class="o">=</span> <span class="n">init_ras_project</span><span class="p">(</span><span class="n">ib_project_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
+</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project: </span><span class="si">{</span><span class="n">ras_ib</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Boundaries (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ras_ib</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">)</span><span class="si">}</span><span class="s2">):&quot;</span><span class="p">)</span>
+</span><span id="__span-24-15"><a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a><span class="n">display</span><span class="p">(</span><span class="n">ras_ib</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">[[</span><span class="s1">&#39;river&#39;</span><span class="p">,</span> <span class="s1">&#39;reach&#39;</span><span class="p">,</span> <span class="s1">&#39;river_station&#39;</span><span class="p">,</span> <span class="s1">&#39;bc_type&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
+</span><span id="__span-24-16"><a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a>
+</span><span id="__span-24-17"><a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a><span class="c1"># Read observed stage/flow data from the internal BC at station 41.76</span>
+</span><span id="__span-24-18"><a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a><span class="n">ib_u01</span> <span class="o">=</span> <span class="n">ras_ib</span><span class="o">.</span><span class="n">unsteady_df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;full_path&#39;</span><span class="p">]</span>
+</span><span id="__span-24-19"><a id="__codelineno-24-19" name="__codelineno-24-19" href="#__codelineno-24-19"></a><span class="n">sf_df</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_stage_flow_hydrograph</span><span class="p">(</span>
+</span><span id="__span-24-20"><a id="__codelineno-24-20" name="__codelineno-24-20" href="#__codelineno-24-20"></a>    <span class="n">unsteady_file</span><span class="o">=</span><span class="n">ib_u01</span><span class="p">,</span>
+</span><span id="__span-24-21"><a id="__codelineno-24-21" name="__codelineno-24-21" href="#__codelineno-24-21"></a>    <span class="n">river</span><span class="o">=</span><span class="s2">&quot;Nittany River&quot;</span><span class="p">,</span>
+</span><span id="__span-24-22"><a id="__codelineno-24-22" name="__codelineno-24-22" href="#__codelineno-24-22"></a>    <span class="n">reach</span><span class="o">=</span><span class="s2">&quot;Weir Reach&quot;</span><span class="p">,</span>
+</span><span id="__span-24-23"><a id="__codelineno-24-23" name="__codelineno-24-23" href="#__codelineno-24-23"></a>    <span class="n">station</span><span class="o">=</span><span class="s2">&quot;41.76&quot;</span><span class="p">,</span>
+</span><span id="__span-24-24"><a id="__codelineno-24-24" name="__codelineno-24-24" href="#__codelineno-24-24"></a>    <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_ib</span><span class="p">,</span>
+</span><span id="__span-24-25"><a id="__codelineno-24-25" name="__codelineno-24-25" href="#__codelineno-24-25"></a><span class="p">)</span>
+</span><span id="__span-24-26"><a id="__codelineno-24-26" name="__codelineno-24-26" href="#__codelineno-24-26"></a>
+</span><span id="__span-24-27"><a id="__codelineno-24-27" name="__codelineno-24-27" href="#__codelineno-24-27"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Observed Stage and Flow Hydrograph at Nittany River / Weir Reach / 41.76:&quot;</span><span class="p">)</span>
+</span><span id="__span-24-28"><a id="__codelineno-24-28" name="__codelineno-24-28" href="#__codelineno-24-28"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Pairs: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">sf_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-24-29"><a id="__codelineno-24-29" name="__codelineno-24-29" href="#__codelineno-24-29"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Stage range: </span><span class="si">{</span><span class="n">sf_df</span><span class="p">[</span><span class="s1">&#39;stage&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> – </span><span class="si">{</span><span class="n">sf_df</span><span class="p">[</span><span class="s1">&#39;stage&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-24-30"><a id="__codelineno-24-30" name="__codelineno-24-30" href="#__codelineno-24-30"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Flow  range: </span><span class="si">{</span><span class="n">sf_df</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> – </span><span class="si">{</span><span class="n">sf_df</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-24-31"><a id="__codelineno-24-31" name="__codelineno-24-31" href="#__codelineno-24-31"></a><span class="n">display</span><span class="p">(</span><span class="n">sf_df</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
+</span></code></pre></div>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># --- Step 10b: Scale flows by 1.25x and write back ---</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="n">SCALE_FACTOR</span> <span class="o">=</span> <span class="mf">1.25</span>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="n">sf_modified</span> <span class="o">=</span> <span class="n">sf_df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="n">sf_modified</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">sf_modified</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span> <span class="o">*</span> <span class="n">SCALE_FACTOR</span>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Original peak flow:  </span><span class="si">{</span><span class="n">sf_df</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Scaled peak flow:    </span><span class="si">{</span><span class="n">sf_modified</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">  (x</span><span class="si">{</span><span class="n">SCALE_FACTOR</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>
+</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="n">RasUnsteady</span><span class="o">.</span><span class="n">set_stage_flow_hydrograph</span><span class="p">(</span>
+</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a>    <span class="n">unsteady_file</span><span class="o">=</span><span class="n">ib_u01</span><span class="p">,</span>
+</span><span id="__span-25-13"><a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a>    <span class="n">stage_flow_df</span><span class="o">=</span><span class="n">sf_modified</span><span class="p">,</span>
+</span><span id="__span-25-14"><a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a>    <span class="n">river</span><span class="o">=</span><span class="s2">&quot;Nittany River&quot;</span><span class="p">,</span>
+</span><span id="__span-25-15"><a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a>    <span class="n">reach</span><span class="o">=</span><span class="s2">&quot;Weir Reach&quot;</span><span class="p">,</span>
+</span><span id="__span-25-16"><a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a>    <span class="n">station</span><span class="o">=</span><span class="s2">&quot;41.76&quot;</span><span class="p">,</span>
+</span><span id="__span-25-17"><a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a>    <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_ib</span><span class="p">,</span>
+</span><span id="__span-25-18"><a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a><span class="p">)</span>
+</span><span id="__span-25-19"><a id="__codelineno-25-19" name="__codelineno-25-19" href="#__codelineno-25-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Wrote </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">sf_modified</span><span class="p">)</span><span class="si">}</span><span class="s2"> stage/flow pairs back to </span><span class="si">{</span><span class="n">Path</span><span class="p">(</span><span class="n">ib_u01</span><span class="p">)</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># --- Step 10c: Round-trip verification — re-read and compare ---</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="n">sf_reread</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_stage_flow_hydrograph</span><span class="p">(</span>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>    <span class="n">unsteady_file</span><span class="o">=</span><span class="n">ib_u01</span><span class="p">,</span>
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>    <span class="n">river</span><span class="o">=</span><span class="s2">&quot;Nittany River&quot;</span><span class="p">,</span> <span class="n">reach</span><span class="o">=</span><span class="s2">&quot;Weir Reach&quot;</span><span class="p">,</span> <span class="n">station</span><span class="o">=</span><span class="s2">&quot;41.76&quot;</span><span class="p">,</span>
+</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>    <span class="n">ras_object</span><span class="o">=</span><span class="n">ras_ib</span><span class="p">,</span>
+</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="p">)</span>
+</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Re-read </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">sf_reread</span><span class="p">)</span><span class="si">}</span><span class="s2"> stage/flow pairs after write&quot;</span><span class="p">)</span>
+</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="n">display</span><span class="p">(</span><span class="n">sf_reread</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
+</span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a>
+</span><span id="__span-26-11"><a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a><span class="c1"># Verify round-trip: written values match what we read back</span>
+</span><span id="__span-26-12"><a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a><span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">sf_reread</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">sf_modified</span><span class="p">),</span> <span class="p">(</span>
+</span><span id="__span-26-13"><a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a>    <span class="sa">f</span><span class="s2">&quot;Row count mismatch: wrote </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">sf_modified</span><span class="p">)</span><span class="si">}</span><span class="s2">, read </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">sf_reread</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-26-14"><a id="__codelineno-26-14" name="__codelineno-26-14" href="#__codelineno-26-14"></a><span class="p">)</span>
+</span><span id="__span-26-15"><a id="__codelineno-26-15" name="__codelineno-26-15" href="#__codelineno-26-15"></a><span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">sf_reread</span><span class="p">[</span><span class="s1">&#39;stage&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">sf_modified</span><span class="p">[</span><span class="s1">&#39;stage&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="mf">0.01</span><span class="p">),</span> \
+</span><span id="__span-26-16"><a id="__codelineno-26-16" name="__codelineno-26-16" href="#__codelineno-26-16"></a>    <span class="s2">&quot;Stage values changed during round-trip!&quot;</span>
+</span><span id="__span-26-17"><a id="__codelineno-26-17" name="__codelineno-26-17" href="#__codelineno-26-17"></a><span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">sf_reread</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">sf_modified</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="mf">0.1</span><span class="p">),</span> \
+</span><span id="__span-26-18"><a id="__codelineno-26-18" name="__codelineno-26-18" href="#__codelineno-26-18"></a>    <span class="s2">&quot;Flow values changed during round-trip!&quot;</span>
+</span><span id="__span-26-19"><a id="__codelineno-26-19" name="__codelineno-26-19" href="#__codelineno-26-19"></a>
+</span><span id="__span-26-20"><a id="__codelineno-26-20" name="__codelineno-26-20" href="#__codelineno-26-20"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Round-trip verification PASSED — written values match read-back&quot;</span><span class="p">)</span>
+</span></code></pre></div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated the enhanced <code>boundaries_df</code> features:</p>
 <h3 id="new-dataframe-columns">New DataFrame Columns<a class="headerlink" href="#new-dataframe-columns" title="Permanent link">&para;</a></h3>
@@ -4125,6 +4252,25 @@
 </tr>
 </tbody>
 </table>
+<h3 id="stageflow-hydrograph-methods-internal-boundaries">Stage/Flow Hydrograph Methods (Internal Boundaries)<a class="headerlink" href="#stageflow-hydrograph-methods-internal-boundaries" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RasUnsteady.get_stage_flow_hydrograph()</code></td>
+<td>Read interleaved stage/flow pairs from <code>.u##</code> file</td>
+</tr>
+<tr>
+<td><code>RasUnsteady.set_stage_flow_hydrograph()</code></td>
+<td>Write or replace stage/flow pairs in <code>.u##</code> file</td>
+</tr>
+</tbody>
+</table>
 <h3 id="computational-verification-step-9">Computational Verification (Step 9)<a class="headerlink" href="#computational-verification-step-9" title="Permanent link">&para;</a></h3>
 <p>Three independent HEC-RAS computations verified the implementation:</p>
 <p><strong>Step 9a: Round-Trip Fidelity Test</strong>
@@ -4138,10 +4284,19 @@
 2. Computed the <strong>QMult</strong> plan with 50% of baseline flow
 3. Compared cross section results against baseline
 4. <strong>Result</strong>: All cross sections showed lower WSE with reduced flow (QMult correctly applied)</p>
+<h3 id="stageflow-hydrograph-verification-step-10">Stage/Flow Hydrograph Verification (Step 10)<a class="headerlink" href="#stageflow-hydrograph-verification-step-10" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Extracted <strong>Internal Stage and Flow Boundary Condition</strong> fixture project</li>
+<li>Read observed stage/flow hydrograph at internal BC station with <code>get_stage_flow_hydrograph()</code></li>
+<li>Scaled flows by 1.25x and wrote back with <code>set_stage_flow_hydrograph()</code></li>
+<li>Re-read and verified round-trip: stage values unchanged, flow values match scaled values</li>
+<li><strong>Result</strong>: Round-trip verification PASSED — interleaved 8-char fixed-width format preserved correctly</li>
+</ol>
 <h3 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>QMult insertion</strong>: Automatically inserts line if not present</li>
 <li><strong>TW Check setter</strong>: Set/toggle tailwater check flag with <code>set_stage_hydrograph_tw_check()</code></li>
+<li><strong>Stage/Flow Hydrograph</strong>: Read/write interleaved (stage, flow) pairs for internal BCs</li>
 <li><strong>Partial station matching</strong>: Matches stations even with coordinates appended</li>
 <li><strong>Batch efficiency</strong>: Single file read/write for multiple updates</li>
 <li><strong>Safe updates</strong>: Optional <code>old_a_part</code> validation prevents accidental overwrites</li>
@@ -4149,11 +4304,11 @@
 <li><strong>Inline data cleanup</strong>: <code>set_boundary_dss_link()</code> removes inline table data when switching to DSS</li>
 <li><strong>Verified correctness</strong>: Computational tests prove state transitions are lossless and QMult affects results</li>
 </ul>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Cleanup (optional)</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># import shutil</span>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Cleanup (optional)</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="c1"># import shutil</span>
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
+</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
 </span></code></pre></div>
 
 
@@ -4177,7 +4332,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 13:37:09 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 13:49:56 UTC">May 12, 2026</span>
   </span>
 
     
@@ -4187,7 +4342,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 13:37:09 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 13:49:56 UTC">May 12, 2026</span>
   </span>
 
     
