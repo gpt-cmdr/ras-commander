@@ -79,8 +79,10 @@ Uniform Lateral Inflow Hydrograph Functions:
 - set_uniform_lateral_inflow_hydrograph() - Write uniform lateral inflow data (reach-based BC)
 
 Initial Conditions Method Selection:
-- get_initial_flow_method() - Determine which IC method is active (restart file vs initial flow distribution)
-- set_initial_flow_method() - Set the IC method selection (restart_file, initial_flow_distribution, or none)
+- get_initial_flow_method() - Determine which IC method is active (restart_file, prior_ws, initial_flow_distribution, none)
+- set_initial_flow_method() - Set the IC method selection (restart_file, prior_ws, initial_flow_distribution, none)
+- get_prior_ws_filename() - Read Prior WS Filename and Profile from unsteady file
+- set_prior_ws_filename() - Write Prior WS Filename and Profile to unsteady file
 
 """
 import os
@@ -496,6 +498,7 @@ class RasUnsteady:
 
         HEC-RAS uses implicit state to select the IC method:
         - ``Use Restart= -1`` or ``1`` → Restart File mode
+        - ``Use Restart= 0`` with ``Prior WS Filename=`` → Prior Water Surface mode
         - ``Use Restart= 0`` with ``Initial Flow Loc=`` lines → Enter Initial Flow Distribution
         - ``Use Restart= 0`` without IC lines → no IC configured (HEC-RAS uses zero flow)
 
@@ -510,9 +513,12 @@ class RasUnsteady:
         -------
         dict
             Keys:
-            - ``method`` (str): ``'restart_file'``, ``'initial_flow_distribution'``, or ``'none'``
+            - ``method`` (str): ``'restart_file'``, ``'prior_ws'``,
+              ``'initial_flow_distribution'``, or ``'none'``
             - ``use_restart`` (bool): Parsed ``Use Restart`` flag
             - ``restart_filename`` (str or None): Restart filename when method is restart_file
+            - ``prior_ws_filename`` (str or None): Plan file when method is prior_ws
+            - ``prior_ws_profile`` (str or None): Profile name when method is prior_ws
             - ``ic_count`` (int): Number of ``Initial Flow Loc`` / ``Initial Storage Elev`` /
               ``Initial RRR Elev`` lines present
             - ``raw_use_restart`` (str or None): Raw value from file
@@ -529,6 +535,8 @@ class RasUnsteady:
 
         raw_use_restart = None
         restart_filename = None
+        prior_ws_filename = None
+        prior_ws_profile = None
         ic_count = 0
 
         try:
@@ -538,6 +546,10 @@ class RasUnsteady:
                         raw_use_restart = line.split("=", 1)[1].strip()
                     elif line.startswith("Restart Filename=") and restart_filename is None:
                         restart_filename = line.split("=", 1)[1].strip()
+                    elif line.startswith("Prior WS Filename="):
+                        prior_ws_filename = line.split("=", 1)[1].strip()
+                    elif line.startswith("Prior WS Profile="):
+                        prior_ws_profile = line.split("=", 1)[1].strip()
                     elif line.startswith("Initial Flow Loc="):
                         ic_count += 1
                     elif line.startswith("Initial Storage Elev="):
@@ -555,6 +567,8 @@ class RasUnsteady:
 
         if use_restart:
             method = "restart_file"
+        elif prior_ws_filename:
+            method = "prior_ws"
         elif ic_count > 0:
             method = "initial_flow_distribution"
         else:
@@ -569,6 +583,8 @@ class RasUnsteady:
             "method": method,
             "use_restart": use_restart,
             "restart_filename": restart_filename if use_restart else None,
+            "prior_ws_filename": prior_ws_filename if method == "prior_ws" else None,
+            "prior_ws_profile": prior_ws_profile if method == "prior_ws" else None,
             "ic_count": ic_count,
             "raw_use_restart": raw_use_restart,
         }
@@ -579,14 +595,15 @@ class RasUnsteady:
         unsteady_file: Union[str, Path],
         method: str,
         restart_filename: Optional[str] = None,
+        prior_ws_filename: Optional[str] = None,
+        prior_ws_profile: Optional[str] = None,
         ras_object: Optional[Any] = None
     ) -> None:
         """
         Set the Initial Conditions method selection in an unsteady flow file.
 
         Configures which IC approach HEC-RAS will use by writing the appropriate
-        ``Use Restart`` value and optionally adding or removing the ``Restart Filename``
-        line.
+        ``Use Restart`` value and optionally adding or removing associated lines.
 
         Parameters
         ----------
@@ -595,24 +612,35 @@ class RasUnsteady:
         method : str
             One of:
             - ``'restart_file'`` — enable restart mode (requires *restart_filename*)
+            - ``'prior_ws'`` — use prior water surface profile (requires
+              *prior_ws_filename*; *prior_ws_profile* defaults to first profile)
             - ``'initial_flow_distribution'`` — disable restart; existing IC lines are kept
             - ``'none'`` — disable restart and remove all IC lines
         restart_filename : str, optional
             Required when *method* is ``'restart_file'``.
+        prior_ws_filename : str, optional
+            Plan file path (e.g. ``'ProjectName.p01'``). Required when *method*
+            is ``'prior_ws'``.
+        prior_ws_profile : str, optional
+            Profile name within the prior steady plan. Defaults to empty string
+            (HEC-RAS uses the first available profile).
         ras_object : optional
             RAS project object. If None, uses the global ``ras`` object.
 
         Raises
         ------
         ValueError
-            If *method* is unknown or *restart_filename* is missing for restart_file.
+            If *method* is unknown or required arguments are missing.
         """
-        valid_methods = {"restart_file", "initial_flow_distribution", "none"}
+        valid_methods = {"restart_file", "prior_ws", "initial_flow_distribution", "none"}
         if method not in valid_methods:
             raise ValueError(f"method must be one of {valid_methods}, got '{method}'")
 
         if method == "restart_file" and not restart_filename:
             raise ValueError("restart_filename is required when method is 'restart_file'")
+
+        if method == "prior_ws" and not prior_ws_filename:
+            raise ValueError("prior_ws_filename is required when method is 'prior_ws'")
 
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -639,6 +667,10 @@ class RasUnsteady:
         for line in lines:
             if line.startswith("Restart Filename="):
                 continue
+            if line.startswith("Prior WS Filename="):
+                continue
+            if line.startswith("Prior WS Profile="):
+                continue
             if method == "none" and (
                 line.startswith("Initial Flow Loc=")
                 or line.startswith("Initial Storage Elev=")
@@ -660,6 +692,10 @@ class RasUnsteady:
 
         if method == "restart_file":
             retained.insert(use_restart_idx + 1, f"Restart Filename={restart_filename}\n")
+        elif method == "prior_ws":
+            profile = prior_ws_profile if prior_ws_profile is not None else ""
+            retained.insert(use_restart_idx + 1, f"Prior WS Filename={prior_ws_filename}\n")
+            retained.insert(use_restart_idx + 2, f"Prior WS Profile={profile}\n")
 
         with open(unsteady_path, 'w') as f:
             f.writelines(retained)
@@ -668,6 +704,98 @@ class RasUnsteady:
 
         if hasattr(ras_obj, "get_unsteady_entries"):
             ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+    @staticmethod
+    @log_call
+    def get_prior_ws_filename(
+        unsteady_file: Union[str, Path],
+        ras_object: Optional[Any] = None
+    ) -> Dict[str, Optional[str]]:
+        """
+        Read Prior WS Filename and Profile from an unsteady flow file.
+
+        When HEC-RAS is configured to use a prior steady-state water surface
+        profile as initial conditions, the ``.u##`` file contains
+        ``Prior WS Filename=`` and ``Prior WS Profile=`` lines.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to unsteady flow file or unsteady number.
+        ras_object : optional
+            RAS project object. If None, uses the global ``ras`` object.
+
+        Returns
+        -------
+        dict
+            Keys:
+            - ``prior_ws_filename`` (str or None): Plan file reference
+              (e.g. ``'ProjectName.p01'``)
+            - ``prior_ws_profile`` (str or None): Profile name within that plan
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        unsteady_path = Path(unsteady_file)
+        if not unsteady_path.is_file():
+            from .RasPlan import RasPlan
+            resolved_path = RasPlan.get_unsteady_path(unsteady_file, ras_obj)
+            if resolved_path:
+                unsteady_path = Path(resolved_path)
+
+        prior_ws_filename = None
+        prior_ws_profile = None
+
+        try:
+            with open(unsteady_path, 'r') as f:
+                for line in f:
+                    if line.startswith("Prior WS Filename="):
+                        prior_ws_filename = line.split("=", 1)[1].strip()
+                    elif line.startswith("Prior WS Profile="):
+                        prior_ws_profile = line.split("=", 1)[1].strip()
+                    elif line.startswith("Boundary Location="):
+                        break
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        return {
+            "prior_ws_filename": prior_ws_filename or None,
+            "prior_ws_profile": prior_ws_profile or None,
+        }
+
+    @staticmethod
+    @log_call
+    def set_prior_ws_filename(
+        unsteady_file: Union[str, Path],
+        prior_ws_filename: str,
+        prior_ws_profile: Optional[str] = None,
+        ras_object: Optional[Any] = None
+    ) -> None:
+        """
+        Write Prior WS Filename and Profile to an unsteady flow file.
+
+        Convenience wrapper around ``set_initial_flow_method(method='prior_ws')``.
+        Sets the IC method to prior water surface and writes the plan file
+        reference and optional profile name.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to unsteady flow file or unsteady number.
+        prior_ws_filename : str
+            Plan file to use (e.g. ``'ProjectName.p01'``).
+        prior_ws_profile : str, optional
+            Profile name. Defaults to empty (HEC-RAS uses first profile).
+        ras_object : optional
+            RAS project object. If None, uses the global ``ras`` object.
+        """
+        RasUnsteady.set_initial_flow_method(
+            unsteady_file,
+            method="prior_ws",
+            prior_ws_filename=prior_ws_filename,
+            prior_ws_profile=prior_ws_profile,
+            ras_object=ras_object,
+        )
 
     @staticmethod
     def _empty_to_none(value: Optional[str]) -> Optional[str]:
