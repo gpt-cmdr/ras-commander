@@ -3176,6 +3176,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#step-26-navigation-dam-and-rules-bc-readwrite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 26: Navigation Dam and Rules BC Read/Write
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#summary" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3331,10 +3342,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#key-features" class="md-nav__link">
+  <a href="#navigation-dam-step-26" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Key Features
+        Navigation Dam (Step 26)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rule-operations-bc-step-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rule Operations BC (Step 26)
       
     </span>
   </a>
@@ -5650,6 +5672,86 @@ conditions in an unsteady file. This replicates the HEC-RAS GUI action
 </span><span id="__span-55-51"><a id="__codelineno-55-51" name="__codelineno-55-51" href="#__codelineno-55-51"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-55-52"><a id="__codelineno-55-52" name="__codelineno-55-52" href="#__codelineno-55-52"></a>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Example 22 project not found - skipping GW interflow demo&#39;</span><span class="p">)</span>
 </span></code></pre></div>
+<h2 id="step-26-navigation-dam-and-rules-bc-readwrite">Step 26: Navigation Dam and Rules BC Read/Write<a class="headerlink" href="#step-26-navigation-dam-and-rules-bc-readwrite" title="Permanent link">&para;</a></h2>
+<p>These are less-common boundary condition types that require specialized read/write methods.</p>
+<p><strong>Navigation Dam</strong> stores a stage-flow table (SFT), flow monitor and hinge point river-reach-station references, and control point parameters.</p>
+<p><strong>Rule Operations</strong> stores a mini scripting language (too complex for structured parsing), so we provide raw-text round-trip methods.</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a><span class="c1"># --- Step 26a: Navigation Dam round-trip ---</span>
+</span><span id="__span-56-2"><a id="__codelineno-56-2" name="__codelineno-56-2" href="#__codelineno-56-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-56-3"><a id="__codelineno-56-3" name="__codelineno-56-3" href="#__codelineno-56-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+</span><span id="__span-56-4"><a id="__codelineno-56-4" name="__codelineno-56-4" href="#__codelineno-56-4"></a>
+</span><span id="__span-56-5"><a id="__codelineno-56-5" name="__codelineno-56-5" href="#__codelineno-56-5"></a><span class="c1"># Extract NavigationDam fixture project</span>
+</span><span id="__span-56-6"><a id="__codelineno-56-6" name="__codelineno-56-6" href="#__codelineno-56-6"></a><span class="n">nav_src</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;../example_projects/NavigationDam_clb726&quot;</span><span class="p">)</span>
+</span><span id="__span-56-7"><a id="__codelineno-56-7" name="__codelineno-56-7" href="#__codelineno-56-7"></a><span class="n">nav_work</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;../example_projects/NavigationDam_clb726_312test&quot;</span><span class="p">)</span>
+</span><span id="__span-56-8"><a id="__codelineno-56-8" name="__codelineno-56-8" href="#__codelineno-56-8"></a><span class="k">if</span> <span class="n">nav_work</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-56-9"><a id="__codelineno-56-9" name="__codelineno-56-9" href="#__codelineno-56-9"></a>    <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">nav_work</span><span class="p">)</span>
+</span><span id="__span-56-10"><a id="__codelineno-56-10" name="__codelineno-56-10" href="#__codelineno-56-10"></a><span class="n">shutil</span><span class="o">.</span><span class="n">copytree</span><span class="p">(</span><span class="n">nav_src</span><span class="p">,</span> <span class="n">nav_work</span><span class="p">,</span> <span class="n">ignore</span><span class="o">=</span><span class="n">RasUtils</span><span class="o">.</span><span class="n">ignore_windows_reserved</span><span class="p">)</span>
+</span><span id="__span-56-11"><a id="__codelineno-56-11" name="__codelineno-56-11" href="#__codelineno-56-11"></a>
+</span><span id="__span-56-12"><a id="__codelineno-56-12" name="__codelineno-56-12" href="#__codelineno-56-12"></a><span class="n">nav_u01</span> <span class="o">=</span> <span class="n">nav_work</span> <span class="o">/</span> <span class="s2">&quot;StPaul.u01&quot;</span>
+</span><span id="__span-56-13"><a id="__codelineno-56-13" name="__codelineno-56-13" href="#__codelineno-56-13"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=== Navigation Dam: get_navigation_dam() ===&quot;</span><span class="p">)</span>
+</span><span id="__span-56-14"><a id="__codelineno-56-14" name="__codelineno-56-14" href="#__codelineno-56-14"></a><span class="n">nav_data</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_navigation_dam</span><span class="p">(</span><span class="n">nav_u01</span><span class="p">,</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-56-15"><a id="__codelineno-56-15" name="__codelineno-56-15" href="#__codelineno-56-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  params: </span><span class="si">{</span><span class="n">nav_data</span><span class="p">[</span><span class="s1">&#39;params&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-16"><a id="__codelineno-56-16" name="__codelineno-56-16" href="#__codelineno-56-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  SFT count: </span><span class="si">{</span><span class="n">nav_data</span><span class="p">[</span><span class="s1">&#39;sft_count&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-17"><a id="__codelineno-56-17" name="__codelineno-56-17" href="#__codelineno-56-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  SFT flows: </span><span class="si">{</span><span class="n">nav_data</span><span class="p">[</span><span class="s1">&#39;sft_flow&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-18"><a id="__codelineno-56-18" name="__codelineno-56-18" href="#__codelineno-56-18"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  SFT stage open: </span><span class="si">{</span><span class="n">nav_data</span><span class="p">[</span><span class="s1">&#39;sft_stage_open&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-19"><a id="__codelineno-56-19" name="__codelineno-56-19" href="#__codelineno-56-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  SFT stage closed: </span><span class="si">{</span><span class="n">nav_data</span><span class="p">[</span><span class="s1">&#39;sft_stage_closed&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-20"><a id="__codelineno-56-20" name="__codelineno-56-20" href="#__codelineno-56-20"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Flow Monitor RRR: </span><span class="si">{</span><span class="n">nav_data</span><span class="p">[</span><span class="s1">&#39;flow_monitor_rrr&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-21"><a id="__codelineno-56-21" name="__codelineno-56-21" href="#__codelineno-56-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Hinge Point RRR: </span><span class="si">{</span><span class="n">nav_data</span><span class="p">[</span><span class="s1">&#39;hinge_point_rrr&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-22"><a id="__codelineno-56-22" name="__codelineno-56-22" href="#__codelineno-56-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  CP Hinge Point: </span><span class="si">{</span><span class="n">nav_data</span><span class="p">[</span><span class="s1">&#39;cp_hinge_point&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-23"><a id="__codelineno-56-23" name="__codelineno-56-23" href="#__codelineno-56-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  CP Min Pool: </span><span class="si">{</span><span class="n">nav_data</span><span class="p">[</span><span class="s1">&#39;cp_min_pool&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-24"><a id="__codelineno-56-24" name="__codelineno-56-24" href="#__codelineno-56-24"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  CP Max Pool: </span><span class="si">{</span><span class="n">nav_data</span><span class="p">[</span><span class="s1">&#39;cp_max_pool&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-25"><a id="__codelineno-56-25" name="__codelineno-56-25" href="#__codelineno-56-25"></a>
+</span><span id="__span-56-26"><a id="__codelineno-56-26" name="__codelineno-56-26" href="#__codelineno-56-26"></a><span class="c1"># Round-trip: scale flows by 1.2x</span>
+</span><span id="__span-56-27"><a id="__codelineno-56-27" name="__codelineno-56-27" href="#__codelineno-56-27"></a><span class="n">scaled_flows</span> <span class="o">=</span> <span class="p">[</span><span class="n">f</span> <span class="o">*</span> <span class="mf">1.2</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">nav_data</span><span class="p">[</span><span class="s2">&quot;sft_flow&quot;</span><span class="p">]]</span>
+</span><span id="__span-56-28"><a id="__codelineno-56-28" name="__codelineno-56-28" href="#__codelineno-56-28"></a><span class="n">RasUnsteady</span><span class="o">.</span><span class="n">set_navigation_dam</span><span class="p">(</span>
+</span><span id="__span-56-29"><a id="__codelineno-56-29" name="__codelineno-56-29" href="#__codelineno-56-29"></a>    <span class="n">nav_u01</span><span class="p">,</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+</span><span id="__span-56-30"><a id="__codelineno-56-30" name="__codelineno-56-30" href="#__codelineno-56-30"></a>    <span class="n">sft_flow</span><span class="o">=</span><span class="n">scaled_flows</span><span class="p">,</span>
+</span><span id="__span-56-31"><a id="__codelineno-56-31" name="__codelineno-56-31" href="#__codelineno-56-31"></a>    <span class="n">sft_stage_open</span><span class="o">=</span><span class="n">nav_data</span><span class="p">[</span><span class="s2">&quot;sft_stage_open&quot;</span><span class="p">],</span>
+</span><span id="__span-56-32"><a id="__codelineno-56-32" name="__codelineno-56-32" href="#__codelineno-56-32"></a>    <span class="n">sft_stage_closed</span><span class="o">=</span><span class="n">nav_data</span><span class="p">[</span><span class="s2">&quot;sft_stage_closed&quot;</span><span class="p">],</span>
+</span><span id="__span-56-33"><a id="__codelineno-56-33" name="__codelineno-56-33" href="#__codelineno-56-33"></a><span class="p">)</span>
+</span><span id="__span-56-34"><a id="__codelineno-56-34" name="__codelineno-56-34" href="#__codelineno-56-34"></a><span class="n">nav_data2</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_navigation_dam</span><span class="p">(</span><span class="n">nav_u01</span><span class="p">,</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-56-35"><a id="__codelineno-56-35" name="__codelineno-56-35" href="#__codelineno-56-35"></a><span class="n">max_diff</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">nav_data2</span><span class="p">[</span><span class="s2">&quot;sft_flow&quot;</span><span class="p">],</span> <span class="n">scaled_flows</span><span class="p">))</span>
+</span><span id="__span-56-36"><a id="__codelineno-56-36" name="__codelineno-56-36" href="#__codelineno-56-36"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Round-trip max flow diff: </span><span class="si">{</span><span class="n">max_diff</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-37"><a id="__codelineno-56-37" name="__codelineno-56-37" href="#__codelineno-56-37"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Flows match: </span><span class="si">{</span><span class="n">max_diff</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">1e-6</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-38"><a id="__codelineno-56-38" name="__codelineno-56-38" href="#__codelineno-56-38"></a><span class="c1"># Stage rows should be unchanged</span>
+</span><span id="__span-56-39"><a id="__codelineno-56-39" name="__codelineno-56-39" href="#__codelineno-56-39"></a><span class="n">stage_diff</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">nav_data2</span><span class="p">[</span><span class="s2">&quot;sft_stage_open&quot;</span><span class="p">],</span> <span class="n">nav_data</span><span class="p">[</span><span class="s2">&quot;sft_stage_open&quot;</span><span class="p">]))</span>
+</span><span id="__span-56-40"><a id="__codelineno-56-40" name="__codelineno-56-40" href="#__codelineno-56-40"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Stage open preserved: </span><span class="si">{</span><span class="n">stage_diff</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">1e-6</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-41"><a id="__codelineno-56-41" name="__codelineno-56-41" href="#__codelineno-56-41"></a>
+</span><span id="__span-56-42"><a id="__codelineno-56-42" name="__codelineno-56-42" href="#__codelineno-56-42"></a><span class="c1"># --- Step 26b: Rules BC round-trip ---</span>
+</span><span id="__span-56-43"><a id="__codelineno-56-43" name="__codelineno-56-43" href="#__codelineno-56-43"></a><span class="n">rules_src</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;../example_projects/Rule Operations_clb726&quot;</span><span class="p">)</span>
+</span><span id="__span-56-44"><a id="__codelineno-56-44" name="__codelineno-56-44" href="#__codelineno-56-44"></a><span class="n">rules_work</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;../example_projects/Rule Operations_clb726_312test&quot;</span><span class="p">)</span>
+</span><span id="__span-56-45"><a id="__codelineno-56-45" name="__codelineno-56-45" href="#__codelineno-56-45"></a><span class="k">if</span> <span class="n">rules_work</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-56-46"><a id="__codelineno-56-46" name="__codelineno-56-46" href="#__codelineno-56-46"></a>    <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">rules_work</span><span class="p">)</span>
+</span><span id="__span-56-47"><a id="__codelineno-56-47" name="__codelineno-56-47" href="#__codelineno-56-47"></a><span class="n">shutil</span><span class="o">.</span><span class="n">copytree</span><span class="p">(</span><span class="n">rules_src</span><span class="p">,</span> <span class="n">rules_work</span><span class="p">,</span> <span class="n">ignore</span><span class="o">=</span><span class="n">RasUtils</span><span class="o">.</span><span class="n">ignore_windows_reserved</span><span class="p">)</span>
+</span><span id="__span-56-48"><a id="__codelineno-56-48" name="__codelineno-56-48" href="#__codelineno-56-48"></a>
+</span><span id="__span-56-49"><a id="__codelineno-56-49" name="__codelineno-56-49" href="#__codelineno-56-49"></a><span class="n">rules_u01</span> <span class="o">=</span> <span class="n">rules_work</span> <span class="o">/</span> <span class="s2">&quot;RuleAndTimeSeries.u01&quot;</span>
+</span><span id="__span-56-50"><a id="__codelineno-56-50" name="__codelineno-56-50" href="#__codelineno-56-50"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">=== Rules BC: get_rules_bc() ===&quot;</span><span class="p">)</span>
+</span><span id="__span-56-51"><a id="__codelineno-56-51" name="__codelineno-56-51" href="#__codelineno-56-51"></a><span class="n">rules_data</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_rules_bc</span><span class="p">(</span><span class="n">rules_u01</span><span class="p">,</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-56-52"><a id="__codelineno-56-52" name="__codelineno-56-52" href="#__codelineno-56-52"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Rule lines: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">rules_data</span><span class="p">[</span><span class="s1">&#39;rule_lines&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2"> lines&quot;</span><span class="p">)</span>
+</span><span id="__span-56-53"><a id="__codelineno-56-53" name="__codelineno-56-53" href="#__codelineno-56-53"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Gate data entries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">rules_data</span><span class="p">[</span><span class="s1">&#39;gate_data&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-54"><a id="__codelineno-56-54" name="__codelineno-56-54" href="#__codelineno-56-54"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Description: </span><span class="si">{</span><span class="n">rules_data</span><span class="p">[</span><span class="s1">&#39;description&#39;</span><span class="p">][:</span><span class="mi">60</span><span class="p">]</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
+</span><span id="__span-56-55"><a id="__codelineno-56-55" name="__codelineno-56-55" href="#__codelineno-56-55"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  First rule line: </span><span class="si">{</span><span class="n">rules_data</span><span class="p">[</span><span class="s1">&#39;rule_lines&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()[:</span><span class="mi">80</span><span class="p">]</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
+</span><span id="__span-56-56"><a id="__codelineno-56-56" name="__codelineno-56-56" href="#__codelineno-56-56"></a>
+</span><span id="__span-56-57"><a id="__codelineno-56-57" name="__codelineno-56-57" href="#__codelineno-56-57"></a><span class="c1"># Round-trip write-back</span>
+</span><span id="__span-56-58"><a id="__codelineno-56-58" name="__codelineno-56-58" href="#__codelineno-56-58"></a><span class="n">RasUnsteady</span><span class="o">.</span><span class="n">set_rules_bc</span><span class="p">(</span>
+</span><span id="__span-56-59"><a id="__codelineno-56-59" name="__codelineno-56-59" href="#__codelineno-56-59"></a>    <span class="n">rules_u01</span><span class="p">,</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+</span><span id="__span-56-60"><a id="__codelineno-56-60" name="__codelineno-56-60" href="#__codelineno-56-60"></a>    <span class="n">rule_lines</span><span class="o">=</span><span class="n">rules_data</span><span class="p">[</span><span class="s2">&quot;rule_lines&quot;</span><span class="p">],</span>
+</span><span id="__span-56-61"><a id="__codelineno-56-61" name="__codelineno-56-61" href="#__codelineno-56-61"></a>    <span class="n">gate_data</span><span class="o">=</span><span class="n">rules_data</span><span class="p">[</span><span class="s2">&quot;gate_data&quot;</span><span class="p">],</span>
+</span><span id="__span-56-62"><a id="__codelineno-56-62" name="__codelineno-56-62" href="#__codelineno-56-62"></a>    <span class="n">description</span><span class="o">=</span><span class="n">rules_data</span><span class="p">[</span><span class="s2">&quot;description&quot;</span><span class="p">],</span>
+</span><span id="__span-56-63"><a id="__codelineno-56-63" name="__codelineno-56-63" href="#__codelineno-56-63"></a><span class="p">)</span>
+</span><span id="__span-56-64"><a id="__codelineno-56-64" name="__codelineno-56-64" href="#__codelineno-56-64"></a><span class="n">rules_data2</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_rules_bc</span><span class="p">(</span><span class="n">rules_u01</span><span class="p">,</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-56-65"><a id="__codelineno-56-65" name="__codelineno-56-65" href="#__codelineno-56-65"></a><span class="n">lines_match</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">rules_data2</span><span class="p">[</span><span class="s2">&quot;rule_lines&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">rules_data</span><span class="p">[</span><span class="s2">&quot;rule_lines&quot;</span><span class="p">])</span>
+</span><span id="__span-56-66"><a id="__codelineno-56-66" name="__codelineno-56-66" href="#__codelineno-56-66"></a><span class="n">gate_match</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">rules_data2</span><span class="p">[</span><span class="s2">&quot;gate_data&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">rules_data</span><span class="p">[</span><span class="s2">&quot;gate_data&quot;</span><span class="p">])</span>
+</span><span id="__span-56-67"><a id="__codelineno-56-67" name="__codelineno-56-67" href="#__codelineno-56-67"></a><span class="n">desc_match</span> <span class="o">=</span> <span class="n">rules_data2</span><span class="p">[</span><span class="s2">&quot;description&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">rules_data</span><span class="p">[</span><span class="s2">&quot;description&quot;</span><span class="p">]</span>
+</span><span id="__span-56-68"><a id="__codelineno-56-68" name="__codelineno-56-68" href="#__codelineno-56-68"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Round-trip: rule lines match: </span><span class="si">{</span><span class="n">lines_match</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-69"><a id="__codelineno-56-69" name="__codelineno-56-69" href="#__codelineno-56-69"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Round-trip: gate data match: </span><span class="si">{</span><span class="n">gate_match</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-70"><a id="__codelineno-56-70" name="__codelineno-56-70" href="#__codelineno-56-70"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Round-trip: description match: </span><span class="si">{</span><span class="n">desc_match</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-56-71"><a id="__codelineno-56-71" name="__codelineno-56-71" href="#__codelineno-56-71"></a>
+</span><span id="__span-56-72"><a id="__codelineno-56-72" name="__codelineno-56-72" href="#__codelineno-56-72"></a><span class="c1"># Cleanup working copies</span>
+</span><span id="__span-56-73"><a id="__codelineno-56-73" name="__codelineno-56-73" href="#__codelineno-56-73"></a><span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">nav_work</span><span class="p">,</span> <span class="n">ignore_errors</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-56-74"><a id="__codelineno-56-74" name="__codelineno-56-74" href="#__codelineno-56-74"></a><span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">rules_work</span><span class="p">,</span> <span class="n">ignore_errors</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-56-75"><a id="__codelineno-56-75" name="__codelineno-56-75" href="#__codelineno-56-75"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Step 26 complete: Navigation Dam and Rules BC round-trip verified.&quot;</span><span class="p">)</span>
+</span></code></pre></div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated the enhanced <code>boundaries_df</code> features:</p>
 <h3 id="new-dataframe-columns">New DataFrame Columns<a class="headerlink" href="#new-dataframe-columns" title="Permanent link">&para;</a></h3>
@@ -5901,7 +6003,48 @@ conditions in an unsteady file. This replicates the HEC-RAS GUI action
 <li>Verified Prior WS keys are properly stripped when switching away from <code>prior_ws</code> method</li>
 <li><strong>Result</strong>: All Prior WS state transitions verified correctly</li>
 </ol>
-<h3 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h3>
+<h3 id="navigation-dam-step-26">Navigation Dam (Step 26)<a class="headerlink" href="#navigation-dam-step-26" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>get_navigation_dam()</code></td>
+<td>Read Nav Dam params, SFT table, Flow Monitor/Hinge Point RRR, control points</td>
+</tr>
+<tr>
+<td><code>set_navigation_dam()</code></td>
+<td>Write Nav Dam params, SFT table, RRR references, control points (partial update)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="rule-operations-bc-step-26">Rule Operations BC (Step 26)<a class="headerlink" href="#rule-operations-bc-step-26" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>get_rules_bc()</code></td>
+<td>Read Rule Operation/Expression lines as raw text, plus gate data and description</td>
+</tr>
+<tr>
+<td><code>set_rules_bc()</code></td>
+<td>Write Rule Operation/Expression lines, gate data, and description back (raw text round-trip)</td>
+</tr>
+<tr>
+<td>### Key Features</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <ul>
 <li><strong>QMult insertion</strong>: Automatically inserts line if not present</li>
 <li><strong>TW Check setter</strong>: Set/toggle tailwater check flag with <code>set_stage_hydrograph_tw_check()</code></li>
@@ -6060,11 +6203,11 @@ conditions in an unsteady file. This replicates the HEC-RAS GUI action
 </tr>
 </tbody>
 </table>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a><span class="c1"># Cleanup (optional)</span>
-</span><span id="__span-56-2"><a id="__codelineno-56-2" name="__codelineno-56-2" href="#__codelineno-56-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
-</span><span id="__span-56-3"><a id="__codelineno-56-3" name="__codelineno-56-3" href="#__codelineno-56-3"></a><span class="c1"># import shutil</span>
-</span><span id="__span-56-4"><a id="__codelineno-56-4" name="__codelineno-56-4" href="#__codelineno-56-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
-</span><span id="__span-56-5"><a id="__codelineno-56-5" name="__codelineno-56-5" href="#__codelineno-56-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-57-1"><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a><span class="c1"># Cleanup (optional)</span>
+</span><span id="__span-57-2"><a id="__codelineno-57-2" name="__codelineno-57-2" href="#__codelineno-57-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
+</span><span id="__span-57-3"><a id="__codelineno-57-3" name="__codelineno-57-3" href="#__codelineno-57-3"></a><span class="c1"># import shutil</span>
+</span><span id="__span-57-4"><a id="__codelineno-57-4" name="__codelineno-57-4" href="#__codelineno-57-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
+</span><span id="__span-57-5"><a id="__codelineno-57-5" name="__codelineno-57-5" href="#__codelineno-57-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
 </span></code></pre></div>
 
 
@@ -6088,7 +6231,7 @@ conditions in an unsteady file. This replicates the HEC-RAS GUI action
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 16:02:43 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 16:11:11 UTC">May 12, 2026</span>
   </span>
 
     
@@ -6098,7 +6241,7 @@ conditions in an unsteady file. This replicates the HEC-RAS GUI action
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 16:02:43 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 16:11:11 UTC">May 12, 2026</span>
   </span>
 
     
