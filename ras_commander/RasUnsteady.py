@@ -66,6 +66,10 @@ DSS Boundary Condition Functions:
 - get_rating_curve() - Read Rating Curve (stage, discharge) pairs from a boundary
 - set_rating_curve() - Write or replace Rating Curve data on a boundary
 
+Stage/Flow Hydrograph Functions (Internal Boundary):
+- get_stage_flow_hydrograph() - Read observed stage/flow pairs from an internal BC
+- set_stage_flow_hydrograph() - Write observed stage/flow pairs to an internal BC
+
 """
 import os
 import numbers
@@ -4187,6 +4191,7 @@ class RasUnsteady:
             'Precipitation Hydrograph=': 'Precipitation Hydrograph',
             'Rating Curve=': 'Rating Curve',
             'Gate Name=': 'Gate Opening',
+            'Observed Stage and Flow Hydrograph=': 'Observed Stage and Flow',
         }
         DSS_METADATA_KEYS = ('Interval=', 'DSS File=', 'DSS Path=', 'Use DSS=')
         # Lines that real HEC-RAS Flow Hydrograph / Stage Hydrograph /
@@ -5765,3 +5770,321 @@ class RasUnsteady:
             'boundaries_df_refreshed': boundaries_df_refreshed,
         }
 
+    @staticmethod
+    @log_call
+    def get_stage_flow_hydrograph(
+        unsteady_file: Union[str, Path],
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        station: Optional[str] = None,
+        ras_object: Optional[Any] = None,
+    ) -> Optional[pd.DataFrame]:
+        """
+        Read observed stage/flow pairs from an internal boundary condition.
+
+        Parses the ``Observed Stage and Flow Hydrograph=`` block from a ``.u##``
+        file.  The block stores interleaved (stage, flow) pairs in 8-character
+        fixed-width fields, 10 values per line (5 pairs per line).
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to unsteady flow file or unsteady number (e.g. ``"01"``).
+        river : str, optional
+            River name for location matching.
+        reach : str, optional
+            Reach name for location matching.
+        station : str, optional
+            River station for location matching.
+        ras_object : optional
+            RasPrj instance; falls back to the global ``ras`` object.
+
+        Returns
+        -------
+        pd.DataFrame or None
+            DataFrame with columns ``['stage', 'flow']``, one row per time
+            step.  Returns ``None`` if the boundary or data block is not found.
+
+        See Also
+        --------
+        set_stage_flow_hydrograph : Write stage/flow pairs back to a ``.u##`` file.
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except Exception:
+                pass
+
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            unsteady_num = unsteady_file.zfill(2)
+            unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{unsteady_num}"
+        else:
+            unsteady_path = Path(unsteady_file)
+
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        KEYWORD = 'Observed Stage and Flow Hydrograph='
+
+        target_idx = None
+        for idx, line in enumerate(lines):
+            if line.startswith('Boundary Location='):
+                if river is not None or reach is not None or station is not None:
+                    loc_line = line.replace('Boundary Location=', '')
+                    parts = [p.strip() for p in loc_line.split(',')]
+                    match = True
+                    if river is not None and (len(parts) < 1 or parts[0] != river):
+                        match = False
+                    if reach is not None and (len(parts) < 2 or parts[1] != reach):
+                        match = False
+                    if station is not None and (len(parts) < 3 or parts[2] != station):
+                        match = False
+                    if match:
+                        target_idx = idx
+                else:
+                    for j in range(idx + 1, min(idx + 50, len(lines))):
+                        if lines[j].startswith('Boundary Location='):
+                            break
+                        if lines[j].startswith(KEYWORD):
+                            target_idx = idx
+                            break
+                if target_idx is not None:
+                    break
+
+        if target_idx is None:
+            logger.warning("No matching boundary found for Observed Stage and Flow Hydrograph")
+            return None
+
+        header_idx = None
+        for j in range(target_idx + 1, min(target_idx + 50, len(lines))):
+            if lines[j].startswith('Boundary Location='):
+                break
+            if lines[j].startswith(KEYWORD):
+                header_idx = j
+                break
+
+        if header_idx is None:
+            logger.warning("Observed Stage and Flow Hydrograph header not found in boundary block")
+            return None
+
+        try:
+            pair_count = int(lines[header_idx].replace(KEYWORD, '').strip())
+        except ValueError:
+            logger.warning("Could not parse pair count from header")
+            return None
+
+        total_values = pair_count * 2
+        all_values: List[float] = []
+        data_idx = header_idx + 1
+        while len(all_values) < total_values and data_idx < len(lines):
+            data_line = lines[data_idx]
+            if '=' in data_line or data_line.startswith('Boundary Location='):
+                break
+            for k in range(0, len(data_line.rstrip('\n')), 8):
+                field = data_line[k:k+8]
+                stripped = field.strip()
+                if stripped:
+                    try:
+                        all_values.append(float(stripped))
+                    except ValueError:
+                        break
+                else:
+                    all_values.append(0.0)
+            data_idx += 1
+
+        if len(all_values) < 2:
+            logger.warning(f"Insufficient data: found {len(all_values)} values, expected {total_values}")
+            return None
+
+        stages = [all_values[i] for i in range(0, len(all_values), 2)]
+        flows = [all_values[i] for i in range(1, len(all_values), 2)]
+        min_len = min(len(stages), len(flows))
+
+        return pd.DataFrame({'stage': stages[:min_len], 'flow': flows[:min_len]})
+
+    @staticmethod
+    @log_call
+    def set_stage_flow_hydrograph(
+        unsteady_file: Union[str, Path],
+        stage_flow_df: pd.DataFrame,
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        station: Optional[str] = None,
+        ras_object: Optional[Any] = None,
+    ) -> dict:
+        """
+        Write observed stage/flow pairs to an internal boundary condition.
+
+        Creates or replaces the ``Observed Stage and Flow Hydrograph=`` block
+        in a ``.u##`` file.  Data is written as interleaved (stage, flow) pairs
+        in 8-character fixed-width format, 10 values per line (5 pairs per line).
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to unsteady flow file or unsteady number (e.g. ``"01"``).
+        stage_flow_df : pd.DataFrame
+            DataFrame with columns ``['stage', 'flow']``.
+        river : str, optional
+            River name for location matching.
+        reach : str, optional
+            Reach name for location matching.
+        station : str, optional
+            River station for location matching.
+        ras_object : optional
+            RasPrj instance; falls back to the global ``ras`` object.
+
+        Returns
+        -------
+        dict
+            Metadata about the write: ``pair_count``, ``location``, ``file``.
+
+        Raises
+        ------
+        ValueError
+            If DataFrame is missing required columns or is empty.
+        FileNotFoundError
+            If unsteady flow file not found.
+
+        See Also
+        --------
+        get_stage_flow_hydrograph : Read stage/flow pairs from a ``.u##`` file.
+        """
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except Exception:
+                pass
+
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            unsteady_num = unsteady_file.zfill(2)
+            unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{unsteady_num}"
+        else:
+            unsteady_path = Path(unsteady_file)
+
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        for col in ('stage', 'flow'):
+            if col not in stage_flow_df.columns:
+                raise ValueError(f"DataFrame missing required column: '{col}'")
+        if len(stage_flow_df) == 0:
+            raise ValueError("DataFrame is empty")
+
+        pair_count = len(stage_flow_df)
+        stages = stage_flow_df['stage'].values
+        flows = stage_flow_df['flow'].values
+
+        interleaved: List[float] = []
+        for s, q in zip(stages, flows):
+            interleaved.append(float(s))
+            interleaved.append(float(q))
+
+        formatted_lines: List[str] = []
+        for i in range(0, len(interleaved), 10):
+            row_vals = interleaved[i:i+10]
+            row_str = ''.join(f'{v:8.2f}' if abs(v) < 1e6 else f'{v:8.0f}' for v in row_vals)
+            formatted_lines.append(row_str + '\n')
+
+        KEYWORD = 'Observed Stage and Flow Hydrograph='
+
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        target_idx = None
+        for idx, line in enumerate(lines):
+            if line.startswith('Boundary Location='):
+                if river is not None or reach is not None or station is not None:
+                    loc_line = line.replace('Boundary Location=', '')
+                    parts = [p.strip() for p in loc_line.split(',')]
+                    match = True
+                    if river is not None and (len(parts) < 1 or parts[0] != river):
+                        match = False
+                    if reach is not None and (len(parts) < 2 or parts[1] != reach):
+                        match = False
+                    if station is not None and (len(parts) < 3 or parts[2] != station):
+                        match = False
+                    if match:
+                        target_idx = idx
+                else:
+                    for j in range(idx + 1, min(idx + 50, len(lines))):
+                        if lines[j].startswith('Boundary Location='):
+                            break
+                        if lines[j].startswith(KEYWORD):
+                            target_idx = idx
+                            break
+                if target_idx is not None:
+                    break
+
+        if target_idx is None:
+            loc_str = f"{river}/{reach}/{station}" if river else "first matching"
+            raise ValueError(
+                f"No boundary matched in {unsteady_path.name} for {loc_str}. "
+                f"Boundary must already exist as a `Boundary Location=` block."
+            )
+
+        header_idx = None
+        old_data_start = None
+        old_data_end = None
+        block_end = len(lines)
+
+        for j in range(target_idx + 1, min(target_idx + 500, len(lines))):
+            if lines[j].startswith('Boundary Location='):
+                block_end = j
+                break
+            if lines[j].startswith(KEYWORD):
+                header_idx = j
+                try:
+                    old_count = int(lines[j].replace(KEYWORD, '').strip())
+                except ValueError:
+                    old_count = 0
+                if old_count > 0:
+                    old_data_start = j + 1
+                    for k in range(old_data_start, block_end):
+                        if '=' in lines[k] or lines[k].startswith('Boundary Location='):
+                            old_data_end = k
+                            break
+                    else:
+                        old_data_end = block_end
+                break
+
+        if header_idx is not None:
+            lines[header_idx] = f'{KEYWORD} {pair_count} \n'
+            if old_data_start is not None and old_data_end is not None:
+                lines[old_data_start:old_data_end] = formatted_lines
+            else:
+                for i, fl in enumerate(formatted_lines):
+                    lines.insert(header_idx + 1 + i, fl)
+        else:
+            insert_pos = block_end
+            new_block = [f'{KEYWORD} {pair_count} \n'] + formatted_lines
+            for i, bl in enumerate(new_block):
+                lines.insert(insert_pos + i, bl)
+
+        with open(unsteady_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
+        loc_parts = []
+        if river:
+            loc_parts.append(river)
+        if reach:
+            loc_parts.append(reach)
+        if station:
+            loc_parts.append(station)
+
+        logger.info(
+            f"Wrote {pair_count} stage/flow pairs to "
+            f"{'/'.join(loc_parts) if loc_parts else 'first matching BC'} "
+            f"in {unsteady_path.name}"
+        )
+
+        return {
+            'pair_count': pair_count,
+            'location': '/'.join(loc_parts) if loc_parts else 'first matching',
+            'file': str(unsteady_path),
+        }
