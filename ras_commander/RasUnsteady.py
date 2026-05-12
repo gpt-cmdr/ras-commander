@@ -4386,6 +4386,342 @@ class RasUnsteady:
 
     @staticmethod
     @log_call
+    def set_stage_hydrograph_tw_check(
+        unsteady_file: Union[str, Path],
+        tw_check: int,
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        station: Optional[str] = None,
+        area_2d: Optional[str] = None,
+        bc_line: Optional[str] = None,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Add or update a Stage Hydrograph TW Check flag on a Flow Hydrograph
+        boundary in a HEC-RAS unsteady flow file (.u##).
+
+        Despite the misleading keyword name ``Stage Hydrograph TW Check=``,
+        this field appears inside **Flow Hydrograph** boundary blocks in
+        HEC-RAS-emitted .u## files.  It controls whether HEC-RAS performs a
+        tailwater check for the boundary (0 = disabled, 1 = enabled).
+
+        Behavior
+        --------
+        - **Update path**: if a ``Stage Hydrograph TW Check=`` line already
+          exists in the matched boundary block, its value is overwritten in
+          place.
+        - **Insert path**: if no TW Check line exists, a new line is inserted
+          in the canonical position: after ``Flow Hydrograph QMult=`` if
+          present, otherwise after ``Flow Hydrograph Slope=`` if present,
+          otherwise immediately before the first DSS metadata line
+          (``DSS Path=``, ``DSS File=``, ``Use DSS=``), otherwise just before
+          the first ``=`` line after the inline hydrograph data.
+
+        Target resolution
+        -----------------
+        Provide *exactly one* of:
+
+        - ``(river, reach, station)`` for a 1D river boundary.
+        - ``(area_2d, bc_line)`` for a 2D BC line on a 2D Flow Area perimeter.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##), or a 1-2 character unsteady
+            number (e.g. ``"01"``) when a project-bound ``ras_object`` is
+            available.
+        tw_check : int
+            Tailwater check flag.  Must be 0 (disabled) or 1 (enabled).
+        river, reach, station : str, optional
+            1D location selector.  All three must be provided together.
+        area_2d, bc_line : str, optional
+            2D location selector.  Both must be provided together.
+        ras_object : optional
+            Custom RAS object.  When initialized for a project,
+            ``boundaries_df`` is refreshed after the write.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Reviewable metadata with keys:
+
+            - ``unsteady_file`` (str): absolute path written
+            - ``matched_location`` (str): the matched ``Boundary Location=``
+            - ``bc_type`` (str): always ``'Flow Hydrograph'``
+            - ``previous_tw_check`` (int | None): prior value, or ``None``
+            - ``new_tw_check`` (int): value written
+            - ``updated_in_place`` (bool): True if existing line overwritten
+            - ``lines_inserted`` (int): 1 if new line inserted, else 0
+            - ``insert_anchor`` (str | None): keyword anchor used for insert
+            - ``boundaries_df_refreshed`` (bool)
+            - ``block_before`` (str): boundary block text before edit
+            - ``block_after`` (str): boundary block text after edit
+
+        Raises
+        ------
+        ValueError
+            If ``tw_check`` is not 0 or 1; if selectors are invalid; if the
+            matched block is not a Flow Hydrograph.
+        FileNotFoundError
+            If the unsteady flow file does not exist.
+
+        Examples
+        --------
+        Enable TW check on a 2D Flow Hydrograph boundary:
+
+        >>> result = RasUnsteady.set_stage_hydrograph_tw_check(
+        ...     "BaldEagleDamBrk.u02",
+        ...     tw_check=1,
+        ...     area_2d="BaldEagleCr",
+        ...     bc_line="Upstream Inflow",
+        ... )
+        >>> result["new_tw_check"]
+        1
+
+        See Also
+        --------
+        set_flow_hydrograph_slope : Set distribution slope on Flow Hydrograph.
+        """
+        # 1) Validate tw_check
+        if not isinstance(tw_check, int) or isinstance(tw_check, bool):
+            raise ValueError(
+                f"tw_check must be an integer (0 or 1), got {type(tw_check).__name__}"
+            )
+        if tw_check not in (0, 1):
+            raise ValueError(
+                f"tw_check must be 0 or 1, got {tw_check!r}"
+            )
+
+        # 2) Validate target selectors
+        has_1d = any(x is not None for x in (river, reach, station))
+        has_2d = any(x is not None for x in (area_2d, bc_line))
+        if has_1d == has_2d:
+            raise ValueError(
+                "Provide exactly one selector group: (river, reach, station) "
+                "OR (area_2d, bc_line)"
+            )
+        if has_1d and not (river and reach and station):
+            raise ValueError(
+                "1D selector requires all of river, reach, and station"
+            )
+        if has_2d and not (area_2d and bc_line):
+            raise ValueError(
+                "2D selector requires both area_2d and bc_line"
+            )
+
+        # 3) Resolve unsteady file path
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except Exception:
+                pass
+
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            if ras_obj is None or getattr(ras_obj, 'project_folder', None) is None:
+                raise ValueError(
+                    "Cannot resolve unsteady number without an initialized ras_object"
+                )
+            num = unsteady_file.zfill(2)
+            unsteady_path = Path(ras_obj.project_folder) / f"{ras_obj.project_name}.u{num}"
+        else:
+            unsteady_path = Path(unsteady_file)
+
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        # 4) Read file and find target Boundary Location block
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        def _matches_location(loc_value: str) -> bool:
+            parts = [p.strip() for p in loc_value.split(',')]
+            if has_1d:
+                return (
+                    len(parts) >= 3
+                    and parts[0] == river
+                    and parts[1] == reach
+                    and parts[2] == station
+                )
+            if len(parts) < 6 or parts[5] != area_2d:
+                return False
+            if len(parts) < 8 or parts[7] != bc_line:
+                return False
+            return True
+
+        boundary_idx = None
+        matched_loc = ''
+        for i, line in enumerate(lines):
+            if line.startswith('Boundary Location='):
+                loc = line[len('Boundary Location='):]
+                if _matches_location(loc):
+                    boundary_idx = i
+                    matched_loc = loc
+                    break
+
+        sel = (
+            f"river={river!r}, reach={reach!r}, station={station!r}"
+            if has_1d
+            else f"area_2d={area_2d!r}, bc_line={bc_line!r}"
+        )
+        if boundary_idx is None:
+            raise ValueError(
+                f"No boundary matched in {unsteady_path.name} for {sel}. "
+                f"This function only edits Flow Hydrograph boundaries that "
+                f"already exist as `Boundary Location=` blocks."
+            )
+
+        # 5) Walk the block; verify it is a Flow Hydrograph; locate anchors.
+        FLOW_HYDROGRAPH_HEADER = 'Flow Hydrograph='
+        TW_CHECK_KEY = 'Stage Hydrograph TW Check='
+        SLOPE_KEY = 'Flow Hydrograph Slope='
+        QMULT_KEY = 'Flow Hydrograph QMult='
+        DSS_LINE_KEYS = ('DSS Path=', 'DSS File=', 'Use DSS=')
+
+        flow_header_idx: Optional[int] = None
+        tw_check_idx: Optional[int] = None
+        slope_idx: Optional[int] = None
+        qmult_idx: Optional[int] = None
+        first_dss_idx: Optional[int] = None
+        first_dss_keyword: Optional[str] = None
+        first_post_data_eq_idx: Optional[int] = None
+
+        BLOCK_SCAN_CAP = 1000
+        block_end = min(boundary_idx + 1 + BLOCK_SCAN_CAP, len(lines))
+
+        j = boundary_idx + 1
+        while j < block_end:
+            line = lines[j]
+            if line.startswith('Boundary Location='):
+                block_end = j
+                break
+            if line.startswith(FLOW_HYDROGRAPH_HEADER):
+                flow_header_idx = j
+            j += 1
+
+        if flow_header_idx is None:
+            raise ValueError(
+                f"Boundary at {matched_loc.strip()!r} is not a Flow Hydrograph "
+                f"(no `Flow Hydrograph=<count>` header in block); "
+                f"`Stage Hydrograph TW Check=` only applies to Flow Hydrograph BCs"
+            )
+
+        try:
+            count = int(lines[flow_header_idx].replace(FLOW_HYDROGRAPH_HEADER, '').split(',')[0].strip())
+        except (ValueError, IndexError):
+            count = 0
+        post_data_idx = flow_header_idx + 1
+        if count > 0:
+            for k in range(flow_header_idx + 1, block_end):
+                if '=' in lines[k] or lines[k].startswith('Boundary Location='):
+                    post_data_idx = k
+                    break
+            else:
+                post_data_idx = block_end
+
+        for j in range(post_data_idx, block_end):
+            line = lines[j]
+            if line.startswith(TW_CHECK_KEY) and tw_check_idx is None:
+                tw_check_idx = j
+            elif line.startswith(SLOPE_KEY) and slope_idx is None:
+                slope_idx = j
+            elif line.startswith(QMULT_KEY) and qmult_idx is None:
+                qmult_idx = j
+            else:
+                for dss_kw in DSS_LINE_KEYS:
+                    if line.startswith(dss_kw) and first_dss_idx is None:
+                        first_dss_idx = j
+                        first_dss_keyword = dss_kw
+                        break
+            if first_post_data_eq_idx is None and '=' in line:
+                first_post_data_eq_idx = j
+
+        block_before = ''.join(lines[boundary_idx:block_end])
+
+        previous_tw_check: Optional[int] = None
+        if tw_check_idx is not None:
+            payload = lines[tw_check_idx].replace(TW_CHECK_KEY, '').strip()
+            try:
+                previous_tw_check = int(payload)
+            except ValueError:
+                previous_tw_check = None
+
+        # 6) Compose new line and apply edit.
+        new_tw_line = f'Stage Hydrograph TW Check={tw_check}\n'
+
+        lines_inserted = 0
+        updated_in_place = False
+        insert_anchor: Optional[str] = None
+
+        if tw_check_idx is not None:
+            lines[tw_check_idx] = new_tw_line
+            updated_in_place = True
+        else:
+            if qmult_idx is not None:
+                insert_pos = qmult_idx + 1
+                insert_anchor = QMULT_KEY
+            elif slope_idx is not None:
+                insert_pos = slope_idx + 1
+                insert_anchor = SLOPE_KEY
+            elif first_dss_idx is not None:
+                insert_pos = first_dss_idx
+                insert_anchor = first_dss_keyword
+            elif first_post_data_eq_idx is not None:
+                insert_pos = first_post_data_eq_idx
+                insert_anchor = '<inline-data-tail>'
+            else:
+                insert_pos = block_end
+                insert_anchor = '<block-end>'
+            lines.insert(insert_pos, new_tw_line)
+            lines_inserted = 1
+
+        new_block_end = boundary_idx + 1
+        while (
+            new_block_end < len(lines)
+            and not lines[new_block_end].startswith('Boundary Location=')
+        ):
+            new_block_end += 1
+        block_after = ''.join(lines[boundary_idx:new_block_end])
+
+        # 7) Persist file
+        with open(unsteady_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
+        # 8) Refresh boundaries_df where possible
+        boundaries_df_refreshed = False
+        if ras_obj is not None:
+            try:
+                ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+                boundaries_df_refreshed = True
+            except Exception as exc:
+                logger.debug(f"boundaries_df refresh skipped: {exc}")
+
+        logger.info(
+            "Set Stage Hydrograph TW Check in %s: matched=%s, tw_check=%d, "
+            "updated_in_place=%s, anchor=%s",
+            unsteady_path.name,
+            matched_loc.strip(),
+            tw_check,
+            updated_in_place,
+            insert_anchor,
+        )
+
+        return {
+            'unsteady_file': str(unsteady_path),
+            'matched_location': matched_loc,
+            'bc_type': 'Flow Hydrograph',
+            'previous_tw_check': previous_tw_check,
+            'new_tw_check': tw_check,
+            'updated_in_place': updated_in_place,
+            'lines_inserted': lines_inserted,
+            'insert_anchor': insert_anchor,
+            'boundaries_df_refreshed': boundaries_df_refreshed,
+            'block_before': block_before,
+            'block_after': block_after,
+        }
+
+    @staticmethod
+    @log_call
     def get_unique_dss_subbasins(
         unsteady_file: Union[str, Path],
         ras_object: Optional[Any] = None

@@ -1617,7 +1617,8 @@ class RasPrj:
         # Parse other fields
         known_fields = ['Interval', 'DSS Path', 'Use DSS', 'Use Fixed Start Time', 'Fixed Start Date/Time',
                         'Is Critical Boundary', 'Critical Boundary Flow', 'DSS File',
-                        'Flow Hydrograph QMult', 'Flow Hydrograph QMin', 'Flow Hydrograph Slope', 'Friction Slope']
+                        'Flow Hydrograph QMult', 'Flow Hydrograph QMin', 'Flow Hydrograph Slope',
+                        'Stage Hydrograph TW Check', 'Friction Slope']
         for i, line in enumerate(lines):
             if '=' in line:
                 key, value = line.split('=', 1)
