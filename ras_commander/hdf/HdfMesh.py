@@ -44,6 +44,13 @@ set_face_mannings_n_values()
 pin_property_tables()
     Set or clear the Pinned attribute to prevent RASMapper overwrite
 
+Spatial Filtering (Polygon Mask):
+---------------------------------
+get_face_ids_in_polygon()
+    Filter mesh faces by polygon boundary (midpoint or any-vertex method)
+get_face_ids_in_calibration_region()
+    Filter mesh faces by named Manning's n calibration region from geometry HDF
+
 Spatial Query Utilities:
 -----------------------
 find_nearest_face()
@@ -1749,6 +1756,8 @@ class HdfMesh:
         mannings_n_func: Callable[[float, float], float],
         elevation_step: float = 0.5,
         face_ids: Optional[List[int]] = None,
+        polygon=None,
+        region_name: Optional[str] = None,
         pin_tables: bool = True,
     ) -> Dict[int, int]:
         """
@@ -1777,6 +1786,13 @@ class HdfMesh:
         face_ids : Optional[List[int]]
             List of face IDs to extend. ``None`` extends all faces whose
             current maximum is below ``extension_elevation``.
+        polygon : shapely Polygon/MultiPolygon or GeoDataFrame, optional
+            If provided and ``face_ids`` is None, only extend faces whose
+            midpoint falls within this polygon.
+        region_name : str, optional
+            If provided and ``face_ids`` is None, only extend faces within
+            the named Manning's n calibration region from the geometry HDF.
+            Precedence: ``face_ids`` > ``region_name`` > ``polygon``.
         pin_tables : bool, default True
             Pin tables after modification.
 
@@ -1790,6 +1806,10 @@ class HdfMesh:
         info_path = f"{base_path}/Faces Area Elevation Info"
         values_path = f"{base_path}/Faces Area Elevation Values"
 
+        resolved = HdfMesh._resolve_face_ids(
+            hdf_path, mesh_name, face_ids, polygon, region_name
+        )
+
         with h5py.File(str(hdf_path), 'r') as hdf_file:
             if info_path not in hdf_file or values_path not in hdf_file:
                 raise KeyError(f"Face property tables not found for mesh '{mesh_name}'")
@@ -1797,10 +1817,10 @@ class HdfMesh:
             old_values = hdf_file[values_path][()]
 
         num_faces = old_info.shape[0]
-        if face_ids is None:
+        if resolved is None:
             face_ids_to_extend = list(range(num_faces))
         else:
-            face_ids_to_extend = list(face_ids)
+            face_ids_to_extend = list(resolved)
 
         modified_tables: Dict[int, pd.DataFrame] = {}
         rows_added: Dict[int, int] = {}
@@ -1860,6 +1880,8 @@ class HdfMesh:
         mesh_name: str,
         mannings_n_func: Callable[[float, float, float], float],
         face_ids: Optional[List[int]] = None,
+        polygon=None,
+        region_name: Optional[str] = None,
         pin_tables: bool = True,
     ) -> int:
         """
@@ -1881,6 +1903,13 @@ class HdfMesh:
             Manning's n value.
         face_ids : Optional[List[int]]
             Faces to modify. ``None`` modifies all faces.
+        polygon : shapely Polygon/MultiPolygon or GeoDataFrame, optional
+            If provided and ``face_ids`` is None, only modify faces whose
+            midpoint falls within this polygon.
+        region_name : str, optional
+            If provided and ``face_ids`` is None, only modify faces within
+            the named Manning's n calibration region from the geometry HDF.
+            Precedence: ``face_ids`` > ``region_name`` > ``polygon``.
         pin_tables : bool, default True
             Pin tables after modification.
 
@@ -1894,6 +1923,10 @@ class HdfMesh:
         info_path = f"{base_path}/Faces Area Elevation Info"
         values_path = f"{base_path}/Faces Area Elevation Values"
 
+        resolved = HdfMesh._resolve_face_ids(
+            hdf_path, mesh_name, face_ids, polygon, region_name
+        )
+
         with h5py.File(str(hdf_path), 'r') as hdf_file:
             if info_path not in hdf_file or values_path not in hdf_file:
                 raise KeyError(f"Face property tables not found for mesh '{mesh_name}'")
@@ -1901,10 +1934,10 @@ class HdfMesh:
             old_values = hdf_file[values_path][()]
 
         num_faces = old_info.shape[0]
-        if face_ids is None:
+        if resolved is None:
             target_ids = list(range(num_faces))
         else:
-            target_ids = list(face_ids)
+            target_ids = list(resolved)
 
         modified_tables: Dict[int, pd.DataFrame] = {}
 
@@ -1971,3 +2004,161 @@ class HdfMesh:
 
         action = "Pinned" if pinned else "Unpinned"
         logger.info(f"{action} property tables for mesh '{mesh_name}'")
+
+    # -------------------------------------------------------------------------
+    # Spatial Filtering: Polygon Mask for Selective Face Application
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    @log_call
+    def get_face_ids_in_polygon(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        polygon,
+        method: str = 'midpoint',
+    ) -> List[int]:
+        """
+        Return face IDs whose geometry falls within a polygon boundary.
+
+        Parameters
+        ----------
+        hdf_path : Union[str, Path]
+            Path to the HEC-RAS geometry HDF file (.g##.hdf).
+        mesh_name : str
+            Name of the 2D flow area / mesh.
+        polygon : shapely.geometry.Polygon, shapely.geometry.MultiPolygon, or GeoDataFrame
+            The masking polygon. If a GeoDataFrame is provided, all
+            geometries are unioned into a single polygon.
+        method : str, default 'midpoint'
+            How to test each face against the polygon:
+            - ``'midpoint'``: face midpoint must be within the polygon
+            - ``'any_vertex'``: at least one face vertex must be within
+
+        Returns
+        -------
+        List[int]
+            Sorted list of face IDs (0-indexed) that satisfy the spatial filter.
+        """
+        from shapely.geometry import Point, MultiPolygon
+        from shapely.ops import unary_union
+        from shapely import prepare
+        from geopandas import GeoDataFrame
+
+        if isinstance(polygon, GeoDataFrame):
+            polygon = unary_union(polygon.geometry)
+        if isinstance(polygon, MultiPolygon):
+            pass
+        prepare(polygon)
+
+        faces_gdf = HdfMesh.get_mesh_cell_faces(hdf_path)
+        if faces_gdf.empty:
+            return []
+
+        faces_gdf = faces_gdf[faces_gdf['mesh_name'] == mesh_name]
+        if faces_gdf.empty:
+            return []
+
+        matching_ids = []
+
+        if method == 'midpoint':
+            for _, row in faces_gdf.iterrows():
+                mid = row.geometry.interpolate(0.5, normalized=True)
+                if polygon.contains(mid):
+                    matching_ids.append(int(row['face_id']))
+        elif method == 'any_vertex':
+            for _, row in faces_gdf.iterrows():
+                coords = list(row.geometry.coords)
+                if any(polygon.contains(Point(c)) for c in coords):
+                    matching_ids.append(int(row['face_id']))
+        else:
+            raise ValueError(f"method must be 'midpoint' or 'any_vertex', got '{method}'")
+
+        logger.info(
+            f"Found {len(matching_ids)} faces in polygon "
+            f"(mesh '{mesh_name}', method='{method}')"
+        )
+        return sorted(matching_ids)
+
+    @staticmethod
+    @log_call
+    def get_face_ids_in_calibration_region(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        region_name: str,
+        method: str = 'midpoint',
+    ) -> List[int]:
+        """
+        Return face IDs within a named Manning's n calibration region.
+
+        Reads the calibration region polygon from the geometry HDF via
+        ``HdfLandCover.get_mannings_region_polygons()`` and delegates
+        to ``get_face_ids_in_polygon()``.
+
+        Parameters
+        ----------
+        hdf_path : Union[str, Path]
+            Path to the HEC-RAS geometry HDF file (.g##.hdf).
+        mesh_name : str
+            Name of the 2D flow area / mesh.
+        region_name : str
+            Name of the calibration region as defined in RASMapper GUI.
+        method : str, default 'midpoint'
+            Spatial test method (see ``get_face_ids_in_polygon``).
+
+        Returns
+        -------
+        List[int]
+            Sorted list of face IDs within the named calibration region.
+
+        Raises
+        ------
+        ValueError
+            If the named region is not found in the geometry HDF.
+        """
+        from .HdfLandCover import HdfLandCover
+
+        regions_gdf = HdfLandCover.get_mannings_region_polygons(hdf_path)
+        if regions_gdf.empty:
+            raise ValueError(
+                f"No Manning's n calibration regions found in '{hdf_path}'"
+            )
+
+        match = regions_gdf[regions_gdf['Name'] == region_name]
+        if match.empty:
+            available = regions_gdf['Name'].tolist()
+            raise ValueError(
+                f"Calibration region '{region_name}' not found. "
+                f"Available regions: {available}"
+            )
+
+        region_polygon = match.geometry.iloc[0]
+
+        return HdfMesh.get_face_ids_in_polygon(
+            hdf_path, mesh_name, region_polygon, method=method
+        )
+
+    @staticmethod
+    def _resolve_face_ids(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        face_ids: Optional[List[int]],
+        polygon=None,
+        region_name: Optional[str] = None,
+        method: str = 'midpoint',
+    ) -> Optional[List[int]]:
+        """
+        Resolve face_ids from explicit list, region_name, or polygon.
+
+        Precedence: face_ids > region_name > polygon > None (all faces).
+        """
+        if face_ids is not None:
+            return face_ids
+        if region_name is not None:
+            return HdfMesh.get_face_ids_in_calibration_region(
+                hdf_path, mesh_name, region_name, method=method
+            )
+        if polygon is not None:
+            return HdfMesh.get_face_ids_in_polygon(
+                hdf_path, mesh_name, polygon, method=method
+            )
+        return None
