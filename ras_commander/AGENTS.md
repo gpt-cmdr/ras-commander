@@ -15,6 +15,7 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 - Plan and model files: `RasPlan`, `RasMap`, `RasControl`, `RasUnsteady` (includes IC method selection: `get_initial_flow_method()`, `set_initial_flow_method()`, `get_prior_ws_filename()`, `set_prior_ws_filename()`; IC table: `get_initial_conditions()`, `set_initial_conditions()`, `validate_initial_flow_stations()`; Storage Area IC: `get_initial_storage_elevations()`, `set_initial_storage_elevation()`, `get_min_storage_elevations()`; IC from Output: `set_ic_from_output_profile()`; Non-Newtonian: `get_non_newtonian_method()`, `set_non_newtonian_method()`, `get_non_newtonian_concentration()`, `set_non_newtonian_concentration()`, `get_non_newtonian_shear()`, `set_non_newtonian_shear()`, `get_non_newtonian_herschel_bulkley()`, `set_non_newtonian_herschel_bulkley()`, `get_non_newtonian_clastic()`, `set_non_newtonian_clastic()`; Gate Openings: `get_gate_openings()`, `set_gate_openings()`)
 - Validation framework: `RasValidation`
 - HDF access: `Hdf*` classes and `ras_commander/hdf/`
+- USGS IC generation: `usgs/initial_conditions.py` (`generate_ic_from_usgs()`: auto-discover gauges, match to XS, generate IC table from USGS snapshot)
 - Domain subpackages: `geom/`, `remote/`, `usgs/`, `check/`, `dss/`, `fixit/`, `precip/`, `gui/`, `terrain/`
 
 ## Coding Rules
