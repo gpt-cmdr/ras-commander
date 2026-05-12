@@ -3022,6 +3022,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#step-12-uniform-lateral-inflow-hydrograph-readwrite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 12: Uniform Lateral Inflow Hydrograph Read/Write
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#summary" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3089,6 +3100,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#uniform-lateral-inflow-hydrograph-methods-step-12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Uniform Lateral Inflow Hydrograph Methods (Step 12)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#computational-verification-step-9" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3115,6 +3137,17 @@
     <span class="md-ellipsis">
       
         Lateral Inflow Hydrograph Verification (Step 11)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uniform-lateral-inflow-hydrograph-verification-step-12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Uniform Lateral Inflow Hydrograph Verification (Step 12)
       
     </span>
   </a>
@@ -4274,6 +4307,141 @@
 </span><span id="__span-28-48"><a id="__codelineno-28-48" name="__codelineno-28-48" href="#__codelineno-28-48"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-28-49"><a id="__codelineno-28-49" name="__codelineno-28-49" href="#__codelineno-28-49"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipping write test (no inline lateral inflow found)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<h2 id="step-12-uniform-lateral-inflow-hydrograph-readwrite">Step 12: Uniform Lateral Inflow Hydrograph Read/Write<a class="headerlink" href="#step-12-uniform-lateral-inflow-hydrograph-readwrite" title="Permanent link">&para;</a></h2>
+<p>HEC-RAS supports <strong>Uniform Lateral Inflow Hydrograph</strong> boundary conditions for distributing flow uniformly along a reach between two river stations. Unlike point-based Lateral Inflow (Step 11), this BC type is <strong>reach-based</strong> — applied between two stations listed in the Boundary Location field.</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RasUnsteady.get_uniform_lateral_inflow_hydrograph()</code></td>
+<td>Read uniform lateral inflow values and metadata from a <code>.u##</code> file</td>
+</tr>
+<tr>
+<td><code>RasUnsteady.set_uniform_lateral_inflow_hydrograph()</code></td>
+<td>Write or replace uniform lateral inflow values, optionally update slope</td>
+</tr>
+</tbody>
+</table>
+<p>The inline data format is identical to other hydrograph types (8-character fixed-width, 10 values per line). Metadata includes <code>interval</code>, <code>slope</code>, <code>matched_location</code>, and <code>value_count</code> via <code>df.attrs</code>.</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># --- Step 12a: Read uniform lateral inflow hydrograph from BaldEagleCrkMulti2D ---</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="c1"># Re-initialize BaldEagle project (extracted in Step 1)</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="n">ras</span> <span class="o">=</span> <span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>
+</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="c1"># Find Uniform Lateral Inflow Hydrograph boundaries in boundaries_df</span>
+</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="n">ulat_bcs</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">[</span><span class="s1">&#39;bc_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Uniform Lateral Inflow Hydrograph&#39;</span><span class="p">]</span>
+</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Uniform Lateral Inflow Hydrograph boundaries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ulat_bcs</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a><span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">ulat_bcs</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="__span-29-9"><a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a>    <span class="n">display</span><span class="p">(</span><span class="n">ulat_bcs</span><span class="p">[[</span><span class="s1">&#39;river&#39;</span><span class="p">,</span> <span class="s1">&#39;reach&#39;</span><span class="p">,</span> <span class="s1">&#39;river_station&#39;</span><span class="p">,</span> <span class="s1">&#39;bc_type&#39;</span><span class="p">,</span> <span class="s1">&#39;area_2d&#39;</span><span class="p">,</span> <span class="s1">&#39;bc_line&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
+</span><span id="__span-29-10"><a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a>
+</span><span id="__span-29-11"><a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a><span class="c1"># Pick the first unsteady file that has uniform lateral inflow BCs</span>
+</span><span id="__span-29-12"><a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a><span class="n">ulat_u_file</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-29-13"><a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a><span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">urow</span> <span class="ow">in</span> <span class="n">ras</span><span class="o">.</span><span class="n">unsteady_df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+</span><span id="__span-29-14"><a id="__codelineno-29-14" name="__codelineno-29-14" href="#__codelineno-29-14"></a>    <span class="n">unum</span> <span class="o">=</span> <span class="n">urow</span><span class="p">[</span><span class="s1">&#39;unsteady_number&#39;</span><span class="p">]</span>
+</span><span id="__span-29-15"><a id="__codelineno-29-15" name="__codelineno-29-15" href="#__codelineno-29-15"></a>    <span class="n">match</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">[</span>
+</span><span id="__span-29-16"><a id="__codelineno-29-16" name="__codelineno-29-16" href="#__codelineno-29-16"></a>        <span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">[</span><span class="s1">&#39;unsteady_number&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">unum</span><span class="p">)</span> <span class="o">&amp;</span>
+</span><span id="__span-29-17"><a id="__codelineno-29-17" name="__codelineno-29-17" href="#__codelineno-29-17"></a>        <span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">[</span><span class="s1">&#39;bc_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Uniform Lateral Inflow Hydrograph&#39;</span><span class="p">)</span>
+</span><span id="__span-29-18"><a id="__codelineno-29-18" name="__codelineno-29-18" href="#__codelineno-29-18"></a>    <span class="p">]</span>
+</span><span id="__span-29-19"><a id="__codelineno-29-19" name="__codelineno-29-19" href="#__codelineno-29-19"></a>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">match</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="__span-29-20"><a id="__codelineno-29-20" name="__codelineno-29-20" href="#__codelineno-29-20"></a>        <span class="n">ulat_u_file</span> <span class="o">=</span> <span class="n">urow</span><span class="p">[</span><span class="s1">&#39;full_path&#39;</span><span class="p">]</span>
+</span><span id="__span-29-21"><a id="__codelineno-29-21" name="__codelineno-29-21" href="#__codelineno-29-21"></a>        <span class="n">ulat_sample</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-29-22"><a id="__codelineno-29-22" name="__codelineno-29-22" href="#__codelineno-29-22"></a>        <span class="k">break</span>
+</span><span id="__span-29-23"><a id="__codelineno-29-23" name="__codelineno-29-23" href="#__codelineno-29-23"></a>
+</span><span id="__span-29-24"><a id="__codelineno-29-24" name="__codelineno-29-24" href="#__codelineno-29-24"></a><span class="k">if</span> <span class="n">ulat_u_file</span><span class="p">:</span>
+</span><span id="__span-29-25"><a id="__codelineno-29-25" name="__codelineno-29-25" href="#__codelineno-29-25"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Using unsteady file: </span><span class="si">{</span><span class="n">Path</span><span class="p">(</span><span class="n">ulat_u_file</span><span class="p">)</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-29-26"><a id="__codelineno-29-26" name="__codelineno-29-26" href="#__codelineno-29-26"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  River:   </span><span class="si">{</span><span class="n">ulat_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;river&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-29-27"><a id="__codelineno-29-27" name="__codelineno-29-27" href="#__codelineno-29-27"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Reach:   </span><span class="si">{</span><span class="n">ulat_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;reach&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-29-28"><a id="__codelineno-29-28" name="__codelineno-29-28" href="#__codelineno-29-28"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Station: </span><span class="si">{</span><span class="n">ulat_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;river_station&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-29-29"><a id="__codelineno-29-29" name="__codelineno-29-29" href="#__codelineno-29-29"></a>
+</span><span id="__span-29-30"><a id="__codelineno-29-30" name="__codelineno-29-30" href="#__codelineno-29-30"></a>    <span class="c1"># Attempt to read inline data (BaldEagle BCs are DSS-linked, so expect None)</span>
+</span><span id="__span-29-31"><a id="__codelineno-29-31" name="__codelineno-29-31" href="#__codelineno-29-31"></a>    <span class="n">ulat_df</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_uniform_lateral_inflow_hydrograph</span><span class="p">(</span>
+</span><span id="__span-29-32"><a id="__codelineno-29-32" name="__codelineno-29-32" href="#__codelineno-29-32"></a>        <span class="n">unsteady_file</span><span class="o">=</span><span class="n">ulat_u_file</span><span class="p">,</span>
+</span><span id="__span-29-33"><a id="__codelineno-29-33" name="__codelineno-29-33" href="#__codelineno-29-33"></a>        <span class="n">river</span><span class="o">=</span><span class="n">ulat_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;river&#39;</span><span class="p">),</span>
+</span><span id="__span-29-34"><a id="__codelineno-29-34" name="__codelineno-29-34" href="#__codelineno-29-34"></a>        <span class="n">reach</span><span class="o">=</span><span class="n">ulat_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;reach&#39;</span><span class="p">),</span>
+</span><span id="__span-29-35"><a id="__codelineno-29-35" name="__codelineno-29-35" href="#__codelineno-29-35"></a>        <span class="n">station</span><span class="o">=</span><span class="n">ulat_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;river_station&#39;</span><span class="p">),</span>
+</span><span id="__span-29-36"><a id="__codelineno-29-36" name="__codelineno-29-36" href="#__codelineno-29-36"></a>        <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">,</span>
+</span><span id="__span-29-37"><a id="__codelineno-29-37" name="__codelineno-29-37" href="#__codelineno-29-37"></a>    <span class="p">)</span>
+</span><span id="__span-29-38"><a id="__codelineno-29-38" name="__codelineno-29-38" href="#__codelineno-29-38"></a>
+</span><span id="__span-29-39"><a id="__codelineno-29-39" name="__codelineno-29-39" href="#__codelineno-29-39"></a>    <span class="k">if</span> <span class="n">ulat_df</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-29-40"><a id="__codelineno-29-40" name="__codelineno-29-40" href="#__codelineno-29-40"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Uniform Lateral Inflow Hydrograph:&quot;</span><span class="p">)</span>
+</span><span id="__span-29-41"><a id="__codelineno-29-41" name="__codelineno-29-41" href="#__codelineno-29-41"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Values:   </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ulat_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-29-42"><a id="__codelineno-29-42" name="__codelineno-29-42" href="#__codelineno-29-42"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Flow range: </span><span class="si">{</span><span class="n">ulat_df</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">ulat_df</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-29-43"><a id="__codelineno-29-43" name="__codelineno-29-43" href="#__codelineno-29-43"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Interval: </span><span class="si">{</span><span class="n">ulat_df</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;interval&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-29-44"><a id="__codelineno-29-44" name="__codelineno-29-44" href="#__codelineno-29-44"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Slope:    </span><span class="si">{</span><span class="n">ulat_df</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;slope&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-29-45"><a id="__codelineno-29-45" name="__codelineno-29-45" href="#__codelineno-29-45"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Location: </span><span class="si">{</span><span class="n">ulat_df</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;matched_location&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-29-46"><a id="__codelineno-29-46" name="__codelineno-29-46" href="#__codelineno-29-46"></a>        <span class="n">display</span><span class="p">(</span><span class="n">ulat_df</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
+</span><span id="__span-29-47"><a id="__codelineno-29-47" name="__codelineno-29-47" href="#__codelineno-29-47"></a>    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-29-48"><a id="__codelineno-29-48" name="__codelineno-29-48" href="#__codelineno-29-48"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">No inline uniform lateral inflow found (DSS-linked with count=0)&quot;</span><span class="p">)</span>
+</span><span id="__span-29-49"><a id="__codelineno-29-49" name="__codelineno-29-49" href="#__codelineno-29-49"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  This is expected for BaldEagle — will use setter to write inline data in Step 12b&quot;</span><span class="p">)</span>
+</span><span id="__span-29-50"><a id="__codelineno-29-50" name="__codelineno-29-50" href="#__codelineno-29-50"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-29-51"><a id="__codelineno-29-51" name="__codelineno-29-51" href="#__codelineno-29-51"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No Uniform Lateral Inflow Hydrograph boundaries found in this project&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># --- Step 12b: Write inline data with setter, then round-trip verify ---</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="c1"># BaldEagle uniform lateral inflow BCs are DSS-linked (count=0), so we use</span>
+</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="c1"># the setter to write synthetic inline data, then read it back to verify.</span>
+</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+</span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>
+</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="k">if</span> <span class="n">ulat_u_file</span><span class="p">:</span>
+</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>    <span class="c1"># Create a simple triangular hydrograph (24 hourly values)</span>
+</span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>    <span class="n">hours</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">25</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+</span><span id="__span-30-10"><a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>    <span class="n">peak_flow</span> <span class="o">=</span> <span class="mf">500.0</span>
+</span><span id="__span-30-11"><a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a>    <span class="n">flows</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">hours</span> <span class="o">&lt;=</span> <span class="mi">12</span><span class="p">,</span> <span class="n">hours</span> <span class="o">/</span> <span class="mi">12</span> <span class="o">*</span> <span class="n">peak_flow</span><span class="p">,</span> <span class="p">(</span><span class="mi">24</span> <span class="o">-</span> <span class="n">hours</span><span class="p">)</span> <span class="o">/</span> <span class="mi">12</span> <span class="o">*</span> <span class="n">peak_flow</span><span class="p">)</span>
+</span><span id="__span-30-12"><a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a>    <span class="n">flows</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">flows</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+</span><span id="__span-30-13"><a id="__codelineno-30-13" name="__codelineno-30-13" href="#__codelineno-30-13"></a>
+</span><span id="__span-30-14"><a id="__codelineno-30-14" name="__codelineno-30-14" href="#__codelineno-30-14"></a>    <span class="n">ulat_write_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s1">&#39;flow&#39;</span><span class="p">:</span> <span class="n">flows</span><span class="p">})</span>
+</span><span id="__span-30-15"><a id="__codelineno-30-15" name="__codelineno-30-15" href="#__codelineno-30-15"></a>    <span class="n">NEW_SLOPE</span> <span class="o">=</span> <span class="mf">0.002</span>
+</span><span id="__span-30-16"><a id="__codelineno-30-16" name="__codelineno-30-16" href="#__codelineno-30-16"></a>
+</span><span id="__span-30-17"><a id="__codelineno-30-17" name="__codelineno-30-17" href="#__codelineno-30-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Writing </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ulat_write_df</span><span class="p">)</span><span class="si">}</span><span class="s2"> uniform lateral inflow values&quot;</span><span class="p">)</span>
+</span><span id="__span-30-18"><a id="__codelineno-30-18" name="__codelineno-30-18" href="#__codelineno-30-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Peak flow: </span><span class="si">{</span><span class="n">peak_flow</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> cfs at hour 12&quot;</span><span class="p">)</span>
+</span><span id="__span-30-19"><a id="__codelineno-30-19" name="__codelineno-30-19" href="#__codelineno-30-19"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Slope: </span><span class="si">{</span><span class="n">NEW_SLOPE</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-30-20"><a id="__codelineno-30-20" name="__codelineno-30-20" href="#__codelineno-30-20"></a>
+</span><span id="__span-30-21"><a id="__codelineno-30-21" name="__codelineno-30-21" href="#__codelineno-30-21"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">set_uniform_lateral_inflow_hydrograph</span><span class="p">(</span>
+</span><span id="__span-30-22"><a id="__codelineno-30-22" name="__codelineno-30-22" href="#__codelineno-30-22"></a>        <span class="n">unsteady_file</span><span class="o">=</span><span class="n">ulat_u_file</span><span class="p">,</span>
+</span><span id="__span-30-23"><a id="__codelineno-30-23" name="__codelineno-30-23" href="#__codelineno-30-23"></a>        <span class="n">hydrograph_df</span><span class="o">=</span><span class="n">ulat_write_df</span><span class="p">,</span>
+</span><span id="__span-30-24"><a id="__codelineno-30-24" name="__codelineno-30-24" href="#__codelineno-30-24"></a>        <span class="n">river</span><span class="o">=</span><span class="n">ulat_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;river&#39;</span><span class="p">),</span>
+</span><span id="__span-30-25"><a id="__codelineno-30-25" name="__codelineno-30-25" href="#__codelineno-30-25"></a>        <span class="n">reach</span><span class="o">=</span><span class="n">ulat_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;reach&#39;</span><span class="p">),</span>
+</span><span id="__span-30-26"><a id="__codelineno-30-26" name="__codelineno-30-26" href="#__codelineno-30-26"></a>        <span class="n">station</span><span class="o">=</span><span class="n">ulat_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;river_station&#39;</span><span class="p">),</span>
+</span><span id="__span-30-27"><a id="__codelineno-30-27" name="__codelineno-30-27" href="#__codelineno-30-27"></a>        <span class="n">slope</span><span class="o">=</span><span class="n">NEW_SLOPE</span><span class="p">,</span>
+</span><span id="__span-30-28"><a id="__codelineno-30-28" name="__codelineno-30-28" href="#__codelineno-30-28"></a>        <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">,</span>
+</span><span id="__span-30-29"><a id="__codelineno-30-29" name="__codelineno-30-29" href="#__codelineno-30-29"></a>    <span class="p">)</span>
+</span><span id="__span-30-30"><a id="__codelineno-30-30" name="__codelineno-30-30" href="#__codelineno-30-30"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Write result:&quot;</span><span class="p">)</span>
+</span><span id="__span-30-31"><a id="__codelineno-30-31" name="__codelineno-30-31" href="#__codelineno-30-31"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Matched:  </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;matched_location&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-30-32"><a id="__codelineno-30-32" name="__codelineno-30-32" href="#__codelineno-30-32"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Values:   </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;value_count&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-30-33"><a id="__codelineno-30-33" name="__codelineno-30-33" href="#__codelineno-30-33"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Previous: </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;previous_value_count&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> values&quot;</span><span class="p">)</span>
+</span><span id="__span-30-34"><a id="__codelineno-30-34" name="__codelineno-30-34" href="#__codelineno-30-34"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Slope:    </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;slope_written&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-30-35"><a id="__codelineno-30-35" name="__codelineno-30-35" href="#__codelineno-30-35"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Flow range: </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;flow_range&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-30-36"><a id="__codelineno-30-36" name="__codelineno-30-36" href="#__codelineno-30-36"></a>
+</span><span id="__span-30-37"><a id="__codelineno-30-37" name="__codelineno-30-37" href="#__codelineno-30-37"></a>    <span class="c1"># Round-trip: re-read and verify</span>
+</span><span id="__span-30-38"><a id="__codelineno-30-38" name="__codelineno-30-38" href="#__codelineno-30-38"></a>    <span class="n">ulat_reread</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_uniform_lateral_inflow_hydrograph</span><span class="p">(</span>
+</span><span id="__span-30-39"><a id="__codelineno-30-39" name="__codelineno-30-39" href="#__codelineno-30-39"></a>        <span class="n">unsteady_file</span><span class="o">=</span><span class="n">ulat_u_file</span><span class="p">,</span>
+</span><span id="__span-30-40"><a id="__codelineno-30-40" name="__codelineno-30-40" href="#__codelineno-30-40"></a>        <span class="n">river</span><span class="o">=</span><span class="n">ulat_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;river&#39;</span><span class="p">),</span>
+</span><span id="__span-30-41"><a id="__codelineno-30-41" name="__codelineno-30-41" href="#__codelineno-30-41"></a>        <span class="n">reach</span><span class="o">=</span><span class="n">ulat_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;reach&#39;</span><span class="p">),</span>
+</span><span id="__span-30-42"><a id="__codelineno-30-42" name="__codelineno-30-42" href="#__codelineno-30-42"></a>        <span class="n">station</span><span class="o">=</span><span class="n">ulat_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;river_station&#39;</span><span class="p">),</span>
+</span><span id="__span-30-43"><a id="__codelineno-30-43" name="__codelineno-30-43" href="#__codelineno-30-43"></a>        <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">,</span>
+</span><span id="__span-30-44"><a id="__codelineno-30-44" name="__codelineno-30-44" href="#__codelineno-30-44"></a>    <span class="p">)</span>
+</span><span id="__span-30-45"><a id="__codelineno-30-45" name="__codelineno-30-45" href="#__codelineno-30-45"></a>    <span class="k">assert</span> <span class="n">ulat_reread</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;Re-read returned None after setter&quot;</span>
+</span><span id="__span-30-46"><a id="__codelineno-30-46" name="__codelineno-30-46" href="#__codelineno-30-46"></a>    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">ulat_reread</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">ulat_write_df</span><span class="p">),</span> <span class="p">(</span>
+</span><span id="__span-30-47"><a id="__codelineno-30-47" name="__codelineno-30-47" href="#__codelineno-30-47"></a>        <span class="sa">f</span><span class="s2">&quot;Row count mismatch: wrote </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ulat_write_df</span><span class="p">)</span><span class="si">}</span><span class="s2">, read </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ulat_reread</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-30-48"><a id="__codelineno-30-48" name="__codelineno-30-48" href="#__codelineno-30-48"></a>    <span class="p">)</span>
+</span><span id="__span-30-49"><a id="__codelineno-30-49" name="__codelineno-30-49" href="#__codelineno-30-49"></a>    <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">ulat_reread</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">ulat_write_df</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="mf">0.1</span><span class="p">),</span> <span class="p">(</span>
+</span><span id="__span-30-50"><a id="__codelineno-30-50" name="__codelineno-30-50" href="#__codelineno-30-50"></a>        <span class="s2">&quot;Flow values changed during round-trip!&quot;</span>
+</span><span id="__span-30-51"><a id="__codelineno-30-51" name="__codelineno-30-51" href="#__codelineno-30-51"></a>    <span class="p">)</span>
+</span><span id="__span-30-52"><a id="__codelineno-30-52" name="__codelineno-30-52" href="#__codelineno-30-52"></a>    <span class="n">reread_slope</span> <span class="o">=</span> <span class="n">ulat_reread</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;slope&#39;</span><span class="p">)</span>
+</span><span id="__span-30-53"><a id="__codelineno-30-53" name="__codelineno-30-53" href="#__codelineno-30-53"></a>    <span class="k">assert</span> <span class="n">reread_slope</span> <span class="o">==</span> <span class="nb">str</span><span class="p">(</span><span class="n">NEW_SLOPE</span><span class="p">),</span> <span class="p">(</span>
+</span><span id="__span-30-54"><a id="__codelineno-30-54" name="__codelineno-30-54" href="#__codelineno-30-54"></a>        <span class="sa">f</span><span class="s2">&quot;Slope mismatch: expected </span><span class="si">{</span><span class="n">NEW_SLOPE</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">reread_slope</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-30-55"><a id="__codelineno-30-55" name="__codelineno-30-55" href="#__codelineno-30-55"></a>    <span class="p">)</span>
+</span><span id="__span-30-56"><a id="__codelineno-30-56" name="__codelineno-30-56" href="#__codelineno-30-56"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Round-trip verification PASSED&quot;</span><span class="p">)</span>
+</span><span id="__span-30-57"><a id="__codelineno-30-57" name="__codelineno-30-57" href="#__codelineno-30-57"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ulat_reread</span><span class="p">)</span><span class="si">}</span><span class="s2"> flow values match (atol=0.1)&quot;</span><span class="p">)</span>
+</span><span id="__span-30-58"><a id="__codelineno-30-58" name="__codelineno-30-58" href="#__codelineno-30-58"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Slope = </span><span class="si">{</span><span class="n">reread_slope</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-30-59"><a id="__codelineno-30-59" name="__codelineno-30-59" href="#__codelineno-30-59"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Location: </span><span class="si">{</span><span class="n">ulat_reread</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;matched_location&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-30-60"><a id="__codelineno-30-60" name="__codelineno-30-60" href="#__codelineno-30-60"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-30-61"><a id="__codelineno-30-61" name="__codelineno-30-61" href="#__codelineno-30-61"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipping write test (no uniform lateral inflow BCs in project)&quot;</span><span class="p">)</span>
+</span></code></pre></div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated the enhanced <code>boundaries_df</code> features:</p>
 <h3 id="new-dataframe-columns">New DataFrame Columns<a class="headerlink" href="#new-dataframe-columns" title="Permanent link">&para;</a></h3>
@@ -4425,11 +4593,30 @@
 </tr>
 </tbody>
 </table>
+<h3 id="uniform-lateral-inflow-hydrograph-methods-step-12">Uniform Lateral Inflow Hydrograph Methods (Step 12)<a class="headerlink" href="#uniform-lateral-inflow-hydrograph-methods-step-12" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RasUnsteady.get_uniform_lateral_inflow_hydrograph()</code></td>
+<td>Read uniform lateral inflow values + metadata from <code>.u##</code> file</td>
+</tr>
+<tr>
+<td><code>RasUnsteady.set_uniform_lateral_inflow_hydrograph()</code></td>
+<td>Write/replace uniform lateral inflow values, optionally update slope</td>
+</tr>
+</tbody>
+</table>
 <h3 id="computational-verification-step-9">Computational Verification (Step 9)<a class="headerlink" href="#computational-verification-step-9" title="Permanent link">&para;</a></h3>
 <p>Three independent HEC-RAS computations verified the implementation:</p>
 <p><strong>Step 9a: Round-Trip Fidelity Test</strong>
 1. Computed <strong>baseline</strong> plan with original inline boundary conditions
-2. Performed inline → DSS → inline <strong>round-trip</strong> on a second copy
+2. Performed inline -&gt; DSS -&gt; inline <strong>round-trip</strong> on a second copy
 3. Computed the <strong>round-trip</strong> plan
 4. Compared cross section results via <code>HdfResultsXsec.get_xsec_timeseries()</code>
 5. <strong>Result</strong>: All Water Surface, Flow, and Velocity matched exactly (max diff = 0.000000)</p>
@@ -4444,7 +4631,7 @@
 <li>Read observed stage/flow hydrograph at internal BC station with <code>get_stage_flow_hydrograph()</code></li>
 <li>Scaled flows by 1.25x and wrote back with <code>set_stage_flow_hydrograph()</code></li>
 <li>Re-read and verified round-trip: stage values unchanged, flow values match scaled values</li>
-<li><strong>Result</strong>: Round-trip verification PASSED — interleaved 8-char fixed-width format preserved correctly</li>
+<li><strong>Result</strong>: Round-trip verification PASSED</li>
 </ol>
 <h3 id="lateral-inflow-hydrograph-verification-step-11">Lateral Inflow Hydrograph Verification (Step 11)<a class="headerlink" href="#lateral-inflow-hydrograph-verification-step-11" title="Permanent link">&para;</a></h3>
 <ol>
@@ -4452,7 +4639,15 @@
 <li>Verified metadata extraction: interval, slope, matched_location via <code>df.attrs</code></li>
 <li>Scaled flows by 1.5x and wrote back with new slope using <code>set_lateral_inflow_hydrograph()</code></li>
 <li>Re-read and verified round-trip: flow values match, slope updated</li>
-<li><strong>Result</strong>: Round-trip verification PASSED — dedicated lateral inflow API works correctly</li>
+<li><strong>Result</strong>: Round-trip verification PASSED</li>
+</ol>
+<h3 id="uniform-lateral-inflow-hydrograph-verification-step-12">Uniform Lateral Inflow Hydrograph Verification (Step 12)<a class="headerlink" href="#uniform-lateral-inflow-hydrograph-verification-step-12" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Found Uniform Lateral Inflow Hydrograph BCs in BaldEagleCrkMulti2D (DSS-linked, count=0)</li>
+<li>Attempted read with <code>get_uniform_lateral_inflow_hydrograph()</code> -- returns None (expected for DSS-linked)</li>
+<li>Wrote synthetic triangular hydrograph (25 values, peak 500 cfs) with <code>set_uniform_lateral_inflow_hydrograph()</code></li>
+<li>Re-read and verified round-trip: flow values match, slope updated</li>
+<li><strong>Result</strong>: Round-trip verification PASSED -- reach-based uniform lateral inflow API works correctly</li>
 </ol>
 <h3 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h3>
 <ul>
@@ -4460,6 +4655,7 @@
 <li><strong>TW Check setter</strong>: Set/toggle tailwater check flag with <code>set_stage_hydrograph_tw_check()</code></li>
 <li><strong>Stage/Flow Hydrograph</strong>: Read/write interleaved (stage, flow) pairs for internal BCs</li>
 <li><strong>Lateral Inflow Hydrograph</strong>: Dedicated read/write with slope integration and metadata via <code>df.attrs</code></li>
+<li><strong>Uniform Lateral Inflow Hydrograph</strong>: Reach-based BC read/write with slope and metadata support</li>
 <li><strong>Partial station matching</strong>: Matches stations even with coordinates appended</li>
 <li><strong>Batch efficiency</strong>: Single file read/write for multiple updates</li>
 <li><strong>Safe updates</strong>: Optional <code>old_a_part</code> validation prevents accidental overwrites</li>
@@ -4467,11 +4663,11 @@
 <li><strong>Inline data cleanup</strong>: <code>set_boundary_dss_link()</code> removes inline table data when switching to DSS</li>
 <li><strong>Verified correctness</strong>: Computational tests prove state transitions are lossless and QMult affects results</li>
 </ul>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Cleanup (optional)</span>
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
-</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="c1"># import shutil</span>
-</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
-</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Cleanup (optional)</span>
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
+</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="c1"># import shutil</span>
+</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
+</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
 </span></code></pre></div>
 
 
@@ -4495,7 +4691,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 14:03:32 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 14:13:56 UTC">May 12, 2026</span>
   </span>
 
     
@@ -4505,7 +4701,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 14:03:32 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 14:13:56 UTC">May 12, 2026</span>
   </span>
 
     
