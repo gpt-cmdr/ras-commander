@@ -952,6 +952,106 @@ class RasUnsteady:
 
     @staticmethod
     @log_call
+    def get_non_newtonian_herschel_bulkley(
+        unsteady_number_or_path: Union[str, Path],
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Read Generalized Herschel-Bulkley parameters from a .u## file.
+
+        The HB model is: tau = tau_y + K * (du/dy)^n.
+        When n=1 the model reduces to Bingham plastic.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"02"``) or path to a ``.u##`` file.
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses the global ``ras`` object.
+
+        Returns
+        -------
+        dict
+            ``k`` (float): Consistency factor K.
+            ``n`` (float): Power index n.
+        """
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        result = {'k': 0.0, 'n': 0.0}
+        with open(unsteady_file, 'r') as f:
+            for line in f:
+                if line.startswith('Herschel-Bulkley Coef='):
+                    val_str = line.split('=', 1)[1].strip()
+                    parts = [p.strip() for p in val_str.split(',')]
+                    try:
+                        result['k'] = float(parts[0])
+                        result['n'] = float(parts[1])
+                    except (ValueError, IndexError):
+                        pass
+                    break
+        return result
+
+    @staticmethod
+    @log_call
+    def set_non_newtonian_herschel_bulkley(
+        unsteady_number_or_path: Union[str, Path],
+        k: Optional[float] = None,
+        n: Optional[float] = None,
+        ras_object: Optional[Any] = None,
+    ) -> None:
+        """
+        Set Generalized Herschel-Bulkley parameters in a .u## file.
+
+        The HB model is: tau = tau_y + K * (du/dy)^n.
+        When n=1 the model reduces to Bingham plastic.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"02"``) or path to a ``.u##`` file.
+        k : float, optional
+            Consistency factor K.
+        n : float, optional
+            Power index n (n=1 is Bingham plastic).
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses the global ``ras`` object.
+        """
+        if k is None and n is None:
+            return
+
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        with open(unsteady_file, 'r') as f:
+            lines = f.readlines()
+
+        for i, line in enumerate(lines):
+            if line.startswith('Herschel-Bulkley Coef='):
+                current = line.split('=', 1)[1].strip()
+                parts = [p.strip() for p in current.split(',')]
+                try:
+                    cur_k = float(parts[0])
+                    cur_n = float(parts[1])
+                except (ValueError, IndexError):
+                    cur_k, cur_n = 0.0, 0.0
+                new_k = k if k is not None else cur_k
+                new_n = n if n is not None else cur_n
+                lines[i] = f"Herschel-Bulkley Coef={new_k}, {new_n}\n"
+                break
+
+        with open(unsteady_file, 'w') as f:
+            f.writelines(lines)
+
+        changes = []
+        if k is not None:
+            changes.append(f"K={k}")
+        if n is not None:
+            changes.append(f"n={n}")
+        logger.info(f"Set HB params ({', '.join(changes)}) in {unsteady_file.name}")
+
+    @staticmethod
+    @log_call
     def update_restart_settings(unsteady_file: str, use_restart: bool, restart_filename: Optional[str] = None, ras_object: Optional[Any] = None) -> None:
         """
         Update the restart file settings in an unsteady flow file.
