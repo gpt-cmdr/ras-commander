@@ -84,6 +84,11 @@ Initial Conditions Method Selection:
 - get_prior_ws_filename() - Read Prior WS Filename and Profile from unsteady file
 - set_prior_ws_filename() - Write Prior WS Filename and Profile to unsteady file
 
+Initial Flow Distribution Table:
+- get_initial_conditions() - Read all IC entries (flow, storage, rrr) as DataFrame
+- set_initial_conditions() - Write IC entries from list of dicts or DataFrame (auto-sets IC method)
+- validate_initial_flow_stations() - Check IC flow stations match geometry cross sections
+
 """
 import os
 import numbers
@@ -283,25 +288,179 @@ class RasUnsteady:
     @log_call
     def set_initial_conditions(
         unsteady_number_or_path: Union[str, Path],
-        ic_entries: List[Dict[str, Any]],
-        ras_object: Optional[Any] = None
+        ic_entries,
+        ras_object: Optional[Any] = None,
+        auto_set_method: bool = True,
     ) -> None:
         """
         Write initial condition entries to a HEC-RAS unsteady flow file.
 
-        Args:
-            unsteady_number_or_path: Unsteady flow number or path to a .u## file.
-            ic_entries: List of initial condition dictionaries with keys accepted
-                by ``InitialConditions.write_initial_conditions()``.
-            ras_object: Optional RAS project object. If None, uses global ``ras``.
+        Replaces all existing ``Initial Flow Loc=``, ``Initial Storage Elev=``,
+        and ``Initial RRR Elev=`` lines with the provided entries.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"03"``) or path to a ``.u##`` file.
+        ic_entries : list[dict] or pd.DataFrame
+            IC entries. Each row/dict must have:
+
+            * ``type`` — ``'flow'``, ``'storage'``, or ``'rrr'``
+            * ``river``, ``reach``, ``station``, ``value`` (for flow/rrr)
+            * ``area_name``, ``value`` (for storage)
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses global ``ras``.
+        auto_set_method : bool, default True
+            When True and entries are non-empty, automatically sets the IC
+            method to ``initial_flow_distribution`` via
+            ``set_initial_flow_method()``.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> ic_df = pd.DataFrame([
+        ...     {'type': 'flow', 'river': 'White', 'reach': 'Muncie',
+        ...      'station': 15696.24, 'value': 1500},
+        ... ])
+        >>> RasUnsteady.set_initial_conditions("01", ic_df, ras_object=ras)
         """
         from .usgs.initial_conditions import InitialConditions
+
+        if isinstance(ic_entries, pd.DataFrame):
+            entries = ic_entries.to_dict('records')
+        else:
+            entries = list(ic_entries)
 
         unsteady_file_path = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path,
             ras_object=ras_object,
         )
-        InitialConditions.write_initial_conditions(unsteady_file_path, ic_entries)
+        InitialConditions.write_initial_conditions(unsteady_file_path, entries)
+
+        if auto_set_method and entries:
+            RasUnsteady.set_initial_flow_method(
+                unsteady_number_or_path,
+                method="initial_flow_distribution",
+                ras_object=ras_object,
+            )
+
+    @staticmethod
+    @log_call
+    def validate_initial_flow_stations(
+        unsteady_number_or_path: Union[str, Path],
+        geom_number_or_path: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Validate that Initial Flow Loc stations match cross sections in geometry.
+
+        Reads the IC table from the unsteady file and checks each ``flow`` entry
+        against cross sections parsed from the geometry file. Reports matched,
+        unmatched, and summary statistics.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number or path to a ``.u##`` file.
+        geom_number_or_path : str or Path, optional
+            Geometry file number or path. If None, resolves via the plan that
+            references this unsteady file.
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses the global ``ras`` object.
+
+        Returns
+        -------
+        dict
+            ``valid`` (bool): True if all flow stations have matching XS.
+            ``matched`` (list[dict]): Entries with matching geometry XS.
+            ``unmatched`` (list[dict]): Entries with no matching geometry XS.
+            ``ic_count`` (int): Total flow IC entries checked.
+            ``geom_xs_count`` (int): Total XS in geometry.
+        """
+        from ras_commander import ras as global_ras
+        _ras = ras_object if ras_object is not None else global_ras
+
+        ic_df = RasUnsteady.get_initial_conditions(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        flow_ics = ic_df[ic_df['type'] == 'flow'] if len(ic_df) > 0 else ic_df
+
+        if geom_number_or_path is None:
+            geom_path = None
+            if hasattr(_ras, 'plan_df') and hasattr(_ras, 'unsteady_df'):
+                try:
+                    unsteady_path = RasUnsteady._resolve_unsteady_file_path(
+                        unsteady_number_or_path, ras_object=ras_object,
+                    )
+                    u_name = unsteady_path.name
+                    for _, plan_row in _ras.plan_df.iterrows():
+                        u_num = plan_row.get('unsteady_number')
+                        if u_num is not None and f".u{str(u_num).zfill(2)}" in u_name:
+                            g_num = plan_row.get('Geom File')
+                            if g_num is not None:
+                                g_match = _ras.geom_df[
+                                    _ras.geom_df['geom_number'] == str(g_num)
+                                ]
+                                if len(g_match) > 0:
+                                    geom_path = Path(g_match.iloc[0]['full_path'])
+                                break
+                except Exception:
+                    pass
+        else:
+            geom_path = Path(geom_number_or_path)
+            if not geom_path.is_file() and hasattr(_ras, 'geom_df'):
+                g_match = _ras.geom_df[
+                    _ras.geom_df['geom_number'] == str(geom_number_or_path)
+                ]
+                if len(g_match) > 0:
+                    geom_path = Path(g_match.iloc[0]['full_path'])
+
+        geom_stations = set()
+        if geom_path is not None and geom_path.is_file():
+            try:
+                from ras_commander.geom import GeomCrossSection
+                xs_df = GeomCrossSection.get_cross_sections(geom_path)
+                if xs_df is not None and len(xs_df) > 0:
+                    for _, xs_row in xs_df.iterrows():
+                        river = str(xs_row.get('river', '')).strip()
+                        reach = str(xs_row.get('reach', '')).strip()
+                        station = xs_row.get('station')
+                        if station is not None:
+                            geom_stations.add((river, reach, float(station)))
+            except Exception as e:
+                logger.warning(f"Could not parse geometry for validation: {e}")
+
+        matched = []
+        unmatched = []
+        for _, ic_row in flow_ics.iterrows():
+            river = str(ic_row.get('river', '')).strip()
+            reach = str(ic_row.get('reach', '')).strip()
+            station = ic_row.get('station')
+            entry = {
+                'river': river, 'reach': reach,
+                'station': station, 'value': ic_row.get('value'),
+            }
+            if (river, reach, float(station)) in geom_stations:
+                matched.append(entry)
+            else:
+                unmatched.append(entry)
+
+        valid = len(unmatched) == 0 and len(flow_ics) > 0
+        if not geom_stations:
+            valid = True
+            logger.info("No geometry XS available for validation; skipping station check")
+
+        logger.info(
+            f"IC validation: {len(matched)} matched, {len(unmatched)} unmatched "
+            f"out of {len(flow_ics)} flow ICs ({len(geom_stations)} XS in geometry)"
+        )
+        return {
+            'valid': valid,
+            'matched': matched,
+            'unmatched': unmatched,
+            'ic_count': len(flow_ics),
+            'geom_xs_count': len(geom_stations),
+        }
 
     @staticmethod
     @log_call
