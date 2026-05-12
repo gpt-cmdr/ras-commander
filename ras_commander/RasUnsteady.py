@@ -1968,6 +1968,401 @@ class RasUnsteady:
             f"in {unsteady_file.name}"
         )
 
+    # ------------------------------------------------------------------
+    # Navigation Dam
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @log_call
+    def get_navigation_dam(
+        unsteady_number_or_path,
+        boundary_index: int = 0,
+        ras_object=None,
+    ) -> dict:
+        """Read Navigation Dam BC data from a .u## file.
+
+        Returns a dict with keys:
+            params           – raw parameter string after 'Navigation Dam='
+            sft_count        – number of SFT points
+            sft_flow         – list of flow values (first row)
+            sft_stage_open   – list of stage values with gates open (second row)
+            sft_stage_closed – list of stage values with gates closed (third row)
+            flow_monitor_rrr – raw string for Flow Monitor RRR line
+            hinge_point_rrr  – raw string for Hinge Point RRR line
+            cp_hinge_point   – raw string for CP Hinge Point values
+            cp_min_pool      – raw string for CP Min Pool values
+            cp_max_pool      – raw string for CP Max Pool values
+        """
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object
+        )
+        with open(unsteady_file, 'r') as f:
+            lines = f.readlines()
+
+        # Find all Navigation Dam boundary blocks
+        nav_indices = [
+            i for i, line in enumerate(lines)
+            if line.startswith('Navigation Dam=')
+        ]
+        if boundary_index >= len(nav_indices):
+            raise IndexError(
+                f"boundary_index={boundary_index} but only "
+                f"{len(nav_indices)} Navigation Dam boundaries found"
+            )
+        start = nav_indices[boundary_index]
+
+        result = {
+            'params': lines[start].split('=', 1)[1].strip(),
+        }
+
+        # Parse SFT table (immediately follows Navigation Dam= line)
+        sft_line = lines[start + 1]
+        if not sft_line.strip().startswith('Navigation Dam SFT='):
+            raise ValueError(
+                f"Expected 'Navigation Dam SFT=' at line {start + 2}, "
+                f"got: {sft_line.strip()[:60]}"
+            )
+        sft_count = int(sft_line.split('=')[1].strip())
+        result['sft_count'] = sft_count
+
+        # Read 3 rows of fixed-width data: flow, stage-open, stage-closed
+        # Each row spans ceil(sft_count / 10) lines of 8-char fields
+        num_data_lines = (sft_count + 9) // 10
+        pos = start + 2
+        rows = []
+        for _ in range(3):
+            vals = []
+            for dl in range(num_data_lines):
+                raw = lines[pos + dl]
+                for j in range(0, len(raw.rstrip('\n')), 8):
+                    chunk = raw[j:j+8].strip()
+                    if chunk:
+                        vals.append(float(chunk))
+            rows.append(vals[:sft_count])
+            pos += num_data_lines
+
+        result['sft_flow'] = rows[0]
+        result['sft_stage_open'] = rows[1]
+        result['sft_stage_closed'] = rows[2]
+
+        # Parse remaining Nav Dam fields until next Boundary Location or EOF
+        result['flow_monitor_rrr'] = ''
+        result['hinge_point_rrr'] = ''
+        result['cp_hinge_point'] = ''
+        result['cp_min_pool'] = ''
+        result['cp_max_pool'] = ''
+
+        for i in range(pos, min(pos + 20, len(lines))):
+            line = lines[i]
+            if line.startswith('Boundary Location='):
+                break
+            if line.startswith('Navigation Dam Flow Monitor RRR='):
+                result['flow_monitor_rrr'] = line.split('=', 1)[1].strip()
+            elif line.startswith('Navigation Dam Hinge Point RRR='):
+                result['hinge_point_rrr'] = line.split('=', 1)[1].strip()
+            elif line.startswith('Navigation Dam CP Hinge Point='):
+                result['cp_hinge_point'] = line.split('=', 1)[1].strip()
+            elif line.startswith('Navigation Dam CP Min Pool='):
+                result['cp_min_pool'] = line.split('=', 1)[1].strip()
+            elif line.startswith('Navigation Dam CP Max Pool='):
+                result['cp_max_pool'] = line.split('=', 1)[1].strip()
+
+        return result
+
+    @staticmethod
+    @log_call
+    def set_navigation_dam(
+        unsteady_number_or_path,
+        boundary_index: int = 0,
+        params: Optional[str] = None,
+        sft_flow: Optional[list] = None,
+        sft_stage_open: Optional[list] = None,
+        sft_stage_closed: Optional[list] = None,
+        flow_monitor_rrr: Optional[str] = None,
+        hinge_point_rrr: Optional[str] = None,
+        cp_hinge_point: Optional[str] = None,
+        cp_min_pool: Optional[str] = None,
+        cp_max_pool: Optional[str] = None,
+        ras_object=None,
+    ) -> None:
+        """Write Navigation Dam BC data back to a .u## file.
+
+        Only provided (non-None) parameters are updated; others are preserved.
+        If SFT table rows are provided, all three (flow, stage_open, stage_closed)
+        must be provided together with equal length.
+        """
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object
+        )
+        with open(unsteady_file, 'r') as f:
+            lines = f.readlines()
+
+        nav_indices = [
+            i for i, line in enumerate(lines)
+            if line.startswith('Navigation Dam=')
+        ]
+        if boundary_index >= len(nav_indices):
+            raise IndexError(
+                f"boundary_index={boundary_index} but only "
+                f"{len(nav_indices)} Navigation Dam boundaries found"
+            )
+        start = nav_indices[boundary_index]
+
+        # Update params line
+        if params is not None:
+            lines[start] = f'Navigation Dam={params}\n'
+
+        # Update SFT table
+        if sft_flow is not None or sft_stage_open is not None or sft_stage_closed is not None:
+            if not (sft_flow is not None and sft_stage_open is not None and sft_stage_closed is not None):
+                raise ValueError("All three SFT rows must be provided together")
+            if not (len(sft_flow) == len(sft_stage_open) == len(sft_stage_closed)):
+                raise ValueError("All three SFT rows must have equal length")
+
+            new_count = len(sft_flow)
+            old_sft_line = lines[start + 1]
+            old_count = int(old_sft_line.split('=')[1].strip())
+            old_data_lines = (old_count + 9) // 10
+            new_data_lines = (new_count + 9) // 10
+
+            # Format data rows in 8-char fixed-width, 10 per line
+            def fmt_row(vals):
+                result_lines = []
+                for i in range(0, len(vals), 10):
+                    chunk = vals[i:i+10]
+                    result_lines.append(
+                        ''.join(f'{v:8g}' for v in chunk) + '\n'
+                    )
+                return result_lines
+
+            new_lines = [f'Navigation Dam SFT= {new_count} \n']
+            new_lines.extend(fmt_row(sft_flow))
+            new_lines.extend(fmt_row(sft_stage_open))
+            new_lines.extend(fmt_row(sft_stage_closed))
+
+            old_block_end = start + 1 + 1 + old_data_lines * 3  # SFT= line + 3 rows
+            lines[start + 1:old_block_end] = new_lines
+
+        # Update RRR and CP fields by scanning forward
+        scan_start = start + 1
+        for i in range(scan_start, min(scan_start + 40, len(lines))):
+            line = lines[i]
+            if line.startswith('Boundary Location=') and i > scan_start:
+                break
+            if flow_monitor_rrr is not None and line.startswith('Navigation Dam Flow Monitor RRR='):
+                lines[i] = f'Navigation Dam Flow Monitor RRR={flow_monitor_rrr}\n'
+            elif hinge_point_rrr is not None and line.startswith('Navigation Dam Hinge Point RRR='):
+                lines[i] = f'Navigation Dam Hinge Point RRR={hinge_point_rrr}\n'
+            elif cp_hinge_point is not None and line.startswith('Navigation Dam CP Hinge Point='):
+                lines[i] = f'Navigation Dam CP Hinge Point={cp_hinge_point}\n'
+            elif cp_min_pool is not None and line.startswith('Navigation Dam CP Min Pool='):
+                lines[i] = f'Navigation Dam CP Min Pool={cp_min_pool}\n'
+            elif cp_max_pool is not None and line.startswith('Navigation Dam CP Max Pool='):
+                lines[i] = f'Navigation Dam CP Max Pool={cp_max_pool}\n'
+
+        with open(unsteady_file, 'w') as f:
+            f.writelines(lines)
+
+        logger.info(
+            f"Set Navigation Dam data (boundary_index={boundary_index}) "
+            f"in {unsteady_file.name}"
+        )
+
+    # ------------------------------------------------------------------
+    # Rule Operations BC (raw text round-trip)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    @log_call
+    def get_rules_bc(
+        unsteady_number_or_path,
+        boundary_index: int = 0,
+        ras_object=None,
+    ) -> dict:
+        """Read Rule Operations BC as raw text from a .u## file.
+
+        The Rules BC format is a complex scripting language; this method
+        returns the raw lines for inspection or round-trip writing.
+
+        Returns a dict with keys:
+            rule_lines     – list of raw 'Rule Operation=...' and
+                             'Rule Expression=...' lines (with newlines)
+            gate_data      – list of raw 'Rule Gate Data=...' lines
+            description    – text between BEGIN/END BOUNDARY DESCRIPTION if present
+        """
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object
+        )
+        with open(unsteady_file, 'r') as f:
+            lines = f.readlines()
+
+        # Find Boundary Location blocks that contain Rule Operation lines
+        # A Rules BC boundary has 'Rule Operation=' lines after the Boundary Location header
+        rule_bc_starts = []
+        for i, line in enumerate(lines):
+            if line.startswith('Boundary Location='):
+                # Look ahead for Rule Operation= lines within this boundary block
+                for j in range(i + 1, min(i + 50, len(lines))):
+                    if lines[j].startswith('Boundary Location='):
+                        break
+                    if lines[j].startswith('Rule Operation='):
+                        rule_bc_starts.append(i)
+                        break
+
+        if boundary_index >= len(rule_bc_starts):
+            raise IndexError(
+                f"boundary_index={boundary_index} but only "
+                f"{len(rule_bc_starts)} Rule Operation boundaries found"
+            )
+        bc_start = rule_bc_starts[boundary_index]
+
+        # Find boundary block end
+        bc_end = len(lines)
+        for i in range(bc_start + 1, len(lines)):
+            if lines[i].startswith('Boundary Location='):
+                bc_end = i
+                break
+
+        # Extract description
+        description = ''
+        for i in range(bc_start, bc_end):
+            if lines[i].strip() == 'BEGIN BOUNDARY DESCRIPTION:':
+                desc_lines = []
+                for j in range(i + 1, bc_end):
+                    if lines[j].strip() == 'END BOUNDARY DESCRIPTION:':
+                        break
+                    desc_lines.append(lines[j].rstrip('\n'))
+                description = '\n'.join(desc_lines)
+                break
+
+        # Extract Rule Operation and Rule Expression lines
+        rule_lines = []
+        gate_data = []
+        for i in range(bc_start, bc_end):
+            if lines[i].startswith('Rule Operation=') or lines[i].startswith('Rule Expression='):
+                rule_lines.append(lines[i])
+            elif lines[i].startswith('Rule Gate Data='):
+                gate_data.append(lines[i])
+
+        return {
+            'rule_lines': rule_lines,
+            'gate_data': gate_data,
+            'description': description,
+        }
+
+    @staticmethod
+    @log_call
+    def set_rules_bc(
+        unsteady_number_or_path,
+        boundary_index: int = 0,
+        rule_lines: Optional[list] = None,
+        gate_data: Optional[list] = None,
+        description: Optional[str] = None,
+        ras_object=None,
+    ) -> None:
+        """Write Rule Operations BC data back to a .u## file.
+
+        This replaces the Rule Operation/Expression lines and optionally
+        the gate data and description within the specified boundary block.
+        Only provided (non-None) parameters are updated.
+        """
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object
+        )
+        with open(unsteady_file, 'r') as f:
+            lines = f.readlines()
+
+        # Find Rules BC boundaries (same logic as get_rules_bc)
+        rule_bc_starts = []
+        for i, line in enumerate(lines):
+            if line.startswith('Boundary Location='):
+                for j in range(i + 1, min(i + 50, len(lines))):
+                    if lines[j].startswith('Boundary Location='):
+                        break
+                    if lines[j].startswith('Rule Operation='):
+                        rule_bc_starts.append(i)
+                        break
+
+        if boundary_index >= len(rule_bc_starts):
+            raise IndexError(
+                f"boundary_index={boundary_index} but only "
+                f"{len(rule_bc_starts)} Rule Operation boundaries found"
+            )
+        bc_start = rule_bc_starts[boundary_index]
+
+        bc_end = len(lines)
+        for i in range(bc_start + 1, len(lines)):
+            if lines[i].startswith('Boundary Location='):
+                bc_end = i
+                break
+
+        # Update description if provided
+        if description is not None:
+            desc_start = None
+            desc_end = None
+            for i in range(bc_start, bc_end):
+                if lines[i].strip() == 'BEGIN BOUNDARY DESCRIPTION:':
+                    desc_start = i + 1
+                if lines[i].strip() == 'END BOUNDARY DESCRIPTION:':
+                    desc_end = i
+                    break
+            if desc_start is not None and desc_end is not None:
+                new_desc = [description + '\n'] if description else []
+                old_len = desc_end - desc_start
+                lines[desc_start:desc_end] = new_desc
+                bc_end += len(new_desc) - old_len
+
+        # Replace Rule Operation/Expression lines if provided
+        if rule_lines is not None:
+            # Find range of existing rule lines
+            first_rule = None
+            last_rule = None
+            for i in range(bc_start, bc_end):
+                if lines[i].startswith('Rule Operation=') or lines[i].startswith('Rule Expression='):
+                    if first_rule is None:
+                        first_rule = i
+                    last_rule = i
+
+            if first_rule is not None:
+                # Ensure rule_lines have newlines
+                new_rule_lines = [
+                    l if l.endswith('\n') else l + '\n' for l in rule_lines
+                ]
+                old_len = last_rule - first_rule + 1
+                lines[first_rule:last_rule + 1] = new_rule_lines
+                bc_end += len(new_rule_lines) - old_len
+
+        # Replace gate data if provided
+        if gate_data is not None:
+            # Find existing gate data lines
+            gate_indices = [
+                i for i in range(bc_start, bc_end)
+                if lines[i].startswith('Rule Gate Data=')
+            ]
+            new_gate_lines = [
+                l if l.endswith('\n') else l + '\n' for l in gate_data
+            ]
+            if gate_indices:
+                first_gate = gate_indices[0]
+                last_gate = gate_indices[-1]
+                lines[first_gate:last_gate + 1] = new_gate_lines
+            elif new_gate_lines:
+                # Insert gate data before bc_end (after last rule line)
+                insert_pos = bc_end
+                for i in range(bc_end - 1, bc_start, -1):
+                    if lines[i].startswith('Rule Operation=') or lines[i].startswith('Rule Expression='):
+                        insert_pos = i + 1
+                        break
+                lines[insert_pos:insert_pos] = new_gate_lines
+
+        with open(unsteady_file, 'w') as f:
+            f.writelines(lines)
+
+        logger.info(
+            f"Set Rules BC data (boundary_index={boundary_index}) "
+            f"in {unsteady_file.name}"
+        )
+
     @staticmethod
     @log_call
     def update_restart_settings(unsteady_file: str, use_restart: bool, restart_filename: Optional[str] = None, ras_object: Optional[Any] = None) -> None:

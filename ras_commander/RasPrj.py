@@ -1601,6 +1601,8 @@ class RasPrj:
             'Gate Name=': 'Gate Opening',
             'Observed Stage and Flow Hydrograph=': 'Observed Stage and Flow',
             'Ground Water Interflow=': 'Ground Water Interflow',
+            'Navigation Dam=': 'Navigation Dam',
+            'Rule Operation=': 'Rule Operation',
         }
         
         bc_info['bc_type'] = 'Unknown'
