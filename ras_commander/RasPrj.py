@@ -1596,7 +1596,8 @@ class RasPrj:
             'Precipitation Hydrograph=': 'Precipitation Hydrograph',
             'Rating Curve=': 'Rating Curve',
             'Friction Slope=': 'Normal Depth',
-            'Gate Name=': 'Gate Opening'
+            'Gate Name=': 'Gate Opening',
+            'Observed Stage and Flow Hydrograph=': 'Observed Stage and Flow',
         }
         
         bc_info['bc_type'] = 'Unknown'
