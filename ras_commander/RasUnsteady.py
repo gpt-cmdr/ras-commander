@@ -1050,6 +1050,248 @@ class RasUnsteady:
             changes.append(f"n={n}")
         logger.info(f"Set HB params ({', '.join(changes)}) in {unsteady_file.name}")
 
+    CLASTIC_METHODS = {
+        0: "Coulomb",
+        1: "Voellmy",
+    }
+
+    HINDERED_FV_METHODS = {
+        0: "No Hindered Settling",
+        1: "User Specified K",
+    }
+
+    HIGH_C_TRANSPORT_METHODS = {
+        0: "Yang and Molina",
+        1: "Mehta-Boldock",
+        2: "Simson Only",
+    }
+
+    @staticmethod
+    @log_call
+    def get_non_newtonian_clastic(
+        unsteady_number_or_path: Union[str, Path],
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Read Clastic Grain-Flow and auxiliary Non-Newtonian parameters from a .u## file.
+
+        Covers the Clastic method selector, friction angle (Coulomb Phi / legacy
+        Voellmy Phi), Voellmy Xi, hindered settling, representative grain size,
+        and high-concentration transport equation.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"02"``) or path to a ``.u##`` file.
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses the global ``ras`` object.
+
+        Returns
+        -------
+        dict
+            ``clastic_method`` (int): 0=Coulomb, 1=Voellmy.
+            ``clastic_method_name`` (str): Human-readable clastic method name.
+            ``coulomb_phi`` (float): Friction angle phi in degrees.
+            ``voellmy_x`` (float): Voellmy turbulence parameter Xi.
+            ``hindered_fv`` (int): 0=No Hindered Settling, 1=User Specified K.
+            ``hindered_fv_name`` (str): Human-readable hindered settling method.
+            ``fv_k`` (float): k power parameter for hindered settling.
+            ``ds`` (float): Representative grain size in mm (O'Brien only).
+            ``high_c_transport`` (int): High-concentration transport equation selector.
+            ``high_c_transport_name`` (str): Human-readable transport equation name.
+        """
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        result = {
+            'clastic_method': 0, 'clastic_method_name': 'Coulomb',
+            'coulomb_phi': 0.0, 'voellmy_x': 0.0,
+            'hindered_fv': 0, 'hindered_fv_name': 'No Hindered Settling',
+            'fv_k': 0.0, 'ds': 0.0,
+            'high_c_transport': 0, 'high_c_transport_name': 'Yang and Molina',
+        }
+        with open(unsteady_file, 'r') as f:
+            for line in f:
+                if line.startswith('Clastic Method='):
+                    val_str = line.split('=', 1)[1].strip()
+                    try:
+                        cm = int(val_str)
+                        result['clastic_method'] = cm
+                        result['clastic_method_name'] = RasUnsteady.CLASTIC_METHODS.get(
+                            cm, f"Unknown ({cm})"
+                        )
+                    except ValueError:
+                        pass
+                elif line.startswith('Coulomb Phi=') or line.startswith('Voellmy Phi='):
+                    val_str = line.split('=', 1)[1].strip()
+                    try:
+                        result['coulomb_phi'] = float(val_str)
+                    except ValueError:
+                        pass
+                elif line.startswith('Voellmy X='):
+                    val_str = line.split('=', 1)[1].strip()
+                    try:
+                        result['voellmy_x'] = float(val_str)
+                    except ValueError:
+                        pass
+                elif line.startswith('Non-Newtonian Hindered FV='):
+                    val_str = line.split('=', 1)[1].strip()
+                    try:
+                        hfv = int(val_str)
+                        result['hindered_fv'] = hfv
+                        result['hindered_fv_name'] = RasUnsteady.HINDERED_FV_METHODS.get(
+                            hfv, f"Unknown ({hfv})"
+                        )
+                    except ValueError:
+                        pass
+                elif line.startswith('Non-Newtonian FV K='):
+                    val_str = line.split('=', 1)[1].strip()
+                    try:
+                        result['fv_k'] = float(val_str)
+                    except ValueError:
+                        pass
+                elif line.startswith('Non-Newtonian ds='):
+                    val_str = line.split('=', 1)[1].strip()
+                    try:
+                        result['ds'] = float(val_str)
+                    except ValueError:
+                        pass
+                elif line.startswith('Non-Newtonian High C Transport='):
+                    val_str = line.split('=', 1)[1].strip()
+                    try:
+                        hct = int(val_str)
+                        result['high_c_transport'] = hct
+                        result['high_c_transport_name'] = RasUnsteady.HIGH_C_TRANSPORT_METHODS.get(
+                            hct, f"Unknown ({hct})"
+                        )
+                    except ValueError:
+                        pass
+        return result
+
+    @staticmethod
+    @log_call
+    def set_non_newtonian_clastic(
+        unsteady_number_or_path: Union[str, Path],
+        clastic_method: Optional[Union[int, str]] = None,
+        coulomb_phi: Optional[float] = None,
+        voellmy_x: Optional[float] = None,
+        hindered_fv: Optional[Union[int, str]] = None,
+        fv_k: Optional[float] = None,
+        ds: Optional[float] = None,
+        high_c_transport: Optional[int] = None,
+        ras_object: Optional[Any] = None,
+    ) -> None:
+        """
+        Set Clastic Grain-Flow and auxiliary Non-Newtonian parameters in a .u## file.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"02"``) or path to a ``.u##`` file.
+        clastic_method : int or str, optional
+            ``0``/``"Coulomb"`` or ``1``/``"Voellmy"``.
+        coulomb_phi : float, optional
+            Friction angle phi in degrees. Written as ``Coulomb Phi=``.
+        voellmy_x : float, optional
+            Voellmy turbulence parameter Xi (only for Voellmy method).
+        hindered_fv : int or str, optional
+            ``0``/``"No Hindered Settling"`` or ``1``/``"User Specified K"``.
+        fv_k : float, optional
+            k power parameter for hindered settling equation.
+        ds : float, optional
+            Representative grain size in mm (O'Brien method).
+        high_c_transport : int, optional
+            High-concentration transport equation selector (0-2+).
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses the global ``ras`` object.
+        """
+        all_none = all(v is None for v in [
+            clastic_method, coulomb_phi, voellmy_x, hindered_fv,
+            fv_k, ds, high_c_transport,
+        ])
+        if all_none:
+            return
+
+        if clastic_method is not None:
+            if isinstance(clastic_method, str):
+                name_to_id = {v.lower(): k for k, v in RasUnsteady.CLASTIC_METHODS.items()}
+                cm_lower = clastic_method.lower().strip()
+                if cm_lower in name_to_id:
+                    clastic_method = name_to_id[cm_lower]
+                elif clastic_method.strip().isdigit():
+                    clastic_method = int(clastic_method.strip())
+                else:
+                    raise ValueError(
+                        f"Unknown clastic method: '{clastic_method}'. "
+                        f"Valid: {list(RasUnsteady.CLASTIC_METHODS.values())}"
+                    )
+            if clastic_method not in RasUnsteady.CLASTIC_METHODS:
+                raise ValueError(
+                    f"Invalid clastic_method {clastic_method}. Must be 0-1: "
+                    f"{RasUnsteady.CLASTIC_METHODS}"
+                )
+
+        if hindered_fv is not None:
+            if isinstance(hindered_fv, str):
+                name_to_id = {v.lower(): k for k, v in RasUnsteady.HINDERED_FV_METHODS.items()}
+                hfv_lower = hindered_fv.lower().strip()
+                if hfv_lower in name_to_id:
+                    hindered_fv = name_to_id[hfv_lower]
+                elif hindered_fv.strip().isdigit():
+                    hindered_fv = int(hindered_fv.strip())
+                else:
+                    raise ValueError(
+                        f"Unknown hindered FV method: '{hindered_fv}'. "
+                        f"Valid: {list(RasUnsteady.HINDERED_FV_METHODS.values())}"
+                    )
+            if hindered_fv not in RasUnsteady.HINDERED_FV_METHODS:
+                raise ValueError(
+                    f"Invalid hindered_fv {hindered_fv}. Must be 0-1: "
+                    f"{RasUnsteady.HINDERED_FV_METHODS}"
+                )
+
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        with open(unsteady_file, 'r') as f:
+            lines = f.readlines()
+
+        for i, line in enumerate(lines):
+            if clastic_method is not None and line.startswith('Clastic Method='):
+                lines[i] = f"Clastic Method= {clastic_method} \n"
+            elif coulomb_phi is not None and (line.startswith('Coulomb Phi=') or line.startswith('Voellmy Phi=')):
+                lines[i] = f"Coulomb Phi={coulomb_phi}\n"
+            elif voellmy_x is not None and line.startswith('Voellmy X='):
+                lines[i] = f"Voellmy X={voellmy_x}\n"
+            elif hindered_fv is not None and line.startswith('Non-Newtonian Hindered FV='):
+                lines[i] = f"Non-Newtonian Hindered FV= {hindered_fv} \n"
+            elif fv_k is not None and line.startswith('Non-Newtonian FV K='):
+                lines[i] = f"Non-Newtonian FV K={fv_k}\n"
+            elif ds is not None and line.startswith('Non-Newtonian ds='):
+                lines[i] = f"Non-Newtonian ds={ds}\n"
+            elif high_c_transport is not None and line.startswith('Non-Newtonian High C Transport='):
+                lines[i] = f"Non-Newtonian High C Transport= {high_c_transport} \n"
+
+        with open(unsteady_file, 'w') as f:
+            f.writelines(lines)
+
+        changes = []
+        if clastic_method is not None:
+            changes.append(f"clastic={RasUnsteady.CLASTIC_METHODS[clastic_method]}")
+        if coulomb_phi is not None:
+            changes.append(f"phi={coulomb_phi}°")
+        if voellmy_x is not None:
+            changes.append(f"xi={voellmy_x}")
+        if hindered_fv is not None:
+            changes.append(f"hindered_fv={RasUnsteady.HINDERED_FV_METHODS[hindered_fv]}")
+        if fv_k is not None:
+            changes.append(f"fv_k={fv_k}")
+        if ds is not None:
+            changes.append(f"ds={ds}mm")
+        if high_c_transport is not None:
+            changes.append(f"high_c_transport={high_c_transport}")
+        logger.info(f"Set NN clastic params ({', '.join(changes)}) in {unsteady_file.name}")
+
     @staticmethod
     @log_call
     def update_restart_settings(unsteady_file: str, use_restart: bool, restart_filename: Optional[str] = None, ras_object: Optional[Any] = None) -> None:
