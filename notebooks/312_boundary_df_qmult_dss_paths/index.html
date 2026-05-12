@@ -3121,6 +3121,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#step-21-gate-openings-ts-gate-opening-schedule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 21: Gate Openings - T.S. Gate Opening Schedule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#summary" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3302,6 +3313,17 @@
     <span class="md-ellipsis">
       
         Non-Newtonian Parameters (Steps 16-17)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-openings-step-21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate Openings (Step 21)
       
     </span>
   </a>
@@ -5305,6 +5327,43 @@ The getter accepts both; the setter always writes <code>Coulomb Phi=</code>.</p>
 </span><span id="__span-48-26"><a id="__codelineno-48-26" name="__codelineno-48-26" href="#__codelineno-48-26"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span>
 </span><span id="__span-48-27"><a id="__codelineno-48-27" name="__codelineno-48-27" href="#__codelineno-48-27"></a><span class="n">Round</span><span class="o">-</span><span class="n">trip</span> <span class="n">verified</span><span class="o">.</span><span class="s2">&quot;)</span>
 </span></code></pre></div>
+<h2 id="step-21-gate-openings-ts-gate-opening-schedule">Step 21: Gate Openings - T.S. Gate Opening Schedule<a class="headerlink" href="#step-21-gate-openings-ts-gate-opening-schedule" title="Permanent link">&para;</a></h2>
+<p>HEC-RAS inline structures with gates store their time-series opening schedule in
+the <code>.u##</code> file under <code>Gate Openings=</code>.  The format uses <strong>8-character fixed-width
+fields</strong> with <strong>10 values per line</strong>.</p>
+<p><code>get_gate_openings()</code> reads the gate name, DSS settings, time interval, and
+opening values.  <code>set_gate_openings()</code> writes a new schedule (and optionally
+renames the gate or changes the interval).</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a><span class="c1"># --- Step 21a: Read gate opening schedule from .u02 ---</span>
+</span><span id="__span-49-2"><a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a>
+</span><span id="__span-49-3"><a id="__codelineno-49-3" name="__codelineno-49-3" href="#__codelineno-49-3"></a><span class="n">gate</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_gate_openings</span><span class="p">(</span><span class="n">u02_path</span><span class="p">,</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-49-4"><a id="__codelineno-49-4" name="__codelineno-49-4" href="#__codelineno-49-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Gate name       : </span><span class="si">{</span><span class="n">gate</span><span class="p">[</span><span class="s1">&#39;gate_name&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-49-5"><a id="__codelineno-49-5" name="__codelineno-49-5" href="#__codelineno-49-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Use DSS         : </span><span class="si">{</span><span class="n">gate</span><span class="p">[</span><span class="s1">&#39;use_dss&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-49-6"><a id="__codelineno-49-6" name="__codelineno-49-6" href="#__codelineno-49-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Time interval   : </span><span class="si">{</span><span class="n">gate</span><span class="p">[</span><span class="s1">&#39;interval&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-49-7"><a id="__codelineno-49-7" name="__codelineno-49-7" href="#__codelineno-49-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Opening count   : </span><span class="si">{</span><span class="n">gate</span><span class="p">[</span><span class="s1">&#39;count&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-49-8"><a id="__codelineno-49-8" name="__codelineno-49-8" href="#__codelineno-49-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;First 10 values : </span><span class="si">{</span><span class="n">gate</span><span class="p">[</span><span class="s1">&#39;values&#39;</span><span class="p">][:</span><span class="mi">10</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-49-9"><a id="__codelineno-49-9" name="__codelineno-49-9" href="#__codelineno-49-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;All uniform?    : </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">gate</span><span class="p">[</span><span class="s1">&#39;values&#39;</span><span class="p">]))</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-50-1"><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a><span class="c1"># --- Step 21b: Round-trip set_gate_openings() ---</span>
+</span><span id="__span-50-2"><a id="__codelineno-50-2" name="__codelineno-50-2" href="#__codelineno-50-2"></a><span class="c1"># Create a ramp-up schedule: 0 for first 20 steps, then linearly open to 5 ft</span>
+</span><span id="__span-50-3"><a id="__codelineno-50-3" name="__codelineno-50-3" href="#__codelineno-50-3"></a><span class="n">new_values</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">20</span> <span class="o">+</span> <span class="p">[</span><span class="mf">5.0</span> <span class="o">*</span> <span class="n">i</span> <span class="o">/</span> <span class="mi">80</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">81</span><span class="p">)]</span>
+</span><span id="__span-50-4"><a id="__codelineno-50-4" name="__codelineno-50-4" href="#__codelineno-50-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;New schedule length: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">new_values</span><span class="p">)</span><span class="si">}</span><span class="s2"> steps&quot;</span><span class="p">)</span>
+</span><span id="__span-50-5"><a id="__codelineno-50-5" name="__codelineno-50-5" href="#__codelineno-50-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Steps 1-20 : closed (0.0)&quot;</span><span class="p">)</span>
+</span><span id="__span-50-6"><a id="__codelineno-50-6" name="__codelineno-50-6" href="#__codelineno-50-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Steps 21-100: ramp 0.0625 -&gt; 5.0 ft&quot;</span><span class="p">)</span>
+</span><span id="__span-50-7"><a id="__codelineno-50-7" name="__codelineno-50-7" href="#__codelineno-50-7"></a>
+</span><span id="__span-50-8"><a id="__codelineno-50-8" name="__codelineno-50-8" href="#__codelineno-50-8"></a><span class="n">RasUnsteady</span><span class="o">.</span><span class="n">set_gate_openings</span><span class="p">(</span><span class="n">u02_path</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">new_values</span><span class="p">,</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-50-9"><a id="__codelineno-50-9" name="__codelineno-50-9" href="#__codelineno-50-9"></a>
+</span><span id="__span-50-10"><a id="__codelineno-50-10" name="__codelineno-50-10" href="#__codelineno-50-10"></a><span class="c1"># Verify round-trip</span>
+</span><span id="__span-50-11"><a id="__codelineno-50-11" name="__codelineno-50-11" href="#__codelineno-50-11"></a><span class="n">verify</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_gate_openings</span><span class="p">(</span><span class="n">u02_path</span><span class="p">,</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-50-12"><a id="__codelineno-50-12" name="__codelineno-50-12" href="#__codelineno-50-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span>
+</span><span id="__span-50-13"><a id="__codelineno-50-13" name="__codelineno-50-13" href="#__codelineno-50-13"></a><span class="n">After</span> <span class="n">write</span> <span class="o">-</span> <span class="n">count</span><span class="p">:</span> <span class="p">{</span><span class="n">verify</span><span class="p">[</span><span class="s1">&#39;count&#39;</span><span class="p">]},</span> <span class="n">first</span> <span class="mi">5</span><span class="p">:</span> <span class="p">{</span><span class="n">verify</span><span class="p">[</span><span class="s1">&#39;values&#39;</span><span class="p">][:</span><span class="mi">5</span><span class="p">]},</span> <span class="n">last</span> <span class="mi">5</span><span class="p">:</span> <span class="p">{</span><span class="n">verify</span><span class="p">[</span><span class="s1">&#39;values&#39;</span><span class="p">][</span><span class="o">-</span><span class="mi">5</span><span class="p">:]}</span><span class="s2">&quot;)</span>
+</span><span id="__span-50-14"><a id="__codelineno-50-14" name="__codelineno-50-14" href="#__codelineno-50-14"></a>
+</span><span id="__span-50-15"><a id="__codelineno-50-15" name="__codelineno-50-15" href="#__codelineno-50-15"></a><span class="c1"># Restore original values</span>
+</span><span id="__span-50-16"><a id="__codelineno-50-16" name="__codelineno-50-16" href="#__codelineno-50-16"></a><span class="n">RasUnsteady</span><span class="o">.</span><span class="n">set_gate_openings</span><span class="p">(</span><span class="n">u02_path</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">gate</span><span class="p">[</span><span class="s1">&#39;values&#39;</span><span class="p">],</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-50-17"><a id="__codelineno-50-17" name="__codelineno-50-17" href="#__codelineno-50-17"></a><span class="n">restored</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_gate_openings</span><span class="p">(</span><span class="n">u02_path</span><span class="p">,</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-50-18"><a id="__codelineno-50-18" name="__codelineno-50-18" href="#__codelineno-50-18"></a><span class="k">assert</span> <span class="n">restored</span><span class="p">[</span><span class="s1">&#39;values&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">gate</span><span class="p">[</span><span class="s1">&#39;values&#39;</span><span class="p">],</span> <span class="s2">&quot;Round-trip restore failed!&quot;</span>
+</span><span id="__span-50-19"><a id="__codelineno-50-19" name="__codelineno-50-19" href="#__codelineno-50-19"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Round-trip restore verified.&quot;</span><span class="p">)</span>
+</span></code></pre></div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated the enhanced <code>boundaries_df</code> features:</p>
 <h3 id="new-dataframe-columns">New DataFrame Columns<a class="headerlink" href="#new-dataframe-columns" title="Permanent link">&para;</a></h3>
@@ -5624,11 +5683,30 @@ The getter accepts both; the setter always writes <code>Coulomb Phi=</code>.</p>
 </tbody>
 </table>
 <p>Method enum verified via binary analysis of Ras.exe (0=Newtonian, 1=Bingham, 2=O'Brien, 3=Clastic, 4=Herschel-Bulkley).</p>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a><span class="c1"># Cleanup (optional)</span>
-</span><span id="__span-49-2"><a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
-</span><span id="__span-49-3"><a id="__codelineno-49-3" name="__codelineno-49-3" href="#__codelineno-49-3"></a><span class="c1"># import shutil</span>
-</span><span id="__span-49-4"><a id="__codelineno-49-4" name="__codelineno-49-4" href="#__codelineno-49-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
-</span><span id="__span-49-5"><a id="__codelineno-49-5" name="__codelineno-49-5" href="#__codelineno-49-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
+<h3 id="gate-openings-step-21">Gate Openings (Step 21)<a class="headerlink" href="#gate-openings-step-21" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>get_gate_openings()</code></td>
+<td>Read gate name, DSS settings, interval, and opening values</td>
+</tr>
+<tr>
+<td><code>set_gate_openings()</code></td>
+<td>Write opening schedule, optionally rename gate or change interval</td>
+</tr>
+</tbody>
+</table>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a><span class="c1"># Cleanup (optional)</span>
+</span><span id="__span-51-2"><a id="__codelineno-51-2" name="__codelineno-51-2" href="#__codelineno-51-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
+</span><span id="__span-51-3"><a id="__codelineno-51-3" name="__codelineno-51-3" href="#__codelineno-51-3"></a><span class="c1"># import shutil</span>
+</span><span id="__span-51-4"><a id="__codelineno-51-4" name="__codelineno-51-4" href="#__codelineno-51-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
+</span><span id="__span-51-5"><a id="__codelineno-51-5" name="__codelineno-51-5" href="#__codelineno-51-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
 </span></code></pre></div>
 
 
@@ -5652,7 +5730,7 @@ The getter accepts both; the setter always writes <code>Coulomb Phi=</code>.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:22:36 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:29:51 UTC">May 12, 2026</span>
   </span>
 
     
@@ -5662,7 +5740,7 @@ The getter accepts both; the setter always writes <code>Coulomb Phi=</code>.</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:22:36 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:29:51 UTC">May 12, 2026</span>
   </span>
 
     
