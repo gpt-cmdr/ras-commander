@@ -11242,8 +11242,10 @@ def my_function():
 - get_uniform_lateral_inflow_hydrograph() - Read uniform lateral inflow data (reach-based BC)
 - set_uniform_lateral_inflow_hydrograph() - Write uniform lateral inflow data (reach-based BC)</p>
 <p>Initial Conditions Method Selection:
-- get_initial_flow_method() - Determine which IC method is active (restart file vs initial flow distribution)
-- set_initial_flow_method() - Set the IC method selection (restart_file, initial_flow_distribution, or none)</p>
+- get_initial_flow_method() - Determine which IC method is active (restart_file, prior_ws, initial_flow_distribution, none)
+- set_initial_flow_method() - Set the IC method selection (restart_file, prior_ws, initial_flow_distribution, none)
+- get_prior_ws_filename() - Read Prior WS Filename and Profile from unsteady file
+- set_prior_ws_filename() - Write Prior WS Filename and Profile to unsteady file</p>
 
 
 
