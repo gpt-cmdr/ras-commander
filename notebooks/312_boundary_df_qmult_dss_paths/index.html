@@ -3165,6 +3165,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#step-25-groundwater-interflow-boundary-readwrite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 25: Groundwater Interflow Boundary Read/Write
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#summary" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3390,6 +3401,17 @@
     <span class="md-ellipsis">
       
         USGS-Driven IC Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#groundwater-interflow-step-25" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Groundwater Interflow (Step 25)
       
     </span>
   </a>
@@ -5570,6 +5592,64 @@ conditions in an unsteady file. This replicates the HEC-RAS GUI action
 </span><span id="__span-54-39"><a id="__codelineno-54-39" name="__codelineno-54-39" href="#__codelineno-54-39"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;USGS query failed (internet required): </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-54-40"><a id="__codelineno-54-40" name="__codelineno-54-40" href="#__codelineno-54-40"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;This step requires internet access to USGS NWIS services.&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<h2 id="step-25-groundwater-interflow-boundary-readwrite">Step 25: Groundwater Interflow Boundary Read/Write<a class="headerlink" href="#step-25-groundwater-interflow-boundary-readwrite" title="Permanent link">&para;</a></h2>
+<p>HEC-RAS supports <strong>Groundwater Interflow</strong> boundary conditions, which model subsurface flow between a groundwater reservoir and the channel or storage area. These BCs include:
+- A time series of groundwater elevation values
+- Three Darcy parameters: <strong>K</strong> (hydraulic conductivity), <strong>K/day</strong>, and <strong>Distance</strong></p>
+<p>We demonstrate <code>get_groundwater_interflow()</code> and <code>set_groundwater_interflow()</code> using Example 22.</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-55-1"><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a><span class="c1"># --- Step 25a: Read and modify GW Interflow boundary ---</span>
+</span><span id="__span-55-2"><a id="__codelineno-55-2" name="__codelineno-55-2" href="#__codelineno-55-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span><span class="o">,</span><span class="w"> </span><span class="nn">tempfile</span>
+</span><span id="__span-55-3"><a id="__codelineno-55-3" name="__codelineno-55-3" href="#__codelineno-55-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-55-4"><a id="__codelineno-55-4" name="__codelineno-55-4" href="#__codelineno-55-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasUnsteady</span>
+</span><span id="__span-55-5"><a id="__codelineno-55-5" name="__codelineno-55-5" href="#__codelineno-55-5"></a>
+</span><span id="__span-55-6"><a id="__codelineno-55-6" name="__codelineno-55-6" href="#__codelineno-55-6"></a><span class="c1"># Use Example 22 - Groundwater Interflow fixture</span>
+</span><span id="__span-55-7"><a id="__codelineno-55-7" name="__codelineno-55-7" href="#__codelineno-55-7"></a><span class="n">gw_project</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">&#39;..&#39;</span><span class="p">)</span> <span class="o">/</span> <span class="s1">&#39;example_projects&#39;</span> <span class="o">/</span> <span class="s1">&#39;Example 22 - Groundwater Interflow_gw_research&#39;</span>
+</span><span id="__span-55-8"><a id="__codelineno-55-8" name="__codelineno-55-8" href="#__codelineno-55-8"></a><span class="n">u_file</span> <span class="o">=</span> <span class="n">gw_project</span> <span class="o">/</span> <span class="s1">&#39;GroundwaterInterac.u01&#39;</span>
+</span><span id="__span-55-9"><a id="__codelineno-55-9" name="__codelineno-55-9" href="#__codelineno-55-9"></a>
+</span><span id="__span-55-10"><a id="__codelineno-55-10" name="__codelineno-55-10" href="#__codelineno-55-10"></a><span class="k">if</span> <span class="n">u_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-55-11"><a id="__codelineno-55-11" name="__codelineno-55-11" href="#__codelineno-55-11"></a>    <span class="c1"># Make a temporary copy for round-trip testing</span>
+</span><span id="__span-55-12"><a id="__codelineno-55-12" name="__codelineno-55-12" href="#__codelineno-55-12"></a>    <span class="n">tmp_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+</span><span id="__span-55-13"><a id="__codelineno-55-13" name="__codelineno-55-13" href="#__codelineno-55-13"></a>    <span class="n">tmp_u</span> <span class="o">=</span> <span class="n">tmp_dir</span> <span class="o">/</span> <span class="n">u_file</span><span class="o">.</span><span class="n">name</span>
+</span><span id="__span-55-14"><a id="__codelineno-55-14" name="__codelineno-55-14" href="#__codelineno-55-14"></a>    <span class="n">shutil</span><span class="o">.</span><span class="n">copy2</span><span class="p">(</span><span class="n">u_file</span><span class="p">,</span> <span class="n">tmp_u</span><span class="p">)</span>
+</span><span id="__span-55-15"><a id="__codelineno-55-15" name="__codelineno-55-15" href="#__codelineno-55-15"></a>
+</span><span id="__span-55-16"><a id="__codelineno-55-16" name="__codelineno-55-16" href="#__codelineno-55-16"></a>    <span class="c1"># Read original GW interflow (first boundary)</span>
+</span><span id="__span-55-17"><a id="__codelineno-55-17" name="__codelineno-55-17" href="#__codelineno-55-17"></a>    <span class="n">orig</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_groundwater_interflow</span><span class="p">(</span><span class="n">tmp_u</span><span class="p">,</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-55-18"><a id="__codelineno-55-18" name="__codelineno-55-18" href="#__codelineno-55-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;GW Interflow BC 0:&#39;</span><span class="p">)</span>
+</span><span id="__span-55-19"><a id="__codelineno-55-19" name="__codelineno-55-19" href="#__codelineno-55-19"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  Count: </span><span class="si">{</span><span class="n">orig</span><span class="p">[</span><span class="s2">&quot;count&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1"> values&#39;</span><span class="p">)</span>
+</span><span id="__span-55-20"><a id="__codelineno-55-20" name="__codelineno-55-20" href="#__codelineno-55-20"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  Interval: </span><span class="si">{</span><span class="n">orig</span><span class="p">[</span><span class="s2">&quot;interval&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</span><span id="__span-55-21"><a id="__codelineno-55-21" name="__codelineno-55-21" href="#__codelineno-55-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  Darcy K: </span><span class="si">{</span><span class="n">orig</span><span class="p">[</span><span class="s2">&quot;darcy_k&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</span><span id="__span-55-22"><a id="__codelineno-55-22" name="__codelineno-55-22" href="#__codelineno-55-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  Darcy K/day: </span><span class="si">{</span><span class="n">orig</span><span class="p">[</span><span class="s2">&quot;darcy_k_per_day&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</span><span id="__span-55-23"><a id="__codelineno-55-23" name="__codelineno-55-23" href="#__codelineno-55-23"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  Darcy Distance: </span><span class="si">{</span><span class="n">orig</span><span class="p">[</span><span class="s2">&quot;darcy_distance&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</span><span id="__span-55-24"><a id="__codelineno-55-24" name="__codelineno-55-24" href="#__codelineno-55-24"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  Elevations: [</span><span class="si">{</span><span class="n">orig</span><span class="p">[</span><span class="s2">&quot;values&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s1">, ..., </span><span class="si">{</span><span class="n">orig</span><span class="p">[</span><span class="s2">&quot;values&quot;</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s1">]&#39;</span><span class="p">)</span>
+</span><span id="__span-55-25"><a id="__codelineno-55-25" name="__codelineno-55-25" href="#__codelineno-55-25"></a>
+</span><span id="__span-55-26"><a id="__codelineno-55-26" name="__codelineno-55-26" href="#__codelineno-55-26"></a>    <span class="c1"># Modify: raise elevations by 1 ft, update Darcy K</span>
+</span><span id="__span-55-27"><a id="__codelineno-55-27" name="__codelineno-55-27" href="#__codelineno-55-27"></a>    <span class="n">new_vals</span> <span class="o">=</span> <span class="p">[</span><span class="n">v</span> <span class="o">+</span> <span class="mf">1.0</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">orig</span><span class="p">[</span><span class="s1">&#39;values&#39;</span><span class="p">]]</span>
+</span><span id="__span-55-28"><a id="__codelineno-55-28" name="__codelineno-55-28" href="#__codelineno-55-28"></a>    <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">set_groundwater_interflow</span><span class="p">(</span>
+</span><span id="__span-55-29"><a id="__codelineno-55-29" name="__codelineno-55-29" href="#__codelineno-55-29"></a>        <span class="n">tmp_u</span><span class="p">,</span> <span class="n">new_vals</span><span class="p">,</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+</span><span id="__span-55-30"><a id="__codelineno-55-30" name="__codelineno-55-30" href="#__codelineno-55-30"></a>        <span class="n">darcy_k</span><span class="o">=</span><span class="mf">0.20</span><span class="p">,</span> <span class="n">darcy_distance</span><span class="o">=</span><span class="mf">3.0</span>
+</span><span id="__span-55-31"><a id="__codelineno-55-31" name="__codelineno-55-31" href="#__codelineno-55-31"></a>    <span class="p">)</span>
+</span><span id="__span-55-32"><a id="__codelineno-55-32" name="__codelineno-55-32" href="#__codelineno-55-32"></a>
+</span><span id="__span-55-33"><a id="__codelineno-55-33" name="__codelineno-55-33" href="#__codelineno-55-33"></a>    <span class="c1"># Read back and verify round-trip</span>
+</span><span id="__span-55-34"><a id="__codelineno-55-34" name="__codelineno-55-34" href="#__codelineno-55-34"></a>    <span class="n">modified</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_groundwater_interflow</span><span class="p">(</span><span class="n">tmp_u</span><span class="p">,</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-55-35"><a id="__codelineno-55-35" name="__codelineno-55-35" href="#__codelineno-55-35"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span>
+</span><span id="__span-55-36"><a id="__codelineno-55-36" name="__codelineno-55-36" href="#__codelineno-55-36"></a><span class="n">After</span> <span class="n">modification</span><span class="p">:</span><span class="s1">&#39;)</span>
+</span><span id="__span-55-37"><a id="__codelineno-55-37" name="__codelineno-55-37" href="#__codelineno-55-37"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  Darcy K: </span><span class="si">{</span><span class="n">modified</span><span class="p">[</span><span class="s2">&quot;darcy_k&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1"> (was </span><span class="si">{</span><span class="n">orig</span><span class="p">[</span><span class="s2">&quot;darcy_k&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">)&#39;</span><span class="p">)</span>
+</span><span id="__span-55-38"><a id="__codelineno-55-38" name="__codelineno-55-38" href="#__codelineno-55-38"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  Darcy K/day: </span><span class="si">{</span><span class="n">modified</span><span class="p">[</span><span class="s2">&quot;darcy_k_per_day&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1"> (preserved)&#39;</span><span class="p">)</span>
+</span><span id="__span-55-39"><a id="__codelineno-55-39" name="__codelineno-55-39" href="#__codelineno-55-39"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  Darcy Distance: </span><span class="si">{</span><span class="n">modified</span><span class="p">[</span><span class="s2">&quot;darcy_distance&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1"> (was </span><span class="si">{</span><span class="n">orig</span><span class="p">[</span><span class="s2">&quot;darcy_distance&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">)&#39;</span><span class="p">)</span>
+</span><span id="__span-55-40"><a id="__codelineno-55-40" name="__codelineno-55-40" href="#__codelineno-55-40"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;  Elevations: [</span><span class="si">{</span><span class="n">modified</span><span class="p">[</span><span class="s2">&quot;values&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s1">, ..., </span><span class="si">{</span><span class="n">modified</span><span class="p">[</span><span class="s2">&quot;values&quot;</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s1">]&#39;</span><span class="p">)</span>
+</span><span id="__span-55-41"><a id="__codelineno-55-41" name="__codelineno-55-41" href="#__codelineno-55-41"></a>
+</span><span id="__span-55-42"><a id="__codelineno-55-42" name="__codelineno-55-42" href="#__codelineno-55-42"></a>    <span class="c1"># Verify other boundaries are untouched</span>
+</span><span id="__span-55-43"><a id="__codelineno-55-43" name="__codelineno-55-43" href="#__codelineno-55-43"></a>    <span class="n">other</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_groundwater_interflow</span><span class="p">(</span><span class="n">tmp_u</span><span class="p">,</span> <span class="n">boundary_index</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-55-44"><a id="__codelineno-55-44" name="__codelineno-55-44" href="#__codelineno-55-44"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span>
+</span><span id="__span-55-45"><a id="__codelineno-55-45" name="__codelineno-55-45" href="#__codelineno-55-45"></a><span class="n">BC</span> <span class="mi">1</span> <span class="p">(</span><span class="n">untouched</span><span class="p">):</span> <span class="n">Darcy</span> <span class="n">K</span><span class="o">=</span><span class="p">{</span><span class="n">other</span><span class="p">[</span><span class="s2">&quot;darcy_k&quot;</span><span class="p">]},</span> <span class="n">first_val</span><span class="o">=</span><span class="p">{</span><span class="n">other</span><span class="p">[</span><span class="s2">&quot;values&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]}</span><span class="s1">&#39;)</span>
+</span><span id="__span-55-46"><a id="__codelineno-55-46" name="__codelineno-55-46" href="#__codelineno-55-46"></a>
+</span><span id="__span-55-47"><a id="__codelineno-55-47" name="__codelineno-55-47" href="#__codelineno-55-47"></a>    <span class="c1"># Cleanup</span>
+</span><span id="__span-55-48"><a id="__codelineno-55-48" name="__codelineno-55-48" href="#__codelineno-55-48"></a>    <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">tmp_dir</span><span class="p">)</span>
+</span><span id="__span-55-49"><a id="__codelineno-55-49" name="__codelineno-55-49" href="#__codelineno-55-49"></a>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;</span>
+</span><span id="__span-55-50"><a id="__codelineno-55-50" name="__codelineno-55-50" href="#__codelineno-55-50"></a><span class="n">Round</span><span class="o">-</span><span class="n">trip</span> <span class="n">verified</span> <span class="n">successfully</span><span class="o">.</span><span class="s1">&#39;)</span>
+</span><span id="__span-55-51"><a id="__codelineno-55-51" name="__codelineno-55-51" href="#__codelineno-55-51"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-55-52"><a id="__codelineno-55-52" name="__codelineno-55-52" href="#__codelineno-55-52"></a>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Example 22 project not found - skipping GW interflow demo&#39;</span><span class="p">)</span>
+</span></code></pre></div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated the enhanced <code>boundaries_df</code> features:</p>
 <h3 id="new-dataframe-columns">New DataFrame Columns<a class="headerlink" href="#new-dataframe-columns" title="Permanent link">&para;</a></h3>
@@ -5961,11 +6041,30 @@ conditions in an unsteady file. This replicates the HEC-RAS GUI action
 </tr>
 </tbody>
 </table>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-55-1"><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a><span class="c1"># Cleanup (optional)</span>
-</span><span id="__span-55-2"><a id="__codelineno-55-2" name="__codelineno-55-2" href="#__codelineno-55-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
-</span><span id="__span-55-3"><a id="__codelineno-55-3" name="__codelineno-55-3" href="#__codelineno-55-3"></a><span class="c1"># import shutil</span>
-</span><span id="__span-55-4"><a id="__codelineno-55-4" name="__codelineno-55-4" href="#__codelineno-55-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
-</span><span id="__span-55-5"><a id="__codelineno-55-5" name="__codelineno-55-5" href="#__codelineno-55-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
+<h3 id="groundwater-interflow-step-25">Groundwater Interflow (Step 25)<a class="headerlink" href="#groundwater-interflow-step-25" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>get_groundwater_interflow()</code></td>
+<td>Read GW elevation time series + Darcy K, K/day, Distance from <code>.u##</code></td>
+</tr>
+<tr>
+<td><code>set_groundwater_interflow()</code></td>
+<td>Write GW elevation data, optionally update Darcy parameters</td>
+</tr>
+</tbody>
+</table>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a><span class="c1"># Cleanup (optional)</span>
+</span><span id="__span-56-2"><a id="__codelineno-56-2" name="__codelineno-56-2" href="#__codelineno-56-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
+</span><span id="__span-56-3"><a id="__codelineno-56-3" name="__codelineno-56-3" href="#__codelineno-56-3"></a><span class="c1"># import shutil</span>
+</span><span id="__span-56-4"><a id="__codelineno-56-4" name="__codelineno-56-4" href="#__codelineno-56-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
+</span><span id="__span-56-5"><a id="__codelineno-56-5" name="__codelineno-56-5" href="#__codelineno-56-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
 </span></code></pre></div>
 
 
@@ -5989,7 +6088,7 @@ conditions in an unsteady file. This replicates the HEC-RAS GUI action
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:52:57 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 16:02:43 UTC">May 12, 2026</span>
   </span>
 
     
@@ -5999,7 +6098,7 @@ conditions in an unsteady file. This replicates the HEC-RAS GUI action
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 15:52:57 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 16:02:43 UTC">May 12, 2026</span>
   </span>
 
     
