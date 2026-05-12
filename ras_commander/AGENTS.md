@@ -12,7 +12,7 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 
 - Project management: `RasPrj`, `init_ras_project()`
 - Plan execution: `RasCmdr`
-- Plan and model files: `RasPlan`, `RasMap`, `RasControl`, `RasUnsteady` (includes IC method selection: `get_initial_flow_method()`, `set_initial_flow_method()`, `get_prior_ws_filename()`, `set_prior_ws_filename()`)
+- Plan and model files: `RasPlan`, `RasMap`, `RasControl`, `RasUnsteady` (includes IC method selection: `get_initial_flow_method()`, `set_initial_flow_method()`, `get_prior_ws_filename()`, `set_prior_ws_filename()`; IC table: `get_initial_conditions()`, `set_initial_conditions()`, `validate_initial_flow_stations()`)
 - Validation framework: `RasValidation`
 - HDF access: `Hdf*` classes and `ras_commander/hdf/`
 - Domain subpackages: `geom/`, `remote/`, `usgs/`, `check/`, `dss/`, `fixit/`, `precip/`, `gui/`, `terrain/`
