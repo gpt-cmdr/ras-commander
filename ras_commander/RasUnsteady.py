@@ -592,6 +592,112 @@ class RasUnsteady:
         logger.info(f"Read min elevations for {len(result)} storage areas from {geom_hdf_path.name}")
         return result
 
+    @staticmethod
+    @log_call
+    def set_ic_from_output_profile(
+        unsteady_number_or_path: Union[str, Path],
+        source_plan_hdf: Union[str, Path],
+        time_index: int = -1,
+        include_1d: bool = True,
+        include_storage: bool = True,
+        ras_object: Optional[Any] = None,
+    ) -> pd.DataFrame:
+        """Populate IC table from a completed simulation's output profile.
+
+        Reads flow at each 1D cross section and water-surface elevation at
+        each storage area from the source HDF at the given time step, then
+        writes the values as initial conditions in the target unsteady file.
+
+        This replicates the HEC-RAS GUI menu action
+        *Set Initial Conditions from Output File*.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Target unsteady flow number or ``.u##`` file path.
+        source_plan_hdf : str or Path
+            Path to a completed plan HDF file containing results.
+        time_index : int, default -1
+            Time step index to extract. ``-1`` selects the last time step.
+        include_1d : bool, default True
+            Include 1D cross-section flow values.
+        include_storage : bool, default True
+            Include storage-area water-surface elevations.
+        ras_object : RasPrj, optional
+            RAS project object.
+
+        Returns
+        -------
+        pd.DataFrame
+            The IC entries that were written, with columns matching
+            ``get_initial_conditions()`` output.
+        """
+        import h5py
+
+        source_plan_hdf = Path(source_plan_hdf)
+        if not source_plan_hdf.exists():
+            raise FileNotFoundError(f"Source plan HDF not found: {source_plan_hdf}")
+
+        entries: list = []
+        base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
+
+        with h5py.File(source_plan_hdf, "r") as hdf:
+            if base not in hdf:
+                raise ValueError(f"No unsteady time series results in {source_plan_hdf.name}")
+
+            if include_1d:
+                xs_path = f"{base}/Cross Sections"
+                if xs_path in hdf and f"{xs_path}/Flow" in hdf:
+                    attrs = hdf[f"{xs_path}/Cross Section Attributes"][:]
+                    flow = hdf[f"{xs_path}/Flow"][time_index, :]
+                    for i, attr in enumerate(attrs):
+                        river = attr["River"].decode("utf-8").strip()
+                        reach = attr["Reach"].decode("utf-8").strip()
+                        station = attr["Station"].decode("utf-8").strip()
+                        try:
+                            station_val = float(station)
+                        except ValueError:
+                            station_val = station
+                        entries.append({
+                            "type": "flow",
+                            "river": river,
+                            "reach": reach,
+                            "station": station_val,
+                            "value": float(flow[i]),
+                            "area_name": None,
+                        })
+                    logger.info(f"Read flow at {len(attrs)} cross sections from {source_plan_hdf.name}")
+
+            if include_storage:
+                sa_path = f"{base}/Storage Areas"
+                geom_sa = "Geometry/Storage Areas/Attributes"
+                if sa_path in hdf and f"{sa_path}/Water Surface" in hdf and geom_sa in hdf:
+                    sa_attrs = hdf[geom_sa][:]
+                    ws = hdf[f"{sa_path}/Water Surface"][time_index, :]
+                    for i, sa in enumerate(sa_attrs):
+                        name = sa["Name"].decode("utf-8").strip() if isinstance(sa["Name"], bytes) else str(sa["Name"]).strip()
+                        if i < len(ws):
+                            entries.append({
+                                "type": "storage",
+                                "area_name": name,
+                                "value": float(ws[i]),
+                                "river": None,
+                                "reach": None,
+                                "station": None,
+                            })
+                    logger.info(f"Read WSE for {len(sa_attrs)} storage areas from {source_plan_hdf.name}")
+
+        if not entries:
+            logger.warning("No IC entries extracted from output profile")
+            return pd.DataFrame(columns=["type", "river", "reach", "station", "value", "area_name"])
+
+        ic_df = pd.DataFrame(entries)
+        RasUnsteady.set_initial_conditions(
+            unsteady_number_or_path, ic_df, ras_object=ras_object,
+        )
+        logger.info(f"Wrote {len(entries)} IC entries from output profile to unsteady file")
+        return ic_df
+
     NON_NEWTONIAN_METHODS = {
         0: "Newtonian Assumptions",
         1: "Bingham",
