@@ -1292,6 +1292,217 @@ class RasUnsteady:
             changes.append(f"high_c_transport={high_c_transport}")
         logger.info(f"Set NN clastic params ({', '.join(changes)}) in {unsteady_file.name}")
 
+    # -------------------------------------------------------------------------
+    # Gate Openings — T.S. Gate Openings & Elev Controlled Gates
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    @log_call
+    def get_gate_openings(
+        unsteady_number_or_path,
+        boundary_index: int = 0,
+        ras_object=None,
+    ) -> dict:
+        """Read gate opening data from a boundary location block.
+
+        Scans the unsteady flow file for ``Boundary Location=`` blocks that
+        contain a ``Gate Name=`` key, and returns gate metadata plus the time
+        series opening values for the gate at *boundary_index* (0-based index
+        among all gate-bearing boundaries in the file).
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"02"``) or direct file path.
+        boundary_index : int, optional
+            0-based index of the gate boundary to read (default ``0``).
+        ras_object : optional
+            ``RasPrj`` instance for path resolution.
+
+        Returns
+        -------
+        dict
+            Keys:
+
+            - ``gate_name`` (str): gate name from ``Gate Name=`` line
+            - ``dss_path`` (str): DSS pathname (empty string if inline)
+            - ``use_dss`` (bool): whether DSS link is active
+            - ``interval`` (str): time interval, e.g. ``"1HOUR"``
+            - ``use_fixed_start`` (bool): fixed-start-time flag
+            - ``fixed_start`` (str): fixed start date/time string
+            - ``count`` (int): number of opening values
+            - ``values`` (list[float]): opening heights per time step
+        """
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        with open(unsteady_file, 'r') as f:
+            lines = f.readlines()
+
+        gate_blocks: list[dict] = []
+        i = 0
+        while i < len(lines):
+            if lines[i].startswith('Boundary Location='):
+                bl_idx = i
+                i += 1
+                # Look for Gate Name= within this boundary block
+                while i < len(lines) and not lines[i].startswith('Boundary Location='):
+                    if lines[i].startswith('Gate Name='):
+                        gate = {
+                            'gate_name': lines[i].split('=', 1)[1].strip(),
+                            'dss_path': '',
+                            'use_dss': False,
+                            'interval': '1HOUR',
+                            'use_fixed_start': False,
+                            'fixed_start': '',
+                            'count': 0,
+                            'values': [],
+                        }
+                        i += 1
+                        while i < len(lines) and not lines[i].startswith('Boundary Location='):
+                            line = lines[i]
+                            if line.startswith('Gate DSS Path='):
+                                gate['dss_path'] = line.split('=', 1)[1].strip()
+                            elif line.startswith('Gate Use DSS='):
+                                gate['use_dss'] = line.split('=', 1)[1].strip().lower() == 'true'
+                            elif line.startswith('Gate Time Interval='):
+                                gate['interval'] = line.split('=', 1)[1].strip()
+                            elif line.startswith('Gate Use Fixed Start Time='):
+                                gate['use_fixed_start'] = line.split('=', 1)[1].strip().lower() == 'true'
+                            elif line.startswith('Gate Fixed Start Date/Time='):
+                                gate['fixed_start'] = line.split('=', 1)[1].strip()
+                            elif line.startswith('Gate Openings='):
+                                count = int(line.split('=', 1)[1].strip())
+                                gate['count'] = count
+                                vals: list[float] = []
+                                i += 1
+                                while i < len(lines) and len(vals) < count:
+                                    parts = lines[i].split()
+                                    if not parts or lines[i].startswith('Boundary Location='):
+                                        break
+                                    vals.extend(float(v) for v in parts)
+                                    i += 1
+                                gate['values'] = vals[:count]
+                                gate_blocks.append(gate)
+                                break  # done with this gate's data lines
+                            i += 1
+                        continue  # skip the outer i += 1
+                    i += 1
+            else:
+                i += 1
+
+        if boundary_index >= len(gate_blocks):
+            raise IndexError(
+                f"boundary_index={boundary_index} but only "
+                f"{len(gate_blocks)} gate boundaries found in {unsteady_file.name}"
+            )
+        return gate_blocks[boundary_index]
+
+    @staticmethod
+    @log_call
+    def set_gate_openings(
+        unsteady_number_or_path,
+        values: list,
+        boundary_index: int = 0,
+        gate_name: Optional[str] = None,
+        interval: Optional[str] = None,
+        ras_object=None,
+    ) -> None:
+        """Write gate opening time series to a boundary location block.
+
+        Replaces the ``Gate Openings=`` count and all subsequent data lines for
+        the gate at *boundary_index*.  Optionally updates gate name and time
+        interval.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"02"``) or direct file path.
+        values : list of float
+            Opening heights per time step.
+        boundary_index : int, optional
+            0-based index of the gate boundary to write (default ``0``).
+        gate_name : str, optional
+            New gate name.  If ``None``, the existing name is kept.
+        interval : str, optional
+            New time interval (e.g. ``"15MIN"``).  If ``None``, kept.
+        ras_object : optional
+            ``RasPrj`` instance for path resolution.
+        """
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        with open(unsteady_file, 'r') as f:
+            lines = f.readlines()
+
+        # Locate the Nth gate boundary's Gate Openings= line
+        gate_count = 0
+        target_openings_idx = None
+        target_name_idx = None
+        target_interval_idx = None
+        i = 0
+        while i < len(lines):
+            if lines[i].startswith('Gate Name='):
+                if gate_count == boundary_index:
+                    target_name_idx = i
+                    # Scan forward for metadata and openings line
+                    j = i + 1
+                    while j < len(lines) and not lines[j].startswith('Boundary Location='):
+                        if lines[j].startswith('Gate Time Interval='):
+                            target_interval_idx = j
+                        elif lines[j].startswith('Gate Openings='):
+                            target_openings_idx = j
+                            break
+                        j += 1
+                    break
+                gate_count += 1
+            i += 1
+
+        if target_openings_idx is None:
+            raise IndexError(
+                f"boundary_index={boundary_index} but only "
+                f"{gate_count + 1} gate boundaries scanned in {unsteady_file.name}"
+            )
+
+        # Determine the range of old data lines after Gate Openings=
+        old_count = int(lines[target_openings_idx].split('=', 1)[1].strip())
+        data_start = target_openings_idx + 1
+        data_end = data_start
+        vals_read = 0
+        while data_end < len(lines) and vals_read < old_count:
+            parts = lines[data_end].split()
+            if not parts or lines[data_end].startswith('Boundary Location='):
+                break
+            vals_read += len(parts)
+            data_end += 1
+
+        # Build new data lines: 8-char fixed-width fields, 10 per line
+        new_data_lines = []
+        for row_start in range(0, len(values), 10):
+            chunk = values[row_start:row_start + 10]
+            line_str = ''.join(f'{v:8g}' for v in chunk) + '\n'
+            new_data_lines.append(line_str)
+
+        # Replace the Gate Openings= header + data lines
+        lines[target_openings_idx] = f'Gate Openings= {len(values)} \n'
+        lines[data_start:data_end] = new_data_lines
+
+        # Optional: update gate name
+        if gate_name is not None and target_name_idx is not None:
+            lines[target_name_idx] = f'Gate Name={gate_name}\n'
+
+        # Optional: update interval
+        if interval is not None and target_interval_idx is not None:
+            lines[target_interval_idx] = f'Gate Time Interval={interval}\n'
+
+        with open(unsteady_file, 'w') as f:
+            f.writelines(lines)
+
+        logger.info(
+            f"Set {len(values)} gate openings (boundary_index={boundary_index}) "
+            f"in {unsteady_file.name}"
+        )
+
     @staticmethod
     @log_call
     def update_restart_settings(unsteady_file: str, use_restart: bool, restart_filename: Optional[str] = None, ras_object: Optional[Any] = None) -> None:
