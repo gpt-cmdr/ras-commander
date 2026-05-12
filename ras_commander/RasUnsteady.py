@@ -3564,6 +3564,334 @@ class RasUnsteady:
 
     @staticmethod
     @log_call
+    def set_flow_hydrograph_qmin(
+        unsteady_file: Union[str, Path],
+        qmin: float,
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        station: Optional[str] = None,
+        area_2d: Optional[str] = None,
+        bc_line: Optional[str] = None,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Add or update the ``Flow Hydrograph QMin=`` (minimum flow) line on a
+        Flow Hydrograph boundary in a HEC-RAS unsteady flow file (.u##).
+
+        The minimum flow value prevents HEC-RAS from applying flows below
+        this threshold during the simulation. It is a property of the Flow
+        Hydrograph BC.
+
+        Behavior
+        --------
+        - **Update path**: if a ``Flow Hydrograph QMin=`` line already exists
+          inside the matched boundary block, its value is overwritten in place.
+        - **Insert path**: if no QMin line exists, a new line is inserted after
+          ``Flow Hydrograph QMult=`` if present, otherwise after
+          ``Stage Hydrograph TW Check=``, otherwise before the first DSS
+          metadata line, otherwise just before the first ``=`` line that
+          follows the inline hydrograph data.
+
+        Target resolution
+        -----------------
+        Provide *exactly one* of:
+
+        - ``(river, reach, station)`` for a 1D river boundary.
+        - ``(area_2d, bc_line)`` for a 2D BC line on a 2D Flow Area perimeter.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##), or a 1-2 character unsteady
+            number (e.g. ``"01"``) when a project-bound ``ras_object`` is
+            available.
+        qmin : float
+            Minimum flow value (cfs or cms). Must be non-negative and finite.
+        river, reach, station : str, optional
+            1D location selector. All three must be provided together.
+        area_2d, bc_line : str, optional
+            2D location selector. Both must be provided together.
+        ras_object : optional
+            Custom RAS object. ``boundaries_df`` is refreshed after the write.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Reviewable before/after metadata with keys:
+
+            - ``unsteady_file`` (str): absolute path written
+            - ``matched_location`` (str): matched ``Boundary Location=`` value
+            - ``bc_type`` (str): always ``'Flow Hydrograph'``
+            - ``previous_qmin`` (float | None): prior QMin value, or ``None``
+            - ``new_qmin`` (float): QMin written
+            - ``updated_in_place`` (bool): True when existing line overwritten
+            - ``lines_inserted`` (int): 1 if new line inserted, else 0
+            - ``insert_anchor`` (str | None): keyword anchor for placement
+            - ``boundaries_df_refreshed`` (bool)
+            - ``block_before`` (str): boundary block text before edit
+            - ``block_after`` (str): boundary block text after edit
+
+        Raises
+        ------
+        ValueError
+            If ``qmin`` is non-numeric, non-finite, or negative; if target
+            selectors are inconsistent; if matched block is not a Flow
+            Hydrograph; or if no boundary matches the selectors.
+        FileNotFoundError
+            If the unsteady flow file does not exist.
+
+        Examples
+        --------
+        Set a minimum flow on a 1D boundary:
+
+        >>> from ras_commander import RasUnsteady
+        >>> result = RasUnsteady.set_flow_hydrograph_qmin(
+        ...     "project.u01",
+        ...     qmin=50.0,
+        ...     river="White",
+        ...     reach="Muncie",
+        ...     station="15696.24",
+        ... )
+        >>> result["new_qmin"]
+        50.0
+
+        See Also
+        --------
+        set_flow_hydrograph_slope : Set energy-grade slope on Flow Hydrograph.
+        update_flow_multiplier_by_station : Set QMult multiplier.
+        """
+        if isinstance(qmin, bool) or not isinstance(qmin, numbers.Real):
+            raise ValueError(
+                f"qmin must be a real number, got {type(qmin).__name__}"
+            )
+        qmin_val = float(qmin)
+        if not np.isfinite(qmin_val):
+            raise ValueError(f"qmin must be finite, got {qmin_val!r}")
+        if qmin_val < 0:
+            raise ValueError(f"qmin must be non-negative, got {qmin_val!r}")
+
+        has_1d = any(x is not None for x in (river, reach, station))
+        has_2d = any(x is not None for x in (area_2d, bc_line))
+        if has_1d == has_2d:
+            raise ValueError(
+                "Provide exactly one selector group: (river, reach, station) "
+                "OR (area_2d, bc_line)"
+            )
+        if has_1d and not (river and reach and station):
+            raise ValueError(
+                "1D selector requires all of river, reach, and station"
+            )
+        if has_2d and not (area_2d and bc_line):
+            raise ValueError(
+                "2D selector requires both area_2d and bc_line"
+            )
+
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except Exception:
+                pass
+
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            if ras_obj is None or getattr(ras_obj, 'project_folder', None) is None:
+                raise ValueError(
+                    "Cannot resolve unsteady number without an initialized ras_object"
+                )
+            num = unsteady_file.zfill(2)
+            unsteady_path = Path(ras_obj.project_folder) / f"{ras_obj.project_name}.u{num}"
+        else:
+            unsteady_path = Path(unsteady_file)
+
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+
+        def _matches_location(loc_value: str) -> bool:
+            parts = [p.strip() for p in loc_value.split(',')]
+            if has_1d:
+                return (
+                    len(parts) >= 3
+                    and parts[0] == river
+                    and parts[1] == reach
+                    and parts[2] == station
+                )
+            if len(parts) < 6 or parts[5] != area_2d:
+                return False
+            if len(parts) < 8 or parts[7] != bc_line:
+                return False
+            return True
+
+        boundary_idx = None
+        matched_loc = None
+        for i, line in enumerate(lines):
+            if line.startswith('Boundary Location='):
+                loc_value = line[len('Boundary Location='):].rstrip('\r\n')
+                if _matches_location(loc_value):
+                    boundary_idx = i
+                    matched_loc = loc_value
+                    break
+
+        if boundary_idx is None:
+            sel = (
+                f"river={river!r}/reach={reach!r}/station={station!r}"
+                if has_1d
+                else f"area_2d={area_2d!r}/bc_line={bc_line!r}"
+            )
+            raise ValueError(
+                f"No boundary matched in {unsteady_path.name} for {sel}. "
+                f"This function only edits Flow Hydrograph boundaries that "
+                f"already exist as `Boundary Location=` blocks."
+            )
+
+        FLOW_HYDROGRAPH_HEADER = 'Flow Hydrograph='
+        QMIN_KEY = 'Flow Hydrograph QMin='
+        QMULT_KEY = 'Flow Hydrograph QMult='
+        TW_CHECK_KEY = 'Stage Hydrograph TW Check='
+        DSS_LINE_KEYS = ('DSS Path=', 'DSS File=', 'Use DSS=')
+
+        flow_header_idx: Optional[int] = None
+        qmin_idx: Optional[int] = None
+        qmult_idx: Optional[int] = None
+        tw_check_idx: Optional[int] = None
+        first_dss_idx: Optional[int] = None
+        first_dss_keyword: Optional[str] = None
+        first_post_data_eq_idx: Optional[int] = None
+        BLOCK_SCAN_CAP = 1000
+        block_end = min(boundary_idx + 1 + BLOCK_SCAN_CAP, len(lines))
+
+        j = boundary_idx + 1
+        while j < block_end:
+            line = lines[j]
+            if line.startswith('Boundary Location='):
+                block_end = j
+                break
+            if line.startswith(FLOW_HYDROGRAPH_HEADER):
+                flow_header_idx = j
+            j += 1
+
+        if flow_header_idx is None:
+            raise ValueError(
+                f"Boundary at {matched_loc.strip()!r} is not a Flow Hydrograph "
+                f"(no `Flow Hydrograph=<count>` header in block); "
+                f"`Flow Hydrograph QMin=` only applies to Flow Hydrograph BCs"
+            )
+
+        try:
+            count = int(lines[flow_header_idx].replace(FLOW_HYDROGRAPH_HEADER, '').split(',')[0].strip())
+        except (ValueError, IndexError):
+            count = 0
+        post_data_idx = flow_header_idx + 1
+        if count > 0:
+            for k in range(flow_header_idx + 1, block_end):
+                if '=' in lines[k] or lines[k].startswith('Boundary Location='):
+                    post_data_idx = k
+                    break
+            else:
+                post_data_idx = block_end
+
+        for j in range(post_data_idx, block_end):
+            line = lines[j]
+            if line.startswith(QMIN_KEY) and qmin_idx is None:
+                qmin_idx = j
+            elif line.startswith(QMULT_KEY) and qmult_idx is None:
+                qmult_idx = j
+            elif line.startswith(TW_CHECK_KEY) and tw_check_idx is None:
+                tw_check_idx = j
+            else:
+                for dss_kw in DSS_LINE_KEYS:
+                    if line.startswith(dss_kw) and first_dss_idx is None:
+                        first_dss_idx = j
+                        first_dss_keyword = dss_kw
+                        break
+            if first_post_data_eq_idx is None and '=' in line:
+                first_post_data_eq_idx = j
+
+        block_before = ''.join(lines[boundary_idx:block_end])
+
+        previous_qmin: Optional[float] = None
+        if qmin_idx is not None:
+            payload = lines[qmin_idx].replace(QMIN_KEY, '').strip()
+            try:
+                previous_qmin = float(payload.split(',')[0].strip())
+            except (ValueError, IndexError):
+                previous_qmin = None
+
+        new_qmin_line = f'Flow Hydrograph QMin= {qmin_val} \n'
+
+        lines_inserted = 0
+        updated_in_place = False
+        insert_anchor: Optional[str] = None
+
+        if qmin_idx is not None:
+            lines[qmin_idx] = new_qmin_line
+            updated_in_place = True
+        else:
+            if qmult_idx is not None:
+                insert_pos = qmult_idx + 1
+                insert_anchor = QMULT_KEY
+            elif tw_check_idx is not None:
+                insert_pos = tw_check_idx + 1
+                insert_anchor = TW_CHECK_KEY
+            elif first_dss_idx is not None:
+                insert_pos = first_dss_idx
+                insert_anchor = first_dss_keyword
+            elif first_post_data_eq_idx is not None:
+                insert_pos = first_post_data_eq_idx
+                insert_anchor = '<inline-data-tail>'
+            else:
+                insert_pos = block_end
+                insert_anchor = '<block-end>'
+            lines.insert(insert_pos, new_qmin_line)
+            lines_inserted = 1
+
+        new_block_end = boundary_idx + 1
+        while (
+            new_block_end < len(lines)
+            and not lines[new_block_end].startswith('Boundary Location=')
+        ):
+            new_block_end += 1
+        block_after = ''.join(lines[boundary_idx:new_block_end])
+
+        with open(unsteady_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
+        boundaries_df_refreshed = False
+        if ras_obj is not None:
+            try:
+                ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+                boundaries_df_refreshed = True
+            except Exception as exc:
+                logger.debug(f"boundaries_df refresh skipped: {exc}")
+
+        logger.info(
+            "Set Flow Hydrograph QMin in %s: matched=%s, qmin=%s, "
+            "updated_in_place=%s, anchor=%s",
+            unsteady_path.name,
+            matched_loc.strip(),
+            qmin_val,
+            updated_in_place,
+            insert_anchor,
+        )
+
+        return {
+            'unsteady_file': str(unsteady_path),
+            'matched_location': matched_loc,
+            'bc_type': 'Flow Hydrograph',
+            'previous_qmin': previous_qmin,
+            'new_qmin': qmin_val,
+            'updated_in_place': updated_in_place,
+            'lines_inserted': lines_inserted,
+            'insert_anchor': insert_anchor,
+            'boundaries_df_refreshed': boundaries_df_refreshed,
+            'block_before': block_before,
+            'block_after': block_after,
+        }
+
+    @staticmethod
+    @log_call
     def set_normal_depth_boundary(
         unsteady_file: Union[str, Path],
         friction_slope: float,
