@@ -468,11 +468,15 @@ class RasUnsteady:
 
     NON_NEWTONIAN_METHODS = {
         0: "Newtonian Assumptions",
-        1: "Bulking Only",
-        2: "Bingham",
-        3: "O'Brien (Quadratic)",
-        4: "Herschel-Bulkley",
-        5: "Voellmy",
+        1: "Bingham",
+        2: "O'Brien (Quadratic)",
+        3: "Clastic Grain-Flow",
+        4: "Generalized Herschel-Bulkley",
+    }
+
+    BULKING_METHODS = {
+        0: "Do Not Bulk",
+        1: "Bulk Fluid Volume",
     }
 
     @staticmethod
@@ -494,7 +498,7 @@ class RasUnsteady:
         Returns
         -------
         dict
-            ``method_id`` (int): Integer method code (0-5).
+            ``method_id`` (int): Integer method code (0-4).
             ``method_name`` (str): Human-readable method name.
         """
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
@@ -526,17 +530,17 @@ class RasUnsteady:
         unsteady_number_or_path : str or Path
             Unsteady flow number (e.g. ``"03"``) or path to a ``.u##`` file.
         method : int or str
-            Method to set. Accepts integer (0-5) or name string:
-            ``0``/``"Newtonian Assumptions"``, ``1``/``"Bulking Only"``,
-            ``2``/``"Bingham"``, ``3``/``"O'Brien (Quadratic)"``,
-            ``4``/``"Herschel-Bulkley"``, ``5``/``"Voellmy"``.
+            Method to set. Accepts integer (0-4) or name string:
+            ``0``/``"Newtonian Assumptions"``, ``1``/``"Bingham"``,
+            ``2``/``"O'Brien (Quadratic)"``, ``3``/``"Clastic Grain-Flow"``,
+            ``4``/``"Generalized Herschel-Bulkley"``.
         ras_object : RasPrj, optional
             RAS project object. If None, uses the global ``ras`` object.
 
         Raises
         ------
         ValueError
-            If the method is not a valid integer (0-5) or recognized name.
+            If the method is not a valid integer (0-4) or recognized name.
         """
         if isinstance(method, int):
             method_id = method
@@ -557,7 +561,7 @@ class RasUnsteady:
 
         if method_id not in RasUnsteady.NON_NEWTONIAN_METHODS:
             raise ValueError(
-                f"Invalid method_id {method_id}. Must be 0-5: "
+                f"Invalid method_id {method_id}. Must be 0-4: "
                 f"{RasUnsteady.NON_NEWTONIAN_METHODS}"
             )
 
@@ -570,7 +574,7 @@ class RasUnsteady:
         found = False
         for i, line in enumerate(lines):
             if line.startswith("Non-Newtonian Method="):
-                lines[i] = f"Non-Newtonian Method= {method_id} ,\n"
+                lines[i] = f"Non-Newtonian Method= {method_id} \n"
                 found = True
                 break
 
@@ -589,6 +593,132 @@ class RasUnsteady:
             f"({RasUnsteady.NON_NEWTONIAN_METHODS[method_id]}) "
             f"in {unsteady_file.name}"
         )
+
+    @staticmethod
+    @log_call
+    def get_non_newtonian_concentration(
+        unsteady_number_or_path: Union[str, Path],
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Read Non-Newtonian concentration and bulking parameters from a .u## file.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"02"``) or path to a ``.u##`` file.
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses the global ``ras`` object.
+
+        Returns
+        -------
+        dict
+            ``cv`` (float): Volumetric concentration in percent.
+            ``bulking_method`` (int): 0=Do Not Bulk, 1=Bulk Fluid Volume.
+            ``bulking_method_name`` (str): Human-readable bulking method name.
+            ``max_cv`` (float): Maximum volumetric concentration in percent.
+        """
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        result = {'cv': 0.0, 'bulking_method': 0, 'bulking_method_name': 'Do Not Bulk', 'max_cv': 0.0}
+        key_map = {
+            'Non-Newtonian Constant Vol Conc=': 'cv',
+            'Non-Newtonian Max Cv=': 'max_cv',
+        }
+        with open(unsteady_file, 'r') as f:
+            for line in f:
+                for key, field in key_map.items():
+                    if line.startswith(key):
+                        val_str = line.split('=', 1)[1].strip()
+                        try:
+                            result[field] = float(val_str)
+                        except ValueError:
+                            pass
+                if line.startswith('Non-Newtonian Bulking Method='):
+                    val_str = line.split('=', 1)[1].strip()
+                    try:
+                        bm = int(val_str)
+                        result['bulking_method'] = bm
+                        result['bulking_method_name'] = RasUnsteady.BULKING_METHODS.get(
+                            bm, f"Unknown ({bm})"
+                        )
+                    except ValueError:
+                        pass
+        return result
+
+    @staticmethod
+    @log_call
+    def set_non_newtonian_concentration(
+        unsteady_number_or_path: Union[str, Path],
+        cv: Optional[float] = None,
+        bulking_method: Optional[Union[int, str]] = None,
+        max_cv: Optional[float] = None,
+        ras_object: Optional[Any] = None,
+    ) -> None:
+        """
+        Set Non-Newtonian concentration and bulking parameters in a .u## file.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"02"``) or path to a ``.u##`` file.
+        cv : float, optional
+            Volumetric concentration in percent (e.g. 30.0 for 30%).
+        bulking_method : int or str, optional
+            ``0``/``"Do Not Bulk"`` or ``1``/``"Bulk Fluid Volume"``.
+        max_cv : float, optional
+            Maximum volumetric concentration in percent.
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses the global ``ras`` object.
+        """
+        if cv is None and bulking_method is None and max_cv is None:
+            return
+
+        if bulking_method is not None:
+            if isinstance(bulking_method, str):
+                name_to_id = {v.lower(): k for k, v in RasUnsteady.BULKING_METHODS.items()}
+                bm_lower = bulking_method.lower().strip()
+                if bm_lower in name_to_id:
+                    bulking_method = name_to_id[bm_lower]
+                elif bulking_method.strip().isdigit():
+                    bulking_method = int(bulking_method.strip())
+                else:
+                    raise ValueError(
+                        f"Unknown bulking method: '{bulking_method}'. "
+                        f"Valid: {list(RasUnsteady.BULKING_METHODS.values())}"
+                    )
+            if bulking_method not in RasUnsteady.BULKING_METHODS:
+                raise ValueError(
+                    f"Invalid bulking_method {bulking_method}. Must be 0-1: "
+                    f"{RasUnsteady.BULKING_METHODS}"
+                )
+
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        with open(unsteady_file, 'r') as f:
+            lines = f.readlines()
+
+        for i, line in enumerate(lines):
+            if cv is not None and line.startswith('Non-Newtonian Constant Vol Conc='):
+                lines[i] = f"Non-Newtonian Constant Vol Conc={cv}\n"
+            elif bulking_method is not None and line.startswith('Non-Newtonian Bulking Method='):
+                lines[i] = f"Non-Newtonian Bulking Method= {bulking_method} \n"
+            elif max_cv is not None and line.startswith('Non-Newtonian Max Cv='):
+                lines[i] = f"Non-Newtonian Max Cv={max_cv}\n"
+
+        with open(unsteady_file, 'w') as f:
+            f.writelines(lines)
+
+        changes = []
+        if cv is not None:
+            changes.append(f"cv={cv}%")
+        if bulking_method is not None:
+            changes.append(f"bulking={RasUnsteady.BULKING_METHODS[bulking_method]}")
+        if max_cv is not None:
+            changes.append(f"max_cv={max_cv}%")
+        logger.info(f"Set NN concentration params ({', '.join(changes)}) in {unsteady_file.name}")
 
     @staticmethod
     @log_call
