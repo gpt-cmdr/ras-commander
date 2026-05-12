@@ -3011,6 +3011,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#step-11-lateral-inflow-hydrograph-readwrite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 11: Lateral Inflow Hydrograph Read/Write
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#summary" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3067,6 +3078,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#lateral-inflow-hydrograph-methods-step-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lateral Inflow Hydrograph Methods (Step 11)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#computational-verification-step-9" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3082,6 +3104,17 @@
     <span class="md-ellipsis">
       
         Stage/Flow Hydrograph Verification (Step 10)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lateral-inflow-hydrograph-verification-step-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lateral Inflow Hydrograph Verification (Step 11)
       
     </span>
   </a>
@@ -4139,6 +4172,108 @@
 </span><span id="__span-26-19"><a id="__codelineno-26-19" name="__codelineno-26-19" href="#__codelineno-26-19"></a>
 </span><span id="__span-26-20"><a id="__codelineno-26-20" name="__codelineno-26-20" href="#__codelineno-26-20"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Round-trip verification PASSED — written values match read-back&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<h2 id="step-11-lateral-inflow-hydrograph-readwrite">Step 11: Lateral Inflow Hydrograph Read/Write<a class="headerlink" href="#step-11-lateral-inflow-hydrograph-readwrite" title="Permanent link">&para;</a></h2>
+<p>HEC-RAS supports <strong>Lateral Inflow Hydrograph</strong> boundary conditions for adding flow along a reach (1D) or into a 2D/SA area. The inline data uses 8-character fixed-width format, identical to Flow Hydrograph encoding.</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RasUnsteady.get_lateral_inflow_hydrograph()</code></td>
+<td>Read lateral inflow values and metadata from a <code>.u##</code> file</td>
+</tr>
+<tr>
+<td><code>RasUnsteady.set_lateral_inflow_hydrograph()</code></td>
+<td>Write or replace lateral inflow values, optionally update slope</td>
+</tr>
+</tbody>
+</table>
+<p>These dedicated methods complement the generic <code>get_inline_hydrograph_boundaries()</code> by providing:
+- <strong>Typed return</strong> with <code>flow</code> column (not generic <code>values</code> array)
+- <strong>Metadata via <code>df.attrs</code></strong>: <code>interval</code>, <code>slope</code>, <code>matched_location</code>, <code>value_count</code>
+- <strong>Slope setter</strong> integrated into the write call</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># --- Step 11a: Read lateral inflow hydrograph from BaldEagleCrkMulti2D ---</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="c1"># Re-initialize BaldEagle project (extracted in Step 1)</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="n">ras</span> <span class="o">=</span> <span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_path</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>
+</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="c1"># Find Lateral Inflow Hydrograph boundaries in boundaries_df</span>
+</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="n">lat_bcs</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">[</span><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">[</span><span class="s1">&#39;bc_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Lateral Inflow Hydrograph&#39;</span><span class="p">]</span>
+</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Lateral Inflow Hydrograph boundaries: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">lat_bcs</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-27-8"><a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a><span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">lat_bcs</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="__span-27-9"><a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a>    <span class="n">display</span><span class="p">(</span><span class="n">lat_bcs</span><span class="p">[[</span><span class="s1">&#39;river&#39;</span><span class="p">,</span> <span class="s1">&#39;reach&#39;</span><span class="p">,</span> <span class="s1">&#39;river_station&#39;</span><span class="p">,</span> <span class="s1">&#39;bc_type&#39;</span><span class="p">,</span> <span class="s1">&#39;area_2d&#39;</span><span class="p">,</span> <span class="s1">&#39;bc_line&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
+</span><span id="__span-27-10"><a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a>
+</span><span id="__span-27-11"><a id="__codelineno-27-11" name="__codelineno-27-11" href="#__codelineno-27-11"></a><span class="c1"># Read the lateral inflow using the dedicated method</span>
+</span><span id="__span-27-12"><a id="__codelineno-27-12" name="__codelineno-27-12" href="#__codelineno-27-12"></a><span class="n">u_file</span> <span class="o">=</span> <span class="n">ras</span><span class="o">.</span><span class="n">unsteady_df</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;full_path&#39;</span><span class="p">]</span>
+</span><span id="__span-27-13"><a id="__codelineno-27-13" name="__codelineno-27-13" href="#__codelineno-27-13"></a><span class="n">lat_df</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_lateral_inflow_hydrograph</span><span class="p">(</span>
+</span><span id="__span-27-14"><a id="__codelineno-27-14" name="__codelineno-27-14" href="#__codelineno-27-14"></a>    <span class="n">unsteady_file</span><span class="o">=</span><span class="n">u_file</span><span class="p">,</span>
+</span><span id="__span-27-15"><a id="__codelineno-27-15" name="__codelineno-27-15" href="#__codelineno-27-15"></a>    <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">,</span>
+</span><span id="__span-27-16"><a id="__codelineno-27-16" name="__codelineno-27-16" href="#__codelineno-27-16"></a><span class="p">)</span>
+</span><span id="__span-27-17"><a id="__codelineno-27-17" name="__codelineno-27-17" href="#__codelineno-27-17"></a>
+</span><span id="__span-27-18"><a id="__codelineno-27-18" name="__codelineno-27-18" href="#__codelineno-27-18"></a><span class="k">if</span> <span class="n">lat_df</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-27-19"><a id="__codelineno-27-19" name="__codelineno-27-19" href="#__codelineno-27-19"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Lateral Inflow Hydrograph:&quot;</span><span class="p">)</span>
+</span><span id="__span-27-20"><a id="__codelineno-27-20" name="__codelineno-27-20" href="#__codelineno-27-20"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Values:   </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">lat_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-27-21"><a id="__codelineno-27-21" name="__codelineno-27-21" href="#__codelineno-27-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Flow range: </span><span class="si">{</span><span class="n">lat_df</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">lat_df</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-27-22"><a id="__codelineno-27-22" name="__codelineno-27-22" href="#__codelineno-27-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Interval: </span><span class="si">{</span><span class="n">lat_df</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;interval&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-27-23"><a id="__codelineno-27-23" name="__codelineno-27-23" href="#__codelineno-27-23"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Slope:    </span><span class="si">{</span><span class="n">lat_df</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;slope&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-27-24"><a id="__codelineno-27-24" name="__codelineno-27-24" href="#__codelineno-27-24"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Location: </span><span class="si">{</span><span class="n">lat_df</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;matched_location&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-27-25"><a id="__codelineno-27-25" name="__codelineno-27-25" href="#__codelineno-27-25"></a>    <span class="n">display</span><span class="p">(</span><span class="n">lat_df</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
+</span><span id="__span-27-26"><a id="__codelineno-27-26" name="__codelineno-27-26" href="#__codelineno-27-26"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-27-27"><a id="__codelineno-27-27" name="__codelineno-27-27" href="#__codelineno-27-27"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;No inline lateral inflow found (may be DSS-linked)&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># --- Step 11b: Scale flows, write back with new slope, round-trip verify ---</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="k">if</span> <span class="n">lat_df</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>    <span class="n">SCALE_FACTOR</span> <span class="o">=</span> <span class="mf">1.5</span>
+</span><span id="__span-28-6"><a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a>    <span class="n">NEW_SLOPE</span> <span class="o">=</span> <span class="mf">0.003</span>
+</span><span id="__span-28-7"><a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a>
+</span><span id="__span-28-8"><a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a>    <span class="c1"># Scale flows</span>
+</span><span id="__span-28-9"><a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a>    <span class="n">lat_modified</span> <span class="o">=</span> <span class="n">lat_df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+</span><span id="__span-28-10"><a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a>    <span class="n">lat_modified</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">lat_modified</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span> <span class="o">*</span> <span class="n">SCALE_FACTOR</span>
+</span><span id="__span-28-11"><a id="__codelineno-28-11" name="__codelineno-28-11" href="#__codelineno-28-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Original peak flow: </span><span class="si">{</span><span class="n">lat_df</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-28-12"><a id="__codelineno-28-12" name="__codelineno-28-12" href="#__codelineno-28-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Scaled peak flow:   </span><span class="si">{</span><span class="n">lat_modified</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">  (x</span><span class="si">{</span><span class="n">SCALE_FACTOR</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+</span><span id="__span-28-13"><a id="__codelineno-28-13" name="__codelineno-28-13" href="#__codelineno-28-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Original slope:     </span><span class="si">{</span><span class="n">lat_df</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;slope&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;N/A&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-28-14"><a id="__codelineno-28-14" name="__codelineno-28-14" href="#__codelineno-28-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;New slope:          </span><span class="si">{</span><span class="n">NEW_SLOPE</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-28-15"><a id="__codelineno-28-15" name="__codelineno-28-15" href="#__codelineno-28-15"></a>
+</span><span id="__span-28-16"><a id="__codelineno-28-16" name="__codelineno-28-16" href="#__codelineno-28-16"></a>    <span class="c1"># Write back with new slope</span>
+</span><span id="__span-28-17"><a id="__codelineno-28-17" name="__codelineno-28-17" href="#__codelineno-28-17"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">set_lateral_inflow_hydrograph</span><span class="p">(</span>
+</span><span id="__span-28-18"><a id="__codelineno-28-18" name="__codelineno-28-18" href="#__codelineno-28-18"></a>        <span class="n">unsteady_file</span><span class="o">=</span><span class="n">u_file</span><span class="p">,</span>
+</span><span id="__span-28-19"><a id="__codelineno-28-19" name="__codelineno-28-19" href="#__codelineno-28-19"></a>        <span class="n">hydrograph_df</span><span class="o">=</span><span class="n">lat_modified</span><span class="p">,</span>
+</span><span id="__span-28-20"><a id="__codelineno-28-20" name="__codelineno-28-20" href="#__codelineno-28-20"></a>        <span class="n">slope</span><span class="o">=</span><span class="n">NEW_SLOPE</span><span class="p">,</span>
+</span><span id="__span-28-21"><a id="__codelineno-28-21" name="__codelineno-28-21" href="#__codelineno-28-21"></a>        <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">,</span>
+</span><span id="__span-28-22"><a id="__codelineno-28-22" name="__codelineno-28-22" href="#__codelineno-28-22"></a>    <span class="p">)</span>
+</span><span id="__span-28-23"><a id="__codelineno-28-23" name="__codelineno-28-23" href="#__codelineno-28-23"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Write result:&quot;</span><span class="p">)</span>
+</span><span id="__span-28-24"><a id="__codelineno-28-24" name="__codelineno-28-24" href="#__codelineno-28-24"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Matched:  </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;matched_location&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-28-25"><a id="__codelineno-28-25" name="__codelineno-28-25" href="#__codelineno-28-25"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Values:   </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;value_count&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-28-26"><a id="__codelineno-28-26" name="__codelineno-28-26" href="#__codelineno-28-26"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Previous: </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;previous_value_count&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> values&quot;</span><span class="p">)</span>
+</span><span id="__span-28-27"><a id="__codelineno-28-27" name="__codelineno-28-27" href="#__codelineno-28-27"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Slope:    </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;slope_written&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-28-28"><a id="__codelineno-28-28" name="__codelineno-28-28" href="#__codelineno-28-28"></a>
+</span><span id="__span-28-29"><a id="__codelineno-28-29" name="__codelineno-28-29" href="#__codelineno-28-29"></a>    <span class="c1"># Round-trip: re-read and verify</span>
+</span><span id="__span-28-30"><a id="__codelineno-28-30" name="__codelineno-28-30" href="#__codelineno-28-30"></a>    <span class="n">lat_reread</span> <span class="o">=</span> <span class="n">RasUnsteady</span><span class="o">.</span><span class="n">get_lateral_inflow_hydrograph</span><span class="p">(</span>
+</span><span id="__span-28-31"><a id="__codelineno-28-31" name="__codelineno-28-31" href="#__codelineno-28-31"></a>        <span class="n">unsteady_file</span><span class="o">=</span><span class="n">u_file</span><span class="p">,</span>
+</span><span id="__span-28-32"><a id="__codelineno-28-32" name="__codelineno-28-32" href="#__codelineno-28-32"></a>        <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">,</span>
+</span><span id="__span-28-33"><a id="__codelineno-28-33" name="__codelineno-28-33" href="#__codelineno-28-33"></a>    <span class="p">)</span>
+</span><span id="__span-28-34"><a id="__codelineno-28-34" name="__codelineno-28-34" href="#__codelineno-28-34"></a>    <span class="k">assert</span> <span class="n">lat_reread</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;Re-read returned None&quot;</span>
+</span><span id="__span-28-35"><a id="__codelineno-28-35" name="__codelineno-28-35" href="#__codelineno-28-35"></a>    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">lat_reread</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">lat_modified</span><span class="p">),</span> <span class="p">(</span>
+</span><span id="__span-28-36"><a id="__codelineno-28-36" name="__codelineno-28-36" href="#__codelineno-28-36"></a>        <span class="sa">f</span><span class="s2">&quot;Row count mismatch: wrote </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">lat_modified</span><span class="p">)</span><span class="si">}</span><span class="s2">, read </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">lat_reread</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-28-37"><a id="__codelineno-28-37" name="__codelineno-28-37" href="#__codelineno-28-37"></a>    <span class="p">)</span>
+</span><span id="__span-28-38"><a id="__codelineno-28-38" name="__codelineno-28-38" href="#__codelineno-28-38"></a>    <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">lat_reread</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">lat_modified</span><span class="p">[</span><span class="s1">&#39;flow&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="mf">0.1</span><span class="p">),</span> <span class="p">(</span>
+</span><span id="__span-28-39"><a id="__codelineno-28-39" name="__codelineno-28-39" href="#__codelineno-28-39"></a>        <span class="s2">&quot;Flow values changed during round-trip!&quot;</span>
+</span><span id="__span-28-40"><a id="__codelineno-28-40" name="__codelineno-28-40" href="#__codelineno-28-40"></a>    <span class="p">)</span>
+</span><span id="__span-28-41"><a id="__codelineno-28-41" name="__codelineno-28-41" href="#__codelineno-28-41"></a>    <span class="n">reread_slope</span> <span class="o">=</span> <span class="n">lat_reread</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;slope&#39;</span><span class="p">)</span>
+</span><span id="__span-28-42"><a id="__codelineno-28-42" name="__codelineno-28-42" href="#__codelineno-28-42"></a>    <span class="k">assert</span> <span class="n">reread_slope</span> <span class="o">==</span> <span class="nb">str</span><span class="p">(</span><span class="n">NEW_SLOPE</span><span class="p">),</span> <span class="p">(</span>
+</span><span id="__span-28-43"><a id="__codelineno-28-43" name="__codelineno-28-43" href="#__codelineno-28-43"></a>        <span class="sa">f</span><span class="s2">&quot;Slope mismatch: expected </span><span class="si">{</span><span class="n">NEW_SLOPE</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">reread_slope</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-28-44"><a id="__codelineno-28-44" name="__codelineno-28-44" href="#__codelineno-28-44"></a>    <span class="p">)</span>
+</span><span id="__span-28-45"><a id="__codelineno-28-45" name="__codelineno-28-45" href="#__codelineno-28-45"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Round-trip verification PASSED&quot;</span><span class="p">)</span>
+</span><span id="__span-28-46"><a id="__codelineno-28-46" name="__codelineno-28-46" href="#__codelineno-28-46"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Flow values match (atol=0.1)&quot;</span><span class="p">)</span>
+</span><span id="__span-28-47"><a id="__codelineno-28-47" name="__codelineno-28-47" href="#__codelineno-28-47"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Slope = </span><span class="si">{</span><span class="n">reread_slope</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-28-48"><a id="__codelineno-28-48" name="__codelineno-28-48" href="#__codelineno-28-48"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-28-49"><a id="__codelineno-28-49" name="__codelineno-28-49" href="#__codelineno-28-49"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipping write test (no inline lateral inflow found)&quot;</span><span class="p">)</span>
+</span></code></pre></div>
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
 <p>This notebook demonstrated the enhanced <code>boundaries_df</code> features:</p>
 <h3 id="new-dataframe-columns">New DataFrame Columns<a class="headerlink" href="#new-dataframe-columns" title="Permanent link">&para;</a></h3>
@@ -4271,6 +4406,25 @@
 </tr>
 </tbody>
 </table>
+<h3 id="lateral-inflow-hydrograph-methods-step-11">Lateral Inflow Hydrograph Methods (Step 11)<a class="headerlink" href="#lateral-inflow-hydrograph-methods-step-11" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RasUnsteady.get_lateral_inflow_hydrograph()</code></td>
+<td>Read lateral inflow values + metadata (interval, slope) from <code>.u##</code> file</td>
+</tr>
+<tr>
+<td><code>RasUnsteady.set_lateral_inflow_hydrograph()</code></td>
+<td>Write/replace lateral inflow values, optionally update <code>Flow Hydrograph Slope=</code></td>
+</tr>
+</tbody>
+</table>
 <h3 id="computational-verification-step-9">Computational Verification (Step 9)<a class="headerlink" href="#computational-verification-step-9" title="Permanent link">&para;</a></h3>
 <p>Three independent HEC-RAS computations verified the implementation:</p>
 <p><strong>Step 9a: Round-Trip Fidelity Test</strong>
@@ -4292,11 +4446,20 @@
 <li>Re-read and verified round-trip: stage values unchanged, flow values match scaled values</li>
 <li><strong>Result</strong>: Round-trip verification PASSED — interleaved 8-char fixed-width format preserved correctly</li>
 </ol>
+<h3 id="lateral-inflow-hydrograph-verification-step-11">Lateral Inflow Hydrograph Verification (Step 11)<a class="headerlink" href="#lateral-inflow-hydrograph-verification-step-11" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Read lateral inflow hydrograph from BaldEagleCrkMulti2D with <code>get_lateral_inflow_hydrograph()</code></li>
+<li>Verified metadata extraction: interval, slope, matched_location via <code>df.attrs</code></li>
+<li>Scaled flows by 1.5x and wrote back with new slope using <code>set_lateral_inflow_hydrograph()</code></li>
+<li>Re-read and verified round-trip: flow values match, slope updated</li>
+<li><strong>Result</strong>: Round-trip verification PASSED — dedicated lateral inflow API works correctly</li>
+</ol>
 <h3 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>QMult insertion</strong>: Automatically inserts line if not present</li>
 <li><strong>TW Check setter</strong>: Set/toggle tailwater check flag with <code>set_stage_hydrograph_tw_check()</code></li>
 <li><strong>Stage/Flow Hydrograph</strong>: Read/write interleaved (stage, flow) pairs for internal BCs</li>
+<li><strong>Lateral Inflow Hydrograph</strong>: Dedicated read/write with slope integration and metadata via <code>df.attrs</code></li>
 <li><strong>Partial station matching</strong>: Matches stations even with coordinates appended</li>
 <li><strong>Batch efficiency</strong>: Single file read/write for multiple updates</li>
 <li><strong>Safe updates</strong>: Optional <code>old_a_part</code> validation prevents accidental overwrites</li>
@@ -4304,11 +4467,11 @@
 <li><strong>Inline data cleanup</strong>: <code>set_boundary_dss_link()</code> removes inline table data when switching to DSS</li>
 <li><strong>Verified correctness</strong>: Computational tests prove state transitions are lossless and QMult affects results</li>
 </ul>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Cleanup (optional)</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="c1"># import shutil</span>
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
-</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Cleanup (optional)</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="c1"># Uncomment to remove extracted project folder</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="c1"># import shutil</span>
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># shutil.rmtree(project_path, ignore_errors=True)</span>
+</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="c1"># print(f&quot;Cleaned up: {project_path}&quot;)</span>
 </span></code></pre></div>
 
 
@@ -4332,7 +4495,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 13:49:56 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 14:03:32 UTC">May 12, 2026</span>
   </span>
 
     
@@ -4342,7 +4505,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 13:49:56 UTC">May 12, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 12, 2026 14:03:32 UTC">May 12, 2026</span>
   </span>
 
     
