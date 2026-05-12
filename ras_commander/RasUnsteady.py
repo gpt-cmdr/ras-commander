@@ -479,6 +479,18 @@ class RasUnsteady:
         1: "Bulk Fluid Volume",
     }
 
+    YIELD_METHODS = {
+        0: "Exponential",
+        1: "User Yield",
+    }
+
+    VISCOSITY_METHODS = {
+        0: "Use Coulomb",
+        1: "Maron and Pierce",
+        2: "User Defined Viscosity",
+        3: "User Visc Ratio",
+    }
+
     @staticmethod
     @log_call
     def get_non_newtonian_method(
@@ -719,6 +731,224 @@ class RasUnsteady:
         if max_cv is not None:
             changes.append(f"max_cv={max_cv}%")
         logger.info(f"Set NN concentration params ({', '.join(changes)}) in {unsteady_file.name}")
+
+    @staticmethod
+    @log_call
+    def get_non_newtonian_shear(
+        unsteady_number_or_path: Union[str, Path],
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Read Non-Newtonian yield stress and viscosity parameters from a .u## file.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"02"``) or path to a ``.u##`` file.
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses the global ``ras`` object.
+
+        Returns
+        -------
+        dict
+            ``yield_method`` (int): 0=Exponential, 1=User Yield.
+            ``yield_method_name`` (str): Human-readable yield method name.
+            ``yield_coef`` (tuple[float, float]): Exponential yield coefficients (a, b).
+            ``user_yield`` (float): User-specified yield stress in Pa.
+            ``visc_method`` (int): 0=Use Coulomb, 1=Maron and Pierce, 2=User Defined Viscosity, 3=User Visc Ratio.
+            ``visc_method_name`` (str): Human-readable viscosity method name.
+            ``obrien_b`` (float): O'Brien exponential viscosity B coefficient.
+            ``user_viscosity`` (float): User-defined dynamic viscosity in Pa·s.
+            ``user_visc_ratio`` (float): Viscosity ratio multiplier.
+        """
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        result = {
+            'yield_method': 0, 'yield_method_name': 'Exponential',
+            'yield_coef': (0.0, 0.0), 'user_yield': 0.0,
+            'visc_method': 0, 'visc_method_name': 'Use Coulomb',
+            'obrien_b': 0.0, 'user_viscosity': 0.0, 'user_visc_ratio': 0.0,
+        }
+        with open(unsteady_file, 'r') as f:
+            for line in f:
+                if line.startswith('Non-Newtonian Yield Method='):
+                    val_str = line.split('=', 1)[1].strip()
+                    try:
+                        ym = int(val_str)
+                        result['yield_method'] = ym
+                        result['yield_method_name'] = RasUnsteady.YIELD_METHODS.get(
+                            ym, f"Unknown ({ym})"
+                        )
+                    except ValueError:
+                        pass
+                elif line.startswith('Non-Newtonian Yield Coef='):
+                    val_str = line.split('=', 1)[1].strip()
+                    parts = [p.strip() for p in val_str.split(',')]
+                    try:
+                        result['yield_coef'] = (float(parts[0]), float(parts[1]))
+                    except (ValueError, IndexError):
+                        pass
+                elif line.startswith('User Yeild='):
+                    val_str = line.split('=', 1)[1].strip()
+                    try:
+                        result['user_yield'] = float(val_str)
+                    except ValueError:
+                        pass
+                elif line.startswith('Non-Newtonian Sed Visc='):
+                    val_str = line.split('=', 1)[1].strip()
+                    try:
+                        vm = int(val_str)
+                        result['visc_method'] = vm
+                        result['visc_method_name'] = RasUnsteady.VISCOSITY_METHODS.get(
+                            vm, f"Unknown ({vm})"
+                        )
+                    except ValueError:
+                        pass
+                elif line.startswith('Non-Newtonian Obrian B='):
+                    val_str = line.split('=', 1)[1].strip()
+                    try:
+                        result['obrien_b'] = float(val_str)
+                    except ValueError:
+                        pass
+                elif line.startswith('User Viscosity Ratio='):
+                    val_str = line.split('=', 1)[1].strip()
+                    try:
+                        result['user_visc_ratio'] = float(val_str)
+                    except ValueError:
+                        pass
+                elif line.startswith('User Viscosity='):
+                    val_str = line.split('=', 1)[1].strip()
+                    try:
+                        result['user_viscosity'] = float(val_str)
+                    except ValueError:
+                        pass
+        return result
+
+    @staticmethod
+    @log_call
+    def set_non_newtonian_shear(
+        unsteady_number_or_path: Union[str, Path],
+        yield_method: Optional[Union[int, str]] = None,
+        yield_coef: Optional[tuple] = None,
+        user_yield: Optional[float] = None,
+        visc_method: Optional[Union[int, str]] = None,
+        obrien_b: Optional[float] = None,
+        user_viscosity: Optional[float] = None,
+        user_visc_ratio: Optional[float] = None,
+        ras_object: Optional[Any] = None,
+    ) -> None:
+        """
+        Set Non-Newtonian yield stress and viscosity parameters in a .u## file.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"02"``) or path to a ``.u##`` file.
+        yield_method : int or str, optional
+            ``0``/``"Exponential"`` or ``1``/``"User Yield"``.
+        yield_coef : tuple of (float, float), optional
+            Exponential yield coefficients (a, b) for tau_y = a * exp(b * Cv).
+        user_yield : float, optional
+            User-specified constant yield stress in Pa.
+        visc_method : int or str, optional
+            ``0``/``"Use Coulomb"``, ``1``/``"Maron and Pierce"``,
+            ``2``/``"User Defined Viscosity"``, ``3``/``"User Visc Ratio"``.
+        obrien_b : float, optional
+            O'Brien exponential viscosity B coefficient.
+        user_viscosity : float, optional
+            User-defined dynamic viscosity in Pa·s.
+        user_visc_ratio : float, optional
+            Viscosity ratio multiplier.
+        ras_object : RasPrj, optional
+            RAS project object. If None, uses the global ``ras`` object.
+        """
+        all_none = all(v is None for v in [
+            yield_method, yield_coef, user_yield, visc_method,
+            obrien_b, user_viscosity, user_visc_ratio,
+        ])
+        if all_none:
+            return
+
+        if yield_method is not None:
+            if isinstance(yield_method, str):
+                name_to_id = {v.lower(): k for k, v in RasUnsteady.YIELD_METHODS.items()}
+                ym_lower = yield_method.lower().strip()
+                if ym_lower in name_to_id:
+                    yield_method = name_to_id[ym_lower]
+                elif yield_method.strip().isdigit():
+                    yield_method = int(yield_method.strip())
+                else:
+                    raise ValueError(
+                        f"Unknown yield method: '{yield_method}'. "
+                        f"Valid: {list(RasUnsteady.YIELD_METHODS.values())}"
+                    )
+            if yield_method not in RasUnsteady.YIELD_METHODS:
+                raise ValueError(
+                    f"Invalid yield_method {yield_method}. Must be 0-1: "
+                    f"{RasUnsteady.YIELD_METHODS}"
+                )
+
+        if visc_method is not None:
+            if isinstance(visc_method, str):
+                name_to_id = {v.lower(): k for k, v in RasUnsteady.VISCOSITY_METHODS.items()}
+                vm_lower = visc_method.lower().strip()
+                if vm_lower in name_to_id:
+                    visc_method = name_to_id[vm_lower]
+                elif visc_method.strip().isdigit():
+                    visc_method = int(visc_method.strip())
+                else:
+                    raise ValueError(
+                        f"Unknown viscosity method: '{visc_method}'. "
+                        f"Valid: {list(RasUnsteady.VISCOSITY_METHODS.values())}"
+                    )
+            if visc_method not in RasUnsteady.VISCOSITY_METHODS:
+                raise ValueError(
+                    f"Invalid visc_method {visc_method}. Must be 0-3: "
+                    f"{RasUnsteady.VISCOSITY_METHODS}"
+                )
+
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        with open(unsteady_file, 'r') as f:
+            lines = f.readlines()
+
+        for i, line in enumerate(lines):
+            if yield_method is not None and line.startswith('Non-Newtonian Yield Method='):
+                lines[i] = f"Non-Newtonian Yield Method= {yield_method} \n"
+            elif yield_coef is not None and line.startswith('Non-Newtonian Yield Coef='):
+                lines[i] = f"Non-Newtonian Yield Coef={yield_coef[0]}, {yield_coef[1]}\n"
+            elif user_yield is not None and line.startswith('User Yeild='):
+                lines[i] = f"User Yeild={user_yield}\n"
+            elif visc_method is not None and line.startswith('Non-Newtonian Sed Visc='):
+                lines[i] = f"Non-Newtonian Sed Visc= {visc_method} \n"
+            elif obrien_b is not None and line.startswith('Non-Newtonian Obrian B='):
+                lines[i] = f"Non-Newtonian Obrian B={obrien_b}\n"
+            elif user_visc_ratio is not None and line.startswith('User Viscosity Ratio='):
+                lines[i] = f"User Viscosity Ratio={user_visc_ratio}\n"
+            elif user_viscosity is not None and line.startswith('User Viscosity='):
+                lines[i] = f"User Viscosity={user_viscosity}\n"
+
+        with open(unsteady_file, 'w') as f:
+            f.writelines(lines)
+
+        changes = []
+        if yield_method is not None:
+            changes.append(f"yield_method={RasUnsteady.YIELD_METHODS[yield_method]}")
+        if yield_coef is not None:
+            changes.append(f"yield_coef=({yield_coef[0]}, {yield_coef[1]})")
+        if user_yield is not None:
+            changes.append(f"user_yield={user_yield} Pa")
+        if visc_method is not None:
+            changes.append(f"visc_method={RasUnsteady.VISCOSITY_METHODS[visc_method]}")
+        if obrien_b is not None:
+            changes.append(f"obrien_b={obrien_b}")
+        if user_viscosity is not None:
+            changes.append(f"user_viscosity={user_viscosity} Pa·s")
+        if user_visc_ratio is not None:
+            changes.append(f"user_visc_ratio={user_visc_ratio}")
+        logger.info(f"Set NN shear params ({', '.join(changes)}) in {unsteady_file.name}")
 
     @staticmethod
     @log_call
