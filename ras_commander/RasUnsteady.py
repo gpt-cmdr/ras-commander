@@ -78,6 +78,10 @@ Uniform Lateral Inflow Hydrograph Functions:
 - get_uniform_lateral_inflow_hydrograph() - Read uniform lateral inflow data (reach-based BC)
 - set_uniform_lateral_inflow_hydrograph() - Write uniform lateral inflow data (reach-based BC)
 
+Initial Conditions Method Selection:
+- get_initial_flow_method() - Determine which IC method is active (restart file vs initial flow distribution)
+- set_initial_flow_method() - Set the IC method selection (restart_file, initial_flow_distribution, or none)
+
 """
 import os
 import numbers
@@ -480,6 +484,190 @@ class RasUnsteady:
                 "Write IC File keys in HEC-RAS 5.x through 7.0."
             ),
         }
+
+    @staticmethod
+    @log_call
+    def get_initial_flow_method(
+        unsteady_file: Union[str, Path],
+        ras_object: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        """
+        Determine which Initial Conditions method is active in an unsteady flow file.
+
+        HEC-RAS uses implicit state to select the IC method:
+        - ``Use Restart= -1`` or ``1`` → Restart File mode
+        - ``Use Restart= 0`` with ``Initial Flow Loc=`` lines → Enter Initial Flow Distribution
+        - ``Use Restart= 0`` without IC lines → no IC configured (HEC-RAS uses zero flow)
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to unsteady flow file or unsteady number.
+        ras_object : optional
+            RAS project object. If None, uses the global ``ras`` object.
+
+        Returns
+        -------
+        dict
+            Keys:
+            - ``method`` (str): ``'restart_file'``, ``'initial_flow_distribution'``, or ``'none'``
+            - ``use_restart`` (bool): Parsed ``Use Restart`` flag
+            - ``restart_filename`` (str or None): Restart filename when method is restart_file
+            - ``ic_count`` (int): Number of ``Initial Flow Loc`` / ``Initial Storage Elev`` /
+              ``Initial RRR Elev`` lines present
+            - ``raw_use_restart`` (str or None): Raw value from file
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        unsteady_path = Path(unsteady_file)
+        if not unsteady_path.is_file():
+            from .RasPlan import RasPlan
+            resolved_path = RasPlan.get_unsteady_path(unsteady_file, ras_obj)
+            if resolved_path:
+                unsteady_path = Path(resolved_path)
+
+        raw_use_restart = None
+        restart_filename = None
+        ic_count = 0
+
+        try:
+            with open(unsteady_path, 'r') as f:
+                for line in f:
+                    if line.startswith("Use Restart="):
+                        raw_use_restart = line.split("=", 1)[1].strip()
+                    elif line.startswith("Restart Filename=") and restart_filename is None:
+                        restart_filename = line.split("=", 1)[1].strip()
+                    elif line.startswith("Initial Flow Loc="):
+                        ic_count += 1
+                    elif line.startswith("Initial Storage Elev="):
+                        ic_count += 1
+                    elif line.startswith("Initial RRR Elev="):
+                        ic_count += 1
+                    elif line.startswith("Boundary Location="):
+                        break
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        use_restart = False
+        if raw_use_restart is not None:
+            use_restart = raw_use_restart.lower() in {"-1", "1", "true"}
+
+        if use_restart:
+            method = "restart_file"
+        elif ic_count > 0:
+            method = "initial_flow_distribution"
+        else:
+            method = "none"
+
+        logger.info(
+            f"IC method for {unsteady_path.name}: {method} "
+            f"(Use Restart={raw_use_restart}, {ic_count} IC lines)"
+        )
+
+        return {
+            "method": method,
+            "use_restart": use_restart,
+            "restart_filename": restart_filename if use_restart else None,
+            "ic_count": ic_count,
+            "raw_use_restart": raw_use_restart,
+        }
+
+    @staticmethod
+    @log_call
+    def set_initial_flow_method(
+        unsteady_file: Union[str, Path],
+        method: str,
+        restart_filename: Optional[str] = None,
+        ras_object: Optional[Any] = None
+    ) -> None:
+        """
+        Set the Initial Conditions method selection in an unsteady flow file.
+
+        Configures which IC approach HEC-RAS will use by writing the appropriate
+        ``Use Restart`` value and optionally adding or removing the ``Restart Filename``
+        line.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to unsteady flow file or unsteady number.
+        method : str
+            One of:
+            - ``'restart_file'`` — enable restart mode (requires *restart_filename*)
+            - ``'initial_flow_distribution'`` — disable restart; existing IC lines are kept
+            - ``'none'`` — disable restart and remove all IC lines
+        restart_filename : str, optional
+            Required when *method* is ``'restart_file'``.
+        ras_object : optional
+            RAS project object. If None, uses the global ``ras`` object.
+
+        Raises
+        ------
+        ValueError
+            If *method* is unknown or *restart_filename* is missing for restart_file.
+        """
+        valid_methods = {"restart_file", "initial_flow_distribution", "none"}
+        if method not in valid_methods:
+            raise ValueError(f"method must be one of {valid_methods}, got '{method}'")
+
+        if method == "restart_file" and not restart_filename:
+            raise ValueError("restart_filename is required when method is 'restart_file'")
+
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+
+        unsteady_path = Path(unsteady_file)
+        if not unsteady_path.is_file():
+            from .RasPlan import RasPlan
+            resolved_path = RasPlan.get_unsteady_path(unsteady_file, ras_obj)
+            if resolved_path:
+                unsteady_path = Path(resolved_path)
+
+        try:
+            with open(unsteady_path, 'r') as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        new_value = "-1" if method == "restart_file" else "0"
+
+        retained = []
+        use_restart_idx = None
+        program_version_idx = None
+
+        for line in lines:
+            if line.startswith("Restart Filename="):
+                continue
+            if method == "none" and (
+                line.startswith("Initial Flow Loc=")
+                or line.startswith("Initial Storage Elev=")
+                or line.startswith("Initial RRR Elev=")
+            ):
+                continue
+            if line.startswith("Program Version="):
+                program_version_idx = len(retained)
+            if line.startswith("Use Restart="):
+                use_restart_idx = len(retained)
+                retained.append(f"Use Restart={new_value}\n")
+            else:
+                retained.append(line)
+
+        if use_restart_idx is None:
+            insert_idx = (program_version_idx + 1) if program_version_idx is not None else 0
+            retained.insert(insert_idx, f"Use Restart={new_value}\n")
+            use_restart_idx = insert_idx
+
+        if method == "restart_file":
+            retained.insert(use_restart_idx + 1, f"Restart Filename={restart_filename}\n")
+
+        with open(unsteady_path, 'w') as f:
+            f.writelines(retained)
+
+        logger.info(f"Set IC method to '{method}' in {unsteady_path.name}")
+
+        if hasattr(ras_obj, "get_unsteady_entries"):
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
 
     @staticmethod
     def _empty_to_none(value: Optional[str]) -> Optional[str]:
