@@ -1737,6 +1737,239 @@ class RasUnsteady:
 
     @staticmethod
     @log_call
+    def get_groundwater_interflow(
+        unsteady_number_or_path,
+        boundary_index: int = 0,
+        ras_object=None,
+    ) -> dict:
+        """Read groundwater interflow data from a boundary location block.
+
+        Scans the unsteady flow file for ``Boundary Location=`` blocks that
+        contain a ``Ground Water Interflow=`` key, and returns the interflow
+        metadata plus time-series elevation values and Darcy parameters for
+        the boundary at *boundary_index*.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"01"``) or direct file path.
+        boundary_index : int, optional
+            0-based index of the GW interflow boundary to read (default ``0``).
+        ras_object : optional
+            ``RasPrj`` instance for path resolution.
+
+        Returns
+        -------
+        dict
+            Keys:
+
+            - ``interval`` (str): time interval, e.g. ``"1HOUR"``
+            - ``count`` (int): number of elevation values
+            - ``values`` (list[float]): groundwater elevation time series
+            - ``darcy_k`` (float or None): hydraulic conductivity
+            - ``darcy_k_per_day`` (float or None): conductivity per day
+            - ``darcy_distance`` (float or None): Darcy flow distance
+            - ``dss_path`` (str): DSS pathname (empty string if inline)
+            - ``use_dss`` (bool): whether DSS link is active
+        """
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        with open(unsteady_file, 'r') as f:
+            lines = f.readlines()
+
+        gw_blocks: list[dict] = []
+        i = 0
+        while i < len(lines):
+            if lines[i].startswith('Boundary Location='):
+                i += 1
+                interval = '1HOUR'
+                while i < len(lines) and not lines[i].startswith('Boundary Location='):
+                    if lines[i].startswith('Interval='):
+                        interval = lines[i].split('=', 1)[1].strip()
+                    if lines[i].startswith('Ground Water Interflow='):
+                        count = int(lines[i].split('=', 1)[1].strip())
+                        gw = {
+                            'interval': interval,
+                            'count': count,
+                            'values': [],
+                            'darcy_k': None,
+                            'darcy_k_per_day': None,
+                            'darcy_distance': None,
+                            'dss_path': '',
+                            'use_dss': False,
+                        }
+                        vals: list[float] = []
+                        i += 1
+                        while i < len(lines) and len(vals) < count:
+                            if lines[i].startswith('Boundary Location=') or lines[i].startswith('Ground Water Darcy'):
+                                break
+                            parts = lines[i].split()
+                            if parts:
+                                vals.extend(float(v) for v in parts)
+                            i += 1
+                        gw['values'] = vals[:count]
+                        while i < len(lines) and not lines[i].startswith('Boundary Location='):
+                            line = lines[i]
+                            if line.startswith('Ground Water Darcy K='):
+                                gw['darcy_k'] = float(line.split('=', 1)[1].strip())
+                            elif line.startswith('Ground Water Darcy K/day='):
+                                gw['darcy_k_per_day'] = float(line.split('=', 1)[1].strip())
+                            elif line.startswith('Ground Water Darcy Distance='):
+                                gw['darcy_distance'] = float(line.split('=', 1)[1].strip())
+                            elif line.startswith('DSS Path='):
+                                gw['dss_path'] = line.split('=', 1)[1].strip()
+                            elif line.startswith('Use DSS='):
+                                gw['use_dss'] = line.split('=', 1)[1].strip().lower() == 'true'
+                            i += 1
+                        gw_blocks.append(gw)
+                        continue
+                    i += 1
+            else:
+                i += 1
+
+        if boundary_index >= len(gw_blocks):
+            raise IndexError(
+                f"boundary_index={boundary_index} but only "
+                f"{len(gw_blocks)} GW interflow boundaries found in {unsteady_file.name}"
+            )
+        return gw_blocks[boundary_index]
+
+    @staticmethod
+    @log_call
+    def set_groundwater_interflow(
+        unsteady_number_or_path,
+        values: list,
+        boundary_index: int = 0,
+        darcy_k: Optional[float] = None,
+        darcy_k_per_day: Optional[float] = None,
+        darcy_distance: Optional[float] = None,
+        interval: Optional[str] = None,
+        ras_object=None,
+    ) -> None:
+        """Write groundwater interflow elevation data to a boundary block.
+
+        Replaces the inline elevation time series and optionally updates the
+        three Darcy parameters for the GW interflow boundary at
+        *boundary_index*.
+
+        Parameters
+        ----------
+        unsteady_number_or_path : str or Path
+            Unsteady flow number (e.g. ``"01"``) or direct file path.
+        values : list[float]
+            Groundwater elevation time series values.
+        boundary_index : int, optional
+            0-based index of the GW interflow boundary to write (default ``0``).
+        darcy_k : float, optional
+            Hydraulic conductivity. If ``None``, existing value is preserved.
+        darcy_k_per_day : float, optional
+            Conductivity per day. If ``None``, existing value is preserved.
+        darcy_distance : float, optional
+            Darcy flow distance. If ``None``, existing value is preserved.
+        interval : str, optional
+            Time interval (e.g. ``"1HOUR"``). If ``None``, preserved.
+        ras_object : optional
+            ``RasPrj`` instance for path resolution.
+        """
+        unsteady_file = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_number_or_path, ras_object=ras_object,
+        )
+        with open(unsteady_file, 'r') as f:
+            lines = f.readlines()
+
+        gw_hit = 0
+        target_header_idx = None
+        target_data_start = None
+        target_data_end = None
+        target_darcy_lines: dict[str, int] = {}
+        target_interval_idx = None
+
+        i = 0
+        while i < len(lines):
+            if lines[i].startswith('Boundary Location='):
+                i += 1
+                while i < len(lines) and not lines[i].startswith('Boundary Location='):
+                    if lines[i].startswith('Interval='):
+                        candidate_interval_idx = i
+                    if lines[i].startswith('Ground Water Interflow='):
+                        if gw_hit == boundary_index:
+                            target_header_idx = i
+                            target_interval_idx = candidate_interval_idx
+                            count = int(lines[i].split('=', 1)[1].strip())
+                            target_data_start = i + 1
+                            j = target_data_start
+                            parsed = 0
+                            while j < len(lines) and parsed < count:
+                                if lines[j].startswith('Boundary Location=') or lines[j].startswith('Ground Water Darcy'):
+                                    break
+                                parts = lines[j].split()
+                                if parts:
+                                    parsed += len(parts)
+                                j += 1
+                            target_data_end = j
+                            while j < len(lines) and not lines[j].startswith('Boundary Location='):
+                                line = lines[j]
+                                if line.startswith('Ground Water Darcy K='):
+                                    target_darcy_lines['k'] = j
+                                elif line.startswith('Ground Water Darcy K/day='):
+                                    target_darcy_lines['k_day'] = j
+                                elif line.startswith('Ground Water Darcy Distance='):
+                                    target_darcy_lines['dist'] = j
+                                j += 1
+                            break
+                        gw_hit += 1
+                        i += 1
+                        continue
+                    i += 1
+                if target_header_idx is not None:
+                    break
+            else:
+                i += 1
+
+        if target_header_idx is None:
+            raise IndexError(
+                f"boundary_index={boundary_index} but only "
+                f"{gw_hit} GW interflow boundaries found in {unsteady_file.name}"
+            )
+
+        lines[target_header_idx] = f'Ground Water Interflow= {len(values)} \n'
+
+        new_data_lines: list[str] = []
+        for row_start in range(0, len(values), 10):
+            row_vals = values[row_start:row_start + 10]
+            row_str = ''.join(
+                f'{v:8.2f}' if v != int(v) or abs(v) > 99999 else f'{int(v):>8}'
+                for v in row_vals
+            )
+            new_data_lines.append(row_str + '\n')
+
+        lines[target_data_start:target_data_end] = new_data_lines
+
+        offset = len(new_data_lines) - (target_data_end - target_data_start)
+        adjusted = {k: v + offset for k, v in target_darcy_lines.items()}
+        if target_interval_idx is not None:
+            target_interval_idx_adj = target_interval_idx  # before data, no offset
+
+        if darcy_k is not None and 'k' in adjusted:
+            lines[adjusted['k']] = f'Ground Water Darcy K={darcy_k}\n'
+        if darcy_k_per_day is not None and 'k_day' in adjusted:
+            lines[adjusted['k_day']] = f'Ground Water Darcy K/day={darcy_k_per_day}\n'
+        if darcy_distance is not None and 'dist' in adjusted:
+            lines[adjusted['dist']] = f'Ground Water Darcy Distance={darcy_distance}\n'
+        if interval is not None and target_interval_idx is not None:
+            lines[target_interval_idx_adj] = f'Interval={interval}\n'
+
+        with open(unsteady_file, 'w') as f:
+            f.writelines(lines)
+
+        logger.info(
+            f"Set {len(values)} GW interflow values (boundary_index={boundary_index}) "
+            f"in {unsteady_file.name}"
+        )
+
+    @staticmethod
+    @log_call
     def update_restart_settings(unsteady_file: str, use_restart: bool, restart_filename: Optional[str] = None, ras_object: Optional[Any] = None) -> None:
         """
         Update the restart file settings in an unsteady flow file.
