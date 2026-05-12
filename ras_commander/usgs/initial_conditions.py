@@ -492,3 +492,249 @@ class InitialConditions:
         except Exception as e:
             logger.error(f"Error querying USGS site {site_id_clean}: {str(e)}")
             raise
+
+    @staticmethod
+    @log_call
+    def generate_ic_from_usgs(
+        geom_hdf_path: Union[str, Path],
+        target_datetime: Union[str, datetime],
+        unsteady_number_or_path: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+        parameter: str = 'flow',
+        max_distance_m: float = 1000.0,
+        tolerance_hours: int = 1,
+        buffer_percent: float = 50.0,
+        min_match_quality: str = 'fair',
+        write_to_file: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Generate initial conditions from USGS gauge data at a target datetime.
+
+        Discovers USGS gauges near the model, matches them to 1D cross sections,
+        retrieves flow values at the target datetime, and assembles an IC table.
+
+        Parameters
+        ----------
+        geom_hdf_path : str or Path
+            Path to HEC-RAS geometry HDF file (.g##.hdf).
+        target_datetime : str or datetime
+            Target datetime for IC snapshot (ISO format or datetime object).
+        unsteady_number_or_path : str or Path, optional
+            Unsteady flow number (e.g., '01') or path to .u## file.
+            Required if write_to_file is True.
+        ras_object : optional
+            RAS project object. If None, uses global ras.
+        parameter : str, default 'flow'
+            Parameter to retrieve: 'flow' (00060) or 'stage' (00065).
+        max_distance_m : float, default 1000.0
+            Maximum distance (meters) for gauge-to-XS matching.
+        tolerance_hours : int, default 1
+            Maximum time offset (hours) for nearest USGS value.
+        buffer_percent : float, default 50.0
+            Buffer percentage to expand project bounds for gauge discovery.
+        min_match_quality : str, default 'fair'
+            Minimum match quality to include: 'excellent', 'good', 'fair', 'poor'.
+        write_to_file : bool, default False
+            If True, write IC entries to the unsteady file via
+            RasUnsteady.set_initial_conditions().
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with columns:
+            - type: 'flow' for all entries
+            - river: River name from matched cross section
+            - reach: Reach name from matched cross section
+            - station: River station (float)
+            - value: Flow value (cfs) from USGS gauge
+            - area_name: None (not applicable for flow ICs)
+            - site_no: USGS site number
+            - station_nm: USGS station name
+            - match_quality: Match quality ('excellent', 'good', 'fair', 'poor')
+            - match_distance_m: Distance from gauge to XS (meters)
+            - time_offset_minutes: Time offset from target datetime
+            - actual_time: Actual datetime of the retrieved value
+
+            Returns empty DataFrame if no gauges found or matched.
+
+        Raises
+        ------
+        ImportError
+            If dataretrieval or geopandas packages are not installed.
+        ValueError
+            If write_to_file is True but unsteady_number_or_path is None.
+
+        Examples
+        --------
+        >>> from ras_commander.usgs import InitialConditions
+        >>> ic_df = InitialConditions.generate_ic_from_usgs(
+        ...     geom_hdf_path='project.g01.hdf',
+        ...     target_datetime='2024-06-15T00:00:00',
+        ...     max_distance_m=2000.0,
+        ... )
+        >>> print(ic_df[['river', 'reach', 'station', 'value', 'site_no']])
+
+        Notes
+        -----
+        Requires internet access to query USGS NWIS.
+        Requires the 'dataretrieval' and 'geopandas' packages.
+        """
+        from .spatial import UsgsGaugeSpatial
+        from .gauge_matching import GaugeMatcher
+
+        geom_hdf_path = Path(geom_hdf_path)
+
+        if write_to_file and unsteady_number_or_path is None:
+            raise ValueError(
+                "unsteady_number_or_path is required when write_to_file=True"
+            )
+
+        if isinstance(target_datetime, str):
+            target_dt = pd.to_datetime(target_datetime)
+        else:
+            target_dt = target_datetime
+
+        quality_order = ['excellent', 'good', 'fair', 'poor']
+        if min_match_quality not in quality_order:
+            raise ValueError(
+                f"min_match_quality must be one of {quality_order}, "
+                f"got '{min_match_quality}'"
+            )
+        allowed_qualities = set(
+            quality_order[:quality_order.index(min_match_quality) + 1]
+        )
+
+        # Step 1: Discover USGS gauges near the model
+        param_code = 'flow' if parameter.lower() == 'flow' else 'stage'
+        logger.info(
+            f"Discovering USGS gauges near model with "
+            f"buffer={buffer_percent}%, parameter={param_code}"
+        )
+
+        try:
+            gauges_gdf = UsgsGaugeSpatial.find_gauges_in_project(
+                hdf_path=geom_hdf_path,
+                buffer_percent=buffer_percent,
+                parameter_codes=[param_code],
+            )
+        except Exception as e:
+            logger.warning(f"Gauge discovery failed: {e}")
+            return pd.DataFrame(columns=[
+                'type', 'river', 'reach', 'station', 'value',
+                'area_name', 'site_no', 'station_nm',
+                'match_quality', 'match_distance_m',
+                'time_offset_minutes', 'actual_time',
+            ])
+
+        if gauges_gdf is None or len(gauges_gdf) == 0:
+            logger.info("No USGS gauges found near the model")
+            return pd.DataFrame(columns=[
+                'type', 'river', 'reach', 'station', 'value',
+                'area_name', 'site_no', 'station_nm',
+                'match_quality', 'match_distance_m',
+                'time_offset_minutes', 'actual_time',
+            ])
+
+        logger.info(f"Found {len(gauges_gdf)} USGS gauges near the model")
+
+        # Step 2: Match gauges to model cross sections
+        matched_df = GaugeMatcher.auto_match_gauges(
+            gauges_gdf=gauges_gdf,
+            hdf_path=geom_hdf_path,
+            max_distance_m=max_distance_m,
+        )
+
+        # Filter to gauges that matched a 1D cross section with sufficient quality
+        xs_matched = matched_df[
+            matched_df['matched_river'].notna()
+            & matched_df['match_quality'].isin(allowed_qualities)
+        ].copy()
+
+        if len(xs_matched) == 0:
+            logger.info(
+                f"No gauges matched to cross sections within "
+                f"{max_distance_m}m at quality >= {min_match_quality}"
+            )
+            return pd.DataFrame(columns=[
+                'type', 'river', 'reach', 'station', 'value',
+                'area_name', 'site_no', 'station_nm',
+                'match_quality', 'match_distance_m',
+                'time_offset_minutes', 'actual_time',
+            ])
+
+        logger.info(
+            f"Matched {len(xs_matched)} gauges to cross sections "
+            f"(quality >= {min_match_quality})"
+        )
+
+        # Step 3: Retrieve flow values from USGS for each matched gauge
+        ic_rows = []
+        for _, row in xs_matched.iterrows():
+            site_no = str(row.get('site_no', '')).strip()
+            if not site_no:
+                continue
+
+            try:
+                value, metadata = InitialConditions.get_ic_value_from_usgs(
+                    site_id=site_no,
+                    target_datetime=target_dt,
+                    parameter=parameter,
+                    tolerance_hours=tolerance_hours,
+                )
+                ic_rows.append({
+                    'type': 'flow' if parameter.lower() == 'flow' else 'rrr',
+                    'river': row['matched_river'],
+                    'reach': row['matched_reach'],
+                    'station': float(row['matched_station']),
+                    'value': value,
+                    'area_name': None,
+                    'site_no': site_no,
+                    'station_nm': row.get('station_nm', ''),
+                    'match_quality': row['match_quality'],
+                    'match_distance_m': row.get('match_distance_m', None),
+                    'time_offset_minutes': metadata['time_offset_minutes'],
+                    'actual_time': metadata['actual_time'],
+                })
+                logger.info(
+                    f"  Site {site_no}: {value:.1f} "
+                    f"{metadata['unit_of_measure']} → "
+                    f"{row['matched_river']}/{row['matched_reach']}/"
+                    f"{row['matched_station']}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"  Site {site_no}: Failed to retrieve data — {e}"
+                )
+                continue
+
+        if len(ic_rows) == 0:
+            logger.warning("No USGS data retrieved for any matched gauge")
+            return pd.DataFrame(columns=[
+                'type', 'river', 'reach', 'station', 'value',
+                'area_name', 'site_no', 'station_nm',
+                'match_quality', 'match_distance_m',
+                'time_offset_minutes', 'actual_time',
+            ])
+
+        ic_df = pd.DataFrame(ic_rows)
+        logger.info(
+            f"Generated {len(ic_df)} IC entries from USGS gauges at {target_dt}"
+        )
+
+        # Step 4: Optionally write to unsteady file
+        if write_to_file:
+            from ..RasUnsteady import RasUnsteady
+
+            write_entries = ic_df[
+                ['type', 'river', 'reach', 'station', 'value', 'area_name']
+            ].to_dict('records')
+            RasUnsteady.set_initial_conditions(
+                unsteady_number_or_path=unsteady_number_or_path,
+                ic_entries=write_entries,
+                ras_object=ras_object,
+            )
+            logger.info(
+                f"Wrote {len(write_entries)} IC entries to unsteady file"
+            )
+
+        return ic_df

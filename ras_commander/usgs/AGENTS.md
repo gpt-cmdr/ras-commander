@@ -23,7 +23,7 @@ This file is the canonical local instruction file for `ras_commander/usgs/`.
 - Matching: `gauge_matching.py`
 - Time series handling: `time_series.py`
 - Boundary generation: `boundary_generation.py`
-- Initial conditions: `initial_conditions.py`
+- Initial conditions: `initial_conditions.py` (`generate_ic_from_usgs()`: auto-discover gauges, match to XS, retrieve USGS values, assemble IC table)
 - Real-time workflows: `real_time.py`
 - Catalogs and persistence: `catalog.py`, `file_io.py`
 - Validation and plotting: `metrics.py`, `visualization.py`

@@ -106,6 +106,14 @@ Public API:
         in example notebooks rather than the main public package surface so the
         library stays focused on composable primitives.
 
+    From initial_conditions:
+        - InitialConditions: Static class for IC management
+            - parse_initial_conditions: Read IC entries from unsteady file
+            - create_ic_line: Format IC line for file writing
+            - write_initial_conditions: Write IC entries to unsteady file
+            - get_ic_value_from_usgs: Retrieve IC value from single USGS gauge
+            - generate_ic_from_usgs: Auto-discover gauges, match to XS, generate IC table
+
     From rate_limiter:
         - test_api_key: Validate USGS API key functionality
         - UsgsRateLimiter: Token bucket rate limiter for API requests
@@ -276,6 +284,9 @@ align_timeseries = TimeSeriesProcessor.align_timeseries
 resample_to_hecras_interval = TimeSeriesProcessor.resample_to_hecras_interval
 check_data_gaps = TimeSeriesProcessor.check_data_gaps
 
+# From initial_conditions module
+generate_ic_from_usgs = InitialConditions.generate_ic_from_usgs
+
 # From catalog module
 generate_gauge_catalog = UsgsGaugeCatalog.generate_gauge_catalog
 load_gauge_catalog = UsgsGaugeCatalog.load_gauge_catalog
@@ -367,6 +378,8 @@ __all__ = [
     'match_gauge_to_cross_section',
     'match_gauge_to_2d_area',
     'auto_match_gauges',
+    # IC generation functions
+    'generate_ic_from_usgs',
     # Visualization class and functions
     'RasUsgsVisualization',
     'plot_timeseries_comparison',
