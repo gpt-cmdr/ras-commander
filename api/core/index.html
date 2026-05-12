@@ -11246,6 +11246,10 @@ def my_function():
 - set_initial_flow_method() - Set the IC method selection (restart_file, prior_ws, initial_flow_distribution, none)
 - get_prior_ws_filename() - Read Prior WS Filename and Profile from unsteady file
 - set_prior_ws_filename() - Write Prior WS Filename and Profile to unsteady file</p>
+<p>Initial Flow Distribution Table:
+- get_initial_conditions() - Read all IC entries (flow, storage, rrr) as DataFrame
+- set_initial_conditions() - Write IC entries from list of dicts or DataFrame (auto-sets IC method)
+- validate_initial_flow_stations() - Check IC flow stations match geometry cross sections</p>
 
 
 
