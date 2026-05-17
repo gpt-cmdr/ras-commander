@@ -318,7 +318,7 @@ class HdfStorageArea:
                     {"elevation": values[:, 1].astype("float64"),
                      "volume": values[:, 0].astype("float64")},
                 )
-                logger.info(
+                logger.debug(
                     "Read %d elevation-volume points for SA '%s' from %s",
                     len(df), sa_name, hdf_path,
                 )

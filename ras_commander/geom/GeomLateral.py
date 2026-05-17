@@ -86,6 +86,33 @@ class GeomLateral:
     )
 
     @staticmethod
+    def _format_profile_values(
+        values: List[float],
+        column_width: int = 8,
+        values_per_line: int = 10,
+    ) -> List[str]:
+        """Format profile values with adaptive precision to fit column width.
+
+        Uses maximum decimal precision (up to 3) that fits each value within
+        the column width while guaranteeing at least one leading space for
+        whitespace-delimited parsing by HEC-RAS.
+        """
+        lines = []
+        for i in range(0, len(values), values_per_line):
+            row_values = values[i:i + values_per_line]
+            parts = []
+            for v in row_values:
+                for prec in range(3, -1, -1):
+                    formatted = f'{v:{column_width}.{prec}f}'
+                    if len(formatted) <= column_width and formatted[0] == ' ':
+                        parts.append(formatted)
+                        break
+                else:
+                    parts.append(f'{int(round(v)):>{column_width}d}')
+            lines.append(''.join(parts) + '\n')
+        return lines
+
+    @staticmethod
     def _is_connection_header(line: str) -> bool:
         """Return True when *line* starts a SA/2D connection block."""
         return line.startswith(GeomLateral.CONNECTION_HEADER_PREFIXES)
@@ -382,17 +409,22 @@ class GeomLateral:
             num_openings = int(g.get('NumOpenings', 1))
             stations = g.get('OpeningStations', [])
 
+            def _fmt_num(v):
+                """Format number: integer if whole, else float."""
+                return str(int(v)) if float(v) == int(float(v)) else str(v)
+
             lines.append(
                 "Conn Gate Name Wd,H,Inv,GCoef,Exp_T,Exp_O,Exp_H,Type,WCoef,Is_Ogee,SpillHt,DesHd,#Openings\n"
             )
             lines.append(
-                f"{name},{width},{height},{invert},{coef},0,1,0.5, 0 ,3, 0 ,,, {num_openings} ,0,0.8, 0 ,{coef},,0,0,0, 0 \n"
+                f"{name},{_fmt_num(width)},{_fmt_num(height)},{_fmt_num(invert)},{coef},0,1,0.5, 0 ,3, 0 ,,, {num_openings} ,0,0.8, 0 ,{coef},,0,0,0, 0 \n"
             )
             if stations:
                 station_lines = GeomParser.format_fixed_width(
                     [float(s) for s in stations],
                     column_width=GeomLateral.FIXED_WIDTH_COLUMN,
                     values_per_line=GeomLateral.VALUES_PER_LINE,
+                    precision=0,
                 )
                 lines.extend(station_lines)
             for idx in range(num_openings):
@@ -579,7 +611,7 @@ class GeomLateral:
                         'Elevation': elevations[:count]
                     })
 
-                    logger.info(f"Extracted {len(df)} profile points for lateral {lateral_name}")
+                    logger.debug(f"Extracted {len(df)} profile points for lateral {lateral_name}")
                     return df
 
                 # Stop at next structure
@@ -856,7 +888,7 @@ class GeomLateral:
             marker_idx, _, count = marker
             df = GeomLateral._parse_paired_data(block_lines, marker_idx + 1, count)
 
-            logger.info(f"Extracted {len(df)} weir profile points for connection {connection_name}")
+            logger.debug(f"Extracted {len(df)} weir profile points for connection {connection_name}")
             return df
 
         except FileNotFoundError:
@@ -922,18 +954,18 @@ class GeomLateral:
             profile_idx = start_idx + marker_idx
             data_start = profile_idx + 1
             data_end = data_start
-            while data_end < end_idx and '=' not in lines[data_end]:
+            while data_end < end_idx and '=' not in lines[data_end] \
+                    and not lines[data_end].startswith("Conn Gate Name"):
                 data_end += 1
 
             values = []
             for _, row in sta_elev_df.iterrows():
                 values.extend([float(row['Station']), float(row['Elevation'])])
 
-            new_data_lines = GeomParser.format_fixed_width(
+            new_data_lines = GeomLateral._format_profile_values(
                 values,
                 column_width=GeomLateral.FIXED_WIDTH_COLUMN,
                 values_per_line=GeomLateral.VALUES_PER_LINE,
-                precision=3,
             )
 
             line_ending = '\n' if lines[profile_idx].endswith('\n') else ''
@@ -1123,7 +1155,7 @@ class GeomLateral:
                 raise ValueError(f"No gates found for connection {connection_name}")
 
             df = pd.DataFrame(gates)
-            logger.info(f"Extracted {len(df)} gates for connection {connection_name}")
+            logger.debug(f"Extracted {len(df)} gates for connection {connection_name}")
             return df
 
         except FileNotFoundError:

@@ -384,7 +384,7 @@ class HdfMesh:
                             logger.warning(f"Error converting attribute '{name}': {str(e)}")
                     return pd.DataFrame.from_dict(result, orient='index', columns=['Value'])
                 else:
-                    logger.info("No 2D Flow Area attributes found or invalid dataset.")
+                    logger.debug("No 2D Flow Area attributes found or invalid dataset.")
                     return pd.DataFrame()  # Return an empty DataFrame
         except Exception as e:
             logger.error(f"Error reading 2D flow area attributes from {hdf_path}: {str(e)}")
@@ -1364,7 +1364,7 @@ class HdfMesh:
 
         # Create result GeoDataFrame
         if not selected_indices:
-            logger.info("No faces found along profile line with given thresholds")
+            logger.debug("No faces found along profile line with given thresholds")
             result = faces.iloc[0:0].copy()  # Empty GeoDataFrame with same structure
             result['distance_along_profile'] = []
             result['angle_to_profile'] = []

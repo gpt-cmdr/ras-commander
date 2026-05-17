@@ -127,7 +127,7 @@ class HdfProject:
                     geometries.extend(mesh_areas.geometry.tolist())
                     if crs is None:
                         crs = mesh_areas.crs
-                    logger.info(f"Found {len(mesh_areas)} 2D flow areas")
+                    logger.debug(f"Found {len(mesh_areas)} 2D flow areas")
             except Exception as e:
                 logger.debug(f"No 2D areas found or error: {e}")
 
@@ -139,7 +139,7 @@ class HdfProject:
                     geometries.extend(cross_sections.geometry.tolist())
                     if crs is None:
                         crs = cross_sections.crs
-                    logger.info(f"Found {len(cross_sections)} cross sections")
+                    logger.debug(f"Found {len(cross_sections)} cross sections")
             except Exception as e:
                 logger.debug(f"No cross sections found or error: {e}")
 
@@ -149,7 +149,7 @@ class HdfProject:
                     geometries.extend(centerlines.geometry.tolist())
                     if crs is None:
                         crs = centerlines.crs
-                    logger.info(f"Found {len(centerlines)} river centerlines")
+                    logger.debug(f"Found {len(centerlines)} river centerlines")
             except Exception as e:
                 logger.debug(f"No river centerlines found or error: {e}")
 
@@ -189,10 +189,10 @@ class HdfProject:
         buffered_maxx = maxx + x_expansion
         buffered_maxy = maxy + y_expansion
 
-        logger.info(f"Original extent: ({minx:.2f}, {miny:.2f}, {maxx:.2f}, {maxy:.2f})")
-        logger.info(f"Buffered extent ({x_buffer}% x, {y_buffer}% y): "
-                   f"({buffered_minx:.2f}, {buffered_miny:.2f}, "
-                   f"{buffered_maxx:.2f}, {buffered_maxy:.2f})")
+        logger.debug(f"Original extent: ({minx:.2f}, {miny:.2f}, {maxx:.2f}, {maxy:.2f})")
+        logger.debug(f"Buffered extent ({x_buffer}% x, {y_buffer}% y): "
+                    f"({buffered_minx:.2f}, {buffered_miny:.2f}, "
+                    f"{buffered_maxx:.2f}, {buffered_maxy:.2f})")
 
         # Create buffered polygon
         buffered_polygon = box(buffered_minx, buffered_miny,
@@ -276,7 +276,7 @@ class HdfProject:
         # Use provided project_crs if extent has no CRS defined
         if extent_gdf.crs is None:
             if project_crs is not None:
-                logger.info(f"No CRS in HDF file, using provided project_crs: {project_crs}")
+                logger.debug(f"No CRS in HDF file, using provided project_crs: {project_crs}")
                 extent_gdf = extent_gdf.set_crs(project_crs)
             else:
                 logger.warning("No CRS defined and no project_crs provided. Cannot transform to WGS84.")
@@ -306,7 +306,7 @@ class HdfProject:
                 logger.warning(f"Returning original projected coordinates: {original_bounds}")
                 return tuple(original_bounds)
             
-            logger.info(f"WGS84 bounds: W={west:.6f}, S={south:.6f}, E={east:.6f}, N={north:.6f}")
+            logger.debug(f"WGS84 bounds: W={west:.6f}, S={south:.6f}, E={east:.6f}, N={north:.6f}")
             return (west, south, east, north)
             
         except Exception as e:

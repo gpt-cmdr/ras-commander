@@ -175,7 +175,7 @@ class HdfResultsBreach:
                 # Combine all structures
                 if data_list:
                     result_df = pd.concat(data_list, ignore_index=True)
-                    logger.info(f"Extracted {len(time_stamps)} timesteps for {len(structures)} structure(s)")
+                    logger.debug(f"Extracted {len(time_stamps)} timesteps for {len(structures)} structure(s)")
                     return result_df
                 else:
                     return pd.DataFrame()
@@ -309,7 +309,7 @@ class HdfResultsBreach:
                 # Combine all structures
                 if data_list:
                     result_df = pd.concat(data_list, ignore_index=True)
-                    logger.info(f"Extracted breach variables for {len(structures)} structure(s), "
+                    logger.debug(f"Extracted breach variables for {len(structures)} structure(s), "
                               f"{len(time_stamps)} timesteps")
                     return result_df
                 else:

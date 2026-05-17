@@ -1023,7 +1023,7 @@ class RasTerrain:
 
         # Generate PRJ if requested and not already present
         if generate_prj and not projection_prj.exists():
-            logger.info(f"Generating projection file from: {input_rasters[0]}")
+            logger.debug(f"Generating projection file from: {input_rasters[0]}")
             RasTerrain._generate_prj_from_raster(
                 input_rasters[0],
                 projection_prj

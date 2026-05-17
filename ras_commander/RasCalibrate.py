@@ -419,7 +419,7 @@ def _remove_compiled_geometry_hdf(geom_path: Path) -> None:
     compiled_hdf = Path(f"{Path(geom_path)}.hdf")
     if compiled_hdf.exists():
         compiled_hdf.unlink()
-        logger.info("Removed stale compiled geometry HDF: %s", compiled_hdf)
+        logger.debug("Removed stale compiled geometry HDF: %s", compiled_hdf)
 
 
 def _resolve_profile_name_for_index(plan_hdf: Path, profile_index: int) -> str:

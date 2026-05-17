@@ -128,7 +128,7 @@ class HdfResultsAnalysis:
                     peaks[col] = float(ts_df[col].max())
 
                 plan_peaks[label] = peaks
-                logger.info(f"Plan {plan_num} ({label}): extracted peaks for {len(peaks)} locations")
+                logger.debug(f"Plan {plan_num} ({label}): extracted peaks for {len(peaks)} locations")
 
             except Exception as e:
                 logger.error(f"Error processing plan {plan_num}: {e}")

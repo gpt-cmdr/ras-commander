@@ -810,7 +810,7 @@ class RasModPuls:
                     attr_ds.attrs['Type'] = np.bytes_('Reference Line')
 
                     written += 1
-                    logger.info(f"Wrote reference line '{name}' with {len(coords)} points")
+                    logger.debug(f"Wrote reference line '{name}' with {len(coords)} points")
 
         except Exception as e:
             logger.error(f"Failed to write reference lines to HDF: {e}")

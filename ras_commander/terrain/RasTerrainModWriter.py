@@ -192,7 +192,7 @@ class RasTerrainModWriter:
             if modification_type == MODIFICATION_TAKE_HIGHER
             else "Fill Surface"
         )
-        logger.info(
+        logger.debug(
             "Adding %s terrain modification '%s' to %s",
             subtype_label.lower(),
             name,
@@ -224,7 +224,7 @@ class RasTerrainModWriter:
             group_name=group_name,
         )
 
-        logger.info("Terrain modification '%s' added successfully", name)
+        logger.debug("Terrain modification '%s' added successfully", name)
         return terrain_hdf_path
 
     @staticmethod
@@ -359,7 +359,7 @@ class RasTerrainModWriter:
             boundary_elevations=boundary_elevations,
         )
 
-        logger.info(
+        logger.debug(
             "Adding polygon multipoint terrain modification '%s' to %s",
             name,
             terrain_hdf_path.name,
@@ -388,7 +388,7 @@ class RasTerrainModWriter:
             group_name=group_name,
         )
 
-        logger.info("Polygon terrain modification '%s' added successfully", name)
+        logger.debug("Polygon terrain modification '%s' added successfully", name)
         return terrain_hdf_path
 
     @staticmethod
@@ -452,9 +452,9 @@ class RasTerrainModWriter:
         )
         RasTerrainModWriter._validate_positive("depth", depth)
 
-        logger.info(f"Adding channel modification '{name}' to {terrain_hdf_path.name}")
-        logger.info(f"  Alignment: {len(line_points)} points")
-        logger.info(f"  Channel: width={width}, depth={depth}, slopes={left_slope}/{right_slope}")
+        logger.debug(f"Adding channel modification '{name}' to {terrain_hdf_path.name}")
+        logger.debug(f"  Alignment: {len(line_points)} points")
+        logger.debug(f"  Channel: width={width}, depth={depth}, slopes={left_slope}/{right_slope}")
 
         stations = RasTerrainModWriter._station_values(line_points)
         profile_data = np.column_stack(
@@ -489,7 +489,7 @@ class RasTerrainModWriter:
             group_name=group_name,
         )
 
-        logger.info(f"Channel modification '{name}' added successfully")
+        logger.debug(f"Channel modification '{name}' added successfully")
         return terrain_hdf_path
 
     @staticmethod
@@ -523,7 +523,7 @@ class RasTerrainModWriter:
         with h5py.File(terrain_hdf_path, 'a') as f:
             if 'Modifications' not in f:
                 f.create_group('Modifications')
-                logger.info(f"Created /Modifications group in {terrain_hdf_path.name}")
+                logger.debug(f"Created /Modifications group in {terrain_hdf_path.name}")
 
         # Update .rasmap XML
         RasTerrainModWriter._ensure_modification_group_in_rasmap(
@@ -942,9 +942,9 @@ class RasTerrainModWriter:
             cp_grp = mod_grp.create_group('Control Points')
             cp_grp.attrs['Type'] = np.bytes_('ControlCrossSection')
 
-            logger.info(f"Wrote ground-line modification '{name}' to HDF: "
-                       f"{n_pts} pts, length={profile_data[-1, 0]:.1f}, "
-                       f"width={width}, mode={modification_type}")
+            logger.debug(f"Wrote ground-line modification '{name}' to HDF: "
+                        f"{n_pts} pts, length={profile_data[-1, 0]:.1f}, "
+                        f"width={width}, mode={modification_type}")
 
     @staticmethod
     def _write_polygon_to_hdf(
@@ -1124,7 +1124,7 @@ class RasTerrainModWriter:
                 cp_attrs[idx]["Elevation"] = np.float32(elevation)
             RasTerrainModWriter._create_hdf_dataset(cp_grp, "Attributes", cp_attrs)
 
-            logger.info(
+            logger.debug(
                 "Wrote polygon multipoint modification '%s' to HDF: "
                 "%d boundary pts, %d control pts, mode=%d",
                 name,
@@ -2163,7 +2163,7 @@ class RasTerrainModWriter:
             mod_group = ET.SubElement(terrain_layer, 'Layer')
             mod_group.set('Name', group_name)
             mod_group.set('Type', 'ElevationModificationGroup')
-            logger.info(f"Created modification group '{group_name}' in .rasmap")
+            logger.debug(f"Created modification group '{group_name}' in .rasmap")
         mod_group.set('Checked', 'True')
         mod_group.set('Expanded', 'True')
 
@@ -2227,7 +2227,7 @@ class RasTerrainModWriter:
         cp_layer.set('Checked', 'True')
 
         tree.write(rasmap_path, xml_declaration=False, encoding='unicode')
-        logger.info(f"Added modification layer '{name}' to .rasmap")
+        logger.debug(f"Added modification layer '{name}' to .rasmap")
 
 
 class RasTerrainModification(RasTerrainModWriter):

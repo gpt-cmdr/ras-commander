@@ -483,18 +483,18 @@ class HdfPlan:
         Raises:
             ValueError: If Geometry group is missing or there's an error reading attributes.
         """
-        logger.info(f"Getting geometry attributes from {hdf_path}")
+        logger.debug(f"Getting geometry attributes from {hdf_path}")
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 geom_attrs_path = "Geometry"
-                logger.info(f"Checking for Geometry group in {hdf_path}")
+                logger.debug(f"Checking for Geometry group in {hdf_path}")
                 if geom_attrs_path not in hdf_file:
                     logger.error(f"Geometry group not found in {hdf_path}")
                     raise ValueError(f"Geometry group not found in {hdf_path}")
 
                 attrs = {}
                 geom_group = hdf_file[geom_attrs_path]
-                logger.info("Getting root level geometry attributes")
+                logger.debug("Getting root level geometry attributes")
                 # Get root level geometry attributes only
                 for key, value in geom_group.attrs.items():
                     if isinstance(value, bytes):
@@ -506,7 +506,7 @@ class HdfPlan:
                     attrs[key] = value
                     logger.debug(f"Geometry attribute: {key} = {value}")
 
-                logger.info(f"Successfully extracted {len(attrs)} root level geometry attributes")
+                logger.debug(f"Successfully extracted {len(attrs)} root level geometry attributes")
                 return pd.DataFrame.from_dict(attrs, orient='index', columns=['Value'])
 
         except (OSError, RuntimeError) as e:
@@ -615,7 +615,7 @@ class HdfPlan:
                     result['method'] = 'Unknown'
                     result['note'] = 'Boundary condition method not found in HDF file'
 
-                logger.info(f"Successfully extracted starting WSE method: {result.get('method', 'Unknown')}")
+                logger.debug(f"Successfully extracted starting WSE method: {result.get('method', 'Unknown')}")
                 return result
 
         except Exception as e:

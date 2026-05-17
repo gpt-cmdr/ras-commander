@@ -350,7 +350,7 @@ class GeomInlineWeir:
                         lines, j + 1, count, 'Station', 'Elevation'
                     )
 
-                    logger.info(f"Extracted {len(df)} profile points for {river}/{reach}/RS {rs}")
+                    logger.debug(f"Extracted {len(df)} profile points for {river}/{reach}/RS {rs}")
                     return df
 
             raise ValueError(f"#Inline Weir SE= not found for {river}/{reach}/RS {rs}")
@@ -502,7 +502,7 @@ class GeomInlineWeir:
                 raise ValueError(f"No gates found for inline weir: {river}/{reach}/RS {rs}")
 
             df = pd.DataFrame(gates)
-            logger.info(f"Extracted {len(df)} gates for {river}/{reach}/RS {rs}")
+            logger.debug(f"Extracted {len(df)} gates for {river}/{reach}/RS {rs}")
             return df
 
         except FileNotFoundError:

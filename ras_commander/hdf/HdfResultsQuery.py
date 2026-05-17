@@ -419,7 +419,7 @@ def _get_steady_variable_values(
     variable_name: str,
 ) -> np.ndarray:
     """Read steady 2D mesh values, ignoring time_index as required."""
-    logger.info("Steady plan detected; time_index is ignored.")
+    logger.debug("Steady plan detected; time_index is ignored.")
 
     values: List[np.ndarray] = []
     cell_min_elev = None

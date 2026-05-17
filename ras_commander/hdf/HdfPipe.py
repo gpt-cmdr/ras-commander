@@ -211,7 +211,7 @@ class HdfPipe:
                 ('side', '/Geometry/Pipe Nodes/Side Inlets/Attributes'),
             ]:
                 if group_path not in f:
-                    logger.info(f"{group_path} not found in HDF file, skipping")
+                    logger.debug(f"{group_path} not found in HDF file, skipping")
                     continue
 
                 data = f[group_path][:]

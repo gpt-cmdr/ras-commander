@@ -306,10 +306,10 @@ class M3Model:
 
         if as_dataframe:
             df = pd.DataFrame(models_list)
-            logger.info(f"Listed {len(df)} M3 Models")
+            logger.debug(f"Listed {len(df)} M3 Models")
             return df
         else:
-            logger.info(f"Listed {len(models_list)} M3 Models")
+            logger.debug(f"Listed {len(models_list)} M3 Models")
             return models_list
 
     @classmethod
@@ -345,7 +345,7 @@ class M3Model:
         info['download_url'] = cls._get_download_url(model_id)
         info['filename'] = cls._get_filename(model_id)
 
-        logger.info(f"Retrieved info for model '{model_id}': {info['name']}")
+        logger.debug(f"Retrieved info for model '{model_id}': {info['name']}")
         return info
 
     @classmethod
@@ -412,20 +412,20 @@ class M3Model:
         model_name = model_info['name']
         model_folder = base_output_path / model_name
 
-        logger.info("----- M3Model Extracting Model -----")
-        logger.info(f"Extracting model '{model_id}' - {model_name}")
+        logger.debug("----- M3Model Extracting Model -----")
+        logger.debug(f"Extracting model '{model_id}' - {model_name}")
 
         # Check if model already exists
         if model_folder.exists():
             if not overwrite:
-                logger.info(f"Model '{model_name}' already exists at {model_folder}")
-                logger.info("Use overwrite=True to re-download")
+                logger.debug(f"Model '{model_name}' already exists at {model_folder}")
+                logger.debug("Use overwrite=True to re-download")
                 return model_folder
             else:
-                logger.info(f"Removing existing model '{model_name}'...")
+                logger.debug(f"Removing existing model '{model_name}'...")
                 try:
                     shutil.rmtree(model_folder)
-                    logger.info(f"Existing folder deleted")
+                    logger.debug(f"Existing folder deleted")
                 except Exception as e:
                     logger.error(f"Failed to delete existing folder: {e}")
                     raise
@@ -434,8 +434,8 @@ class M3Model:
         zip_path = base_output_path / cls._get_filename(model_id)
         url = cls._get_download_url(model_id)
 
-        logger.info(f"Downloading from: {url}")
-        logger.info(f"Size: {model_info['size_gb']} GB")
+        logger.debug(f"Downloading from: {url}")
+        logger.debug(f"Size: {model_info['size_gb']} GB")
 
         try:
             response = requests.get(url, stream=True, timeout=300)
@@ -461,7 +461,7 @@ class M3Model:
                     for chunk in response.iter_content(chunk_size=8192):
                         file.write(chunk)
 
-            logger.info(f"Downloaded to {zip_path}")
+            logger.debug(f"Downloaded to {zip_path}")
 
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to download model '{model_id}': {e}")
@@ -470,14 +470,14 @@ class M3Model:
             raise
 
         # Extract the zip file
-        logger.info(f"Extracting to {model_folder}...")
+        logger.debug(f"Extracting to {model_folder}...")
         try:
             model_folder.mkdir(parents=True, exist_ok=True)
 
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall(model_folder)
 
-            logger.info(f"Successfully extracted model '{model_id}' to {model_folder}")
+            logger.debug(f"Successfully extracted model '{model_id}' to {model_folder}")
 
         except Exception as e:
             logger.error(f"Failed to extract model '{model_id}': {e}")
@@ -511,7 +511,7 @@ class M3Model:
         if cls._channel_df is None or refresh:
             cls._channel_df = cls.query_arcgis_channels()
 
-        logger.info(f"Listed {len(cls._channel_df)} channels")
+        logger.debug(f"Listed {len(cls._channel_df)} channels")
         return cls._channel_df.copy()
 
     @classmethod
@@ -528,7 +528,7 @@ class M3Model:
             and attempts to match them to M3 Models based on the primary_channels
             defined in the MODELS dictionary.
         """
-        logger.info("Querying HCFCD ArcGIS REST API for channel data...")
+        logger.debug("Querying HCFCD ArcGIS REST API for channel data...")
 
         query_url = f"{cls.arcgis_url}/query"
         params = {
@@ -557,8 +557,8 @@ class M3Model:
             # Add model_id column by matching with MODELS
             df['model_id'] = df['channel_name'].apply(cls._match_channel_to_model)
 
-            logger.info(f"Retrieved {len(df)} unique channels from ArcGIS API")
-            logger.info(f"Matched {df['model_id'].notna().sum()} channels to M3 Models")
+            logger.debug(f"Retrieved {len(df)} unique channels from ArcGIS API")
+            logger.debug(f"Matched {df['model_id'].notna().sum()} channels to M3 Models")
 
             return df
 
@@ -612,7 +612,7 @@ class M3Model:
         model_id = cls._match_channel_to_model(channel_name)
 
         if model_id:
-            logger.info(f"Channel '{channel_name}' matches model '{model_id}' - {cls.MODELS[model_id]['name']}")
+            logger.debug(f"Channel '{channel_name}' matches model '{model_id}' - {cls.MODELS[model_id]['name']}")
         else:
             logger.warning(f"No model found for channel '{channel_name}'")
 
@@ -652,7 +652,7 @@ class M3Model:
         model_folder = base_output_path / model_name
 
         is_extracted = model_folder.exists()
-        logger.info(f"Model '{model_id}' extracted: {is_extracted}")
+        logger.debug(f"Model '{model_id}' extracted: {is_extracted}")
         return is_extracted
 
     @classmethod
@@ -674,12 +674,12 @@ class M3Model:
             if not target_dir.is_absolute():
                 target_dir = Path.cwd() / target_dir
 
-        logger.info(f"Cleaning models directory: {target_dir}")
+        logger.debug(f"Cleaning models directory: {target_dir}")
 
         if target_dir.exists():
             try:
                 shutil.rmtree(target_dir)
-                logger.info("All models have been removed.")
+                logger.debug("All models have been removed.")
             except Exception as e:
                 logger.error(f"Failed to remove models directory: {e}")
                 raise
@@ -687,4 +687,4 @@ class M3Model:
             logger.warning("Models directory does not exist.")
 
         target_dir.mkdir(parents=True, exist_ok=True)
-        logger.info("Models directory cleaned and recreated.")
+        logger.debug("Models directory cleaned and recreated.")

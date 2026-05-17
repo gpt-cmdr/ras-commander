@@ -438,7 +438,7 @@ class RasDss:
         ]
 
         if len(dss_boundaries) == 0:
-            logger.info("No DSS-defined boundaries found")
+            logger.debug("No DSS-defined boundaries found")
             return result_df
 
         logger.info(f"Found {len(dss_boundaries)} DSS-defined boundaries")
@@ -473,7 +473,7 @@ class RasDss:
                 result_df.at[idx, 'dss_timeseries'] = df_ts
 
                 success_count += 1
-                logger.info(
+                logger.debug(
                     f"Row {idx}: Extracted {len(df_ts)} points from "
                     f"{dss_file_path.name}"
                 )
@@ -496,7 +496,7 @@ class RasDss:
         Note: With pyjnius, JVM shutdown is typically not needed.
         This is a placeholder for API compatibility.
         """
-        logger.info("pyjnius handles JVM lifecycle automatically")
+        logger.debug("pyjnius handles JVM lifecycle automatically")
         pass
 
     # =========================================================================

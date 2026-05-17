@@ -303,7 +303,7 @@ class RasPrj:
                 self._set_flow_path(idx, row)
                 
                 if not self.suppress_logging:
-                    logger.info(f"Plan {row['plan_number']} paths set up")
+                    logger.debug(f"Plan {row['plan_number']} paths set up")
             except Exception as e:
                 logger.error(f"Error processing plan file {row['plan_number']}: {e}")
 
@@ -996,7 +996,7 @@ class RasPrj:
 
         if self.project_crs:
             if not self.suppress_logging:
-                logger.info(
+                logger.debug(
                     f"Resolved project CRS: {self.project_crs} "
                     f"(source={self.project_crs_source})"
                 )
@@ -1407,7 +1407,7 @@ class RasPrj:
                     logger.debug(f"Failed to extract title/description for {row['geom_file']}: {e}")
 
             if not self.suppress_logging:  # Only log if suppress_logging is False
-                logger.info(f"Found {len(geom_df)} geometry entries")
+                logger.debug(f"Found {len(geom_df)} geometry entries")
             return geom_df
         except Exception as e:
             logger.error(f"Error reading geometry entries from project file: {e}")
@@ -1469,27 +1469,27 @@ class RasPrj:
             >>> ras.print_data()  # Displays complete project overview
         """
         self.check_initialized()
-        logger.info(f"--- Data for {self.project_name} ---")
-        logger.info(f"Project folder: {self.project_folder}")
-        logger.info(f"PRJ file: {self.prj_file}")
-        logger.info(f"HEC-RAS executable: {self.ras_exe_path}")
-        logger.info(
+        logger.debug(f"--- Data for {self.project_name} ---")
+        logger.debug(f"Project folder: {self.project_folder}")
+        logger.debug(f"PRJ file: {self.prj_file}")
+        logger.debug(f"HEC-RAS executable: {self.ras_exe_path}")
+        logger.debug(
             f"Project CRS: {self.project_crs} "
             f"(source={self.project_crs_source})"
         )
-        logger.info("Plan files:")
-        logger.info(f"\n{self.plan_df}")
-        logger.info("Flow files:")
-        logger.info(f"\n{self.flow_df}")
-        logger.info("Unsteady flow files:")
-        logger.info(f"\n{self.unsteady_df}")
-        logger.info("Geometry files:")
-        logger.info(f"\n{self.geom_df}")
-        logger.info("HDF entries:")
-        logger.info(f"\n{self.get_hdf_entries()}")
-        logger.info("Boundary conditions:")
-        logger.info(f"\n{self.boundaries_df}")
-        logger.info("----------------------------")
+        logger.debug("Plan files:")
+        logger.debug(f"\n{self.plan_df}")
+        logger.debug("Flow files:")
+        logger.debug(f"\n{self.flow_df}")
+        logger.debug("Unsteady flow files:")
+        logger.debug(f"\n{self.unsteady_df}")
+        logger.debug("Geometry files:")
+        logger.debug(f"\n{self.geom_df}")
+        logger.debug("HDF entries:")
+        logger.debug(f"\n{self.get_hdf_entries()}")
+        logger.debug("Boundary conditions:")
+        logger.debug(f"\n{self.boundaries_df}")
+        logger.debug("----------------------------")
 
     @log_call
     def get_boundary_conditions(self) -> pd.DataFrame:
@@ -1532,7 +1532,7 @@ class RasPrj:
         
         # Check if unsteady_df is empty
         if self.unsteady_df.empty:
-            logger.info("No unsteady flow files found in the project.")
+            logger.debug("No unsteady flow files found in the project.")
             return pd.DataFrame()  # Return an empty DataFrame
         
         for _, row in self.unsteady_df.iterrows():
@@ -1556,7 +1556,7 @@ class RasPrj:
                     logger.debug(f"Unparsed lines for boundary condition {i} in unsteady file {unsteady_number}:\n{unparsed_lines}")
         
         if not boundary_data:
-            logger.info("No boundary conditions found in unsteady flow files.")
+            logger.debug("No boundary conditions found in unsteady flow files.")
             return pd.DataFrame()  # Return an empty DataFrame if no boundary conditions were found
         
         boundaries_df = pd.DataFrame(boundary_data)
@@ -1958,7 +1958,7 @@ class RasPrj:
             else:
                 self.results_df = new_results
 
-        logger.info(f"Updated results_df with {len(new_results)} plan(s)")
+        logger.debug(f"Updated results_df with {len(new_results)} plan(s)")
         return self.results_df
 
     @log_call
@@ -1995,7 +1995,8 @@ def init_ras_project(
     ras_project_folder,
     ras_version=None,
     ras_object=None,
-    load_results_summary=True
+    load_results_summary=True,
+    hide_intro=False
 ) -> 'RasPrj':
     """
     Initialize a RAS project for use with the ras-commander library.
@@ -2026,6 +2027,9 @@ def init_ras_project(
                                                     basic results via ras.results_df without needing
                                                     to re-scan HDF files. Set to False for faster
                                                     initialization when results are not needed.
+        hide_intro (bool, default=False): If True, suppress the agent intro banner that is
+                                          printed after initialization. The banner provides
+                                          API guidance for AI agents using the library.
 
     Returns:
         RasPrj: An initialized RasPrj instance.
@@ -2123,31 +2127,31 @@ def init_ras_project(
     else:
         # No version specified, try to detect from plan files
         detected_version = None
-        logger.info("No HEC-RAS Version Specified.Attempting to detect HEC-RAS version from plan files.")
-        
+        logger.debug("No HEC-RAS version specified. Detecting from plan files.")
+
         # Look for .pXX files in project folder
-        logger.info(f"Searching for plan files in {project_folder}")
+        logger.debug(f"Searching for plan files in {project_folder}")
         # Search for any file with .p01 through .p99 extension, regardless of base name
         plan_files = list(project_folder.glob("*.p[0-9][0-9]"))
         
         if not plan_files:
-            logger.info(f"No plan files found in {project_folder}")
+            logger.debug(f"No plan files found in {project_folder}")
         
         for plan_file in plan_files:
-            logger.info(f"Found plan file: {plan_file.name}")
+            logger.debug(f"Found plan file: {plan_file.name}")
             content, encoding = read_file_with_fallback_encoding(plan_file)
             
             if not content:
-                logger.info(f"Could not read content from {plan_file.name}")
+                logger.debug(f"Could not read content from {plan_file.name}")
                 continue
                 
-            logger.info(f"Successfully read plan file with {encoding} encoding")
+            logger.debug(f"Successfully read plan file with {encoding} encoding")
             
             # Look for Program Version in plan file
             for line in content.splitlines():
                 if line.startswith("Program Version="):
                     version = line.split("=")[1].strip()
-                    logger.info(f"Found Program Version={version} in {plan_file.name}")
+                    logger.debug(f"Found Program Version={version} in {plan_file.name}")
                     
                     # Replace 00 in version string if present
                     if "00" in version:
@@ -2155,15 +2159,15 @@ def init_ras_project(
                     
                     # Try to get RAS executable for this version
                     test_exe_path = get_ras_exe(version)
-                    logger.info(f"Checking RAS executable path: {test_exe_path}")
+                    logger.debug(f"Checking RAS executable path: {test_exe_path}")
                     
                     if test_exe_path != "Ras.exe":
                         detected_version = version
                         ras_exe_path = test_exe_path
-                        logger.debug(f"Found valid HEC-RAS version {version} in plan file {plan_file.name}")
+                        logger.info(f"Detected HEC-RAS version {version} from {plan_file.name}")
                         break
                     else:
-                        logger.info(f"Version {version} not found in default installation path")
+                        logger.debug(f"Version {version} not found in default installation path")
             
             if detected_version:
                 break
@@ -2210,6 +2214,53 @@ def init_ras_project(
     )
     logger.info(f"Project initialized: {ras_object.project_name} | Folder: {ras_object.project_folder}")
     logger.info(f"Using HEC-RAS executable: {ras_exe_path}")
+
+    if not hide_intro:
+        _obj = "ras" if ras_object is ras else "ras_object"
+        logger.info(
+            "\n"
+            "═══════════════════════════════════════════════════════════════════════\n"
+            "ras-commander | HEC-RAS Automation Library\n"
+            "Docs: https://gpt-cmdr.github.io/ras-commander/\n"
+            "Repo: https://github.com/gpt-cmdr/ras-commander\n"
+            "═══════════════════════════════════════════════════════════════════════\n"
+            "\n"
+            "PROJECT DATAFRAMES (single source of truth — use these, not file globbing):\n"
+            f"  {_obj}.plan_df        Plans, HDF paths, geometry/flow associations\n"
+            f"  {_obj}.geom_df        Geometry files and HDF preprocessor paths\n"
+            f"  {_obj}.flow_df        Steady flow files\n"
+            f"  {_obj}.unsteady_df    Unsteady flow files and configurations\n"
+            f"  {_obj}.boundaries_df  Boundary conditions (type, name, location)\n"
+            f"  {_obj}.results_df     Lightweight HDF results summaries\n"
+            f"  {_obj}.rasmap_df      RASMapper layers, terrain, land cover paths\n"
+            "\n"
+            "KEY APIS (static classes — call directly, never instantiate):\n"
+            "  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()\n"
+            "  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()\n"
+            "  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation\n"
+            "  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh\n"
+            "  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()\n"
+            "                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()\n"
+            "                HdfMesh.get_mesh_cell_points()\n"
+            "  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)\n"
+            "  DSS:          RasDss.get_timeseries() / check_pathname()\n"
+            "  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration\n"
+            "  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance\n"
+            "  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod\n"
+            "\n"
+            "MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.\n"
+            "\n"
+            "EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,\n"
+            "  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).\n"
+            "  Review relevant notebooks before assembling new workflows.\n"
+            "\n"
+            "PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for\n"
+            "  headless execution, data access, geometry modification, and preprocessing\n"
+            "  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.\n"
+            "  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).\n"
+            "═══════════════════════════════════════════════════════════════════════"
+        )
+
     return ras_object
 
 @log_call

@@ -88,33 +88,33 @@ class HdfFluvialPluvial:
             gpd.GeoDataFrame: GeoDataFrame containing the fluvial-pluvial boundary lines.
         """
         try:
-            logger.info("Getting cell polygons from HDF file...")
+            logger.debug("Getting cell polygons from HDF file...")
             cell_polygons_gdf = HdfMesh.get_mesh_cell_polygons(hdf_path)
             if cell_polygons_gdf.empty:
                 raise ValueError("No cell polygons found in HDF file")
 
-            logger.info("Getting maximum water surface data from HDF file...")
+            logger.debug("Getting maximum water surface data from HDF file...")
             max_ws_df = HdfResultsMesh.get_mesh_max_ws(hdf_path)
             if max_ws_df.empty:
                 raise ValueError("No maximum water surface data found in HDF file")
 
-            logger.info("Converting maximum water surface timestamps...")
+            logger.debug("Converting maximum water surface timestamps...")
             max_ws_df['maximum_water_surface_time'] = max_ws_df['maximum_water_surface_time'].apply(
                 lambda x: HdfUtils.parse_ras_datetime(x) if isinstance(x, str) else x
             )
 
-            logger.info("Processing cell adjacencies...")
+            logger.debug("Processing cell adjacencies...")
             cell_adjacency, common_edges = HdfFluvialPluvial._process_cell_adjacencies(cell_polygons_gdf)
-            
-            logger.info("Extracting cell times from maximum water surface data...")
+
+            logger.debug("Extracting cell times from maximum water surface data...")
             cell_times = max_ws_df.set_index('cell_id')['maximum_water_surface_time'].to_dict()
-            
-            logger.info("Identifying boundary edges...")
+
+            logger.debug("Identifying boundary edges...")
             boundary_edges = HdfFluvialPluvial._identify_boundary_edges(
                 cell_adjacency, common_edges, cell_times, delta_t, min_line_length=min_line_length
             )
 
-            logger.info("Creating final GeoDataFrame for boundaries...")
+            logger.debug("Creating final GeoDataFrame for boundaries...")
             boundary_gdf = gpd.GeoDataFrame(
                 geometry=boundary_edges, 
                 crs=cell_polygons_gdf.crs
@@ -163,7 +163,7 @@ class HdfFluvialPluvial:
         """
         try:
             # --- 1. Data Loading and Preparation ---
-            logger.info("Loading mesh and results data...")
+            logger.debug("Loading mesh and results data...")
             cell_polygons_gdf = HdfMesh.get_mesh_cell_polygons(hdf_path)
             max_ws_df = HdfResultsMesh.get_mesh_max_ws(hdf_path)
             max_ws_df['maximum_water_surface_time'] = max_ws_df['maximum_water_surface_time'].apply(
@@ -171,11 +171,11 @@ class HdfFluvialPluvial:
             )
             cell_times = max_ws_df.set_index('cell_id')['maximum_water_surface_time'].to_dict()
             
-            logger.info("Processing cell adjacencies...")
+            logger.debug("Processing cell adjacencies...")
             cell_adjacency, _ = HdfFluvialPluvial._process_cell_adjacencies(cell_polygons_gdf)
 
             # --- 2. Seeding the Classifications ---
-            logger.info(f"Identifying initial boundary seeds with delta_t = {delta_t} hours...")
+            logger.debug(f"Identifying initial boundary seeds with delta_t = {delta_t} hours...")
             boundary_pairs = HdfFluvialPluvial._get_boundary_cell_pairs(cell_adjacency, cell_times, delta_t)
 
             classifications = pd.Series('unclassified', index=cell_polygons_gdf['cell_id'], name='classification')
@@ -189,7 +189,7 @@ class HdfFluvialPluvial:
                     classifications.loc[cell2] = 'fluvial'
             
             # --- 3. Iterative Region Growth ---
-            logger.info(f"Starting iterative region growth with tolerance = {temporal_tolerance_hours} hours...")
+            logger.debug(f"Starting iterative region growth with tolerance = {temporal_tolerance_hours} hours...")
             fluvial_frontier = set(classifications[classifications == 'fluvial'].index)
             pluvial_frontier = set(classifications[classifications == 'pluvial'].index)
             
@@ -245,15 +245,15 @@ class HdfFluvialPluvial:
             # Classify any remaining unclassified (likely isolated) cells as ambiguous
             classifications[classifications == 'unclassified'] = 'ambiguous'
 
-            logger.info("Merging classifications with cell polygons...")
+            logger.debug("Merging classifications with cell polygons...")
             classified_gdf = cell_polygons_gdf.merge(classifications.to_frame(), left_on='cell_id', right_index=True)
-            
-            logger.info("Dissolving polygons by classification...")
+
+            logger.debug("Dissolving polygons by classification...")
             final_regions_gdf = classified_gdf.dissolve(by='classification', aggfunc='first').reset_index()
 
             # --- 5. Minimum Polygon Area Filtering and Merging (if requested) ---
             if min_polygon_area_acres is not None:
-                logger.info(f"Applying minimum polygon area filter: {min_polygon_area_acres} acres")
+                logger.debug(f"Applying minimum polygon area filter: {min_polygon_area_acres} acres")
                 # Calculate area in acres (1 acre = 4046.8564224 m^2)
                 # If CRS is not projected, warn and skip area filtering
                 if not final_regions_gdf.crs or not final_regions_gdf.crs.is_projected:
@@ -269,7 +269,7 @@ class HdfFluvialPluvial:
 
                     n_fluvial = mask_fluvial.sum()
                     n_pluvial = mask_pluvial.sum()
-                    logger.info(f"Found {n_fluvial} small fluvial and {n_pluvial} small pluvial polygons to reclassify.")
+                    logger.debug(f"Found {n_fluvial} small fluvial and {n_pluvial} small pluvial polygons to reclassify.")
 
                     # Reclassify small fluvial polygons as pluvial, and small pluvial polygons as fluvial
                     exploded.loc[mask_fluvial, 'classification'] = 'pluvial'
@@ -278,7 +278,7 @@ class HdfFluvialPluvial:
 
                     # Redissolve by classification to merge with adjacent polygons of the same type
                     final_regions_gdf = exploded.dissolve(by='classification', aggfunc='first').reset_index()
-                    logger.info("Redissolved polygons after reclassification of small areas.")
+                    logger.debug("Redissolved polygons after reclassification of small areas.")
 
             logger.info("Polygon generation completed successfully.")
             return final_regions_gdf
@@ -402,13 +402,13 @@ class HdfFluvialPluvial:
         
         boundary_edges = [common_edges[c1][c2] for c1, c2 in boundary_pairs]
         
-        logger.info(f"Identified {len(boundary_edges)} boundary edges using delta_t of {delta_t} hours.")
+        logger.debug(f"Identified {len(boundary_edges)} boundary edges using delta_t of {delta_t} hours.")
 
         if min_line_length is not None:
             filtered_edges = [edge for edge in boundary_edges if edge.length >= min_line_length]
             num_dropped = len(boundary_edges) - len(filtered_edges)
             if num_dropped > 0:
-                logger.info(f"{num_dropped} boundary line(s) shorter than {min_line_length} units were dropped after filtering.")
+                logger.debug(f"{num_dropped} boundary line(s) shorter than {min_line_length} units were dropped after filtering.")
             boundary_edges = filtered_edges
 
         return boundary_edges

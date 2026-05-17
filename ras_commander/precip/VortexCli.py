@@ -727,7 +727,7 @@ print("VORTEX_IMPORT_COMPLETE")
 
         for i, (group_name, files) in enumerate(file_groups.items(), 1):
             output_dss = output_dir / f"{group_name}.dss"
-            logger.info(f"Processing group {i}/{total}: {group_name} ({len(files)} files)")
+            logger.debug(f"Processing group {i}/{total}: {group_name} ({len(files)} files)")
 
             try:
                 result_path = VortexCli.import_gridded(
@@ -741,7 +741,7 @@ print("VORTEX_IMPORT_COMPLETE")
                     timeout=timeout_per_group,
                 )
                 results[group_name] = result_path
-                logger.info(f"Group {group_name}: complete ({result_path.name})")
+                logger.debug(f"Group {group_name}: complete ({result_path.name})")
             except Exception as e:
                 logger.error(f"Group {group_name}: failed - {e}")
                 results[group_name] = None

@@ -711,7 +711,7 @@ class RasTerrainMod:
         # Allocate output — start with original terrain
         modified = original.copy()
 
-        logger.info(
+        logger.debug(
             f"Sampling modified terrain: {width}x{height} grid "
             f"({width * height:,} cells, {height} rows)"
         )
@@ -755,7 +755,7 @@ class RasTerrainMod:
                 sampled_rows += 1
 
             if (row_idx + 1) % 500 == 0:
-                logger.info(f"  Progress: {row_idx + 1}/{height} rows")
+                logger.debug(f"  Progress: {row_idx + 1}/{height} rows")
 
         logger.info(f"Modified terrain raster: {sampled_rows}/{height} rows updated")
 

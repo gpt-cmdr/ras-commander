@@ -3997,7 +3997,7 @@ class RasPlan:
             for file_path in files_to_remove:
                 if file_path.exists():
                     file_path.unlink()
-                    logger.info(f"Permanently deleted {file_path.name}")
+                    logger.debug(f"Permanently deleted {file_path.name}")
         else:
             label = f"deleted_{file_prefix}{component_number}"
             backup_dir = RasUtils.backup_files(
@@ -4086,7 +4086,7 @@ class RasPlan:
         for old_path, new_path in rename_pairs:
             if old_path.exists():
                 old_path.rename(new_path)
-                logger.info(f"Renamed {old_path.name} -> {new_path.name}")
+                logger.debug(f"Renamed {old_path.name} -> {new_path.name}")
 
         # Update .prj entry
         RasUtils.rename_prj_entry(ras_obj.prj_file, component_type, old_number, new_number, ras_object=ras_obj)
@@ -4228,7 +4228,7 @@ class RasPlan:
             for f in files_to_remove:
                 if f.exists():
                     f.unlink()
-                    logger.info(f"Permanently deleted {f.name}")
+                    logger.debug(f"Permanently deleted {f.name}")
         else:
             label = f"deleted_p{plan_number}"
             RasUtils.backup_files(files_to_remove, ras_obj.project_folder, label)
@@ -4297,7 +4297,7 @@ class RasPlan:
         for old_path, new_path in rename_pairs:
             if old_path.exists():
                 old_path.rename(new_path)
-                logger.info(f"Renamed {old_path.name} -> {new_path.name}")
+                logger.debug(f"Renamed {old_path.name} -> {new_path.name}")
 
         # Update .prj entry
         RasUtils.rename_prj_entry(ras_obj.prj_file, 'Plan', old_number, new_number, ras_object=ras_obj)
@@ -4363,10 +4363,10 @@ class RasPlan:
         if c_file.exists():
             if permanent_delete:
                 c_file.unlink()
-                logger.info(f"Permanently deleted {c_file.name}")
+                logger.debug(f"Permanently deleted {c_file.name}")
             elif backup_dir:
                 shutil.move(str(c_file), str(backup_dir / c_file.name))
-                logger.info(f"Backed up {c_file.name} to {backup_dir}")
+                logger.debug(f"Backed up {c_file.name} to {backup_dir}")
             else:
                 label = f"deleted_g{number}"
                 RasUtils.backup_files([c_file], ras_obj.project_folder, label)

@@ -201,7 +201,7 @@ class HdfBndry:
                 # Log summary of invalid breaklines
                 total_invalid = zero_length_count + single_point_count + other_error_count
                 if total_invalid > 0:
-                    logger.info(
+                    logger.debug(
                         f"Breakline processing summary:\n"
                         f"- Zero-length breaklines: {zero_length_count}\n"
                         f"- Single-point breaklines: {single_point_count}\n"

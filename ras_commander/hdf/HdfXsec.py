@@ -435,7 +435,7 @@ class HdfXsec:
                             centerline_gdf[col] = centerline_gdf[col].dt.strftime(
                                 '%Y-%m-%d %H:%M:%S')
 
-                logger.info(f"Extracted {len(centerline_gdf)} river centerlines")
+                logger.debug(f"Extracted {len(centerline_gdf)} river centerlines")
                 return centerline_gdf
 
         except Exception as e:

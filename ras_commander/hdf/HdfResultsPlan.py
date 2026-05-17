@@ -207,7 +207,7 @@ class HdfResultsPlan:
                 return None
 
             with h5py.File(hdf_path, 'r') as hdf_file:
-                logger.info(f"Extracting Plan Information from: {Path(hdf_file.filename).name}")
+                logger.debug(f"Extracting Plan Information from: {Path(hdf_file.filename).name}")
                 plan_info = hdf_file.get('/Plan Data/Plan Information')
                 if plan_info is None:
                     logger.warning("Group '/Plan Data/Plan Information' not found.")
@@ -236,8 +236,8 @@ class HdfResultsPlan:
                     logger.error(f"Error parsing simulation times: {e}")
                     return None
 
-                logger.info(f"Plan Name: {plan_name}")
-                logger.info(f"Simulation Duration (hours): {simulation_hours}")
+                logger.debug(f"Plan Name: {plan_name}")
+                logger.debug(f"Simulation Duration (hours): {simulation_hours}")
 
                 # Extract compute processes data
                 compute_processes = hdf_file.get('/Results/Summary/Compute Processes')
@@ -469,7 +469,7 @@ class HdfResultsPlan:
                     else:
                         profile_names.append(str(name).strip())
 
-                logger.info(f"Found {len(profile_names)} steady state profiles: {profile_names}")
+                logger.debug(f"Found {len(profile_names)} steady state profiles: {profile_names}")
                 return profile_names
 
         except FileNotFoundError:
@@ -616,7 +616,7 @@ class HdfResultsPlan:
                 else:
                     df = df[['River', 'Reach', 'Station', 'WSE']]
 
-                logger.info(
+                logger.debug(
                     f"Extracted WSE data for {len(profiles_to_extract)} profile(s), "
                     f"{num_xs} cross sections"
                 )
@@ -704,7 +704,7 @@ class HdfResultsPlan:
                     logger.warning("No steady state attributes found in HDF file")
                     return pd.DataFrame()
 
-                logger.info(f"Extracted {len(attrs_dict)} steady state attributes")
+                logger.debug(f"Extracted {len(attrs_dict)} steady state attributes")
                 return pd.DataFrame(attrs_dict, index=[0])
 
         except FileNotFoundError:
@@ -783,7 +783,7 @@ class HdfResultsPlan:
                     return ""
 
                 # Read dataset from HDF
-                logger.info(f"Reading computation messages from HDF: {hdf_path.name}")
+                logger.debug(f"Reading computation messages from HDF: {hdf_path.name}")
                 dataset = hdf_file[compute_msgs_path]
                 data = dataset[()]
 
@@ -799,7 +799,7 @@ class HdfResultsPlan:
                 else:
                     contents = str(data)
 
-                logger.info(f"Successfully extracted {len(contents)} characters from HDF")
+                logger.debug(f"Successfully extracted {len(contents)} characters from HDF")
                 return contents
 
         except FileNotFoundError:
@@ -874,7 +874,7 @@ class HdfResultsPlan:
                 compute_msgs_path = "Results/Summary/Compute Messages (text)"
 
                 if compute_msgs_path in hdf_file:
-                    logger.info(f"Reading computation messages from HDF: {hdf_path.name}")
+                    logger.debug(f"Reading computation messages from HDF: {hdf_path.name}")
                     dataset = hdf_file[compute_msgs_path]
                     data = dataset[()]
 
@@ -890,7 +890,7 @@ class HdfResultsPlan:
                     else:
                         contents = str(data)
 
-                    logger.info(f"Successfully extracted {len(contents)} characters from HDF")
+                    logger.debug(f"Successfully extracted {len(contents)} characters from HDF")
                     return contents
                 else:
                     logger.debug(
@@ -909,7 +909,7 @@ class HdfResultsPlan:
             txt_path_6x = Path(str(hdf_path).replace('.hdf', '.computeMsgs.txt'))
             if txt_path_6x.exists():
                 contents = txt_path_6x.read_text(encoding='utf-8', errors='ignore')
-                logger.info(f"Successfully read {len(contents)} characters from {txt_path_6x.name}")
+                logger.debug(f"Successfully read {len(contents)} characters from {txt_path_6x.name}")
                 return contents
             else:
                 logger.debug(f".computeMsgs.txt file not found: {txt_path_6x}")
@@ -923,7 +923,7 @@ class HdfResultsPlan:
             txt_path_5x = Path(str(hdf_path).replace('.hdf', '.comp_msgs.txt'))
             if txt_path_5x.exists():
                 contents = txt_path_5x.read_text(encoding='utf-8', errors='ignore')
-                logger.info(f"Successfully read {len(contents)} characters from {txt_path_5x.name}")
+                logger.debug(f"Successfully read {len(contents)} characters from {txt_path_5x.name}")
                 return contents
             else:
                 logger.debug(f".comp_msgs.txt file not found: {txt_path_5x}")
@@ -1119,8 +1119,8 @@ class HdfResultsPlan:
                         })
 
                 df = pd.DataFrame(rows)
-                logger.info(f"Extracted steady results: {len(df)} rows "
-                           f"({num_profiles} profiles x {num_xs} cross sections)")
+                logger.debug(f"Extracted steady results: {len(df)} rows "
+                            f"({num_profiles} profiles x {num_xs} cross sections)")
                 return df
 
         except Exception as e:
@@ -1194,9 +1194,9 @@ class HdfResultsPlan:
                         if isinstance(struct_group[key], h5py.Dataset):
                             result['structures'].append(key)
 
-                logger.info(f"Found {len(result['cross_sections'])} XS vars, "
-                           f"{len(result['additional'])} additional vars, "
-                           f"{len(result['structures'])} structure vars")
+                logger.debug(f"Found {len(result['cross_sections'])} XS vars, "
+                            f"{len(result['additional'])} additional vars, "
+                            f"{len(result['structures'])} structure vars")
 
                 return result
 

@@ -1043,7 +1043,7 @@ class HdfResultsMesh:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
                 if d2_flow_areas is None:
-                    logger.info("No 2D Flow Areas found in HDF file")
+                    logger.debug("No 2D Flow Areas found in HDF file")
                     return gpd.GeoDataFrame()
 
                 for d2_flow_area in d2_flow_areas[:]:
@@ -1827,21 +1827,21 @@ class HdfResultsMesh:
             dfs = []
             start_time = HdfBase.get_simulation_start_time(hdf_file)
             
-            logger.info(f"Processing summary output for variable: {var}")
+            logger.debug(f"Processing summary output for variable: {var}")
             d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
             if d2_flow_areas is None:
-                logger.info("No 2D Flow Areas found in HDF file")
+                logger.debug("No 2D Flow Areas found in HDF file")
                 return gpd.GeoDataFrame()
 
             for d2_flow_area in d2_flow_areas[:]:
                 mesh_name = HdfUtils.convert_ras_string(d2_flow_area[0])
                 cell_count = d2_flow_area[-1]
                 logger.debug(f"Processing mesh: {mesh_name} with {cell_count} cells")
-                
+
                 try:
                     group = HdfResultsMesh.get_mesh_summary_output_group(hdf_file, mesh_name, var)
                 except ValueError:
-                    logger.info(f"Variable '{var}' not present in output file for mesh '{mesh_name}', skipping")
+                    logger.debug(f"Variable '{var}' not present in output file for mesh '{mesh_name}', skipping")
                     continue
                 
                 data = group[:]

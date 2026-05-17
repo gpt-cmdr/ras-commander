@@ -857,7 +857,7 @@ class GeomCulvert:
                 'lines_inserted': len(new_lines),
                 'backup_path': str(backup_path),
             }
-            logger.info(
+            logger.debug(
                 f"Wrote {len(normalized_records)} culvert records at {river}/{reach}/RS {rs}"
             )
             return result

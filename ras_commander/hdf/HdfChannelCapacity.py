@@ -216,7 +216,7 @@ class HdfChannelCapacity:
         if not geom_path.exists():
             raise FileNotFoundError(f"Geometry HDF not found: {geom_path}")
 
-        logger.info(f"Extracting bank elevations from: {geom_path.name}")
+        logger.debug(f"Extracting bank elevations from: {geom_path.name}")
 
         xs_gdf = HdfXsec.get_cross_sections(str(geom_path), ras_object=_ras)
 
@@ -255,7 +255,7 @@ class HdfChannelCapacity:
             })
 
         bank_df = pd.DataFrame(rows)
-        logger.info(f"Extracted bank elevations for {len(bank_df)} cross sections")
+        logger.debug(f"Extracted bank elevations for {len(bank_df)} cross sections")
         return bank_df
 
     @staticmethod
@@ -304,7 +304,7 @@ class HdfChannelCapacity:
         if not hdf_path.exists():
             raise FileNotFoundError(f"HDF file not found: {hdf_path}")
 
-        logger.info(f"Extracting steady-state profiles from: {hdf_path.name}")
+        logger.debug(f"Extracting steady-state profiles from: {hdf_path.name}")
 
         base_steady = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles"
 
@@ -357,7 +357,7 @@ class HdfChannelCapacity:
 
         result_df = pd.DataFrame(result)
 
-        logger.info(
+        logger.debug(
             f"Extracted {n_profiles} steady profiles for {n_xs} cross sections "
             f"from {hdf_path.name}"
         )
@@ -418,7 +418,7 @@ class HdfChannelCapacity:
                 logger.warning(f"HDF not found for {pname}: {hdf_path}")
                 continue
 
-            logger.info(f"Extracting Max WSE from {hdf_path.name} as '{pname}'")
+            logger.debug(f"Extracting Max WSE from {hdf_path.name} as '{pname}'")
 
             max_wse_values = None
             xs_rivers = None
@@ -484,7 +484,7 @@ class HdfChannelCapacity:
         if result_df is None:
             raise ValueError("No WSE data extracted from any plan input.")
 
-        logger.info(
+        logger.debug(
             f"Extracted Max WSE: {len(result_df)} XS, "
             f"{len([c for c in result_df.columns if c not in ('River','Reach','RS')])} plans"
         )
@@ -593,7 +593,7 @@ class HdfChannelCapacity:
         for level in sorted(LEVEL_TO_CATEGORY.keys()):
             count = np.sum(capacity_level == level)
             if count > 0:
-                logger.info(f"  Level {level} ({LEVEL_TO_CATEGORY[level]}): {count} XS")
+                logger.debug(f"  Level {level} ({LEVEL_TO_CATEGORY[level]}): {count} XS")
 
         return merged
 
@@ -689,7 +689,7 @@ class HdfChannelCapacity:
                 })
 
         result = pd.DataFrame(segments)
-        logger.info(f"Created {len(result)} segments across {capacity_df[['River','Reach']].drop_duplicates().shape[0]} reaches")
+        logger.debug(f"Created {len(result)} segments across {capacity_df[['River','Reach']].drop_duplicates().shape[0]} reaches")
         return result
 
     @staticmethod

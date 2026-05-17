@@ -195,10 +195,10 @@ class HdfBenefitAreas:
             )
 
         # Step 1: Extract max WSE points from both plans
-        logger.info(f"Loading max WSE from existing plan: {existing_path}")
+        logger.debug(f"Loading max WSE from existing plan: {existing_path}")
         existing_points = HdfResultsMesh.get_mesh_max_ws(existing_path)
 
-        logger.info(f"Loading max WSE from proposed plan: {proposed_path}")
+        logger.debug(f"Loading max WSE from proposed plan: {proposed_path}")
         proposed_points = HdfResultsMesh.get_mesh_max_ws(proposed_path)
 
         if existing_points is None or existing_points.empty:
@@ -208,7 +208,7 @@ class HdfBenefitAreas:
             raise ValueError(f"No max WSE data found in proposed plan: {proposed_path}")
 
         # Step 2: Match points between plans and compute differences
-        logger.info("Matching points between plans...")
+        logger.debug("Matching points between plans...")
         matched_df = HdfBenefitAreas._match_points_by_xy(
             existing_points, proposed_points, match_precision
         )
@@ -217,26 +217,26 @@ class HdfBenefitAreas:
             raise ValueError("No matching points found between the two plans")
 
         # Step 3: Apply threshold and classify points
-        logger.info(f"Applying minimum delta threshold of {min_delta} feet...")
+        logger.debug(f"Applying minimum delta threshold of {min_delta} feet...")
         benefit_points, rise_points = HdfBenefitAreas._apply_threshold_and_classify(
             matched_df, min_delta
         )
 
         # Step 4: Load mesh cell polygons from existing plan
-        logger.info(f"Loading mesh cells from existing plan: {existing_path}")
+        logger.debug(f"Loading mesh cells from existing plan: {existing_path}")
         cells_gdf = HdfMesh.get_mesh_cell_polygons(existing_path)
 
         if cells_gdf is None or cells_gdf.empty:
             raise ValueError(f"No mesh cells found in existing plan: {existing_path}")
 
         # Step 5: Build contiguous polygons
-        logger.info("Building contiguous benefit areas...")
+        logger.debug("Building contiguous benefit areas...")
         benefit_polygons = HdfBenefitAreas._build_contiguous_polygons(
             benefit_points, cells_gdf, "Benefit Area", adjacency_method, dissolve,
             existing_path if adjacency_method == "topology" else None
         )
 
-        logger.info("Building contiguous rise areas...")
+        logger.debug("Building contiguous rise areas...")
         rise_polygons = HdfBenefitAreas._build_contiguous_polygons(
             rise_points, cells_gdf, "Rise Area", adjacency_method, dissolve,
             existing_path if adjacency_method == "topology" else None
@@ -424,7 +424,7 @@ class HdfBenefitAreas:
         # Convert back to GeoDataFrame
         result = gpd.GeoDataFrame(result, geometry='geometry', crs=existing_points.crs)
 
-        logger.info(f"Matched {len(result)} points out of {len(existing_points)} existing points")
+        logger.debug(f"Matched {len(result)} points out of {len(existing_points)} existing points")
 
         return result
 
@@ -455,7 +455,7 @@ class HdfBenefitAreas:
         benefit = significant[significant['wse_difference'] < 0].copy()
         rise = significant[significant['wse_difference'] > 0].copy()
 
-        logger.info(f"Found {len(benefit)} benefit points and {len(rise)} rise points")
+        logger.debug(f"Found {len(benefit)} benefit points and {len(rise)} rise points")
 
         return benefit, rise
 
@@ -493,7 +493,7 @@ class HdfBenefitAreas:
             }, crs=cells_gdf.crs)
 
         # Step 1: Associate points with cells using spatial join
-        logger.info(f"Associating {len(points_df)} points with mesh cells...")
+        logger.debug(f"Associating {len(points_df)} points with mesh cells...")
         points_with_cells = gpd.sjoin(
             points_df, cells_gdf[['cell_id', 'mesh_name', 'geometry']],
             how='inner', predicate='within'
@@ -513,7 +513,7 @@ class HdfBenefitAreas:
                 'geometry': []
             }, crs=cells_gdf.crs)
 
-        logger.info(f"Associated {len(target_cells)} cells with {area_type} points")
+        logger.debug(f"Associated {len(target_cells)} cells with {area_type} points")
 
         # Step 2: Build adjacency
         if adjacency_method == "topology":
@@ -526,12 +526,12 @@ class HdfBenefitAreas:
             )
 
         # Step 3: Find contiguous groups using flood-fill
-        logger.info("Grouping cells into contiguous areas...")
+        logger.debug("Grouping cells into contiguous areas...")
         cell_groups = HdfBenefitAreas._connected_components(
             target_cells, adjacency
         )
 
-        logger.info(f"Created {len(cell_groups)} contiguous {area_type} groups")
+        logger.debug(f"Created {len(cell_groups)} contiguous {area_type} groups")
 
         # Step 4: Build polygon features for each group
         polygon_features = HdfBenefitAreas._build_group_polygons(
@@ -558,7 +558,7 @@ class HdfBenefitAreas:
         Returns:
             Dictionary mapping (mesh_name, cell_id) to list of adjacent (mesh_name, cell_id)
         """
-        logger.info("Building adjacency using polygon edges...")
+        logger.debug("Building adjacency using polygon edges...")
 
         # Build edge-to-cells mapping
         edge_to_cells = defaultdict(set)
@@ -608,7 +608,7 @@ class HdfBenefitAreas:
         # Convert sets to lists
         adjacency_dict = {k: list(v) for k, v in adjacency.items()}
 
-        logger.info(f"Built adjacency for {len(adjacency_dict)} cells")
+        logger.debug(f"Built adjacency for {len(adjacency_dict)} cells")
 
         return adjacency_dict
 
@@ -633,7 +633,7 @@ class HdfBenefitAreas:
         """
         from ras_commander.hdf import HdfMesh
 
-        logger.info("Building adjacency using mesh topology...")
+        logger.debug("Building adjacency using mesh topology...")
 
         # Get topology for each mesh
         meshes = target_cells['mesh_name'].unique()
@@ -676,7 +676,7 @@ class HdfBenefitAreas:
         # Convert sets to lists
         adjacency_dict = {k: list(v) for k, v in adjacency.items()}
 
-        logger.info(f"Built topology-based adjacency for {len(adjacency_dict)} cells")
+        logger.debug(f"Built topology-based adjacency for {len(adjacency_dict)} cells")
 
         return adjacency_dict
 
@@ -718,7 +718,7 @@ class HdfBenefitAreas:
 
             groups.append(current_group)
 
-        logger.info(f"Found {len(groups)} connected components")
+        logger.debug(f"Found {len(groups)} connected components")
 
         return groups
 

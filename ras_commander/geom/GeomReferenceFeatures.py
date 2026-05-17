@@ -598,7 +598,7 @@ class GeomReferenceFeatures:
         if not generated_lines:
             raise ValueError("No reference lines were generated")
 
-        logger.info(
+        logger.debug(
             f"Generated {len(generated_lines)} transverse reference line(s) "
             f"from {len(records)} longitudinal line(s)"
         )
@@ -861,7 +861,7 @@ class GeomReferenceFeatures:
         with open(geom_file, "w", encoding="utf-8", newline="") as f:
             f.writelines(file_lines)
 
-        logger.info(
+        logger.debug(
             f"Inserted {len(lines)} reference line(s) into {geom_file.name} "
             f"(storage area: {storage_area}) at line {insert_idx + 1}"
         )
@@ -949,7 +949,7 @@ class GeomReferenceFeatures:
         with open(geom_file, "w", encoding="utf-8", newline="") as f:
             f.writelines(file_lines)
 
-        logger.info(
+        logger.debug(
             f"Inserted {len(points)} reference point(s) into {geom_file.name} "
             f"at line {insert_idx + 1}"
         )

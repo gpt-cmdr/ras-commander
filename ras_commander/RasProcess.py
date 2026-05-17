@@ -1489,7 +1489,7 @@ Step 5: Configure (optional — auto-detection usually works)
                     mode=render_mode,
                     ras_object=ras_obj,
                 )
-                logger.info(f"Set render mode to '{render_mode}' before StoreAllMaps")
+                logger.debug(f"Set render mode to '{render_mode}' before StoreAllMaps")
 
             # Clear existing stored maps if requested
             if clear_existing:
@@ -2105,7 +2105,7 @@ Step 5: Configure (optional — auto-detection usually works)
             with rasterio.open(output_path, 'w', **profile) as dst:
                 dst.write(data, 1)
 
-        logger.info(
+        logger.debug(
             f"Threshold applied: {cells_filtered}/{cells_total} cells filtered "
             f"(min_depth={min_depth}), output: {output_path.name}"
         )
@@ -2480,7 +2480,7 @@ Step 5: Configure (optional — auto-detection usually works)
                     # Use the most recently modified match
                     best = max(matches, key=lambda p: p.stat().st_mtime)
                     input_tiffs.append(best)
-                    logger.info(f"Plan {plan_num}: found {best.name}")
+                    logger.debug(f"Plan {plan_num}: found {best.name}")
                     found = True
                     break
 

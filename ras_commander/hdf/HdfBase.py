@@ -150,7 +150,7 @@ class HdfBase:
             epsg = crs.to_epsg()
             if epsg:
                 epsg_str = f"EPSG:{epsg}"
-                logger.info(f"Converted WKT to {epsg_str} from {source}")
+                logger.debug(f"Converted WKT to {epsg_str} from {source}")
                 return epsg_str
 
             logger.debug(
@@ -179,7 +179,7 @@ class HdfBase:
                     return None
                 if isinstance(proj_wkt, (bytes, np.bytes_)):
                     proj_wkt = proj_wkt.decode("utf-8")
-                logger.info(f"Found projection in HDF file: {hdf_path}")
+                logger.debug(f"Found projection in HDF file: {hdf_path}")
                 return HdfBase._wkt_to_crs_string(
                     str(proj_wkt),
                     f"HDF file {hdf_path.name}",
@@ -195,7 +195,7 @@ class HdfBase:
         try:
             with open(prj_path, 'r', encoding='utf-8') as f:
                 wkt = f.read().strip()
-            logger.info(f"Found projection in projection file: {prj_path}")
+            logger.debug(f"Found projection in projection file: {prj_path}")
             return HdfBase._wkt_to_crs_string(
                 wkt,
                 f"projection file {prj_path.name}",
@@ -224,7 +224,7 @@ class HdfBase:
                 epsg = src.crs.to_epsg()
                 if epsg:
                     epsg_str = f"EPSG:{epsg}"
-                    logger.info(f"Found CRS {epsg_str} in raster: {raster_path}")
+                    logger.debug(f"Found CRS {epsg_str} in raster: {raster_path}")
                     return epsg_str
                 wkt = src.crs.to_wkt()
                 if wkt:

@@ -1039,7 +1039,7 @@ class GeomBridge:
 
             if deck_start is None or deck_start + 1 >= bridge_end_idx:
                 df = pd.DataFrame(deck_data)
-                logger.info(f"No deck geometry found for {river}/{reach}/RS {rs}")
+                logger.debug(f"No deck geometry found for {river}/{reach}/RS {rs}")
                 return df
 
             parts = GeomBridge._parse_csv_values(lines[deck_start + 1])
@@ -1077,7 +1077,7 @@ class GeomBridge:
                     })
 
             df = pd.DataFrame(deck_data)
-            logger.info(f"Extracted deck geometry for {river}/{reach}/RS {rs}: {len(df)} points")
+            logger.debug(f"Extracted deck geometry for {river}/{reach}/RS {rs}: {len(df)} points")
             return df
 
         except FileNotFoundError:
@@ -1174,7 +1174,7 @@ class GeomBridge:
                 raise ValueError(f"No piers found for bridge: {river}/{reach}/RS {rs}")
 
             df = pd.DataFrame(piers)
-            logger.info(f"Extracted {len(df)} piers for {river}/{reach}/RS {rs}")
+            logger.debug(f"Extracted {len(df)} piers for {river}/{reach}/RS {rs}")
             return df
 
         except FileNotFoundError:
@@ -1273,7 +1273,7 @@ class GeomBridge:
                 raise ValueError(f"No abutment found for bridge: {river}/{reach}/RS {rs}")
 
             df = pd.DataFrame(abutment_data)
-            logger.info(f"Extracted abutment for {river}/{reach}/RS {rs}: {len(df)} points")
+            logger.debug(f"Extracted abutment for {river}/{reach}/RS {rs}: {len(df)} points")
             return df
 
         except FileNotFoundError:
@@ -1447,7 +1447,7 @@ class GeomBridge:
                     })
 
             df = pd.DataFrame(approach_data)
-            logger.info(f"Extracted approach sections for {river}/{reach}/RS {rs}")
+            logger.debug(f"Extracted approach sections for {river}/{reach}/RS {rs}")
             return df
 
         except FileNotFoundError:
@@ -1556,7 +1556,7 @@ class GeomBridge:
                             })
 
             df = pd.DataFrame(coef_data)
-            logger.info(f"Extracted coefficients for {river}/{reach}/RS {rs}")
+            logger.debug(f"Extracted coefficients for {river}/{reach}/RS {rs}")
             return df
 
         except FileNotFoundError:
@@ -1705,7 +1705,7 @@ class GeomBridge:
                 },
             }
 
-            logger.info(
+            logger.debug(
                 f"Read bridge hydraulic methods for {river}/{reach}/RS {rs}: "
                 f"low={result['low_flow_method']}, high={result['high_flow_method']}"
             )
@@ -2025,7 +2025,7 @@ class GeomBridge:
                 'after': after,
             }
 
-            logger.info(
+            logger.debug(
                 f"Set bridge hydraulic methods for {river}/{reach}/RS {rs}: "
                 f"low={result['low_flow_method']}, high={result['high_flow_method']}"
             )
@@ -2144,7 +2144,7 @@ class GeomBridge:
                         except: pass
 
             df = pd.DataFrame(htab_data)
-            logger.info(f"Extracted HTab parameters for {river}/{reach}/RS {rs}")
+            logger.debug(f"Extracted HTab parameters for {river}/{reach}/RS {rs}")
             return df
 
         except FileNotFoundError:
@@ -2270,9 +2270,9 @@ class GeomBridge:
                 # If deck extraction fails, just leave invert as None
                 logger.debug(f"Could not extract invert from deck geometry: {e}")
 
-        logger.info(f"Extracted HTab dict for {river}/{reach}/RS {rs}: "
-                   f"hw_max={result['hw_max']}, max_flow={result['max_flow']}, "
-                   f"invert={result['invert']}")
+        logger.debug(f"Extracted HTab dict for {river}/{reach}/RS {rs}: "
+                    f"hw_max={result['hw_max']}, max_flow={result['max_flow']}, "
+                    f"invert={result['invert']}")
 
         return result
 
@@ -3137,7 +3137,7 @@ class GeomBridge:
                 lines_replaced = last_htab - first_htab + 1
                 lines = lines[:first_htab] + new_htab_lines + lines[last_htab + 1:]
                 lines_inserted = len(new_htab_lines)
-                logger.info(
+                logger.debug(
                     f"Replaced {lines_replaced} existing HTAB lines with {lines_inserted} new lines"
                 )
             else:
@@ -3146,13 +3146,13 @@ class GeomBridge:
                 insert_idx = struct_end_idx
                 lines = lines[:insert_idx] + new_htab_lines + lines[insert_idx:]
                 lines_inserted = len(new_htab_lines)
-                logger.info(f"Inserted {lines_inserted} new HTAB lines at line {insert_idx}")
+                logger.debug(f"Inserted {lines_inserted} new HTAB lines at line {insert_idx}")
 
             # Write modified file
             with open(geom_file, 'w', encoding='utf-8') as f:
                 f.writelines(lines)
 
-            logger.info(f"Successfully wrote HTAB parameters for {river}/{reach}/RS {rs}")
+            logger.debug(f"Successfully wrote HTAB parameters for {river}/{reach}/RS {rs}")
 
             # Return summary of what was written
             result = {
@@ -3408,7 +3408,7 @@ class GeomBridge:
             structures = GeomBridge._find_all_structures(lines)
 
             if not structures:
-                logger.info(f"No structures found in {geom_file.name}")
+                logger.debug(f"No structures found in {geom_file.name}")
                 return {
                     'bridges': 0,
                     'inline_weirs': 0,
@@ -3514,7 +3514,7 @@ class GeomBridge:
                 f.writelines(lines)
 
             total_modified = bridges_modified + inline_weirs_modified
-            logger.info(
+            logger.debug(
                 f"Successfully modified HTAB for {total_modified} structures "
                 f"({bridges_modified} bridges/culverts, {inline_weirs_modified} inline weirs)"
             )
@@ -3685,7 +3685,7 @@ class GeomBridge:
         # Use headwater as tailwater estimate if not found
         if max_tw is None:
             max_tw = max_hw
-            logger.info(f"Using headwater ({max_hw:.2f}) as tailwater estimate")
+            logger.debug(f"Using headwater ({max_hw:.2f}) as tailwater estimate")
 
         # Step 3: Calculate optimal HTAB parameters
         optimal_params = GeomHtabUtils.calculate_optimal_structure_htab(
@@ -3701,7 +3701,7 @@ class GeomBridge:
             points_per_curve=points_per_curve
         )
 
-        logger.info(
+        logger.debug(
             f"Calculated optimal HTAB for {river}/{reach}/RS {rs}: "
             f"HW from {max_hw:.1f} to {optimal_params['hw_max']:.1f}, "
             f"Flow from {max_flow:.0f} to {optimal_params['max_flow']:.0f}"
@@ -3755,7 +3755,7 @@ class GeomBridge:
             'backup_path': write_result.get('backup_path')
         }
 
-        logger.info(
+        logger.debug(
             f"Successfully optimized HTAB for {river}/{reach}/RS {rs}: "
             f"HWMax={result['hw_max']:.1f}, TWMax={result['tw_max']:.1f}, "
             f"MaxFlow={result['max_flow']:.0f}"
@@ -3852,7 +3852,7 @@ class GeomBridge:
         structures = GeomBridge._find_all_structures(lines)
 
         if not structures:
-            logger.info(f"No structures found in {geom_file.name}")
+            logger.debug(f"No structures found in {geom_file.name}")
             return {
                 'optimized': 0,
                 'failed': 0,
@@ -3929,7 +3929,7 @@ class GeomBridge:
             'backup_path': str(backup_path) if backup_path else None
         }
 
-        logger.info(
+        logger.debug(
             f"Structure HTAB optimization complete: "
             f"{optimized_count} optimized, {failed_count} failed of {len(structures)} total"
         )

@@ -528,7 +528,7 @@ class RasBreach:
             if block is None:
                 raise ValueError(f"Structure '{structure_name}' not found in {plan_path.name}")
 
-            logger.info(f"Read breach block for {structure_name} from {plan_path.name}")
+            logger.debug(f"Read breach block for {structure_name} from {plan_path.name}")
             return block.to_dict()
 
         except Exception as e:
@@ -795,7 +795,7 @@ class RasBreach:
                     "HEC-RAS will not be able to open this project."
                 )
 
-            logger.info(f"Updated breach block for {structure_name} in {plan_path.name}")
+            logger.debug(f"Updated breach block for {structure_name} in {plan_path.name}")
             return block.to_dict()
 
         except Exception as e:
@@ -1147,7 +1147,7 @@ class RasBreach:
                     "HEC-RAS will not be able to open this project."
                 )
 
-            logger.info(f"Created breach block for {structure_name} in {plan_path.name}")
+            logger.debug(f"Created breach block for {structure_name} in {plan_path.name}")
 
             # Re-read to return the created block
             updated_blocks = RasBreach._read_breach_blocks_internal(plan_path)

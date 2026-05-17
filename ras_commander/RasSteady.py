@@ -227,7 +227,7 @@ class RasSteady:
             data["number_of_profiles"] = len(data["profile_names"])
 
         RasSteady.validate_flow_file_data(data)
-        logger.info("Read steady flow file %s", flow_path)
+        logger.debug("Read steady flow file %s", flow_path)
         return data
 
     @staticmethod
@@ -294,7 +294,7 @@ class RasSteady:
             lines.append(f"{key}={value}\n")
 
         flow_path.write_text("".join(lines), encoding="utf-8")
-        logger.info("Wrote steady flow file %s", flow_path)
+        logger.debug("Wrote steady flow file %s", flow_path)
         return flow_path
 
     @staticmethod

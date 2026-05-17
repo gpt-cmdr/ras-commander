@@ -241,12 +241,12 @@ class HdfStruc:
                         )
 
                 # Final GeoDataFrame
-                logger.info("Successfully extracted structures GeoDataFrame.")
-                
+                logger.debug("Successfully extracted structures GeoDataFrame.")
+
                 # Add group attributes to the GeoDataFrame's attrs['group_attributes']
                 struct_gdf.attrs['group_attributes'] = group_attrs
-                
-                logger.info("Successfully extracted structures GeoDataFrame with attributes.")
+
+                logger.debug("Successfully extracted structures GeoDataFrame with attributes.")
                 
                 return struct_gdf
 
@@ -280,7 +280,7 @@ class HdfStruc:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 if "Geometry/Structures" not in hdf_file:
-                    logger.info(f"No structures found in the geometry file: {hdf_path}")
+                    logger.debug(f"No structures found in the geometry file: {hdf_path}")
                     return pd.DataFrame()
                 
                 # Get attributes and decode byte strings
@@ -334,12 +334,12 @@ class HdfStruc:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 # Check if culvert data exists
                 if "Geometry/Structures" not in hdf_file:
-                    logger.info(f"No structures found in geometry file: {hdf_path}")
+                    logger.debug(f"No structures found in geometry file: {hdf_path}")
                     return pd.DataFrame()
 
                 # Get structure attributes to identify culverts
                 if "Geometry/Structures/Attributes" not in hdf_file:
-                    logger.info(f"No structure attributes found: {hdf_path}")
+                    logger.debug(f"No structure attributes found: {hdf_path}")
                     return pd.DataFrame()
 
                 struct_attrs = hdf_file["Geometry/Structures/Attributes"][()]
@@ -358,7 +358,7 @@ class HdfStruc:
                     culvert_df = struct_df.copy()
 
                 if culvert_df.empty:
-                    logger.info(f"No culverts found in geometry file: {hdf_path}")
+                    logger.debug(f"No culverts found in geometry file: {hdf_path}")
                     return pd.DataFrame()
 
                 # Assign Structure ID based on index
@@ -412,7 +412,7 @@ class HdfStruc:
                             lambda x: x.decode('utf-8', errors='ignore') if isinstance(x, bytes) else x
                         )
 
-                logger.info(f"Successfully extracted hydraulic data for {len(result_df)} culverts")
+                logger.debug(f"Successfully extracted hydraulic data for {len(result_df)} culverts")
                 return result_df
 
         except Exception as e:
@@ -464,7 +464,7 @@ class HdfStruc:
 
                 # List all groups (structure names) under SA 2D Area Conn
                 structures = list(hdf_file[base_path].keys())
-                logger.info(f"Found {len(structures)} SA/2D connection structures: {structures}")
+                logger.debug(f"Found {len(structures)} SA/2D connection structures: {structures}")
                 return structures
 
         except Exception as e:
@@ -602,13 +602,13 @@ class HdfStruc:
         try:
             with h5py.File(hdf_path, 'r') as hdf:
                 if 'Geometry/Storage Areas' not in hdf:
-                    logger.info(f"No Storage Areas group found in HDF: {hdf_path}")
+                    logger.debug(f"No Storage Areas group found in HDF: {hdf_path}")
                     return _empty
 
                 sa_group = hdf['Geometry/Storage Areas']
 
                 if 'Polygon Points' not in sa_group or 'Polygon Info' not in sa_group:
-                    logger.info(
+                    logger.debug(
                         f"Missing Polygon Points or Polygon Info in Storage Areas: {hdf_path}"
                     )
                     return _empty

@@ -2647,7 +2647,7 @@ class GeomCrossSection:
                         lines, j + 1, count, 'Station', 'Elevation'
                     )
 
-                    logger.info(
+                    logger.debug(
                         f"Extracted {len(df)} station/elevation pairs for "
                         f"{river}/{reach}/RS {rs}"
                     )
@@ -2885,13 +2885,13 @@ class GeomCrossSection:
                     with open(geom_file, 'w', encoding='utf-8') as f:
                         f.writelines(modified_lines)
 
-                    logger.info(
+                    logger.debug(
                         f"Updated station/elevation for {river}/{reach}/RS {rs}: "
                         f"{new_count} pairs written"
                     )
 
                     if bank_left is not None and bank_right is not None:
-                        logger.info(f"Updated bank stations: {bank_left:g}, {bank_right:g}")
+                        logger.debug(f"Updated bank stations: {bank_left:g}, {bank_right:g}")
 
                     return backup_path
 
@@ -3013,10 +3013,10 @@ class GeomCrossSection:
 
             if banks:
                 left_bank, right_bank = banks
-                logger.info(f"Extracted bank stations for {river}/{reach}/RS {rs}: {left_bank}, {right_bank}")
+                logger.debug(f"Extracted bank stations for {river}/{reach}/RS {rs}: {left_bank}, {right_bank}")
                 return banks
             else:
-                logger.info(f"No bank stations found for {river}/{reach}/RS {rs}")
+                logger.debug(f"No bank stations found for {river}/{reach}/RS {rs}")
                 return None
 
         except FileNotFoundError:
@@ -3080,14 +3080,14 @@ class GeomCrossSection:
                         expansion = float(values[0])
                         contraction = float(values[1])
 
-                        logger.info(
+                        logger.debug(
                             f"Extracted expansion/contraction for {river}/{reach}/RS {rs}: "
                             f"{expansion}, {contraction}"
                         )
                         return (expansion, contraction)
 
             # XS found but no Exp/Cntr= (use defaults)
-            logger.info(f"No Exp/Cntr found for {river}/{reach}/RS {rs}, using defaults")
+            logger.debug(f"No Exp/Cntr found for {river}/{reach}/RS {rs}, using defaults")
             return (0.3, 0.1)  # HEC-RAS defaults
 
         except FileNotFoundError:

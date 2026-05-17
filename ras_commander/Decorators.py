@@ -88,7 +88,7 @@ def standardize_input(file_type: str = 'plan_hdf'):
                     test_path = Path(hdf_input)
                     if test_path.is_file():
                         hdf_path = test_path
-                        logger.info(f"Using HDF file from direct string path: {hdf_path}")
+                        logger.debug(f"Using HDF file from direct string path: {hdf_path}")
                 except Exception as e:
                     logger.debug(f"Error converting string to path: {str(e)}")
 
@@ -97,16 +97,16 @@ def standardize_input(file_type: str = 'plan_hdf'):
                 # If hdf_input is already a Path and exists, use it directly
                 if isinstance(hdf_input, Path) and hdf_input.is_file():
                     hdf_path = hdf_input
-                    logger.info(f"Using existing Path object HDF file: {hdf_path}")
+                    logger.debug(f"Using existing Path object HDF file: {hdf_path}")
                 # If hdf_input is an h5py.File object, use its filename
                 elif isinstance(hdf_input, h5py.File):
                     hdf_path = Path(hdf_input.filename)
-                    logger.info(f"Using HDF file from h5py.File object: {hdf_path}")
+                    logger.debug(f"Using HDF file from h5py.File object: {hdf_path}")
                 # Handle Path objects that might not be verified yet
                 elif isinstance(hdf_input, Path):
                     if hdf_input.is_file():
                         hdf_path = hdf_input
-                        logger.info(f"Using verified Path object HDF file: {hdf_path}")
+                        logger.debug(f"Using verified Path object HDF file: {hdf_path}")
                 # Handle string inputs that are plan/geom numbers
                 elif isinstance(hdf_input, str) and (hdf_input.isdigit() or (len(hdf_input) > 1 and hdf_input[0] == 'p' and hdf_input[1:].isdigit())):
                     try:
@@ -169,7 +169,7 @@ def standardize_input(file_type: str = 'plan_hdf'):
                                             # Create the HDF path by adding .hdf to the geometry path
                                             hdf_path = Path(str(geom_path) + ".hdf")
                                             if hdf_path.exists():
-                                                logger.info(f"Found geometry HDF file for plan {number_int}: {hdf_path}")
+                                                logger.debug(f"Found geometry HDF file for plan {number_int}: {hdf_path}")
                                             else:
                                                 # Try to find it in the geom_df if direct path doesn't exist
                                                 geom_info = ras_obj.geom_df[ras_obj.geom_df['full_path'] == str(geom_path)]
@@ -177,7 +177,7 @@ def standardize_input(file_type: str = 'plan_hdf'):
                                                     hdf_path_str = geom_info.iloc[0]['hdf_path']
                                                     if pd.notna(hdf_path_str):
                                                         hdf_path = Path(str(hdf_path_str))
-                                                        logger.info(f"Found geometry HDF file from geom_df for plan {number_int}: {hdf_path}")
+                                                        logger.debug(f"Found geometry HDF file from geom_df for plan {number_int}: {hdf_path}")
                                     except (TypeError, ValueError) as e:
                                         logger.warning(f"Error processing geometry number {geom_number}: {str(e)}")
                                 else:
@@ -246,7 +246,7 @@ def standardize_input(file_type: str = 'plan_hdf'):
                                             # Create the HDF path by adding .hdf to the geometry path
                                             hdf_path = Path(str(geom_path) + ".hdf")
                                             if hdf_path.exists():
-                                                logger.info(f"Found geometry HDF file for plan {number_int}: {hdf_path}")
+                                                logger.debug(f"Found geometry HDF file for plan {number_int}: {hdf_path}")
                                             else:
                                                 # Try to find it in the geom_df if direct path doesn't exist
                                                 geom_info = ras_obj.geom_df[ras_obj.geom_df['full_path'] == str(geom_path)]
@@ -254,7 +254,7 @@ def standardize_input(file_type: str = 'plan_hdf'):
                                                     hdf_path_str = geom_info.iloc[0]['hdf_path']
                                                     if pd.notna(hdf_path_str):
                                                         hdf_path = Path(str(hdf_path_str))
-                                                        logger.info(f"Found geometry HDF file from geom_df for plan {number_int}: {hdf_path}")
+                                                        logger.debug(f"Found geometry HDF file from geom_df for plan {number_int}: {hdf_path}")
                                     except (TypeError, ValueError) as e:
                                         logger.warning(f"Error processing geometry number {geom_number}: {str(e)}")
                                 else:
@@ -271,7 +271,7 @@ def standardize_input(file_type: str = 'plan_hdf'):
                 logger.error(error_msg)
                 raise FileNotFoundError(error_msg)
 
-            logger.info(f"Final validated file path: {hdf_path}")
+            logger.debug(f"Final validated file path: {hdf_path}")
 
             # Validate HDF file structure (only for HDF types)
             if 'hdf' in file_type:

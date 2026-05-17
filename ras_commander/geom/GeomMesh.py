@@ -2726,7 +2726,7 @@ class GeomMesh:
 
             for iteration in range(max_iterations):
                 ratio = ratios[min(ratio_idx, len(ratios) - 1)]
-                logger.info(
+                logger.debug(
                     f"[{mesh_name}] Iteration {iteration + 1}: "
                     f"{current_seeds_pm.Count} seeds, ratio={ratio:.2f}"
                 )
@@ -2738,7 +2738,7 @@ class GeomMesh:
                 state_name = str(mesh.MeshCompletionState)
                 result.iterations = iteration + 1
 
-                logger.info(
+                logger.debug(
                     f"[{mesh_name}] Iteration {iteration + 1} result: "
                     f"{state_name} "
                     f"({_safe_non_virtual_cell_count(mesh) or 'unknown'} cells)"
@@ -2780,7 +2780,7 @@ class GeomMesh:
                             _new_seeds = _hf[_cc_path][:_nv].astype(
                                 _np.float64
                             )
-                        logger.info(
+                        logger.debug(
                             f"[{mesh_name}] Read {_nv} cell centers from HDF"
                         )
                     except Exception as _se:
@@ -2796,7 +2796,7 @@ class GeomMesh:
                             cell = mesh.Cell(ci)
                             _new_seeds[ci, 0] = float(cell.Point.X)
                             _new_seeds[ci, 1] = float(cell.Point.Y)
-                        logger.info(
+                        logger.debug(
                             f"[{mesh_name}] Extracted {_nv} cell centers "
                             f"via .NET iteration"
                         )

@@ -226,7 +226,7 @@ class HdfHydraulicTables:
             if 'WP_LOB' in df.columns and 'WP_Chan' in df.columns and 'WP_ROB' in df.columns:
                 df['Wetted_Perimeter_Total'] = df['WP_LOB'] + df['WP_Chan'] + df['WP_ROB']
 
-            logger.info(f"Extracted property table: {len(df)} elevations × {len(df.columns)} properties")
+            logger.debug(f"Extracted property table: {len(df)} elevations × {len(df.columns)} properties")
 
             return df
 
@@ -342,7 +342,7 @@ class HdfHydraulicTables:
                 if df is None:
                     raise IOError(f"Failed to extract property table for {river}/{reach}/RS {rs}")
 
-                logger.info(
+                logger.debug(
                     f"Extracted HTAB for {river}/{reach}/RS {rs}: "
                     f"{len(df)} elevations, {len(df.columns)} properties"
                 )

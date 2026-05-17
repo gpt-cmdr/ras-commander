@@ -397,7 +397,7 @@ class RasCurrency:
 
         try:
             geom_hdf_path.unlink()
-            logger.info(f"Deleted geometry HDF: {geom_hdf_path}")
+            logger.debug(f"Deleted geometry HDF: {geom_hdf_path}")
             return True
         except (PermissionError, OSError) as e:
             logger.error(f"Error deleting geometry HDF {geom_hdf_path}: {e}")

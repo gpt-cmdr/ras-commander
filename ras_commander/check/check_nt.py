@@ -382,7 +382,7 @@ class CheckNt:
                 xs_df = xs_df[xs_df['Type'] == 1].reset_index(drop=True)
 
             if xs_df.empty:
-                logger.info(f"No cross sections found in {geom_file.name}")
+                logger.debug(f"No cross sections found in {geom_file.name}")
                 results.messages = messages
                 return results
 
@@ -653,7 +653,7 @@ class CheckNt:
                 structure_rows.extend(weirs_df.to_dict('records'))
 
             if not structure_rows:
-                logger.info(f"No bridges/structures found in {geom_file.name}")
+                logger.debug(f"No bridges/structures found in {geom_file.name}")
                 results.messages = messages
                 return results
 

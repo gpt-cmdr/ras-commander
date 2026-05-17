@@ -236,7 +236,7 @@ class GeomHtabUtils:
             final_increment = math.ceil(calculated_increment * 100) / 100
             final_points = max_points
 
-            logger.info(
+            logger.debug(
                 f"Increased XS HTAB increment from {target_increment} to "
                 f"{final_increment} to cover {target_depth:.1f} ft depth range"
             )
@@ -259,7 +259,7 @@ class GeomHtabUtils:
             'coverage_adequate': coverage_adequate
         }
 
-        logger.info(
+        logger.debug(
             f"Optimal XS HTAB: starting_el={starting_el_rounded}, increment={final_increment}, "
             f"num_points={final_points}, actual_max_el={actual_max_el:.2f}"
         )
@@ -433,7 +433,7 @@ class GeomHtabUtils:
             'tw_range_applied': round(safe_tw_range, 2)
         }
 
-        logger.info(
+        logger.debug(
             f"Optimal structure HTAB: hw_max={hw_max:.2f}, tw_max={tw_max:.2f}, "
             f"max_flow={flow_max:.2f}, free_flow_points={free_flow_points}, "
             f"submerged_curves={submerged_curves}"

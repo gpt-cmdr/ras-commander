@@ -89,6 +89,21 @@ class GeomPreprocessor:
         """
         Run HEC-RAS geometry preprocessing and review detailed compute messages.
 
+        .. note::
+           This method is designed for **pre-flight geometry validation**,
+           particularly for Linux/headless execution environments where the
+           HEC-RAS GUI is unavailable.  It launches ``Ras.exe``, monitors
+           compute messages for the start of flow computations, then
+           terminates early — it is **not** a general-purpose geometry
+           preprocessor suitable for notebooks or interactive workflows.
+
+           For general-purpose geometry preprocessing (e.g. resampling
+           land-cover overrides), use ``RasCmdr.compute_plan()`` with the
+           plan temporarily configured to force preprocessing
+           (``Run HTab=-1``) and skip unsteady/post-processing/mapping
+           (``Run UNet=0``, ``Run PostProcess=0``, ``Run RASMapper=0``),
+           combined with ``clear_geompre=True``.
+
         This method uses the ras-commander execution flow rather than invoking
         the standalone ``RasGeomPreprocess.exe`` directly:
 
@@ -217,7 +232,6 @@ class GeomPreprocessor:
                     GeomPreprocessor._set_plan_run_flags(
                         plan_path,
                         {
-                            "Run UNet": "0",
                             "Run PostProcess": "0",
                             "Run RASMapper": "0",
                             "Run Sediment": "0",
@@ -225,25 +239,27 @@ class GeomPreprocessor:
                         },
                     )
 
-                cmd = [
-                    str(ras_exe_path),
-                    "-c",
-                    str(prj_file),
-                    str(plan_path),
-                ]
-                command_text = " ".join(
-                    f'"{part}"' if " " in part else part for part in cmd
+                command_text = (
+                    f'"{ras_exe_path}" -c "{prj_file}" "{plan_path}"'
                 )
-                logger.info("Running HEC-RAS geometry preprocessor validation:")
-                logger.info(command_text)
+                logger.debug("Running HEC-RAS geometry preprocessor validation:")
+                logger.debug(command_text)
 
                 process = subprocess.Popen(
-                    cmd,
+                    command_text,
                     cwd=str(project_folder),
+                    shell=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    text=True,
                 )
+
+                geom_only_artifacts = None
+                if geometry_only:
+                    geom_only_artifacts = [
+                        project_folder / f"{project_name}.c{geometry_number}",
+                        project_folder / f"{project_name}.g{geometry_number}.hdf",
+                        project_folder / f"{project_name}.x{geometry_number}",
+                    ]
 
                 monitor_result = GeomPreprocessor._monitor_compute_messages(
                     process=process,
@@ -252,13 +268,14 @@ class GeomPreprocessor:
                     max_wait=max_wait,
                     signals=flow_start_signals
                     or GEOMETRY_PREPROCESSOR_FLOW_START_SIGNALS,
+                    geometry_only_artifacts=geom_only_artifacts,
                 )
 
                 timed_out = monitor_result["timed_out"]
                 signal_detected = monitor_result["signal_detected"]
 
                 if signal_detected and process.poll() is None:
-                    logger.info(
+                    logger.debug(
                         "Geometry preprocessing signal detected; terminating flow "
                         "computation before full plan execution."
                     )
@@ -289,12 +306,12 @@ class GeomPreprocessor:
             try:
                 stdout, stderr = process.communicate(timeout=2)
             except Exception:
-                stdout, stderr = "", ""
+                stdout, stderr = b"", b""
 
             if stdout:
-                logger.debug(stdout)
+                logger.debug(stdout.decode("utf-8", errors="replace"))
             if stderr:
-                logger.debug(stderr)
+                logger.debug(stderr.decode("utf-8", errors="replace"))
 
             existing_message_paths, messages = (
                 GeomPreprocessor._read_compute_messages(
@@ -333,7 +350,7 @@ class GeomPreprocessor:
                     "No geometry preprocessor artifacts found "
                     f"(.c{geometry_number}, .g{geometry_number}.hdf, .x{geometry_number}, or .b{plan_num})"
                 )
-            if not existing_message_paths:
+            if not existing_message_paths and not (geometry_only and artifact_paths):
                 errors.append("No compute messages were produced")
 
             elapsed = time.time() - start_time
@@ -534,11 +551,22 @@ class GeomPreprocessor:
         start_time: float,
         max_wait: int,
         signals: List[str],
+        geometry_only_artifacts: Optional[List[Path]] = None,
     ) -> dict:
-        """Poll compute-message files until a flow-start signal, exit, or timeout."""
+        """Poll compute-message files until a flow-start signal, exit, or timeout.
+
+        When *geometry_only_artifacts* is provided (geometry_only mode), the
+        loop also checks whether preprocessing artifacts have been freshly
+        written and stabilized.  Because ``Run UNet=0`` prevents any
+        flow-start signal from appearing, artifact stability is the only
+        reliable completion indicator in geometry-only mode.
+        """
         positions = {path: 0 for path in message_paths}
         signal_detected = None
         signal_patterns = [(signal, signal.lower()) for signal in signals]
+
+        _ARTIFACT_GRACE = 15
+        _ARTIFACT_STABLE = 10
 
         while time.time() - start_time < max_wait:
             for path in message_paths:
@@ -562,6 +590,36 @@ class GeomPreprocessor:
                             "signal_detected": signal_detected,
                             "timed_out": False,
                         }
+
+            if (
+                geometry_only_artifacts is not None
+                and (time.time() - start_time) > _ARTIFACT_GRACE
+            ):
+                fresh = []
+                for artifact in geometry_only_artifacts:
+                    try:
+                        if (
+                            artifact.exists()
+                            and artifact.stat().st_size > 0
+                            and artifact.stat().st_mtime >= start_time - 1
+                        ):
+                            fresh.append(artifact)
+                    except OSError:
+                        pass
+                if fresh:
+                    try:
+                        latest_mtime = max(a.stat().st_mtime for a in fresh)
+                        if time.time() - latest_mtime >= _ARTIFACT_STABLE:
+                            signal_detected = (
+                                "Geometry preprocessing artifacts stable "
+                                "(geometry_only mode)"
+                            )
+                            return {
+                                "signal_detected": signal_detected,
+                                "timed_out": False,
+                            }
+                    except OSError:
+                        pass
 
             if process.poll() is not None:
                 return {"signal_detected": signal_detected, "timed_out": False}
@@ -858,7 +916,7 @@ class GeomPreprocessor:
                     continue
                 try:
                     geom_preprocessor_file.unlink()
-                    logger.info(f"Deleted geometry preprocessor file: {geom_preprocessor_file}")
+                    logger.debug(f"Deleted geometry preprocessor file: {geom_preprocessor_file}")
                     return
                 except PermissionError:
                     logger.error(f"Permission denied: Unable to delete geometry preprocessor file: {geom_preprocessor_file}")
@@ -887,7 +945,7 @@ class GeomPreprocessor:
 
         try:
             ras_obj.geom_df = ras_obj.get_geom_entries()
-            logger.info("Geometry dataframe updated successfully.")
+            logger.debug("Geometry dataframe updated successfully.")
         except Exception as e:
             logger.error(f"Failed to update geometry dataframe: {str(e)}")
             raise

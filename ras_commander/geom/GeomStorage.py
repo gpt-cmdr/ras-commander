@@ -855,7 +855,7 @@ class GeomStorage:
                         'Volume': volumes[:count]
                     })
 
-                    logger.info(f"Extracted {len(df)} elevation-volume points for {storage_name}")
+                    logger.debug(f"Extracted {len(df)} elevation-volume points for {storage_name}")
                     return df
 
             raise ValueError(f"Elevation-volume data not found for {storage_name}")

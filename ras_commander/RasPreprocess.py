@@ -139,7 +139,7 @@ class RasPreprocess:
                     elapsed_seconds=time.time() - start_time,
                 )
 
-        logger.info(f"Plan {plan_num} uses geometry g{geometry_number}")
+        logger.debug(f"Plan {plan_num} uses geometry g{geometry_number}")
 
         # Build file paths
         tmp_hdf = project_folder / f"{project_name}.p{plan_num}.tmp.hdf"

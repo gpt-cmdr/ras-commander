@@ -162,29 +162,29 @@ class RasExamples:
         self._find_zip_file()
         
         if not self._zip_file_path:
-            logger.info("No example projects zip file found. Downloading...")
+            logger.debug("No example projects zip file found. Downloading...")
             self.get_example_projects()
-        
+
         try:
             zip_modified_time = os.path.getmtime(self._zip_file_path)
         except FileNotFoundError:
             logger.error(f"Zip file not found at {self._zip_file_path}.")
             return
-        
+
         if self.csv_file_path.exists():
             csv_modified_time = os.path.getmtime(self.csv_file_path)
-            
+
             if csv_modified_time >= zip_modified_time:
-                logger.info("Loading project data from CSV...")
+                logger.debug("Loading project data from CSV...")
                 try:
                     self._folder_df = pd.read_csv(self.csv_file_path)
-                    logger.info(f"Loaded {len(self._folder_df)} projects from CSV.")
+                    logger.debug(f"Loaded {len(self._folder_df)} projects from CSV.")
                     return
                 except Exception as e:
                     logger.error(f"Failed to read CSV file: {e}")
                     self._folder_df = None
 
-        logger.info("Extracting folder structure from zip file...")
+        logger.debug("Extracting folder structure from zip file...")
         self._extract_folder_structure()
         self._save_to_csv()
 
@@ -213,7 +213,7 @@ class RasExamples:
         if cls._folder_df is None:
             cls._find_zip_file()
             if not cls._zip_file_path:
-                logger.info("No example projects zip file found. Downloading...")
+                logger.debug("No example projects zip file found. Downloading...")
                 cls.get_example_projects()
             cls._load_project_data()
         
@@ -250,16 +250,16 @@ class RasExamples:
                     continue
 
             # Regular project extraction logic
-            logger.info("----- RasExamples Extracting Project -----")
-            logger.info(f"Extracting project '{project_name}'" + (f" as '{folder_name}'" if suffix else ""))
+            logger.debug("----- RasExamples Extracting Project -----")
+            logger.debug(f"Extracting project '{project_name}'" + (f" as '{folder_name}'" if suffix else ""))
             project_path = base_output_path
             final_folder_path = project_path / folder_name
 
             if final_folder_path.exists():
-                logger.info(f"Folder '{folder_name}' already exists. Deleting existing folder...")
+                logger.debug(f"Folder '{folder_name}' already exists. Deleting existing folder...")
                 try:
                     shutil.rmtree(final_folder_path)
-                    logger.info(f"Existing folder '{folder_name}' has been deleted.")
+                    logger.debug(f"Existing folder '{folder_name}' has been deleted.")
                 except Exception as e:
                     raise RuntimeError(
                         f"Cannot extract project '{project_name}': failed to delete existing "
@@ -330,10 +330,10 @@ class RasExamples:
                 if potential_zip.exists():
                     cls._zip_file_path = potential_zip
                     if search_dir == cls._legacy_dir:
-                        logger.info(f"Found zip file in legacy location: {cls._zip_file_path}")
-                        logger.info("Note: Future downloads will use user data directory.")
+                        logger.debug(f"Found zip file in legacy location: {cls._zip_file_path}")
+                        logger.debug("Note: Future downloads will use user data directory.")
                     else:
-                        logger.info(f"Found zip file: {cls._zip_file_path}")
+                        logger.debug(f"Found zip file: {cls._zip_file_path}")
                     return
 
         logger.warning("No existing example projects zip file found.")
@@ -355,7 +355,7 @@ class RasExamples:
         Returns:
             Path: Directory where projects will be extracted
         """
-        logger.info(f"Getting example projects for version {version_number}")
+        logger.debug(f"Getting example projects for version {version_number}")
         if version_number not in cls.valid_versions:
             error_msg = f"Invalid version number. Valid versions are: {', '.join(cls.valid_versions)}"
             logger.error(error_msg)
@@ -390,7 +390,7 @@ class RasExamples:
                 logger.error(f"Failed to download the zip file: {e}")
                 raise
         else:
-            logger.info("HEC-RAS Example Projects zip file already exists. Skipping download.")
+            logger.debug("HEC-RAS Example Projects zip file already exists. Skipping download.")
 
         cls._load_project_data()
         return cls.projects_dir
@@ -410,16 +410,16 @@ class RasExamples:
             csv_modified_time = os.path.getmtime(cls.csv_file_path)
             
             if csv_modified_time >= zip_modified_time:
-                logger.info("Loading project data from CSV...")
+                logger.debug("Loading project data from CSV...")
                 try:
                     cls._folder_df = pd.read_csv(cls.csv_file_path)
-                    logger.info(f"Loaded {len(cls._folder_df)} projects from CSV.")
+                    logger.debug(f"Loaded {len(cls._folder_df)} projects from CSV.")
                     return
                 except Exception as e:
                     logger.error(f"Failed to read CSV file: {e}")
                     cls._folder_df = None
 
-        logger.info("Extracting folder structure from zip file...")
+        logger.debug("Extracting folder structure from zip file...")
         cls._extract_folder_structure()
         cls._save_to_csv()
 
@@ -442,7 +442,7 @@ class RasExamples:
                         })
         
             cls._folder_df = pd.DataFrame(folder_data).drop_duplicates()
-            logger.info(f"Extracted {len(cls._folder_df)} projects.")
+            logger.debug(f"Extracted {len(cls._folder_df)} projects.")
             logger.debug(f"folder_df:\n{cls._folder_df}")
         except zipfile.BadZipFile:
             logger.error(f"The file {cls._zip_file_path} is not a valid zip file.")
@@ -459,7 +459,7 @@ class RasExamples:
                 # Ensure parent directory exists
                 cls.csv_file_path.parent.mkdir(parents=True, exist_ok=True)
                 cls._folder_df.to_csv(cls.csv_file_path, index=False)
-                logger.info(f"Saved project data to {cls.csv_file_path}")
+                logger.debug(f"Saved project data to {cls.csv_file_path}")
             except Exception as e:
                 logger.error(f"Failed to save project data to CSV: {e}")
         else:
@@ -474,7 +474,7 @@ class RasExamples:
             logger.warning("No categories available. Make sure the zip file is properly loaded.")
             return []
         categories = cls._folder_df['Category'].unique()
-        logger.info(f"Available categories: {', '.join(categories)}")
+        logger.debug(f"Available categories: {', '.join(categories)}")
         return categories.tolist()
 
     @classmethod
@@ -490,12 +490,12 @@ class RasExamples:
             return []
         if category:
             projects = cls._folder_df[cls._folder_df['Category'] == category]['Project'].unique()
-            logger.info(f"Projects in category '{category}': {', '.join(projects)}")
+            logger.debug(f"Projects in category '{category}': {', '.join(projects)}")
         else:
             projects = cls._folder_df['Project'].unique()
             # Add special projects to the list
             all_projects = list(projects) + list(cls.SPECIAL_PROJECTS.keys())
-            logger.info(f"All available projects: {', '.join(all_projects)}")
+            logger.debug(f"All available projects: {', '.join(all_projects)}")
             return all_projects
         return projects.tolist()
 
@@ -506,23 +506,23 @@ class RasExamples:
         """
         project_path = cls.projects_dir / project_name
         is_extracted = project_path.exists()
-        logger.info(f"Project '{project_name}' extracted: {is_extracted}")
+        logger.debug(f"Project '{project_name}' extracted: {is_extracted}")
         return is_extracted
 
     @classmethod
     def clean_projects_directory(cls):
         """Remove all extracted projects from the example_projects directory."""
-        logger.info(f"Cleaning projects directory: {cls.projects_dir}")
+        logger.debug(f"Cleaning projects directory: {cls.projects_dir}")
         if cls.projects_dir.exists():
             try:
                 shutil.rmtree(cls.projects_dir)
-                logger.info("All projects have been removed.")
+                logger.debug("All projects have been removed.")
             except Exception as e:
                 logger.error(f"Failed to remove projects directory: {e}")
         else:
             logger.warning("Projects directory does not exist.")
         cls.projects_dir.mkdir(parents=True, exist_ok=True)
-        logger.info("Projects directory cleaned and recreated.")
+        logger.debug("Projects directory cleaned and recreated.")
 
     @classmethod
     def download_fema_ble_model(cls, huc8, output_dir=None):
@@ -632,21 +632,21 @@ class RasExamples:
         # Compute final folder name with optional suffix
         folder_name = cls._get_folder_name(project_name, suffix)
 
-        logger.info(f"----- RasExamples Extracting Special Project -----")
-        logger.info(f"Extracting special project '{project_name}'" + (f" as '{folder_name}'" if suffix else ""))
+        logger.debug(f"----- RasExamples Extracting Special Project -----")
+        logger.debug(f"Extracting special project '{project_name}'" + (f" as '{folder_name}'" if suffix else ""))
 
         # Use provided output_path or default
         base_path = output_path if output_path else cls.projects_dir
 
         # Create the project directory with suffix-aware folder name
         project_path = base_path / folder_name
-        
+
         # Check if already exists
         if project_path.exists():
-            logger.info(f"Folder '{folder_name}' already exists. Deleting existing folder...")
+            logger.debug(f"Folder '{folder_name}' already exists. Deleting existing folder...")
             try:
                 shutil.rmtree(project_path)
-                logger.info(f"Existing folder '{folder_name}' has been deleted.")
+                logger.debug(f"Existing folder '{folder_name}' has been deleted.")
             except Exception as e:
                 logger.error(f"Failed to delete existing folder '{folder_name}': {e}")
                 raise

@@ -282,7 +282,7 @@ class HdfStruc1D:
             # Conservative estimate: TW slightly less than HW
             result['max_tw'] = result['max_hw']
             result['tw_source'] = f"Estimated from HW (same as {result['hw_source']})"
-            logger.info("TW not found separately - using HW value as conservative estimate")
+            logger.debug("TW not found separately - using HW value as conservative estimate")
 
         return result
 
@@ -538,8 +538,8 @@ class HdfStruc1D:
         df = pd.DataFrame(structures)
         if not df.empty:
             df = df.drop_duplicates(subset=['River', 'Reach', 'RS']).reset_index(drop=True)
-            logger.info(f"Found {len(df)} 1D structures with results")
+            logger.debug(f"Found {len(df)} 1D structures with results")
         else:
-            logger.info("No 1D structures found in HDF file")
+            logger.debug("No 1D structures found in HDF file")
 
         return df

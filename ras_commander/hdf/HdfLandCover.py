@@ -594,7 +594,7 @@ class HdfLandCover:
                 )
 
         if not normalized_mapping:
-            logger.info(f"No land cover classes supplied for update in {hdf_path}")
+            logger.debug(f"No land cover classes supplied for update in {hdf_path}")
 
         name_to_index = {
             class_name: idx for idx, class_name in enumerate(class_names)
@@ -609,7 +609,7 @@ class HdfLandCover:
                         idx = name_to_index[class_name]
                         old_n = float(mannings[idx])
                         mannings[idx] = new_n
-                        logger.info(
+                        logger.debug(
                             f"Updated '{class_name}' in {hdf_path.name} "
                             f"(v5): {old_n} -> {new_n}"
                         )
@@ -642,7 +642,7 @@ class HdfLandCover:
                         raster_row['ManningsN'] = new_n
                         raster_map[raster_idx] = raster_row
 
-                        logger.info(
+                        logger.debug(
                             f"Updated '{class_name}' in {hdf_path.name} "
                             f"(v6_0 Variables + Raster Map): {old_n} -> {new_n}"
                         )
@@ -662,7 +662,7 @@ class HdfLandCover:
                         old_n = float(row['ManningsN'])
                         row['ManningsN'] = new_n
                         variables[idx] = row
-                        logger.info(
+                        logger.debug(
                             f"Updated '{class_name}' in {hdf_path.name} "
                             f"(v6_modern Variables): {old_n} -> {new_n}"
                         )
@@ -759,7 +759,7 @@ class HdfLandCover:
                     })
 
         if not rows:
-            logger.info("No calibration overrides found (all regions use base values)")
+            logger.debug("No calibration overrides found (all regions use base values)")
             return pd.DataFrame(columns=[
                 'land_cover_class', 'base_n', 'region_name',
                 'calibrated_n', 'delta_n', 'pct_change'
@@ -984,7 +984,7 @@ class HdfLandCover:
                         float(pts[:, 0].max()) + buffer,
                         float(pts[:, 1].max()) + buffer,
                     )
-                    logger.info(f"Clipping to 2D flow area perimeter (+ {buffer:.0f} ft buffer)")
+                    logger.debug(f"Clipping to 2D flow area perimeter (+ {buffer:.0f} ft buffer)")
                 else:
                     # Fall back to full geometry extents
                     extents = hf['Geometry'].attrs.get('Extents')
@@ -993,7 +993,7 @@ class HdfLandCover:
                             float(extents[0]), float(extents[2]),
                             float(extents[1]), float(extents[3]),
                         )
-                        logger.info("Clipping to geometry extent (no 2D perimeter found)")
+                        logger.debug("Clipping to geometry extent (no 2D perimeter found)")
         except Exception as e:
             logger.debug(f"Could not read clip bounds from geometry HDF: {e}")
 
@@ -1026,7 +1026,7 @@ class HdfLandCover:
                 profile = src.profile.copy()
                 transform = src.transform
 
-            logger.info(f"Land cover raster: {lc_raster.shape} ({lc_raster.nbytes / 1024 / 1024:.0f} MB)")
+            logger.debug(f"Land cover raster: {lc_raster.shape} ({lc_raster.nbytes / 1024 / 1024:.0f} MB)")
 
             if lc_raster.size == 0:
                 logger.error("Land cover raster is empty after clipping — check clip bounds vs raster extent")
@@ -1034,7 +1034,7 @@ class HdfLandCover:
 
             # Rasterize calibration regions onto same grid
             if region_shapes:
-                logger.info(f"Rasterizing {len(region_shapes)} calibration regions")
+                logger.debug(f"Rasterizing {len(region_shapes)} calibration regions")
                 region_raster = rio_rasterize(
                     region_shapes,
                     out_shape=lc_raster.shape,

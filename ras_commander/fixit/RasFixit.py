@@ -638,7 +638,7 @@ class RasFixit:
                             bank_left=bank_left, bank_right=bank_right
                         )
                         results.total_xs_fixed += 1
-                        logger.info(
+                        logger.debug(
                             f"Normalized {river}/{reach}/RS {rs}"
                         )
                     except Exception as e:
@@ -829,7 +829,7 @@ class RasFixit:
                             fixed_df, fmt_flag, perm_flags
                         )
                         results.total_xs_fixed += 1
-                        logger.info(
+                        logger.debug(
                             f"Fixed ineffective flow for {river}/{reach}/RS {rs}: "
                             f"right_station=0 -> {rightmost:.2f}"
                         )
@@ -1127,7 +1127,7 @@ class RasFixit:
                             format_flag=0, change_flag=0
                         )
                         results.total_xs_fixed += 1
-                        logger.info(f"Fixed Manning's n for {river}/{reach}/RS {rs}")
+                        logger.debug(f"Fixed Manning's n for {river}/{reach}/RS {rs}")
                     except Exception as e:
                         logger.error(f"Failed to fix {river}/{reach}/RS {rs}: {e}")
 
