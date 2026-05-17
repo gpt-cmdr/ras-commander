@@ -1867,7 +1867,6 @@ def _upsert_raster_map_class(
             resolved_class_id = (max(positive_ids) + 1) if positive_ids else 1
         rows.append({"ID": resolved_class_id, "Name": class_name})
 
-    rows = sorted(rows, key=lambda row: int(row["ID"]))
     _replace_structured_dataset(hdf_file, "Raster Map", rows, dtype)
     return resolved_class_id
 
