@@ -42,7 +42,9 @@ Type RM Length L Ch R  = 1 ,12345.67,   100.0,   100.0,   100.0
 Call these static methods directly for common geometry operations:
 
 ```python
-from ras_commander import RasGeometry, RasGeo
+from ras_commander import RasGeometry
+from ras_commander.geom import GeomLandCover
+from ras_commander.hdf import HdfLandCover
 
 # Get cross sections from geometry file
 xs_df = RasGeometry.get_cross_sections(geom_file)
@@ -50,8 +52,11 @@ xs_df = RasGeometry.get_cross_sections(geom_file)
 # Get river/reach structure
 rivers = RasGeometry.get_rivers(geom_file)
 
-# Modify 2D Manning's n values
-RasGeo.set_2d_mannings_n(geom_file, new_n_values)
+# Modify 2D Manning's n base table (plain text geometry)
+GeomLandCover.set_base_mannings_n(geom_file, mannings_df)
+
+# Modify land cover sidecar (raster class -> n mapping)
+HdfLandCover.set_landcover_raster_map(sidecar_hdf, {"Forest": 0.12})
 ```
 
 ## Bank Station Interpolation
