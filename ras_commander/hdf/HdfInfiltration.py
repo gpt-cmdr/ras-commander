@@ -51,7 +51,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List, Tuple, Union
 import logging
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -940,29 +940,57 @@ class HdfInfiltration:
     @log_call
     def set_infiltration_layer_data(
         hdf_path: Path,
-        infiltration_df: pd.DataFrame
+        infiltration_df: pd.DataFrame,
+        geom_hdf_path: Union[str, Path, None] = None,
     ) -> Optional[pd.DataFrame]:
         """
-        Set infiltration layer data in the infiltration layer HDF file directly from the provided DataFrame.
-        # NOTE: This will not work if there are base overrides present in the Geometry HDF file. 
-        Updates the Variables dataset with the provided data.
+        Set infiltration layer data in the infiltration layer HDF file.
+
+        Writes to the ``//Variables`` dataset in the infiltration sidecar HDF.
+
+        .. warning::
+
+            If the associated geometry HDF contains a
+            ``/Geometry/Infiltration/Base Overrides`` dataset, values written
+            here are **ignored** by HEC-RAS during preprocessing.  Use
+            ``HdfInfiltration.set_infiltration_baseoverrides()`` instead when
+            Base Overrides are present.
 
         Parameters
         ----------
         hdf_path : Path
-            Path to the HEC-RAS infiltration layer HDF file
+            Path to the HEC-RAS infiltration layer HDF file (sidecar).
         infiltration_df : pd.DataFrame
             DataFrame containing infiltration parameters with columns:
             - Name (string)
             - Curve Number (float)
             - Abstraction Ratio (float)
             - Minimum Infiltration Rate (float)
+        geom_hdf_path : str, Path, or None
+            Optional path to the geometry HDF (.g##.hdf).  When provided, the
+            function checks for Base Overrides and emits a warning if they
+            exist.
 
         Returns
         -------
         Optional[pd.DataFrame]
-            The infiltration DataFrame if successful, None if operation fails
+            The infiltration DataFrame if successful, None if operation fails.
         """
+        if geom_hdf_path is not None:
+            geom_hdf_path = Path(geom_hdf_path)
+            if geom_hdf_path.exists():
+                try:
+                    with h5py.File(str(geom_hdf_path), 'r') as gf:
+                        if 'Geometry/Infiltration/Base Overrides' in gf:
+                            logger.warning(
+                                "Base Overrides exist in %s and will take "
+                                "precedence over sidecar values.  Edit with "
+                                "HdfInfiltration.set_infiltration_baseoverrides() "
+                                "instead.", geom_hdf_path.name
+                            )
+                except Exception:
+                    pass
+
         try:
             variables_path = '//Variables'
             
