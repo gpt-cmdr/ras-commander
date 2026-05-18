@@ -217,25 +217,35 @@ class RasCurrency:
     @staticmethod
     def check_plan_hdf_complete(hdf_path: Path) -> bool:
         """
-        Check if plan HDF contains 'Complete Process' in compute messages.
+        Check if plan HDF represents a successful computation.
+
+        Checks both 'Complete Process' in compute messages AND structural
+        integrity (/Plan Data/Plan Information must exist). A partially
+        written HDF from a failed preprocessing pass will fail this check.
 
         Args:
             hdf_path: Path to the plan HDF file
 
         Returns:
-            True if 'Complete Process' found, False otherwise
+            True if HDF is structurally complete with 'Complete Process'
         """
         if not hdf_path.exists():
             return False
 
         try:
-            # Late import to avoid circular dependency
+            import h5py
             from .hdf.HdfResultsPlan import HdfResultsPlan
 
             compute_msgs = HdfResultsPlan.get_compute_messages(hdf_path)
-            if compute_msgs and 'Complete Process' in compute_msgs:
-                return True
-            return False
+            if not compute_msgs or 'Complete Process' not in compute_msgs:
+                return False
+
+            with h5py.File(str(hdf_path), 'r') as hdf:
+                if hdf.get('Plan Data/Plan Information') is None:
+                    logger.debug(f"HDF missing '/Plan Data/Plan Information': {hdf_path.name}")
+                    return False
+
+            return True
         except Exception as e:
             logger.warning(f"Error checking completion for {hdf_path}: {e}")
             return False

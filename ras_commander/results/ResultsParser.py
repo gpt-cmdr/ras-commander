@@ -43,6 +43,8 @@ class ResultsParser:
         r'exception\s*:',                  # "Exception:"
         r'aborted',                        # "aborted"
         r'terminated\s+abnormally',        # "terminated abnormally"
+        r'\bwriter\s+failed\b',            # "Geometry Writer Failed"
+        r'exit\s+code\s*=\s*-?\d+',        # "Exit Code = -532462766" (RasProcess crash)
         r'\berror\b',                      # HEC-RAS data_errors: "Error generating Mesh"
     ]
 
