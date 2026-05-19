@@ -331,6 +331,54 @@ class ManningsFromLandCover:
         ])
 
     @staticmethod
+    @log_call
+    def default_landcover_classification_table(
+        percent_impervious: Optional[Mapping[int, float]] = None,
+        sanitize_names: bool = True,
+    ) -> pd.DataFrame:
+        """
+        Return the built-in NLCD table in ``RasMap.add_landcover_layer()`` shape.
+
+        The returned DataFrame maps source NLCD raster values to the HEC-RAS
+        land-cover sidecar class ID, class name, and starter Manning's n value.
+        ``percent_impervious`` may override the optional sidecar percent
+        impervious field by NLCD code. By default class names are sanitized for
+        RASMapper sidecar authoring because RAS rejects ``/`` and ``\\`` in
+        land-cover classifications.
+        """
+        percent_lookup = {
+            int(code): float(value)
+            for code, value in (percent_impervious or {}).items()
+        }
+        rows = []
+        for code, (class_name, n_value) in sorted(
+            ManningsFromLandCover.DEFAULT_NLCD_MANNINGS.items()
+        ):
+            rows.append(
+                {
+                    "source_value": int(code),
+                    "class_id": int(code),
+                    "class_name": (
+                        str(class_name).replace("/", "-").replace("\\", "-")
+                        if sanitize_names
+                        else str(class_name)
+                    ),
+                    "mannings_n": float(n_value),
+                    "percent_impervious": percent_lookup.get(int(code), 0.0),
+                }
+            )
+        return pd.DataFrame(
+            rows,
+            columns=[
+                "source_value",
+                "class_id",
+                "class_name",
+                "mannings_n",
+                "percent_impervious",
+            ],
+        )
+
+    @staticmethod
     def _validate_max_blocks(max_blocks: int) -> int:
         max_blocks = int(max_blocks)
         if max_blocks < 1:

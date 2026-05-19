@@ -10,6 +10,7 @@ All methods are static and designed to be used without instantiation.
 List of Functions:
 - get_base_mannings_n() - Read base Manning's n table from geometry file
 - set_base_mannings_n() - Write base Manning's n values to geometry file
+- replace_base_mannings_n() - Replace or create a base Manning's n class table
 - get_region_mannings_n() - Read Manning's n region overrides
 - set_region_mannings_n() - Write regional Manning's n overrides
 - override_2d_mannings_n() - EXPERIMENTAL: Override preprocessed Manning's n in geometry HDF
@@ -28,7 +29,7 @@ Example Usage:
 """
 
 from pathlib import Path
-from typing import Union
+from typing import Any, Optional, Union
 import pandas as pd
 
 from ..LoggingConfig import get_logger
@@ -43,6 +44,110 @@ class GeomLandCover:
 
     All methods are static and designed to be used without instantiation.
     """
+
+    _TABLE_END_PREFIXES = (
+        'LCMann',
+        'Chan Stop',
+        'Geom Raster',
+        'GIS ',
+        'Use User',
+        'User Specified',
+    )
+
+    _NAME_COLUMNS = (
+        'Land Cover Name',
+        'land_cover_name',
+        'class_name',
+        'Class Name',
+        'Name',
+    )
+
+    _N_VALUE_COLUMNS = (
+        'Base Mannings n Value',
+        "Base Manning's n Value",
+        'mannings_n',
+        'ManningsN',
+        'n_value',
+        "Manning's n",
+        'Mannings n',
+    )
+
+    @staticmethod
+    def _first_existing_column(df: pd.DataFrame, candidates: tuple[str, ...]) -> Optional[str]:
+        for candidate in candidates:
+            if candidate in df.columns:
+                return candidate
+        return None
+
+    @staticmethod
+    def _normalize_base_table(
+        mannings_data: Any,
+        table_number: Optional[Union[str, int]] = None,
+    ) -> tuple[str, pd.DataFrame]:
+        df = pd.DataFrame(mannings_data).copy()
+        if df.empty:
+            raise ValueError("Manning's n table cannot be empty")
+
+        name_col = GeomLandCover._first_existing_column(df, GeomLandCover._NAME_COLUMNS)
+        value_col = GeomLandCover._first_existing_column(df, GeomLandCover._N_VALUE_COLUMNS)
+        if name_col is None or value_col is None:
+            raise ValueError(
+                "Manning's n data must include land-cover name and n-value columns"
+            )
+
+        if table_number is None:
+            if 'Table Number' in df.columns and not df['Table Number'].dropna().empty:
+                table_number = str(df['Table Number'].dropna().iloc[0])
+            else:
+                table_number = "16"
+        table_number = str(table_number)
+
+        normalized = pd.DataFrame(
+            {
+                'Table Number': table_number,
+                'Land Cover Name': df[name_col].astype(str).str.strip(),
+                'Base Mannings n Value': pd.to_numeric(df[value_col], errors='coerce'),
+            }
+        )
+        normalized = normalized.loc[
+            (normalized['Land Cover Name'] != "")
+            & normalized['Base Mannings n Value'].notna()
+        ].copy()
+        if normalized.empty:
+            raise ValueError("Manning's n table has no writable rows")
+        return table_number, normalized
+
+    @staticmethod
+    def _find_lcmann_table_bounds(
+        lines: list[str],
+        table_number: Optional[str] = None,
+    ) -> tuple[Optional[int], Optional[int], Optional[str]]:
+        start_idx = None
+        resolved_table_number = table_number
+
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if not stripped.startswith("LCMann Table="):
+                continue
+            candidate_table_number = stripped.split("=", 1)[1].strip()
+            if table_number is None or candidate_table_number == str(table_number):
+                start_idx = i
+                resolved_table_number = candidate_table_number
+                break
+
+        if start_idx is None:
+            return None, None, resolved_table_number
+
+        end_idx = len(lines)
+        for j in range(start_idx + 1, len(lines)):
+            stripped = lines[j].strip()
+            if stripped and any(
+                stripped.startswith(prefix)
+                for prefix in GeomLandCover._TABLE_END_PREFIXES
+            ):
+                end_idx = j
+                break
+        return start_idx, end_idx, resolved_table_number
 
     @staticmethod
     @log_call
@@ -170,15 +275,6 @@ class GeomLandCover:
         start_idx = None
         end_idx = None
 
-        _TABLE_END_PREFIXES = (
-            'LCMann',
-            'Chan Stop',
-            'Geom Raster',
-            'GIS ',
-            'Use User',
-            'User Specified',
-        )
-
         for i, line in enumerate(lines):
             if line.strip() == f"LCMann Table={table_number}":
                 start_idx = i
@@ -186,7 +282,7 @@ class GeomLandCover:
                 # non-land-cover line, or end of file)
                 for j in range(i+1, len(lines)):
                     stripped = lines[j].strip()
-                    if stripped and any(stripped.startswith(p) for p in _TABLE_END_PREFIXES):
+                    if stripped and any(stripped.startswith(p) for p in GeomLandCover._TABLE_END_PREFIXES):
                         end_idx = j
                         break
                 if end_idx is None:  # If we reached the end of the file
@@ -239,6 +335,99 @@ class GeomLandCover:
                 break
 
         # Write the updated file
+        with open(geom_file_path, 'w', encoding='utf-8') as f:
+            f.writelines(updated_lines)
+
+        return True
+
+    @staticmethod
+    @log_call
+    def replace_base_mannings_n(
+        geom_file_path: Union[str, Path],
+        mannings_data: Any,
+        table_number: Optional[Union[str, int]] = None,
+        backup: bool = True,
+    ) -> bool:
+        """
+        Replace or create the plain-text ``LCMann Table=`` base Manning's n table.
+
+        Unlike :meth:`set_base_mannings_n`, this authoring method allows the
+        land-cover class names themselves to change. It is intended for new
+        land-cover layer workflows where the sidecar HDF class list is being
+        established and the geometry text file must receive the matching
+        authoritative base n-values.
+
+        Args:
+            geom_file_path: Path to the HEC-RAS geometry text file (``.g##``).
+            mannings_data: DataFrame-like table with land-cover names and
+                n-values. Accepted name columns include ``Land Cover Name`` and
+                ``class_name``; accepted n-value columns include
+                ``Base Mannings n Value``, ``mannings_n``, and ``n_value``.
+            table_number: Optional ``LCMann Table`` number. Defaults to the
+                first table in the file, the input ``Table Number`` column, or
+                ``16`` for new tables.
+            backup: If True, write ``.bak`` beside the geometry file first.
+
+        Returns:
+            True if the geometry text file was updated.
+        """
+        import datetime
+        import shutil
+
+        geom_file_path = Path(geom_file_path)
+        requested_table_number, normalized = GeomLandCover._normalize_base_table(
+            mannings_data,
+            table_number=table_number,
+        )
+
+        if backup:
+            backup_path = geom_file_path.with_suffix(geom_file_path.suffix + '.bak')
+            shutil.copy2(geom_file_path, backup_path)
+
+        with open(geom_file_path, 'r', encoding='utf-8', errors='replace') as f:
+            lines = f.readlines()
+
+        start_idx, end_idx, existing_table_number = GeomLandCover._find_lcmann_table_bounds(
+            lines,
+            table_number=str(table_number) if table_number is not None else None,
+        )
+        # If exact table_number wasn't found but one was specified, replace ANY
+        # existing LCMann Table (e.g. disabled "=0") instead of appending a duplicate.
+        if start_idx is None and table_number is not None:
+            start_idx, end_idx, _ = GeomLandCover._find_lcmann_table_bounds(
+                lines, table_number=None,
+            )
+        resolved_table_number = existing_table_number or requested_table_number
+        normalized['Table Number'] = str(resolved_table_number)
+
+        new_content = [f"LCMann Table={resolved_table_number}\n"]
+        for _, row in normalized.iterrows():
+            n_value = float(row['Base Mannings n Value'])
+            new_content.append(f"{row['Land Cover Name']},{n_value:g}\n")
+
+        if start_idx is not None and end_idx is not None:
+            updated_lines = lines[:start_idx] + new_content + lines[end_idx:]
+        else:
+            insert_idx = len(lines)
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if stripped.startswith(('Chan Stop', 'Geom Raster', 'Use User', 'GIS ')):
+                    insert_idx = i
+                    break
+
+            prefix_lines = []
+            if not any(line.strip().startswith("LCMann Time=") for line in lines):
+                prefix_lines.append("LCMann Time=Dec/30/1899 00:00:00\n")
+            if not any(line.strip().startswith("LCMann Region Time=") for line in lines):
+                prefix_lines.append("LCMann Region Time=Dec/30/1899 00:00:00\n")
+            updated_lines = lines[:insert_idx] + prefix_lines + new_content + lines[insert_idx:]
+
+        current_time = datetime.datetime.now().strftime("%b/%d/%Y %H:%M:%S")
+        for i, line in enumerate(updated_lines):
+            if line.strip().startswith("LCMann Time="):
+                updated_lines[i] = f"LCMann Time={current_time}\n"
+                break
+
         with open(geom_file_path, 'w', encoding='utf-8') as f:
             f.writelines(updated_lines)
 

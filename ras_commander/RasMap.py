@@ -725,6 +725,7 @@ class RasMap:
         source_field: Optional[str] = None,
         output_hdf_path: Optional[Union[str, Path]] = None,
         restrict_to_extent: Optional[Any] = None,
+        layer_name: str = "LandCover",
         ras_object=None,
     ) -> Path:
         """
@@ -743,6 +744,7 @@ class RasMap:
             source_field=source_field,
             output_hdf_path=output_hdf_path,
             restrict_to_extent=restrict_to_extent,
+            layer_name=layer_name,
         )
 
     @staticmethod
