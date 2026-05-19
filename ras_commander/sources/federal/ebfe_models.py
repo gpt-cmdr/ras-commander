@@ -24,7 +24,7 @@ Last Updated: 2026-04-24
 """
 
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Union
 import os
 import re
 import shutil
@@ -36,6 +36,9 @@ import requests
 from tqdm import tqdm
 
 from ras_commander.Decorators import log_call
+from ras_commander.sources.base import (
+    DownloadResult, ModelMetadata, ModelSource, ModelType, SourceStatus,
+)
 
 
 class RasEbfeModels:
@@ -228,6 +231,95 @@ class RasEbfeModels:
                 "notes": str(metadata["notes"]),
             }
         return models
+
+    # ── ModelSource protocol ──────────────────────────────────────────────────
+
+    @property
+    def source_name(self) -> str:
+        return "FEMA eBFE/BLE"
+
+    @property
+    def source_type(self) -> str:
+        return "federal"
+
+    @staticmethod
+    def get_source_status() -> SourceStatus:
+        """Always available — registry is built-in, no network required."""
+        return SourceStatus.AVAILABLE
+
+    @staticmethod
+    def list_models(
+        location: Optional[str] = None,
+        model_type: Optional[ModelType] = None,
+        hecras_version: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        limit: Optional[int] = None,
+        **kwargs,
+    ) -> List[ModelMetadata]:
+        """Return ModelMetadata for all registered eBFE models, with optional filtering."""
+        results: List[ModelMetadata] = []
+        for key, meta in RasEbfeModels._MODEL_REGISTRY.items():
+            if location and location.lower() not in meta["study_area"].lower():
+                continue
+            if hecras_version and meta["ras_version"] != hecras_version:
+                continue
+            results.append(
+                ModelMetadata(
+                    source_name="FEMA eBFE/BLE",
+                    source_id=key,
+                    name=meta["study_area"],
+                    description=meta["notes"],
+                    location=meta["huc8"],
+                    model_type=ModelType.UNSTEADY_2D,
+                    hecras_version=meta["ras_version"],
+                    tags=["ebfe", "ble", "fema", meta["huc8"]],
+                )
+            )
+            if limit and len(results) >= limit:
+                break
+        return results
+
+    @staticmethod
+    @log_call
+    def download_model(
+        model_id: str,
+        output_folder: Union[str, Path],
+        extract: bool = True,
+        overwrite: bool = False,
+        credentials: Optional[dict] = None,
+        **kwargs,
+    ) -> DownloadResult:
+        """Thin ModelSource-compatible wrapper around organize_model()."""
+        try:
+            organized_path = RasEbfeModels.organize_model(
+                model_key=model_id,
+                output_root=Path(output_folder),
+                **kwargs,
+            )
+            meta = RasEbfeModels._MODEL_REGISTRY.get(
+                RasEbfeModels.normalize_model_key(model_id), {}
+            )
+            return DownloadResult(
+                success=True,
+                model_path=organized_path,
+                message=f"Organized {model_id} to {organized_path}",
+                metadata=ModelMetadata(
+                    source_name="FEMA eBFE/BLE",
+                    source_id=model_id,
+                    name=meta.get("study_area", model_id),
+                    description=meta.get("notes", ""),
+                    location=meta.get("huc8", ""),
+                    model_type=ModelType.UNSTEADY_2D,
+                    hecras_version=meta.get("ras_version"),
+                ),
+                extracted=True,
+            )
+        except Exception as exc:
+            return DownloadResult(
+                success=False,
+                model_path=None,
+                message=str(exc),
+            )
 
     @staticmethod
     @log_call
