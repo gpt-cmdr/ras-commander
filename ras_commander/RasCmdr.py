@@ -255,14 +255,19 @@ class RasCmdr:
         return True
 
     @staticmethod
-    def _verify_completion(hdf_path: Path, check_errors: bool = False) -> bool:
+    def _verify_completion(hdf_path: Path, check_errors: bool = True) -> bool:
         """
         Verify that a HEC-RAS computation completed successfully (HDF-only).
+
+        Checks three conditions:
+        1. 'Complete Process' present in compute messages
+        2. '/Plan Data/Plan Information' HDF group exists (structural integrity)
+        3. No error patterns in compute messages (when check_errors=True)
 
         Args:
             hdf_path: Path to plan HDF file
             check_errors: If True, also fail verification if errors detected
-                         in compute messages (default: False for backward compatibility)
+                         in compute messages (default: True)
 
         Returns:
             bool: True if verification passed
@@ -272,25 +277,30 @@ class RasCmdr:
             return False
 
         try:
-            # Late import to avoid circular dependency
+            import h5py
             from .hdf.HdfResultsPlan import HdfResultsPlan
 
             compute_msgs = HdfResultsPlan.get_compute_messages_hdf_only(hdf_path)
 
-            if compute_msgs and 'Complete Process' in compute_msgs:
-                # Optionally check for errors
-                if check_errors:
-                    from .results.ResultsParser import ResultsParser
-                    parsed = ResultsParser.parse_compute_messages(compute_msgs)
-                    if parsed['has_errors']:
-                        logger.debug(f"Verification failed: {parsed['error_count']} errors found in {hdf_path.name}")
-                        return False
-
-                logger.debug(f"Verification passed: 'Complete Process' found in {hdf_path.name}")
-                return True
-            else:
+            if not compute_msgs or 'Complete Process' not in compute_msgs:
                 logger.debug(f"Verification failed: 'Complete Process' not found in {hdf_path.name}")
                 return False
+
+            # Structural check: /Plan Data/Plan Information must exist
+            with h5py.File(str(hdf_path), 'r') as hdf:
+                if hdf.get('Plan Data/Plan Information') is None:
+                    logger.warning(f"Verification failed: '/Plan Data/Plan Information' missing in {hdf_path.name} (partial HDF)")
+                    return False
+
+            if check_errors:
+                from .results.ResultsParser import ResultsParser
+                parsed = ResultsParser.parse_compute_messages(compute_msgs)
+                if parsed['has_errors']:
+                    logger.warning(f"Verification failed: {parsed['error_count']} errors found in {hdf_path.name}")
+                    return False
+
+            logger.debug(f"Verification passed for {hdf_path.name}")
+            return True
         except Exception as e:
             logger.warning(f"Error verifying completion for {hdf_path}: {e}")
             return False
@@ -515,7 +525,7 @@ class RasCmdr:
             # Skip existing check - runs regardless of force_rerun (for resume capability)
             if skip_existing:
                 hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
-                if RasCmdr._verify_completion(hdf_path):
+                if RasCmdr._verify_completion(hdf_path, check_errors=False):
                     logger.info(f"Skipping plan {plan_number}: HDF results already exist with 'Complete Process'")
                     _success = True
                     return ComputeResult(success=True, results_df_row=None)
@@ -881,7 +891,7 @@ class RasCmdr:
                 plans_to_compute = []
                 for plan_num in filtered_plan_numbers:
                     hdf_path = RasCmdr._get_hdf_path(plan_num, ras_obj)
-                    if RasCmdr._verify_completion(hdf_path):
+                    if RasCmdr._verify_completion(hdf_path, check_errors=False):
                         plans_to_skip.append(plan_num)
                         execution_results[plan_num] = True  # Mark as successful (results exist)
                     else:

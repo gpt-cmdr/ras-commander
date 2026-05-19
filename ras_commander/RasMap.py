@@ -79,7 +79,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 import pandas as pd
 import shutil
-from typing import Union, Optional, Dict, List, Any, Sequence, TYPE_CHECKING
+from typing import Union, Optional, Dict, List, Any, Sequence, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -725,6 +725,7 @@ class RasMap:
         source_field: Optional[str] = None,
         output_hdf_path: Optional[Union[str, Path]] = None,
         restrict_to_extent: Optional[Any] = None,
+        layer_name: str = "LandCover",
         ras_object=None,
     ) -> Path:
         """
@@ -743,6 +744,7 @@ class RasMap:
             source_field=source_field,
             output_hdf_path=output_hdf_path,
             restrict_to_extent=restrict_to_extent,
+            layer_name=layer_name,
         )
 
     @staticmethod
@@ -2220,6 +2222,142 @@ class RasMap:
         from . import _rasmap_control_helper as _rch
 
         return _rch.close_rasmapper(pid=pid)
+
+    @staticmethod
+    @log_call
+    def screenshot_model(
+        ras_project_path: Union[str, Path],
+        output_path: Optional[Union[str, Path]] = None,
+        *,
+        delay_seconds: float = 5.0,
+        timeout_seconds: float = 1800.0,
+        ras_version: Optional[str] = None,
+    ) -> Optional[Path]:
+        """
+        One-call screenshot: backup rasmap, open RASMapper, capture, close, restore.
+
+        This is a convenience wrapper around ``open_rasmapper``,
+        ``capture_rasmapper_snapshot``, and ``close_rasmapper`` for the
+        common case of capturing a model's current RASMapper view.
+
+        Args:
+            ras_project_path: Path to the .prj file (no init_ras_project needed).
+            output_path: Where to save the PNG. Defaults to
+                ``{project_folder}/{project_name}_screenshot.png``.
+            delay_seconds: Wait time for RASMapper to render before capture.
+            timeout_seconds: Max time to wait for RASMapper window.
+            ras_version: HEC-RAS version for finding RASMapper.exe.
+
+        Returns:
+            Path to the saved PNG, or None if capture failed.
+        """
+        import shutil
+        from . import _rasmap_control_helper as _rch
+
+        prj_path = Path(ras_project_path)
+        project_folder = prj_path.parent
+        project_name = prj_path.stem
+        rasmap_path = project_folder / f"{project_name}.rasmap"
+
+        # Backup .rasmap
+        rasmap_backup = None
+        if rasmap_path.exists():
+            rasmap_backup = rasmap_path.with_suffix(".rasmap.screenshot_bak")
+            shutil.copy2(rasmap_path, rasmap_backup)
+
+        # Default output path
+        if output_path is None:
+            output_path = project_folder / f"{project_name}_screenshot.png"
+        output_path = Path(output_path)
+
+        screenshot_result = None
+        try:
+            proc = _rch.open_rasmapper(
+                prj_path,
+                ras_version=ras_version,
+                wait=False,
+            )
+            pid = proc.pid if proc else None
+
+            screenshot_result = _rch.capture_rasmapper_snapshot(
+                pid=pid,
+                output_path=output_path,
+                delay_seconds=delay_seconds,
+                timeout_seconds=timeout_seconds,
+            )
+
+            _rch.close_rasmapper(pid=pid)
+        finally:
+            # Restore .rasmap from backup
+            if rasmap_backup and rasmap_backup.exists():
+                shutil.copy2(rasmap_backup, rasmap_path)
+                rasmap_backup.unlink()
+
+        if screenshot_result and screenshot_result.exists():
+            logger.info(f"Screenshot saved to {screenshot_result}")
+        else:
+            logger.warning("Screenshot capture returned no file")
+
+        return screenshot_result
+
+    @staticmethod
+    @log_call
+    def screenshot_model_gallery(
+        models: List[Tuple[Union[str, Path], str]],
+        output_dir: Union[str, Path],
+        *,
+        delay_seconds: float = 5.0,
+        timeout_seconds: float = 1800.0,
+        ras_version: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Capture screenshots of multiple models into a gallery directory.
+
+        Args:
+            models: List of (project_path, label) tuples. Each project_path
+                is a .prj file; label is used for the output filename.
+            output_dir: Directory for all screenshots.
+            delay_seconds: Render wait per model.
+            timeout_seconds: Max wait per model.
+            ras_version: HEC-RAS version for finding RASMapper.exe.
+
+        Returns:
+            List of dicts with keys: label, project_path, screenshot_path, success.
+        """
+        out = Path(output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+
+        results = []
+        for project_path, label in models:
+            safe_label = "".join(c if c.isalnum() or c in "-_ " else "_" for c in label)
+            png_path = out / f"{safe_label}.png"
+
+            try:
+                result_path = RasMap.screenshot_model(
+                    project_path,
+                    output_path=png_path,
+                    delay_seconds=delay_seconds,
+                    timeout_seconds=timeout_seconds,
+                    ras_version=ras_version,
+                )
+                results.append({
+                    "label": label,
+                    "project_path": str(project_path),
+                    "screenshot_path": str(result_path) if result_path else None,
+                    "success": result_path is not None and result_path.exists(),
+                })
+            except Exception as e:
+                logger.error(f"Failed to screenshot '{label}': {e}")
+                results.append({
+                    "label": label,
+                    "project_path": str(project_path),
+                    "screenshot_path": None,
+                    "success": False,
+                })
+
+        successful = sum(1 for r in results if r["success"])
+        logger.info(f"Gallery: {successful}/{len(models)} screenshots captured in {out}")
+        return results
 
     @staticmethod
     @log_call

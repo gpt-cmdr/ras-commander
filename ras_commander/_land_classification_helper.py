@@ -1275,9 +1275,8 @@ def _resource_template_path(filename: str) -> Path:
 def _set_hdf_string_attr(hdf_file: h5py.File, key: str, value: str) -> None:
     payload = np.bytes_(value)
     if key in hdf_file.attrs:
-        hdf_file.attrs.modify(key, payload)
-    else:
-        hdf_file.attrs[key] = payload
+        del hdf_file.attrs[key]
+    hdf_file.attrs[key] = payload
 
 
 def _decode_hdf_string(value: Any) -> str:
@@ -1867,6 +1866,7 @@ def _upsert_raster_map_class(
             resolved_class_id = (max(positive_ids) + 1) if positive_ids else 1
         rows.append({"ID": resolved_class_id, "Name": class_name})
 
+    rows = sorted(rows, key=lambda row: int(row["ID"]))
     _replace_structured_dataset(hdf_file, "Raster Map", rows, dtype)
     return resolved_class_id
 
@@ -2720,6 +2720,7 @@ def add_landcover_layer(
     source_field: Optional[str] = None,
     output_hdf_path: Optional[Union[str, Path]] = None,
     restrict_to_extent: Optional[Any] = None,
+    layer_name: str = "LandCover",
 ) -> Path:
     """Create and register a land-cover classification layer."""
     project_paths = resolve_project_paths(ras_project_path)
@@ -2766,7 +2767,7 @@ def add_landcover_layer(
     upsert_land_classification_layer(
         project_paths,
         output_hdf_path,
-        layer_name="LandCover",
+        layer_name=layer_name,
         selected_parameter="ManningsN",
         alpha=128,
     )

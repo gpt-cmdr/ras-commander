@@ -294,7 +294,16 @@ class HdfStruc1D:
         rs: str,
         result: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Extract max values from steady results for a structure."""
+        """Extract max values from steady results for a structure.
+
+        Steady-state HDF stores results only at cross section locations.
+        Bridges, culverts, and inline structures do NOT appear in the Cross
+        Section Attributes array — they are listed only in Node Info with a
+        type suffix (e.g. ``"52.37 BR"``).  When the target RS is a
+        structure, this method identifies the flanking cross sections
+        (immediately upstream and downstream) and reports HW from the
+        upstream XS and TW from the downstream XS.
+        """
         base_path = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Cross Sections"
 
         if base_path not in hdf_file:
@@ -304,7 +313,6 @@ class HdfStruc1D:
         # Get cross section attributes
         attrs_path = f"{base_path}/Attributes"
         if attrs_path not in hdf_file:
-            # Try alternate path
             attrs_path = "Results/Steady/Output/Geometry Info/Cross Section Attributes"
             if attrs_path not in hdf_file:
                 logger.warning("No cross section attributes found")
@@ -312,7 +320,6 @@ class HdfStruc1D:
 
         attrs_data = hdf_file[attrs_path][()]
 
-        # Build location lookup (similar to unsteady)
         xs_locations = []
         for i, attr in enumerate(attrs_data):
             xs_river = attr['River'].decode('utf-8').strip() if isinstance(attr['River'], bytes) else str(attr['River']).strip()
@@ -326,31 +333,91 @@ class HdfStruc1D:
                 'station': xs_station
             })
 
-        # Find structure location
+        # Strategy 1: direct match (structure RS exists as a cross section)
         hw_idx = None
+        tw_idx = None
         for xs in xs_locations:
             if xs['river'] == river and xs['reach'] == reach:
                 if xs['station'] == rs:
                     hw_idx = xs['index']
+                    tw_idx = xs['index']
                     result['hw_source'] = f"{river}/{reach}/{rs}"
+                    result['tw_source'] = f"{river}/{reach}/{rs}"
                     break
 
+        # Strategy 2: structure not in XS attrs — find flanking cross sections
+        if hw_idx is None:
+            node_info_path = "Results/Steady/Output/Geometry Info/Node Info"
+            if node_info_path in hdf_file:
+                node_data = hdf_file[node_info_path][()]
+                nodes = [
+                    (n.decode('utf-8') if isinstance(n, bytes) else str(n)).strip().rstrip('\x00').strip()
+                    for n in node_data
+                ]
+                structure_node_idx = None
+                for ni, node_str in enumerate(nodes):
+                    parts = node_str.split()
+                    if len(parts) >= 4:
+                        node_rs = parts[-2]
+                        node_type = parts[-1]
+                        if node_rs == rs and node_type in ("BR", "IC", "IW"):
+                            structure_node_idx = ni
+                            break
+
+                if structure_node_idx is not None:
+                    reach_xs = [
+                        xs for xs in xs_locations
+                        if xs['river'] == river and xs['reach'] == reach
+                    ]
+                    try:
+                        target_rs_float = float(rs)
+                    except ValueError:
+                        target_rs_float = None
+
+                    if target_rs_float is not None and reach_xs:
+                        upstream = None
+                        downstream = None
+                        for xs in reach_xs:
+                            try:
+                                xs_rs_float = float(xs['station'].rstrip('*'))
+                            except ValueError:
+                                continue
+                            if xs_rs_float > target_rs_float:
+                                if upstream is None or xs_rs_float < float(upstream['station'].rstrip('*')):
+                                    upstream = xs
+                            elif xs_rs_float < target_rs_float:
+                                if downstream is None or xs_rs_float > float(downstream['station'].rstrip('*')):
+                                    downstream = xs
+
+                        if upstream is not None:
+                            hw_idx = upstream['index']
+                            result['hw_source'] = f"{river}/{reach}/{upstream['station']} (US of {rs})"
+                        if downstream is not None:
+                            tw_idx = downstream['index']
+                            result['tw_source'] = f"{river}/{reach}/{downstream['station']} (DS of {rs})"
+                        elif upstream is not None:
+                            tw_idx = hw_idx
+                            result['tw_source'] = result['hw_source']
+
+                        if hw_idx is not None:
+                            logger.info(
+                                f"Steady structure {rs}: using flanking XS "
+                                f"US={upstream['station'] if upstream else 'N/A'}, "
+                                f"DS={downstream['station'] if downstream else 'N/A'}"
+                            )
+
         if hw_idx is not None:
-            # Water Surface (steady has multiple profiles - take max across all)
             ws_path = f"{base_path}/Water Surface"
             if ws_path in hdf_file:
                 ws_data = hdf_file[ws_path][:]
                 if hw_idx < ws_data.shape[1]:
-                    # Shape is typically (num_profiles, num_xs)
                     result['max_hw'] = float(np.nanmax(ws_data[:, hw_idx]))
-                    result['max_tw'] = result['max_hw']  # Conservative
-                    result['tw_source'] = result['hw_source']
                     result['found'] = True
+                if tw_idx is not None and tw_idx < ws_data.shape[1]:
+                    result['max_tw'] = float(np.nanmax(ws_data[:, tw_idx]))
 
-            # Flow
             flow_path = f"{base_path}/Flow"
             if flow_path not in hdf_file:
-                # Try alternate path for flow
                 flow_path = f"{base_path}/Additional Variables/Flow"
 
             if flow_path in hdf_file:

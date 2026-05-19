@@ -33,6 +33,7 @@ This file is the canonical local instruction file for `examples/`.
 - `101_project_initialization.ipynb` - project metadata and DataFrame patterns
 - `110_single_plan_execution.ipynb` and `113_parallel_execution.ipynb` - execution patterns
 - `201_1d_plaintext_geometry.ipynb`, `203_htab_parameter_optimization.ipynb`, `205_extract_xs_xyz_from_geometry.ipynb` - geometry parsing and HTAB work
+- `218_infiltration_base_override_authoring.ipynb` - programmatic infiltration group creation and Base Override round-trip
 - `310_validating_dss_paths.ipynb` and `312_boundary_df_qmult_dss_paths.ipynb` - DSS workflows
 - `410_2d_hdf_data_extraction.ipynb` and `412_2d_detail_face_data_extraction.ipynb` - mesh and results extraction
 - `421_usgs_gauge_data_integration.ipynb` through `424_model_validation_with_usgs.ipynb` - USGS integration

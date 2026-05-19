@@ -16,6 +16,8 @@ from datetime import datetime
 from pathlib import Path, PureWindowsPath
 from typing import Any, Callable, Dict, Mapping, Optional, Union
 
+import numpy as np
+
 from .RasUtils import RasUtils
 
 
@@ -93,9 +95,9 @@ def decode_hdf_attr(value: Any) -> Optional[str]:
     return text if text else None
 
 
-def encode_hdf_attr(value: str) -> bytes:
+def encode_hdf_attr(value: str) -> np.bytes_:
     """Encode an HDF string attribute in the byte-string style HEC-RAS uses."""
-    return str(value).encode("utf-8")
+    return np.bytes_(str(value).encode("utf-8"))
 
 
 def resolve_association_attr_path(hdf_path: PathLike, attr_value: str) -> Path:

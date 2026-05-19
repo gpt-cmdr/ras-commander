@@ -41,6 +41,7 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - 2D results extraction: `HdfResultsMesh`
 - 1D cross section geometry and results: `HdfXsec`, `HdfResultsXsec`
 - Land cover and infiltration preprocessing: `HdfLandCover`, `HdfInfiltration`
+- Infiltration group authoring: `HdfInfiltration.create_infiltration_group()`, `HdfInfiltration.set_infiltration_baseoverrides()`
 
 ## Testing
 

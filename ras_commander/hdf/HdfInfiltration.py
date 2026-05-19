@@ -51,7 +51,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List, Tuple, Union
 import logging
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -510,7 +510,365 @@ class HdfInfiltration:
             logger.error(f"Error reading infiltration region polygons from {hdf_path}: {str(e)}")
             return gpd.GeoDataFrame()
 
-    # set_infiltration_baseoverrides goes here, once finalized tested and fixed.
+    SOIL_GROUPS = ['NoData', 'D', 'C', 'B', 'A']
+
+    @staticmethod
+    @log_call
+    def create_infiltration_group(
+        hdf_path: Path,
+        region_names: Optional[List[str]] = None,
+    ) -> pd.DataFrame:
+        """
+        Create the /Geometry/Infiltration group in a geometry HDF file.
+
+        Reads land cover class names from the existing Land Cover (Manning's n)
+        Calibration Table, reuses the Land Cover region polygon geometry, and
+        initializes all infiltration parameters to -9999.0 (no active override).
+
+        After this function completes, ``set_infiltration_baseoverrides()`` can
+        modify the Curve Number, Abstraction Ratio, and Minimum Infiltration
+        Rate values.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file (.g##.hdf).
+        region_names : list of str, optional
+            Names for the infiltration calibration regions. If *None*, reuses
+            the Land Cover region names (e.g. ``["Manning's Region 1"]``).
+
+        Returns
+        -------
+        pd.DataFrame
+            The Base Overrides table that was written (all values -9999.0).
+
+        Raises
+        ------
+        ValueError
+            If the HDF has no Land Cover (Manning's n) group, its polygon
+            datasets are missing, or if the Infiltration group already exists.
+        """
+        hdf_path = Path(hdf_path)
+
+        lc_group_path = "Geometry/Land Cover (Manning's n)"
+        lc_cal_path = f"{lc_group_path}/Calibration Table"
+        infil_group_path = "Geometry/Infiltration"
+
+        soil_groups = HdfInfiltration.SOIL_GROUPS
+
+        # ── Phase 1: Read Land Cover structure ──────────────────────────
+        with h5py.File(hdf_path, 'r') as hf:
+            if lc_group_path not in hf:
+                raise ValueError(
+                    f"No Land Cover (Manning's n) group in {hdf_path}. "
+                    "Associate a land cover layer in HEC-RAS before creating "
+                    "infiltration overrides."
+                )
+            if lc_cal_path not in hf:
+                raise ValueError(
+                    f"Land Cover group exists but Calibration Table is missing "
+                    f"in {hdf_path}. Re-run the geometry preprocessor."
+                )
+            if infil_group_path in hf:
+                raise ValueError(
+                    f"Infiltration group already exists in {hdf_path}. "
+                    "Use set_infiltration_baseoverrides() to modify values."
+                )
+
+            lc_group = hf[lc_group_path]
+            for req in ("Polygon Info", "Polygon Parts", "Polygon Points", "Attributes"):
+                if req not in lc_group:
+                    raise ValueError(
+                        f"Land Cover group missing '{req}' dataset in {hdf_path}. "
+                        "Re-run the geometry preprocessor."
+                    )
+
+            lc_class_names = [
+                v.decode('utf-8').strip()
+                for v in hf[lc_cal_path]['Land Cover Name']
+            ]
+
+            lc_attrs_data = lc_group["Attributes"][()]
+            lc_region_names = [
+                v.decode('utf-8').strip()
+                for v in lc_attrs_data['Name']
+            ]
+            n_lc_regions = len(lc_region_names)
+
+            lc_poly_info = lc_group["Polygon Info"][()]
+            lc_poly_parts = lc_group["Polygon Parts"][()]
+            lc_poly_points = lc_group["Polygon Points"][()]
+
+        if region_names is None:
+            region_names = lc_region_names
+
+        n_regions = len(region_names)
+
+        # ── Phase 2: Build Base Override names ──────────────────────────
+        override_names = []
+        for i, lc_name in enumerate(lc_class_names):
+            for j, sg in enumerate(soil_groups):
+                if i == 0 and j == 0:
+                    override_names.append(lc_name)
+                else:
+                    override_names.append(f"{lc_name} : {sg}")
+        n_overrides = len(override_names)
+
+        max_name_len = max(len(n) for n in override_names) + 2
+        name_dtype_width = max(max_name_len, 37)
+
+        # ── Phase 3: Build structured arrays ────────────────────────────
+        # Attributes
+        attr_name_width = max(max(len(n) for n in region_names) + 2, 30)
+        attrs_dtype = np.dtype([('Name', f'S{attr_name_width}')])
+        attrs_array = np.array(
+            [(n.encode('utf-8'),) for n in region_names],
+            dtype=attrs_dtype,
+        )
+
+        # Base Overrides
+        bo_dtype = np.dtype([
+            ('Land Cover Name', f'S{name_dtype_width}'),
+            ('Curve Number', '<f4'),
+            ('Abstraction Ratio', '<f4'),
+            ('Minimum Infiltration Rate', '<f4'),
+        ])
+        bo_array = np.zeros(n_overrides, dtype=bo_dtype)
+        bo_array['Land Cover Name'] = np.array(
+            [n.encode('utf-8') for n in override_names],
+            dtype=f'|S{name_dtype_width}',
+        )
+        bo_array['Curve Number'] = -9999.0
+        bo_array['Abstraction Ratio'] = -9999.0
+        bo_array['Minimum Infiltration Rate'] = -9999.0
+
+        # Variables compound dtype (field per override name, all float32)
+        var_fields = [(n, '<f4') for n in override_names]
+        var_dtype = np.dtype(var_fields)
+        var_sentinel = np.full(n_regions, -9999.0, dtype=np.float32)
+
+        # ── Phase 4: Polygon geometry (reuse Land Cover) ───────────────
+        if n_regions == n_lc_regions:
+            poly_info = lc_poly_info.copy()
+            poly_parts = lc_poly_parts.copy()
+            poly_points = lc_poly_points.copy()
+        else:
+            total_pts = lc_poly_points.shape[0]
+            poly_info = np.zeros((n_regions, 4), dtype=np.int32)
+            poly_parts = np.zeros((n_regions, 2), dtype=np.int32)
+            poly_info[0] = [0, total_pts, 0, 1]
+            poly_parts[0] = [0, total_pts]
+            for k in range(1, n_regions):
+                poly_info[k] = [0, total_pts, k, 1]
+                poly_parts[k] = [0, total_pts]
+            poly_points = lc_poly_points.copy()
+
+        # ── Phase 5: Write to HDF ──────────────────────────────────────
+        with h5py.File(hdf_path, 'a') as hf:
+            infil = hf.create_group(infil_group_path)
+
+            infil.create_dataset("Attributes", data=attrs_array)
+
+            ds_info = infil.create_dataset("Polygon Info", data=poly_info)
+            ds_info.attrs['Column'] = np.array(
+                [b'Point Starting Index', b'Point Count',
+                 b'Part Starting Index', b'Part Count'],
+                dtype='|S20',
+            )
+            ds_info.attrs['Feature Type'] = np.bytes_(b'Polygon')
+            ds_info.attrs['Row'] = np.bytes_(b'Feature')
+
+            ds_parts = infil.create_dataset("Polygon Parts", data=poly_parts)
+            ds_parts.attrs['Column'] = np.array(
+                [b'Point Starting Index', b'Point Count'],
+                dtype='|S20',
+            )
+            ds_parts.attrs['Row'] = np.bytes_(b'Part')
+
+            ds_pts = infil.create_dataset("Polygon Points", data=poly_points)
+            ds_pts.attrs['Column'] = np.array([b'X', b'Y'], dtype='|S1')
+            ds_pts.attrs['Row'] = np.bytes_(b'Points')
+
+            infil.create_dataset(
+                "Base Overrides",
+                data=bo_array,
+                dtype=bo_dtype,
+                compression='gzip',
+                compression_opts=1,
+                chunks=(min(100, n_overrides),),
+                maxshape=(None,),
+            )
+
+            var_grp = infil.create_group("Variables")
+            for param_name in ['Abstraction Ratio', 'Curve Number',
+                               'Minimum Infiltration Rate']:
+                var_data = np.zeros(n_regions, dtype=var_dtype)
+                for field in var_dtype.names:
+                    var_data[field] = var_sentinel
+                var_grp.create_dataset(param_name, data=var_data)
+
+        # ── Phase 6: Return the Base Overrides as DataFrame ─────────────
+        result_df = pd.DataFrame({
+            'Land Cover Name': override_names,
+            'Curve Number': np.full(n_overrides, -9999.0),
+            'Abstraction Ratio': np.full(n_overrides, -9999.0),
+            'Minimum Infiltration Rate': np.full(n_overrides, -9999.0),
+        })
+
+        logger.info(
+            f"Created Infiltration group in {hdf_path}: "
+            f"{n_regions} region(s), {n_overrides} override rows "
+            f"({len(lc_class_names)} land cover classes x {len(soil_groups)} soil groups)"
+        )
+        return result_df
+
+    @staticmethod
+    @log_call
+    def set_infiltration_baseoverrides(
+        hdf_path: Path,
+        infiltration_df: pd.DataFrame
+    ) -> Optional[pd.DataFrame]:
+        """
+        Set base overrides for infiltration parameters in the HDF file.
+
+        Writes values to the existing /Geometry/Infiltration/Base Overrides
+        dataset using in-place modification when row count is unchanged, or
+        delete-and-recreate when the row count differs.
+
+        The infiltration group (Attributes, Polygon Info/Parts/Points) MUST
+        already exist in the HDF file. Call ``create_infiltration_group()``
+        first if the group does not exist.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file.
+        infiltration_df : pd.DataFrame
+            DataFrame with columns matching HDF structure. Must include
+            'Land Cover Name' (or 'Name' which will be renamed). Numeric
+            columns should be 'Curve Number', 'Abstraction Ratio', and/or
+            'Minimum Infiltration Rate'. Use -9999.0 for no override.
+
+        Returns
+        -------
+        Optional[pd.DataFrame]
+            The written DataFrame if successful, None if operation fails.
+
+        Raises
+        ------
+        ValueError
+            If the infiltration group or required polygon datasets are missing.
+        """
+        hdf_path = Path(hdf_path)
+        infiltration_df = infiltration_df.copy()
+
+        if "Name" in infiltration_df.columns and "Land Cover Name" not in infiltration_df.columns:
+            infiltration_df = infiltration_df.rename(columns={"Name": "Land Cover Name"})
+
+        table_path = '/Geometry/Infiltration/Base Overrides'
+        group_path = '/Geometry/Infiltration'
+
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                if group_path not in hdf_file:
+                    raise ValueError(
+                        f"Infiltration group not found in {hdf_path}. "
+                        "Call create_infiltration_group() first."
+                    )
+
+                infil_group = hdf_file[group_path]
+                required = ["Attributes", "Polygon Info", "Polygon Points"]
+                missing = [r for r in required if r not in infil_group]
+                if missing:
+                    raise ValueError(
+                        f"Infiltration group missing required datasets: {missing}. "
+                        "Call create_infiltration_group() to build the full structure."
+                    )
+
+                if table_path not in hdf_file:
+                    existing_dtype = None
+                    existing_shape = None
+                else:
+                    existing_dtype = hdf_file[table_path].dtype
+                    existing_shape = hdf_file[table_path].shape
+
+            if existing_dtype is not None:
+                target_dtype = existing_dtype
+            else:
+                str_len = max(len(str(n)) for n in infiltration_df['Land Cover Name']) + 1
+                target_dtype = np.dtype([
+                    ('Land Cover Name', f'S{str_len}'),
+                    ('Curve Number', '<f4'),
+                    ('Abstraction Ratio', '<f4'),
+                    ('Minimum Infiltration Rate', '<f4'),
+                ])
+
+            structured_array = np.zeros(len(infiltration_df), dtype=target_dtype)
+
+            for col in target_dtype.names:
+                if col not in infiltration_df.columns:
+                    if target_dtype[col].kind == 'S':
+                        structured_array[col] = b''
+                    else:
+                        structured_array[col] = -9999.0
+                    continue
+
+                if target_dtype[col].kind == 'S':
+                    max_len = target_dtype[col].itemsize
+                    encoded = np.array(
+                        [str(s).encode('utf-8')[:max_len] for s in infiltration_df[col]],
+                        dtype=f'|S{max_len}',
+                    )
+                    structured_array[col] = encoded
+                else:
+                    structured_array[col] = (
+                        infiltration_df[col].values.astype(target_dtype[col])
+                    )
+
+            with h5py.File(hdf_path, 'a') as hdf_file:
+                if table_path in hdf_file:
+                    ds = hdf_file[table_path]
+                    if ds.shape[0] == len(structured_array):
+                        for col in target_dtype.names:
+                            if target_dtype[col].kind != 'S':
+                                ds[col] = structured_array[col]
+                    else:
+                        del hdf_file[table_path]
+                        hdf_file.create_dataset(
+                            table_path,
+                            data=structured_array,
+                            dtype=target_dtype,
+                            compression='gzip',
+                            compression_opts=1,
+                            chunks=(100,),
+                            maxshape=(None,),
+                        )
+                else:
+                    hdf_file.create_dataset(
+                        table_path,
+                        data=structured_array,
+                        dtype=target_dtype,
+                        compression='gzip',
+                        compression_opts=1,
+                        chunks=(100,),
+                        maxshape=(None,),
+                    )
+
+            result_df = pd.DataFrame()
+            for col in target_dtype.names:
+                if target_dtype[col].kind == 'S':
+                    result_df[col] = [v.decode('utf-8').strip() for v in structured_array[col]]
+                else:
+                    result_df[col] = structured_array[col]
+
+            logger.info(f"Successfully wrote {len(result_df)} infiltration base override rows to {hdf_path}")
+            return result_df
+
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error setting infiltration data in {hdf_path}: {str(e)}")
+            return None
 
     # Since the infiltration base overrides are in the geometry file, the above functions work on the geometry files
     # The below functions work on the infiltration layer HDF files.  Changes only take effect if no base overrides are present. 
@@ -582,29 +940,57 @@ class HdfInfiltration:
     @log_call
     def set_infiltration_layer_data(
         hdf_path: Path,
-        infiltration_df: pd.DataFrame
+        infiltration_df: pd.DataFrame,
+        geom_hdf_path: Union[str, Path, None] = None,
     ) -> Optional[pd.DataFrame]:
         """
-        Set infiltration layer data in the infiltration layer HDF file directly from the provided DataFrame.
-        # NOTE: This will not work if there are base overrides present in the Geometry HDF file. 
-        Updates the Variables dataset with the provided data.
+        Set infiltration layer data in the infiltration layer HDF file.
+
+        Writes to the ``//Variables`` dataset in the infiltration sidecar HDF.
+
+        .. warning::
+
+            If the associated geometry HDF contains a
+            ``/Geometry/Infiltration/Base Overrides`` dataset, values written
+            here are **ignored** by HEC-RAS during preprocessing.  Use
+            ``HdfInfiltration.set_infiltration_baseoverrides()`` instead when
+            Base Overrides are present.
 
         Parameters
         ----------
         hdf_path : Path
-            Path to the HEC-RAS infiltration layer HDF file
+            Path to the HEC-RAS infiltration layer HDF file (sidecar).
         infiltration_df : pd.DataFrame
             DataFrame containing infiltration parameters with columns:
             - Name (string)
             - Curve Number (float)
             - Abstraction Ratio (float)
             - Minimum Infiltration Rate (float)
+        geom_hdf_path : str, Path, or None
+            Optional path to the geometry HDF (.g##.hdf).  When provided, the
+            function checks for Base Overrides and emits a warning if they
+            exist.
 
         Returns
         -------
         Optional[pd.DataFrame]
-            The infiltration DataFrame if successful, None if operation fails
+            The infiltration DataFrame if successful, None if operation fails.
         """
+        if geom_hdf_path is not None:
+            geom_hdf_path = Path(geom_hdf_path)
+            if geom_hdf_path.exists():
+                try:
+                    with h5py.File(str(geom_hdf_path), 'r') as gf:
+                        if 'Geometry/Infiltration/Base Overrides' in gf:
+                            logger.warning(
+                                "Base Overrides exist in %s and will take "
+                                "precedence over sidecar values.  Edit with "
+                                "HdfInfiltration.set_infiltration_baseoverrides() "
+                                "instead.", geom_hdf_path.name
+                            )
+                except Exception:
+                    pass
+
         try:
             variables_path = '//Variables'
             
@@ -1813,146 +2199,3 @@ class HdfInfiltration:
             results_df = results_df.sort_values(['mesh_name', 'percentage'], ascending=[True, False])
         
         return results_df
-
-
-
-'''
-
-THIS FUNCTION IS VERY CLOSE BUT DOES NOT WORK BECAUSE IT DOES NOT PRESERVE THE EXACT STRUCTURE OF THE HDF FILE.
-WHEN RAS LOADS THE HDF, IT IGNORES THE DATA IN THE TABLE AND REPLACES IT WITH NULLS.
-
-
-    @staticmethod
-    @log_call
-    def set_infiltration_baseoverrides(
-        hdf_path: Path,
-        infiltration_df: pd.DataFrame
-    ) -> Optional[pd.DataFrame]:
-        """
-        Set base overrides for infiltration parameters in the HDF file while preserving
-        the exact structure of the existing dataset.
-        
-        This function ensures that the HDF structure is maintained exactly as in the
-        original file, including field names, data types, and string lengths. It updates
-        the values while preserving all dataset attributes.
-
-        Parameters
-        ----------
-        hdf_path : Path
-            Path to the HEC-RAS geometry HDF file
-        infiltration_df : pd.DataFrame
-            DataFrame containing infiltration parameters with columns matching HDF structure.
-            The first column should be 'Name' or 'Land Cover Name'.
-
-        Returns
-        -------
-        Optional[pd.DataFrame]
-            The infiltration DataFrame if successful, None if operation fails
-        """
-        try:
-            # Make a copy to avoid modifying the input DataFrame
-            infiltration_df = infiltration_df.copy()
-            
-            # Check for and rename the first column if needed
-            if "Land Cover Name" in infiltration_df.columns:
-                name_col = "Land Cover Name"
-            else:
-                name_col = "Name"
-                # Rename 'Name' to 'Land Cover Name' for HDF dataset
-                infiltration_df = infiltration_df.rename(columns={"Name": "Land Cover Name"})
-                
-            table_path = '/Geometry/Infiltration/Base Overrides'
-            
-            with h5py.File(hdf_path, 'r') as hdf_file_read:
-                # Check if dataset exists
-                if table_path not in hdf_file_read:
-                    logger.warning(f"No infiltration data found in {hdf_path}. Creating new dataset.")
-                    # If dataset doesn't exist, use the standard set_infiltration_baseoverrides method
-                    return HdfInfiltration.set_infiltration_baseoverrides(hdf_path, infiltration_df)
-                
-                # Get the exact dtype of the existing dataset
-                existing_dtype = hdf_file_read[table_path].dtype
-                
-                # Extract column names from the existing dataset
-                existing_columns = existing_dtype.names
-                
-                # Check if all columns in the DataFrame exist in the HDF dataset
-                for col in infiltration_df.columns:
-                    hdf_col = col
-                    if col == "Name" and "Land Cover Name" in existing_columns:
-                        hdf_col = "Land Cover Name"
-                    
-                    if hdf_col not in existing_columns:
-                        logger.warning(f"Column {col} not found in existing dataset - it will be ignored")
-                
-                # Get current dataset to preserve structure for non-updated fields
-                existing_data = hdf_file_read[table_path][()]
-            
-            # Create a structured array with the exact same dtype as the existing dataset
-            structured_array = np.zeros(len(infiltration_df), dtype=existing_dtype)
-            
-            # Copy data from DataFrame to structured array, preserving existing structure
-            for col in existing_columns:
-                df_col = col
-                # Map 'Land Cover Name' to 'Name' if needed
-                if col == "Land Cover Name" and name_col == "Name":
-                    df_col = "Name"
-                    
-                if df_col in infiltration_df.columns:
-                    # Handle string fields - need to maintain exact string length
-                    if existing_dtype[col].kind == 'S':
-                        # Get the exact string length from dtype
-                        max_str_len = existing_dtype[col].itemsize
-                        # Convert to bytes with correct length
-                        structured_array[col] = infiltration_df[df_col].astype(str).values.astype(f'|S{max_str_len}')
-                    else:
-                        # Handle numeric fields - ensure correct numeric type
-                        if existing_dtype[col].kind in ('f', 'i'):
-                            structured_array[col] = infiltration_df[df_col].values.astype(existing_dtype[col])
-                        else:
-                            # For any other type, just copy as is
-                            structured_array[col] = infiltration_df[df_col].values
-                else:
-                    logger.warning(f"Column {col} not in DataFrame - using default values")
-                    # Use zeros for numeric fields or empty strings for string fields
-                    if existing_dtype[col].kind == 'S':
-                        structured_array[col] = np.array([''] * len(infiltration_df), dtype=f'|S{existing_dtype[col].itemsize}')
-            
-            # Write back to HDF file
-            with h5py.File(hdf_path, 'a') as hdf_file_write:
-                # Delete existing dataset
-                if table_path in hdf_file_write:
-                    del hdf_file_write[table_path]
-                
-                # Create new dataset with exact same properties as original
-                dataset = hdf_file_write.create_dataset(
-                    table_path,
-                    data=structured_array,
-                    dtype=existing_dtype,
-                    compression='gzip',
-                    compression_opts=1,
-                    chunks=(100,),
-                    maxshape=(None,)
-                )
-            
-            # Return the DataFrame with columns matching what was actually written
-            result_df = pd.DataFrame()
-            for col in existing_columns:
-                if existing_dtype[col].kind == 'S':
-                    # Convert bytes back to string
-                    result_df[col] = [val.decode('utf-8').strip() for val in structured_array[col]]
-                else:
-                    result_df[col] = structured_array[col]
-                    
-            return result_df
-
-        except Exception as e:
-            logger.error(f"Error setting infiltration data in {hdf_path}: {str(e)}")
-            return None
-
-
-
-
-
-
-'''
