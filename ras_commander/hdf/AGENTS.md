@@ -38,6 +38,9 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 
 - Plan metadata and compute messages: `HdfResultsPlan`
 - 2D cell geometry and face geometry: `HdfMesh`
+- 2D face property table write (Manning's n vs Elevation): `HdfMesh.set_mesh_face_property_tables()`, `extend_face_property_tables()`, `set_face_mannings_n_values()`, `pin_property_tables()`
+- 2D face spatial filtering (polygon mask): `HdfMesh.get_face_ids_in_polygon()`, `get_face_ids_in_calibration_region()`
+- Both `extend_face_property_tables()` and `set_face_mannings_n_values()` accept optional `polygon` and `region_name` parameters for selective face application (precedence: `face_ids` > `region_name` > `polygon` > all faces)
 - 2D results extraction: `HdfResultsMesh`
 - 1D cross section geometry and results: `HdfXsec`, `HdfResultsXsec`
 - Land cover and infiltration preprocessing: `HdfLandCover`, `HdfInfiltration`

@@ -33,6 +33,24 @@ get_reference_line_internal_faces()
 get_mesh_cell_property_tables()
     Returns Cell Property Tables for each Cell in all 2D Flow Areas
 
+Write API (Face Property Tables):
+---------------------------------
+set_mesh_face_property_tables()
+    Write face property tables (all 4 columns) to geometry HDF
+extend_face_property_tables()
+    Extend face tables to higher elevations with depth-varying Manning's n
+set_face_mannings_n_values()
+    Replace Manning's n column in existing face tables via a user function
+pin_property_tables()
+    Set or clear the Pinned attribute to prevent RASMapper overwrite
+
+Spatial Filtering (Polygon Mask):
+---------------------------------
+get_face_ids_in_polygon()
+    Filter mesh faces by polygon boundary (midpoint or any-vertex method)
+get_face_ids_in_calibration_region()
+    Filter mesh faces by named Manning's n calibration region from geometry HDF
+
 Spatial Query Utilities:
 -----------------------
 find_nearest_face()
@@ -51,7 +69,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
-from typing import List, Tuple, Optional, Dict, Any, TYPE_CHECKING
+from typing import List, Tuple, Optional, Dict, Any, Callable, Union, TYPE_CHECKING
 import logging
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -81,7 +99,7 @@ class HdfMesh:
     """
 
     @staticmethod
-    @standardize_input(file_type='plan_hdf')
+    @standardize_input(file_type='geom_hdf')
     def get_mesh_area_names(hdf_path: Path) -> List[str]:
         """
         Return a list of the 2D mesh area names from the RAS geometry.
@@ -1626,3 +1644,521 @@ class HdfMesh:
         except Exception as e:
             logger.error(f"Error reading Manning's n calibration table from {hdf_path}: {str(e)}")
             return None
+
+    # -------------------------------------------------------------------------
+    # Write API: Face Property Tables (Manning's n vs Elevation)
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    @log_call
+    def set_mesh_face_property_tables(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        face_tables: Dict[int, pd.DataFrame],
+        pin_tables: bool = True,
+    ) -> None:
+        """
+        Write face property tables to geometry HDF.
+
+        Atomically rewrites both the Info and Values datasets for the
+        specified mesh. Unmodified faces retain their original tables.
+
+        Parameters
+        ----------
+        hdf_path : Union[str, Path]
+            Path to the HEC-RAS geometry HDF file (.g##.hdf).
+        mesh_name : str
+            Name of the 2D flow area / mesh.
+        face_tables : Dict[int, pd.DataFrame]
+            Dictionary mapping face_id (int) to a DataFrame with columns
+            ``['Elevation', 'Area', 'Wetted Perimeter', "Manning's n"]``.
+            Only faces present in this dict are replaced; others keep
+            their original tables.
+        pin_tables : bool, default True
+            If True, set the Pinned attribute on the mesh group to
+            prevent RASMapper from overwriting the modified tables.
+        """
+        hdf_path = Path(hdf_path)
+        base_path = f"Geometry/2D Flow Areas/{mesh_name}"
+        info_path = f"{base_path}/Faces Area Elevation Info"
+        values_path = f"{base_path}/Faces Area Elevation Values"
+
+        required_cols = ['Elevation', 'Area', 'Wetted Perimeter', "Manning's n"]
+
+        for fid, df in face_tables.items():
+            missing = [c for c in required_cols if c not in df.columns]
+            if missing:
+                raise ValueError(f"Face {fid} table missing columns: {missing}")
+            elevations = df['Elevation'].values
+            if len(elevations) > 1 and not np.all(np.diff(elevations) > 0):
+                raise ValueError(f"Face {fid} elevations must be monotonically increasing")
+
+        with h5py.File(str(hdf_path), 'r+') as hdf_file:
+            if info_path not in hdf_file or values_path not in hdf_file:
+                raise KeyError(f"Face property tables not found for mesh '{mesh_name}'")
+
+            old_info = hdf_file[info_path][()]
+            old_values = hdf_file[values_path][()]
+            num_faces = old_info.shape[0]
+
+            info_attrs = dict(hdf_file[info_path].attrs)
+            values_attrs = dict(hdf_file[values_path].attrs)
+
+            new_face_slices = []
+            for face_id in range(num_faces):
+                if face_id in face_tables:
+                    df = face_tables[face_id]
+                    rows = np.column_stack([
+                        df['Elevation'].values,
+                        df['Area'].values,
+                        df['Wetted Perimeter'].values,
+                        df["Manning's n"].values,
+                    ]).astype(np.float32)
+                    new_face_slices.append(rows)
+                else:
+                    start, count = old_info[face_id]
+                    new_face_slices.append(old_values[start:start + count])
+
+            new_values = np.vstack(new_face_slices).astype(np.float32)
+
+            new_info = np.zeros((num_faces, 2), dtype=np.int32)
+            offset = 0
+            for i, sl in enumerate(new_face_slices):
+                new_info[i, 0] = offset
+                new_info[i, 1] = len(sl)
+                offset += len(sl)
+
+            del hdf_file[info_path]
+            del hdf_file[values_path]
+
+            ds_info = hdf_file.create_dataset(info_path, data=new_info)
+            for k, v in info_attrs.items():
+                ds_info.attrs[k] = v
+
+            ds_values = hdf_file.create_dataset(values_path, data=new_values)
+            for k, v in values_attrs.items():
+                ds_values.attrs[k] = v
+
+        if pin_tables:
+            HdfMesh.pin_property_tables(hdf_path, mesh_name, pinned=True)
+
+        logger.info(
+            f"Wrote face property tables for {len(face_tables)} faces "
+            f"in mesh '{mesh_name}' ({new_values.shape[0]} total rows)"
+        )
+
+    @staticmethod
+    @log_call
+    def extend_face_property_tables(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        extension_elevation: float,
+        mannings_n_func: Callable[[float, float], float],
+        elevation_step: float = 0.5,
+        face_ids: Optional[List[int]] = None,
+        polygon=None,
+        region_name: Optional[str] = None,
+        pin_tables: bool = True,
+    ) -> Dict[int, int]:
+        """
+        Extend face tables to higher elevations with depth-varying Manning's n.
+
+        For each target face, appends rows from the current table maximum up
+        to ``extension_elevation``. Area and Wetted Perimeter are extrapolated
+        assuming a rectangular cross section above the terrain maximum (top
+        width equals the last Wetted Perimeter value). Manning's n at each
+        new elevation is computed via ``mannings_n_func``.
+
+        Parameters
+        ----------
+        hdf_path : Union[str, Path]
+            Path to the HEC-RAS geometry HDF file.
+        mesh_name : str
+            Name of the 2D flow area.
+        extension_elevation : float
+            Target maximum elevation for the extended tables.
+        mannings_n_func : Callable[[float, float], float]
+            Function ``(depth, base_n) -> n`` where *depth* is the water
+            depth above the face's minimum elevation and *base_n* is the
+            Manning's n from the last existing table row.
+        elevation_step : float, default 0.5
+            Elevation increment between new rows.
+        face_ids : Optional[List[int]]
+            List of face IDs to extend. ``None`` extends all faces whose
+            current maximum is below ``extension_elevation``.
+        polygon : shapely Polygon/MultiPolygon or GeoDataFrame, optional
+            If provided and ``face_ids`` is None, only extend faces whose
+            midpoint falls within this polygon.
+        region_name : str, optional
+            If provided and ``face_ids`` is None, only extend faces within
+            the named Manning's n calibration region from the geometry HDF.
+            Precedence: ``face_ids`` > ``region_name`` > ``polygon``.
+        pin_tables : bool, default True
+            Pin tables after modification.
+
+        Returns
+        -------
+        Dict[int, int]
+            Mapping of ``{face_id: rows_added}`` for each extended face.
+        """
+        hdf_path = Path(hdf_path)
+        base_path = f"Geometry/2D Flow Areas/{mesh_name}"
+        info_path = f"{base_path}/Faces Area Elevation Info"
+        values_path = f"{base_path}/Faces Area Elevation Values"
+
+        resolved = HdfMesh._resolve_face_ids(
+            hdf_path, mesh_name, face_ids, polygon, region_name
+        )
+
+        with h5py.File(str(hdf_path), 'r') as hdf_file:
+            if info_path not in hdf_file or values_path not in hdf_file:
+                raise KeyError(f"Face property tables not found for mesh '{mesh_name}'")
+            old_info = hdf_file[info_path][()]
+            old_values = hdf_file[values_path][()]
+
+        num_faces = old_info.shape[0]
+        if resolved is None:
+            face_ids_to_extend = list(range(num_faces))
+        else:
+            face_ids_to_extend = list(resolved)
+
+        modified_tables: Dict[int, pd.DataFrame] = {}
+        rows_added: Dict[int, int] = {}
+
+        for fid in face_ids_to_extend:
+            if fid >= num_faces:
+                logger.warning(f"Face ID {fid} out of range (0-{num_faces - 1}), skipping")
+                continue
+
+            start, count = old_info[fid]
+            face_vals = old_values[start:start + count]
+
+            max_elev = face_vals[-1, 0]
+            if max_elev >= extension_elevation:
+                continue
+
+            min_elev = face_vals[0, 0]
+            last_area = face_vals[-1, 1]
+            last_wp = face_vals[-1, 2]
+            base_n = face_vals[-1, 3]
+            top_width = last_wp
+
+            new_rows = []
+            elev = max_elev + elevation_step
+            while elev <= extension_elevation + 1e-6:
+                depth_above_max = elev - max_elev
+                new_area = last_area + top_width * depth_above_max
+                new_wp = last_wp + 2.0 * depth_above_max
+                total_depth = elev - min_elev
+                new_n = mannings_n_func(total_depth, base_n)
+                new_rows.append([elev, new_area, new_wp, new_n])
+                elev += elevation_step
+
+            if not new_rows:
+                continue
+
+            combined = np.vstack([face_vals, np.array(new_rows, dtype=np.float32)])
+            df = pd.DataFrame(combined, columns=['Elevation', 'Area', 'Wetted Perimeter', "Manning's n"])
+            modified_tables[fid] = df
+            rows_added[fid] = len(new_rows)
+
+        if modified_tables:
+            HdfMesh.set_mesh_face_property_tables(
+                hdf_path, mesh_name, modified_tables, pin_tables=pin_tables
+            )
+
+        logger.info(
+            f"Extended {len(rows_added)} face tables in mesh '{mesh_name}', "
+            f"total rows added: {sum(rows_added.values())}"
+        )
+        return rows_added
+
+    @staticmethod
+    @log_call
+    def set_face_mannings_n_values(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        mannings_n_func: Callable[[float, float, float], float],
+        face_ids: Optional[List[int]] = None,
+        polygon=None,
+        region_name: Optional[str] = None,
+        pin_tables: bool = True,
+    ) -> int:
+        """
+        Replace Manning's n values in existing face tables using a function.
+
+        Preserves Elevation, Area, and Wetted Perimeter columns. Only the
+        Manning's n column is recomputed.
+
+        Parameters
+        ----------
+        hdf_path : Union[str, Path]
+            Path to the HEC-RAS geometry HDF file.
+        mesh_name : str
+            Name of the 2D flow area.
+        mannings_n_func : Callable[[float, float, float], float]
+            Function ``(elevation, depth, current_n) -> new_n`` where
+            *elevation* is the row elevation, *depth* is elevation minus
+            the face minimum elevation, and *current_n* is the existing
+            Manning's n value.
+        face_ids : Optional[List[int]]
+            Faces to modify. ``None`` modifies all faces.
+        polygon : shapely Polygon/MultiPolygon or GeoDataFrame, optional
+            If provided and ``face_ids`` is None, only modify faces whose
+            midpoint falls within this polygon.
+        region_name : str, optional
+            If provided and ``face_ids`` is None, only modify faces within
+            the named Manning's n calibration region from the geometry HDF.
+            Precedence: ``face_ids`` > ``region_name`` > ``polygon``.
+        pin_tables : bool, default True
+            Pin tables after modification.
+
+        Returns
+        -------
+        int
+            Number of faces modified.
+        """
+        hdf_path = Path(hdf_path)
+        base_path = f"Geometry/2D Flow Areas/{mesh_name}"
+        info_path = f"{base_path}/Faces Area Elevation Info"
+        values_path = f"{base_path}/Faces Area Elevation Values"
+
+        resolved = HdfMesh._resolve_face_ids(
+            hdf_path, mesh_name, face_ids, polygon, region_name
+        )
+
+        with h5py.File(str(hdf_path), 'r') as hdf_file:
+            if info_path not in hdf_file or values_path not in hdf_file:
+                raise KeyError(f"Face property tables not found for mesh '{mesh_name}'")
+            old_info = hdf_file[info_path][()]
+            old_values = hdf_file[values_path][()]
+
+        num_faces = old_info.shape[0]
+        if resolved is None:
+            target_ids = list(range(num_faces))
+        else:
+            target_ids = list(resolved)
+
+        modified_tables: Dict[int, pd.DataFrame] = {}
+
+        for fid in target_ids:
+            if fid >= num_faces:
+                logger.warning(f"Face ID {fid} out of range (0-{num_faces - 1}), skipping")
+                continue
+
+            start, count = old_info[fid]
+            face_vals = old_values[start:start + count].copy()
+
+            min_elev = face_vals[0, 0]
+            for i in range(count):
+                elev = float(face_vals[i, 0])
+                depth = elev - float(min_elev)
+                current_n = float(face_vals[i, 3])
+                face_vals[i, 3] = mannings_n_func(elev, depth, current_n)
+
+            df = pd.DataFrame(face_vals, columns=['Elevation', 'Area', 'Wetted Perimeter', "Manning's n"])
+            modified_tables[fid] = df
+
+        if modified_tables:
+            HdfMesh.set_mesh_face_property_tables(
+                hdf_path, mesh_name, modified_tables, pin_tables=pin_tables
+            )
+
+        logger.info(f"Modified Manning's n for {len(modified_tables)} faces in mesh '{mesh_name}'")
+        return len(modified_tables)
+
+    @staticmethod
+    @log_call
+    def pin_property_tables(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        pinned: bool = True,
+    ) -> None:
+        """
+        Set or clear the Pinned attribute on the mesh group.
+
+        When pinned, RASMapper will not overwrite externally-modified
+        face property tables during geometry preprocessing.
+
+        Parameters
+        ----------
+        hdf_path : Union[str, Path]
+            Path to the HEC-RAS geometry HDF file.
+        mesh_name : str
+            Name of the 2D flow area.
+        pinned : bool, default True
+            True to pin (protect), False to unpin.
+        """
+        hdf_path = Path(hdf_path)
+        group_path = f"Geometry/2D Flow Areas/{mesh_name}"
+
+        with h5py.File(str(hdf_path), 'r+') as hdf_file:
+            if group_path not in hdf_file:
+                raise KeyError(f"Mesh group not found: '{group_path}'")
+            group = hdf_file[group_path]
+            if pinned:
+                group.attrs['Pinned'] = np.bool_(True)
+            else:
+                if 'Pinned' in group.attrs:
+                    del group.attrs['Pinned']
+
+        action = "Pinned" if pinned else "Unpinned"
+        logger.info(f"{action} property tables for mesh '{mesh_name}'")
+
+    # -------------------------------------------------------------------------
+    # Spatial Filtering: Polygon Mask for Selective Face Application
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    @log_call
+    def get_face_ids_in_polygon(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        polygon,
+        method: str = 'midpoint',
+    ) -> List[int]:
+        """
+        Return face IDs whose geometry falls within a polygon boundary.
+
+        Parameters
+        ----------
+        hdf_path : Union[str, Path]
+            Path to the HEC-RAS geometry HDF file (.g##.hdf).
+        mesh_name : str
+            Name of the 2D flow area / mesh.
+        polygon : shapely.geometry.Polygon, shapely.geometry.MultiPolygon, or GeoDataFrame
+            The masking polygon. If a GeoDataFrame is provided, all
+            geometries are unioned into a single polygon.
+        method : str, default 'midpoint'
+            How to test each face against the polygon:
+            - ``'midpoint'``: face midpoint must be within the polygon
+            - ``'any_vertex'``: at least one face vertex must be within
+
+        Returns
+        -------
+        List[int]
+            Sorted list of face IDs (0-indexed) that satisfy the spatial filter.
+        """
+        from shapely.geometry import Point, MultiPolygon
+        from shapely.ops import unary_union
+        from shapely import prepare
+        from geopandas import GeoDataFrame
+
+        if isinstance(polygon, GeoDataFrame):
+            polygon = unary_union(polygon.geometry)
+        if isinstance(polygon, MultiPolygon):
+            pass
+        prepare(polygon)
+
+        faces_gdf = HdfMesh.get_mesh_cell_faces(hdf_path)
+        if faces_gdf.empty:
+            return []
+
+        faces_gdf = faces_gdf[faces_gdf['mesh_name'] == mesh_name]
+        if faces_gdf.empty:
+            return []
+
+        matching_ids = []
+
+        if method == 'midpoint':
+            for _, row in faces_gdf.iterrows():
+                mid = row.geometry.interpolate(0.5, normalized=True)
+                if polygon.contains(mid):
+                    matching_ids.append(int(row['face_id']))
+        elif method == 'any_vertex':
+            for _, row in faces_gdf.iterrows():
+                coords = list(row.geometry.coords)
+                if any(polygon.contains(Point(c)) for c in coords):
+                    matching_ids.append(int(row['face_id']))
+        else:
+            raise ValueError(f"method must be 'midpoint' or 'any_vertex', got '{method}'")
+
+        logger.info(
+            f"Found {len(matching_ids)} faces in polygon "
+            f"(mesh '{mesh_name}', method='{method}')"
+        )
+        return sorted(matching_ids)
+
+    @staticmethod
+    @log_call
+    def get_face_ids_in_calibration_region(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        region_name: str,
+        method: str = 'midpoint',
+    ) -> List[int]:
+        """
+        Return face IDs within a named Manning's n calibration region.
+
+        Reads the calibration region polygon from the geometry HDF via
+        ``HdfLandCover.get_mannings_region_polygons()`` and delegates
+        to ``get_face_ids_in_polygon()``.
+
+        Parameters
+        ----------
+        hdf_path : Union[str, Path]
+            Path to the HEC-RAS geometry HDF file (.g##.hdf).
+        mesh_name : str
+            Name of the 2D flow area / mesh.
+        region_name : str
+            Name of the calibration region as defined in RASMapper GUI.
+        method : str, default 'midpoint'
+            Spatial test method (see ``get_face_ids_in_polygon``).
+
+        Returns
+        -------
+        List[int]
+            Sorted list of face IDs within the named calibration region.
+
+        Raises
+        ------
+        ValueError
+            If the named region is not found in the geometry HDF.
+        """
+        from .HdfLandCover import HdfLandCover
+
+        regions_gdf = HdfLandCover.get_mannings_region_polygons(hdf_path)
+        if regions_gdf.empty:
+            raise ValueError(
+                f"No Manning's n calibration regions found in '{hdf_path}'"
+            )
+
+        match = regions_gdf[regions_gdf['Name'] == region_name]
+        if match.empty:
+            available = regions_gdf['Name'].tolist()
+            raise ValueError(
+                f"Calibration region '{region_name}' not found. "
+                f"Available regions: {available}"
+            )
+
+        region_polygon = match.geometry.iloc[0]
+
+        return HdfMesh.get_face_ids_in_polygon(
+            hdf_path, mesh_name, region_polygon, method=method
+        )
+
+    @staticmethod
+    def _resolve_face_ids(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        face_ids: Optional[List[int]],
+        polygon=None,
+        region_name: Optional[str] = None,
+        method: str = 'midpoint',
+    ) -> Optional[List[int]]:
+        """
+        Resolve face_ids from explicit list, region_name, or polygon.
+
+        Precedence: face_ids > region_name > polygon > None (all faces).
+        """
+        if face_ids is not None:
+            return face_ids
+        if region_name is not None:
+            return HdfMesh.get_face_ids_in_calibration_region(
+                hdf_path, mesh_name, region_name, method=method
+            )
+        if polygon is not None:
+            return HdfMesh.get_face_ids_in_polygon(
+                hdf_path, mesh_name, polygon, method=method
+            )
+        return None
