@@ -12,6 +12,7 @@ List of Functions:
 - get_piers() - Read pier definitions (widths, elevations)
 - get_abutment() - Read abutment geometry
 - get_approach_sections() - Read BR U/BR D approach sections
+- get_bridge_opening_xs() - Read inside-bridge ground profile (sections 2/3)
 - get_coefficients() - Read hydraulic coefficients
 - get_hydraulic_methods() - Read bridge low-flow/high-flow method selections
 - set_hydraulic_methods() - Set bridge low-flow/high-flow method selections
@@ -1457,6 +1458,212 @@ class GeomBridge:
         except Exception as e:
             logger.error(f"Error reading approach sections: {str(e)}")
             raise IOError(f"Failed to read approach sections: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def get_bridge_opening_xs(geom_file: Union[str, Path],
+                              river: str,
+                              reach: str,
+                              rs: str,
+                              section: str = 'upstream') -> pd.DataFrame:
+        """
+        Extract the ground profile inside the bridge opening for a 1D bridge.
+
+        In HEC-RAS 1D bridge modeling, sections 2 and 3 represent the ground
+        profile at the downstream and upstream faces of the bridge opening.
+        These are stored as BR D / BR U #Sta/Elev records in the bridge block.
+        When no explicit inside-bridge XS data exists, the method falls back to
+        the nearest regular cross-section in the appropriate direction.
+
+        Inside-bridge sections are typically initialized as copies of the
+        approach cross-sections when a bridge is first created in HEC-RAS, but
+        users may edit them independently.
+
+        Parameters:
+            geom_file: Path to geometry file (.g##)
+            river: River name (case-sensitive)
+            reach: Reach name (case-sensitive)
+            rs: River station (as string)
+            section: 'upstream' for section 3 (upstream face) or
+                     'downstream' for section 2 (downstream face)
+
+        Returns:
+            pd.DataFrame with columns:
+            - Station: Cross-section station (float)
+            - Elevation: Ground elevation (float)
+            - Source: 'bridge_block' if from BR U/BR D data,
+                      'approach_xs' if from adjacent regular cross-section
+
+        Raises:
+            FileNotFoundError: If geometry file doesn't exist
+            ValueError: If bridge not found, invalid section, or no XS data available
+
+        Example:
+            >>> xs = GeomBridge.get_bridge_opening_xs("model.g01", "River", "Reach", "5.4")
+            >>> print(f"Section 3 has {len(xs)} points, source: {xs['Source'].iloc[0]}")
+            >>> downstream = GeomBridge.get_bridge_opening_xs(
+            ...     "model.g01", "River", "Reach", "5.4", section='downstream'
+            ... )
+        """
+        geom_file = Path(geom_file)
+        section = section.lower()
+
+        if section not in ('upstream', 'downstream'):
+            raise ValueError(f"section must be 'upstream' or 'downstream', got '{section}'")
+
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+
+        try:
+            with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+
+            bridge_idx = GeomBridge._find_bridge(lines, river, reach, rs)
+            if bridge_idx is None:
+                raise ValueError(f"Bridge not found: {river}/{reach}/RS {rs}")
+
+            struct_end_idx = GeomBridge._find_structure_end(lines, bridge_idx)
+
+            keyword = "BR U #Sta/Elev" if section == 'upstream' else "BR D #Sta/Elev"
+            stations, elevations = GeomBridge._parse_bridge_xs_block(
+                lines, bridge_idx, struct_end_idx, keyword
+            )
+
+            if stations:
+                df = pd.DataFrame({
+                    'Station': stations,
+                    'Elevation': elevations,
+                    'Source': 'bridge_block'
+                })
+                logger.info(
+                    f"Extracted {section} bridge opening XS ({len(df)} pts) "
+                    f"for {river}/{reach}/RS {rs} from bridge block"
+                )
+                return df
+
+            stations, elevations = GeomBridge._parse_adjacent_xs(
+                lines, bridge_idx, section
+            )
+
+            if stations:
+                df = pd.DataFrame({
+                    'Station': stations,
+                    'Elevation': elevations,
+                    'Source': 'approach_xs'
+                })
+                logger.info(
+                    f"Extracted {section} bridge opening XS ({len(df)} pts) "
+                    f"for {river}/{reach}/RS {rs} from adjacent approach XS"
+                )
+                return df
+
+            raise ValueError(
+                f"No inside-bridge or adjacent approach XS data found "
+                f"for {section} face of bridge {river}/{reach}/RS {rs}"
+            )
+
+        except FileNotFoundError:
+            raise
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error reading bridge opening XS: {str(e)}")
+            raise IOError(f"Failed to read bridge opening XS: {str(e)}")
+
+    @staticmethod
+    def _parse_bridge_xs_block(
+        lines: List[str],
+        bridge_idx: int,
+        struct_end_idx: int,
+        keyword: str
+    ) -> tuple:
+        """Parse BR U/BR D #Sta/Elev block, returning (stations, elevations) lists."""
+        for j in range(bridge_idx, struct_end_idx):
+            line = lines[j]
+            if line.startswith(f"{keyword}="):
+                count_str = GeomParser.extract_keyword_value(line, keyword)
+                count = int(count_str.strip())
+
+                values = []
+                k = j + 1
+                while len(values) < count * 2 and k < len(lines):
+                    if '=' in lines[k]:
+                        break
+                    values.extend(GeomParser.parse_fixed_width(lines[k], 8))
+                    k += 1
+
+                stations = values[0::2]
+                elevations = values[1::2]
+                n = min(len(stations), len(elevations))
+                return stations[:n], elevations[:n]
+
+        return [], []
+
+    @staticmethod
+    def _parse_adjacent_xs(
+        lines: List[str],
+        bridge_idx: int,
+        section: str
+    ) -> tuple:
+        """Find the nearest regular XS adjacent to the bridge and parse its station/elevation data.
+
+        For 'upstream', searches backward from the bridge marker to find the
+        preceding "Type RM Length L Ch R = 1" entry (regular XS). For 'downstream',
+        searches forward past the bridge block.
+        """
+        if section == 'upstream':
+            xs_header_idx = None
+            for i in range(bridge_idx - 1, -1, -1):
+                if lines[i].startswith("Type RM Length L Ch R ="):
+                    val = GeomParser.extract_keyword_value(lines[i], "Type RM Length L Ch R")
+                    parts = [p.strip() for p in val.split(',')]
+                    if parts and parts[0] == '1':
+                        xs_header_idx = i
+                        break
+            if xs_header_idx is None:
+                return [], []
+
+            search_end = bridge_idx
+        else:
+            struct_end_idx = GeomBridge._find_structure_end(lines, bridge_idx)
+            xs_header_idx = None
+            for i in range(struct_end_idx, min(struct_end_idx + GeomBridge.MAX_PARSE_LINES, len(lines))):
+                if lines[i].startswith("Type RM Length L Ch R ="):
+                    val = GeomParser.extract_keyword_value(lines[i], "Type RM Length L Ch R")
+                    parts = [p.strip() for p in val.split(',')]
+                    if parts and parts[0] == '1':
+                        xs_header_idx = i
+                        break
+            if xs_header_idx is None:
+                return [], []
+
+            next_end = len(lines)
+            for i in range(xs_header_idx + 1, min(xs_header_idx + GeomBridge.MAX_PARSE_LINES, len(lines))):
+                if lines[i].startswith("Type RM Length L Ch R =") or lines[i].startswith("River Reach="):
+                    next_end = i
+                    break
+            search_end = next_end
+
+        for j in range(xs_header_idx, search_end):
+            line = lines[j]
+            if line.startswith("#Sta/Elev="):
+                count_str = GeomParser.extract_keyword_value(line, "#Sta/Elev")
+                count = int(count_str.strip())
+
+                values = []
+                k = j + 1
+                while len(values) < count * 2 and k < len(lines):
+                    if '=' in lines[k]:
+                        break
+                    values.extend(GeomParser.parse_fixed_width(lines[k], 8))
+                    k += 1
+
+                stations = values[0::2]
+                elevations = values[1::2]
+                n = min(len(stations), len(elevations))
+                return stations[:n], elevations[:n]
+
+        return [], []
 
     @staticmethod
     @log_call
