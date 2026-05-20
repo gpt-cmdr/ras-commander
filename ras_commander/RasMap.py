@@ -2269,8 +2269,9 @@ class RasMap:
             rasmap_backup = rasmap_path.with_suffix(".rasmap.screenshot_bak")
             shutil.copy2(rasmap_path, rasmap_backup)
 
-        # Enable terrain and geometry layers so the screenshot is not blank.
-        # Errors are suppressed — the original .rasmap is restored in the finally block.
+        # Enable terrain and geometry layers and zoom view to the model extent so
+        # the screenshot is not blank.  Errors are suppressed — the original .rasmap
+        # is restored in the finally block regardless.
         if configure_layers and rasmap_path.exists():
             try:
                 _rch.set_terrain_layer_visibility(rasmap_path, checked=True)
@@ -2278,6 +2279,10 @@ class RasMap:
                 pass
             try:
                 _rch.set_geometry_layer_visibility(rasmap_path, checked=True)
+            except Exception:
+                pass
+            try:
+                _rch.zoom_to_geometry_layer(rasmap_path)
             except Exception:
                 pass
 
