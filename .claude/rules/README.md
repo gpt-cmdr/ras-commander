@@ -26,6 +26,7 @@ Domain-specific knowledge:
 - `terrain.md` - Terrain creation and terrain-file guidance
 - `usgs.md` - Gauge workflows, NWIS access, validation metrics
 - `precipitation.md` - AORC workflows, Atlas 14 integration
+- `land-cover-mannings-n.md` - Layered override architecture, sidecar HDF, calibration NaN semantics
 
 ### testing/
 Testing approaches:
@@ -75,6 +76,7 @@ These files have **no** `paths:` frontmatter and load in all sessions:
 | `hec-ras/ras-commander-first.md` | `**/*.py`, `**/*.ipynb` |
 | `hec-ras/terrain.md` | `ras_commander/**` |
 | `hec-ras/terrain-modification.md` | `ras_commander/terrain/RasTerrainMod.py`, `examples/930_terrain_modification_analysis.ipynb` |
+| `hec-ras/land-cover-mannings-n.md` | `ras_commander/geom/GeomLandCover.py`, `ras_commander/_land_classification_helper.py`, `examples/212_landcover_mannings_n_write.ipynb` |
 | `hec-ras/remote.md` | `ras_commander/remote/**` |
 | `validation/validation-patterns.md` | `ras_commander/**` |
 | `testing/tdd-approach.md` | `tests/**` |

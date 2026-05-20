@@ -41,6 +41,19 @@ This file is the canonical local instruction file for `ras_commander/geom/`.
 - Structure geometry and metadata: `GeomBridge`, `GeomInlineWeir`, `GeomCulvert`
 - HTAB optimization from results: `GeomHtab`
 
+## Land Cover Manning's n Override Architecture
+
+HEC-RAS resolves per-cell Manning's n through a layered override hierarchy:
+
+1. **Sidecar HDF Variables** — authoritative base n-values per class
+2. **LCMann Table= (plain text .g##)** — optional base overrides
+3. **LCMann Region Table=** — optional per-region calibration overrides
+4. **Geometry HDF Calibration Table** — final preprocessed values (NaN = use sidecar)
+
+`LCMann Table=0` means no overrides defined (empty table). NaN in the calibration table is normal — HEC-RAS reads the sidecar directly. There is no 16-class limit.
+
+See `.claude/rules/hec-ras/land-cover-mannings-n.md` for full documentation.
+
 ## Testing
 
 - Validate geometry changes against real `.g##` files.

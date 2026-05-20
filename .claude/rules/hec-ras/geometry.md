@@ -121,6 +121,7 @@ GeomStorage.set_2d_flow_area_settings(
 - `qa_repair_geometry` -- Use to fix blocked obstructions and geometry errors
 
 **Rules** (auto-loaded context):
+- `.claude/rules/hec-ras/land-cover-mannings-n.md` -- Land cover Manning's n override architecture and NaN semantics
 - `.claude/rules/python/state-machine-empty-line-handling.md` -- Read when parsing multi-line geometry blocks
 
 **Primary sources**:
