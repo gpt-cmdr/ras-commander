@@ -8364,6 +8364,8 @@ class RasUnsteady:
                 pass
 
         if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            if ras_obj is None or getattr(ras_obj, 'project_folder', None) is None:
+                raise ValueError("Cannot resolve unsteady number without an initialized ras_object")
             unsteady_num = unsteady_file.zfill(2)
             unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{unsteady_num}"
         else:
@@ -8509,6 +8511,8 @@ class RasUnsteady:
                 pass
 
         if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            if ras_obj is None or getattr(ras_obj, 'project_folder', None) is None:
+                raise ValueError("Cannot resolve unsteady number without an initialized ras_object")
             unsteady_num = unsteady_file.zfill(2)
             unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{unsteady_num}"
         else:
@@ -8532,11 +8536,27 @@ class RasUnsteady:
             interleaved.append(float(s))
             interleaved.append(float(q))
 
+        def _fmt8(v: float) -> str:
+            """Format a value into an 8-character fixed-width field matching HEC-RAS style.
+
+            HEC-RAS writes blanks for zero, integers without decimals, and
+            non-integers with max precision that fits in 8 chars (trailing
+            zeros stripped).
+            """
+            if v == 0.0:
+                return ' ' * 8
+            if v == int(v) and abs(v) < 1e8:
+                return f'{int(v):>8}'
+            for decimals in range(6, 0, -1):
+                s = f'{v:.{decimals}f}'.rstrip('0').rstrip('.')
+                if len(s) <= 8:
+                    return s.rjust(8)
+            return f'{v:8.0f}'
+
         formatted_lines: List[str] = []
         for i in range(0, len(interleaved), 10):
             row_vals = interleaved[i:i+10]
-            row_str = ''.join(f'{v:8.2f}' if abs(v) < 1e6 else f'{v:8.0f}' for v in row_vals)
-            formatted_lines.append(row_str + '\n')
+            formatted_lines.append(''.join(_fmt8(v) for v in row_vals) + '\n')
 
         KEYWORD = 'Observed Stage and Flow Hydrograph='
 
@@ -8616,6 +8636,16 @@ class RasUnsteady:
         with open(unsteady_path, 'w', encoding='utf-8') as f:
             f.writelines(lines)
 
+        boundaries_df_refreshed = False
+        if ras_obj is not None:
+            try:
+                ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+                boundaries_df_refreshed = True
+            except Exception as exc:
+                logger.debug(f"boundaries_df refresh skipped: {exc}")
+
+        matched_location = lines[target_idx].replace('Boundary Location=', '').rstrip('\r\n')
+
         loc_parts = []
         if river:
             loc_parts.append(river)
@@ -8632,8 +8662,9 @@ class RasUnsteady:
 
         return {
             'pair_count': pair_count,
-            'location': '/'.join(loc_parts) if loc_parts else 'first matching',
-            'file': str(unsteady_path),
+            'matched_location': matched_location,
+            'unsteady_file': str(unsteady_path),
+            'boundaries_df_refreshed': boundaries_df_refreshed,
         }
 
     # ------------------------------------------------------------------
