@@ -967,10 +967,13 @@ def capture_rasmapper_snapshot(
     timeout_seconds: float = 1800.0,
     poll_interval_seconds: float = 0.5,
 ) -> Optional[Path]:
-    """Capture a visible RASMapper window using the existing Win32 screenshot helper."""
-    if delay_seconds > 0:
-        time.sleep(delay_seconds)
+    """Capture a visible RASMapper window using the existing Win32 screenshot helper.
 
+    ``delay_seconds`` is the render-wait applied *after* the RASMapper window
+    appears, giving the map canvas time to draw terrain and geometry.  Previously
+    the sleep preceded the window search, which consumed the entire delay on
+    process startup for large models and left zero time for map rendering.
+    """
     hwnd = wait_for_rasmapper_window(
         pid=pid,
         timeout_seconds=timeout_seconds,
@@ -979,6 +982,11 @@ def capture_rasmapper_snapshot(
     if hwnd is None:
         logger.warning("No visible RASMapper window found for screenshot capture")
         return None
+
+    # Sleep *after* the window appears so the delay is spent on map rendering,
+    # not on waiting for the process to start.
+    if delay_seconds > 0:
+        time.sleep(delay_seconds)
 
     from .RasScreenshot import RasScreenshot
 
