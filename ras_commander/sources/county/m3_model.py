@@ -51,7 +51,7 @@ import shutil
 from typing import Union, List, Dict, Optional
 from datetime import datetime
 import logging
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from ras_commander import get_logger
 from ras_commander.LoggingConfig import log_call
 
@@ -453,6 +453,7 @@ class M3Model:
                         unit='iB',
                         unit_scale=True,
                         unit_divisor=1024,
+                        mininterval=2.0,
                     ) as progress_bar:
                         for chunk in response.iter_content(chunk_size=8192):
                             size = file.write(chunk)
