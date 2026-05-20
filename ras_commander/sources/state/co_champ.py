@@ -211,7 +211,7 @@ class ColoradoChampModels:
         # Stream to disk with optional progress
         total_size = int(response.headers.get("content-length", 0))
         try:
-            from tqdm import tqdm
+            from tqdm.auto import tqdm
 
             progress = tqdm(
                 total=total_size or None,
@@ -219,6 +219,7 @@ class ColoradoChampModels:
                 unit_scale=True,
                 desc=filename,
                 disable=total_size == 0,
+                mininterval=2.0,
             )
         except ImportError:
             progress = None

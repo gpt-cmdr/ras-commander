@@ -33,7 +33,7 @@ import sys
 import zipfile
 from datetime import datetime
 import requests
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from ras_commander.Decorators import log_call
 from ras_commander.sources.base import (
@@ -2594,7 +2594,8 @@ HEC-RAS version: 5.0.1 / 5.0.3
                     initial=resume_from,
                     unit='B',
                     unit_scale=True,
-                    desc=f"    {dest.name}"
+                    desc=f"    {dest.name}",
+                    mininterval=2.0,
                 ) as pbar:
                     for chunk in response.iter_content(chunk_size=8192):
                         if not chunk:
@@ -2632,7 +2633,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         print(f"  Extracting {description or zip_path.name}...")
         with zipfile.ZipFile(zip_path, 'r') as zf:
             total = sum(info.file_size for info in zf.filelist)
-            with tqdm(total=total, unit='B', unit_scale=True, desc=f"    {zip_path.name}") as pbar:
+            with tqdm(total=total, unit='B', unit_scale=True, desc=f"    {zip_path.name}", mininterval=2.0) as pbar:
                 for member in zf.filelist:
                     zf.extract(member, dest)
                     pbar.update(member.file_size)
@@ -2707,7 +2708,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 # Get total uncompressed size for progress bar
                 total_size = sum(info.file_size for info in zip_ref.filelist)
 
-                with tqdm(total=total_size, unit='B', unit_scale=True, desc=f"  Extracting") as pbar:
+                with tqdm(total=total_size, unit='B', unit_scale=True, desc=f"  Extracting", mininterval=2.0) as pbar:
                     for member in zip_ref.filelist:
                         zip_ref.extract(member, extracted_folder)
                         pbar.update(member.file_size)

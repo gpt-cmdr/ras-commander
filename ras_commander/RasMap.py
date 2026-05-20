@@ -2232,6 +2232,7 @@ class RasMap:
         delay_seconds: float = 5.0,
         timeout_seconds: float = 1800.0,
         ras_version: Optional[str] = None,
+        configure_layers: bool = True,
     ) -> Optional[Path]:
         """
         One-call screenshot: backup rasmap, open RASMapper, capture, close, restore.
@@ -2247,6 +2248,9 @@ class RasMap:
             delay_seconds: Wait time for RASMapper to render before capture.
             timeout_seconds: Max time to wait for RASMapper window.
             ras_version: HEC-RAS version for finding RASMapper.exe.
+            configure_layers: If True (default), enable terrain and geometry layers
+                in the .rasmap before opening RASMapper so the screenshot shows
+                model content. The original .rasmap is restored afterward.
 
         Returns:
             Path to the saved PNG, or None if capture failed.
@@ -2264,6 +2268,18 @@ class RasMap:
         if rasmap_path.exists():
             rasmap_backup = rasmap_path.with_suffix(".rasmap.screenshot_bak")
             shutil.copy2(rasmap_path, rasmap_backup)
+
+        # Enable terrain and geometry layers so the screenshot is not blank.
+        # Errors are suppressed — the original .rasmap is restored in the finally block.
+        if configure_layers and rasmap_path.exists():
+            try:
+                _rch.set_terrain_layer_visibility(rasmap_path, checked=True)
+            except Exception:
+                pass
+            try:
+                _rch.set_geometry_layer_visibility(rasmap_path, checked=True)
+            except Exception:
+                pass
 
         # Default output path
         if output_path is None:
