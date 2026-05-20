@@ -117,6 +117,7 @@ Current folder names are legacy Claude-era names.
 - `qa_repair_geometry`
 - `qa_rasmapper_spatial-review`
 - `dev_gate_merge-to-main`
+- `dev_human-in-loop`
 - `dev_manage_git-worktrees`
 
 ### Claude-Only Orchestration Skills

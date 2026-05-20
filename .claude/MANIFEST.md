@@ -188,6 +188,7 @@ the shared multi-harness skill corpus.
 | `dev_invoke_kimi-cli` | skill | `.claude/skills/dev_invoke_kimi-cli/SKILL.md` |
 | `dev_manage_git-worktrees` | skill | `.claude/skills/dev_manage_git-worktrees/SKILL.md` |
 | `dev_gate_merge-to-main` | skill | `.claude/skills/dev_gate_merge-to-main/SKILL.md` |
+| `dev_human-in-loop` | skill | `.claude/skills/dev_human-in-loop/SKILL.md` |
 | `code-oracle-codex` | agent | `.claude/agents/code-oracle-codex.md` |
 | `code-oracle-gemini` | agent | `.claude/agents/code-oracle-gemini.md` |
 | `git-operations` | agent | `.claude/agents/git-operations/SUBAGENT.md` |
@@ -363,6 +364,8 @@ use these only when the user explicitly requests the legacy provider-mixed workf
 **`dev_gate_merge-to-main`** (skill) -- feature-branch guardrail
 - Agents: `git-operations`
 - Commands: `agent-taskupdate`, `agent-engagesubagents`
+
+**`dev_human-in-loop`** (skill) -- human approval gate for high-risk agent actions
 
 **`dev_invoke_codex-cli`** (skill) -- Codex CLI delegation
 - Agents: `code-oracle-codex`
