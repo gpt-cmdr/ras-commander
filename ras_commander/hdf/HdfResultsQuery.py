@@ -80,6 +80,9 @@ def _extract_geometry_number(raw_value: Any) -> Optional[str]:
     if raw_value is None:
         return None
 
+    if isinstance(raw_value, (bytes, np.bytes_)):
+        raw_value = raw_value.decode("utf-8", errors="ignore")
+
     try:
         if pd.isna(raw_value):
             return None
@@ -142,7 +145,7 @@ def _resolve_geometry_hdf(
 
     try:
         plan_info = HdfPlan.get_plan_information(plan_hdf_path)
-        for key in ("Geometry File", "Geom File"):
+        for key in ("Geometry File", "Geom File", "Geometry Filename"):
             geom_number = _extract_geometry_number(plan_info.get(key))
             if geom_number:
                 geom_hdf_path = (
@@ -779,6 +782,128 @@ def _validate_value_length(
         )
 
 
+def _decode_hdf_attr(value: Any) -> Any:
+    """Decode common byte-valued HDF attributes."""
+    if isinstance(value, (bytes, np.bytes_)):
+        return value.decode("utf-8", errors="ignore")
+    return value
+
+
+def _read_unit_metadata(geom_hdf_path: Path) -> Dict[str, str]:
+    """Read project unit metadata from a geometry HDF."""
+    raw_si_units = None
+    raw_unit_system = None
+    with h5py.File(geom_hdf_path, "r") as hdf_file:
+        geometry_group = hdf_file.get("Geometry")
+        if geometry_group is not None:
+            raw_si_units = _decode_hdf_attr(geometry_group.attrs.get("SI Units"))
+        raw_unit_system = _decode_hdf_attr(hdf_file.attrs.get("Units System"))
+
+    unit_text = str(raw_unit_system or "").strip().lower()
+    si_units = str(raw_si_units).strip().lower() in {
+        "true",
+        "1",
+        "yes",
+        "si",
+    } or unit_text.startswith("si")
+
+    length_units = "m" if si_units else "ft"
+    return {
+        "unit_system": "SI" if si_units else "US Customary",
+        "length_units": length_units,
+        "velocity_units": "m/s" if si_units else "ft/s",
+        "depth_units": length_units,
+    }
+
+
+def _read_ras_version(plan_hdf_path: Path) -> Optional[str]:
+    """Read a compact HEC-RAS version string from a plan HDF."""
+    candidates: List[Any] = []
+    with h5py.File(plan_hdf_path, "r") as hdf_file:
+        candidates.extend(
+            [
+                hdf_file.attrs.get("File Version"),
+                hdf_file.attrs.get("Program Version"),
+            ]
+        )
+        for path in ("Results/Unsteady", "Results/Steady"):
+            if path in hdf_file:
+                candidates.extend(
+                    [
+                        hdf_file[path].attrs.get("Program Version"),
+                        hdf_file[path].attrs.get("File Version"),
+                    ]
+                )
+
+    for value in candidates:
+        text = str(_decode_hdf_attr(value) or "").strip()
+        match = re.search(r"(\d+\.\d+)", text)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _coerce_linestring(polyline: Any):
+    """Validate and normalize a shapely LineString-like input."""
+    from shapely.geometry import LineString, MultiLineString
+    from shapely.ops import linemerge
+
+    if getattr(polyline, "geom_type", None) == "LinearRing":
+        polyline = LineString(polyline)
+    elif isinstance(polyline, MultiLineString):
+        polyline = linemerge(polyline)
+        if getattr(polyline, "geom_type", None) == "MultiLineString":
+            polyline = max(polyline.geoms, key=lambda geom: geom.length)
+    elif not isinstance(polyline, LineString):
+        try:
+            polyline = LineString(polyline)
+        except Exception as exc:
+            raise ValueError(
+                "polyline must be a shapely LineString or coordinate sequence"
+            ) from exc
+
+    if polyline.is_empty or not np.isfinite(polyline.length) or polyline.length <= 0:
+        raise ValueError("polyline must have positive length")
+
+    return polyline
+
+
+def _resolve_profile_sample_spacing(sample_spacing: Optional[float]) -> float:
+    """Validate explicit sample spacing or use the RAS Mapper fixture default."""
+    spacing = 50.0 if sample_spacing is None else float(sample_spacing)
+    if not np.isfinite(spacing) or spacing <= 0.0:
+        raise ValueError("sample_spacing must be a positive finite value")
+    return spacing
+
+
+def _reject_unsupported_2d_bridge_meshes(
+    plan_hdf_path: Path,
+    mesh_names: List[str],
+) -> None:
+    """Reject HDFs with native 2D bridge velocity output groups."""
+    with h5py.File(plan_hdf_path, "r") as hdf_file:
+        if "Geometry/2D Bridges" in hdf_file or "Geometry/2D Bridge" in hdf_file:
+            raise NotImplementedError(
+                "2D bridge velocity profile extraction is not supported. "
+                "RAS Mapper uses VelocityRenderer2DBridge for those meshes."
+            )
+
+        for mesh_name in mesh_names:
+            base_path = (
+                "Results/Unsteady/Output/Output Blocks/Base Output/"
+                "Unsteady Time Series/2D Flow Areas/"
+                f"{mesh_name}"
+            )
+            if base_path not in hdf_file:
+                continue
+            group_names = {name.lower() for name in hdf_file[base_path].keys()}
+            if {"2d bridge", "2d bridges"} & group_names:
+                raise NotImplementedError(
+                    "2D bridge velocity profile extraction is not supported. "
+                    "RAS Mapper uses VelocityRenderer2DBridge for those meshes."
+                )
+
+
 def _warn_on_large_distances(distances: np.ndarray) -> None:
     """Warn when nearest-cell distances suggest a CRS mismatch."""
     distances = np.asarray(distances, dtype=float)
@@ -1017,6 +1142,79 @@ class HdfResultsQuery:
                 "distance",
             ]
         ]
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def query_polyline_velocity_profile(
+        hdf_path: Path,
+        polyline: Any,
+        time_index: int,
+        sample_spacing: Optional[float] = None,
+        terrain_raster: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+    ) -> pd.DataFrame:
+        """
+        Extract RAS Mapper velocity/depth/terrain samples along a profile line.
+
+        This method delegates velocity computation to
+        ``RasMapperLib.Render.VelocityRenderer.Compute`` through pythonnet.
+
+        Returns:
+            DataFrame with station, x, y, mesh_name, face_id, velocity_x,
+            velocity_y, velocity_mag, depth, and terrain_elev columns.
+        """
+        if isinstance(time_index, str) and time_index.strip().lower() == "max":
+            raise ValueError(
+                "time_index='max' is not supported for RAS Mapper velocity "
+                "profile extraction; pass a concrete profile index or name."
+            )
+
+        geom_hdf_path = _resolve_geometry_hdf(hdf_path, ras_object=ras_object)
+        mesh_names = HdfMesh.get_mesh_area_names(geom_hdf_path)
+        _reject_unsupported_2d_bridge_meshes(hdf_path, mesh_names)
+
+        line = _coerce_linestring(polyline)
+        coords = np.asarray(line.coords, dtype=float)
+        if coords.ndim != 2 or coords.shape[1] < 2:
+            raise ValueError("polyline must provide at least x/y coordinates")
+        polyline_xy = coords[:, :2]
+
+        spacing = _resolve_profile_sample_spacing(sample_spacing)
+        terrain_hdf_path = Path(terrain_raster) if terrain_raster is not None else None
+
+        from ..dotnet.velocity_interop import query_polyline_velocity
+
+        profile_data = query_polyline_velocity(
+            hdf_path,
+            polyline_xy,
+            time_index,
+            sample_spacing=spacing,
+            geometry_hdf_path=geom_hdf_path,
+            terrain_hdf_path=terrain_hdf_path,
+        )
+
+        columns = [
+            "station",
+            "x",
+            "y",
+            "mesh_name",
+            "face_id",
+            "velocity_x",
+            "velocity_y",
+            "velocity_mag",
+            "depth",
+            "terrain_elev",
+        ]
+        result_df = pd.DataFrame({column: profile_data[column] for column in columns})
+
+        result_df.attrs.update(_read_unit_metadata(geom_hdf_path))
+        result_df.attrs["sample_spacing"] = float(spacing)
+        result_df.attrs["velocity_source"] = [
+            "RasMapperLib.Render.VelocityRenderer"
+        ]
+        result_df.attrs["ras_version"] = _read_ras_version(hdf_path)
+        return result_df[columns]
 
     @staticmethod
     @log_call
