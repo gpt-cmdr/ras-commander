@@ -215,6 +215,7 @@ examples/verify_*.py
 # Temporary source folders (allow tracked subpackages and __init__)
 ras_commander/sources/*
 !ras_commander/sources/__init__.py
+!ras_commander/sources/base.py
 !ras_commander/sources/county/
 !ras_commander/sources/federal/
 
