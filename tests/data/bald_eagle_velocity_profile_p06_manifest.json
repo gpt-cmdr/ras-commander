@@ -1,0 +1,45 @@
+{
+  "additional_tabs": [],
+  "checksums": {
+    "polyline.geojson": "8a6991d0ecf1cd306292d2dbe35694a4c34491cc406f295846e2c751f135b0eb",
+    "velocity.csv": "7e5de23c12a95ef5173f413cb4425a993eedc5efee88d4fd7c026dff26262d14",
+    "velocity.png": "cca89ee6110666c2317cf5a269892f1c0dc98095f8664b94b282b0ec7832e860",
+    "velocity_against_terrain.csv": "7e5de23c12a95ef5173f413cb4425a993eedc5efee88d4fd7c026dff26262d14",
+    "velocity_against_terrain.png": "c2384ff57c7cb4dadbae56b544fb348176a032146ffa4ad16bd318dde259cff1"
+  },
+  "generated_at_utc": "2026-05-21T12:44:08+00:00",
+  "geometry_hdf": null,
+  "install_root": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\7.0",
+  "max_segment_len": 50.0,
+  "plan_hdf": {
+    "path": "\\\\192.168.3.20\\CLB-Engineering\\Symphony\\RASDecomp\\CLB-850\\inputs\\BaldEagleCrkMulti2D_722_gridded\\BaldEagleDamBrk.p06.hdf",
+    "sha256": "f8db2d5c26feac279dab9ca2a0e3d647b87cba6e354c81da9a99439432469759"
+  },
+  "polyline_csv": {
+    "path": "\\\\192.168.3.20\\CLB-Engineering\\Symphony\\RASDecomp\\CLB-850\\inputs\\polyline.csv",
+    "sha256": "04778384df12e8e8be4c17c5de409b4be1767e5e14e1448a810cffaa9cfb1060"
+  },
+  "polyline_vertices": [
+    {
+      "x": 2006500.0,
+      "y": 321750.0
+    },
+    {
+      "x": 2008500.0,
+      "y": 321750.0
+    }
+  ],
+  "profile_name": "11SEP2018 12:00:00",
+  "ras_version": "7.0 (2.0.0.0)",
+  "row_count": 111,
+  "tabs": [
+    "velocity",
+    "velocity_against_terrain"
+  ],
+  "terrain_hdf": {
+    "path": "\\\\192.168.3.20\\CLB-Engineering\\Symphony\\RASDecomp\\CLB-850\\inputs\\BaldEagleCrkMulti2D_722_gridded\\Terrain\\Terrain50.hdf",
+    "sha256": "b46f8c3e8581975244635e6000af5637bcb771f557d3ce43da0b2644a37cae7b"
+  },
+  "time_index": 360,
+  "valid_velocity_rows": 36
+}

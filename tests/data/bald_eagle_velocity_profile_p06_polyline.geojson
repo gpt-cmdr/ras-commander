@@ -1,0 +1,24 @@
+{
+  "features": [
+    {
+      "geometry": {
+        "coordinates": [
+          [
+            2006500.0,
+            321750.0
+          ],
+          [
+            2008500.0,
+            321750.0
+          ]
+        ],
+        "type": "LineString"
+      },
+      "properties": {
+        "name": "velocity_profile_polyline"
+      },
+      "type": "Feature"
+    }
+  ],
+  "type": "FeatureCollection"
+}
