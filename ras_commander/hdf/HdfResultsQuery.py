@@ -144,6 +144,16 @@ def _resolve_geometry_hdf(
     project_name = _project_name_from_plan_hdf(plan_hdf_path)
 
     try:
+        with h5py.File(plan_hdf_path, "r") as hdf_file:
+            if (
+                "Geometry/2D Flow Areas" in hdf_file
+                or "Geometry/Pipe Networks" in hdf_file
+            ):
+                return plan_hdf_path
+    except Exception:
+        pass
+
+    try:
         plan_info = HdfPlan.get_plan_information(plan_hdf_path)
         for key in ("Geometry File", "Geom File", "Geometry Filename"):
             geom_number = _extract_geometry_number(plan_info.get(key))
@@ -1447,7 +1457,7 @@ class HdfResultsQuery:
             geom_hdf_path,
             spacing,
             "velocity_source",
-            "RasMapperLib.Render.VelocityRenderer",
+            "RasMapperLib.Render.VelocityTimeSeries",
             "velocity_mag",
             wide,
         )
@@ -1501,7 +1511,7 @@ class HdfResultsQuery:
             geom_hdf_path,
             spacing,
             "wse_source",
-            "RasMapperLib.Render.WaterSurfaceRenderer",
+            "RasMapperLib.Render.WaterSurfaceTimeSeries",
             "wse",
             wide,
         )
@@ -1707,7 +1717,7 @@ class HdfResultsQuery:
             geom_hdf_path,
             spacing,
             "velocity_source",
-            "RasMapperLib.Render.VelocityRendererPipe",
+            "RasMapperLib.Render.VelocityPipeTimeSeries",
             "velocity_mag",
             wide,
         )
@@ -1761,7 +1771,7 @@ class HdfResultsQuery:
             geom_hdf_path,
             spacing,
             "flow_source",
-            "RasMapperLib.Render.FlowRendererPipe",
+            "RasMapperLib.Render.FlowPipeTimeSeries",
             "flow",
             wide,
         )

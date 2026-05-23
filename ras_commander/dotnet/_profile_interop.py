@@ -531,6 +531,53 @@ def _compute_flow_array(
     )
 
 
+def _compute_velocity_timeseries_arrays(
+    results: Any,
+    map_points: Any,
+    terrain_values: Any,
+) -> tuple[Any, Any, Any, Any]:
+    from H5Assist.Caching import CacheCollection  # type: ignore
+    from RasMapperLib.Render import VelocityTimeSeries  # type: ignore
+
+    computed = VelocityTimeSeries.Compute(
+        results,
+        map_points,
+        terrain_values,
+        None,
+        None,
+        None,
+        CacheCollection(),
+        None,
+        None,
+    )
+    if not isinstance(computed, tuple) or len(computed) != 4:
+        raise RuntimeError(
+            "Unexpected VelocityTimeSeries.Compute return value; expected four arrays"
+        )
+    velocity_mag_raw, velocity_x_raw, velocity_y_raw, depth_raw = computed
+    return velocity_x_raw, velocity_y_raw, velocity_mag_raw, depth_raw
+
+
+def _compute_wse_timeseries_array(
+    results: Any,
+    map_points: Any,
+    terrain_values: Any,
+) -> Any:
+    from H5Assist.Caching import CacheCollection  # type: ignore
+    from RasMapperLib.Render import WaterSurfaceTimeSeries  # type: ignore
+
+    return _single_ref_array(
+        WaterSurfaceTimeSeries.Compute(
+            results,
+            map_points,
+            None,
+            CacheCollection(),
+            terrain_values,
+            None,
+        )
+    )
+
+
 def _compute_pipe_velocity_array(
     results: Any,
     profile_index: int,
@@ -569,6 +616,52 @@ def _compute_pipe_flow_array(
             True,
         )
     )
+
+
+def _compute_pipe_velocity_timeseries_arrays(
+    results: Any,
+    map_points: Any,
+) -> tuple[Any, Any]:
+    from H5Assist.Caching import CacheCollection  # type: ignore
+    from RasMapperLib.Render import VelocityPipeTimeSeries  # type: ignore
+
+    computed = VelocityPipeTimeSeries.Compute(
+        results,
+        map_points,
+        None,
+        CacheCollection(),
+        None,
+        None,
+    )
+    if not isinstance(computed, tuple) or len(computed) != 2:
+        raise RuntimeError(
+            "Unexpected VelocityPipeTimeSeries.Compute return value; expected two arrays"
+        )
+    velocity_raw, depth_raw = computed
+    return velocity_raw, depth_raw
+
+
+def _compute_pipe_flow_timeseries_arrays(
+    results: Any,
+    map_points: Any,
+) -> tuple[Any, Any]:
+    from H5Assist.Caching import CacheCollection  # type: ignore
+    from RasMapperLib.Render import FlowPipeTimeSeries  # type: ignore
+
+    computed = FlowPipeTimeSeries.Compute(
+        results,
+        map_points,
+        None,
+        CacheCollection(),
+        None,
+        None,
+    )
+    if not isinstance(computed, tuple) or len(computed) != 2:
+        raise RuntimeError(
+            "Unexpected FlowPipeTimeSeries.Compute return value; expected two arrays"
+        )
+    flow_raw, depth_raw = computed
+    return flow_raw, depth_raw
 
 
 def _compute_wse_difference_array(
@@ -686,8 +779,9 @@ def _profile_times(context: MapPointsContext) -> np.ndarray:
 def _timeseries_base_data(
     context: MapPointsContext,
     profile_indexes: Sequence[int],
+    sample_count: int | None = None,
 ) -> dict[str, np.ndarray]:
-    base = _base_profile_data(context)
+    base = _base_profile_data(context, sample_count)
     n_times = len(profile_indexes)
     n_samples = len(base["station"])
     times = _profile_times(context)
@@ -714,6 +808,33 @@ def _flatten_timeseries(values: list[np.ndarray]) -> np.ndarray:
     if not values:
         return np.asarray([], dtype=float)
     return np.vstack(values).reshape(-1)
+
+
+def _flatten_sample_major_timeseries(
+    values: Any,
+    profile_indexes: Sequence[int],
+    sample_count: int,
+) -> np.ndarray:
+    """Return time-major flattened values from RAS Mapper sample-major output."""
+    matrix = np.full((len(profile_indexes), sample_count), np.nan, dtype=float)
+    if sample_count <= 0:
+        return matrix.reshape(-1)
+    if len(values) < sample_count:
+        raise RuntimeError(
+            "TimeSeries.Compute returned fewer profile samples than MapPixels"
+        )
+
+    for sample_idx in range(sample_count):
+        sample_values = values[sample_idx]
+        for time_pos, profile_index in enumerate(profile_indexes):
+            if profile_index >= len(sample_values):
+                raise RuntimeError(
+                    "TimeSeries.Compute returned fewer timesteps than RASResults.ProfileCount"
+                )
+            value = sample_values[profile_index]
+            if not _is_missing(value):
+                matrix[time_pos, sample_idx] = float(value)
+    return matrix.reshape(-1)
 
 
 def _ensure_pipe_network_results(plan_hdf_path: Path) -> None:
@@ -880,7 +1001,7 @@ def query_polyline_velocity_timeseries(
     geometry_hdf_path: Path | None = None,
     terrain_hdf_path: Path | None = None,
 ) -> dict[str, np.ndarray]:
-    """Extract velocity time series by streaming RAS Mapper profile renders."""
+    """Extract velocity time series with RAS Mapper VelocityTimeSeries.Compute."""
     context = _build_map_points(
         plan_hdf_path,
         polyline_xy,
@@ -889,35 +1010,35 @@ def query_polyline_velocity_timeseries(
         terrain_hdf_path=terrain_hdf_path,
     )
     profile_indexes = _normalize_time_range(context.results, time_range)
-    n_samples = len(context.station)
-    vx_values: list[np.ndarray] = []
-    vy_values: list[np.ndarray] = []
-    vmag_values: list[np.ndarray] = []
-    depth_values: list[np.ndarray] = []
-    for profile_index in profile_indexes:
-        vx_raw, vy_raw, vmag_raw, depth_raw = _compute_velocity_arrays(
-            context.results,
-            profile_index,
-            context.map_points,
-            context.terrain_values,
-        )
-        count = min(n_samples, len(vx_raw), len(vy_raw), len(vmag_raw), len(depth_raw))
-        if count != n_samples:
-            raise RuntimeError(
-                "VelocityRenderer returned inconsistent profile lengths across timesteps"
-            )
-        vx_values.append(_clean_float_array(vx_raw, n_samples))
-        vy_values.append(_clean_float_array(vy_raw, n_samples))
-        vmag_values.append(_clean_float_array(vmag_raw, n_samples))
-        depth_values.append(_clean_float_array(depth_raw, n_samples))
-
-    result = _timeseries_base_data(context, profile_indexes)
+    vx_raw, vy_raw, vmag_raw, depth_raw = _compute_velocity_timeseries_arrays(
+        context.results,
+        context.map_points,
+        context.terrain_values,
+    )
+    n_samples = min(len(context.station), len(vx_raw), len(vy_raw), len(vmag_raw), len(depth_raw))
+    result = _timeseries_base_data(context, profile_indexes, sample_count=n_samples)
     result.update(
         {
-            "velocity_x": _flatten_timeseries(vx_values),
-            "velocity_y": _flatten_timeseries(vy_values),
-            "velocity_mag": _flatten_timeseries(vmag_values),
-            "depth": _flatten_timeseries(depth_values),
+            "velocity_x": _flatten_sample_major_timeseries(
+                vx_raw,
+                profile_indexes,
+                n_samples,
+            ),
+            "velocity_y": _flatten_sample_major_timeseries(
+                vy_raw,
+                profile_indexes,
+                n_samples,
+            ),
+            "velocity_mag": _flatten_sample_major_timeseries(
+                vmag_raw,
+                profile_indexes,
+                n_samples,
+            ),
+            "depth": _flatten_sample_major_timeseries(
+                depth_raw,
+                profile_indexes,
+                n_samples,
+            ),
         }
     )
     return result
@@ -931,7 +1052,7 @@ def query_polyline_wse_timeseries(
     geometry_hdf_path: Path | None = None,
     terrain_hdf_path: Path | None = None,
 ) -> dict[str, np.ndarray]:
-    """Extract water-surface time series by streaming RAS Mapper profile renders."""
+    """Extract water-surface time series with WaterSurfaceTimeSeries.Compute."""
     context = _build_map_points(
         plan_hdf_path,
         polyline_xy,
@@ -940,30 +1061,22 @@ def query_polyline_wse_timeseries(
         terrain_hdf_path=terrain_hdf_path,
     )
     profile_indexes = _normalize_time_range(context.results, time_range)
-    n_samples = len(context.station)
-    wse_values: list[np.ndarray] = []
-    depth_values: list[np.ndarray] = []
-    terrain = _clean_float_array(context.terrain_values, n_samples)
-    for profile_index in profile_indexes:
-        wse_raw = _compute_wse_array(
-            context.results,
-            profile_index,
-            context.map_points,
-            context.terrain_values,
-        )
-        if len(wse_raw) < n_samples:
-            raise RuntimeError(
-                "WaterSurfaceRenderer returned inconsistent profile lengths across timesteps"
-            )
-        wse = _clean_float_array(wse_raw, n_samples)
-        wse_values.append(wse)
-        depth_values.append(_depth_from_wse(wse, terrain))
-
-    result = _timeseries_base_data(context, profile_indexes)
+    wse_raw = _compute_wse_timeseries_array(
+        context.results,
+        context.map_points,
+        context.terrain_values,
+    )
+    n_samples = min(len(context.station), len(wse_raw))
+    wse = _flatten_sample_major_timeseries(wse_raw, profile_indexes, n_samples)
+    terrain = np.tile(
+        _clean_float_array(context.terrain_values, n_samples),
+        len(profile_indexes),
+    )
+    result = _timeseries_base_data(context, profile_indexes, sample_count=n_samples)
     result.update(
         {
-            "wse": _flatten_timeseries(wse_values),
-            "depth": _flatten_timeseries(depth_values),
+            "wse": wse,
+            "depth": _depth_from_wse(wse, terrain),
         }
     )
     return result
@@ -977,7 +1090,13 @@ def query_polyline_flow_timeseries(
     geometry_hdf_path: Path | None = None,
     terrain_hdf_path: Path | None = None,
 ) -> dict[str, np.ndarray]:
-    """Extract flow time series by looping RAS Mapper FlowRenderer.Compute."""
+    """
+    Extract flow time series with native FlowRenderer.Compute calls.
+
+    HEC-RAS 7.0 exposes no 2D ``RasMapperLib.Render.FlowTimeSeries`` class.
+    RAS Mapper uses the single-profile flow renderer for profile animations,
+    so this method loops the literal native ``FlowRenderer.Compute`` call.
+    """
     context = _build_map_points(
         plan_hdf_path,
         polyline_xy,
@@ -1096,7 +1215,7 @@ def query_polyline_pipe_velocity_timeseries(
     geometry_hdf_path: Path | None = None,
     terrain_hdf_path: Path | None = None,
 ) -> dict[str, np.ndarray]:
-    """Extract pipe velocity time series by streaming RAS Mapper renders."""
+    """Extract pipe velocity time series with VelocityPipeTimeSeries.Compute."""
     plan_hdf_path = Path(plan_hdf_path)
     _ensure_pipe_network_results(plan_hdf_path)
     context = _build_map_points(
@@ -1107,24 +1226,24 @@ def query_polyline_pipe_velocity_timeseries(
         terrain_hdf_path=terrain_hdf_path,
     )
     profile_indexes = _normalize_time_range(context.results, time_range)
-    n_samples = len(context.station)
-    velocity_values: list[np.ndarray] = []
-    for profile_index in profile_indexes:
-        velocity_raw = _compute_pipe_velocity_array(
-            context.results,
-            profile_index,
-            context.map_points,
-        )
-        if len(velocity_raw) < n_samples:
-            raise RuntimeError(
-                "VelocityRendererPipe returned inconsistent profile lengths across timesteps"
-            )
-        velocity_values.append(_clean_float_array(velocity_raw, n_samples))
-    result = _timeseries_base_data(context, profile_indexes)
+    velocity_raw, depth_raw = _compute_pipe_velocity_timeseries_arrays(
+        context.results,
+        context.map_points,
+    )
+    n_samples = min(len(context.station), len(velocity_raw), len(depth_raw))
+    result = _timeseries_base_data(context, profile_indexes, sample_count=n_samples)
     result.update(
         {
-            "velocity_mag": _flatten_timeseries(velocity_values),
-            "depth": np.full(n_samples * len(profile_indexes), np.nan, dtype=float),
+            "velocity_mag": _flatten_sample_major_timeseries(
+                velocity_raw,
+                profile_indexes,
+                n_samples,
+            ),
+            "depth": _flatten_sample_major_timeseries(
+                depth_raw,
+                profile_indexes,
+                n_samples,
+            ),
         }
     )
     return result
@@ -1138,7 +1257,7 @@ def query_polyline_pipe_flow_timeseries(
     geometry_hdf_path: Path | None = None,
     terrain_hdf_path: Path | None = None,
 ) -> dict[str, np.ndarray]:
-    """Extract pipe flow time series by streaming RAS Mapper renders."""
+    """Extract pipe flow time series with FlowPipeTimeSeries.Compute."""
     plan_hdf_path = Path(plan_hdf_path)
     _ensure_pipe_network_results(plan_hdf_path)
     context = _build_map_points(
@@ -1149,24 +1268,24 @@ def query_polyline_pipe_flow_timeseries(
         terrain_hdf_path=terrain_hdf_path,
     )
     profile_indexes = _normalize_time_range(context.results, time_range)
-    n_samples = len(context.station)
-    flow_values: list[np.ndarray] = []
-    for profile_index in profile_indexes:
-        flow_raw = _compute_pipe_flow_array(
-            context.results,
-            profile_index,
-            context.map_points,
-        )
-        if len(flow_raw) < n_samples:
-            raise RuntimeError(
-                "FlowRendererPipe returned inconsistent profile lengths across timesteps"
-            )
-        flow_values.append(_clean_float_array(flow_raw, n_samples))
-    result = _timeseries_base_data(context, profile_indexes)
+    flow_raw, depth_raw = _compute_pipe_flow_timeseries_arrays(
+        context.results,
+        context.map_points,
+    )
+    n_samples = min(len(context.station), len(flow_raw), len(depth_raw))
+    result = _timeseries_base_data(context, profile_indexes, sample_count=n_samples)
     result.update(
         {
-            "flow": _flatten_timeseries(flow_values),
-            "depth": np.full(n_samples * len(profile_indexes), np.nan, dtype=float),
+            "flow": _flatten_sample_major_timeseries(
+                flow_raw,
+                profile_indexes,
+                n_samples,
+            ),
+            "depth": _flatten_sample_major_timeseries(
+                depth_raw,
+                profile_indexes,
+                n_samples,
+            ),
         }
     )
     return result

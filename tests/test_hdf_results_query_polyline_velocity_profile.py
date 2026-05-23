@@ -71,6 +71,13 @@ DATA_DIR = Path(__file__).parent / "data"
 REFERENCE_CSV = DATA_DIR / "bald_eagle_velocity_profile_p06.csv"
 REFERENCE_GEOJSON = DATA_DIR / "bald_eagle_velocity_profile_p06_polyline.geojson"
 REFERENCE_MANIFEST = DATA_DIR / "bald_eagle_velocity_profile_p06_manifest.json"
+CHIPPEWA_PLAN = Path(
+    "H:/Symphony/ras-commander/CLB-214/profile_line_flow_validation/"
+    "project/Chippewa_2D_profile_line_flow/Chippewa_2D.p02.hdf"
+)
+CHIPPEWA_POLYLINE = DATA_DIR / "chippewa_upstream_profile_line.geojson"
+CHIPPEWA_VELOCITY_TS_CSV = DATA_DIR / "chippewa_velocity_timeseries_upstream_p02.csv"
+CHIPPEWA_WSE_TS_CSV = DATA_DIR / "chippewa_wse_timeseries_upstream_p02.csv"
 DEFAULT_BALD_EAGLE_PLAN = Path(
     "H:/Symphony/RASDecomp/CLB-850/inputs/"
     "BaldEagleCrkMulti2D_722_gridded/BaldEagleDamBrk.p06.hdf"
@@ -83,6 +90,11 @@ def _load_manifest() -> dict:
 
 def _load_polyline() -> LineString:
     geojson = json.loads(REFERENCE_GEOJSON.read_text(encoding="utf-8"))
+    return shape(geojson["features"][0]["geometry"])
+
+
+def _load_chippewa_polyline() -> LineString:
+    geojson = json.loads(CHIPPEWA_POLYLINE.read_text(encoding="utf-8"))
     return shape(geojson["features"][0]["geometry"])
 
 
@@ -112,6 +124,12 @@ def _require_bald_eagle_plan() -> Path:
     if not plan_hdf.exists():
         pytest.skip(f"Bald Eagle plan HDF not staged: {plan_hdf}")
     return plan_hdf
+
+
+def _require_chippewa_plan() -> Path:
+    if not CHIPPEWA_PLAN.exists():
+        pytest.skip(f"Chippewa validation plan HDF not staged: {CHIPPEWA_PLAN}")
+    return CHIPPEWA_PLAN
 
 
 def test_matches_ras_mapper_fixture() -> None:
@@ -259,42 +277,52 @@ def test_wse_and_flow_profiles_return_expected_schema() -> None:
 
 
 def test_velocity_wse_flow_timeseries_return_long_schema() -> None:
-    manifest = _load_manifest()
-    plan_hdf = _require_bald_eagle_plan()
-    terrain_hdf = _bald_eagle_terrain_hdf(plan_hdf)
-    polyline = _load_polyline()
-    time_start = int(manifest["time_index"])
-    time_range = (time_start, time_start + 2)
+    plan_hdf = _require_chippewa_plan()
+    polyline = _load_chippewa_polyline()
+    time_range = (0, 2)
 
     velocity = HdfResultsQuery.query_polyline_velocity_timeseries(
         plan_hdf,
         polyline,
         time_range=time_range,
-        sample_spacing=float(manifest["max_segment_len"]),
-        terrain_raster=terrain_hdf,
+        sample_spacing=50.0,
     )
     wse = HdfResultsQuery.query_polyline_wse_timeseries(
         plan_hdf,
         polyline,
         time_range=time_range,
-        sample_spacing=float(manifest["max_segment_len"]),
-        terrain_raster=terrain_hdf,
+        sample_spacing=50.0,
     )
     flow = HdfResultsQuery.query_polyline_flow_timeseries(
         plan_hdf,
         polyline,
         time_range=time_range,
-        sample_spacing=float(manifest["max_segment_len"]),
-        terrain_raster=terrain_hdf,
+        sample_spacing=50.0,
     )
 
-    expected_rows = int(manifest["row_count"]) * 2
+    expected_velocity = pd.read_csv(CHIPPEWA_VELOCITY_TS_CSV)
+    expected_wse = pd.read_csv(CHIPPEWA_WSE_TS_CSV)
+    expected_rows = len(expected_velocity)
     assert list(velocity.columns) == EXPECTED_VELOCITY_TS_COLUMNS
     assert len(velocity) == expected_rows
     assert len(wse) == expected_rows
     assert len(flow) == expected_rows
     assert sorted(velocity["time_index"].unique().tolist()) == list(range(*time_range))
+    assert velocity.attrs["velocity_source"] == [
+        "RasMapperLib.Render.VelocityTimeSeries"
+    ]
+    assert wse.attrs["wse_source"] == ["RasMapperLib.Render.WaterSurfaceTimeSeries"]
     assert wse["wse"].notna().any()
+    np.testing.assert_allclose(
+        velocity["velocity_mag"].to_numpy(dtype=float),
+        expected_velocity["velocity_mag"].to_numpy(dtype=float),
+        equal_nan=True,
+    )
+    np.testing.assert_allclose(
+        wse["wse"].to_numpy(dtype=float),
+        expected_wse["wse"].to_numpy(dtype=float),
+        equal_nan=True,
+    )
 
 
 def test_difference_same_plan_is_zero() -> None:

@@ -1,0 +1,25 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Davis conduit 134",
+        "source": "DavisStormSystem pipe conduit index 0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            6635295.441,
+            1965214.2465
+          ],
+          [
+            6635196.5532,
+            1965646.8276
+          ]
+        ]
+      }
+    }
+  ]
+}
