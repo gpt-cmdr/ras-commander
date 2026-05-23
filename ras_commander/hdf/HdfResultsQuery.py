@@ -904,6 +904,88 @@ def _reject_unsupported_2d_bridge_meshes(
                 )
 
 
+def _polyline_profile_inputs(
+    hdf_path: Path,
+    polyline: Any,
+    sample_spacing: Optional[float],
+    terrain_raster: Optional[Union[str, Path]],
+    ras_object: Optional[Any],
+) -> tuple[np.ndarray, Path, float, Optional[Path]]:
+    """Resolve common HDF, geometry, polyline, spacing, and terrain inputs."""
+    geom_hdf_path = _resolve_geometry_hdf(hdf_path, ras_object=ras_object)
+    mesh_names = HdfMesh.get_mesh_area_names(geom_hdf_path)
+    _reject_unsupported_2d_bridge_meshes(hdf_path, mesh_names)
+
+    line = _coerce_linestring(polyline)
+    coords = np.asarray(line.coords, dtype=float)
+    if coords.ndim != 2 or coords.shape[1] < 2:
+        raise ValueError("polyline must provide at least x/y coordinates")
+
+    terrain_hdf_path = Path(terrain_raster) if terrain_raster is not None else None
+    return (
+        coords[:, :2],
+        geom_hdf_path,
+        _resolve_profile_sample_spacing(sample_spacing),
+        terrain_hdf_path,
+    )
+
+
+def _profile_dataframe(
+    profile_data: Dict[str, Any],
+    columns: List[str],
+    hdf_path: Path,
+    geom_hdf_path: Path,
+    sample_spacing: float,
+    source_key: str,
+    source_value: str,
+) -> pd.DataFrame:
+    """Build a profile DataFrame with standard RAS metadata attrs."""
+    result_df = pd.DataFrame({column: profile_data[column] for column in columns})
+    result_df.attrs.update(_read_unit_metadata(geom_hdf_path))
+    result_df.attrs["sample_spacing"] = float(sample_spacing)
+    result_df.attrs[source_key] = [source_value]
+    result_df.attrs["ras_version"] = _read_ras_version(hdf_path)
+    return result_df[columns]
+
+
+def _timeseries_dataframe(
+    profile_data: Dict[str, Any],
+    columns: List[str],
+    hdf_path: Path,
+    geom_hdf_path: Path,
+    sample_spacing: float,
+    source_key: str,
+    source_value: str,
+    value_column: str,
+    wide: bool,
+) -> pd.DataFrame:
+    """Build a long or station-by-time profile time-series DataFrame."""
+    result_df = _profile_dataframe(
+        profile_data,
+        columns,
+        hdf_path,
+        geom_hdf_path,
+        sample_spacing,
+        source_key,
+        source_value,
+    )
+    parsed_time = pd.to_datetime(
+        result_df["time"],
+        format="%d%b%Y %H:%M:%S:%f",
+        errors="coerce",
+    )
+    if parsed_time.notna().any():
+        result_df["time"] = parsed_time
+    if wide:
+        return result_df.pivot_table(
+            index="station",
+            columns="time_index",
+            values=value_column,
+            aggfunc="first",
+        )
+    return result_df
+
+
 def _warn_on_large_distances(distances: np.ndarray) -> None:
     """Warn when nearest-cell distances suggest a CRS mismatch."""
     distances = np.asarray(distances, dtype=float)
@@ -1170,20 +1252,15 @@ class HdfResultsQuery:
                 "profile extraction; pass a concrete profile index or name."
             )
 
-        geom_hdf_path = _resolve_geometry_hdf(hdf_path, ras_object=ras_object)
-        mesh_names = HdfMesh.get_mesh_area_names(geom_hdf_path)
-        _reject_unsupported_2d_bridge_meshes(hdf_path, mesh_names)
+        polyline_xy, geom_hdf_path, spacing, terrain_hdf_path = _polyline_profile_inputs(
+            hdf_path,
+            polyline,
+            sample_spacing,
+            terrain_raster,
+            ras_object,
+        )
 
-        line = _coerce_linestring(polyline)
-        coords = np.asarray(line.coords, dtype=float)
-        if coords.ndim != 2 or coords.shape[1] < 2:
-            raise ValueError("polyline must provide at least x/y coordinates")
-        polyline_xy = coords[:, :2]
-
-        spacing = _resolve_profile_sample_spacing(sample_spacing)
-        terrain_hdf_path = Path(terrain_raster) if terrain_raster is not None else None
-
-        from ..dotnet.velocity_interop import query_polyline_velocity
+        from ..dotnet._profile_interop import query_polyline_velocity
 
         profile_data = query_polyline_velocity(
             hdf_path,
@@ -1206,15 +1283,598 @@ class HdfResultsQuery:
             "depth",
             "terrain_elev",
         ]
-        result_df = pd.DataFrame({column: profile_data[column] for column in columns})
+        return _profile_dataframe(
+            profile_data,
+            columns,
+            hdf_path,
+            geom_hdf_path,
+            spacing,
+            "velocity_source",
+            "RasMapperLib.Render.VelocityRenderer",
+        )
 
-        result_df.attrs.update(_read_unit_metadata(geom_hdf_path))
-        result_df.attrs["sample_spacing"] = float(spacing)
-        result_df.attrs["velocity_source"] = [
-            "RasMapperLib.Render.VelocityRenderer"
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def query_polyline_wse_profile(
+        hdf_path: Path,
+        polyline: Any,
+        time_index: int,
+        sample_spacing: Optional[float] = None,
+        terrain_raster: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+    ) -> pd.DataFrame:
+        """Extract RAS Mapper WSE/depth/terrain samples along a profile line."""
+        polyline_xy, geom_hdf_path, spacing, terrain_hdf_path = _polyline_profile_inputs(
+            hdf_path,
+            polyline,
+            sample_spacing,
+            terrain_raster,
+            ras_object,
+        )
+        from ..dotnet._profile_interop import query_polyline_wse
+
+        profile_data = query_polyline_wse(
+            hdf_path,
+            polyline_xy,
+            time_index,
+            sample_spacing=spacing,
+            geometry_hdf_path=geom_hdf_path,
+            terrain_hdf_path=terrain_hdf_path,
+        )
+        columns = [
+            "station",
+            "x",
+            "y",
+            "mesh_name",
+            "face_id",
+            "wse",
+            "depth",
+            "terrain_elev",
         ]
-        result_df.attrs["ras_version"] = _read_ras_version(hdf_path)
-        return result_df[columns]
+        return _profile_dataframe(
+            profile_data,
+            columns,
+            hdf_path,
+            geom_hdf_path,
+            spacing,
+            "wse_source",
+            "RasMapperLib.Render.WaterSurfaceRenderer",
+        )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def query_polyline_flow_profile(
+        hdf_path: Path,
+        polyline: Any,
+        time_index: int,
+        sample_spacing: Optional[float] = None,
+        terrain_raster: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+    ) -> pd.DataFrame:
+        """Extract RAS Mapper flow/depth/terrain samples along a profile line."""
+        polyline_xy, geom_hdf_path, spacing, terrain_hdf_path = _polyline_profile_inputs(
+            hdf_path,
+            polyline,
+            sample_spacing,
+            terrain_raster,
+            ras_object,
+        )
+        from ..dotnet._profile_interop import query_polyline_flow
+
+        profile_data = query_polyline_flow(
+            hdf_path,
+            polyline_xy,
+            time_index,
+            sample_spacing=spacing,
+            geometry_hdf_path=geom_hdf_path,
+            terrain_hdf_path=terrain_hdf_path,
+        )
+        columns = [
+            "station",
+            "x",
+            "y",
+            "mesh_name",
+            "face_id",
+            "flow",
+            "depth",
+            "terrain_elev",
+        ]
+        return _profile_dataframe(
+            profile_data,
+            columns,
+            hdf_path,
+            geom_hdf_path,
+            spacing,
+            "flow_source",
+            "RasMapperLib.Render.FlowRenderer",
+        )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def query_polyline_velocity_timeseries(
+        hdf_path: Path,
+        polyline: Any,
+        time_range: Optional[tuple[int, int]] = None,
+        sample_spacing: Optional[float] = None,
+        terrain_raster: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+        wide: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Extract RAS Mapper velocity time series along a profile line.
+
+        ``time_range`` uses Python slicing semantics: ``(start, stop)`` includes
+        ``start`` and excludes ``stop``. ``None`` returns all profiles.
+        """
+        polyline_xy, geom_hdf_path, spacing, terrain_hdf_path = _polyline_profile_inputs(
+            hdf_path,
+            polyline,
+            sample_spacing,
+            terrain_raster,
+            ras_object,
+        )
+        from ..dotnet._profile_interop import query_polyline_velocity_timeseries
+
+        profile_data = query_polyline_velocity_timeseries(
+            hdf_path,
+            polyline_xy,
+            time_range=time_range,
+            sample_spacing=spacing,
+            geometry_hdf_path=geom_hdf_path,
+            terrain_hdf_path=terrain_hdf_path,
+        )
+        columns = [
+            "time_index",
+            "time",
+            "station",
+            "x",
+            "y",
+            "mesh_name",
+            "face_id",
+            "velocity_x",
+            "velocity_y",
+            "velocity_mag",
+            "depth",
+            "terrain_elev",
+        ]
+        return _timeseries_dataframe(
+            profile_data,
+            columns,
+            hdf_path,
+            geom_hdf_path,
+            spacing,
+            "velocity_source",
+            "RasMapperLib.Render.VelocityRenderer",
+            "velocity_mag",
+            wide,
+        )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def query_polyline_wse_timeseries(
+        hdf_path: Path,
+        polyline: Any,
+        time_range: Optional[tuple[int, int]] = None,
+        sample_spacing: Optional[float] = None,
+        terrain_raster: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+        wide: bool = False,
+    ) -> pd.DataFrame:
+        """Extract RAS Mapper WSE time series along a profile line."""
+        polyline_xy, geom_hdf_path, spacing, terrain_hdf_path = _polyline_profile_inputs(
+            hdf_path,
+            polyline,
+            sample_spacing,
+            terrain_raster,
+            ras_object,
+        )
+        from ..dotnet._profile_interop import query_polyline_wse_timeseries
+
+        profile_data = query_polyline_wse_timeseries(
+            hdf_path,
+            polyline_xy,
+            time_range=time_range,
+            sample_spacing=spacing,
+            geometry_hdf_path=geom_hdf_path,
+            terrain_hdf_path=terrain_hdf_path,
+        )
+        columns = [
+            "time_index",
+            "time",
+            "station",
+            "x",
+            "y",
+            "mesh_name",
+            "face_id",
+            "wse",
+            "depth",
+            "terrain_elev",
+        ]
+        return _timeseries_dataframe(
+            profile_data,
+            columns,
+            hdf_path,
+            geom_hdf_path,
+            spacing,
+            "wse_source",
+            "RasMapperLib.Render.WaterSurfaceRenderer",
+            "wse",
+            wide,
+        )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def query_polyline_flow_timeseries(
+        hdf_path: Path,
+        polyline: Any,
+        time_range: Optional[tuple[int, int]] = None,
+        sample_spacing: Optional[float] = None,
+        terrain_raster: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+        wide: bool = False,
+    ) -> pd.DataFrame:
+        """Extract RAS Mapper flow time series along a profile line."""
+        polyline_xy, geom_hdf_path, spacing, terrain_hdf_path = _polyline_profile_inputs(
+            hdf_path,
+            polyline,
+            sample_spacing,
+            terrain_raster,
+            ras_object,
+        )
+        from ..dotnet._profile_interop import query_polyline_flow_timeseries
+
+        profile_data = query_polyline_flow_timeseries(
+            hdf_path,
+            polyline_xy,
+            time_range=time_range,
+            sample_spacing=spacing,
+            geometry_hdf_path=geom_hdf_path,
+            terrain_hdf_path=terrain_hdf_path,
+        )
+        columns = [
+            "time_index",
+            "time",
+            "station",
+            "x",
+            "y",
+            "mesh_name",
+            "face_id",
+            "flow",
+            "depth",
+            "terrain_elev",
+        ]
+        return _timeseries_dataframe(
+            profile_data,
+            columns,
+            hdf_path,
+            geom_hdf_path,
+            spacing,
+            "flow_source",
+            "RasMapperLib.Render.FlowRenderer",
+            "flow",
+            wide,
+        )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def query_polyline_pipe_velocity_profile(
+        hdf_path: Path,
+        polyline: Any,
+        time_index: int,
+        sample_spacing: Optional[float] = None,
+        terrain_raster: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+    ) -> pd.DataFrame:
+        """Extract RAS Mapper pipe velocity samples along a profile line."""
+        polyline_xy, geom_hdf_path, spacing, terrain_hdf_path = _polyline_profile_inputs(
+            hdf_path,
+            polyline,
+            sample_spacing,
+            terrain_raster,
+            ras_object,
+        )
+        from ..dotnet._profile_interop import query_polyline_pipe_velocity
+
+        profile_data = query_polyline_pipe_velocity(
+            hdf_path,
+            polyline_xy,
+            time_index,
+            sample_spacing=spacing,
+            geometry_hdf_path=geom_hdf_path,
+            terrain_hdf_path=terrain_hdf_path,
+        )
+        columns = [
+            "station",
+            "x",
+            "y",
+            "mesh_name",
+            "face_id",
+            "velocity_mag",
+            "depth",
+            "terrain_elev",
+        ]
+        return _profile_dataframe(
+            profile_data,
+            columns,
+            hdf_path,
+            geom_hdf_path,
+            spacing,
+            "velocity_source",
+            "RasMapperLib.Render.VelocityRendererPipe",
+        )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def query_polyline_pipe_flow_profile(
+        hdf_path: Path,
+        polyline: Any,
+        time_index: int,
+        sample_spacing: Optional[float] = None,
+        terrain_raster: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+    ) -> pd.DataFrame:
+        """Extract RAS Mapper pipe flow samples along a profile line."""
+        polyline_xy, geom_hdf_path, spacing, terrain_hdf_path = _polyline_profile_inputs(
+            hdf_path,
+            polyline,
+            sample_spacing,
+            terrain_raster,
+            ras_object,
+        )
+        from ..dotnet._profile_interop import query_polyline_pipe_flow
+
+        profile_data = query_polyline_pipe_flow(
+            hdf_path,
+            polyline_xy,
+            time_index,
+            sample_spacing=spacing,
+            geometry_hdf_path=geom_hdf_path,
+            terrain_hdf_path=terrain_hdf_path,
+        )
+        columns = [
+            "station",
+            "x",
+            "y",
+            "mesh_name",
+            "face_id",
+            "flow",
+            "depth",
+            "terrain_elev",
+        ]
+        return _profile_dataframe(
+            profile_data,
+            columns,
+            hdf_path,
+            geom_hdf_path,
+            spacing,
+            "flow_source",
+            "RasMapperLib.Render.FlowRendererPipe",
+        )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def query_polyline_pipe_velocity_timeseries(
+        hdf_path: Path,
+        polyline: Any,
+        time_range: Optional[tuple[int, int]] = None,
+        sample_spacing: Optional[float] = None,
+        terrain_raster: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+        wide: bool = False,
+    ) -> pd.DataFrame:
+        """Extract RAS Mapper pipe velocity time series along a profile line."""
+        polyline_xy, geom_hdf_path, spacing, terrain_hdf_path = _polyline_profile_inputs(
+            hdf_path,
+            polyline,
+            sample_spacing,
+            terrain_raster,
+            ras_object,
+        )
+        from ..dotnet._profile_interop import query_polyline_pipe_velocity_timeseries
+
+        profile_data = query_polyline_pipe_velocity_timeseries(
+            hdf_path,
+            polyline_xy,
+            time_range=time_range,
+            sample_spacing=spacing,
+            geometry_hdf_path=geom_hdf_path,
+            terrain_hdf_path=terrain_hdf_path,
+        )
+        columns = [
+            "time_index",
+            "time",
+            "station",
+            "x",
+            "y",
+            "mesh_name",
+            "face_id",
+            "velocity_mag",
+            "depth",
+            "terrain_elev",
+        ]
+        return _timeseries_dataframe(
+            profile_data,
+            columns,
+            hdf_path,
+            geom_hdf_path,
+            spacing,
+            "velocity_source",
+            "RasMapperLib.Render.VelocityRendererPipe",
+            "velocity_mag",
+            wide,
+        )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def query_polyline_pipe_flow_timeseries(
+        hdf_path: Path,
+        polyline: Any,
+        time_range: Optional[tuple[int, int]] = None,
+        sample_spacing: Optional[float] = None,
+        terrain_raster: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+        wide: bool = False,
+    ) -> pd.DataFrame:
+        """Extract RAS Mapper pipe flow time series along a profile line."""
+        polyline_xy, geom_hdf_path, spacing, terrain_hdf_path = _polyline_profile_inputs(
+            hdf_path,
+            polyline,
+            sample_spacing,
+            terrain_raster,
+            ras_object,
+        )
+        from ..dotnet._profile_interop import query_polyline_pipe_flow_timeseries
+
+        profile_data = query_polyline_pipe_flow_timeseries(
+            hdf_path,
+            polyline_xy,
+            time_range=time_range,
+            sample_spacing=spacing,
+            geometry_hdf_path=geom_hdf_path,
+            terrain_hdf_path=terrain_hdf_path,
+        )
+        columns = [
+            "time_index",
+            "time",
+            "station",
+            "x",
+            "y",
+            "mesh_name",
+            "face_id",
+            "flow",
+            "depth",
+            "terrain_elev",
+        ]
+        return _timeseries_dataframe(
+            profile_data,
+            columns,
+            hdf_path,
+            geom_hdf_path,
+            spacing,
+            "flow_source",
+            "RasMapperLib.Render.FlowRendererPipe",
+            "flow",
+            wide,
+        )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def query_polyline_wse_difference(
+        base_hdf_path: Path,
+        compare_hdf_path: Path,
+        polyline: Any,
+        time_index: int,
+        sample_spacing: Optional[float] = None,
+        terrain_raster: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+    ) -> pd.DataFrame:
+        """Compare RAS Mapper water-surface profiles between two plan HDFs."""
+        compare_hdf_path = Path(compare_hdf_path)
+        polyline_xy, geom_hdf_path, spacing, terrain_hdf_path = _polyline_profile_inputs(
+            base_hdf_path,
+            polyline,
+            sample_spacing,
+            terrain_raster,
+            ras_object,
+        )
+        from ..dotnet._profile_interop import query_polyline_wse_difference
+
+        profile_data = query_polyline_wse_difference(
+            base_hdf_path,
+            compare_hdf_path,
+            polyline_xy,
+            time_index,
+            sample_spacing=spacing,
+            geometry_hdf_path=geom_hdf_path,
+            terrain_hdf_path=terrain_hdf_path,
+        )
+        columns = [
+            "station",
+            "x",
+            "y",
+            "mesh_name",
+            "face_id",
+            "wse_base",
+            "wse_compare",
+            "wse_delta",
+        ]
+        return _profile_dataframe(
+            profile_data,
+            columns,
+            base_hdf_path,
+            geom_hdf_path,
+            spacing,
+            "wse_difference_source",
+            "RasMapperLib.Render.WaterSurfaceDifferenceRenderer",
+        )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def query_polyline_velocity_difference(
+        base_hdf_path: Path,
+        compare_hdf_path: Path,
+        polyline: Any,
+        time_index: int,
+        sample_spacing: Optional[float] = None,
+        terrain_raster: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+    ) -> pd.DataFrame:
+        """Compare RAS Mapper velocity profiles between two plan HDFs."""
+        compare_hdf_path = Path(compare_hdf_path)
+        polyline_xy, geom_hdf_path, spacing, terrain_hdf_path = _polyline_profile_inputs(
+            base_hdf_path,
+            polyline,
+            sample_spacing,
+            terrain_raster,
+            ras_object,
+        )
+        from ..dotnet._profile_interop import query_polyline_velocity_difference
+
+        profile_data = query_polyline_velocity_difference(
+            base_hdf_path,
+            compare_hdf_path,
+            polyline_xy,
+            time_index,
+            sample_spacing=spacing,
+            geometry_hdf_path=geom_hdf_path,
+            terrain_hdf_path=terrain_hdf_path,
+        )
+        columns = [
+            "station",
+            "x",
+            "y",
+            "mesh_name",
+            "face_id",
+            "velocity_x_base",
+            "velocity_y_base",
+            "velocity_mag_base",
+            "velocity_x_compare",
+            "velocity_y_compare",
+            "velocity_mag_compare",
+            "velocity_x_delta",
+            "velocity_y_delta",
+            "velocity_mag_delta",
+        ]
+        return _profile_dataframe(
+            profile_data,
+            columns,
+            base_hdf_path,
+            geom_hdf_path,
+            spacing,
+            "velocity_difference_source",
+            "RasMapperLib.Render.VelocityDifferenceRenderer",
+        )
 
     @staticmethod
     @log_call

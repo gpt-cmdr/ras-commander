@@ -32,6 +32,40 @@ EXPECTED_COLUMNS = [
     "depth",
     "terrain_elev",
 ]
+EXPECTED_WSE_COLUMNS = [
+    "station",
+    "x",
+    "y",
+    "mesh_name",
+    "face_id",
+    "wse",
+    "depth",
+    "terrain_elev",
+]
+EXPECTED_FLOW_COLUMNS = [
+    "station",
+    "x",
+    "y",
+    "mesh_name",
+    "face_id",
+    "flow",
+    "depth",
+    "terrain_elev",
+]
+EXPECTED_VELOCITY_TS_COLUMNS = [
+    "time_index",
+    "time",
+    "station",
+    "x",
+    "y",
+    "mesh_name",
+    "face_id",
+    "velocity_x",
+    "velocity_y",
+    "velocity_mag",
+    "depth",
+    "terrain_elev",
+]
 
 DATA_DIR = Path(__file__).parent / "data"
 REFERENCE_CSV = DATA_DIR / "bald_eagle_velocity_profile_p06.csv"
@@ -190,3 +224,116 @@ def test_handles_polyline_gap_rows() -> None:
     gap_rows = profile["velocity_mag"].isna()
     assert gap_rows.any()
     assert profile.loc[gap_rows, "terrain_elev"].notna().any()
+
+
+def test_wse_and_flow_profiles_return_expected_schema() -> None:
+    manifest = _load_manifest()
+    plan_hdf = _require_bald_eagle_plan()
+    terrain_hdf = _bald_eagle_terrain_hdf(plan_hdf)
+    polyline = _load_polyline()
+
+    wse = HdfResultsQuery.query_polyline_wse_profile(
+        plan_hdf,
+        polyline,
+        time_index=int(manifest["time_index"]),
+        sample_spacing=float(manifest["max_segment_len"]),
+        terrain_raster=terrain_hdf,
+    )
+    flow = HdfResultsQuery.query_polyline_flow_profile(
+        plan_hdf,
+        polyline,
+        time_index=int(manifest["time_index"]),
+        sample_spacing=float(manifest["max_segment_len"]),
+        terrain_raster=terrain_hdf,
+    )
+
+    assert list(wse.columns) == EXPECTED_WSE_COLUMNS
+    assert list(flow.columns) == EXPECTED_FLOW_COLUMNS
+    assert len(wse) == int(manifest["row_count"])
+    assert len(flow) == int(manifest["row_count"])
+    assert wse["wse"].notna().any()
+    assert wse.attrs["wse_source"] == [
+        "RasMapperLib.Render.WaterSurfaceRenderer"
+    ]
+    assert flow.attrs["flow_source"] == ["RasMapperLib.Render.FlowRenderer"]
+
+
+def test_velocity_wse_flow_timeseries_return_long_schema() -> None:
+    manifest = _load_manifest()
+    plan_hdf = _require_bald_eagle_plan()
+    terrain_hdf = _bald_eagle_terrain_hdf(plan_hdf)
+    polyline = _load_polyline()
+    time_start = int(manifest["time_index"])
+    time_range = (time_start, time_start + 2)
+
+    velocity = HdfResultsQuery.query_polyline_velocity_timeseries(
+        plan_hdf,
+        polyline,
+        time_range=time_range,
+        sample_spacing=float(manifest["max_segment_len"]),
+        terrain_raster=terrain_hdf,
+    )
+    wse = HdfResultsQuery.query_polyline_wse_timeseries(
+        plan_hdf,
+        polyline,
+        time_range=time_range,
+        sample_spacing=float(manifest["max_segment_len"]),
+        terrain_raster=terrain_hdf,
+    )
+    flow = HdfResultsQuery.query_polyline_flow_timeseries(
+        plan_hdf,
+        polyline,
+        time_range=time_range,
+        sample_spacing=float(manifest["max_segment_len"]),
+        terrain_raster=terrain_hdf,
+    )
+
+    expected_rows = int(manifest["row_count"]) * 2
+    assert list(velocity.columns) == EXPECTED_VELOCITY_TS_COLUMNS
+    assert len(velocity) == expected_rows
+    assert len(wse) == expected_rows
+    assert len(flow) == expected_rows
+    assert sorted(velocity["time_index"].unique().tolist()) == list(range(*time_range))
+    assert wse["wse"].notna().any()
+
+
+def test_difference_same_plan_is_zero() -> None:
+    manifest = _load_manifest()
+    plan_hdf = _require_bald_eagle_plan()
+
+    wse_diff = HdfResultsQuery.query_polyline_wse_difference(
+        plan_hdf,
+        plan_hdf,
+        _load_polyline(),
+        time_index=int(manifest["time_index"]),
+        sample_spacing=float(manifest["max_segment_len"]),
+        terrain_raster=_bald_eagle_terrain_hdf(plan_hdf),
+    )
+    velocity_diff = HdfResultsQuery.query_polyline_velocity_difference(
+        plan_hdf,
+        plan_hdf,
+        _load_polyline(),
+        time_index=int(manifest["time_index"]),
+        sample_spacing=float(manifest["max_segment_len"]),
+        terrain_raster=_bald_eagle_terrain_hdf(plan_hdf),
+    )
+
+    assert np.nanmax(np.abs(wse_diff["wse_delta"].to_numpy(dtype=float))) <= 1.0e-5
+    assert (
+        np.nanmax(np.abs(velocity_diff["velocity_mag_delta"].to_numpy(dtype=float)))
+        <= 1.0e-5
+    )
+
+
+def test_pipe_profiles_reject_non_pipe_plan() -> None:
+    manifest = _load_manifest()
+    plan_hdf = _require_bald_eagle_plan()
+
+    with pytest.raises(NotImplementedError, match="pipe network"):
+        HdfResultsQuery.query_polyline_pipe_velocity_profile(
+            plan_hdf,
+            _load_polyline(),
+            time_index=int(manifest["time_index"]),
+            sample_spacing=float(manifest["max_segment_len"]),
+            terrain_raster=_bald_eagle_terrain_hdf(plan_hdf),
+        )

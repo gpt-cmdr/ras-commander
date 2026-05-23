@@ -205,11 +205,48 @@ class HdfResultsMesh:
         """
         Return a flow time series across a RAS Mapper profile/reference line.
 
-        The method first looks for native HEC-RAS reference-line internal-face
-        metadata in the plan HDF. If no matching native reference line is found,
-        it reads the RAS Mapper Profile Lines feature file and uses
-        ``HdfMesh.get_faces_along_profile_line()`` to select mesh faces
-        geometrically. Face flows are read through ``get_mesh_timeseries()``.
+        This canonical entry point is reserved for the RasMapperLib-backed
+        implementation. The current backend delegates to
+        ``get_profile_line_flow_timeseries_legacy()`` while the CLB-852
+        reference-line and arbitrary-polyline pythonnet flow aggregation is
+        completed.
+        """
+        logger.warning(
+            "RasMapperLib profile-line flow time-series backend is not yet "
+            "available in this build; using legacy HDF face-flow aggregation."
+        )
+        return HdfResultsMesh.get_profile_line_flow_timeseries_legacy(
+            hdf_path=hdf_path,
+            line_name=line_name,
+            mesh_name=mesh_name,
+            profile_lines_path=profile_lines_path,
+            direction=direction,
+            truncate=truncate,
+            ras_object=ras_object,
+        )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_profile_line_flow_timeseries_legacy(
+        hdf_path: Path,
+        line_name: str,
+        mesh_name: Optional[str] = None,
+        profile_lines_path: Optional[Union[str, Path]] = None,
+        direction: str = "absolute",
+        truncate: bool = False,
+        ras_object: Optional[Any] = None,
+    ) -> pd.DataFrame:
+        """
+        Return a legacy pure-Python profile/reference-line flow time series.
+
+        This method predates the pythonnet/RasMapperLib profile API. It selects
+        native reference-line internal faces when available, otherwise reads a
+        RAS Mapper Profile Lines feature file and uses
+        ``HdfMesh.get_faces_along_profile_line()`` plus direct HDF ``Face Flow``
+        time series. Keep using it for offline analysis without a HEC-RAS
+        install or to reproduce pre-CLB-852 results; it is retained for
+        backward compatibility.
 
         Parameters
         ----------
