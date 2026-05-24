@@ -18,6 +18,10 @@ logger = get_logger(__name__)
 MISSING_LIMIT = 1.0e30
 MISSING_SENTINELS = (-9999.0,)
 DEFAULT_SAMPLE_SPACING = 50.0
+MAX_PROFILE_SAMPLES = 100_000
+MIN_SAMPLE_SPACING_FT = 0.5
+MIN_SAMPLE_SPACING_M = 0.15
+MIN_SAMPLE_SPACING_FACE_LENGTH_FACTOR = 0.1
 
 
 @dataclass
@@ -62,6 +66,106 @@ def _clean_float_array(values: Any, count: int) -> np.ndarray:
         if not _is_missing(value):
             cleaned[idx] = float(value)
     return cleaned
+
+
+def _decode_hdf_text(value: Any) -> str:
+    if isinstance(value, (bytes, np.bytes_)):
+        return value.decode("utf-8", errors="ignore")
+    return "" if value is None else str(value)
+
+
+def _uses_si_units(hdf_path: Path | None) -> bool:
+    if hdf_path is None or not hdf_path.exists():
+        return False
+
+    try:
+        with h5py.File(hdf_path, "r") as hdf_file:
+            geometry_group = hdf_file.get("Geometry")
+            raw_si_units = None
+            if geometry_group is not None:
+                raw_si_units = geometry_group.attrs.get("SI Units")
+            raw_unit_system = hdf_file.attrs.get("Units System")
+    except Exception:
+        return False
+
+    si_text = _decode_hdf_text(raw_si_units).strip().lower()
+    unit_text = _decode_hdf_text(raw_unit_system).strip().lower()
+    return si_text in {"true", "1", "yes", "si"} or unit_text.startswith("si")
+
+
+def _minimum_spacing_from_units(hdf_path: Path | None) -> float:
+    return MIN_SAMPLE_SPACING_M if _uses_si_units(hdf_path) else MIN_SAMPLE_SPACING_FT
+
+
+def _smallest_mesh_face_length(geometry_hdf_path: Path | None) -> float | None:
+    if geometry_hdf_path is None or not geometry_hdf_path.exists():
+        return None
+
+    face_lengths: list[float] = []
+    try:
+        with h5py.File(geometry_hdf_path, "r") as hdf_file:
+            areas_group = hdf_file.get("Geometry/2D Flow Areas")
+            if areas_group is None:
+                return None
+            for mesh_name in areas_group.keys():
+                normals_path = (
+                    f"Geometry/2D Flow Areas/{mesh_name}/"
+                    "Faces NormalUnitVector and Length"
+                )
+                if normals_path not in hdf_file:
+                    continue
+                values = np.asarray(hdf_file[normals_path])
+                if values.ndim != 2 or values.shape[1] < 3:
+                    continue
+                lengths = values[:, 2].astype(float)
+                lengths = lengths[np.isfinite(lengths) & (lengths > 0.0)]
+                if lengths.size:
+                    face_lengths.append(float(np.nanmin(lengths)))
+    except Exception:
+        return None
+
+    if not face_lengths:
+        return None
+    return float(min(face_lengths))
+
+
+def _polyline_length(polyline_xy: np.ndarray) -> float:
+    segment_lengths = np.linalg.norm(np.diff(polyline_xy, axis=0), axis=1)
+    return float(np.nansum(segment_lengths))
+
+
+def _validate_profile_sampling(
+    polyline_xy: np.ndarray,
+    sample_spacing: float,
+    geometry_hdf_path: Path | None,
+) -> None:
+    line_length = _polyline_length(polyline_xy)
+    if not np.isfinite(line_length) or line_length <= 0.0:
+        raise ValueError("polyline_xy must define a positive-length line")
+
+    min_spacing = _minimum_spacing_from_units(geometry_hdf_path)
+    smallest_face_length = _smallest_mesh_face_length(geometry_hdf_path)
+    if smallest_face_length is not None:
+        min_spacing = max(
+            min_spacing,
+            smallest_face_length * MIN_SAMPLE_SPACING_FACE_LENGTH_FACTOR,
+        )
+
+    if sample_spacing < min_spacing:
+        raise ValueError(
+            "sample_spacing is too small for RAS Mapper profile extraction: "
+            f"requested {sample_spacing:g}, minimum {min_spacing:g}. "
+            "Increase sample_spacing to avoid excessive CLR-side profile samples."
+        )
+
+    expected_sample_count = int(math.floor(line_length / sample_spacing)) + 1
+    if expected_sample_count > MAX_PROFILE_SAMPLES:
+        raise ValueError(
+            "sample_spacing would create too many RAS Mapper profile samples: "
+            f"requested spacing {sample_spacing:g}, line length {line_length:g}, "
+            f"computed sample count {expected_sample_count:,}, "
+            f"maximum {MAX_PROFILE_SAMPLES:,}."
+        )
 
 
 def _point_ms_from_xy(polyline_xy: np.ndarray) -> Any:
@@ -393,10 +497,6 @@ def _build_map_points(
     terrain_hdf_path: Path | None = None,
 ) -> MapPointsContext:
     """Build shared RAS Mapper profile-line objects and sample metadata."""
-    load_clr()
-
-    from RasMapperLib import Polyline  # type: ignore
-
     plan_hdf_path = Path(plan_hdf_path)
     geometry_hdf_path = Path(geometry_hdf_path) if geometry_hdf_path else None
     terrain_hdf_path = Path(terrain_hdf_path) if terrain_hdf_path else None
@@ -408,6 +508,13 @@ def _build_map_points(
     spacing = DEFAULT_SAMPLE_SPACING if sample_spacing is None else float(sample_spacing)
     if not np.isfinite(spacing) or spacing <= 0.0:
         raise ValueError("sample_spacing must be a positive finite value")
+
+    sampling_hdf_path = geometry_hdf_path or plan_hdf_path
+    _validate_profile_sampling(xy, spacing, sampling_hdf_path)
+
+    load_clr()
+
+    from RasMapperLib import Polyline  # type: ignore
 
     results, geometry, terrain = _load_results_geometry_terrain(
         plan_hdf_path,

@@ -58,6 +58,98 @@ def absolute_flow_df(validation_paths):
     )
 
 
+@pytest.fixture
+def zero_edge_flow_df():
+    df = pd.DataFrame({
+        "time": pd.date_range("2026-01-01", periods=7, freq="h"),
+        "flow": [0.0, np.nan, 5.0, 0.0, 7.0, np.nan, 0.0],
+        "line_name": ["Test Line"] * 7,
+        "mesh_name": ["Test Mesh"] * 7,
+        "direction": ["absolute"] * 7,
+        "face_count": [2] * 7,
+        "selection_source": ["test_fixture"] * 7,
+    })
+    df.attrs["face_ids"] = [1, 2]
+    df.attrs["units"] = "cfs"
+    return df
+
+
+def test_profile_line_flow_timeseries_truncate_applies_to_refline_path(
+    tmp_path,
+    monkeypatch,
+    zero_edge_flow_df,
+):
+    plan_hdf = tmp_path / "Project.p02.hdf"
+    with h5py.File(plan_hdf, "w"):
+        pass
+
+    monkeypatch.setattr(
+        HdfResultsMesh,
+        "_get_native_profile_line_faces",
+        staticmethod(lambda **_kwargs: pd.DataFrame({
+            "mesh_name": ["Test Mesh"],
+            "face_id": [1],
+        })),
+    )
+    monkeypatch.setattr(
+        HdfResultsMesh,
+        "_try_read_ref_line_flow_rasmapper",
+        staticmethod(lambda **_kwargs: zero_edge_flow_df.copy()),
+    )
+
+    result = HdfResultsMesh.get_profile_line_flow_timeseries(
+        plan_hdf,
+        "Test Line",
+        truncate=True,
+    )
+
+    assert result["flow"].tolist() == [5.0, 0.0, 7.0]
+    assert result["time"].tolist() == zero_edge_flow_df.loc[2:4, "time"].tolist()
+    assert result.attrs["face_ids"] == [1, 2]
+    assert result.attrs["units"] == "cfs"
+
+
+def test_profile_line_flow_timeseries_truncate_applies_to_face_flow_path(
+    tmp_path,
+    monkeypatch,
+    zero_edge_flow_df,
+):
+    plan_hdf = tmp_path / "Project.p02.hdf"
+    with h5py.File(plan_hdf, "w"):
+        pass
+
+    monkeypatch.setattr(
+        HdfResultsMesh,
+        "_get_native_profile_line_faces",
+        staticmethod(lambda **_kwargs: pd.DataFrame({
+            "mesh_name": ["Test Mesh", "Test Mesh"],
+            "face_id": [1, 2],
+        })),
+    )
+    monkeypatch.setattr(
+        HdfResultsMesh,
+        "_try_read_ref_line_flow_rasmapper",
+        staticmethod(lambda **_kwargs: None),
+    )
+    monkeypatch.setattr(
+        HdfResultsMesh,
+        "_read_rasmapper_face_flow_timeseries",
+        staticmethod(lambda **_kwargs: zero_edge_flow_df.copy()),
+    )
+
+    result = HdfResultsMesh.get_profile_line_flow_timeseries(
+        plan_hdf,
+        "Test Line",
+        mesh_name="Test Mesh",
+        truncate=True,
+    )
+
+    assert result["flow"].tolist() == [5.0, 0.0, 7.0]
+    assert result["time"].tolist() == zero_edge_flow_df.loc[2:4, "time"].tolist()
+    assert result.attrs["face_ids"] == [1, 2]
+    assert result.attrs["units"] == "cfs"
+
+
 def test_profile_line_flow_timeseries_matches_validation_csv(
     validation_paths,
     absolute_flow_df,

@@ -125,6 +125,15 @@ def _get_global_ras() -> Any:
     return ras
 
 
+@standardize_input(file_type="plan_hdf")
+def _resolve_plan_hdf_input(
+    hdf_path: Union[str, Path],
+    ras_object: Optional[Any] = None,
+) -> Path:
+    """Resolve a flexible plan-HDF input using the standard decorator logic."""
+    return Path(hdf_path)
+
+
 def _resolve_geometry_hdf(
     plan_hdf_path: Union[str, Path],
     ras_object: Optional[Any] = None,
@@ -1789,7 +1798,14 @@ class HdfResultsQuery:
         ras_object: Optional[Any] = None,
     ) -> pd.DataFrame:
         """Compare RAS Mapper water-surface profiles between two plan HDFs."""
-        compare_hdf_path = Path(compare_hdf_path)
+        base_hdf_path = _resolve_plan_hdf_input(
+            base_hdf_path,
+            ras_object=ras_object,
+        )
+        compare_hdf_path = _resolve_plan_hdf_input(
+            compare_hdf_path,
+            ras_object=ras_object,
+        )
         polyline_xy, geom_hdf_path, spacing, terrain_hdf_path = _polyline_profile_inputs(
             base_hdf_path,
             polyline,
@@ -1841,7 +1857,14 @@ class HdfResultsQuery:
         ras_object: Optional[Any] = None,
     ) -> pd.DataFrame:
         """Compare RAS Mapper velocity profiles between two plan HDFs."""
-        compare_hdf_path = Path(compare_hdf_path)
+        base_hdf_path = _resolve_plan_hdf_input(
+            base_hdf_path,
+            ras_object=ras_object,
+        )
+        compare_hdf_path = _resolve_plan_hdf_input(
+            compare_hdf_path,
+            ras_object=ras_object,
+        )
         polyline_xy, geom_hdf_path, spacing, terrain_hdf_path = _polyline_profile_inputs(
             base_hdf_path,
             polyline,

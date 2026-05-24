@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,9 @@ from shapely.geometry import LineString, shape
 
 from ras_commander import HdfResultsQuery
 from ras_commander.dotnet.clr_bootstrap import is_hecras_available
+
+hdf_results_query_module = importlib.import_module("ras_commander.hdf.HdfResultsQuery")
+profile_interop_module = importlib.import_module("ras_commander.dotnet._profile_interop")
 
 pytestmark = pytest.mark.skipif(
     not is_hecras_available(),
@@ -130,6 +134,155 @@ def _require_chippewa_plan() -> Path:
     if not CHIPPEWA_PLAN.exists():
         pytest.skip(f"Chippewa validation plan HDF not staged: {CHIPPEWA_PLAN}")
     return CHIPPEWA_PLAN
+
+
+class _FakeRasObject:
+    def __init__(self, plan_paths: dict[str, Path]) -> None:
+        self.plan_df = pd.DataFrame({
+            "plan_number": list(plan_paths.keys()),
+            "HDF_Results_Path": [str(path) for path in plan_paths.values()],
+        })
+
+    def check_initialized(self) -> None:
+        return None
+
+
+def _write_minimal_plan_hdf(path: Path) -> None:
+    with h5py.File(path, "w") as hdf:
+        hdf.attrs["Program Version"] = np.bytes_("7.0")
+
+
+def _write_minimal_geom_hdf(path: Path) -> None:
+    with h5py.File(path, "w") as hdf:
+        hdf.require_group("Geometry").attrs["SI Units"] = np.bytes_("False")
+
+
+def test_profile_sampling_rejects_excessive_sample_count_before_clr(tmp_path: Path) -> None:
+    plan_hdf = tmp_path / "minimal.p01.hdf"
+    _write_minimal_plan_hdf(plan_hdf)
+
+    with pytest.raises(ValueError, match="computed sample count"):
+        profile_interop_module._build_map_points(
+            plan_hdf,
+            np.array([[0.0, 0.0], [100_001.0, 0.0]], dtype=float),
+            sample_spacing=0.5,
+        )
+
+
+def test_wse_difference_resolves_plan_number_shorthand_for_both_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    plan_02 = tmp_path / "Project.p02.hdf"
+    plan_03 = tmp_path / "Project.p03.hdf"
+    geom_hdf = tmp_path / "Project.g01.hdf"
+    _write_minimal_plan_hdf(plan_02)
+    _write_minimal_plan_hdf(plan_03)
+    _write_minimal_geom_hdf(geom_hdf)
+    ras_object = _FakeRasObject({"02": plan_02, "03": plan_03})
+
+    observed: dict[str, Path] = {}
+
+    def fake_inputs(hdf_path, *_args, **_kwargs):
+        observed["base"] = Path(hdf_path)
+        return np.array([[0.0, 0.0], [100.0, 0.0]], dtype=float), geom_hdf, 10.0, None
+
+    def fake_wse_difference(base_hdf_path, compare_hdf_path, *_args, **_kwargs):
+        observed["interop_base"] = Path(base_hdf_path)
+        observed["interop_compare"] = Path(compare_hdf_path)
+        return {
+            "station": [0.0],
+            "x": [0.0],
+            "y": [0.0],
+            "mesh_name": ["Perimeter 1"],
+            "face_id": [1],
+            "wse_base": [10.0],
+            "wse_compare": [10.0],
+            "wse_delta": [0.0],
+        }
+
+    monkeypatch.setattr(hdf_results_query_module, "_polyline_profile_inputs", fake_inputs)
+    monkeypatch.setattr(
+        profile_interop_module,
+        "query_polyline_wse_difference",
+        fake_wse_difference,
+    )
+
+    result = HdfResultsQuery.query_polyline_wse_difference(
+        base_hdf_path="02",
+        compare_hdf_path="03",
+        polyline=LineString([(0.0, 0.0), (100.0, 0.0)]),
+        time_index=0,
+        ras_object=ras_object,
+    )
+
+    assert observed == {
+        "base": plan_02,
+        "interop_base": plan_02,
+        "interop_compare": plan_03,
+    }
+    assert result["wse_delta"].tolist() == [0.0]
+
+
+def test_velocity_difference_resolves_plan_number_shorthand_for_both_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    plan_02 = tmp_path / "Project.p02.hdf"
+    plan_03 = tmp_path / "Project.p03.hdf"
+    geom_hdf = tmp_path / "Project.g01.hdf"
+    _write_minimal_plan_hdf(plan_02)
+    _write_minimal_plan_hdf(plan_03)
+    _write_minimal_geom_hdf(geom_hdf)
+    ras_object = _FakeRasObject({"02": plan_02, "03": plan_03})
+
+    observed: dict[str, Path] = {}
+
+    def fake_inputs(hdf_path, *_args, **_kwargs):
+        observed["base"] = Path(hdf_path)
+        return np.array([[0.0, 0.0], [100.0, 0.0]], dtype=float), geom_hdf, 10.0, None
+
+    def fake_velocity_difference(base_hdf_path, compare_hdf_path, *_args, **_kwargs):
+        observed["interop_base"] = Path(base_hdf_path)
+        observed["interop_compare"] = Path(compare_hdf_path)
+        return {
+            "station": [0.0],
+            "x": [0.0],
+            "y": [0.0],
+            "mesh_name": ["Perimeter 1"],
+            "face_id": [1],
+            "velocity_x_base": [1.0],
+            "velocity_y_base": [0.0],
+            "velocity_mag_base": [1.0],
+            "velocity_x_compare": [1.0],
+            "velocity_y_compare": [0.0],
+            "velocity_mag_compare": [1.0],
+            "velocity_x_delta": [0.0],
+            "velocity_y_delta": [0.0],
+            "velocity_mag_delta": [0.0],
+        }
+
+    monkeypatch.setattr(hdf_results_query_module, "_polyline_profile_inputs", fake_inputs)
+    monkeypatch.setattr(
+        profile_interop_module,
+        "query_polyline_velocity_difference",
+        fake_velocity_difference,
+    )
+
+    result = HdfResultsQuery.query_polyline_velocity_difference(
+        base_hdf_path="02",
+        compare_hdf_path="03",
+        polyline=LineString([(0.0, 0.0), (100.0, 0.0)]),
+        time_index=0,
+        ras_object=ras_object,
+    )
+
+    assert observed == {
+        "base": plan_02,
+        "interop_base": plan_02,
+        "interop_compare": plan_03,
+    }
+    assert result["velocity_mag_delta"].tolist() == [0.0]
 
 
 def test_matches_ras_mapper_fixture() -> None:

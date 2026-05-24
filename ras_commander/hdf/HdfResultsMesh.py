@@ -191,6 +191,25 @@ class HdfResultsMesh:
             return HdfResultsMesh._get_mesh_timeseries_output(hdf_path, mesh_name, var, truncate)
 
     @staticmethod
+    def _truncate_profile_line_flow_dataframe(
+        flow_df: pd.DataFrame,
+        truncate: bool,
+    ) -> pd.DataFrame:
+        """Trim leading/trailing zero or NaN flow rows while preserving attrs."""
+        if not truncate or flow_df.empty or "flow" not in flow_df.columns:
+            return flow_df
+
+        flow = pd.to_numeric(flow_df["flow"], errors="coerce").to_numpy(dtype=float)
+        nonzero = np.flatnonzero(np.isfinite(flow) & (flow != 0.0))
+        if len(nonzero) == 0:
+            trimmed = flow_df.iloc[:0].copy()
+        else:
+            start, end = int(nonzero[0]), int(nonzero[-1]) + 1
+            trimmed = flow_df.iloc[start:end].reset_index(drop=True)
+        trimmed.attrs.update(flow_df.attrs)
+        return trimmed
+
+    @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_profile_line_flow_timeseries(
@@ -227,7 +246,10 @@ class HdfResultsMesh:
                 direction=direction,
             )
             if refline_flow is not None:
-                return refline_flow
+                return HdfResultsMesh._truncate_profile_line_flow_dataframe(
+                    refline_flow,
+                    truncate,
+                )
 
             resolved_mesh_name = HdfResultsMesh._resolve_single_mesh_name(
                 native_faces,
@@ -235,13 +257,17 @@ class HdfResultsMesh:
                 line_name,
             )
             selected_faces = native_faces[native_faces["mesh_name"] == resolved_mesh_name]
-            return HdfResultsMesh._read_rasmapper_face_flow_timeseries(
+            flow_df = HdfResultsMesh._read_rasmapper_face_flow_timeseries(
                 hdf_path=hdf_path,
                 line_name=line_name,
                 mesh_name=resolved_mesh_name,
                 face_ids=HdfResultsMesh._unique_int_values(selected_faces["face_id"]),
                 direction=direction,
                 selection_source="reference_line_internal_faces",
+            )
+            return HdfResultsMesh._truncate_profile_line_flow_dataframe(
+                flow_df,
+                truncate,
             )
 
         resolved_profile_lines_path = HdfResultsMesh._resolve_profile_lines_path(
@@ -276,13 +302,17 @@ class HdfResultsMesh:
             line_name,
         )
         selected_faces = selected_faces[selected_faces["mesh_name"] == resolved_mesh_name]
-        return HdfResultsMesh._read_rasmapper_face_flow_timeseries(
+        flow_df = HdfResultsMesh._read_rasmapper_face_flow_timeseries(
             hdf_path=hdf_path,
             line_name=line_name,
             mesh_name=resolved_mesh_name,
             face_ids=HdfResultsMesh._unique_int_values(selected_faces["face_id"]),
             direction=direction,
             selection_source="rasmapper_perimeter_faces",
+        )
+        return HdfResultsMesh._truncate_profile_line_flow_dataframe(
+            flow_df,
+            truncate,
         )
 
     @staticmethod
