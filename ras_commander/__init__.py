@@ -43,6 +43,7 @@ from .ComputeResults import (
 )
 from .RasPreprocess import RasPreprocess
 from .RasMap import RasMap
+from .RasDialogWatchdog import DialogWatchdog, DismissedDialog
 from .RasEncroachments import RasEncroachments
 from .RasMapValidation import RasMapValidation
 from .RasProcess import RasProcess, ProjectionInfo
@@ -237,6 +238,9 @@ __all__ = [
 
     # Plotting functionality
     'HdfPlot', 'HdfResultsPlot',
+
+    # Dialog watchdog (headless execution)
+    'DialogWatchdog', 'DismissedDialog',
 
     # Utilities
     'get_logger', 'log_call', 'standardize_input',

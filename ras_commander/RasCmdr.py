@@ -320,7 +320,8 @@ class RasCmdr:
         hdf_additional_variables: Optional[List[str]] = None,
         hdf_output_variables: Optional[List[str]] = None,
         hdf_output_options: Optional[Dict[str, Any]] = None,
-        hdf_output_profile: Optional[str] = None
+        hdf_output_profile: Optional[str] = None,
+        dialog_watchdog: bool = True,
     ) -> 'ComputeResult':
         """
         Execute a single HEC-RAS plan in a specified location.
@@ -604,7 +605,13 @@ class RasCmdr:
             # Execute the HEC-RAS command
             _did_execute = True
             start_time = time.time()
+            _watchdog = None
             try:
+                if dialog_watchdog:
+                    from .RasDialogWatchdog import DialogWatchdog
+                    _watchdog = DialogWatchdog()
+                    _watchdog.start()
+
                 # Choose execution method based on whether callback is provided
                 if stream_callback and bco_monitor:
                     # Use Popen for real-time monitoring
@@ -615,6 +622,8 @@ class RasCmdr:
                         cwd=str(compute_ras.project_folder),
                         shell=True
                     )
+                    if _watchdog:
+                        _watchdog.add_pid(process.pid)
 
                     # Monitor .bco file until process completes
                     # (BcoMonitor will call on_exec_message callback as messages appear)
@@ -701,6 +710,9 @@ class RasCmdr:
             logger.critical(f"Error in compute_plan: {str(e)}")
             _success = False
         finally:
+            if _watchdog:
+                _watchdog.stop()
+
             # Update the RAS object's dataframes ONLY if executing in original folder
             # When dest_folder is used, the original project is unchanged
             if _ras_obj and dest_folder is None:

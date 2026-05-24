@@ -85,6 +85,7 @@ class GeomPreprocessor:
         geometry_only: bool = True,
         restore_plan_settings: bool = True,
         flow_start_signals: Optional[List[str]] = None,
+        dialog_watchdog: bool = True,
     ) -> GeometryPreprocessResult:
         """
         Run HEC-RAS geometry preprocessing and review detailed compute messages.
@@ -245,6 +246,12 @@ class GeomPreprocessor:
                 logger.debug("Running HEC-RAS geometry preprocessor validation:")
                 logger.debug(command_text)
 
+                _watchdog = None
+                if dialog_watchdog:
+                    from ..RasDialogWatchdog import DialogWatchdog
+                    _watchdog = DialogWatchdog()
+                    _watchdog.start()
+
                 process = subprocess.Popen(
                     command_text,
                     cwd=str(project_folder),
@@ -252,6 +259,8 @@ class GeomPreprocessor:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                 )
+                if _watchdog:
+                    _watchdog.add_pid(process.pid)
 
                 geom_only_artifacts = None
                 if geometry_only:
@@ -297,6 +306,8 @@ class GeomPreprocessor:
                     except subprocess.TimeoutExpired:
                         GeomPreprocessor._terminate_process_tree(process)
             finally:
+                if _watchdog:
+                    _watchdog.stop()
                 if restore_plan_settings and original_plan_text is not None:
                     GeomPreprocessor._restore_plan_file(plan_path, original_plan_text)
 
