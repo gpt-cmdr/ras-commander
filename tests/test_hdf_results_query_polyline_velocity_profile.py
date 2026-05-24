@@ -70,11 +70,42 @@ EXPECTED_VELOCITY_TS_COLUMNS = [
     "depth",
     "terrain_elev",
 ]
+EXPECTED_WSE_TS_COLUMNS = [
+    "time_index",
+    "time",
+    "station",
+    "x",
+    "y",
+    "mesh_name",
+    "face_id",
+    "wse",
+    "depth",
+    "terrain_elev",
+]
+EXPECTED_FLOW_TS_COLUMNS = [
+    "time_index",
+    "time",
+    "station",
+    "x",
+    "y",
+    "mesh_name",
+    "face_id",
+    "flow",
+    "depth",
+    "terrain_elev",
+]
 
 DATA_DIR = Path(__file__).parent / "data"
 REFERENCE_CSV = DATA_DIR / "bald_eagle_velocity_profile_p06.csv"
 REFERENCE_GEOJSON = DATA_DIR / "bald_eagle_velocity_profile_p06_polyline.geojson"
 REFERENCE_MANIFEST = DATA_DIR / "bald_eagle_velocity_profile_p06_manifest.json"
+BALD_EAGLE_WSE_PROFILE_CSV = DATA_DIR / "bald_eagle_wse_profile_p06.csv"
+BALD_EAGLE_FLOW_PROFILE_CSV = DATA_DIR / "bald_eagle_flow_profile_p06.csv"
+BALD_EAGLE_VELOCITY_TS_CSV = DATA_DIR / "bald_eagle_velocity_timeseries_p06.csv"
+BALD_EAGLE_WSE_TS_CSV = DATA_DIR / "bald_eagle_wse_timeseries_p06.csv"
+BALD_EAGLE_FLOW_TS_CSV = DATA_DIR / "bald_eagle_flow_timeseries_p06.csv"
+BALD_EAGLE_XS_GEOJSON = DATA_DIR / "bald_eagle_xs_polyline.geojson"
+BALD_EAGLE_XS_MANIFEST = DATA_DIR / "bald_eagle_xs_polyline_manifest.json"
 CHIPPEWA_PLAN = Path(
     "H:/Symphony/ras-commander/CLB-214/profile_line_flow_validation/"
     "project/Chippewa_2D_profile_line_flow/Chippewa_2D.p02.hdf"
@@ -100,6 +131,15 @@ def _load_polyline() -> LineString:
 def _load_chippewa_polyline() -> LineString:
     geojson = json.loads(CHIPPEWA_POLYLINE.read_text(encoding="utf-8"))
     return shape(geojson["features"][0]["geometry"])
+
+
+def _load_bald_eagle_xs_polyline() -> LineString:
+    geojson = json.loads(BALD_EAGLE_XS_GEOJSON.read_text(encoding="utf-8"))
+    return shape(geojson["features"][0]["geometry"])
+
+
+def _load_bald_eagle_xs_manifest() -> dict:
+    return json.loads(BALD_EAGLE_XS_MANIFEST.read_text(encoding="utf-8"))
 
 
 def _bald_eagle_plan_hdf() -> Path:
@@ -155,6 +195,31 @@ def _write_minimal_plan_hdf(path: Path) -> None:
 def _write_minimal_geom_hdf(path: Path) -> None:
     with h5py.File(path, "w") as hdf:
         hdf.require_group("Geometry").attrs["SI Units"] = np.bytes_("False")
+
+
+def _assert_fixture_rms(
+    observed: pd.DataFrame,
+    expected: pd.DataFrame,
+    value_columns: list[str],
+    *,
+    relative_threshold: float = 0.05,
+) -> None:
+    assert len(observed) == len(expected)
+    assert list(observed.columns) == list(expected.columns)
+    for column in value_columns:
+        valid = expected[column].notna() & observed[column].notna()
+        if not valid.any():
+            assert expected[column].isna().all()
+            assert observed[column].isna().all()
+            continue
+        error = (
+            observed.loc[valid, column].to_numpy(dtype=float)
+            - expected.loc[valid, column].to_numpy(dtype=float)
+        )
+        rms_error = float(np.sqrt(np.mean(error * error)))
+        scale = float(np.nanmean(np.abs(expected.loc[valid, column].to_numpy(dtype=float))))
+        threshold = relative_threshold * max(scale, 1.0)
+        assert rms_error <= threshold
 
 
 def test_profile_sampling_rejects_excessive_sample_count_before_clr(tmp_path: Path) -> None:
@@ -427,6 +492,85 @@ def test_wse_and_flow_profiles_return_expected_schema() -> None:
         "RasMapperLib.Render.WaterSurfaceRenderer"
     ]
     assert flow.attrs["flow_source"] == ["RasMapperLib.Render.FlowRenderer"]
+
+
+def test_bald_eagle_wse_profile_matches_fixture() -> None:
+    manifest = _load_manifest()
+    plan_hdf = _require_bald_eagle_plan()
+    terrain_hdf = _bald_eagle_terrain_hdf(plan_hdf)
+
+    observed = HdfResultsQuery.query_polyline_wse_profile(
+        plan_hdf,
+        _load_polyline(),
+        time_index=int(manifest["time_index"]),
+        sample_spacing=float(manifest["max_segment_len"]),
+        terrain_raster=terrain_hdf,
+    )
+    expected = pd.read_csv(BALD_EAGLE_WSE_PROFILE_CSV)
+
+    assert list(observed.columns) == EXPECTED_WSE_COLUMNS
+    assert observed["wse"].notna().any()
+    _assert_fixture_rms(observed, expected, ["wse", "depth"])
+
+
+def test_bald_eagle_flow_profile_matches_xs_fixture() -> None:
+    plan_hdf = _require_bald_eagle_plan()
+    terrain_hdf = _bald_eagle_terrain_hdf(plan_hdf)
+    fixture_manifest = _load_bald_eagle_xs_manifest()
+
+    observed = HdfResultsQuery.query_polyline_flow_profile(
+        plan_hdf,
+        _load_bald_eagle_xs_polyline(),
+        time_index=int(fixture_manifest["time_index"]),
+        sample_spacing=float(fixture_manifest["xs_polyline"]["sample_spacing"]),
+        terrain_raster=terrain_hdf,
+    )
+    expected = pd.read_csv(BALD_EAGLE_FLOW_PROFILE_CSV)
+
+    assert list(observed.columns) == EXPECTED_FLOW_COLUMNS
+    assert observed["depth"].notna().any()
+    _assert_fixture_rms(observed, expected, ["flow", "depth"])
+
+
+def test_bald_eagle_timeseries_match_fixtures() -> None:
+    plan_hdf = _require_bald_eagle_plan()
+    terrain_hdf = _bald_eagle_terrain_hdf(plan_hdf)
+    velocity_manifest = _load_manifest()
+    fixture_manifest = _load_bald_eagle_xs_manifest()
+    time_range = tuple(fixture_manifest["time_range"])
+
+    velocity = HdfResultsQuery.query_polyline_velocity_timeseries(
+        plan_hdf,
+        _load_polyline(),
+        time_range=time_range,
+        sample_spacing=float(velocity_manifest["max_segment_len"]),
+        terrain_raster=terrain_hdf,
+    )
+    wse = HdfResultsQuery.query_polyline_wse_timeseries(
+        plan_hdf,
+        _load_polyline(),
+        time_range=time_range,
+        sample_spacing=float(velocity_manifest["max_segment_len"]),
+        terrain_raster=terrain_hdf,
+    )
+    flow = HdfResultsQuery.query_polyline_flow_timeseries(
+        plan_hdf,
+        _load_bald_eagle_xs_polyline(),
+        time_range=time_range,
+        sample_spacing=float(fixture_manifest["xs_polyline"]["sample_spacing"]),
+        terrain_raster=terrain_hdf,
+    )
+
+    assert list(velocity.columns) == EXPECTED_VELOCITY_TS_COLUMNS
+    assert list(wse.columns) == EXPECTED_WSE_TS_COLUMNS
+    assert list(flow.columns) == EXPECTED_FLOW_TS_COLUMNS
+    _assert_fixture_rms(
+        velocity,
+        pd.read_csv(BALD_EAGLE_VELOCITY_TS_CSV),
+        ["velocity_x", "velocity_y", "velocity_mag", "depth"],
+    )
+    _assert_fixture_rms(wse, pd.read_csv(BALD_EAGLE_WSE_TS_CSV), ["wse", "depth"])
+    _assert_fixture_rms(flow, pd.read_csv(BALD_EAGLE_FLOW_TS_CSV), ["flow", "depth"])
 
 
 def test_velocity_wse_flow_timeseries_return_long_schema() -> None:
