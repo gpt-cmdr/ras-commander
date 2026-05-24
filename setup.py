@@ -99,7 +99,8 @@ setup(
         # Notebook dependencies (raster visualization, coordinate systems)
         'notebooks': ['rasterio', 'pyproj', 'aiohttp', 'dataretrieval>=1.0'],
         # RasMapperLib pythonnet interop: headless mesh generation and
-        # query_polyline_velocity_profile (Windows HEC-RAS install required)
+        # polyline profile queries for velocity, WSE, flow, time-series,
+        # pipe-network, and plan-difference renderers (Windows HEC-RAS install required)
         'mesh': ['pythonnet>=3.0.5'],
         # DSS file operations (requires Java JRE/JDK 8+)
         'dss': ['pyjnius'],

@@ -1,0 +1,32 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Upstream",
+        "source": "CLB-214 Chippewa profile-line validation"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            1027286.18176048,
+            7858101.94176079,
+            0.0
+          ],
+          [
+            1025888.83316053,
+            7858224.78559376,
+            0.0
+          ],
+          [
+            1025888.83316053,
+            7858224.78559376,
+            0.0
+          ]
+        ]
+      }
+    }
+  ]
+}

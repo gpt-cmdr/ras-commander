@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,9 @@ from shapely.geometry import LineString, shape
 
 from ras_commander import HdfResultsQuery
 from ras_commander.dotnet.clr_bootstrap import is_hecras_available
+
+hdf_results_query_module = importlib.import_module("ras_commander.hdf.HdfResultsQuery")
+profile_interop_module = importlib.import_module("ras_commander.dotnet._profile_interop")
 
 pytestmark = pytest.mark.skipif(
     not is_hecras_available(),
@@ -32,11 +36,52 @@ EXPECTED_COLUMNS = [
     "depth",
     "terrain_elev",
 ]
+EXPECTED_WSE_COLUMNS = [
+    "station",
+    "x",
+    "y",
+    "mesh_name",
+    "face_id",
+    "wse",
+    "depth",
+    "terrain_elev",
+]
+EXPECTED_FLOW_COLUMNS = [
+    "station",
+    "x",
+    "y",
+    "mesh_name",
+    "face_id",
+    "flow",
+    "depth",
+    "terrain_elev",
+]
+EXPECTED_VELOCITY_TS_COLUMNS = [
+    "time_index",
+    "time",
+    "station",
+    "x",
+    "y",
+    "mesh_name",
+    "face_id",
+    "velocity_x",
+    "velocity_y",
+    "velocity_mag",
+    "depth",
+    "terrain_elev",
+]
 
 DATA_DIR = Path(__file__).parent / "data"
 REFERENCE_CSV = DATA_DIR / "bald_eagle_velocity_profile_p06.csv"
 REFERENCE_GEOJSON = DATA_DIR / "bald_eagle_velocity_profile_p06_polyline.geojson"
 REFERENCE_MANIFEST = DATA_DIR / "bald_eagle_velocity_profile_p06_manifest.json"
+CHIPPEWA_PLAN = Path(
+    "H:/Symphony/ras-commander/CLB-214/profile_line_flow_validation/"
+    "project/Chippewa_2D_profile_line_flow/Chippewa_2D.p02.hdf"
+)
+CHIPPEWA_POLYLINE = DATA_DIR / "chippewa_upstream_profile_line.geojson"
+CHIPPEWA_VELOCITY_TS_CSV = DATA_DIR / "chippewa_velocity_timeseries_upstream_p02.csv"
+CHIPPEWA_WSE_TS_CSV = DATA_DIR / "chippewa_wse_timeseries_upstream_p02.csv"
 DEFAULT_BALD_EAGLE_PLAN = Path(
     "H:/Symphony/RASDecomp/CLB-850/inputs/"
     "BaldEagleCrkMulti2D_722_gridded/BaldEagleDamBrk.p06.hdf"
@@ -49,6 +94,11 @@ def _load_manifest() -> dict:
 
 def _load_polyline() -> LineString:
     geojson = json.loads(REFERENCE_GEOJSON.read_text(encoding="utf-8"))
+    return shape(geojson["features"][0]["geometry"])
+
+
+def _load_chippewa_polyline() -> LineString:
+    geojson = json.loads(CHIPPEWA_POLYLINE.read_text(encoding="utf-8"))
     return shape(geojson["features"][0]["geometry"])
 
 
@@ -78,6 +128,161 @@ def _require_bald_eagle_plan() -> Path:
     if not plan_hdf.exists():
         pytest.skip(f"Bald Eagle plan HDF not staged: {plan_hdf}")
     return plan_hdf
+
+
+def _require_chippewa_plan() -> Path:
+    if not CHIPPEWA_PLAN.exists():
+        pytest.skip(f"Chippewa validation plan HDF not staged: {CHIPPEWA_PLAN}")
+    return CHIPPEWA_PLAN
+
+
+class _FakeRasObject:
+    def __init__(self, plan_paths: dict[str, Path]) -> None:
+        self.plan_df = pd.DataFrame({
+            "plan_number": list(plan_paths.keys()),
+            "HDF_Results_Path": [str(path) for path in plan_paths.values()],
+        })
+
+    def check_initialized(self) -> None:
+        return None
+
+
+def _write_minimal_plan_hdf(path: Path) -> None:
+    with h5py.File(path, "w") as hdf:
+        hdf.attrs["Program Version"] = np.bytes_("7.0")
+
+
+def _write_minimal_geom_hdf(path: Path) -> None:
+    with h5py.File(path, "w") as hdf:
+        hdf.require_group("Geometry").attrs["SI Units"] = np.bytes_("False")
+
+
+def test_profile_sampling_rejects_excessive_sample_count_before_clr(tmp_path: Path) -> None:
+    plan_hdf = tmp_path / "minimal.p01.hdf"
+    _write_minimal_plan_hdf(plan_hdf)
+
+    with pytest.raises(ValueError, match="computed sample count"):
+        profile_interop_module._build_map_points(
+            plan_hdf,
+            np.array([[0.0, 0.0], [100_001.0, 0.0]], dtype=float),
+            sample_spacing=0.5,
+        )
+
+
+def test_wse_difference_resolves_plan_number_shorthand_for_both_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    plan_02 = tmp_path / "Project.p02.hdf"
+    plan_03 = tmp_path / "Project.p03.hdf"
+    geom_hdf = tmp_path / "Project.g01.hdf"
+    _write_minimal_plan_hdf(plan_02)
+    _write_minimal_plan_hdf(plan_03)
+    _write_minimal_geom_hdf(geom_hdf)
+    ras_object = _FakeRasObject({"02": plan_02, "03": plan_03})
+
+    observed: dict[str, Path] = {}
+
+    def fake_inputs(hdf_path, *_args, **_kwargs):
+        observed["base"] = Path(hdf_path)
+        return np.array([[0.0, 0.0], [100.0, 0.0]], dtype=float), geom_hdf, 10.0, None
+
+    def fake_wse_difference(base_hdf_path, compare_hdf_path, *_args, **_kwargs):
+        observed["interop_base"] = Path(base_hdf_path)
+        observed["interop_compare"] = Path(compare_hdf_path)
+        return {
+            "station": [0.0],
+            "x": [0.0],
+            "y": [0.0],
+            "mesh_name": ["Perimeter 1"],
+            "face_id": [1],
+            "wse_base": [10.0],
+            "wse_compare": [10.0],
+            "wse_delta": [0.0],
+        }
+
+    monkeypatch.setattr(hdf_results_query_module, "_polyline_profile_inputs", fake_inputs)
+    monkeypatch.setattr(
+        profile_interop_module,
+        "query_polyline_wse_difference",
+        fake_wse_difference,
+    )
+
+    result = HdfResultsQuery.query_polyline_wse_difference(
+        base_hdf_path="02",
+        compare_hdf_path="03",
+        polyline=LineString([(0.0, 0.0), (100.0, 0.0)]),
+        time_index=0,
+        ras_object=ras_object,
+    )
+
+    assert observed == {
+        "base": plan_02,
+        "interop_base": plan_02,
+        "interop_compare": plan_03,
+    }
+    assert result["wse_delta"].tolist() == [0.0]
+
+
+def test_velocity_difference_resolves_plan_number_shorthand_for_both_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    plan_02 = tmp_path / "Project.p02.hdf"
+    plan_03 = tmp_path / "Project.p03.hdf"
+    geom_hdf = tmp_path / "Project.g01.hdf"
+    _write_minimal_plan_hdf(plan_02)
+    _write_minimal_plan_hdf(plan_03)
+    _write_minimal_geom_hdf(geom_hdf)
+    ras_object = _FakeRasObject({"02": plan_02, "03": plan_03})
+
+    observed: dict[str, Path] = {}
+
+    def fake_inputs(hdf_path, *_args, **_kwargs):
+        observed["base"] = Path(hdf_path)
+        return np.array([[0.0, 0.0], [100.0, 0.0]], dtype=float), geom_hdf, 10.0, None
+
+    def fake_velocity_difference(base_hdf_path, compare_hdf_path, *_args, **_kwargs):
+        observed["interop_base"] = Path(base_hdf_path)
+        observed["interop_compare"] = Path(compare_hdf_path)
+        return {
+            "station": [0.0],
+            "x": [0.0],
+            "y": [0.0],
+            "mesh_name": ["Perimeter 1"],
+            "face_id": [1],
+            "velocity_x_base": [1.0],
+            "velocity_y_base": [0.0],
+            "velocity_mag_base": [1.0],
+            "velocity_x_compare": [1.0],
+            "velocity_y_compare": [0.0],
+            "velocity_mag_compare": [1.0],
+            "velocity_x_delta": [0.0],
+            "velocity_y_delta": [0.0],
+            "velocity_mag_delta": [0.0],
+        }
+
+    monkeypatch.setattr(hdf_results_query_module, "_polyline_profile_inputs", fake_inputs)
+    monkeypatch.setattr(
+        profile_interop_module,
+        "query_polyline_velocity_difference",
+        fake_velocity_difference,
+    )
+
+    result = HdfResultsQuery.query_polyline_velocity_difference(
+        base_hdf_path="02",
+        compare_hdf_path="03",
+        polyline=LineString([(0.0, 0.0), (100.0, 0.0)]),
+        time_index=0,
+        ras_object=ras_object,
+    )
+
+    assert observed == {
+        "base": plan_02,
+        "interop_base": plan_02,
+        "interop_compare": plan_03,
+    }
+    assert result["velocity_mag_delta"].tolist() == [0.0]
 
 
 def test_matches_ras_mapper_fixture() -> None:
@@ -190,3 +395,126 @@ def test_handles_polyline_gap_rows() -> None:
     gap_rows = profile["velocity_mag"].isna()
     assert gap_rows.any()
     assert profile.loc[gap_rows, "terrain_elev"].notna().any()
+
+
+def test_wse_and_flow_profiles_return_expected_schema() -> None:
+    manifest = _load_manifest()
+    plan_hdf = _require_bald_eagle_plan()
+    terrain_hdf = _bald_eagle_terrain_hdf(plan_hdf)
+    polyline = _load_polyline()
+
+    wse = HdfResultsQuery.query_polyline_wse_profile(
+        plan_hdf,
+        polyline,
+        time_index=int(manifest["time_index"]),
+        sample_spacing=float(manifest["max_segment_len"]),
+        terrain_raster=terrain_hdf,
+    )
+    flow = HdfResultsQuery.query_polyline_flow_profile(
+        plan_hdf,
+        polyline,
+        time_index=int(manifest["time_index"]),
+        sample_spacing=float(manifest["max_segment_len"]),
+        terrain_raster=terrain_hdf,
+    )
+
+    assert list(wse.columns) == EXPECTED_WSE_COLUMNS
+    assert list(flow.columns) == EXPECTED_FLOW_COLUMNS
+    assert len(wse) == int(manifest["row_count"])
+    assert len(flow) == int(manifest["row_count"])
+    assert wse["wse"].notna().any()
+    assert wse.attrs["wse_source"] == [
+        "RasMapperLib.Render.WaterSurfaceRenderer"
+    ]
+    assert flow.attrs["flow_source"] == ["RasMapperLib.Render.FlowRenderer"]
+
+
+def test_velocity_wse_flow_timeseries_return_long_schema() -> None:
+    plan_hdf = _require_chippewa_plan()
+    polyline = _load_chippewa_polyline()
+    time_range = (0, 2)
+
+    velocity = HdfResultsQuery.query_polyline_velocity_timeseries(
+        plan_hdf,
+        polyline,
+        time_range=time_range,
+        sample_spacing=50.0,
+    )
+    wse = HdfResultsQuery.query_polyline_wse_timeseries(
+        plan_hdf,
+        polyline,
+        time_range=time_range,
+        sample_spacing=50.0,
+    )
+    flow = HdfResultsQuery.query_polyline_flow_timeseries(
+        plan_hdf,
+        polyline,
+        time_range=time_range,
+        sample_spacing=50.0,
+    )
+
+    expected_velocity = pd.read_csv(CHIPPEWA_VELOCITY_TS_CSV)
+    expected_wse = pd.read_csv(CHIPPEWA_WSE_TS_CSV)
+    expected_rows = len(expected_velocity)
+    assert list(velocity.columns) == EXPECTED_VELOCITY_TS_COLUMNS
+    assert len(velocity) == expected_rows
+    assert len(wse) == expected_rows
+    assert len(flow) == expected_rows
+    assert sorted(velocity["time_index"].unique().tolist()) == list(range(*time_range))
+    assert velocity.attrs["velocity_source"] == [
+        "RasMapperLib.Render.VelocityTimeSeries"
+    ]
+    assert wse.attrs["wse_source"] == ["RasMapperLib.Render.WaterSurfaceTimeSeries"]
+    assert wse["wse"].notna().any()
+    np.testing.assert_allclose(
+        velocity["velocity_mag"].to_numpy(dtype=float),
+        expected_velocity["velocity_mag"].to_numpy(dtype=float),
+        equal_nan=True,
+    )
+    np.testing.assert_allclose(
+        wse["wse"].to_numpy(dtype=float),
+        expected_wse["wse"].to_numpy(dtype=float),
+        equal_nan=True,
+    )
+
+
+def test_difference_same_plan_is_zero() -> None:
+    manifest = _load_manifest()
+    plan_hdf = _require_bald_eagle_plan()
+
+    wse_diff = HdfResultsQuery.query_polyline_wse_difference(
+        plan_hdf,
+        plan_hdf,
+        _load_polyline(),
+        time_index=int(manifest["time_index"]),
+        sample_spacing=float(manifest["max_segment_len"]),
+        terrain_raster=_bald_eagle_terrain_hdf(plan_hdf),
+    )
+    velocity_diff = HdfResultsQuery.query_polyline_velocity_difference(
+        plan_hdf,
+        plan_hdf,
+        _load_polyline(),
+        time_index=int(manifest["time_index"]),
+        sample_spacing=float(manifest["max_segment_len"]),
+        terrain_raster=_bald_eagle_terrain_hdf(plan_hdf),
+    )
+
+    assert np.nanmax(np.abs(wse_diff["wse_delta"].to_numpy(dtype=float))) <= 1.0e-5
+    assert (
+        np.nanmax(np.abs(velocity_diff["velocity_mag_delta"].to_numpy(dtype=float)))
+        <= 1.0e-5
+    )
+
+
+def test_pipe_profiles_reject_non_pipe_plan() -> None:
+    manifest = _load_manifest()
+    plan_hdf = _require_bald_eagle_plan()
+
+    with pytest.raises(NotImplementedError, match="pipe network"):
+        HdfResultsQuery.query_polyline_pipe_velocity_profile(
+            plan_hdf,
+            _load_polyline(),
+            time_index=int(manifest["time_index"]),
+            sample_spacing=float(manifest["max_segment_len"]),
+            terrain_raster=_bald_eagle_terrain_hdf(plan_hdf),
+        )

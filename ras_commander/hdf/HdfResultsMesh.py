@@ -191,6 +191,25 @@ class HdfResultsMesh:
             return HdfResultsMesh._get_mesh_timeseries_output(hdf_path, mesh_name, var, truncate)
 
     @staticmethod
+    def _truncate_profile_line_flow_dataframe(
+        flow_df: pd.DataFrame,
+        truncate: bool,
+    ) -> pd.DataFrame:
+        """Trim leading/trailing zero or NaN flow rows while preserving attrs."""
+        if not truncate or flow_df.empty or "flow" not in flow_df.columns:
+            return flow_df
+
+        flow = pd.to_numeric(flow_df["flow"], errors="coerce").to_numpy(dtype=float)
+        nonzero = np.flatnonzero(np.isfinite(flow) & (flow != 0.0))
+        if len(nonzero) == 0:
+            trimmed = flow_df.iloc[:0].copy()
+        else:
+            start, end = int(nonzero[0]), int(nonzero[-1]) + 1
+            trimmed = flow_df.iloc[start:end].reset_index(drop=True)
+        trimmed.attrs.update(flow_df.attrs)
+        return trimmed
+
+    @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_profile_line_flow_timeseries(
@@ -205,11 +224,119 @@ class HdfResultsMesh:
         """
         Return a flow time series across a RAS Mapper profile/reference line.
 
-        The method first looks for native HEC-RAS reference-line internal-face
-        metadata in the plan HDF. If no matching native reference line is found,
-        it reads the RAS Mapper Profile Lines feature file and uses
-        ``HdfMesh.get_faces_along_profile_line()`` to select mesh faces
-        geometrically. Face flows are read through ``get_mesh_timeseries()``.
+        This canonical entry point uses RasMapperLib through pythonnet. Native
+        reference lines first use ``ObservedDataLayer.TryReadRefLineFlow()``
+        when RAS Mapper exposes a precomputed hydrograph; otherwise native
+        reference-line faces and ad-hoc profile lines are read through
+        ``RASResults.ReadUnsteadyTimeSeries()`` after selecting ad-hoc faces
+        with ``MeshFV2D.PerimeterFacesAlongPolyline()``.
+        """
+        direction = HdfResultsMesh._normalize_profile_line_direction(direction)
+        native_faces = HdfResultsMesh._get_native_profile_line_faces(
+            hdf_path=hdf_path,
+            line_name=line_name,
+            mesh_name=mesh_name,
+            ras_object=ras_object,
+        )
+        if not native_faces.empty:
+            refline_flow = HdfResultsMesh._try_read_ref_line_flow_rasmapper(
+                hdf_path=hdf_path,
+                line_name=line_name,
+                mesh_name=mesh_name,
+                direction=direction,
+            )
+            if refline_flow is not None:
+                return HdfResultsMesh._truncate_profile_line_flow_dataframe(
+                    refline_flow,
+                    truncate,
+                )
+
+            resolved_mesh_name = HdfResultsMesh._resolve_single_mesh_name(
+                native_faces,
+                mesh_name,
+                line_name,
+            )
+            selected_faces = native_faces[native_faces["mesh_name"] == resolved_mesh_name]
+            flow_df = HdfResultsMesh._read_rasmapper_face_flow_timeseries(
+                hdf_path=hdf_path,
+                line_name=line_name,
+                mesh_name=resolved_mesh_name,
+                face_ids=HdfResultsMesh._unique_int_values(selected_faces["face_id"]),
+                direction=direction,
+                selection_source="reference_line_internal_faces",
+            )
+            return HdfResultsMesh._truncate_profile_line_flow_dataframe(
+                flow_df,
+                truncate,
+            )
+
+        resolved_profile_lines_path = HdfResultsMesh._resolve_profile_lines_path(
+            profile_lines_path=profile_lines_path,
+            ras_object=ras_object,
+        )
+        if resolved_profile_lines_path is None:
+            raise ValueError(
+                f"Profile/reference line '{line_name}' was not found in native HDF "
+                "reference lines, and no RAS Mapper profile-lines feature path could "
+                "be resolved. Pass profile_lines_path or initialize a ras_object with "
+                "rasmap_df."
+            )
+
+        reference_hdf_path = HdfResultsMesh._resolve_reference_line_hdf_path(
+            hdf_path,
+            ras_object=ras_object,
+        )
+        profile_line = HdfResultsMesh._read_profile_line_geometry(
+            profile_lines_path=resolved_profile_lines_path,
+            line_name=line_name,
+        )
+        selected_faces = HdfResultsMesh._get_rasmapper_perimeter_faces(
+            geometry_hdf_path=reference_hdf_path,
+            profile_line=profile_line,
+            mesh_name=mesh_name,
+            line_name=line_name,
+        )
+        resolved_mesh_name = HdfResultsMesh._resolve_single_mesh_name(
+            selected_faces,
+            mesh_name,
+            line_name,
+        )
+        selected_faces = selected_faces[selected_faces["mesh_name"] == resolved_mesh_name]
+        flow_df = HdfResultsMesh._read_rasmapper_face_flow_timeseries(
+            hdf_path=hdf_path,
+            line_name=line_name,
+            mesh_name=resolved_mesh_name,
+            face_ids=HdfResultsMesh._unique_int_values(selected_faces["face_id"]),
+            direction=direction,
+            selection_source="rasmapper_perimeter_faces",
+        )
+        return HdfResultsMesh._truncate_profile_line_flow_dataframe(
+            flow_df,
+            truncate,
+        )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_profile_line_flow_timeseries_legacy(
+        hdf_path: Path,
+        line_name: str,
+        mesh_name: Optional[str] = None,
+        profile_lines_path: Optional[Union[str, Path]] = None,
+        direction: str = "absolute",
+        truncate: bool = False,
+        ras_object: Optional[Any] = None,
+    ) -> pd.DataFrame:
+        """
+        Return a legacy pure-Python profile/reference-line flow time series.
+
+        This method predates the pythonnet/RasMapperLib profile API. It selects
+        native reference-line internal faces when available, otherwise reads a
+        RAS Mapper Profile Lines feature file and uses
+        ``HdfMesh.get_faces_along_profile_line()`` plus direct HDF ``Face Flow``
+        time series. Keep using it for offline analysis without a HEC-RAS
+        install or to reproduce pre-CLB-852 results; it is retained for
+        backward compatibility.
 
         Parameters
         ----------
@@ -427,6 +554,247 @@ class HdfResultsMesh:
         )
         selected_faces = selected_faces[selected_faces["mesh_name"] == resolved_mesh_name]
         return selected_faces, resolved_mesh_name, "profile_lines_geometry"
+
+    @staticmethod
+    def _try_read_ref_line_flow_rasmapper(
+        hdf_path: Path,
+        line_name: str,
+        mesh_name: Optional[str],
+        direction: str,
+    ) -> Optional[pd.DataFrame]:
+        """Read a native RAS Mapper reference-line flow hydrograph if present."""
+        try:
+            from ..dotnet.clr_bootstrap import load_clr
+
+            load_clr()
+            from RasMapperLib import (  # type: ignore
+                ObservedDataLayer,
+                RASEventConditions,
+                RASResults,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "pythonnet/RasMapperLib is required for canonical profile-line "
+                "flow time-series extraction. Use "
+                "get_profile_line_flow_timeseries_legacy() for offline analysis."
+            ) from exc
+
+        results = RASResults(str(Path(hdf_path)))
+        if not bool(results.LoadedSuccessfully):
+            raise RuntimeError(f"RASResults could not load {hdf_path}")
+
+        observed = ObservedDataLayer(RASEventConditions(results))
+        met_ts = observed.TryReadRefLineFlow(str(line_name))
+        if met_ts is None:
+            return None
+
+        values = np.asarray([float(value) for value in met_ts.AllValues], dtype=float)
+        if direction == "absolute":
+            values = np.abs(values)
+
+        dates = [pd.Timestamp(str(value)) for value in met_ts.AllDates]
+        if len(dates) != len(values):
+            dates = HdfResultsMesh._profile_times_from_hdf(hdf_path, results)
+        dates = dates[: len(values)]
+
+        result = pd.DataFrame({
+            "time": pd.to_datetime(dates),
+            "flow": values,
+            "line_name": str(line_name),
+            "mesh_name": "" if mesh_name is None else str(mesh_name),
+            "direction": direction,
+            "face_count": 0,
+            "selection_source": "try_read_ref_line_flow",
+        })
+        result.attrs["face_ids"] = []
+        result.attrs["units"] = str(getattr(met_ts, "UnitString", "") or "")
+        result.attrs["variable"] = "Reference Line Flow"
+        return result
+
+    @staticmethod
+    def _get_rasmapper_perimeter_faces(
+        geometry_hdf_path: Path,
+        profile_line: Any,
+        mesh_name: Optional[str],
+        line_name: str,
+    ) -> pd.DataFrame:
+        """Select profile-line faces with MeshFV2D.PerimeterFacesAlongPolyline."""
+        try:
+            from ..dotnet.clr_bootstrap import load_clr
+
+            load_clr()
+            from RasMapperLib import MeshFV2D, PointMs, Polyline  # type: ignore
+        except Exception as exc:
+            raise RuntimeError(
+                "pythonnet/RasMapperLib is required for canonical profile-line "
+                "flow time-series extraction. Use "
+                "get_profile_line_flow_timeseries_legacy() for offline analysis."
+            ) from exc
+
+        geometry_hdf_path = Path(geometry_hdf_path)
+        mesh_names = [str(mesh_name)] if mesh_name is not None else (
+            HdfMesh.get_mesh_area_names(geometry_hdf_path) or []
+        )
+        if not mesh_names:
+            raise ValueError(
+                f"No 2D flow-area meshes were found in {geometry_hdf_path}"
+            )
+
+        coords = list(profile_line.coords)
+        points = PointMs(len(coords))
+        for coord in coords:
+            points.Add(float(coord[0]), float(coord[1]))
+        polyline = Polyline(points)
+
+        rows: List[Dict[str, Any]] = []
+        for candidate_mesh in mesh_names:
+            try:
+                mesh = MeshFV2D(str(geometry_hdf_path), candidate_mesh, None)
+                computed = mesh.PerimeterFacesAlongPolyline(polyline, None)
+            except Exception as exc:
+                logger.debug(
+                    "RasMapperLib perimeter-face selection failed for mesh %s: %s",
+                    candidate_mesh,
+                    exc,
+                )
+                continue
+
+            face_ranges = computed[0] if isinstance(computed, tuple) else computed
+            for face_range in face_ranges:
+                rows.append({
+                    "mesh_name": str(candidate_mesh),
+                    "face_id": int(face_range.Face),
+                    "fp_start_idx": int(face_range.FPStartIdx),
+                    "fp_end_idx": int(face_range.FPEndIdx),
+                    "station_start": float(face_range.StationStart),
+                    "station_end": float(face_range.StationEnd),
+                })
+
+        if not rows:
+            raise ValueError(
+                f"No RAS Mapper perimeter faces found along profile line '{line_name}'. "
+                "Check that the line crosses the target mesh and that the HDF and "
+                "feature file use compatible coordinates."
+            )
+
+        selected = pd.DataFrame(rows)
+        selected = selected.drop_duplicates(["mesh_name", "face_id"], keep="first")
+        return selected.sort_values(
+            ["mesh_name", "station_start", "station_end", "face_id"],
+            na_position="last",
+        ).reset_index(drop=True)
+
+    @staticmethod
+    def _read_rasmapper_face_flow_timeseries(
+        hdf_path: Path,
+        line_name: str,
+        mesh_name: str,
+        face_ids: List[int],
+        direction: str,
+        selection_source: str,
+    ) -> pd.DataFrame:
+        """Read selected Face Flow columns through RasMapperLib's HDF reader."""
+        if not face_ids:
+            raise ValueError(f"No valid face IDs resolved for profile line '{line_name}'.")
+
+        try:
+            from ..dotnet.clr_bootstrap import load_clr
+
+            load_clr()
+            from RasMapperLib import RASResults  # type: ignore
+            from System import Int32  # type: ignore
+            from System.Collections.Generic import List as DotNetList  # type: ignore
+        except Exception as exc:
+            raise RuntimeError(
+                "pythonnet/RasMapperLib is required for canonical profile-line "
+                "flow time-series extraction. Use "
+                "get_profile_line_flow_timeseries_legacy() for offline analysis."
+            ) from exc
+
+        dataset_path = HdfResultsMesh._get_mesh_timeseries_output_path(
+            mesh_name,
+            "Face Flow",
+        )
+        results = RASResults(str(Path(hdf_path)))
+        if not bool(results.LoadedSuccessfully):
+            raise RuntimeError(f"RASResults could not load {hdf_path}")
+        if not bool(results.CheckDatasetExists(dataset_path)):
+            raise ValueError(f"Dataset not found in plan HDF: {dataset_path}")
+
+        columns = DotNetList[Int32]()
+        for face_id in face_ids:
+            columns.Add(int(face_id))
+        raw_values = results.ReadUnsteadyTimeSeries(dataset_path, columns, None)
+        n_times = int(raw_values.GetLength(0))
+        n_faces = int(raw_values.GetLength(1))
+        values = np.empty((n_times, n_faces), dtype=float)
+        for time_idx in range(n_times):
+            for face_pos in range(n_faces):
+                values[time_idx, face_pos] = float(raw_values[time_idx, face_pos])
+
+        if direction == "absolute":
+            flow = np.abs(values).sum(axis=1)
+        else:
+            flow = values.sum(axis=1)
+
+        times = HdfResultsMesh._profile_times_from_hdf(hdf_path, results)[:n_times]
+        units = ""
+        try:
+            with h5py.File(hdf_path, "r") as hdf_file:
+                if dataset_path in hdf_file:
+                    units = HdfResultsMesh._decode_hdf_attr(
+                        hdf_file[dataset_path].attrs.get("Units", "")
+                    )
+        except Exception:
+            units = ""
+
+        result = pd.DataFrame({
+            "time": pd.to_datetime(times),
+            "flow": flow,
+            "line_name": str(line_name),
+            "mesh_name": str(mesh_name),
+            "direction": direction,
+            "face_count": len(face_ids),
+            "selection_source": selection_source,
+        })
+        result.attrs["face_ids"] = face_ids
+        result.attrs["units"] = units
+        result.attrs["variable"] = "Face Flow"
+        return result
+
+    @staticmethod
+    def _profile_times_from_hdf(hdf_path: Path, results: Optional[Any] = None) -> List[pd.Timestamp]:
+        """Return unsteady profile timestamps using ras-commander's HDF time helpers."""
+        try:
+            with h5py.File(hdf_path, "r") as hdf_file:
+                start_time = HdfBase.get_simulation_start_time(hdf_file)
+                time_path = (
+                    "Results/Unsteady/Output/Output Blocks/Base Output/"
+                    "Unsteady Time Series/Time"
+                )
+                if time_path in hdf_file:
+                    return list(pd.to_datetime(
+                        HdfUtils.convert_timesteps_to_datetimes(
+                            np.asarray(hdf_file[time_path][:]),
+                            start_time,
+                        )
+                    ))
+        except Exception:
+            pass
+
+        if results is not None:
+            try:
+                return [pd.Timestamp(str(value)) for value in results.ProfileDateTimes]
+            except Exception:
+                pass
+            try:
+                return [
+                    pd.Timestamp(str(results.ProfileName(idx)))
+                    for idx in range(int(results.ProfileCount))
+                ]
+            except Exception:
+                pass
+        return []
 
     @staticmethod
     def _get_native_profile_line_faces(
