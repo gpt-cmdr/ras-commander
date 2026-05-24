@@ -1,0 +1,38 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "bald_eagle_xs_flow_polyline",
+        "source_geometry": "BaldEagleDamBrk.g08.hdf",
+        "source_index": 1,
+        "river": "Bald Eagle Cr.",
+        "reach": "Lock Haven",
+        "river_station": "136948",
+        "xs_name": "Low Water Bridge"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            1966305.14967545,
+            292207.803498933
+          ],
+          [
+            1968605.25102431,
+            290553.056279807
+          ],
+          [
+            1969283.69594219,
+            290503.414796264
+          ],
+          [
+            1970028.33303901,
+            290453.771192196
+          ]
+        ]
+      }
+    }
+  ]
+}

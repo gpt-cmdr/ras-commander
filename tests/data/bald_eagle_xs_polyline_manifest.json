@@ -1,0 +1,90 @@
+{
+  "generated_at_utc": "2026-05-24T21:10:01+00:00",
+  "ras_version": "HEC-RAS 7.0 April 2026",
+  "plan_hdf": {
+    "path": "H:\\Symphony\\RASDecomp\\CLB-850\\inputs\\BaldEagleCrkMulti2D_722_gridded\\BaldEagleDamBrk.p06.hdf",
+    "sha256": "f902462e43313e33119c37f58d7668af2a456759de2321e3673914daa4626937"
+  },
+  "terrain_hdf": {
+    "path": "H:\\Symphony\\RASDecomp\\CLB-850\\inputs\\BaldEagleCrkMulti2D_722_gridded\\Terrain\\Terrain50.hdf",
+    "sha256": "b46f8c3e8581975244635e6000af5637bcb771f557d3ce43da0b2644a37cae7b"
+  },
+  "hdf_output_options": {
+    "HDF Compression": 4,
+    "HDF Chunk Size": 4,
+    "HDF Spatial Parts": 16,
+    "HDF Use Max Rows": true,
+    "HDF Fixed Rows": 1
+  },
+  "time_index": 360,
+  "time_range": [
+    140,
+    150
+  ],
+  "time_range_basis": "centered on direct Face Flow peak at time index 144",
+  "velocity_polyline": {
+    "path": "tests\\data\\bald_eagle_velocity_profile_p06_polyline.geojson",
+    "sha256": "8a6991d0ecf1cd306292d2dbe35694a4c34491cc406f295846e2c751f135b0eb",
+    "sample_spacing": 50.0
+  },
+  "xs_polyline": {
+    "path": "tests\\data\\bald_eagle_xs_polyline.geojson",
+    "sha256": "abb67bdda098c70e7a12784eedf6245b65e200b0ce2d791ca1a1ca30c727fb51",
+    "sample_spacing": 50.0,
+    "name": "bald_eagle_xs_flow_polyline",
+    "source_geometry": "BaldEagleDamBrk.g08.hdf",
+    "source_index": 1,
+    "river": "Bald Eagle Cr.",
+    "reach": "Lock Haven",
+    "river_station": "136948",
+    "xs_name": "Low Water Bridge",
+    "bounds": [
+      1966305.14967545,
+      290453.771192196,
+      1970028.33303901,
+      292207.803498933
+    ]
+  },
+  "outputs": {
+    "wse_profile": {
+      "path": "tests\\data\\bald_eagle_wse_profile_p06.csv",
+      "sha256": "325c66d87c2f2e93840b45200536f812d965bb1435cbabacc81beff907b04c54",
+      "row_count": 111,
+      "valid_wse_rows": 36,
+      "valid_depth_rows": 36
+    },
+    "flow_profile": {
+      "path": "tests\\data\\bald_eagle_flow_profile_p06.csv",
+      "sha256": "d5458560cae6538bacd589982095ebc6800be1536032c17136e2a6ceb0855af7",
+      "row_count": 207,
+      "valid_flow_rows": 0,
+      "valid_depth_rows": 24
+    },
+    "velocity_timeseries": {
+      "path": "tests\\data\\bald_eagle_velocity_timeseries_p06.csv",
+      "sha256": "f52b3257928182318d6d556689cda5239daa0390f1e90e8872ac7df868bcccff",
+      "row_count": 1110,
+      "valid_velocity_mag_rows": 0,
+      "valid_depth_rows": 0
+    },
+    "wse_timeseries": {
+      "path": "tests\\data\\bald_eagle_wse_timeseries_p06.csv",
+      "sha256": "0e052265b9dfc0db3013b4c7c843fd9befd58c3cbec84c6b98dbceb5f9147ed5",
+      "row_count": 1110,
+      "valid_wse_rows": 0,
+      "valid_depth_rows": 0
+    },
+    "flow_timeseries": {
+      "path": "tests\\data\\bald_eagle_flow_timeseries_p06.csv",
+      "sha256": "8308d4697176d5d3c50b327e84c1f785107b71de1aadac4fb48162c5aaec5556",
+      "row_count": 2070,
+      "valid_flow_rows": 0,
+      "valid_depth_rows": 380
+    }
+  },
+  "notes": [
+    "The HEC-RAS 7.0 spatially partitioned p06 HDF avoids the RasMapperLib TimeSeries.Compute AccessViolationException.",
+    "Bald Eagle RasMapperLib VelocityTimeSeries and WaterSurfaceTimeSeries return missing values for these arbitrary polylines even though single-profile renderers return valid rows.",
+    "FlowRenderer.Compute currently returns missing flow values on the selected 2D XS cutline; depth is still populated from WaterSurfaceRenderer in flow queries."
+  ]
+}
