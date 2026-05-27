@@ -1091,16 +1091,18 @@ def _sync_breakline_spacing_text_to_hdf(
             for fid, _name, t_near, t_far, t_nr, t_pr in bl_spacings:
                 if fid >= len(data):
                     break
-                if abs(float(data["Cell Spacing Near"][fid]) - t_near) > 0.001:
+                # 0.0 means "not set in text" for spacing; skip to preserve HDF value
+                if t_near > 0 and abs(float(data["Cell Spacing Near"][fid]) - t_near) > 0.001:
                     data["Cell Spacing Near"][fid] = t_near
                     changed = True
-                if abs(float(data["Cell Spacing Far"][fid]) - t_far) > 0.001:
+                if t_far > 0 and abs(float(data["Cell Spacing Far"][fid]) - t_far) > 0.001:
                     data["Cell Spacing Far"][fid] = t_far
                     changed = True
-                if has_nr and int(data["Near Repeats"][fid]) != t_nr:
+                # Negative means "not set in text"; HDF uses uint8 so skip to avoid overflow
+                if has_nr and t_nr >= 0 and int(data["Near Repeats"][fid]) != t_nr:
                     data["Near Repeats"][fid] = t_nr
                     changed = True
-                if has_pr and int(data["Protection Radius"][fid]) != t_pr:
+                if has_pr and t_pr >= 0 and int(data["Protection Radius"][fid]) != t_pr:
                     data["Protection Radius"][fid] = t_pr
                     changed = True
             if changed:
@@ -1113,6 +1115,37 @@ def _sync_breakline_spacing_text_to_hdf(
         logger.warning(
             f"Could not sync breakline spacing to HDF: {exc}"
         )
+
+
+def _read_cell_size_from_hdf(
+    hdf_path: Path, mesh_name: str | None = None
+) -> float:
+    """Read cell size from HDF Attributes ``Spacing dx``.
+
+    Returns the stored spacing for the matching mesh, or 100.0 if the
+    attribute is missing, zero, or unreadable.
+    """
+    fallback = 100.0
+    try:
+        import h5py
+        attrs_key = "Geometry/2D Flow Areas/Attributes"
+        with h5py.File(str(hdf_path), "r") as hf:
+            if attrs_key not in hf:
+                return fallback
+            data = hf[attrs_key][:]
+            if "Spacing dx" not in data.dtype.names:
+                return fallback
+            for i in range(len(data)):
+                if mesh_name is not None and "Name" in data.dtype.names:
+                    row_name = data["Name"][i].decode().strip()
+                    if row_name != mesh_name:
+                        continue
+                dx = float(data["Spacing dx"][i])
+                if dx > 0:
+                    return dx
+    except Exception:
+        pass
+    return fallback
 
 
 def _sync_cell_size_to_hdf(
@@ -1443,7 +1476,8 @@ def _ensure_hdf(
         raise RuntimeError(
             _geometry_hdf_unavailable_message(geom_text_path, hdf_path, "missing")
         )
-    if geom_text_path.stat().st_mtime > hdf_path.stat().st_mtime:
+    # 2-second tolerance: file copy/extraction can leave text slightly newer
+    if geom_text_path.stat().st_mtime - hdf_path.stat().st_mtime > 2.0:
         message = _geometry_hdf_unavailable_message(
             geom_text_path,
             hdf_path,
@@ -2502,7 +2536,7 @@ class GeomMesh:
         geom_number: Union[str, Number, Path],
         mesh_name: Optional[str] = None,
         mesh_index: int = 0,
-        cell_size: float = 100.0,
+        cell_size: Optional[float] = None,
         bl_spacing: Optional[float] = None,
         near_repeats: Optional[int] = None,
         protection_radius: Optional[int] = None,
@@ -2541,7 +2575,10 @@ class GeomMesh:
             geom_number: Geometry number ("01", 1) or path to .g## text file.
             mesh_name: Name of 2D flow area (None = use mesh_index).
             mesh_index: 0-based index if mesh_name not provided.
-            cell_size: Base grid spacing in project units. Defaults to 100.0.
+            cell_size: Base grid spacing in project units.  When ``None``
+                (default), the value is read from the compiled geometry
+                HDF (``Spacing dx``).  Falls back to 100.0 if the HDF
+                attribute is missing or zero.
             bl_spacing: Legacy alias that applies the same positive value to both
                 near and far breakline spacing when explicit values are omitted.
             near_repeats: Number of offset seed rows on each side of breaklines.
@@ -2572,7 +2609,9 @@ class GeomMesh:
             geom_text_path=str(geom_path),
         )
 
-        cell_size = _normalize_positive_value(cell_size, "cell_size")
+        cell_size_provided = cell_size is not None
+        if cell_size_provided:
+            cell_size = _normalize_positive_value(cell_size, "cell_size")
         legacy_bl_spacing = _normalize_positive_value(
             bl_spacing, "bl_spacing", allow_none=True
         )
@@ -2602,6 +2641,13 @@ class GeomMesh:
                 hecras_dir=hecras_dir,
                 require_current=_require_current_hdf,
             )
+
+            # ── Step 1a: Auto-detect cell size from HDF if not provided ──
+            if not cell_size_provided:
+                cell_size = _read_cell_size_from_hdf(hdf_path, mesh_name)
+                logger.info(
+                    f"Auto-detected cell size {cell_size} from HDF Spacing dx"
+                )
 
             # Only modify .g01 text breakline properties if explicitly provided.
             # Otherwise the geometry's existing per-breakline values are
@@ -2962,7 +3008,7 @@ class GeomMesh:
     @log_call
     def generate_all(
         geom_number: Union[str, Number, Path],
-        cell_size: float = 100.0,
+        cell_size: Optional[float] = None,
         bl_spacing: Optional[float] = None,
         bl_spacing_near: Optional[float] = None,
         bl_spacing_far: Optional[float] = None,
@@ -2981,7 +3027,8 @@ class GeomMesh:
         Args:
             geom_number: Geometry number (e.g. ``"01"`` or ``1``),
                 or a direct path to a ``.g##`` text file.
-            cell_size: Default mesh cell size (metres).
+            cell_size: Default mesh cell size.  When ``None`` (default),
+                each mesh area reads its spacing from the compiled HDF.
             bl_spacing: Shorthand — sets both near and far breakline spacing.
             bl_spacing_near: Breakline near-spacing override.
             bl_spacing_far: Breakline far-spacing override.
