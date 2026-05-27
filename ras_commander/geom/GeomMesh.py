@@ -1091,16 +1091,18 @@ def _sync_breakline_spacing_text_to_hdf(
             for fid, _name, t_near, t_far, t_nr, t_pr in bl_spacings:
                 if fid >= len(data):
                     break
-                if abs(float(data["Cell Spacing Near"][fid]) - t_near) > 0.001:
+                # 0.0 means "not set in text" for spacing; skip to preserve HDF value
+                if t_near > 0 and abs(float(data["Cell Spacing Near"][fid]) - t_near) > 0.001:
                     data["Cell Spacing Near"][fid] = t_near
                     changed = True
-                if abs(float(data["Cell Spacing Far"][fid]) - t_far) > 0.001:
+                if t_far > 0 and abs(float(data["Cell Spacing Far"][fid]) - t_far) > 0.001:
                     data["Cell Spacing Far"][fid] = t_far
                     changed = True
-                if has_nr and int(data["Near Repeats"][fid]) != t_nr:
+                # Negative means "not set in text"; HDF uses uint8 so skip to avoid overflow
+                if has_nr and t_nr >= 0 and int(data["Near Repeats"][fid]) != t_nr:
                     data["Near Repeats"][fid] = t_nr
                     changed = True
-                if has_pr and int(data["Protection Radius"][fid]) != t_pr:
+                if has_pr and t_pr >= 0 and int(data["Protection Radius"][fid]) != t_pr:
                     data["Protection Radius"][fid] = t_pr
                     changed = True
             if changed:
