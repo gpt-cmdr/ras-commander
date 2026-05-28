@@ -8466,7 +8466,8 @@ class RasUnsteady:
             s = f'{v:.{decimals}f}'.rstrip('0').rstrip('.')
             if len(s) <= 8:
                 return s.rjust(8)
-        return f'{v:8.0f}'
+        s = f'{v:.0f}'
+        return s[:8].rjust(8)
 
     @staticmethod
     @log_call
