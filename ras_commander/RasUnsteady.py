@@ -3708,6 +3708,8 @@ class RasUnsteady:
 
         # Resolve unsteady file path
         if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            if ras_obj is None or getattr(ras_obj, 'project_folder', None) is None:
+                raise ValueError("Cannot resolve unsteady number without an initialized ras_object")
             # It's an unsteady number, resolve to full path
             unsteady_num = unsteady_file.zfill(2)
             unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{unsteady_num}"
@@ -4531,6 +4533,8 @@ class RasUnsteady:
 
         # Resolve unsteady file path
         if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            if ras_obj is None or getattr(ras_obj, 'project_folder', None) is None:
+                raise ValueError("Cannot resolve unsteady number without an initialized ras_object")
             # It's an unsteady number, resolve to full path
             unsteady_num = unsteady_file.zfill(2)
             unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{unsteady_num}"
@@ -5495,6 +5499,8 @@ class RasUnsteady:
 
         # Resolve unsteady file path
         if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            if ras_obj is None or getattr(ras_obj, 'project_folder', None) is None:
+                raise ValueError("Cannot resolve unsteady number without an initialized ras_object")
             unsteady_num = unsteady_file.zfill(2)
             unsteady_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{unsteady_num}"
         else:
