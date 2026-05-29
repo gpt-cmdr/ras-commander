@@ -59,6 +59,19 @@ GeomLandCover.set_base_mannings_n(geom_file, mannings_df)
 HdfLandCover.set_landcover_raster_map(sidecar_hdf, {"Forest": 0.12})
 ```
 
+## Manning's n Block Limit
+
+HEC-RAS enforces a **hard limit of 20 Manning's n blocks per 1D cross section**. Block counts of 21 or more are rejected at compute time with a `data_errors` limit violation. Verified empirically on HEC-RAS 6.6 across Muncie, Channel Modification, and Beaver Creek examples.
+
+```python
+from ras_commander.geom import GeomCrossSection
+
+# Constant available for programmatic checks
+GeomCrossSection.MAX_MANNINGS_N_BLOCKS  # 20
+
+# set_mannings_n() raises ValueError if mann_df exceeds 20 rows
+```
+
 ## Bank Station Interpolation
 
 Apply the 0.02-unit gap constant for bank station interpolation:

@@ -23,7 +23,8 @@ This file is the canonical local instruction file for `ras_commander/geom/`.
 - Standard numeric formatting is 8-character fields with 10 values per line.
 - Count declarations can describe pairs rather than raw scalar count. Interpret them carefully before reading or writing.
 - Preserve exact river, reach, and river-station identifiers. They are case-sensitive and must match the source file.
-- Respect the HEC-RAS cross-section point-count limit when modifying cross sections.
+- Respect the HEC-RAS cross-section point-count limit (500) when modifying cross sections.
+- Respect the Manning's n block limit of 20 per cross section (`GeomCrossSection.MAX_MANNINGS_N_BLOCKS`). HEC-RAS 6.6 rejects 21+ blocks at compute time.
 - Create or preserve `.bak` backups before destructive writes.
 
 ## Modification Rules

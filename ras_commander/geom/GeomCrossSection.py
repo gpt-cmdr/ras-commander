@@ -187,6 +187,7 @@ class GeomCrossSection:
     MANNINGS_VALUES_PER_LINE = 9  # 3 Manning's n triplets per line
     BLOCKED_OBSTRUCTION_VALUES_PER_LINE = 9  # 3 obstructions x 3 values
     MAX_XS_POINTS = 500         # HEC-RAS computational limit on cross section points
+    MAX_MANNINGS_N_BLOCKS = 20  # HEC-RAS 6.6 rejects 21+ blocks per cross section
 
     # Parsing constants
     MAX_PARSE_LINES = 100       # Safety limit on lines to parse for data blocks
@@ -4055,6 +4056,11 @@ class GeomCrossSection:
         Replaces the ``#Mann=`` data block in the geometry file with new
         breakpoint data. Creates a ``.bak`` backup before modifying.
 
+        HEC-RAS enforces a hard limit of 20 Manning's n blocks per cross
+        section. Block counts of 21 or more are rejected at compute time
+        with a data_errors limit violation (verified empirically on HEC-RAS
+        6.6 across multiple example models).
+
         Parameters:
             geom_file: Path to HEC-RAS geometry file
             river: River name
@@ -4062,12 +4068,14 @@ class GeomCrossSection:
             rs: River station
             mann_df: DataFrame with 'Station' and 'n_value' columns.
                      Rows define LOB/MC/ROB breakpoints in ascending station order.
+                     Maximum 20 rows (see MAX_MANNINGS_N_BLOCKS).
             format_flag: Format flag for ``#Mann=`` header (0 or -1)
             change_flag: Change flag for ``#Mann=`` header
 
         Raises:
             FileNotFoundError: If geometry file not found
-            ValueError: If cross section or ``#Mann=`` block not found
+            ValueError: If cross section or ``#Mann=`` block not found,
+                        or if mann_df exceeds 20 rows
 
         Example:
             >>> import pandas as pd
@@ -4084,6 +4092,11 @@ class GeomCrossSection:
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
         count = len(mann_df)
+        if count > GeomCrossSection.MAX_MANNINGS_N_BLOCKS:
+            raise ValueError(
+                f"Manning's n block count ({count}) exceeds HEC-RAS limit of "
+                f"{GeomCrossSection.MAX_MANNINGS_N_BLOCKS} per cross section"
+            )
 
         try:
             backup_path = GeomParser.create_backup(geom_file)
