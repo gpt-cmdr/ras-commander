@@ -10,7 +10,9 @@ This subpackage provides terrain capabilities for HEC-RAS projects:
 - Terrain modification analysis (cut/fill, no-net-fill) via RasMapperLib.dll
 
 Main Classes:
-    RasTerrain: Terrain HDF creation and VRT conversion (RasProcess.exe CLI)
+    RasTerrain: Terrain HDF creation, VRT conversion, XS interpolation surface
+        - compute_xs_interpolation_surface(): Delaunay TIN from XS bathymetry
+        - compute_bank_lines(): Generate bank lines from XS bank stations
         - create_terrain_hdf(): Create terrain HDF from input rasters
         - vrt_to_tiff(): Convert VRT to single TIFF with overviews
 
