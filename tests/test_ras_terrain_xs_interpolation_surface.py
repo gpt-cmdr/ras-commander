@@ -12,14 +12,26 @@ def _load_examples():
 
 
 @pytest.fixture
-def muncie_geom_hdf(tmp_path):
+def muncie_project(tmp_path):
     proj = RasExamples.extract_project("Muncie", output_path=tmp_path, suffix="xs_surf")
     ras = init_ras_project(proj, "6.5")
+    return proj, ras
+
+
+@pytest.fixture
+def muncie_geom_hdf(muncie_project):
+    proj, ras = muncie_project
     for _, row in ras.geom_df.iterrows():
         hdf_path = Path(f"{row['full_path']}.hdf")
         if hdf_path.exists():
             return hdf_path
     pytest.skip("No geometry HDF found in Muncie project")
+
+
+@pytest.fixture
+def muncie_geom_plain(muncie_project):
+    proj, ras = muncie_project
+    return Path(ras.geom_df.iloc[0]["full_path"])
 
 
 def test_xs_surface_hdf_channel_only(muncie_geom_hdf, tmp_path):
@@ -110,3 +122,20 @@ def test_xs_surface_raster_requires_cell_size(muncie_geom_hdf, tmp_path):
             muncie_geom_hdf,
             output_raster=tmp_path / "out.tif",
         )
+
+
+def test_xs_surface_plain_geometry(muncie_geom_plain):
+    result = RasTerrain.compute_xs_interpolation_surface(
+        muncie_geom_plain,
+        channel_only=True,
+        crs="EPSG:26916",
+    )
+
+    meta = result["metadata"]
+    assert meta["source_type"] == "plain_geometry"
+    assert meta["channel_only"] is True
+    assert meta["cross_section_count"] > 0
+    assert meta["interpolation_point_count"] > 0
+    assert meta["triangle_count"] > 0
+    assert not result["points"].empty
+    assert not result["triangles"].empty

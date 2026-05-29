@@ -76,6 +76,7 @@ class RasTerrain:
 
     Primary Methods:
         compute_bank_lines(): Generate bank lines from XS bank stations
+        compute_xs_interpolation_surface(): Build Delaunay TIN from XS data
         create_terrain_hdf(): Create HEC-RAS terrain HDF from input rasters
         vrt_to_tiff(): Convert VRT mosaic to single optimized TIFF
 
@@ -944,21 +945,21 @@ class RasTerrain:
                 invert=True,
                 all_touched=True,
             )
-        except Exception:
+        except (ImportError, AttributeError):
             pass
 
         try:
             from shapely import contains_xy
 
             return contains_xy(footprint, xx, yy)
-        except Exception:
+        except (ImportError, AttributeError):
             pass
 
         try:
             from shapely.vectorized import contains
 
             return contains(footprint, xx, yy)
-        except Exception:
+        except (ImportError, AttributeError):
             pass
 
         from shapely.geometry import Point
@@ -1004,7 +1005,7 @@ class RasTerrain:
             from rasterio.transform import from_origin
 
             transform = from_origin(minx, maxy, raster_cell_size, raster_cell_size)
-        except Exception:
+        except ImportError:
             transform = (minx, raster_cell_size, 0.0, maxy, 0.0, -raster_cell_size)
 
         x_coords = minx + (np.arange(width) + 0.5) * raster_cell_size
@@ -1101,12 +1102,12 @@ class RasTerrain:
         return output_gpkg
 
     @staticmethod
-    def _load_hdf_xs_surface_inputs(geom_path: Path, crs, channel_only: bool):
+    def _load_hdf_xs_surface_inputs(geom_path: Path, crs, channel_only: bool, ras_object=None):
         import geopandas as gpd
 
         from ..hdf import HdfXsec
 
-        xs_gdf = HdfXsec.get_cross_sections(str(geom_path))
+        xs_gdf = HdfXsec.get_cross_sections(str(geom_path), ras_object=ras_object)
         if xs_gdf is None or xs_gdf.empty:
             raise ValueError(f"No cross sections found in geometry HDF: {geom_path}")
         xs_gdf = RasTerrain._set_gdf_crs(xs_gdf, crs)
@@ -1193,7 +1194,7 @@ class RasTerrain:
         edge_infos: List[Dict[str, Any]] = []
         xs_records: List[Dict[str, Any]] = []
 
-        for xs_order, row in xs_df.iterrows():
+        for xs_order, (_, row) in enumerate(xs_df.iterrows()):
             river = str(row["River"])
             reach = str(row["Reach"])
             rs = str(row["RS"])
@@ -1231,7 +1232,7 @@ class RasTerrain:
                 river=river,
                 reach=reach,
                 rs=rs,
-                xs_order=int(xs_order),
+                xs_order=xs_order,
                 left_bank=left_bank,
                 right_bank=right_bank,
                 channel_only=channel_only,
@@ -1272,6 +1273,7 @@ class RasTerrain:
         crs: Optional[Union[str, int]] = None,
         channel_only: bool = True,
         nodata: float = -9999.0,
+        ras_object=None,
     ) -> Dict[str, Any]:
         """
         Compute a cross-section interpolation surface for channel bathymetry.
@@ -1296,6 +1298,7 @@ class RasTerrain:
             channel_only: If True, clip/interpolate between left and right
                 bank stations or RAS bank lines. If False, use full XS extents.
             nodata: NoData value for raster output.
+            ras_object: Optional RasPrj instance for project context.
 
         Returns:
             dict: Contains ``points``, ``triangles``, ``channel_polygon``,
@@ -1327,6 +1330,7 @@ class RasTerrain:
                 geom_path,
                 resolved_crs,
                 channel_only,
+                ras_object=ras_object,
             )
             source_type = "geometry_hdf"
         else:
