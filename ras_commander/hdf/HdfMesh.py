@@ -33,16 +33,24 @@ get_reference_line_internal_faces()
 get_mesh_cell_property_tables()
     Returns Cell Property Tables for each Cell in all 2D Flow Areas
 
-Write API (Face Property Tables):
----------------------------------
+Write API (Face Property Tables) — EXPERIMENTAL:
+-------------------------------------------------
+These write methods modify face-property tables in the geometry HDF. Edits are
+overwritten by the Windows HEC-RAS geometry preprocessor on the next plan
+execution. They are intended for use with the Linux two-phase execution
+workflow only. This is an undocumented and unsupported method of injecting modified HDF inputs
+into the solver and may produce erroneous results. Use with caution.
+
 set_mesh_face_property_tables()
     Write face property tables (all 4 columns) to geometry HDF
 extend_face_property_tables()
     Extend face tables to higher elevations with depth-varying Manning's n
 set_face_mannings_n_values()
     Replace Manning's n column in existing face tables via a user function
+recompute_face_mannings_n_from_landcover_curves()
+    Recompute face Manning's n from land-cover raster and depth-varying curves
 pin_property_tables()
-    Set or clear the Pinned attribute to prevent RASMapper overwrite
+    Set or clear the Pinned attribute on the mesh group
 
 Spatial Filtering (Polygon Mask):
 ---------------------------------
@@ -242,7 +250,7 @@ class HdfMesh:
             return GeoDataFrame()
         
     @staticmethod
-    @standardize_input(file_type='plan_hdf')
+    @standardize_input(file_type='geom_hdf')
     def get_mesh_cell_points(hdf_path: Path) -> 'GeoDataFrame':
         """
         Return 2D flow mesh cell center points.
@@ -301,7 +309,7 @@ class HdfMesh:
             return GeoDataFrame()
 
     @staticmethod
-    @standardize_input(file_type='plan_hdf')
+    @standardize_input(file_type='geom_hdf')
     def get_mesh_cell_faces(hdf_path: Path) -> 'GeoDataFrame':
         """
         Return 2D flow mesh cell faces.
@@ -1660,8 +1668,20 @@ class HdfMesh:
         """
         Write face property tables to geometry HDF.
 
-        Atomically rewrites both the Info and Values datasets for the
-        specified mesh. Unmodified faces retain their original tables.
+        Rewrites both the Info and Values datasets for the specified mesh
+        (non-atomic — back up the file before calling). Unmodified faces
+        retain their original tables.
+
+        .. warning::
+            Edits written by this method are overwritten by the Windows
+            HEC-RAS geometry preprocessor on the next plan execution. To
+            preserve edits through a solver run, use the Linux two-phase
+            workflow: (1) preprocess on Windows via
+            ``RasPreprocess.preprocess_plan()`` to generate the ``.tmp.hdf``,
+            (2) apply edits to the ``.tmp.hdf``, (3) execute with
+            ``RasCmdr.compute_plan_linux()``. This is an undocumented and unsupported method
+            of injecting modified HDF inputs into the solver and may produce
+            erroneous results. Use with caution.
 
         Parameters
         ----------
@@ -1707,8 +1727,6 @@ class HdfMesh:
 
             info_attrs = dict(old_info_ds.attrs)
             values_attrs = dict(old_values_ds.attrs)
-            info_create_kwargs = HdfMesh._dataset_create_kwargs(old_info_ds)
-            values_create_kwargs = HdfMesh._dataset_create_kwargs(old_values_ds)
 
             new_face_slices = []
             for face_id in range(num_faces):
@@ -1734,6 +1752,13 @@ class HdfMesh:
                 new_info[i, 1] = len(sl)
                 offset += len(sl)
 
+            info_create_kwargs = HdfMesh._dataset_create_kwargs(
+                old_info_ds, new_shape=new_info.shape
+            )
+            values_create_kwargs = HdfMesh._dataset_create_kwargs(
+                old_values_ds, new_shape=new_values.shape
+            )
+
             del hdf_file[info_path]
             del hdf_file[values_path]
 
@@ -1758,7 +1783,10 @@ class HdfMesh:
         )
 
     @staticmethod
-    def _dataset_create_kwargs(dataset: h5py.Dataset) -> Dict[str, Any]:
+    def _dataset_create_kwargs(
+        dataset: h5py.Dataset,
+        new_shape: Optional[Tuple[int, ...]] = None,
+    ) -> Dict[str, Any]:
         """
         Return creation keyword arguments needed to recreate an HDF dataset.
 
@@ -1770,9 +1798,21 @@ class HdfMesh:
         kwargs: Dict[str, Any] = {}
 
         if dataset.chunks is not None:
-            kwargs["chunks"] = dataset.chunks
+            chunks = dataset.chunks
+            if new_shape is not None:
+                chunks = tuple(
+                    min(chunk_dim, shape_dim)
+                    for chunk_dim, shape_dim in zip(chunks, new_shape)
+                )
+            kwargs["chunks"] = chunks
         if dataset.maxshape is not None:
-            kwargs["maxshape"] = dataset.maxshape
+            maxshape = dataset.maxshape
+            if new_shape is not None:
+                maxshape = tuple(
+                    None if max_dim is None else max(max_dim, shape_dim)
+                    for max_dim, shape_dim in zip(maxshape, new_shape)
+                )
+            kwargs["maxshape"] = maxshape
         if dataset.compression is not None:
             kwargs["compression"] = dataset.compression
         if dataset.compression_opts is not None:
@@ -1805,10 +1845,22 @@ class HdfMesh:
         Extend face tables to higher elevations with depth-varying Manning's n.
 
         For each target face, appends rows from the current table maximum up
-        to ``extension_elevation``. Area and Wetted Perimeter are extrapolated
-        assuming a rectangular cross section above the terrain maximum (top
-        width equals the last Wetted Perimeter value). Manning's n at each
-        new elevation is computed via ``mannings_n_func``.
+        to ``extension_elevation``. Area is extrapolated above the terrain
+        maximum using the native face length when available, falling back to
+        the last Wetted Perimeter value. Wetted Perimeter is held at the last
+        tabulated value. Manning's n at each new elevation is computed via
+        ``mannings_n_func``.
+
+        .. warning::
+            Edits written by this method are overwritten by the Windows
+            HEC-RAS geometry preprocessor on the next plan execution. To
+            preserve edits through a solver run, use the Linux two-phase
+            workflow: (1) preprocess on Windows via
+            ``RasPreprocess.preprocess_plan()`` to generate the ``.tmp.hdf``,
+            (2) apply edits to the ``.tmp.hdf``, (3) execute with
+            ``RasCmdr.compute_plan_linux()``. This is an undocumented and unsupported method
+            of injecting modified HDF inputs into the solver and may produce
+            erroneous results. Use with caution.
 
         Parameters
         ----------
@@ -1847,6 +1899,9 @@ class HdfMesh:
         info_path = f"{base_path}/Faces Area Elevation Info"
         values_path = f"{base_path}/Faces Area Elevation Values"
 
+        if elevation_step <= 0:
+            raise ValueError("elevation_step must be positive")
+
         resolved = HdfMesh._resolve_face_ids(
             hdf_path, mesh_name, face_ids, polygon, region_name
         )
@@ -1856,6 +1911,12 @@ class HdfMesh:
                 raise KeyError(f"Face property tables not found for mesh '{mesh_name}'")
             old_info = hdf_file[info_path][()]
             old_values = hdf_file[values_path][()]
+            normals_path = f"{base_path}/Faces NormalUnitVector and Length"
+            face_lengths = (
+                hdf_file[normals_path][:, 2]
+                if normals_path in hdf_file and hdf_file[normals_path].shape[1] >= 3
+                else None
+            )
 
         num_faces = old_info.shape[0]
         if resolved is None:
@@ -1883,17 +1944,28 @@ class HdfMesh:
             last_wp = face_vals[-1, 2]
             base_n = face_vals[-1, 3]
             top_width = last_wp
+            if face_lengths is not None and fid < len(face_lengths):
+                face_length = float(face_lengths[fid])
+                if np.isfinite(face_length) and face_length > 0:
+                    top_width = face_length
 
             new_rows = []
-            elev = max_elev + elevation_step
-            while elev <= extension_elevation + 1e-6:
+
+            def _build_extended_row(elev):
                 depth_above_max = elev - max_elev
                 new_area = last_area + top_width * depth_above_max
-                new_wp = last_wp + 2.0 * depth_above_max
+                new_wp = last_wp
                 total_depth = elev - min_elev
                 new_n = mannings_n_func(total_depth, base_n)
-                new_rows.append([elev, new_area, new_wp, new_n])
+                return [elev, new_area, new_wp, new_n]
+
+            elev = max_elev + elevation_step
+            while elev <= extension_elevation + 1e-6:
+                new_rows.append(_build_extended_row(elev))
                 elev += elevation_step
+
+            if not new_rows or new_rows[-1][0] < extension_elevation - 1e-6:
+                new_rows.append(_build_extended_row(extension_elevation))
 
             if not new_rows:
                 continue
@@ -1930,6 +2002,17 @@ class HdfMesh:
 
         Preserves Elevation, Area, and Wetted Perimeter columns. Only the
         Manning's n column is recomputed.
+
+        .. warning::
+            Edits written by this method are overwritten by the Windows
+            HEC-RAS geometry preprocessor on the next plan execution. To
+            preserve edits through a solver run, use the Linux two-phase
+            workflow: (1) preprocess on Windows via
+            ``RasPreprocess.preprocess_plan()`` to generate the ``.tmp.hdf``,
+            (2) apply edits to the ``.tmp.hdf``, (3) execute with
+            ``RasCmdr.compute_plan_linux()``. This is an undocumented and unsupported method
+            of injecting modified HDF inputs into the solver and may produce
+            erroneous results. Use with caution.
 
         Parameters
         ----------
@@ -2010,6 +2093,178 @@ class HdfMesh:
 
     @staticmethod
     @log_call
+    def recompute_face_mannings_n_from_landcover_curves(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        curves: pd.DataFrame,
+        landcover_hdf_path: Optional[Union[str, Path]] = None,
+        face_ids: Optional[List[int]] = None,
+        sample_spacing: float = 10.0,
+        pin_tables: bool = True,
+    ) -> int:
+        """
+        Recompute face-table Manning's n values from land-cover roughness curves.
+
+        The land-cover raster is sampled along each target face. For each face
+        property-table elevation, class-specific roughness values are interpolated
+        by depth and composited using a power-mean with exponent 1.5 to
+        approximate conveyance-weighted composite roughness across sampled
+        land-cover classes. Faces that fall outside the raster extent or have
+        only nodata pixels retain their original Manning's n values and are not
+        included in the returned count.
+
+        .. warning::
+            Edits written by this method are overwritten by the Windows
+            HEC-RAS geometry preprocessor on the next plan execution. To
+            preserve edits through a solver run, use the Linux two-phase
+            workflow: (1) preprocess on Windows via
+            ``RasPreprocess.preprocess_plan()`` to generate the ``.tmp.hdf``,
+            (2) apply edits to the ``.tmp.hdf``, (3) execute with
+            ``RasCmdr.compute_plan_linux()``. This is an undocumented and unsupported method
+            of injecting modified HDF inputs into the solver and may produce
+            erroneous results. Use with caution.
+
+        Parameters
+        ----------
+        hdf_path : Union[str, Path]
+            Path to the HEC-RAS geometry HDF file.
+        mesh_name : str
+            Name of the 2D flow area.
+        curves : pd.DataFrame
+            Depth-varying roughness curves with ``pixel_value``, ``depth``, and
+            ``mannings_n`` columns.
+        landcover_hdf_path : Optional[Union[str, Path]]
+            Land-cover HDF path. The sidecar ``.tif`` raster is sampled.
+        face_ids : Optional[List[int]]
+            Faces to recompute. ``None`` recomputes all faces with sampled
+            land-cover classes.
+        sample_spacing : float, default 10.0
+            Maximum spacing for additional samples along each face.
+        pin_tables : bool, default True
+            Pin tables after modification.
+
+        Returns
+        -------
+        int
+            Number of faces modified.
+        """
+        if landcover_hdf_path is None:
+            raise ValueError("landcover_hdf_path is required")
+        if sample_spacing <= 0:
+            raise ValueError("sample_spacing must be positive")
+
+        import rasterio
+
+        hdf_path = Path(hdf_path)
+        landcover_hdf_path = Path(landcover_hdf_path)
+        landcover_tif_path = landcover_hdf_path.with_suffix(".tif")
+        if not landcover_tif_path.exists():
+            candidates = sorted(
+                landcover_hdf_path.parent.glob(f"{landcover_hdf_path.stem}*.tif")
+            )
+            if not candidates:
+                raise FileNotFoundError(
+                    f"Land cover TIF not found for {landcover_hdf_path}"
+                )
+            landcover_tif_path = candidates[0]
+
+        required = {"pixel_value", "depth", "mannings_n"}
+        missing = required - set(curves.columns)
+        if missing:
+            raise ValueError(f"curves missing columns: {sorted(missing)}")
+
+        curve_lookup = {}
+        for pixel_value, group in curves.groupby("pixel_value"):
+            group = group.sort_values("depth")
+            curve_lookup[int(pixel_value)] = (
+                group["depth"].to_numpy(dtype=float),
+                group["mannings_n"].to_numpy(dtype=float),
+            )
+
+        face_tables_by_mesh = HdfMesh.get_mesh_face_property_tables(hdf_path)
+        if mesh_name not in face_tables_by_mesh:
+            raise KeyError(f"Face property tables not found for mesh '{mesh_name}'")
+        face_tables = face_tables_by_mesh[mesh_name]
+
+        faces_gdf = HdfMesh.get_mesh_cell_faces(hdf_path)
+        if faces_gdf.empty:
+            return 0
+        faces_gdf = faces_gdf[faces_gdf["mesh_name"] == mesh_name]
+
+        if face_ids is None:
+            target_ids = sorted(face_tables["Face ID"].astype(int).unique())
+        else:
+            target_ids = [int(fid) for fid in face_ids]
+
+        def _line_sample_points(line):
+            points = list(line.coords)
+            if line.length > sample_spacing:
+                distance = sample_spacing
+                while distance < line.length:
+                    points.append(line.interpolate(distance).coords[0])
+                    distance += sample_spacing
+            return points
+
+        modified_tables: Dict[int, pd.DataFrame] = {}
+        with rasterio.open(landcover_tif_path) as src:
+            nodata = src.nodata
+            for fid in target_ids:
+                face_rows = faces_gdf[faces_gdf["face_id"].astype(int) == fid]
+                if face_rows.empty:
+                    continue
+
+                sample_points = _line_sample_points(face_rows.iloc[0].geometry)
+                sampled_classes = set()
+                for sample in src.sample(sample_points):
+                    if len(sample) == 0:
+                        continue
+                    value = sample[0]
+                    if nodata is not None and value == nodata:
+                        continue
+                    pixel_value = int(value)
+                    if pixel_value in curve_lookup:
+                        sampled_classes.add(pixel_value)
+
+                if not sampled_classes:
+                    continue
+
+                face_table = face_tables[
+                    face_tables["Face ID"].astype(int) == fid
+                ].copy()
+                if face_table.empty:
+                    continue
+
+                min_elev = float(face_table["Elevation"].min())
+                updated = face_table[
+                    ['Elevation', 'Area', 'Wetted Perimeter', "Manning's n"]
+                ].copy()
+                for idx, row in updated.iterrows():
+                    depth = float(row["Elevation"]) - min_elev
+                    n_values = []
+                    for pixel_value in sampled_classes:
+                        depths, mannings_values = curve_lookup[pixel_value]
+                        n_values.append(
+                            float(np.interp(depth, depths, mannings_values))
+                        )
+                    updated.at[idx, "Manning's n"] = float(
+                        np.mean(np.power(n_values, 1.5)) ** (1.0 / 1.5)
+                    )
+
+                modified_tables[fid] = updated
+
+        if modified_tables:
+            HdfMesh.set_mesh_face_property_tables(
+                hdf_path, mesh_name, modified_tables, pin_tables=pin_tables
+            )
+
+        logger.info(
+            f"Recomputed face Manning's n for {len(modified_tables)} faces "
+            f"in mesh '{mesh_name}'"
+        )
+        return len(modified_tables)
+
+    @staticmethod
+    @log_call
     def pin_property_tables(
         hdf_path: Union[str, Path],
         mesh_name: str,
@@ -2018,8 +2273,13 @@ class HdfMesh:
         """
         Set or clear the Pinned attribute on the mesh group.
 
-        When pinned, RASMapper will not overwrite externally-modified
-        face property tables during geometry preprocessing.
+        .. warning::
+            This attribute may be recognized by RASMapper (the geometry
+            editor GUI) but is **ignored by the Windows HEC-RAS solver**
+            during geometry preprocessing. Face property table edits
+            survive a solver run only via the Linux two-phase workflow.
+            Do not rely on this attribute to protect edits when running
+            plans through the Windows solver.
 
         Parameters
         ----------

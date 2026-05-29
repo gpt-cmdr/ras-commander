@@ -73,6 +73,48 @@ def _write_face_property_hdf(path: Path) -> Path:
     return path
 
 
+def _write_chunked_face_property_hdf(path: Path) -> Path:
+    mesh_name = "MainArea"
+    attrs_dtype = np.dtype([("Name", "S32")])
+    attrs = np.array([(mesh_name.encode("utf-8"),)], dtype=attrs_dtype)
+
+    face_values = np.array(
+        [
+            [100.0, 0.0, 0.0, 0.04],
+            [101.0, 5.0, 2.5, 0.04],
+            [102.0, 10.0, 5.0, 0.04],
+            [103.0, 15.0, 7.5, 0.04],
+            [100.0, 0.0, 0.0, 0.05],
+            [101.0, 4.0, 2.0, 0.05],
+            [102.0, 8.0, 4.0, 0.05],
+            [103.0, 12.0, 6.0, 0.05],
+            [100.0, 0.0, 0.0, 0.06],
+            [101.0, 6.0, 3.0, 0.06],
+            [102.0, 12.0, 6.0, 0.06],
+            [103.0, 18.0, 9.0, 0.06],
+        ],
+        dtype=np.float64,
+    )
+    face_info = np.array([[0, 4], [4, 4], [8, 4]], dtype=np.int32)
+
+    with h5py.File(path, "w") as hdf:
+        hdf.create_dataset("Geometry/2D Flow Areas/Attributes", data=attrs)
+        mesh_group = hdf.create_group(f"Geometry/2D Flow Areas/{mesh_name}")
+        mesh_group.create_dataset(
+            "Faces Area Elevation Info",
+            data=face_info,
+            chunks=(1024, 2),
+            maxshape=(None, 2),
+        )
+        mesh_group.create_dataset(
+            "Faces Area Elevation Values",
+            data=face_values,
+            chunks=(12, 4),
+        )
+
+    return path
+
+
 def _write_landcover_sidecar(path: Path) -> Path:
     with h5py.File(path, "w") as hdf:
         hdf.create_dataset("IDs", data=np.array([0, 1, 2], dtype=np.int32))
@@ -300,6 +342,36 @@ def test_extend_face_property_tables_rejects_nonpositive_step(tmp_path):
             mannings_n_func=lambda depth, base_n: base_n,
             pin_tables=False,
         )
+
+
+def test_set_mesh_face_property_tables_clamps_chunks_for_smaller_tables(tmp_path):
+    hdf_path = _write_chunked_face_property_hdf(tmp_path / "chunked.g01.hdf")
+    replacement = pd.DataFrame(
+        {
+            "Elevation": [100.0],
+            "Area": [0.0],
+            "Wetted Perimeter": [0.0],
+            "Manning's n": [0.035],
+        }
+    )
+
+    HdfMesh.set_mesh_face_property_tables(
+        hdf_path,
+        "MainArea",
+        {0: replacement},
+        pin_tables=False,
+    )
+
+    with h5py.File(hdf_path, "r") as hdf:
+        info = hdf["Geometry/2D Flow Areas/MainArea/Faces Area Elevation Info"]
+        values = hdf["Geometry/2D Flow Areas/MainArea/Faces Area Elevation Values"]
+
+        assert info.shape == (3, 2)
+        assert info.chunks == (3, 2)
+        assert values.shape == (9, 4)
+        assert values.chunks == (9, 4)
+        assert np.all(np.asarray(info.chunks) <= np.asarray(info.shape))
+        assert np.all(np.asarray(values.chunks) <= np.asarray(values.shape))
 
 
 def test_build_landcover_depth_roughness_curves_reads_v5_sidecar(tmp_path):
