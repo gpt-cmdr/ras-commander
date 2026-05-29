@@ -4686,7 +4686,9 @@ Completed: 12 of 12 storms
 </code></pre></div>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Display results summary from results_df</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># Shows execution status, completion, errors/warnings, and runtime for all plans</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;plan_title&#39;</span><span class="p">,</span> <span class="s1">&#39;completed&#39;</span><span class="p">,</span> <span class="s1">&#39;has_errors&#39;</span><span class="p">,</span> <span class="s1">&#39;has_warnings&#39;</span><span class="p">,</span> <span class="s1">&#39;runtime_complete_process_hours&#39;</span><span class="p">]]</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="n">desired_cols</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;plan_title&#39;</span><span class="p">,</span> <span class="s1">&#39;completed&#39;</span><span class="p">,</span> <span class="s1">&#39;has_errors&#39;</span><span class="p">,</span> <span class="s1">&#39;has_warnings&#39;</span><span class="p">,</span> <span class="s1">&#39;runtime_complete_process_hours&#39;</span><span class="p">]</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="n">available_cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">desired_cols</span> <span class="k">if</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="n">ras</span><span class="o">.</span><span class="n">results_df</span><span class="p">[</span><span class="n">available_cols</span><span class="p">]</span>
 </span></code></pre></div>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Summary visualization</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="k">if</span> <span class="n">storm_results</span><span class="p">:</span>
@@ -5026,7 +5028,7 @@ Each year gets its own project folder with full precipitation data export.</p>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># OPTIONAL: Process all AORC years</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># Set PROCESS_ALL_YEARS = True to run</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="n">PROCESS_ALL_YEARS</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># Set to True to run</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="n">PROCESS_ALL_YEARS</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># Set to True to process all years</span>
 </span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>
 </span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="k">if</span> <span class="n">PROCESS_ALL_YEARS</span><span class="p">:</span>
 </span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
@@ -5202,7 +5204,7 @@ Each year gets its own project folder with full precipitation data export.</p>
 </span><span id="__span-22-177"><a id="__codelineno-22-177" name="__codelineno-22-177" href="#__codelineno-22-177"></a>
 </span><span id="__span-22-178"><a id="__codelineno-22-178" name="__codelineno-22-178" href="#__codelineno-22-178"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">TOTAL: </span><span class="si">{</span><span class="n">total_storms</span><span class="si">}</span><span class="s2"> storms, </span><span class="si">{</span><span class="n">total_success</span><span class="si">}</span><span class="s2"> successful simulations&quot;</span><span class="p">)</span>
 </span><span id="__span-22-179"><a id="__codelineno-22-179" name="__codelineno-22-179" href="#__codelineno-22-179"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-22-180"><a id="__codelineno-22-180" name="__codelineno-22-180" href="#__codelineno-22-180"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Set PROCESS_ALL_YEARS = True to process all AORC years (1979-2024)&quot;</span><span class="p">)</span>
+</span><span id="__span-22-180"><a id="__codelineno-22-180" name="__codelineno-22-180" href="#__codelineno-22-180"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Set PROCESS_ALL_YEARS = False to process all AORC years (1979-2024)&quot;</span><span class="p">)</span>
 </span><span id="__span-22-181"><a id="__codelineno-22-181" name="__codelineno-22-181" href="#__codelineno-22-181"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Warning: This will take many hours and generate many files!&quot;</span><span class="p">)</span>
 </span><span id="__span-22-182"><a id="__codelineno-22-182" name="__codelineno-22-182" href="#__codelineno-22-182"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Simulation buffer: </span><span class="si">{</span><span class="n">RESPONSE_BUFFER_HOURS</span><span class="si">}</span><span class="s2"> hours (data-driven from watershed response analysis)&quot;</span><span class="p">)</span>
 </span><span id="__span-22-183"><a id="__codelineno-22-183" name="__codelineno-22-183" href="#__codelineno-22-183"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Each year will include:&quot;</span><span class="p">)</span>
@@ -5233,7 +5235,7 @@ Each year gets its own project folder with full precipitation data export.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 29, 2026 17:11:50 UTC">May 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 29, 2026 17:15:24 UTC">May 29, 2026</span>
   </span>
 
     
@@ -5243,7 +5245,7 @@ Each year gets its own project folder with full precipitation data export.</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 29, 2026 17:11:50 UTC">May 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 29, 2026 17:15:24 UTC">May 29, 2026</span>
   </span>
 
     
