@@ -960,13 +960,13 @@ class RasUtils:
         ras_obj.check_initialized()
         
         try:
-            with open(prj_file, 'r') as f:
+            with open(prj_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
-            
+
             new_line = f"{file_type} File={file_type[0].lower()}{new_num}\n"
             lines.append(new_line)
-            
-            with open(prj_file, 'w') as f:
+
+            with open(prj_file, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(lines)
             logger.info(f"Project file updated with new {file_type} entry: {new_num}")
         except Exception as e:
@@ -997,7 +997,7 @@ class RasUtils:
         target = f"{file_type} File={prefix}{number}"
 
         try:
-            with open(prj_file, 'r') as f:
+            with open(prj_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             new_lines = [line for line in lines if line.strip() != target]
@@ -1006,7 +1006,7 @@ class RasUtils:
                 logger.warning(f"Entry '{target}' not found in {prj_file}")
                 return
 
-            with open(prj_file, 'w') as f:
+            with open(prj_file, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(new_lines)
             logger.info(f"Removed {file_type} entry {number} from project file")
         except Exception as e:
@@ -1038,7 +1038,7 @@ class RasUtils:
         new_line_content = f"{file_type} File={prefix}{new_number}"
 
         try:
-            with open(prj_file, 'r') as f:
+            with open(prj_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             found = False
@@ -1052,7 +1052,7 @@ class RasUtils:
                 logger.warning(f"Entry '{old_line}' not found in {prj_file}")
                 return
 
-            with open(prj_file, 'w') as f:
+            with open(prj_file, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(lines)
             logger.info(f"Renamed {file_type} entry {old_number} to {new_number} in project file")
         except Exception as e:

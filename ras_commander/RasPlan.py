@@ -4207,7 +4207,7 @@ class RasPlan:
             raise ValueError(f"Plan {plan_number} does not exist in the project")
 
         # Check if this is the current plan - warn but allow deletion
-        with open(ras_obj.prj_file, 'r') as f:
+        with open(ras_obj.prj_file, 'r', encoding='utf-8', errors='replace') as f:
             prj_content = f.read()
         if f"Current Plan=p{plan_number}" in prj_content:
             logger.warning(
@@ -4237,11 +4237,11 @@ class RasPlan:
         RasUtils.remove_prj_entry(ras_obj.prj_file, 'Plan', plan_number, ras_object=ras_obj)
 
         # Remove Current Plan line if it references this plan
-        with open(ras_obj.prj_file, 'r') as f:
+        with open(ras_obj.prj_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
         new_lines = [line for line in lines if line.strip() != f"Current Plan=p{plan_number}"]
         if len(new_lines) < len(lines):
-            with open(ras_obj.prj_file, 'w') as f:
+            with open(ras_obj.prj_file, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(new_lines)
             logger.info(f"Removed Current Plan=p{plan_number} line from .prj")
 
@@ -4303,12 +4303,12 @@ class RasPlan:
         RasUtils.rename_prj_entry(ras_obj.prj_file, 'Plan', old_number, new_number, ras_object=ras_obj)
 
         # Update Current Plan if it references the old number
-        with open(ras_obj.prj_file, 'r') as f:
+        with open(ras_obj.prj_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
         for i, line in enumerate(lines):
             if line.strip() == f"Current Plan=p{old_number}":
                 lines[i] = f"Current Plan=p{new_number}\n"
-                with open(ras_obj.prj_file, 'w') as f:
+                with open(ras_obj.prj_file, 'w', encoding='utf-8', errors='replace') as f:
                     f.writelines(lines)
                 logger.info(f"Updated Current Plan from p{old_number} to p{new_number}")
                 break
