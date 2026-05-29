@@ -4377,14 +4377,14 @@ Data points between 1999-02-18 12:00:00 and 1999-02-20 12:00:00: 4450
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># OPTIONAL: Multi-version unsteady comparison (SKIP for automated testing)</span>
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="c1"># This cell runs multiple HEC-RAS versions and takes 1-2 hours.</span>
-</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="c1"># Set SKIP_MULTIVERSION = False to run the comparison.</span>
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="c1"># Set SKIP_MULTIVERSION = True to run the comparison.</span>
 </span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>
-</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="n">SKIP_MULTIVERSION</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># Set to False to run optional multi-version comparisons</span>
+</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="n">SKIP_MULTIVERSION</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># Set to False to run optional multi-version comparisons</span>
 </span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>
 </span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a><span class="k">if</span> <span class="n">SKIP_MULTIVERSION</span><span class="p">:</span>
 </span><span id="__span-26-11"><a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipping multi-version unsteady comparison (SKIP_MULTIVERSION=True)&quot;</span><span class="p">)</span>
-</span><span id="__span-26-12"><a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Set SKIP_MULTIVERSION = False in the cell above to run this analysis&quot;</span><span class="p">)</span>
+</span><span id="__span-26-12"><a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Set SKIP_MULTIVERSION = True in the cell above to run this analysis&quot;</span><span class="p">)</span>
 </span><span id="__span-26-13"><a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a>    <span class="n">unsteady_results</span> <span class="o">=</span> <span class="p">{}</span>
 </span><span id="__span-26-14"><a id="__codelineno-26-14" name="__codelineno-26-14" href="#__codelineno-26-14"></a>    <span class="n">max_ws_data</span> <span class="o">=</span> <span class="p">{}</span>
 </span><span id="__span-26-15"><a id="__codelineno-26-15" name="__codelineno-26-15" href="#__codelineno-26-15"></a><span class="k">else</span><span class="p">:</span>
@@ -5142,7 +5142,7 @@ True [&#39;Starting Unsteady Computations&#39;, &#39;Computing&#39;, &#39;Comput
 </span><span id="__span-27-102"><a id="__codelineno-27-102" name="__codelineno-27-102" href="#__codelineno-27-102"></a>
 </span><span id="__span-27-103"><a id="__codelineno-27-103" name="__codelineno-27-103" href="#__codelineno-27-103"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-27-104"><a id="__codelineno-27-104" name="__codelineno-27-104" href="#__codelineno-27-104"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipping multi-version unsteady comparison plots (no data)&quot;</span><span class="p">)</span>
-</span><span id="__span-27-105"><a id="__codelineno-27-105" name="__codelineno-27-105" href="#__codelineno-27-105"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Set SKIP_MULTIVERSION = False in cell above to run the analysis&quot;</span><span class="p">)</span>
+</span><span id="__span-27-105"><a id="__codelineno-27-105" name="__codelineno-27-105" href="#__codelineno-27-105"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Set SKIP_MULTIVERSION = True in cell above to run the analysis&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Plotting 36 stations (every 5th of 178 total)
 </code></pre></div>
@@ -5565,12 +5565,12 @@ Max WSE by version at station 138154.4:
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="c1"># OPTIONAL: Multi-version steady state comparison (SKIP for automated testing)</span>
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="c1"># This cell runs multiple HEC-RAS versions and can take 30+ minutes.</span>
-</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="c1"># Set SKIP_MULTIVERSION = False in cell 29 to run this comparison.</span>
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="c1"># Set SKIP_MULTIVERSION = True in cell 29 to run this comparison.</span>
 </span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>
 </span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a><span class="k">if</span> <span class="n">SKIP_MULTIVERSION</span><span class="p">:</span>
 </span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipping multi-version steady comparison (SKIP_MULTIVERSION=True)&quot;</span><span class="p">)</span>
-</span><span id="__span-30-10"><a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Set SKIP_MULTIVERSION = False in cell above to run this analysis&quot;</span><span class="p">)</span>
+</span><span id="__span-30-10"><a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Set SKIP_MULTIVERSION = True in cell above to run this analysis&quot;</span><span class="p">)</span>
 </span><span id="__span-30-11"><a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a>    <span class="n">steady_results</span> <span class="o">=</span> <span class="p">{}</span>
 </span><span id="__span-30-12"><a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-30-13"><a id="__codelineno-30-13" name="__codelineno-30-13" href="#__codelineno-30-13"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasPlan</span>
@@ -6459,7 +6459,7 @@ True [&#39;Starting Steady Computations&#39;, &#39;Computing&#39;, &#39;Computat
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 29, 2026 02:37:28 UTC">May 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 29, 2026 14:07:36 UTC">May 29, 2026</span>
   </span>
 
     
@@ -6469,7 +6469,7 @@ True [&#39;Starting Steady Computations&#39;, &#39;Computing&#39;, &#39;Computat
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 29, 2026 02:37:28 UTC">May 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 29, 2026 14:07:36 UTC">May 29, 2026</span>
   </span>
 
     

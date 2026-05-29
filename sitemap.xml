@@ -181,23 +181,11 @@
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/201_executed/</loc>
-         <lastmod>2026-05-29</lastmod>
-    </url>
-    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/202_2d_plaintext_geometry/</loc>
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/203_executed/</loc>
-         <lastmod>2026-05-29</lastmod>
-    </url>
-    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/203_htab_parameter_optimization/</loc>
-         <lastmod>2026-05-29</lastmod>
-    </url>
-    <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/205_executed/</loc>
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
@@ -221,15 +209,15 @@
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/210_fixit_blocked_obstructions/</loc>
-         <lastmod>2026-05-29</lastmod>
-    </url>
-    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/210_xs_interpolation_settings/</loc>
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/211_final_mannings_and_infiltration/</loc>
+         <lastmod>2026-05-29</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/211_fixit_blocked_obstructions/</loc>
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
@@ -309,10 +297,6 @@
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/311_validating_dss_paths/</loc>
-         <lastmod>2026-05-29</lastmod>
-    </url>
-    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/312_boundary_df_qmult_dss_paths/</loc>
          <lastmod>2026-05-29</lastmod>
     </url>
@@ -321,15 +305,15 @@
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/313_hms_to_ras_boundary_matching_executed/</loc>
-         <lastmod>2026-05-29</lastmod>
-    </url>
-    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/314_reference_line_generation/</loc>
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/315_2d_computation_options/</loc>
+         <lastmod>2026-05-29</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/315_validating_dss_paths/</loc>
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
@@ -497,19 +481,7 @@
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/914_model_validation_with_usgs/</loc>
-         <lastmod>2026-05-29</lastmod>
-    </url>
-    <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/915_executed/</loc>
-         <lastmod>2026-05-29</lastmod>
-    </url>
-    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/915_realtime_forecast_workflow/</loc>
-         <lastmod>2026-05-29</lastmod>
-    </url>
-    <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/916_executed/</loc>
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
@@ -521,15 +493,19 @@
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/917_stofs3d_coastal_boundary/</loc>
-         <lastmod>2026-05-29</lastmod>
-    </url>
-    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/918_hms_ras_coupled_forecast/</loc>
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/918_model_validation_with_usgs/</loc>
+         <lastmod>2026-05-29</lastmod>
+    </url>
+    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/919_operational_forecast_cycling/</loc>
+         <lastmod>2026-05-29</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/919_stofs3d_coastal_boundary/</loc>
          <lastmod>2026-05-29</lastmod>
     </url>
     <url>
