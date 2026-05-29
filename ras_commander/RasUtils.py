@@ -879,12 +879,12 @@ class RasUtils:
         >>> RasUtils.update_file(Path("example.txt"), update_content, "Hello")
         """
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
-            
+
             updated_lines = update_function(lines, *args) if args else update_function(lines)
-            
-            with open(file_path, 'w') as f:
+
+            with open(file_path, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(updated_lines)
             logger.info(f"Successfully updated file: {file_path}")
         except Exception as e:

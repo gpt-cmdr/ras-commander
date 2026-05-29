@@ -9,7 +9,7 @@ All methods are static. Do not instantiate.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import logging
 import re
 
@@ -37,6 +37,7 @@ VARIABLE_MAP = {
 }
 
 _kdtree_cache: Dict[str, Dict[str, Any]] = {}
+_topology_cache: Dict[Tuple[str, str], Dict[str, Any]] = {}
 
 _UNSTEADY_2D_PATH = (
     "Results/Unsteady/Output/Output Blocks/Base Output/"
@@ -178,6 +179,17 @@ def _resolve_geometry_hdf(
     except Exception:
         pass
 
+    try:
+        with h5py.File(plan_hdf_path, "r") as hdf_file:
+            if "Geometry/2D Flow Areas" in hdf_file:
+                logger.debug(
+                    "Using embedded geometry in plan HDF as geometry source: %s",
+                    plan_hdf_path,
+                )
+                return plan_hdf_path
+    except Exception:
+        pass
+
     _ras = ras_object if ras_object is not None else _get_global_ras()
     plan_df = getattr(_ras, "plan_df", None)
     geom_df = getattr(_ras, "geom_df", None)
@@ -307,6 +319,86 @@ def _get_kdtree(
     }
     _kdtree_cache[cache_key] = cache_entry
     return cache_entry
+
+
+def _get_mesh_topology(
+    geom_hdf_path: Union[str, Path],
+    mesh_name: str,
+) -> Dict[str, Any]:
+    """Read and cache the mesh topology needed for cell-to-cell marching."""
+    geom_hdf_path = Path(geom_hdf_path)
+    cache_key = (str(geom_hdf_path.absolute()), str(mesh_name))
+    if cache_key in _topology_cache:
+        return _topology_cache[cache_key]
+
+    base_path = f"Geometry/2D Flow Areas/{mesh_name}"
+    with h5py.File(geom_hdf_path, "r") as hdf_file:
+        required = {
+            "cell_centers": "Cells Center Coordinate",
+            "cell_face_info": "Cells Face and Orientation Info",
+            "cell_face_values": "Cells Face and Orientation Values",
+            "face_cells": "Faces Cell Indexes",
+            "face_normals": "Faces NormalUnitVector and Length",
+        }
+        missing = [
+            dataset
+            for dataset in required.values()
+            if f"{base_path}/{dataset}" not in hdf_file
+        ]
+        if missing:
+            raise KeyError(
+                f"Missing topology dataset(s) for mesh '{mesh_name}': {missing}"
+            )
+
+        topology = {
+            key: np.asarray(hdf_file[f"{base_path}/{dataset}"][()])
+            for key, dataset in required.items()
+        }
+
+    _topology_cache[cache_key] = topology
+    return topology
+
+
+def _mesh_cell_global_lookup(
+    cache: Dict[str, Any],
+    mesh_name: str,
+) -> Dict[int, int]:
+    """Map mesh-local cell IDs to KDTree/global value-array indices."""
+    mesh_slice = cache["mesh_slices"][mesh_name]
+    local_cell_ids = cache["cell_ids"][mesh_slice]
+    return {
+        int(cell_id): int(mesh_slice.start + offset)
+        for offset, cell_id in enumerate(local_cell_ids)
+    }
+
+
+def _nearest_cell_global_index(
+    cache: Dict[str, Any],
+    point: np.ndarray,
+    mesh_name: Optional[str] = None,
+) -> Tuple[int, float]:
+    """Find the nearest cached cell, optionally restricted to one mesh."""
+    point = np.asarray(point, dtype=float)
+
+    if mesh_name is None:
+        distance, global_index = cache["tree"].query(point, k=1)
+        return int(global_index), float(distance)
+
+    mesh_name = str(mesh_name)
+    if mesh_name not in cache["mesh_slices"]:
+        available = sorted(cache["mesh_slices"])
+        raise ValueError(
+            f"Mesh '{mesh_name}' not found. Available meshes: {available}"
+        )
+
+    mesh_slice = cache["mesh_slices"][mesh_name]
+    mesh_coords = cache["coords"][mesh_slice]
+    if len(mesh_coords) == 0:
+        raise ValueError(f"Mesh '{mesh_name}' has no cells")
+
+    distances = np.linalg.norm(mesh_coords - point, axis=1)
+    local_offset = int(np.argmin(distances))
+    return int(mesh_slice.start + local_offset), float(distances[local_offset])
 
 
 def _coerce_points_dataframe(points: Any) -> pd.DataFrame:
@@ -510,6 +602,195 @@ def _read_unsteady_direct(
     return np.concatenate(values) if values else np.array([], dtype=float)
 
 
+def _read_face_velocity_values(
+    plan_hdf_path: Path,
+    mesh_name: str,
+    time_index: Union[int, str],
+    steady_plan: bool,
+) -> np.ndarray:
+    """Read signed face velocity values for one mesh and time/profile."""
+    with h5py.File(plan_hdf_path, "r") as hdf_file:
+        if steady_plan:
+            face_values = _read_steady_mesh_dataset(
+                hdf_file,
+                mesh_name,
+                "Face Velocity",
+            )
+            return _collapse_steady_dataset(
+                face_values,
+                mesh_name,
+                "Face Velocity",
+            )
+
+        if time_index == "max":
+            raise ValueError(
+                "query_transverse_profile requires a signed time_index; "
+                "'max' envelope face velocities do not preserve flow direction."
+            )
+
+        dataset_path = _UNSTEADY_2D_PATH.format(
+            mesh_name=mesh_name,
+            variable_name="Face Velocity",
+        )
+        if dataset_path not in hdf_file:
+            raise KeyError(f"Dataset not found in plan HDF: {dataset_path}")
+        dataset_values = np.asarray(hdf_file[dataset_path][()], dtype=float)
+        return _select_time_slice(dataset_values, int(time_index))
+
+
+def _solve_velocity_from_face_normals(
+    face_ids: np.ndarray,
+    face_velocity: np.ndarray,
+    face_normals: np.ndarray,
+) -> Tuple[float, float]:
+    """
+    Reconstruct one cell-centered velocity vector from face normal velocities.
+
+    HEC-RAS may store signed velocity only at faces. Each connected face gives
+    one equation, ``u_face = vx * nx + vy * ny``. A weighted least-squares solve
+    over the cell's connected faces recovers the best-fit cell-centered vector.
+    """
+    if face_ids.size == 0:
+        return float("nan"), float("nan")
+
+    valid_face_ids = face_ids[
+        (face_ids >= 0) & (face_ids < len(face_velocity))
+    ].astype(int)
+    if valid_face_ids.size == 0:
+        return float("nan"), float("nan")
+
+    normals = np.asarray(face_normals[valid_face_ids, :2], dtype=float)
+    values = np.asarray(face_velocity[valid_face_ids], dtype=float)
+    lengths = np.asarray(face_normals[valid_face_ids, 2], dtype=float)
+
+    normal_magnitude = np.linalg.norm(normals, axis=1)
+    valid = (
+        np.isfinite(values)
+        & np.all(np.isfinite(normals), axis=1)
+        & np.isfinite(lengths)
+        & (normal_magnitude > 0.0)
+    )
+    if np.sum(valid) < 2:
+        return float("nan"), float("nan")
+
+    normals = normals[valid] / normal_magnitude[valid, None]
+    values = values[valid]
+    weights = np.sqrt(np.maximum(lengths[valid], 1.0))
+
+    a_matrix = normals * weights[:, None]
+    b_vector = values * weights
+    if np.linalg.matrix_rank(a_matrix) < 2:
+        return float("nan"), float("nan")
+
+    velocity_xy, *_ = np.linalg.lstsq(a_matrix, b_vector, rcond=None)
+    return float(velocity_xy[0]), float(velocity_xy[1])
+
+
+def _reconstruct_velocity_components_from_faces(
+    plan_hdf_path: Path,
+    geom_hdf_path: Path,
+    cache: Dict[str, Any],
+    time_index: Union[int, str],
+    steady_plan: bool,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Return cell-centered velocity X/Y reconstructed from face velocities."""
+    velocity_x: List[np.ndarray] = []
+    velocity_y: List[np.ndarray] = []
+
+    for mesh_name in cache["mesh_order"]:
+        topology = _get_mesh_topology(geom_hdf_path, mesh_name)
+        face_velocity = _read_face_velocity_values(
+            plan_hdf_path,
+            mesh_name,
+            time_index,
+            steady_plan,
+        )
+        face_normals = np.asarray(topology["face_normals"], dtype=float)
+        cell_face_info = np.asarray(topology["cell_face_info"], dtype=int)
+        cell_face_values = np.asarray(topology["cell_face_values"], dtype=int)
+
+        mesh_vx = np.full(len(cell_face_info), np.nan, dtype=float)
+        mesh_vy = np.full(len(cell_face_info), np.nan, dtype=float)
+
+        for cell_id, (start, count) in enumerate(cell_face_info[:, :2]):
+            connections = cell_face_values[start : start + count]
+            if connections.ndim == 1:
+                face_ids = connections
+            else:
+                face_ids = connections[:, 0]
+            vx, vy = _solve_velocity_from_face_normals(
+                face_ids,
+                face_velocity,
+                face_normals,
+            )
+            mesh_vx[cell_id] = vx
+            mesh_vy[cell_id] = vy
+
+        velocity_x.append(mesh_vx)
+        velocity_y.append(mesh_vy)
+
+    if not velocity_x:
+        empty = np.array([], dtype=float)
+        return empty, empty
+
+    return np.concatenate(velocity_x), np.concatenate(velocity_y)
+
+
+def _get_cell_velocity_components(
+    plan_hdf_path: Path,
+    geom_hdf_path: Path,
+    cache: Dict[str, Any],
+    time_index: Union[int, str],
+    steady_plan: bool,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Return cell-centered velocity X/Y, reconstructing from faces if needed."""
+    try:
+        if steady_plan:
+            vx = _get_steady_variable_values(
+                plan_hdf_path,
+                geom_hdf_path,
+                cache,
+                "Velocity X",
+            )
+            vy = _get_steady_variable_values(
+                plan_hdf_path,
+                geom_hdf_path,
+                cache,
+                "Velocity Y",
+            )
+        else:
+            if time_index == "max":
+                raise ValueError(
+                    "Velocity components require a signed time_index; "
+                    "'max' envelopes do not preserve flow direction."
+                )
+            vx = _read_unsteady_direct(
+                plan_hdf_path,
+                cache,
+                "Velocity X",
+                int(time_index),
+            )
+            vy = _read_unsteady_direct(
+                plan_hdf_path,
+                cache,
+                "Velocity Y",
+                int(time_index),
+            )
+        return vx, vy
+    except KeyError:
+        logger.debug(
+            "Velocity X/Y datasets not found; reconstructing cell-centered "
+            "components from Face Velocity and face normals."
+        )
+        return _reconstruct_velocity_components_from_faces(
+            plan_hdf_path,
+            geom_hdf_path,
+            cache,
+            time_index,
+            steady_plan,
+        )
+
+
 def _get_unsteady_variable_values(
     plan_hdf_path: Path,
     cache: Dict[str, Any],
@@ -548,7 +829,13 @@ def _get_unsteady_variable_values(
         )
         return np.maximum(wse - cell_min_elev, 0.0)
 
-    if variable_name == "Velocity":
+    if variable_name in {"Velocity", "Velocity X", "Velocity Y"}:
+        if geom_hdf_path is None:
+            raise KeyError(
+                f"Variable '{variable_name}' not found in plan HDF and "
+                "geometry HDF path was not provided for face-velocity "
+                "fallback computation."
+            ) from direct_read_error
         try:
             logger.debug(
                 "'Velocity' dataset not found; computing from Velocity X "
@@ -560,14 +847,29 @@ def _get_unsteady_variable_values(
             vy = _read_unsteady_direct(
                 plan_hdf_path, cache, "Velocity Y", time_index,
             )
+            if variable_name == "Velocity X":
+                return vx
+            if variable_name == "Velocity Y":
+                return vy
             return np.sqrt(vx**2 + vy**2)
         except KeyError:
-            logger.warning(
+            logger.debug(
                 "Neither 'Velocity' nor 'Velocity X'/'Velocity Y' found "
-                "in plan HDF time series. Returning NaN. Use "
-                "time_index='max' for velocity from face envelope data."
+                "in plan HDF time series; reconstructing components from "
+                "Face Velocity."
             )
-            return np.full(len(cache["cell_ids"]), np.nan)
+            vx, vy = _reconstruct_velocity_components_from_faces(
+                plan_hdf_path,
+                geom_hdf_path,
+                cache,
+                time_index,
+                steady_plan=False,
+            )
+            if variable_name == "Velocity X":
+                return vx
+            if variable_name == "Velocity Y":
+                return vy
+            return np.sqrt(vx**2 + vy**2)
 
     raise KeyError(
         f"Variable '{variable_name}' not found in plan HDF and no "
@@ -1116,6 +1418,167 @@ def _query_points_core(
             "distance": distances.astype(float),
         }
     )
+
+
+def _neighbor_across_face(
+    face_cells: np.ndarray,
+    face_id: int,
+    cell_id: int,
+) -> Optional[int]:
+    """Return the adjacent cell across a face, or None for boundary faces."""
+    if face_id < 0 or face_id >= len(face_cells):
+        return None
+
+    cell_a, cell_b = [int(value) for value in face_cells[face_id, :2]]
+    if cell_a == cell_id and cell_b >= 0:
+        return cell_b
+    if cell_b == cell_id and cell_a >= 0:
+        return cell_a
+    return None
+
+
+def _choose_transverse_neighbor(
+    topology: Dict[str, Any],
+    cell_id: int,
+    direction: np.ndarray,
+    visited: set,
+) -> Tuple[Optional[int], Optional[int], float]:
+    """Choose the adjacent cell whose shared face best advances direction."""
+    cell_centers = np.asarray(topology["cell_centers"], dtype=float)
+    cell_face_info = np.asarray(topology["cell_face_info"], dtype=int)
+    cell_face_values = np.asarray(topology["cell_face_values"], dtype=int)
+    face_cells = np.asarray(topology["face_cells"], dtype=int)
+    face_normals = np.asarray(topology["face_normals"], dtype=float)
+
+    start, count = [int(value) for value in cell_face_info[cell_id, :2]]
+    connections = cell_face_values[start : start + count]
+    face_ids = connections if connections.ndim == 1 else connections[:, 0]
+
+    current_center = cell_centers[cell_id]
+    best_score = -np.inf
+    best_cell = None
+    best_face = None
+    best_distance = float("nan")
+
+    for raw_face_id in face_ids:
+        face_id = int(raw_face_id)
+        neighbor = _neighbor_across_face(face_cells, face_id, cell_id)
+        if neighbor is None or neighbor in visited:
+            continue
+
+        delta = cell_centers[neighbor] - current_center
+        distance = float(np.linalg.norm(delta))
+        if not np.isfinite(distance) or distance <= 0.0:
+            continue
+
+        travel_alignment = float(np.dot(delta / distance, direction))
+        if travel_alignment <= 0.0:
+            continue
+
+        normal = np.asarray(face_normals[face_id, :2], dtype=float)
+        normal_length = float(np.linalg.norm(normal))
+        normal_alignment = (
+            abs(float(np.dot(normal / normal_length, direction)))
+            if normal_length > 0.0
+            else 0.0
+        )
+        score = travel_alignment + 0.25 * normal_alignment
+        if score > best_score:
+            best_score = score
+            best_cell = int(neighbor)
+            best_face = face_id
+            best_distance = distance
+
+    return best_cell, best_face, best_distance
+
+
+def _transverse_profile_row(
+    station: float,
+    mesh_name: str,
+    cell_id: int,
+    cell_center: np.ndarray,
+    velocity_x: float,
+    velocity_y: float,
+    side: str,
+    step: int,
+    entry_face_id: Optional[int],
+) -> Dict[str, Any]:
+    """Build one transverse profile DataFrame row."""
+    speed = float(np.hypot(velocity_x, velocity_y))
+    return {
+        "station": float(station),
+        "x": float(cell_center[0]),
+        "y": float(cell_center[1]),
+        "cell_id": int(cell_id),
+        "mesh_name": str(mesh_name),
+        "velocity": speed,
+        "velocity_x": float(velocity_x),
+        "velocity_y": float(velocity_y),
+        "side": side,
+        "step": int(step),
+        "entry_face_id": (
+            np.nan if entry_face_id is None else int(entry_face_id)
+        ),
+    }
+
+
+def _march_transverse_side(
+    topology: Dict[str, Any],
+    mesh_name: str,
+    start_cell_id: int,
+    direction: np.ndarray,
+    sign: int,
+    velocity_x: np.ndarray,
+    velocity_y: np.ndarray,
+    cell_to_global: Dict[int, int],
+    min_velocity: float,
+    max_steps: int,
+    visited: set,
+) -> List[Dict[str, Any]]:
+    """March from the seed cell in one transverse direction."""
+    rows: List[Dict[str, Any]] = []
+    current_cell = int(start_cell_id)
+    station = 0.0
+    side = "right" if sign > 0 else "left"
+
+    for step in range(1, int(max_steps) + 1):
+        next_cell, face_id, distance = _choose_transverse_neighbor(
+            topology,
+            current_cell,
+            direction,
+            visited,
+        )
+        if next_cell is None:
+            break
+
+        global_index = cell_to_global.get(int(next_cell))
+        if global_index is None:
+            break
+
+        vx = float(velocity_x[global_index])
+        vy = float(velocity_y[global_index])
+        speed = float(np.hypot(vx, vy))
+        if not np.isfinite(speed) or speed < float(min_velocity):
+            break
+
+        station += float(sign) * distance
+        visited.add(int(next_cell))
+        rows.append(
+            _transverse_profile_row(
+                station,
+                mesh_name,
+                int(next_cell),
+                np.asarray(topology["cell_centers"][next_cell], dtype=float),
+                vx,
+                vy,
+                side,
+                step * sign,
+                face_id,
+            )
+        )
+        current_cell = int(next_cell)
+
+    return rows
 
 
 class HdfResultsQuery:
@@ -1908,6 +2371,146 @@ class HdfResultsQuery:
             "velocity_difference_source",
             "RasMapperLib.Render.VelocityDifferenceRenderer",
         )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def query_transverse_profile(
+        hdf_path: Path,
+        x: float,
+        y: float,
+        time_index: Union[int, str] = -1,
+        max_steps: int = 25,
+        min_velocity: float = 0.05,
+        mesh_name: Optional[str] = None,
+        ras_object: Optional[Any] = None,
+    ) -> pd.DataFrame:
+        """
+        March cell-by-cell across local flow to build a velocity profile.
+
+        The seed point is snapped to the nearest 2D cell. The seed cell's
+        velocity vector defines the transverse axis, and the marcher advances
+        across adjacent mesh faces in both directions until it reaches a mesh
+        boundary, an already visited cell, ``max_steps``, or a cell below
+        ``min_velocity``.
+
+        Returns:
+            DataFrame with station, x, y, cell_id, mesh_name, velocity,
+            velocity_x, velocity_y, side, step, and entry_face_id.
+        """
+        if time_index == "max":
+            raise ValueError(
+                "query_transverse_profile requires a signed time_index; "
+                "'max' envelope velocities do not preserve flow direction."
+            )
+
+        max_steps = int(max_steps)
+        if max_steps < 0:
+            raise ValueError("max_steps must be non-negative")
+        min_velocity = float(min_velocity)
+        if min_velocity < 0.0:
+            raise ValueError("min_velocity must be non-negative")
+
+        geom_hdf_path = _resolve_geometry_hdf(hdf_path, ras_object=ras_object)
+        cache = _get_kdtree(geom_hdf_path, ras_object=ras_object)
+        steady_plan = HdfResultsPlan.is_steady_plan(hdf_path)
+
+        velocity_x, velocity_y = _get_cell_velocity_components(
+            hdf_path,
+            geom_hdf_path,
+            cache,
+            int(time_index),
+            steady_plan,
+        )
+        _validate_value_length(velocity_x, cache, "Velocity X")
+        _validate_value_length(velocity_y, cache, "Velocity Y")
+
+        seed_point = np.array([float(x), float(y)], dtype=float)
+        seed_global_index, seed_distance = _nearest_cell_global_index(
+            cache,
+            seed_point,
+            mesh_name=mesh_name,
+        )
+        _warn_on_large_distances(np.array([seed_distance], dtype=float))
+
+        seed_mesh_name = str(cache["mesh_names"][seed_global_index])
+        seed_cell_id = int(cache["cell_ids"][seed_global_index])
+        topology = _get_mesh_topology(geom_hdf_path, seed_mesh_name)
+        cell_to_global = _mesh_cell_global_lookup(cache, seed_mesh_name)
+
+        seed_vx = float(velocity_x[seed_global_index])
+        seed_vy = float(velocity_y[seed_global_index])
+        seed_speed = float(np.hypot(seed_vx, seed_vy))
+        if not np.isfinite(seed_speed) or seed_speed < min_velocity:
+            raise ValueError(
+                f"Seed cell velocity {seed_speed:.6g} is below "
+                f"min_velocity {min_velocity:.6g}; transverse direction "
+                "cannot be determined."
+            )
+
+        transverse_direction = np.array(
+            [-seed_vy / seed_speed, seed_vx / seed_speed],
+            dtype=float,
+        )
+        visited = {seed_cell_id}
+        seed_row = _transverse_profile_row(
+            0.0,
+            seed_mesh_name,
+            seed_cell_id,
+            np.asarray(topology["cell_centers"][seed_cell_id], dtype=float),
+            seed_vx,
+            seed_vy,
+            "seed",
+            0,
+            None,
+        )
+
+        left_rows = _march_transverse_side(
+            topology,
+            seed_mesh_name,
+            seed_cell_id,
+            -transverse_direction,
+            -1,
+            velocity_x,
+            velocity_y,
+            cell_to_global,
+            min_velocity,
+            max_steps,
+            visited,
+        )
+        right_rows = _march_transverse_side(
+            topology,
+            seed_mesh_name,
+            seed_cell_id,
+            transverse_direction,
+            1,
+            velocity_x,
+            velocity_y,
+            cell_to_global,
+            min_velocity,
+            max_steps,
+            visited,
+        )
+
+        profile = pd.DataFrame(left_rows + [seed_row] + right_rows)
+        profile = profile.sort_values("station").reset_index(drop=True)
+        profile["distance_from_seed"] = profile["station"].abs()
+        return profile[
+            [
+                "station",
+                "distance_from_seed",
+                "x",
+                "y",
+                "cell_id",
+                "mesh_name",
+                "velocity",
+                "velocity_x",
+                "velocity_y",
+                "side",
+                "step",
+                "entry_face_id",
+            ]
+        ]
 
     @staticmethod
     @log_call

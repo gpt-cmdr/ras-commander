@@ -817,7 +817,7 @@ class PrecipAorc:
             raise ValueError(f"Template plan '{template_plan}' not found")
 
         # Read template plan to find unsteady file
-        with open(template_plan_path, 'r') as f:
+        with open(template_plan_path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
 
         import re
@@ -919,7 +919,7 @@ class PrecipAorc:
                 # 7. Enable HDF time series output if requested
                 if enable_timeseries:
                     plan_path = RasPlan.get_plan_path(new_plan, ras_obj)
-                    with open(plan_path, 'r') as f:
+                    with open(plan_path, 'r', encoding='utf-8', errors='replace') as f:
                         plan_content = f.read()
                     # Enable HDF Write Time Slices
                     plan_content = re.sub(
@@ -927,7 +927,7 @@ class PrecipAorc:
                         'HDF Write Time Slices=-1',
                         plan_content
                     )
-                    with open(plan_path, 'w') as f:
+                    with open(plan_path, 'w', encoding='utf-8', errors='replace') as f:
                         f.write(plan_content)
                     logger.info(f"  Enabled HDF time series output")
 

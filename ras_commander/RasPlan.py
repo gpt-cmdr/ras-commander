@@ -341,7 +341,7 @@ class RasPlan:
         
         # Read the plan file and update the Geom File line
         try:
-            with open(plan_file_path, 'r') as file:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
             
             for i, line in enumerate(lines):
@@ -350,7 +350,7 @@ class RasPlan:
                     logger.info(f"Updated Geom File in plan file to g{new_geom} for plan {plan_number}")
                     break
                 
-            with open(plan_file_path, 'w') as file:
+            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(lines)
         except Exception as e:
             logger.error(f"Error updating plan file: {e}")
@@ -476,7 +476,7 @@ class RasPlan:
         
         try:
             # Read the plan file
-            with open(plan_file_path, 'r') as f:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Update the Flow File line
@@ -486,7 +486,7 @@ class RasPlan:
                     break
             
             # Write back to the plan file
-            with open(plan_file_path, 'w') as f:
+            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(lines)
             
             # Update all dataframes
@@ -1247,7 +1247,7 @@ class RasPlan:
                 raise ValueError(f"Plan file not found: {plan_file_path}")
 
         try:
-            with open(plan_file_path, 'r') as file:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 content = file.read()
         except IOError as e:
             logger = logging.getLogger(__name__)
@@ -1345,7 +1345,7 @@ class RasPlan:
         ]
 
         try:
-            with open(plan_file_path, 'r') as f:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Annotate which flags got edited for logger
@@ -1366,7 +1366,7 @@ class RasPlan:
                         lines.append(f"{flag}= {-1 if value else 0}\n")
                         updated_lines += 1
 
-            with open(plan_file_path, 'w') as f:
+            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(lines)
 
             logger = get_logger(__name__)
@@ -1438,7 +1438,7 @@ class RasPlan:
         }
 
         try:
-            with open(plan_file_path, 'r') as file:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
 
             for i, line in enumerate(lines):
@@ -1449,7 +1449,7 @@ class RasPlan:
                         if line.strip().startswith(key):
                             lines[i] = f"{key}={value.upper()}\n"
 
-            with open(plan_file_path, 'w') as file:
+            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(lines)
 
             logger = logging.getLogger(__name__)
@@ -1491,7 +1491,7 @@ class RasPlan:
                 raise ValueError(f"Plan file not found: {plan_file_path}")
 
         try:
-            with open(plan_file_path, 'r') as file:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
         except IOError as e:
             logger.error(f"Error reading plan file {plan_file_path}: {e}")
@@ -1563,7 +1563,7 @@ class RasPlan:
             plan_path = RasPlan.get_plan_path(plan_number, ras_object=ras_obj)
             
             # Read the plan file
-            with open(plan_path, 'r') as f:
+            with open(plan_path, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
             
             # Find existing description block if it exists
@@ -1666,12 +1666,12 @@ class RasPlan:
                 new_lines = lines[:insertion_idx] + description_block + lines[insertion_idx:]
             
             # Write the modified content back to the file
-            with open(plan_path, 'w') as f:
+            with open(plan_path, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(new_lines)
             
             # Validate the result (optional debug check)
             if __debug__:  # Only in debug mode
-                with open(plan_path, 'r') as f:
+                with open(plan_path, 'r', encoding='utf-8', errors='replace') as f:
                     content = f.read()
                 
                 # Check that description comes before Computation Interval
@@ -1833,7 +1833,7 @@ class RasPlan:
 
         try:
             # Read the file
-            with open(plan_file_path, 'r') as file:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
 
             # Update the Simulation Date line
@@ -1852,7 +1852,7 @@ class RasPlan:
                 )
 
             # Write the updated content back to the file
-            with open(plan_file_path, 'w') as file:
+            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(lines)
 
             logger.info(f"Updated simulation date in plan file: {plan_file_path}")
@@ -1938,7 +1938,7 @@ class RasPlan:
 
         try:
             # Read the file
-            with open(plan_file_path, 'r') as file:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
 
             # Update the Short Identifier line
@@ -1962,7 +1962,7 @@ class RasPlan:
                     lines.insert(0, f"Short Identifier={new_shortid}\n")
 
             # Write the updated content back to the file
-            with open(plan_file_path, 'w') as file:
+            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(lines)
 
             logger.info(f"Updated Short Identifier in plan file to: {new_shortid}")
@@ -2042,7 +2042,7 @@ class RasPlan:
 
         try:
             # Read the file
-            with open(plan_file_path, 'r') as file:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
 
             # Update the Plan Title line
@@ -2058,7 +2058,7 @@ class RasPlan:
                 lines.insert(0, f"Plan Title={new_title}\n")
 
             # Write the updated content back to the file
-            with open(plan_file_path, 'w') as file:
+            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(lines)
 
             logger.info(f"Updated Plan Title in plan file to: {new_title}")
@@ -2480,7 +2480,7 @@ class RasPlan:
         if not plan_file_path or not plan_file_path.exists():
             raise ValueError(f"Plan file not found: {plan_number_or_path}")
 
-        with open(plan_file_path, "r") as file:
+        with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
             lines = file.readlines()
 
         area_key_to_api_key = {
@@ -2622,7 +2622,7 @@ class RasPlan:
         if not plan_file_path or not plan_file_path.exists():
             raise ValueError(f"Plan file not found: {plan_number_or_path}")
 
-        with open(plan_file_path, "r") as file:
+        with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
             lines = file.readlines()
         original_lines = list(lines)
 
@@ -2693,7 +2693,7 @@ class RasPlan:
             logger.info(f"2D flow options already current in plan file: {plan_file_path.name}")
             return True
 
-        with open(plan_file_path, "w") as file:
+        with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
             file.writelines(lines)
 
         logger.info(f"Updated 2D flow options in plan file: {plan_file_path.name}")
@@ -2988,7 +2988,7 @@ class RasPlan:
             }
 
         try:
-            with open(plan_file_path, 'r') as file:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 for line in file:
                     if "=" not in line:
                         continue
@@ -3108,7 +3108,7 @@ class RasPlan:
             }
 
         try:
-            with open(plan_file_path, 'r') as file:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
             original_lines = list(lines)
 
@@ -3146,7 +3146,7 @@ class RasPlan:
                 )
                 return True
 
-            with open(plan_file_path, 'w') as file:
+            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(lines)
 
             if hasattr(ras_obj, "get_plan_entries"):
@@ -3190,7 +3190,7 @@ class RasPlan:
         }
 
         try:
-            with open(plan_file_path, 'r') as file:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 for line in file:
                     if "=" not in line:
                         continue
@@ -3295,7 +3295,7 @@ class RasPlan:
             return False
 
         try:
-            with open(plan_file_path, 'r') as file:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
             original_lines = list(lines)
 
@@ -3326,7 +3326,7 @@ class RasPlan:
                 logger.info(f"HDF write parameters already current in plan file: {plan_file_path.name}")
                 return True
 
-            with open(plan_file_path, 'w') as file:
+            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(lines)
 
             logger.info(f"Updated HDF write parameters in plan file: {plan_file_path.name}")
@@ -3557,7 +3557,7 @@ class RasPlan:
 
         try:
             # Read the file
-            with open(plan_file_path, 'r') as file:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
 
             # Check if this variable already exists
@@ -3595,7 +3595,7 @@ class RasPlan:
             lines.insert(insert_index, f"{target_line}\n")
 
             # Write the updated content back to the file
-            with open(plan_file_path, 'w') as file:
+            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(lines)
 
             logger.info(f"Added HDF output variable '{variable}' to plan file: {plan_file_path.name}")
@@ -3636,7 +3636,7 @@ class RasPlan:
 
         variables = []
         try:
-            with open(plan_file_path, 'r') as file:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 for line in file:
                     if line.startswith("HDF Additional Output Variable="):
                         var_name = line.split("=", 1)[1].strip()
@@ -3744,7 +3744,7 @@ class RasPlan:
 
         try:
             # Read the file
-            with open(plan_file_path, 'r') as file:
+            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
 
             # Find and remove the variable line
@@ -3762,7 +3762,7 @@ class RasPlan:
                 return False
 
             # Write the updated content back to the file
-            with open(plan_file_path, 'w') as file:
+            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(new_lines)
 
             logger.info(f"Removed HDF output variable '{variable}' from plan file")
@@ -4143,7 +4143,7 @@ class RasPlan:
         bool: True if file was modified, False if key/value not found.
         """
         try:
-            with open(plan_path, 'r') as f:
+            with open(plan_path, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             target = f"{key}={old_value}"
@@ -4157,7 +4157,7 @@ class RasPlan:
                     break
 
             if modified:
-                with open(plan_path, 'w') as f:
+                with open(plan_path, 'w', encoding='utf-8', errors='replace') as f:
                     f.writelines(lines)
                 logger.info(f"Updated {key} from {old_value} to {new_value} in {plan_path.name}")
 

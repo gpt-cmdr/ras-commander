@@ -313,7 +313,7 @@ class BoundaryGenerator:
 
         # Read file
         try:
-            with open(unsteady_path, 'r') as f:
+            with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
             logger.debug(f"Read {len(lines)} lines from {unsteady_path}")
         except PermissionError:
@@ -397,7 +397,7 @@ class BoundaryGenerator:
         # Create backup
         backup_path = Path(str(unsteady_path) + '.bak')
         try:
-            with open(backup_path, 'w') as f:
+            with open(backup_path, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(lines)
             logger.debug(f"Created backup: {backup_path}")
         except Exception as e:
@@ -405,7 +405,7 @@ class BoundaryGenerator:
 
         # Write updated file
         try:
-            with open(unsteady_path, 'w') as f:
+            with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(new_lines)
             logger.info(f"Successfully updated {unsteady_path}")
         except PermissionError:

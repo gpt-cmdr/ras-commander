@@ -879,7 +879,7 @@ class AbmHyetographGrid:
         if not asc_path.exists():
             raise FileNotFoundError(f"ASC file not found: {asc_path}")
 
-        with open(asc_path, 'r') as f:
+        with open(asc_path, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         # Parse header (first 6 keyword lines, case-insensitive)
