@@ -128,7 +128,7 @@ def test_xs_surface_plain_geometry(muncie_geom_plain):
     result = RasTerrain.compute_xs_interpolation_surface(
         muncie_geom_plain,
         channel_only=True,
-        crs="EPSG:26916",
+        crs="EPSG:2965",
     )
 
     meta = result["metadata"]
