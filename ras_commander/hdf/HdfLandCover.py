@@ -29,7 +29,7 @@ Example:
 import logging
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import h5py
 import numpy as np
@@ -181,6 +181,65 @@ class HdfLandCover:
         except Exception as e:
             logger.error(f"Error reading calibration table from {hdf_path}: {e}")
             return None
+
+    @staticmethod
+    @log_call
+    def build_landcover_depth_roughness_curves(
+        landcover_hdf_path: Union[str, Path],
+        depths: List[float],
+        mannings_n_func: Callable[[float, float, str], float],
+    ) -> pd.DataFrame:
+        """
+        Build depth-varying Manning's n curves from a land-cover sidecar HDF.
+
+        Parameters
+        ----------
+        landcover_hdf_path : Union[str, Path]
+            Path to the land-cover HDF containing ``IDs``, ``Names``, and
+            ``ManningsN`` datasets.
+        depths : List[float]
+            Depth values used to evaluate ``mannings_n_func``.
+        mannings_n_func : Callable
+            Function ``(depth, base_n, class_name) -> n``.
+
+        Returns
+        -------
+        pd.DataFrame
+            Columns: ``pixel_value``, ``class_name``, ``depth``,
+            ``base_mannings_n``, and ``mannings_n``.
+        """
+        landcover_hdf_path = Path(landcover_hdf_path)
+        rows = []
+        nodata_threshold = np.finfo(np.float32).max * 0.5
+
+        with h5py.File(landcover_hdf_path, "r") as hdf_file:
+            ids = hdf_file["IDs"][()]
+            names = hdf_file["Names"][()]
+            mannings_n = hdf_file["ManningsN"][()]
+
+        for pixel_value, raw_name, base_n in zip(ids, names, mannings_n):
+            class_name = str(HdfUtils.convert_ras_hdf_value(raw_name)).strip()
+            base_n = float(base_n)
+            if not np.isfinite(base_n) or base_n >= nodata_threshold:
+                continue
+            if class_name.lower() == "nodata":
+                continue
+
+            for depth in depths:
+                depth = float(depth)
+                rows.append(
+                    {
+                        "pixel_value": int(pixel_value),
+                        "class_name": class_name,
+                        "depth": depth,
+                        "base_mannings_n": base_n,
+                        "mannings_n": float(
+                            mannings_n_func(depth, base_n, class_name)
+                        ),
+                    }
+                )
+
+        return pd.DataFrame(rows)
 
     # ---- Phase 2: Component Readers ----
 

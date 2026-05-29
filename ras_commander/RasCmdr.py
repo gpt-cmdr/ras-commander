@@ -446,6 +446,7 @@ class RasCmdr:
         _results_df_row = None
         _ras_obj = None
         _did_execute = False  # Track if we actually ran HEC-RAS (vs skip/early exit)
+        _watchdog = None
         try:
             ras_obj = ras_object if ras_object is not None else ras
             _ras_obj = ras_obj
@@ -606,7 +607,6 @@ class RasCmdr:
             # Execute the HEC-RAS command
             _did_execute = True
             start_time = time.time()
-            _watchdog = None
             try:
                 if dialog_watchdog:
                     from .RasDialogWatchdog import DialogWatchdog
@@ -1447,6 +1447,7 @@ class RasCmdr:
                 ["wsl", "test", "-x", ras_exe],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
             )
             if probe.returncode != 0:
                 raise FileNotFoundError(
@@ -1685,6 +1686,7 @@ class RasCmdr:
             ["wsl", "wslpath", "-a", path_arg],
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         if proc.returncode != 0:
             raise RuntimeError(
@@ -1758,7 +1760,9 @@ fi
 if [ -n "\$lib_base" ]; then
     ld_path="\$lib_base"
     for d in "\$lib_base"/*; do
-        [ -d "\$d" ] && ld_path="\$ld_path:\$d"
+        if [ -d "\$d" ]; then
+            ld_path="\$ld_path:\$d"
+        fi
     done
 else
     ld_path={ras_exe_dir_q}
@@ -1771,11 +1775,18 @@ LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 
             logger.info(
                 f"WSL Linux execution attempt {attempt}/{max_attempts} for plan {plan_number}"
             )
+
+            # Remove any leftover io.tmp.hdf from previous run
+            io_tmp_hdf = project_dir / "io.tmp.hdf"
+            if io_tmp_hdf.exists():
+                io_tmp_hdf.unlink()
+
             proc = subprocess.Popen(
                 ["wsl", "bash", "-lc", script],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
             )
             try:
                 stdout, stderr = proc.communicate(timeout=timeout_sec)
@@ -1793,6 +1804,7 @@ LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 
                     ["wsl", "bash", "-lc", cleanup_script],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
                 )
                 if tmp_hdf.exists():
                     plan_hdf = RasCmdr._get_hdf_path(plan_number, ras_obj)
@@ -1827,5 +1839,6 @@ LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 
             ["wsl", "bash", "-lc", cleanup_script],
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         return ComputeResult(success=False, results_df_row=None)
