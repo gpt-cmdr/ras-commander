@@ -163,7 +163,7 @@ class RasUnsteady:
         new_title = new_title[:24]  # Truncate to 24 characters if longer
         
         try:
-            with open(unsteady_path, 'r') as f:
+            with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
             logger.debug(f"Successfully read unsteady flow file: {unsteady_path}")
         except FileNotFoundError:
@@ -184,7 +184,7 @@ class RasUnsteady:
         
         if updated:
             try:
-                with open(unsteady_path, 'w') as f:
+                with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as f:
                     f.writelines(lines)
                 logger.debug(f"Successfully wrote modifications to unsteady flow file: {unsteady_path}")
             except PermissionError:
@@ -760,7 +760,7 @@ class RasUnsteady:
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path, ras_object=ras_object,
         )
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             for line in f:
                 if line.startswith("Non-Newtonian Method="):
                     value_str = line.split('=', 1)[1].strip().rstrip(',').strip()
@@ -824,7 +824,7 @@ class RasUnsteady:
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path, ras_object=ras_object,
         )
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         found = False
@@ -841,7 +841,7 @@ class RasUnsteady:
             )
             return
 
-        with open(unsteady_file, 'w') as f:
+        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
             f.writelines(lines)
 
         logger.info(
@@ -882,7 +882,7 @@ class RasUnsteady:
             'Non-Newtonian Constant Vol Conc=': 'cv',
             'Non-Newtonian Max Cv=': 'max_cv',
         }
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             for line in f:
                 for key, field in key_map.items():
                     if line.startswith(key):
@@ -953,7 +953,7 @@ class RasUnsteady:
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path, ras_object=ras_object,
         )
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         for i, line in enumerate(lines):
@@ -964,7 +964,7 @@ class RasUnsteady:
             elif max_cv is not None and line.startswith('Non-Newtonian Max Cv='):
                 lines[i] = f"Non-Newtonian Max Cv={max_cv}\n"
 
-        with open(unsteady_file, 'w') as f:
+        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
             f.writelines(lines)
 
         changes = []
@@ -1014,7 +1014,7 @@ class RasUnsteady:
             'visc_method': 0, 'visc_method_name': 'Use Coulomb',
             'obrien_b': 0.0, 'user_viscosity': 0.0, 'user_visc_ratio': 0.0,
         }
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             for line in f:
                 if line.startswith('Non-Newtonian Yield Method='):
                     val_str = line.split('=', 1)[1].strip()
@@ -1155,7 +1155,7 @@ class RasUnsteady:
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path, ras_object=ras_object,
         )
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         for i, line in enumerate(lines):
@@ -1174,7 +1174,7 @@ class RasUnsteady:
             elif user_viscosity is not None and line.startswith('User Viscosity='):
                 lines[i] = f"User Viscosity={user_viscosity}\n"
 
-        with open(unsteady_file, 'w') as f:
+        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
             f.writelines(lines)
 
         changes = []
@@ -1223,7 +1223,7 @@ class RasUnsteady:
             unsteady_number_or_path, ras_object=ras_object,
         )
         result = {'k': 0.0, 'n': 0.0}
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             for line in f:
                 if line.startswith('Herschel-Bulkley Coef='):
                     val_str = line.split('=', 1)[1].strip()
@@ -1267,7 +1267,7 @@ class RasUnsteady:
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path, ras_object=ras_object,
         )
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         for i, line in enumerate(lines):
@@ -1284,7 +1284,7 @@ class RasUnsteady:
                 lines[i] = f"Herschel-Bulkley Coef={new_k}, {new_n}\n"
                 break
 
-        with open(unsteady_file, 'w') as f:
+        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
             f.writelines(lines)
 
         changes = []
@@ -1354,7 +1354,7 @@ class RasUnsteady:
             'fv_k': 0.0, 'ds': 0.0,
             'high_c_transport': 0, 'high_c_transport_name': 'Yang and Molina',
         }
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             for line in f:
                 if line.startswith('Clastic Method='):
                     val_str = line.split('=', 1)[1].strip()
@@ -1497,7 +1497,7 @@ class RasUnsteady:
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path, ras_object=ras_object,
         )
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         for i, line in enumerate(lines):
@@ -1516,7 +1516,7 @@ class RasUnsteady:
             elif high_c_transport is not None and line.startswith('Non-Newtonian High C Transport='):
                 lines[i] = f"Non-Newtonian High C Transport= {high_c_transport} \n"
 
-        with open(unsteady_file, 'w') as f:
+        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
             f.writelines(lines)
 
         changes = []
@@ -1580,7 +1580,7 @@ class RasUnsteady:
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path, ras_object=ras_object,
         )
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         gate_blocks: list[dict] = []
@@ -1676,7 +1676,7 @@ class RasUnsteady:
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path, ras_object=ras_object,
         )
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         # Locate the Nth gate boundary's Gate Openings= line
@@ -1739,7 +1739,7 @@ class RasUnsteady:
         if interval is not None and target_interval_idx is not None:
             lines[target_interval_idx] = f'Gate Time Interval={interval}\n'
 
-        with open(unsteady_file, 'w') as f:
+        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
             f.writelines(lines)
 
         logger.info(
@@ -1787,7 +1787,7 @@ class RasUnsteady:
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path, ras_object=ras_object,
         )
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         gw_blocks: list[dict] = []
@@ -1887,7 +1887,7 @@ class RasUnsteady:
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path, ras_object=ras_object,
         )
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         gw_hit = 0
@@ -1972,7 +1972,7 @@ class RasUnsteady:
         if interval is not None and target_interval_idx is not None:
             lines[target_interval_idx_adj] = f'Interval={interval}\n'
 
-        with open(unsteady_file, 'w') as f:
+        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
             f.writelines(lines)
 
         logger.info(
@@ -2008,7 +2008,7 @@ class RasUnsteady:
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path, ras_object
         )
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         # Find all Navigation Dam boundary blocks
@@ -2106,7 +2106,7 @@ class RasUnsteady:
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path, ras_object
         )
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         nav_indices = [
@@ -2172,7 +2172,7 @@ class RasUnsteady:
             elif cp_max_pool is not None and line.startswith('Navigation Dam CP Max Pool='):
                 lines[i] = f'Navigation Dam CP Max Pool={cp_max_pool}\n'
 
-        with open(unsteady_file, 'w') as f:
+        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
             f.writelines(lines)
 
         logger.info(
@@ -2205,7 +2205,7 @@ class RasUnsteady:
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path, ras_object
         )
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         # Find Boundary Location blocks that contain Rule Operation lines
@@ -2281,7 +2281,7 @@ class RasUnsteady:
         unsteady_file = RasUnsteady._resolve_unsteady_file_path(
             unsteady_number_or_path, ras_object
         )
-        with open(unsteady_file, 'r') as f:
+        with open(unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         # Find Rules BC boundaries (same logic as get_rules_bc)
@@ -2367,7 +2367,7 @@ class RasUnsteady:
                         break
                 lines[insert_pos:insert_pos] = new_gate_lines
 
-        with open(unsteady_file, 'w') as f:
+        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
             f.writelines(lines)
 
         logger.info(
@@ -2419,7 +2419,7 @@ class RasUnsteady:
                 unsteady_path = Path(resolved_path)
         
         try:
-            with open(unsteady_path, 'r') as f:
+            with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
             logger.debug(f"Successfully read unsteady flow file: {unsteady_path}")
         except FileNotFoundError:
@@ -2464,7 +2464,7 @@ class RasUnsteady:
 
         if retained_lines != original_lines:
             try:
-                with open(unsteady_path, 'w') as f:
+                with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as f:
                     f.writelines(retained_lines)
                 logger.debug(f"Successfully wrote modifications to unsteady flow file: {unsteady_path}")
             except PermissionError:
@@ -2531,7 +2531,7 @@ class RasUnsteady:
         }
 
         try:
-            with open(unsteady_path, 'r') as file:
+            with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as file:
                 for line in file:
                     if line.startswith("Use Restart="):
                         raw_values["Use Restart"] = line.split("=", 1)[1].strip()
@@ -2612,7 +2612,7 @@ class RasUnsteady:
         ic_count = 0
 
         try:
-            with open(unsteady_path, 'r') as f:
+            with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as f:
                 for line in f:
                     if line.startswith("Use Restart="):
                         raw_use_restart = line.split("=", 1)[1].strip()
@@ -2725,7 +2725,7 @@ class RasUnsteady:
                 unsteady_path = Path(resolved_path)
 
         try:
-            with open(unsteady_path, 'r') as f:
+            with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
         except FileNotFoundError:
             raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
@@ -2769,7 +2769,7 @@ class RasUnsteady:
             retained.insert(use_restart_idx + 1, f"Prior WS Filename={prior_ws_filename}\n")
             retained.insert(use_restart_idx + 2, f"Prior WS Profile={profile}\n")
 
-        with open(unsteady_path, 'w') as f:
+        with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as f:
             f.writelines(retained)
 
         logger.info(f"Set IC method to '{method}' in {unsteady_path.name}")
@@ -2819,7 +2819,7 @@ class RasUnsteady:
         prior_ws_profile = None
 
         try:
-            with open(unsteady_path, 'r') as f:
+            with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as f:
                 for line in f:
                     if line.startswith("Prior WS Filename="):
                         prior_ws_filename = line.split("=", 1)[1].strip()
@@ -3210,7 +3210,7 @@ class RasUnsteady:
         ]
         
         try:
-            with open(unsteady_path, 'r') as file:
+            with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
             logger.debug(f"Successfully read unsteady flow file: {unsteady_path}")
         except FileNotFoundError:
@@ -3402,7 +3402,7 @@ class RasUnsteady:
 
         Example:
             # Read the unsteady flow file
-            with open(new_unsteady_file, 'r') as f:
+            with open(new_unsteady_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
                 
             # Identify tables in the file
@@ -3537,7 +3537,7 @@ class RasUnsteady:
         
         unsteady_path = Path(unsteady_file)
         try:
-            with open(unsteady_path, 'r') as file:
+            with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
             logger.debug(f"Successfully read unsteady flow file: {unsteady_path}")
         except FileNotFoundError:
@@ -3595,7 +3595,7 @@ class RasUnsteady:
         
         unsteady_path = Path(unsteady_file)
         try:
-            with open(unsteady_path, 'r') as file:
+            with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
             logger.debug(f"Successfully read unsteady flow file: {unsteady_path}")
         except FileNotFoundError:
@@ -3616,7 +3616,7 @@ class RasUnsteady:
         lines[start_line:start_line+len(formatted_values)] = formatted_values
         
         try:
-            with open(unsteady_path, 'w') as file:
+            with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(lines)
             logger.info(f"Successfully updated table '{table_name}' in {unsteady_path}")
         except PermissionError:
@@ -4570,7 +4570,7 @@ class RasUnsteady:
         logger.info(f"  Interpolation: {interpolation}")
 
         # Read the file
-        with open(unsteady_path, 'r') as f:
+        with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         # Track what we need to update
@@ -4626,7 +4626,7 @@ class RasUnsteady:
             logger.warning("Could not add GDAL Filename line")
 
         # Write the updated file
-        with open(unsteady_path, 'w') as f:
+        with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as f:
             f.writelines(lines)
 
         logger.info(f"Successfully configured gridded precipitation in {unsteady_path}")

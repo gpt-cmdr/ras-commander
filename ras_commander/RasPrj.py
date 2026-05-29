@@ -458,8 +458,9 @@ class RasPrj:
                 raise ValueError(f"Plan file not found: {plan_file_path}")
 
         try:
-            with open(plan_file_path, 'r') as file:
-                content = file.read()
+            content, _ = read_file_with_fallback_encoding(plan_file_path)
+            if content is None:
+                raise IOError(f"Failed to read plan file with any encoding: {plan_file_path}")
         except IOError as e:
             logger.error(f"Error reading plan file {plan_file_path}: {e}")
             raise
@@ -1045,10 +1046,9 @@ class RasPrj:
                     return RasUtils.safe_resolve(prj_file)
             for prj_file in prj_files:
                 try:
-                    with open(prj_file, 'r') as file:
-                        content = file.read()
-                        if "Proj Title=" in content:
-                            return RasUtils.safe_resolve(prj_file)
+                    content, _ = read_file_with_fallback_encoding(prj_file)
+                    if content and "Proj Title=" in content:
+                        return RasUtils.safe_resolve(prj_file)
                 except Exception:
                     continue
         return None
@@ -1107,7 +1107,7 @@ class RasPrj:
 
         try:
             # Read the project file
-            with open(self.prj_file, 'r') as f:
+            with open(self.prj_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Find and update the Current Plan line
@@ -1130,7 +1130,7 @@ class RasPrj:
                 raise ValueError("Could not find 'Proj Title=' or 'Current Plan=' in project file")
 
             # Write back to file
-            with open(self.prj_file, 'w') as f:
+            with open(self.prj_file, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(lines)
 
             logger.info(f"Set current plan to p{plan_number_str} in {self.prj_file}")
@@ -1540,8 +1540,10 @@ class RasPrj:
             unsteady_number = row['unsteady_number']
             
             try:
-                with open(unsteady_file_path, 'r') as file:
-                    content = file.read()
+                content, _ = read_file_with_fallback_encoding(unsteady_file_path)
+                if content is None:
+                    logger.error(f"Failed to read unsteady file with any encoding: {unsteady_file_path}")
+                    continue
             except IOError as e:
                 logger.error(f"Error reading unsteady file {unsteady_file_path}: {e}")
                 continue

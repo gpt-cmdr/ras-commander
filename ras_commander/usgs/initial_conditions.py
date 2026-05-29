@@ -81,7 +81,7 @@ class InitialConditions:
         ic_entries = []
 
         try:
-            with open(unsteady_path, 'r') as f:
+            with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as f:
                 for line in f:
                     line = line.rstrip('\n')
 
@@ -298,7 +298,7 @@ class InitialConditions:
 
         try:
             # Read existing file
-            with open(unsteady_path, 'r') as f:
+            with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
 
             # Find insertion point (after headers, before Boundary Location)
@@ -350,7 +350,7 @@ class InitialConditions:
             final_lines = new_lines[:header_end_idx] + ic_lines + new_lines[header_end_idx:]
 
             # Write modified file
-            with open(unsteady_path, 'w') as f:
+            with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(final_lines)
 
             logger.info(f"Wrote {len(ic_entries)} initial condition entries to {unsteady_path.name}")
