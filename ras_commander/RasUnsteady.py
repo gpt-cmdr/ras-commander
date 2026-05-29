@@ -54,7 +54,6 @@ Precipitation Functions:
 - set_precipitation_hyetograph() - Write hyetograph DataFrame to unsteady file
 - set_gridded_precipitation() - Configure GDAL raster precipitation
 - configure_gridded_dss_precipitation() - Configure gridded DSS precipitation
-- get_met_precipitation_config() - Read meteorologic precipitation configuration
 
 Meteorological Point Data Functions:
 - set_meteorological_station() - Create/update meteorological station metadata
@@ -2896,18 +2895,22 @@ class RasUnsteady:
         ras_object: Optional[Any] = None
     ) -> Dict[str, Optional[Any]]:
         """
-        Parse Meteorological Data tab precipitation settings from a .u## file.
+        Parse meteorologic precipitation configuration from a .u## file.
 
         HEC-RAS persists inactive precipitation settings in ``Met BC`` lines.
         This reader returns the active configuration implied by the top-level
-        ``Precipitation Mode`` switch and ``Met BC=Precipitation|Mode`` value.
+        ``Precipitation Mode`` switch and ``Met BC=Precipitation|Mode`` value,
+        plus the raw ``Met BC`` key-value pairs and any sidecar HDF attributes
+        when ``<unsteady_file>.hdf`` exists.
 
         Args:
             unsteady_file: Path to a .u## file or an unsteady flow number.
             ras_object: Optional RAS project object used when resolving a flow number.
 
         Returns:
-            Dict[str, Optional[Any]]: Structured precipitation configuration.
+            Dict with normalized precipitation keys, ``raw`` dict of all
+            ``Met BC=Precipitation|`` values, and ``hdf_attributes`` from the
+            sidecar HDF (empty dict if no sidecar exists).
         """
         unsteady_path = Path(unsteady_file)
         if not unsteady_path.is_file():
@@ -2918,6 +2921,7 @@ class RasUnsteady:
 
         config: Dict[str, Optional[Any]] = {
             "enabled": False,
+            "precipitation_mode": "",
             "mode": None,
             "source": None,
             "dss_filename": None,
@@ -2930,6 +2934,8 @@ class RasUnsteady:
             "gdal_folder": None,
             "gdal_filter": None,
             "point_interpolation": None,
+            "raw": {},
+            "hdf_attributes": {},
         }
 
         met_values: Dict[str, str] = {}
@@ -2955,9 +2961,13 @@ class RasUnsteady:
             logger.error(f"Permission denied when reading unsteady flow file: {unsteady_path}")
             raise PermissionError(f"Permission denied when reading unsteady flow file: {unsteady_path}")
 
+        config["raw"] = dict(met_values)
+        config["precipitation_mode"] = precipitation_mode or ""
+
         enabled = (precipitation_mode or "").strip().lower() == "enable"
         config["enabled"] = enabled
         if not enabled:
+            RasUnsteady._read_hdf_precip_attrs(config, unsteady_path)
             return config
 
         mode = RasUnsteady._empty_to_none(met_values.get("Mode"))
@@ -3004,7 +3014,29 @@ class RasUnsteady:
                     met_values.get("Gridded GDAL Filter")
                 )
 
+        RasUnsteady._read_hdf_precip_attrs(config, unsteady_path)
         return config
+
+    @staticmethod
+    def _read_hdf_precip_attrs(
+        config: Dict[str, Any], unsteady_path: Path
+    ) -> None:
+        """Read precipitation attributes from the sidecar .u##.hdf into config."""
+        hdf_path = Path(str(unsteady_path) + ".hdf")
+        if not hdf_path.exists():
+            return
+        try:
+            import h5py
+
+            precip_path = "Event Conditions/Meteorology/Precipitation"
+            with h5py.File(hdf_path, "r") as hdf_file:
+                if precip_path in hdf_file:
+                    config["hdf_attributes"] = {
+                        key: RasUnsteady._decode_hdf_attr_value(value)
+                        for key, value in hdf_file[precip_path].attrs.items()
+                    }
+        except Exception:
+            pass
 
     @staticmethod
     @log_call
@@ -4398,87 +4430,6 @@ class RasUnsteady:
         if isinstance(value, np.ndarray):
             return [RasUnsteady._decode_hdf_attr_value(item) for item in value]
         return value
-
-    @staticmethod
-    @log_call
-    def get_met_precipitation_config(
-        unsteady_file: Union[str, Path],
-    ) -> Dict[str, Any]:
-        """
-        Read the meteorologic precipitation configuration from a .u## file.
-
-        Returns a flat dictionary with normalized convenience keys plus the raw
-        ``Met BC=Precipitation|...`` values and any sidecar HDF precipitation
-        attributes when ``<unsteady_file>.hdf`` exists.
-        """
-        unsteady_path = Path(unsteady_file)
-        if not unsteady_path.exists():
-            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
-
-        config: Dict[str, Any] = {
-            "unsteady_file": str(unsteady_path),
-            "precipitation_mode": "",
-            "mode": "",
-            "source": "",
-            "interpolation": "",
-            "dss_filename": "",
-            "dss_pathname": "",
-            "gdal_filename": "",
-            "raw": {},
-            "hdf_path": str(Path(str(unsteady_path) + ".hdf")),
-            "hdf_attributes": {},
-        }
-
-        with open(unsteady_path, "r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                stripped = line.rstrip("\r\n")
-                if stripped.startswith("Precipitation Mode="):
-                    config["precipitation_mode"] = stripped.split("=", 1)[1].strip()
-                    continue
-
-                met_prefix = "Met BC=Precipitation|"
-                if not stripped.startswith(met_prefix):
-                    continue
-
-                met_payload = stripped[len(met_prefix):]
-                if "=" not in met_payload:
-                    continue
-
-                met_key, value = met_payload.split("=", 1)
-                value = value.strip()
-                config["raw"][met_key] = value
-                if met_key == "Mode":
-                    config["mode"] = value
-                elif met_key == "Gridded Source":
-                    config["source"] = value
-                elif met_key == "Gridded Interpolation":
-                    config["interpolation"] = value
-                elif met_key == "Gridded DSS Filename":
-                    config["dss_filename"] = value
-                elif met_key == "Gridded DSS Pathname":
-                    config["dss_pathname"] = value
-                elif met_key == "Gridded GDAL Filename":
-                    config["gdal_filename"] = value
-
-        config["gridded_source"] = config["source"]
-        config["gridded_interpolation"] = config["interpolation"]
-        config["gridded_dss_filename"] = config["dss_filename"]
-        config["gridded_dss_pathname"] = config["dss_pathname"]
-        config["gridded_gdal_filename"] = config["gdal_filename"]
-
-        hdf_path = Path(config["hdf_path"])
-        if hdf_path.exists():
-            import h5py
-
-            precip_path = "Event Conditions/Meteorology/Precipitation"
-            with h5py.File(hdf_path, "r") as hdf_file:
-                if precip_path in hdf_file:
-                    config["hdf_attributes"] = {
-                        key: RasUnsteady._decode_hdf_attr_value(value)
-                        for key, value in hdf_file[precip_path].attrs.items()
-                    }
-
-        return config
 
     @staticmethod
     @log_call

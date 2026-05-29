@@ -9,6 +9,7 @@ FIXTURE_DIR = Path(__file__).resolve().parents[1] / "research" / "fixtures" / "m
 
 BASE_CONFIG = {
     "enabled": False,
+    "precipitation_mode": "",
     "mode": None,
     "source": None,
     "dss_filename": None,
@@ -21,6 +22,79 @@ BASE_CONFIG = {
     "gdal_folder": None,
     "gdal_filter": None,
     "point_interpolation": None,
+    "raw": {},
+    "hdf_attributes": {},
+}
+
+
+DAVIS_RAW_DISABLED = {
+    "Mode": "Constant",
+    "Expanded View": "-1",
+    "Constant Value": "1",
+    "Constant Units": "in/hr",
+    "Point Interpolation": "",
+    "Gridded Source": "DSS",
+    "Gridded Interpolation": "",
+}
+
+DAVIS_RAW_NONE = {
+    "Mode": "None",
+    "Expanded View": "-1",
+    "Constant Value": "1",
+    "Constant Units": "in/hr",
+    "Point Interpolation": "Thiessen Polygon",
+    "Gridded Source": "GDAL Raster File(s)",
+    "Gridded Interpolation": "",
+}
+
+DAVIS_RAW_CONSTANT = {
+    "Mode": "Constant",
+    "Expanded View": "-1",
+    "Constant Value": "1",
+    "Constant Units": "in/hr",
+    "Point Interpolation": "Thiessen Polygon",
+    "Gridded Source": "GDAL Raster File(s)",
+    "Gridded Interpolation": "",
+}
+
+DAVIS_RAW_POINT = {
+    "Mode": "Point",
+    "Expanded View": "-1",
+    "Constant Value": "1",
+    "Constant Units": "in/hr",
+    "Point Interpolation": "Thiessen Polygon",
+    "Gridded Source": "GDAL Raster File(s)",
+    "Gridded Interpolation": "",
+}
+
+DAVIS_RAW_GRIDDED_DSS = {
+    "Mode": "Gridded",
+    "Expanded View": "-1",
+    "Constant Value": "1",
+    "Constant Units": "in/hr",
+    "Point Interpolation": "Thiessen Polygon",
+    "Gridded Source": "DSS",
+    "Gridded Interpolation": "",
+}
+
+DAVIS_RAW_GRIDDED_GDAL = {
+    "Mode": "Gridded",
+    "Expanded View": "-1",
+    "Constant Value": "1",
+    "Constant Units": "in/hr",
+    "Point Interpolation": "Thiessen Polygon",
+    "Gridded Source": "GDAL Raster File(s)",
+    "Gridded Interpolation": "",
+}
+
+BALDEAGLE_RAW = {
+    "Mode": "Gridded",
+    "Expanded View": "-1",
+    "Constant Units": "mm/hr",
+    "Point Interpolation": "",
+    "Gridded Source": "DSS",
+    "Gridded DSS Filename": r".\Precipitation\precip.2018.09.dss",
+    "Gridded DSS Pathname": "/SHG/MARFC/PRECIP/01SEP2018:0200/01SEP2018:0300/NEXRAD/",
 }
 
 
@@ -35,55 +109,72 @@ def expected_config(**overrides):
     [
         (
             "precip_00_disabled_official_davis.u01",
-            expected_config(),
+            expected_config(
+                precipitation_mode="Disable",
+                raw=DAVIS_RAW_DISABLED,
+            ),
         ),
         (
             "precip_01_enabled_none_gui_davis.u01",
-            expected_config(enabled=True),
+            expected_config(
+                enabled=True,
+                precipitation_mode="Enable",
+                raw=DAVIS_RAW_NONE,
+            ),
         ),
         (
             "precip_02_constant_gui_davis.u01",
             expected_config(
                 enabled=True,
+                precipitation_mode="Enable",
                 mode="Constant",
                 constant_value=1.0,
                 constant_units="in/hr",
+                raw=DAVIS_RAW_CONSTANT,
             ),
         ),
         (
             "precip_03_point_thiessen_gui_davis.u01",
             expected_config(
                 enabled=True,
+                precipitation_mode="Enable",
                 mode="Point",
                 point_interpolation="Thiessen Polygon",
+                raw=DAVIS_RAW_POINT,
             ),
         ),
         (
             "precip_04_gridded_dss_gui_davis.u01",
             expected_config(
                 enabled=True,
+                precipitation_mode="Enable",
                 mode="Gridded",
                 source="DSS",
                 interpolation="",
+                raw=DAVIS_RAW_GRIDDED_DSS,
             ),
         ),
         (
             "precip_05_gridded_gdal_gui_davis.u01",
             expected_config(
                 enabled=True,
+                precipitation_mode="Enable",
                 mode="Gridded",
                 source="GDAL Raster File(s)",
                 interpolation="",
+                raw=DAVIS_RAW_GRIDDED_GDAL,
             ),
         ),
         (
             "precip_06_gridded_dss_official_baldeagle.u03",
             expected_config(
                 enabled=True,
+                precipitation_mode="Enable",
                 mode="Gridded",
                 source="DSS",
                 dss_filename=r".\Precipitation\precip.2018.09.dss",
                 dss_pathname="/SHG/MARFC/PRECIP/01SEP2018:0200/01SEP2018:0300/NEXRAD/",
+                raw=BALDEAGLE_RAW,
             ),
         ),
     ],
@@ -129,7 +220,10 @@ def test_get_met_precipitation_config_partial_enabled_file(tmp_path):
 
     config = RasUnsteady.get_met_precipitation_config(unsteady_file)
 
-    assert config == expected_config(enabled=True)
+    assert config == expected_config(
+        enabled=True,
+        precipitation_mode="Enable",
+    )
 
 
 def test_get_met_precipitation_config_gridded_gdal_source_fields(tmp_path):
@@ -156,6 +250,7 @@ def test_get_met_precipitation_config_gridded_gdal_source_fields(tmp_path):
 
     assert config == expected_config(
         enabled=True,
+        precipitation_mode="Enable",
         mode="Gridded",
         source="GDAL Raster File(s)",
         interpolation="Nearest",
@@ -163,4 +258,13 @@ def test_get_met_precipitation_config_gridded_gdal_source_fields(tmp_path):
         gdal_group="precip",
         gdal_folder=r".\Precipitation",
         gdal_filter="*.nc",
+        raw={
+            "Mode": "Gridded",
+            "Gridded Source": "GDAL Raster File(s)",
+            "Gridded Interpolation": "Nearest",
+            "Gridded GDAL Filename": r".\Precipitation\aorc.nc",
+            "Gridded GDAL Group": "precip",
+            "Gridded GDAL Folder": r".\Precipitation",
+            "Gridded GDAL Filter": "*.nc",
+        },
     )
