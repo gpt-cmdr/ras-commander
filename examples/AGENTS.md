@@ -39,6 +39,7 @@ This file is the canonical local instruction file for `examples/`.
 - `421_usgs_gauge_data_integration.ipynb` through `424_model_validation_with_usgs.ipynb` - USGS integration
 - `720_atlas14_aep_events.ipynb`, `725_atlas14_spatial_variance.ipynb`, `726_abm_hyetograph_grid.ipynb` - precipitation methods
 - `915_realtime_forecast_workflow.ipynb` through `919_operational_forecast_cycling.ipynb` - operational forecast patterns
+- `925_xs_interpolation_surface.ipynb` - XS interpolation surface (channel bathymetry TIN)
 - `930_terrain_modification_analysis.ipynb` - terrain modification workflows
 - `960_cloud_native_geometry_export.ipynb` through `962_cloud_native_cog_results_export.ipynb` - `ras2cng` export patterns
 
