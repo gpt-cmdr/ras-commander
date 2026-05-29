@@ -38,6 +38,7 @@ List of Functions in RasCmdr:
 import os
 import subprocess
 import shutil
+import shlex
 from collections import defaultdict
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1436,13 +1437,30 @@ class RasCmdr:
 
         plan_num_str = RasUtils.normalize_ras_number(plan_number)
 
-        ras_exe_dir = Path(ras_exe_dir)
-        ras_exe = ras_exe_dir / "RasUnsteady"
-        if not ras_exe.exists():
-            raise FileNotFoundError(
-                f"RasUnsteady binary not found at {ras_exe}. "
-                "Ensure HEC-RAS Linux binaries are installed."
+        ras_exe_dir_raw = str(ras_exe_dir)
+        ras_exe_dir_posix = ras_exe_dir_raw.replace("\\", "/").rstrip("/")
+        run_via_wsl = os.name == "nt" and ras_exe_dir_posix.startswith("/mnt/")
+
+        if run_via_wsl:
+            ras_exe = f"{ras_exe_dir_posix}/RasUnsteady"
+            probe = subprocess.run(
+                ["wsl", "test", "-x", ras_exe],
+                capture_output=True,
+                text=True,
             )
+            if probe.returncode != 0:
+                raise FileNotFoundError(
+                    f"RasUnsteady binary not found or not executable in WSL at {ras_exe}. "
+                    "Ensure HEC-RAS Linux binaries are installed and WSL can access them."
+                )
+        else:
+            ras_exe_dir = Path(ras_exe_dir)
+            ras_exe = ras_exe_dir / "RasUnsteady"
+            if not ras_exe.exists():
+                raise FileNotFoundError(
+                    f"RasUnsteady binary not found at {ras_exe}. "
+                    "Ensure HEC-RAS Linux binaries are installed."
+                )
 
         project_dir = Path(ras_obj.project_folder)
         project_name = ras_obj.project_name
@@ -1491,6 +1509,22 @@ class RasCmdr:
                 logger.info(f"Set number of cores to {num_cores} for plan: {plan_num_str}")
             except Exception as e:
                 logger.error(f"Error setting number of cores: {e}")
+
+        if run_via_wsl:
+            return RasCmdr._compute_plan_linux_via_wsl(
+                ras_exe=str(ras_exe),
+                ras_exe_dir=ras_exe_dir_posix,
+                plan_number=plan_num_str,
+                geom_num=geom_num,
+                project_dir=project_dir,
+                project_name=project_name,
+                tmp_hdf=tmp_hdf,
+                timeout_sec=timeout_sec,
+                dos2unix=dos2unix,
+                retry=retry,
+                retry_delay_sec=retry_delay_sec,
+                ras_obj=ras_obj,
+            )
 
         # Build LD_LIBRARY_PATH — auto-detect library subdirectories
         # HEC-RAS Linux versions have varying layouts:
@@ -1642,3 +1676,156 @@ class RasCmdr:
                         pass
 
                 return ComputeResult(success=False, results_df_row=None)
+
+    @staticmethod
+    def _windows_path_to_wsl(path: Union[str, Path]) -> str:
+        """Translate a Windows path to its WSL path using the active distro."""
+        path_arg = str(path).replace("\\", "/")
+        proc = subprocess.run(
+            ["wsl", "wslpath", "-a", path_arg],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"wslpath failed for {path}: {proc.stderr.strip() or proc.stdout.strip()}"
+            )
+        return proc.stdout.strip()
+
+    @staticmethod
+    def _compute_plan_linux_via_wsl(
+        ras_exe: str,
+        ras_exe_dir: str,
+        plan_number: str,
+        geom_num: str,
+        project_dir: Path,
+        project_name: str,
+        tmp_hdf: Path,
+        timeout_sec: int,
+        dos2unix: bool,
+        retry: bool,
+        retry_delay_sec: int,
+        ras_obj,
+    ) -> 'ComputeResult':
+        """Run native Linux RasUnsteady from a Windows Python session via WSL."""
+        project_dir_wsl = RasCmdr._windows_path_to_wsl(project_dir)
+        tmp_hdf_wsl = RasCmdr._windows_path_to_wsl(tmp_hdf)
+        log_path = project_dir / f"compute_linux_{plan_number}.log"
+        log_path_wsl = RasCmdr._windows_path_to_wsl(log_path)
+
+        if dos2unix:
+            try:
+                count = RasUtils.dos2unix(project_dir)
+                logger.debug(f"dos2unix converted {count} files")
+            except Exception as e:
+                logger.warning(f"dos2unix failed before WSL execution: {e}")
+
+        project_q = shlex.quote(project_dir_wsl)
+        project_name_q = shlex.quote(project_name)
+        ras_exe_q = shlex.quote(ras_exe)
+        ras_exe_dir_q = shlex.quote(ras_exe_dir)
+        tmp_hdf_q = shlex.quote(tmp_hdf_wsl)
+        log_path_q = shlex.quote(log_path_wsl)
+        geom_arg_q = shlex.quote(f"x{geom_num}")
+
+        cleanup_script = (
+            f"cd {project_q} && "
+            "find . -maxdepth 1 -type l -name 'io.*' -delete"
+        )
+
+        script = fr"""
+set -e
+cd {project_q}
+find . -maxdepth 1 -type l -name 'io.*' -delete
+link_or_copy() {{
+    ln -sfn "\$1" "\$2" 2>/dev/null || cp -f "\$1" "\$2"
+}}
+prefix={project_name_q}.
+link_or_copy {shlex.quote(f'{project_name}.b{plan_number}')} io.b
+link_or_copy {shlex.quote(f'{project_name}.x{geom_num}')} io.X
+link_or_copy {shlex.quote(f'{project_name}.x{geom_num}')} io.x
+for f in {project_name_q}.*; do
+    [ -e "\$f" ] || continue
+    suffix="\${{f#\$prefix}}"
+    [ -e "io.\$suffix" ] || link_or_copy "\$f" "io.\$suffix"
+done
+lib_base=""
+if [ -d {ras_exe_dir_q}/libs ]; then
+    lib_base={ras_exe_dir_q}/libs
+elif [ -d "\$(dirname {ras_exe_dir_q})/libs" ]; then
+    lib_base="\$(dirname {ras_exe_dir_q})/libs"
+fi
+if [ -n "\$lib_base" ]; then
+    ld_path="\$lib_base"
+    for d in "\$lib_base"/*; do
+        [ -d "\$d" ] && ld_path="\$ld_path:\$d"
+    done
+else
+    ld_path={ras_exe_dir_q}
+fi
+LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 2>&1
+"""
+
+        max_attempts = 2 if retry else 1
+        for attempt in range(1, max_attempts + 1):
+            logger.info(
+                f"WSL Linux execution attempt {attempt}/{max_attempts} for plan {plan_number}"
+            )
+            proc = subprocess.Popen(
+                ["wsl", "bash", "-lc", script],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout_sec)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.communicate()
+                logger.error(f"Plan {plan_number}: WSL RasUnsteady timeout after {timeout_sec}s")
+                stdout, stderr = "", f"Timeout after {timeout_sec}s"
+                rc = -1
+            else:
+                rc = proc.returncode
+
+            if rc == 0:
+                subprocess.run(
+                    ["wsl", "bash", "-lc", cleanup_script],
+                    capture_output=True,
+                    text=True,
+                )
+                if tmp_hdf.exists():
+                    plan_hdf = RasCmdr._get_hdf_path(plan_number, ras_obj)
+                    shutil.move(str(tmp_hdf), str(plan_hdf))
+                    logger.debug(f"Renamed {tmp_hdf.name} -> {plan_hdf.name}")
+
+                try:
+                    ras_obj.plan_df = ras_obj.get_plan_entries()
+                    ras_obj.update_results_df(plan_numbers=[plan_number])
+                    mask = ras_obj.results_df['plan_number'] == plan_number
+                    results_row = ras_obj.results_df[mask].iloc[0].copy() if mask.any() else None
+                except Exception as e:
+                    logger.debug(f"Could not extract results_df_row: {e}")
+                    results_row = None
+
+                return ComputeResult(success=True, results_df_row=results_row)
+
+            try:
+                tail = log_path.read_text(errors='replace')[-800:] if log_path.exists() else ""
+            except OSError:
+                tail = "(log unreadable)"
+            logger.error(
+                f"Plan {plan_number}: WSL RasUnsteady exited with code {rc}. "
+                f"stdout={stdout.strip()} stderr={stderr.strip()} log tail={tail}"
+            )
+
+            if attempt < max_attempts:
+                logger.info(f"Retrying in {retry_delay_sec}s...")
+                time.sleep(retry_delay_sec)
+
+        subprocess.run(
+            ["wsl", "bash", "-lc", cleanup_script],
+            capture_output=True,
+            text=True,
+        )
+        return ComputeResult(success=False, results_df_row=None)

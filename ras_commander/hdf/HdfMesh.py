@@ -402,7 +402,7 @@ class HdfMesh:
                             logger.warning(f"Error converting attribute '{name}': {str(e)}")
                     return pd.DataFrame.from_dict(result, orient='index', columns=['Value'])
                 else:
-                    logger.debug("No 2D Flow Area attributes found or invalid dataset.")
+                    logger.info("No 2D Flow Area attributes found or invalid dataset.")
                     return pd.DataFrame()  # Return an empty DataFrame
         except Exception as e:
             logger.error(f"Error reading 2D flow area attributes from {hdf_path}: {str(e)}")
@@ -1382,7 +1382,7 @@ class HdfMesh:
 
         # Create result GeoDataFrame
         if not selected_indices:
-            logger.debug("No faces found along profile line with given thresholds")
+            logger.info("No faces found along profile line with given thresholds")
             result = faces.iloc[0:0].copy()  # Empty GeoDataFrame with same structure
             result['distance_along_profile'] = []
             result['angle_to_profile'] = []
@@ -1686,6 +1686,8 @@ class HdfMesh:
         required_cols = ['Elevation', 'Area', 'Wetted Perimeter', "Manning's n"]
 
         for fid, df in face_tables.items():
+            if int(fid) < 0:
+                raise ValueError(f"Face ID must be non-negative, got {fid}")
             missing = [c for c in required_cols if c not in df.columns]
             if missing:
                 raise ValueError(f"Face {fid} table missing columns: {missing}")
@@ -1697,12 +1699,16 @@ class HdfMesh:
             if info_path not in hdf_file or values_path not in hdf_file:
                 raise KeyError(f"Face property tables not found for mesh '{mesh_name}'")
 
-            old_info = hdf_file[info_path][()]
-            old_values = hdf_file[values_path][()]
+            old_info_ds = hdf_file[info_path]
+            old_values_ds = hdf_file[values_path]
+            old_info = old_info_ds[()]
+            old_values = old_values_ds[()]
             num_faces = old_info.shape[0]
 
-            info_attrs = dict(hdf_file[info_path].attrs)
-            values_attrs = dict(hdf_file[values_path].attrs)
+            info_attrs = dict(old_info_ds.attrs)
+            values_attrs = dict(old_values_ds.attrs)
+            info_create_kwargs = HdfMesh._dataset_create_kwargs(old_info_ds)
+            values_create_kwargs = HdfMesh._dataset_create_kwargs(old_values_ds)
 
             new_face_slices = []
             for face_id in range(num_faces):
@@ -1719,9 +1725,9 @@ class HdfMesh:
                     start, count = old_info[face_id]
                     new_face_slices.append(old_values[start:start + count])
 
-            new_values = np.vstack(new_face_slices).astype(np.float32)
+            new_values = np.vstack(new_face_slices).astype(old_values.dtype, copy=False)
 
-            new_info = np.zeros((num_faces, 2), dtype=np.int32)
+            new_info = np.zeros((num_faces, 2), dtype=old_info.dtype)
             offset = 0
             for i, sl in enumerate(new_face_slices):
                 new_info[i, 0] = offset
@@ -1731,11 +1737,15 @@ class HdfMesh:
             del hdf_file[info_path]
             del hdf_file[values_path]
 
-            ds_info = hdf_file.create_dataset(info_path, data=new_info)
+            ds_info = hdf_file.create_dataset(
+                info_path, data=new_info, **info_create_kwargs
+            )
             for k, v in info_attrs.items():
                 ds_info.attrs[k] = v
 
-            ds_values = hdf_file.create_dataset(values_path, data=new_values)
+            ds_values = hdf_file.create_dataset(
+                values_path, data=new_values, **values_create_kwargs
+            )
             for k, v in values_attrs.items():
                 ds_values.attrs[k] = v
 
@@ -1746,6 +1756,37 @@ class HdfMesh:
             f"Wrote face property tables for {len(face_tables)} faces "
             f"in mesh '{mesh_name}' ({new_values.shape[0]} total rows)"
         )
+
+    @staticmethod
+    def _dataset_create_kwargs(dataset: h5py.Dataset) -> Dict[str, Any]:
+        """
+        Return creation keyword arguments needed to recreate an HDF dataset.
+
+        HEC-RAS geometry and preprocessed plan HDF datasets can use chunking,
+        compression, filters, fill values, and unlimited dimensions. Preserve
+        those properties when rewriting face property tables so solver-facing
+        files keep their original HDF layout.
+        """
+        kwargs: Dict[str, Any] = {}
+
+        if dataset.chunks is not None:
+            kwargs["chunks"] = dataset.chunks
+        if dataset.maxshape is not None:
+            kwargs["maxshape"] = dataset.maxshape
+        if dataset.compression is not None:
+            kwargs["compression"] = dataset.compression
+        if dataset.compression_opts is not None:
+            kwargs["compression_opts"] = dataset.compression_opts
+        if dataset.shuffle:
+            kwargs["shuffle"] = True
+        if dataset.fletcher32:
+            kwargs["fletcher32"] = True
+        if dataset.scaleoffset is not None:
+            kwargs["scaleoffset"] = dataset.scaleoffset
+        if dataset.fillvalue is not None:
+            kwargs["fillvalue"] = dataset.fillvalue
+
+        return kwargs
 
     @staticmethod
     @log_call
