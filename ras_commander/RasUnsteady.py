@@ -44,6 +44,10 @@ List of Functions in RasUnsteady:
 - set_precipitation_hyetograph()
 - set_gridded_precipitation()
 - configure_gridded_dss_precipitation()
+- set_meteorological_station()
+- get_meteorological_stations()
+- set_point_evapotranspiration()
+- get_point_evapotranspiration()
 
 Precipitation Functions:
 - get_met_precipitation_config() - Read Meteorological Data tab precipitation settings
@@ -51,6 +55,12 @@ Precipitation Functions:
 - set_gridded_precipitation() - Configure GDAL raster precipitation
 - configure_gridded_dss_precipitation() - Configure gridded DSS precipitation
 - get_met_precipitation_config() - Read meteorologic precipitation configuration
+
+Meteorological Point Data Functions:
+- set_meteorological_station() - Create/update meteorological station metadata
+- get_meteorological_stations() - Parse meteorological station metadata
+- set_point_evapotranspiration() - Write point ET series from a DataFrame
+- get_point_evapotranspiration() - Parse point ET series into a DataFrame
 
 DSS Boundary Condition Functions:
 - get_dss_boundaries() - Extract all DSS-linked BCs with full path info
@@ -4638,6 +4648,737 @@ class RasUnsteady:
             )
         else:
             logger.warning(f"HDF file not found: {hdf_path} - precipitation data not imported")
+
+    @staticmethod
+    def _format_met_float(value: Optional[float]) -> str:
+        """Format optional floats for ras-commander-authored meteorological metadata."""
+        if value is None:
+            return ""
+        if pd.isna(value):
+            return ""
+        formatted = f"{float(value):.8f}".rstrip("0").rstrip(".")
+        return "0" if formatted in ("", "-0") else formatted
+
+    @staticmethod
+    def _parse_met_float(value: str) -> float:
+        """Parse optional floats from meteorological metadata."""
+        text = value.strip()
+        if not text:
+            return np.nan
+        return float(text)
+
+    @staticmethod
+    def _validate_station_name(name: str) -> str:
+        """Validate and normalize a meteorological station name."""
+        station_name = str(name).strip()
+        if not station_name:
+            raise ValueError("Meteorological station name cannot be blank")
+        if any(char in station_name for char in [",", "\r", "\n", "="]):
+            raise ValueError("Meteorological station name cannot contain comma, newline, or equals characters")
+        return station_name
+
+    @staticmethod
+    def _meteorological_station_lines(
+        name: str,
+        x: float,
+        y: float,
+        longitude: Optional[float] = None,
+        latitude: Optional[float] = None,
+        height_m: Optional[float] = None
+    ) -> List[str]:
+        """Build native HEC-RAS meteorological station metadata lines."""
+        station_name = RasUnsteady._validate_station_name(name)
+        return [
+            f"Met Station Name={station_name}\n",
+            f"Met Station Gauge Height={RasUnsteady._format_met_float(height_m)}\n",
+            (
+                "Met Station LL="
+                f"{RasUnsteady._format_met_float(longitude)},{RasUnsteady._format_met_float(latitude)}\n"
+            ),
+            f"Met Station XY={RasUnsteady._format_met_float(x)},{RasUnsteady._format_met_float(y)}\n",
+        ]
+
+    @staticmethod
+    def _parse_meteorological_station_line(line: str, line_number: int, unsteady_path: Path) -> Optional[Dict[str, Any]]:
+        """Parse a legacy single-line ras-commander meteorological station line."""
+        if line.startswith("Met Station="):
+            raw_value = line.split("=", 1)[1].strip()
+        elif line.startswith("Meteorological Station="):
+            raw_value = line.split("=", 1)[1].strip()
+        else:
+            return None
+
+        parts = [part.strip() for part in raw_value.split(",")]
+        if len(parts) < 3:
+            logger.warning(f"Skipping malformed meteorological station line {line_number}: {line.strip()}")
+            return None
+
+        while len(parts) < 6:
+            parts.append("")
+
+        return {
+            "name": parts[0],
+            "x": RasUnsteady._parse_met_float(parts[1]),
+            "y": RasUnsteady._parse_met_float(parts[2]),
+            "longitude": RasUnsteady._parse_met_float(parts[3]),
+            "latitude": RasUnsteady._parse_met_float(parts[4]),
+            "height_m": RasUnsteady._parse_met_float(parts[5]),
+            "line_number": line_number,
+            "unsteady_file": str(unsteady_path),
+        }
+
+    @staticmethod
+    def _parse_native_meteorological_stations(lines: List[str], unsteady_path: Path) -> List[Dict[str, Any]]:
+        """Parse native HEC-RAS meteorological station line groups."""
+        records = []
+        name_prefix = "Met Station Name="
+        height_prefix = "Met Station Gauge Height="
+        ll_prefix = "Met Station LL="
+        xy_prefix = "Met Station XY="
+        station_prefixes = (name_prefix, height_prefix, ll_prefix, xy_prefix)
+        stop_prefixes = (
+            "Met Point Raster Parameters=",
+            "Precipitation Mode=",
+            "Wind Mode=",
+            "Air Density Mode=",
+            "Wave Mode=",
+            "Met BC=",
+        )
+
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if not line.startswith(name_prefix):
+                i += 1
+                continue
+
+            station_name = line[len(name_prefix):].strip()
+            record: Dict[str, Any] = {
+                "name": station_name,
+                "x": np.nan,
+                "y": np.nan,
+                "longitude": np.nan,
+                "latitude": np.nan,
+                "height_m": np.nan,
+                "line_number": i + 1,
+                "unsteady_file": str(unsteady_path),
+            }
+
+            j = i + 1
+            while j < len(lines):
+                current_line = lines[j]
+                if current_line.startswith(name_prefix):
+                    break
+                if current_line.startswith(height_prefix):
+                    record["height_m"] = RasUnsteady._parse_met_float(current_line[len(height_prefix):])
+                elif current_line.startswith(ll_prefix):
+                    parts = [part.strip() for part in current_line[len(ll_prefix):].split(",")]
+                    if len(parts) >= 2:
+                        record["longitude"] = RasUnsteady._parse_met_float(parts[0])
+                        record["latitude"] = RasUnsteady._parse_met_float(parts[1])
+                elif current_line.startswith(xy_prefix):
+                    parts = [part.strip() for part in current_line[len(xy_prefix):].split(",")]
+                    if len(parts) >= 2:
+                        record["x"] = RasUnsteady._parse_met_float(parts[0])
+                        record["y"] = RasUnsteady._parse_met_float(parts[1])
+                elif current_line.startswith(stop_prefixes):
+                    break
+                elif current_line.startswith("Met Station") and not current_line.startswith(station_prefixes):
+                    break
+                j += 1
+
+            records.append(record)
+            i = j
+
+        return records
+
+    @staticmethod
+    def _remove_meteorological_station_block(lines: List[str], station_name: str) -> List[str]:
+        """Remove native or legacy station metadata for a station name."""
+        name_prefix = "Met Station Name="
+        native_station_prefixes = (
+            "Met Station Gauge Height=",
+            "Met Station LL=",
+            "Met Station XY=",
+        )
+        normalized_name = station_name.lower()
+        cleaned_lines: List[str] = []
+        i = 0
+
+        while i < len(lines):
+            line = lines[i]
+            if line.startswith(name_prefix) and line[len(name_prefix):].strip().lower() == normalized_name:
+                i += 1
+                while i < len(lines) and lines[i].startswith(native_station_prefixes):
+                    i += 1
+                continue
+
+            parsed_legacy = RasUnsteady._parse_meteorological_station_line(line, i + 1, Path(""))
+            if parsed_legacy is not None and parsed_legacy["name"].lower() == normalized_name:
+                i += 1
+                continue
+
+            cleaned_lines.append(line)
+            i += 1
+
+        return cleaned_lines
+
+    @staticmethod
+    def _find_station_insert_index(lines: List[str]) -> int:
+        """Find the native HEC-RAS insertion location for station metadata."""
+        last_station_line = -1
+        for i, line in enumerate(lines):
+            if line.startswith((
+                "Met Station Name=",
+                "Met Station Gauge Height=",
+                "Met Station LL=",
+                "Met Station XY=",
+            )):
+                last_station_line = i
+        if last_station_line >= 0:
+            return last_station_line + 1
+
+        for i, line in enumerate(lines):
+            if line.startswith("Met Point Raster Parameters="):
+                return i
+        for i, line in enumerate(lines):
+            if line.startswith("Precipitation Mode="):
+                return i
+        for i, line in enumerate(lines):
+            if line.startswith("Met BC="):
+                return i
+        return len(lines)
+
+    @staticmethod
+    def _find_met_insert_index(lines: List[str]) -> int:
+        """Find a stable insertion location for meteorological boundary metadata."""
+        for i, line in enumerate(lines):
+            if line.startswith("Met Point Raster Parameters="):
+                return i + 1
+        for i, line in enumerate(lines):
+            if line.startswith("Precipitation Mode="):
+                return i
+        for i, line in enumerate(lines):
+            if line.startswith("Met BC="):
+                return i
+        return len(lines)
+
+    @staticmethod
+    def _set_met_bc_line(lines: List[str], met_type: str, setting: str, value: str) -> None:
+        """Update or insert a meteorological boundary condition setting."""
+        prefix = f"Met BC={met_type}|{setting}="
+        for i, line in enumerate(lines):
+            if line.startswith(prefix):
+                lines[i] = f"{prefix}{value}\n"
+                return
+
+        insert_idx = len(lines)
+        for i, line in enumerate(lines):
+            if line.startswith(f"Met BC={met_type}|"):
+                insert_idx = i + 1
+        lines.insert(insert_idx, f"{prefix}{value}\n")
+
+    @staticmethod
+    def _get_met_bc_value(lines: List[str], met_type: str, setting: str) -> Optional[str]:
+        """Get a meteorological boundary condition setting value."""
+        prefix = f"Met BC={met_type}|{setting}="
+        for line in lines:
+            if line.startswith(prefix):
+                return line[len(prefix):].strip()
+        return None
+
+    @staticmethod
+    def _format_interval_from_hours(interval_hours: float) -> str:
+        """Convert a numeric interval in hours to a HEC-RAS interval string."""
+        interval_hours = float(interval_hours)
+        if interval_hours <= 0:
+            raise ValueError("Time interval must be positive")
+
+        rounded_hours = round(interval_hours)
+        if interval_hours >= 1.0 and abs(interval_hours - rounded_hours) < 1e-9:
+            return f"{int(rounded_hours)}HOUR"
+
+        interval_minutes = round(interval_hours * 60.0)
+        if interval_minutes <= 0:
+            raise ValueError("Time interval must be at least one minute")
+        if abs(interval_hours - (interval_minutes / 60.0)) > 1e-6:
+            raise ValueError("Time interval must resolve to whole minutes")
+        return f"{int(interval_minutes)}MIN"
+
+    @staticmethod
+    def _detect_et_value_column(et_df: pd.DataFrame, value_column: Optional[str]) -> str:
+        """Detect the value column for point ET input."""
+        if value_column is not None:
+            if value_column not in et_df.columns:
+                raise ValueError(f"ET value column not found: {value_column}")
+            return value_column
+
+        candidates = [
+            "evapotranspiration",
+            "potential_evapotranspiration",
+            "potential_et",
+            "pet",
+            "et",
+            "value",
+        ]
+        lower_to_column = {str(column).lower(): column for column in et_df.columns}
+        for candidate in candidates:
+            if candidate in lower_to_column:
+                return lower_to_column[candidate]
+
+        numeric_columns = [
+            column for column in et_df.columns
+            if pd.api.types.is_numeric_dtype(et_df[column]) and str(column).lower() != "hour"
+        ]
+        if len(numeric_columns) == 1:
+            return numeric_columns[0]
+
+        raise ValueError(
+            "Could not detect ET value column. Pass value_column or use one of: "
+            "evapotranspiration, potential_evapotranspiration, potential_et, pet, et, value"
+        )
+
+    @staticmethod
+    def _detect_et_times(
+        et_df: pd.DataFrame,
+        time_column: Optional[str]
+    ) -> Tuple[np.ndarray, str, Optional[str]]:
+        """Return elapsed hours, interval string, and optional start timestamp."""
+        if time_column is not None:
+            if time_column == "index":
+                raw_times = et_df.index
+            elif time_column in et_df.columns:
+                raw_times = et_df[time_column]
+            else:
+                raise ValueError(f"ET time column not found: {time_column}")
+            timestamps = pd.to_datetime(raw_times, errors="raise")
+        elif isinstance(et_df.index, pd.DatetimeIndex):
+            timestamps = pd.to_datetime(et_df.index, errors="raise")
+        elif "hour" in et_df.columns:
+            hours = pd.to_numeric(et_df["hour"], errors="raise").to_numpy(dtype=float)
+            diffs = np.diff(hours)
+            if len(diffs) == 0:
+                raise ValueError("ET DataFrame must have at least 2 rows to determine interval")
+            if np.any(diffs <= 0):
+                raise ValueError("ET hour values must be strictly increasing")
+            interval_hours = float(diffs[0])
+            if np.max(np.abs(diffs - interval_hours)) > 1e-9:
+                raise ValueError("ET hour values must have a uniform interval")
+            return hours, RasUnsteady._format_interval_from_hours(interval_hours), None
+        else:
+            candidate_columns = ["datetime", "date_time", "timestamp", "time", "date"]
+            lower_to_column = {str(column).lower(): column for column in et_df.columns}
+            timestamp_column = None
+            for candidate in candidate_columns:
+                if candidate in lower_to_column:
+                    timestamp_column = lower_to_column[candidate]
+                    break
+            if timestamp_column is None:
+                raise ValueError(
+                    "ET DataFrame must have a DatetimeIndex, a time_column, a datetime/time column, or an hour column"
+                )
+            timestamps = pd.to_datetime(et_df[timestamp_column], errors="raise")
+
+        timestamp_series = pd.Series(timestamps)
+        if len(timestamp_series) < 2:
+            raise ValueError("ET DataFrame must have at least 2 rows to determine interval")
+        if timestamp_series.isna().any():
+            raise ValueError("ET timestamps cannot contain null values")
+
+        diffs = timestamp_series.diff().dropna().dt.total_seconds().to_numpy(dtype=float) / 3600.0
+        if np.any(diffs <= 0):
+            raise ValueError("ET timestamps must be strictly increasing")
+        interval_hours = float(diffs[0])
+        if np.max(np.abs(diffs - interval_hours)) > 1e-9:
+            raise ValueError("ET timestamps must have a uniform interval")
+
+        elapsed_hours = (
+            (timestamp_series - timestamp_series.iloc[0]).dt.total_seconds().to_numpy(dtype=float) / 3600.0
+        )
+        start_time = timestamp_series.iloc[0].strftime("%Y-%m-%d %H:%M:%S")
+        return elapsed_hours, RasUnsteady._format_interval_from_hours(interval_hours), start_time
+
+    @staticmethod
+    def _normalise_point_et_dataframe(
+        et_df: pd.DataFrame,
+        value_column: Optional[str],
+        time_column: Optional[str]
+    ) -> Tuple[np.ndarray, np.ndarray, str, Optional[str]]:
+        """Validate and normalize point ET input to hours, values, interval, and start time."""
+        if not isinstance(et_df, pd.DataFrame):
+            raise TypeError("et_df must be a pandas DataFrame")
+        if len(et_df) < 2:
+            raise ValueError("ET DataFrame must have at least 2 rows")
+
+        detected_value_column = RasUnsteady._detect_et_value_column(et_df, value_column)
+        values = pd.to_numeric(et_df[detected_value_column], errors="raise").to_numpy(dtype=float)
+        if np.any(pd.isna(values)):
+            raise ValueError("ET values cannot contain null values")
+
+        hours, interval_str, start_time = RasUnsteady._detect_et_times(et_df, time_column)
+        if len(hours) != len(values):
+            raise ValueError("ET time and value arrays must have the same length")
+        return hours, values, interval_str, start_time
+
+    @staticmethod
+    def _format_point_et_values(hours: np.ndarray, values: np.ndarray) -> List[str]:
+        """Format point ET elapsed-hour/value pairs as chunked metadata lines."""
+        paired_values: List[float] = []
+        for hour, value in zip(hours, values):
+            paired_values.append(float(hour))
+            paired_values.append(float(value))
+
+        formatted_lines = []
+        for i in range(0, len(paired_values), 20):
+            chunk = paired_values[i:i + 20]
+            chunk_text = ",".join(RasUnsteady._format_met_float(value) for value in chunk)
+            formatted_lines.append(f"Met BC=Evapotranspiration|Point Time Series Values={chunk_text}\n")
+        return formatted_lines
+
+    @staticmethod
+    def _remove_point_et_block(lines: List[str], station_name: str) -> List[str]:
+        """Remove an existing ras-commander-authored point ET block for a station."""
+        start_prefix = "Met BC=Evapotranspiration|Point Time Series="
+        end_prefix = "Met BC=Evapotranspiration|Point Time Series End="
+        normalized_name = station_name.lower()
+        cleaned_lines: List[str] = []
+        i = 0
+
+        while i < len(lines):
+            line = lines[i]
+            if line.startswith(start_prefix):
+                existing_name = line[len(start_prefix):].strip()
+                if existing_name.lower() == normalized_name:
+                    i += 1
+                    while i < len(lines):
+                        if lines[i].startswith(end_prefix):
+                            i += 1
+                            break
+                        if lines[i].startswith(start_prefix):
+                            break
+                        i += 1
+                    continue
+            cleaned_lines.append(line)
+            i += 1
+
+        return cleaned_lines
+
+    @staticmethod
+    def _insert_point_et_block(lines: List[str], block_lines: List[str]) -> None:
+        """Insert point ET block after the Evapotranspiration Met BC settings."""
+        insert_idx = -1
+        for i, line in enumerate(lines):
+            if line.startswith("Met BC=Evapotranspiration|"):
+                insert_idx = i + 1
+        if insert_idx < 0:
+            insert_idx = RasUnsteady._find_met_insert_index(lines)
+        lines[insert_idx:insert_idx] = block_lines
+
+    @staticmethod
+    @log_call
+    def set_meteorological_station(
+        unsteady_file: Union[str, Path],
+        name: str,
+        x: float,
+        y: float,
+        longitude: Optional[float] = None,
+        latitude: Optional[float] = None,
+        height_m: Optional[float] = None,
+        ras_object: Optional[Any] = None
+    ) -> None:
+        """
+        Create or update a meteorological station definition in an unsteady flow file.
+
+        This writes the native HEC-RAS station metadata lines alongside the
+        meteorological block. Existing precipitation settings are not modified.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##) or unsteady number (e.g., "01").
+        name : str
+            Meteorological station name.
+        x, y : float
+            Project coordinates for the station.
+        longitude, latitude : float, optional
+            Geographic coordinates for the station.
+        height_m : float, optional
+            Station height in meters. HEC-RAS requires this for wind, but not ET.
+        ras_object : optional
+            Custom RAS object to use instead of the global one.
+        """
+        station_name = RasUnsteady._validate_station_name(name)
+        unsteady_path = RasUnsteady._resolve_unsteady_file_path(unsteady_file, ras_object)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(unsteady_path, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+
+        station_lines = RasUnsteady._meteorological_station_lines(
+            name=station_name,
+            x=x,
+            y=y,
+            longitude=longitude,
+            latitude=latitude,
+            height_m=height_m,
+        )
+
+        lines = RasUnsteady._remove_meteorological_station_block(lines, station_name)
+        insert_idx = RasUnsteady._find_station_insert_index(lines)
+        lines[insert_idx:insert_idx] = station_lines
+
+        with open(unsteady_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+
+        logger.info(f"Updated meteorological station '{station_name}' in {unsteady_path}")
+
+    @staticmethod
+    @log_call
+    def get_meteorological_stations(
+        unsteady_file: Union[str, Path],
+        ras_object: Optional[Any] = None
+    ) -> pd.DataFrame:
+        """
+        Parse meteorological station definitions from an unsteady flow file.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns: name, x, y, longitude, latitude, height_m, line_number,
+            unsteady_file.
+        """
+        unsteady_path = RasUnsteady._resolve_unsteady_file_path(unsteady_file, ras_object)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(unsteady_path, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+
+        records = RasUnsteady._parse_native_meteorological_stations(lines, unsteady_path)
+        native_names = {record["name"].lower() for record in records}
+        for i, line in enumerate(lines, start=1):
+            parsed = RasUnsteady._parse_meteorological_station_line(line, i, unsteady_path)
+            if parsed is not None and parsed["name"].lower() not in native_names:
+                records.append(parsed)
+
+        columns = ["name", "x", "y", "longitude", "latitude", "height_m", "line_number", "unsteady_file"]
+        return pd.DataFrame(records, columns=columns)
+
+    @staticmethod
+    @log_call
+    def set_point_evapotranspiration(
+        unsteady_file: Union[str, Path],
+        station_name: str,
+        et_df: pd.DataFrame,
+        value_column: Optional[str] = None,
+        time_column: Optional[str] = None,
+        units: str = "mm/day",
+        interpolation: str = "Nearest",
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        longitude: Optional[float] = None,
+        latitude: Optional[float] = None,
+        height_m: Optional[float] = None,
+        ras_object: Optional[Any] = None
+    ) -> None:
+        """
+        Set point evapotranspiration mode and write station time-series data.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##) or unsteady number (e.g., "01").
+        station_name : str
+            Meteorological station name used by the ET time series.
+        et_df : pandas.DataFrame
+            ET time series. Provide either a DatetimeIndex, a datetime/time column,
+            or an ``hour`` column. Values are detected from common ET column names
+            or can be specified with ``value_column``.
+        value_column : str, optional
+            ET value column. Defaults to common names such as ``evapotranspiration``,
+            ``potential_et``, ``pet``, ``et``, or ``value``.
+        time_column : str, optional
+            Datetime column name. Use ``"index"`` to force the DataFrame index.
+        units : str, default "mm/day"
+            ET units written to the meteorological block.
+        interpolation : str, default "Nearest"
+            Point interpolation method for the ET meteorological boundary condition.
+        x, y, longitude, latitude, height_m : float, optional
+            Station metadata. If ``x`` and ``y`` are provided, the station definition
+            is created or updated before the ET series is written.
+        ras_object : optional
+            Custom RAS object to use instead of the global one.
+        """
+        station_name = RasUnsteady._validate_station_name(station_name)
+        if (x is None) ^ (y is None):
+            raise ValueError("Both x and y are required when creating/updating a station from ET data")
+
+        unsteady_path = RasUnsteady._resolve_unsteady_file_path(unsteady_file, ras_object)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        hours, values, interval_str, start_time = RasUnsteady._normalise_point_et_dataframe(
+            et_df=et_df,
+            value_column=value_column,
+            time_column=time_column,
+        )
+
+        with open(unsteady_path, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+
+        if x is not None and y is not None:
+            station_lines = RasUnsteady._meteorological_station_lines(
+                name=station_name,
+                x=x,
+                y=y,
+                longitude=longitude,
+                latitude=latitude,
+                height_m=height_m,
+            )
+            lines = RasUnsteady._remove_meteorological_station_block(lines, station_name)
+            insert_idx = RasUnsteady._find_station_insert_index(lines)
+            lines[insert_idx:insert_idx] = station_lines
+
+        RasUnsteady._set_met_bc_line(lines, "Evapotranspiration", "Mode", "Point Gage")
+        RasUnsteady._set_met_bc_line(lines, "Evapotranspiration", "Constant Units", units)
+        RasUnsteady._set_met_bc_line(lines, "Evapotranspiration", "Point Interpolation", interpolation)
+
+        block_lines = [
+            f"Met BC=Evapotranspiration|Point Time Series={station_name}\n",
+            f"Met BC=Evapotranspiration|Point Time Series Interval={interval_str}\n",
+            f"Met BC=Evapotranspiration|Point Time Series Units={units}\n",
+            f"Met BC=Evapotranspiration|Point Time Series Count={len(values)}\n",
+        ]
+        if start_time is not None:
+            block_lines.append(f"Met BC=Evapotranspiration|Point Time Series Start={start_time}\n")
+        block_lines.extend(RasUnsteady._format_point_et_values(hours, values))
+        block_lines.append(f"Met BC=Evapotranspiration|Point Time Series End={station_name}\n")
+
+        lines = RasUnsteady._remove_point_et_block(lines, station_name)
+        RasUnsteady._insert_point_et_block(lines, block_lines)
+
+        with open(unsteady_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+
+        logger.info(
+            f"Configured point ET for station '{station_name}' in {unsteady_path} "
+            f"({len(values)} values, interval {interval_str}, units {units})"
+        )
+
+    @staticmethod
+    @log_call
+    def get_point_evapotranspiration(
+        unsteady_file: Union[str, Path],
+        ras_object: Optional[Any] = None
+    ) -> pd.DataFrame:
+        """
+        Parse ras-commander-authored point evapotranspiration data from an unsteady file.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns: station_name, hour, value, interval, units, start_time,
+            datetime, mode, point_interpolation, line_number, unsteady_file.
+        """
+        unsteady_path = RasUnsteady._resolve_unsteady_file_path(unsteady_file, ras_object)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(unsteady_path, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+
+        mode = RasUnsteady._get_met_bc_value(lines, "Evapotranspiration", "Mode")
+        point_interpolation = RasUnsteady._get_met_bc_value(lines, "Evapotranspiration", "Point Interpolation")
+
+        start_prefix = "Met BC=Evapotranspiration|Point Time Series="
+        interval_prefix = "Met BC=Evapotranspiration|Point Time Series Interval="
+        units_prefix = "Met BC=Evapotranspiration|Point Time Series Units="
+        count_prefix = "Met BC=Evapotranspiration|Point Time Series Count="
+        start_time_prefix = "Met BC=Evapotranspiration|Point Time Series Start="
+        values_prefix = "Met BC=Evapotranspiration|Point Time Series Values="
+        end_prefix = "Met BC=Evapotranspiration|Point Time Series End="
+
+        records = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if not line.startswith(start_prefix):
+                i += 1
+                continue
+
+            station_name = line[len(start_prefix):].strip()
+            line_number = i + 1
+            interval = None
+            units = None
+            count = None
+            start_time = None
+            paired_values: List[float] = []
+            i += 1
+
+            while i < len(lines):
+                current_line = lines[i]
+                if current_line.startswith(end_prefix):
+                    i += 1
+                    break
+                if current_line.startswith(start_prefix):
+                    break
+                if current_line.startswith(interval_prefix):
+                    interval = current_line[len(interval_prefix):].strip()
+                elif current_line.startswith(units_prefix):
+                    units = current_line[len(units_prefix):].strip()
+                elif current_line.startswith(count_prefix):
+                    count = int(current_line[len(count_prefix):].strip())
+                elif current_line.startswith(start_time_prefix):
+                    start_time = current_line[len(start_time_prefix):].strip()
+                elif current_line.startswith(values_prefix):
+                    raw_values = current_line[len(values_prefix):].strip()
+                    if raw_values:
+                        paired_values.extend(float(value) for value in raw_values.split(",") if value.strip())
+                i += 1
+
+            if len(paired_values) % 2 != 0:
+                raise ValueError(f"Point ET series for station '{station_name}' has an odd number of numeric values")
+
+            value_pairs = list(zip(paired_values[0::2], paired_values[1::2]))
+            if count is not None and count != len(value_pairs):
+                raise ValueError(
+                    f"Point ET count mismatch for station '{station_name}': expected {count}, found {len(value_pairs)}"
+                )
+
+            start_timestamp = pd.to_datetime(start_time, errors="coerce") if start_time else pd.NaT
+            for hour, value in value_pairs:
+                timestamp = pd.NaT
+                if not pd.isna(start_timestamp):
+                    timestamp = start_timestamp + pd.to_timedelta(float(hour), unit="h")
+                records.append({
+                    "station_name": station_name,
+                    "hour": float(hour),
+                    "value": float(value),
+                    "interval": interval,
+                    "units": units,
+                    "start_time": start_time,
+                    "datetime": timestamp,
+                    "mode": mode,
+                    "point_interpolation": point_interpolation,
+                    "line_number": line_number,
+                    "unsteady_file": str(unsteady_path),
+                })
+
+        columns = [
+            "station_name",
+            "hour",
+            "value",
+            "interval",
+            "units",
+            "start_time",
+            "datetime",
+            "mode",
+            "point_interpolation",
+            "line_number",
+            "unsteady_file",
+        ]
+        return pd.DataFrame(records, columns=columns)
 
     # ==========================================================================
     # DSS Boundary Condition Functions
