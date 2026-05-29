@@ -2386,7 +2386,19 @@ class HdfResultsQuery:
         ras_object: Optional[Any] = None,
     ) -> pd.DataFrame:
         """
-        March cell-by-cell across local flow to build a velocity profile.
+        March cell-by-cell across local flow to build an approximate velocity
+        transect.
+
+        .. warning::
+
+           This method reconstructs cell-centered velocities from stored HDF
+           face-normal components via least-squares. It does **not** have access
+           to the internal solver state that HEC-RAS uses when computing
+           Reference Line output. Results are therefore approximate and should
+           only be used when it is impractical to re-run plans with Reference
+           Lines included. For authoritative transverse profiles, add a
+           Reference Line in RAS Mapper and re-compute the plan — see
+           ``query_polyline_velocity_profile`` for extraction.
 
         The seed point is snapped to the nearest 2D cell. The seed cell's
         velocity vector defines the transverse axis, and the marcher advances
