@@ -1825,6 +1825,7 @@ class RasMonteCarlo:
         num_cores: int = 2,
         max_plans_per_batch: int = 99,
         ras_object: Any = None,
+        timeout_sec: Optional[int] = None,
     ) -> dict:
         """
         Run a Monte Carlo ensemble using RasPermutation as the execution engine.
@@ -1870,6 +1871,7 @@ class RasMonteCarlo:
             max_workers=max_workers,
             num_cores=num_cores,
             ras_object=ras_object,
+            timeout_sec=timeout_sec,
         )
 
         if "sample_id" in results_df.columns:

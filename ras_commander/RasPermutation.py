@@ -714,6 +714,7 @@ class RasPermutation:
         max_workers: int = 2,
         num_cores: int = 2,
         ras_object: Any = None,
+        timeout_sec: Optional[int] = None,
     ) -> pd.DataFrame:
         """
         Execute generated batch folders and append summary metrics to master log.
@@ -759,6 +760,7 @@ class RasPermutation:
                 max_workers=max_workers,
                 num_cores=num_cores,
                 ras_object=batch_ras,
+                timeout_sec=timeout_sec,
             )
 
             summary_df = compute_result.results_df.copy()

@@ -303,6 +303,31 @@ class RasCmdr:
             return False
     
     @staticmethod
+    def _kill_process_tree(pid: int) -> None:
+        """
+        Forcibly terminate a process and all of its descendants.
+
+        Used to enforce ``timeout_sec`` on Windows, where ``shell=True`` spawns
+        ``cmd.exe`` -> ``Ras.exe`` -> ``RasUnsteady.exe``. ``taskkill /T`` walks
+        the tree from the given PID, so only THIS run's processes are killed
+        (safe when other workers are computing in parallel). Falls back to a
+        plain ``psutil``/``os`` kill on non-Windows platforms.
+        """
+        import sys as _sys
+        try:
+            if _sys.platform.startswith("win"):
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(pid)],
+                    capture_output=True,
+                    timeout=120,
+                )
+            else:
+                import signal as _signal
+                os.killpg(os.getpgid(pid), _signal.SIGKILL)
+        except Exception as _e:
+            logger.warning(f"Failed to kill process tree for PID {pid}: {_e}")
+
+    @staticmethod
     @log_call
     def compute_plan(
         plan_number: Union[str, Number, Path],
@@ -323,6 +348,7 @@ class RasCmdr:
         hdf_output_options: Optional[Dict[str, Any]] = None,
         hdf_output_profile: Optional[str] = None,
         dialog_watchdog: bool = True,
+        timeout_sec: Optional[int] = None,
     ) -> 'ComputeResult':
         """
         Execute a single HEC-RAS plan in a specified location.
@@ -630,16 +656,50 @@ class RasCmdr:
                     # (BcoMonitor will call on_exec_message callback as messages appear)
                     bco_monitor.monitor_until_signal(process)
 
-                    # Wait for process to complete
-                    return_code = process.wait()
+                    # Wait for process to complete (timeout_sec=None waits indefinitely).
+                    try:
+                        return_code = process.wait(timeout=timeout_sec)
+                    except subprocess.TimeoutExpired:
+                        RasCmdr._kill_process_tree(process.pid)
+                        raise RuntimeError(
+                            f"Plan {plan_number}: HEC-RAS execution exceeded "
+                            f"timeout_sec={timeout_sec}s; process tree killed"
+                        )
 
                     # Check if subprocess succeeded
                     if return_code != 0:
                         raise subprocess.CalledProcessError(return_code, cmd)
 
                 else:
-                    # Original behavior when no callback
-                    subprocess.run(cmd, check=True, shell=True, capture_output=True, text=True)
+                    # Original behavior when no callback. When timeout_sec is None we
+                    # keep the simple blocking subprocess.run() (unchanged). When a
+                    # timeout is requested we use Popen so we can kill the full
+                    # cmd.exe -> Ras.exe -> RasUnsteady.exe tree on expiry (taskkill /T),
+                    # which targets only THIS run's processes (safe under parallelism).
+                    if timeout_sec is None:
+                        subprocess.run(cmd, check=True, shell=True, capture_output=True, text=True)
+                    else:
+                        _proc = subprocess.Popen(
+                            cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            cwd=str(compute_ras.project_folder),
+                            shell=True,
+                            text=True,
+                        )
+                        if _watchdog:
+                            _watchdog.add_pid(_proc.pid)
+                        try:
+                            _out, _err = _proc.communicate(timeout=timeout_sec)
+                        except subprocess.TimeoutExpired:
+                            RasCmdr._kill_process_tree(_proc.pid)
+                            _proc.communicate()
+                            raise RuntimeError(
+                                f"Plan {plan_number}: HEC-RAS execution exceeded "
+                                f"timeout_sec={timeout_sec}s; process tree killed"
+                            )
+                        if _proc.returncode != 0:
+                            raise subprocess.CalledProcessError(_proc.returncode, cmd, _out, _err)
 
                 end_time = time.time()
                 run_time = end_time - start_time
@@ -757,7 +817,8 @@ class RasCmdr:
         dest_folder: Union[str, Path, None] = None,
         overwrite_dest: bool = False,
         skip_existing: bool = False,
-        verify: bool = False
+        verify: bool = False,
+        timeout_sec: Optional[int] = None
     ) -> 'ComputeParallelResult':
         """
         Execute multiple HEC-RAS plans in parallel using multiple worker instances.
@@ -971,7 +1032,8 @@ class RasCmdr:
                         force_geompre=force_geompre,
                         force_rerun=True,  # Always force execution in workers - plans passed skip_existing filter
                         num_cores=num_cores,
-                        verify=verify
+                        verify=verify,
+                        timeout_sec=timeout_sec,
                     )
                     future_to_plan[future] = (worker_id, plan_num)
 
