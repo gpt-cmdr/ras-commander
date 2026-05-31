@@ -2940,6 +2940,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#step-5-compare-existing-and-proposed-conditions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5: Compare Existing and Proposed Conditions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#key-takeaways" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2972,9 +2983,9 @@
 
 <h1 id="1d-channel-capacity-analysis">1D Channel Capacity Analysis<a class="headerlink" href="#1d-channel-capacity-analysis" title="Permanent link">&para;</a></h1>
 <p>This notebook demonstrates the <code>HdfChannelCapacity</code> class for analyzing 1D channel capacity
-using WSE results and bank station elevations. Channel capacity is
-determined by comparing water surface elevations from multiple AEP storm profiles against
-bank elevations at each cross section.</p>
+using WSE results and bank station elevations. Channel capacity is determined by comparing
+water surface elevations from multiple AEP storm profiles against bank elevations at each
+cross section, then aggregating the result into 0.25-mile channel segments.</p>
 <p><strong>Capacity Levels:</strong></p>
 <table>
 <thead>
@@ -2987,38 +2998,38 @@ bank elevations at each cross section.</p>
 <tbody>
 <tr>
 <td>1</td>
-<td>X ≤ 10% AEP</td>
-<td>Only contains 10-year storm or smaller</td>
+<td>&lt;=2-yr</td>
+<td>Contains 50% AEP (2-year) or less</td>
 </tr>
 <tr>
 <td>2</td>
-<td>10% &lt; X ≤ 4%</td>
-<td>Contains up to 25-year storm</td>
+<td>5-yr</td>
+<td>Contains 20% AEP (5-year)</td>
 </tr>
 <tr>
 <td>3</td>
-<td>4% &lt; X ≤ 2%</td>
-<td>Contains up to 50-year storm</td>
+<td>10-yr</td>
+<td>Contains 10% AEP (10-year)</td>
 </tr>
 <tr>
 <td>4</td>
-<td>2% &lt; X ≤ 1%</td>
-<td>Contains up to 100-year storm</td>
+<td>25-yr</td>
+<td>Contains 4% AEP (25-year)</td>
 </tr>
 <tr>
 <td>5</td>
-<td>1% &lt; X ≤ 0.2%</td>
-<td>Contains up to 500-year storm</td>
+<td>50-yr</td>
+<td>Contains 2% AEP (50-year)</td>
 </tr>
 <tr>
 <td>6</td>
-<td>X &gt; 0.2%</td>
-<td>Contains all tested storms</td>
+<td>100-yr</td>
+<td>Contains 1% AEP (100-year)</td>
 </tr>
 <tr>
 <td>7</td>
-<td>All overtop</td>
-<td>Overtopped by smallest tested storm</td>
+<td>&gt;=500-yr</td>
+<td>Contains 0.2% AEP (500-year)</td>
 </tr>
 </tbody>
 </table>
@@ -3036,37 +3047,42 @@ with 40 cross sections and 7 steady-state flow profiles.</p>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># =============================================================================</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">USE_LOCAL_SOURCE</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># &lt;-- TOGGLE THIS</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">if</span> <span class="n">USE_LOCAL_SOURCE</span><span class="p">:</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">local_path</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span><span class="o">.</span><span class="n">parent</span><span class="p">)</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="k">if</span> <span class="n">local_path</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">:</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">local_path</span><span class="p">)</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;LOCAL SOURCE MODE: Loading from </span><span class="si">{</span><span class="n">local_path</span><span class="si">}</span><span class="s2">/ras_commander&quot;</span><span class="p">)</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="k">else</span><span class="p">:</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PIP PACKAGE MODE: Loading installed ras-commander&quot;</span><span class="p">)</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf.HdfChannelCapacity</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">HdfChannelCapacity</span><span class="p">,</span> <span class="n">STORM_ORDER</span><span class="p">,</span> <span class="n">LEVEL_TO_CATEGORY</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="p">)</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;NUMEXPR_MAX_THREADS&quot;</span><span class="p">,</span> <span class="s2">&quot;8&quot;</span><span class="p">)</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">logging</span><span class="o">.</span><span class="n">disable</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">CRITICAL</span><span class="p">)</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">ERROR</span><span class="p">)</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s2">&quot;numexpr&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">ERROR</span><span class="p">)</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="k">if</span> <span class="n">USE_LOCAL_SOURCE</span><span class="p">:</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">repo_candidates</span> <span class="o">=</span> <span class="p">[</span><span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">(),</span> <span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span><span class="o">.</span><span class="n">parent</span><span class="p">]</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">local_path</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">next</span><span class="p">((</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">repo_candidates</span> <span class="k">if</span> <span class="p">(</span><span class="n">p</span> <span class="o">/</span> <span class="s2">&quot;ras_commander&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">()),</span> <span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()))</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="k">if</span> <span class="n">local_path</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">:</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>        <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">local_path</span><span class="p">)</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;LOCAL SOURCE MODE: Loading ras-commander from the active workspace&quot;</span><span class="p">)</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PIP PACKAGE MODE: Loading installed ras-commander&quot;</span><span class="p">)</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">RasCmdr</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.hdf.HdfChannelCapacity</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>    <span class="n">HdfChannelCapacity</span><span class="p">,</span> <span class="n">STORM_ORDER</span><span class="p">,</span> <span class="n">LEVEL_TO_CATEGORY</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="p">)</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.sources.federal</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasEbfeModels</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">()</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">ERROR</span><span class="p">)</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s2">&quot;ras_commander&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">ERROR</span><span class="p">)</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ras-commander version: </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">ras_commander</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;__version__&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;local source&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>LOCAL SOURCE MODE: Loading from C:\GH\ras-commander/ras_commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>LOCAL SOURCE MODE: Loading ras-commander from the active workspace
 
 
-2026-04-28 23:39:23 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
-
-
-Loaded: C:\GH\ras-commander\ras_commander\__init__.py
+ras-commander version: 0.96.0
 </code></pre></div>
 <h2 id="setup-ble-model-preparation">Setup: BLE Model Preparation<a class="headerlink" href="#setup-ble-model-preparation" title="Permanent link">&para;</a></h2>
 <p>We use a FEMA Base Level Engineering (BLE) reach model — SHILOH BRANCH from the Lower Colorado-Cummins study (HUC 12090301). BLE models are steady-state with 7 flow profiles representing different AEP events.</p>
@@ -3103,78 +3119,52 @@ Loaded: C:\GH\ras-commander\ras_commander\__init__.py
 </span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Reach: </span><span class="si">{</span><span class="n">BLE_RIVER</span><span class="si">}</span><span class="s2"> / </span><span class="si">{</span><span class="n">BLE_REACH_NAME</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Storm order: </span><span class="si">{</span><span class="n">STORM_ORDER_BLE</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="c1"># Shared eBFE workspace. Override RAS_COMMANDER_EBFE_ROOT to use a different local cache.</span>
-</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
-</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="n">EBFE_ROOT</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;RAS_COMMANDER_EBFE_ROOT&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">EBFE_ROOT</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">EBFE_ROOT</span><span class="p">):</span>
-</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>    <span class="n">EBFE_ROOT</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;ras_ebfe_&quot;</span><span class="p">)</span>
-</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;RAS_COMMANDER_EBFE_ROOT not set, using temp dir: </span><span class="si">{</span><span class="n">EBFE_ROOT</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a><span class="n">EBFE_WORKSPACE</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">EBFE_ROOT</span><span class="p">)</span>
-</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a><span class="n">DOWNLOAD_ROOT</span> <span class="o">=</span> <span class="n">EBFE_WORKSPACE</span> <span class="o">/</span> <span class="s2">&quot;Downloads&quot;</span>
-</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a><span class="n">ORGANIZED_ROOT</span> <span class="o">=</span> <span class="n">EBFE_WORKSPACE</span> <span class="o">/</span> <span class="s2">&quot;Organized&quot;</span>
-</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a><span class="n">VALIDATION_ROOT</span> <span class="o">=</span> <span class="n">EBFE_WORKSPACE</span> <span class="o">/</span> <span class="s2">&quot;Validation&quot;</span> <span class="o">/</span> <span class="s2">&quot;ebfe_delivery&quot;</span>
-</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a><span class="n">repo_candidates</span> <span class="o">=</span> <span class="p">[</span><span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">(),</span> <span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span><span class="o">.</span><span class="n">parent</span><span class="p">]</span>
-</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a><span class="n">VALIDATION_MATRIX</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span>
-</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>    <span class="p">(</span><span class="n">candidate</span> <span class="o">/</span> <span class="s2">&quot;VALIDATION_MATRIX.md&quot;</span> <span class="k">for</span> <span class="n">candidate</span> <span class="ow">in</span> <span class="n">repo_candidates</span> <span class="k">if</span> <span class="p">(</span><span class="n">candidate</span> <span class="o">/</span> <span class="s2">&quot;VALIDATION_MATRIX.md&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">()),</span>
-</span><span id="__span-1-44"><a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>    <span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span> <span class="o">/</span> <span class="s2">&quot;VALIDATION_MATRIX.md&quot;</span><span class="p">,</span>
-</span><span id="__span-1-45"><a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a><span class="p">)</span>
-</span><span id="__span-1-46"><a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a>
-</span><span id="__span-1-47"><a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;eBFE workspace: </span><span class="si">{</span><span class="n">EBFE_WORKSPACE</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-1-48"><a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Validation matrix: </span><span class="si">{</span><span class="n">VALIDATION_MATRIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="n">EBFE_WORKSPACE</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;RAS_COMMANDER_EBFE_ROOT&quot;</span><span class="p">,</span> <span class="sa">r</span><span class="s2">&quot;H:\Testing\eBFE Model Organization&quot;</span><span class="p">))</span>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="n">DOWNLOAD_ROOT</span> <span class="o">=</span> <span class="n">EBFE_WORKSPACE</span> <span class="o">/</span> <span class="s2">&quot;Downloads&quot;</span>
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="n">ORGANIZED_ROOT</span> <span class="o">=</span> <span class="n">EBFE_WORKSPACE</span> <span class="o">/</span> <span class="s2">&quot;Organized&quot;</span>
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="n">VALIDATION_ROOT</span> <span class="o">=</span> <span class="n">EBFE_WORKSPACE</span> <span class="o">/</span> <span class="s2">&quot;Validation&quot;</span> <span class="o">/</span> <span class="s2">&quot;ebfe_delivery&quot;</span>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="n">repo_candidates</span> <span class="o">=</span> <span class="p">[</span><span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">(),</span> <span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span><span class="o">.</span><span class="n">parent</span><span class="p">]</span>
+</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a><span class="n">VALIDATION_MATRIX</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span>
+</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>    <span class="p">(</span><span class="n">candidate</span> <span class="o">/</span> <span class="s2">&quot;VALIDATION_MATRIX.md&quot;</span> <span class="k">for</span> <span class="n">candidate</span> <span class="ow">in</span> <span class="n">repo_candidates</span> <span class="k">if</span> <span class="p">(</span><span class="n">candidate</span> <span class="o">/</span> <span class="s2">&quot;VALIDATION_MATRIX.md&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">()),</span>
+</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>    <span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span> <span class="o">/</span> <span class="s2">&quot;VALIDATION_MATRIX.md&quot;</span><span class="p">,</span>
+</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a><span class="p">)</span>
+</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>
+</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;eBFE workspace configured: </span><span class="si">{</span><span class="n">EBFE_WORKSPACE</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Validation matrix: </span><span class="si">{</span><span class="n">VALIDATION_MATRIX</span><span class="o">.</span><span class="n">name</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">VALIDATION_MATRIX</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;not found&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Reach: Rabbs Creek-Colorado River / SHILOH BRANCH
 Storm order: [&#39;10P&#39;, &#39;4P&#39;, &#39;2P&#39;, &#39;1P&#39;, &#39;0.2P&#39;]
-eBFE workspace: H:\Testing\eBFE Model Organization
-Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
+eBFE workspace configured: True
+Validation matrix: VALIDATION_MATRIX.md
 </code></pre></div>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Download/cache, extract, and organize the BLE model using the shared eBFE delivery workspace.</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># Auto-downloads 290.7 MB from S3 if not already cached under DOWNLOAD_ROOT.</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_model</span><span class="p">(</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="s2">&quot;lower-colorado-cummins&quot;</span><span class="p">,</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">download_root</span><span class="o">=</span><span class="n">DOWNLOAD_ROOT</span><span class="p">,</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">output_root</span><span class="o">=</span><span class="n">ORGANIZED_ROOT</span><span class="p">,</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">river</span><span class="o">=</span><span class="n">BLE_RIVER</span><span class="p">,</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">reach</span><span class="o">=</span><span class="n">BLE_REACH_NAME</span><span class="p">,</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">)</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># Project folder is under RAS Model/{River}/{Reach}/</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">project_folder</span> <span class="o">=</span> <span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span> <span class="o">/</span> <span class="n">BLE_RIVER</span> <span class="o">/</span> <span class="n">BLE_REACH_NAME</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Organized to: </span><span class="si">{</span><span class="n">organized</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project folder: </span><span class="si">{</span><span class="n">project_folder</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Validation root: </span><span class="si">{</span><span class="n">VALIDATION_ROOT</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Project files:&quot;</span><span class="p">)</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">project_folder</span><span class="o">.</span><span class="n">iterdir</span><span class="p">()):</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>    <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> bytes)&quot;</span><span class="p">)</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">redirect_stdout</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">io</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="k">with</span> <span class="n">redirect_stdout</span><span class="p">(</span><span class="n">io</span><span class="o">.</span><span class="n">StringIO</span><span class="p">()):</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">organized</span> <span class="o">=</span> <span class="n">RasEbfeModels</span><span class="o">.</span><span class="n">organize_model</span><span class="p">(</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>        <span class="s2">&quot;lower-colorado-cummins&quot;</span><span class="p">,</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>        <span class="n">download_root</span><span class="o">=</span><span class="n">DOWNLOAD_ROOT</span><span class="p">,</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>        <span class="n">output_root</span><span class="o">=</span><span class="n">ORGANIZED_ROOT</span><span class="p">,</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>        <span class="n">river</span><span class="o">=</span><span class="n">BLE_RIVER</span><span class="p">,</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>        <span class="n">reach</span><span class="o">=</span><span class="n">BLE_REACH_NAME</span><span class="p">,</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="p">)</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># Project folder is under RAS Model/{River}/{Reach}/</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="n">project_folder</span> <span class="o">=</span> <span class="n">organized</span> <span class="o">/</span> <span class="s2">&quot;RAS Model&quot;</span> <span class="o">/</span> <span class="n">BLE_RIVER</span> <span class="o">/</span> <span class="n">BLE_REACH_NAME</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Organized study: </span><span class="si">{</span><span class="n">organized</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Project folder: </span><span class="si">{</span><span class="n">project_folder</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Validation root configured: </span><span class="si">{</span><span class="n">VALIDATION_ROOT</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Project files:&quot;</span><span class="p">)</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">project_folder</span><span class="o">.</span><span class="n">iterdir</span><span class="p">()):</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>    <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> bytes)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Organizing Lower Colorado-Cummins (12090301) - Pattern 1D-BLE
-Source: H:\Testing\eBFE Model Organization\Downloads\12090301_LowerColoradoCummins
-Output: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301
-
-Source data not found - downloading from eBFE S3...
-
-
-
-✓ Lower Colorado-Cummins Models (290.7 MB) already downloaded: H:\Testing\eBFE Model Organization\Downloads\12090301_Models.zip
-✓ Lower Colorado-Cummins Models (290.7 MB) already extracted: H:\Testing\eBFE Model Organization\Downloads\12090301_Models_extracted
-[1/3] Scanning reach models...
-
-
-  Found 2,332 reach models across 7 rivers
-  Filtered to: 1 reach(es)
-
-[2/3] Organizing reach models...
-  Organized 1 reach(es), 8 files total
-
-[3/3] Creating model log...
-
-✓ Lower Colorado-Cummins organized to: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301
-  River: Rabbs Creek-Colorado River, Reach: SHILOH BRANCH
-  Reaches: 1 of 2,332
-  Files: 8
-Organized to: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301
-Project folder: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH
-Validation root: H:\Testing\eBFE Model Organization\Validation\ebfe_delivery
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Organized study: LowerColoradoCummins_12090301
+Project folder: SHILOH BRANCH
+Validation root configured: True
 
 Project files:
   SHILOH BRANCH.f01 (1,778 bytes)
@@ -3195,377 +3185,50 @@ Project files:
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geometry: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">geom_df</span><span class="p">[</span><span class="s1">&#39;geom_title&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Flow profiles: </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">flow_df</span><span class="p">[</span><span class="s1">&#39;Flow Title&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># BLE models were built with HEC-RAS 4.x — update plan to 6.x format</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># so that HEC-RAS 6.5 generates HDF output files</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">plan_file</span> <span class="o">=</span> <span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.p01&quot;</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">plan_text</span> <span class="o">=</span> <span class="n">plan_file</span><span class="o">.</span><span class="n">read_text</span><span class="p">()</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">plan_text</span> <span class="o">=</span> <span class="n">plan_text</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;Program Version=4.10&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Program Version=</span><span class="si">{</span><span class="n">RAS_VERSION</span><span class="si">}</span><span class="s2">0&quot;</span><span class="p">)</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="n">plan_text</span> <span class="o">=</span> <span class="n">plan_text</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;Run HTab= 0&quot;</span><span class="p">,</span> <span class="s2">&quot;Run HTab= 1&quot;</span><span class="p">)</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="n">plan_text</span> <span class="o">=</span> <span class="n">plan_text</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;Run PostProcess= 0&quot;</span><span class="p">,</span> <span class="s2">&quot;Run PostProcess= 1&quot;</span><span class="p">)</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="n">plan_file</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">plan_text</span><span class="p">)</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Updated plan to HEC-RAS </span><span class="si">{</span><span class="n">RAS_VERSION</span><span class="si">}</span><span class="s2"> format (enables HDF output)&quot;</span><span class="p">)</span>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="c1"># Run the plan with geometry preprocessing to generate HDF</span>
-</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Running HEC-RAS...&quot;</span><span class="p">)</span>
-</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">,</span> <span class="n">force_geompre</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>
-</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="c1"># Re-initialize to pick up HDF paths</span>
-</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="n">ras</span> <span class="o">=</span> <span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_folder</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
-</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>
-</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="c1"># Verify HDF files created</span>
-</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="n">hdf_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.hdf&quot;</span><span class="p">))</span>
-</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">HDF files generated:&quot;</span><span class="p">)</span>
-</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="k">for</span> <span class="n">h</span> <span class="ow">in</span> <span class="n">hdf_files</span><span class="p">:</span>
-</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">h</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">h</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> bytes)&quot;</span><span class="p">)</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">plan_file</span> <span class="o">=</span> <span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.p01&quot;</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">plan_hdf</span> <span class="o">=</span> <span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.p01.hdf&quot;</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">geom_hdf</span> <span class="o">=</span> <span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.g01.hdf&quot;</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1"># BLE models were built with HEC-RAS 4.x. Reuse cached HDF output when present;</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="c1"># otherwise update the plan to 6.x format and compute through RasCmdr.</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="k">if</span> <span class="n">plan_hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Using cached plan HDF: </span><span class="si">{</span><span class="n">plan_hdf</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">plan_hdf</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> bytes)&quot;</span><span class="p">)</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="k">elif</span> <span class="n">geom_hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Using cached geometry HDF: </span><span class="si">{</span><span class="n">geom_hdf</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">geom_hdf</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> bytes)&quot;</span><span class="p">)</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="n">plan_text</span> <span class="o">=</span> <span class="n">plan_file</span><span class="o">.</span><span class="n">read_text</span><span class="p">()</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>    <span class="n">plan_text</span> <span class="o">=</span> <span class="n">plan_text</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;Program Version=4.10&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Program Version=</span><span class="si">{</span><span class="n">RAS_VERSION</span><span class="si">}</span><span class="s2">0&quot;</span><span class="p">)</span>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>    <span class="n">plan_text</span> <span class="o">=</span> <span class="n">plan_text</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;Run HTab= 0&quot;</span><span class="p">,</span> <span class="s2">&quot;Run HTab= 1&quot;</span><span class="p">)</span>
+</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>    <span class="n">plan_text</span> <span class="o">=</span> <span class="n">plan_text</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;Run PostProcess= 0&quot;</span><span class="p">,</span> <span class="s2">&quot;Run PostProcess= 1&quot;</span><span class="p">)</span>
+</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>    <span class="n">plan_file</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">plan_text</span><span class="p">)</span>
+</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Updated plan to HEC-RAS </span><span class="si">{</span><span class="n">RAS_VERSION</span><span class="si">}</span><span class="s2"> format (enables HDF output)&quot;</span><span class="p">)</span>
+</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>
+</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Running HEC-RAS...&quot;</span><span class="p">)</span>
+</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>    <span class="n">RasCmdr</span><span class="o">.</span><span class="n">compute_plan</span><span class="p">(</span><span class="s2">&quot;01&quot;</span><span class="p">,</span> <span class="n">ras_object</span><span class="o">=</span><span class="n">ras</span><span class="p">,</span> <span class="n">force_geompre</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>
+</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="c1"># Re-initialize to pick up HDF paths</span>
+</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a><span class="n">ras</span> <span class="o">=</span> <span class="n">init_ras_project</span><span class="p">(</span><span class="n">project_folder</span><span class="p">,</span> <span class="n">RAS_VERSION</span><span class="p">)</span>
+</span><span id="__span-3-32"><a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">plan_hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="n">geom_hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-3-33"><a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>    <span class="n">plan_hdf</span> <span class="o">=</span> <span class="n">geom_hdf</span>
+</span><span id="__span-3-34"><a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">plan_hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-3-35"><a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>    <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No HDF output found for </span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">. Expected </span><span class="si">{</span><span class="n">plan_hdf</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> or </span><span class="si">{</span><span class="n">geom_hdf</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+</span><span id="__span-3-36"><a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a>
+</span><span id="__span-3-37"><a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a><span class="c1"># Verify HDF files created</span>
+</span><span id="__span-3-38"><a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a><span class="n">hdf_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">project_folder</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.hdf&quot;</span><span class="p">))</span>
+</span><span id="__span-3-39"><a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">HDF files generated:&quot;</span><span class="p">)</span>
+</span><span id="__span-3-40"><a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a><span class="k">for</span> <span class="n">h</span> <span class="ow">in</span> <span class="n">hdf_files</span><span class="p">:</span>
+</span><span id="__span-3-41"><a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">h</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">h</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> bytes)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 7.0 at C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.7 Beta 5 at C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 5\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.7 Beta 4 at C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 4\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.5 at C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.4.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.4.1\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.3.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.3.1\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.3 at C:\Program Files (x86)\HEC\HEC-RAS\6.3\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.2 at C:\Program Files (x86)\HEC\HEC-RAS\6.2\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.1\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.0 at C:\Program Files (x86)\HEC\HEC-RAS\6.0\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.7 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.7\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.6 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.6\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.5 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.5\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.4 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.4\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.3 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.3\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.1 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.1\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0 at C:\Program Files (x86)\HEC\HEC-RAS\5.0\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 4.1.0 at C:\Program Files (x86)\HEC\HEC-RAS\4.1.0\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 4.0 at C:\Program Files (x86)\HEC\HEC-RAS\4.0\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.6 at C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:35 - ras_commander.RasUtils - INFO - Discovered 20 installed HEC-RAS version(s)
-
-
-2026-04-28 23:39:35 - ras_commander.RasPrj - INFO - HEC-RAS 6.5 found via version discovery: C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe
-
-
-2026-04-28 23:39:35 - ras_commander.RasPrj - INFO - No unsteady flow files found in the project.
-
-
-2026-04-28 23:39:35 - ras_commander.RasMap - WARNING - RASMapper file not found: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.rasmap
-
-
-2026-04-28 23:39:35 - ras_commander.RasMap - WARNING - No .rasmap file found for this project. Creating empty rasmap_df.
-
-
-2026-04-28 23:39:35 - ras_commander.RasPrj - WARNING - Could not resolve project CRS for H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 867 characters from HDF
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - ERROR - Error parsing simulation times: time data &#39;Unknown&#39; does not match format &#39;%d%b%Y %H:%M:%S&#39;
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 867 characters from HDF
-
-
-2026-04-28 23:39:35 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
-
-
-2026-04-28 23:39:35 - ras_commander.RasPrj - INFO - ras-commander v0.94.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
-
-
-2026-04-28 23:39:35 - ras_commander.RasPrj - INFO - Project initialized: SHILOH BRANCH | Folder: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH
-
-
-2026-04-28 23:39:35 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe
-
-
-2026-04-28 23:39:35 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:35 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 867 characters from HDF
-
-
-2026-04-28 23:39:35 - ras_commander.geom.GeomPreprocessor - INFO - Clearing geometry preprocessor file for single plan: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01
-
-
-2026-04-28 23:39:35 - ras_commander.geom.GeomPreprocessor - WARNING - No geometry preprocessor file found for: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01
-
-
-2026-04-28 23:39:35 - ras_commander.geom.GeomPreprocessor - INFO - Geometry dataframe updated successfully.
-
-
-2026-04-28 23:39:35 - ras_commander.RasCmdr - INFO - Force-cleared all geometry preprocessor files for plan: 01
-
-
-2026-04-28 23:39:35 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
-
-
-2026-04-28 23:39:35 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe&quot; -c &quot;H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.prj&quot; &quot;H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01&quot;
-
-
-Project: SHILOH BRANCH
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Project: SHILOH BRANCH
 Plans: 1
 Geometry: Existing Conditions
 Flow profiles: Multiple
 
-Updated plan to HEC-RAS 6.5 format (enables HDF output)
-Running HEC-RAS...
 
 
-2026-04-28 23:39:41 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01
-
-
-2026-04-28 23:39:41 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 5.25 seconds
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 867 characters from HDF
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - ERROR - Error parsing simulation times: time data &#39;Unknown&#39; does not match format &#39;%d%b%Y %H:%M:%S&#39;
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 867 characters from HDF
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 7.0 at C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.7 Beta 5 at C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 5\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.7 Beta 4 at C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 4\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.5 at C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.4.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.4.1\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.3.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.3.1\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.3 at C:\Program Files (x86)\HEC\HEC-RAS\6.3\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.2 at C:\Program Files (x86)\HEC\HEC-RAS\6.2\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.1\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.0 at C:\Program Files (x86)\HEC\HEC-RAS\6.0\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.7 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.7\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.6 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.6\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.5 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.5\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.4 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.4\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.3 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.3\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.1 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.1\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0 at C:\Program Files (x86)\HEC\HEC-RAS\5.0\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 4.1.0 at C:\Program Files (x86)\HEC\HEC-RAS\4.1.0\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 4.0 at C:\Program Files (x86)\HEC\HEC-RAS\4.0\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.6 at C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe via filesystem (x86)
-
-
-2026-04-28 23:39:41 - ras_commander.RasUtils - INFO - Discovered 20 installed HEC-RAS version(s)
-
-
-2026-04-28 23:39:41 - ras_commander.RasPrj - INFO - HEC-RAS 6.5 found via version discovery: C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe
-
-
-2026-04-28 23:39:41 - ras_commander.RasPrj - INFO - No unsteady flow files found in the project.
-
-
-2026-04-28 23:39:41 - ras_commander.RasMap - WARNING - RASMapper file not found: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.rasmap
-
-
-2026-04-28 23:39:41 - ras_commander.RasMap - WARNING - No .rasmap file found for this project. Creating empty rasmap_df.
-
-
-2026-04-28 23:39:41 - ras_commander.RasPrj - WARNING - Could not resolve project CRS for H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 867 characters from HDF
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - ERROR - Error parsing simulation times: time data &#39;Unknown&#39; does not match format &#39;%d%b%Y %H:%M:%S&#39;
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH\SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: SHILOH BRANCH.p01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 867 characters from HDF
-
-
-2026-04-28 23:39:41 - ras_commander.RasPrj - INFO - Updated results_df with 1 plan(s)
-
-
-2026-04-28 23:39:41 - ras_commander.RasPrj - INFO - ras-commander v0.94.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
-
-
-2026-04-28 23:39:41 - ras_commander.RasPrj - INFO - Project initialized: SHILOH BRANCH | Folder: H:\Testing\eBFE Model Organization\Organized\LowerColoradoCummins_12090301\RAS Model\Rabbs Creek-Colorado River\SHILOH BRANCH
-
-
-2026-04-28 23:39:41 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe
-
-
+Using cached plan HDF: SHILOH BRANCH.p01.hdf (735,637 bytes)
 
 HDF files generated:
-  SHILOH BRANCH.g01.hdf (332,515 bytes)
   SHILOH BRANCH.p01.hdf (735,637 bytes)
 </code></pre></div>
 <h2 id="step-1-extract-bank-elevations">Step 1: Extract Bank Elevations<a class="headerlink" href="#step-1-extract-bank-elevations" title="Permanent link">&para;</a></h2>
@@ -3574,24 +3237,20 @@ and interpolates elevations at the left and right bank stations. The "controllin
 bank elevation (the higher of the two) determines where overtopping occurs.</p>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Get geometry HDF path</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">geom_hdf</span> <span class="o">=</span> <span class="n">project_folder</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ras</span><span class="o">.</span><span class="n">project_name</span><span class="si">}</span><span class="s2">.g01.hdf&quot;</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">bank_df</span> <span class="o">=</span> <span class="n">HdfChannelCapacity</span><span class="o">.</span><span class="n">extract_bank_elevations</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">geom_hdf</span><span class="p">))</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">geom_hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">geom_hdf</span> <span class="o">=</span> <span class="n">plan_hdf</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cross sections: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">bank_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Bank elevation range:&quot;</span><span class="p">)</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Left:  </span><span class="si">{</span><span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;left_bank_elev&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;left_bank_elev&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> ft&quot;</span><span class="p">)</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Right: </span><span class="si">{</span><span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;right_bank_elev&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;right_bank_elev&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> ft&quot;</span><span class="p">)</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Controlling: </span><span class="si">{</span><span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;controlling_bank_elev&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;controlling_bank_elev&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> ft&quot;</span><span class="p">)</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">bank_df</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">bank_df</span> <span class="o">=</span> <span class="n">HdfChannelCapacity</span><span class="o">.</span><span class="n">extract_bank_elevations</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">geom_hdf</span><span class="p">))</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cross sections: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">bank_df</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Bank elevation range:&quot;</span><span class="p">)</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Left:  </span><span class="si">{</span><span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;left_bank_elev&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;left_bank_elev&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> ft&quot;</span><span class="p">)</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Right: </span><span class="si">{</span><span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;right_bank_elev&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;right_bank_elev&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> ft&quot;</span><span class="p">)</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Controlling: </span><span class="si">{</span><span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;controlling_bank_elev&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;controlling_bank_elev&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> ft&quot;</span><span class="p">)</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="n">bank_df</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO - Extracting bank elevations from: SHILOH BRANCH.g01.hdf
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO - Extracted bank elevations for 40 cross sections
-
-
-Cross sections: 40
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Cross sections: 40
 
 Bank elevation range:
   Left:  251.7 - 337.6 ft
@@ -3624,6 +3283,8 @@ Bank elevation range:
       <th>left_bank_elev</th>
       <th>right_bank_elev</th>
       <th>controlling_bank_elev</th>
+      <th>thalweg_elev</th>
+      <th>channel_depth</th>
       <th>Len Channel</th>
     </tr>
   </thead>
@@ -3638,6 +3299,8 @@ Bank elevation range:
       <td>337.649994</td>
       <td>337.019989</td>
       <td>337.649994</td>
+      <td>330.920013</td>
+      <td>6.729980</td>
       <td>418.0</td>
     </tr>
     <tr>
@@ -3650,6 +3313,8 @@ Bank elevation range:
       <td>336.500000</td>
       <td>335.700012</td>
       <td>336.500000</td>
+      <td>329.130005</td>
+      <td>7.369995</td>
       <td>614.0</td>
     </tr>
     <tr>
@@ -3662,6 +3327,8 @@ Bank elevation range:
       <td>334.750000</td>
       <td>334.429993</td>
       <td>334.750000</td>
+      <td>325.149994</td>
+      <td>9.600006</td>
       <td>534.0</td>
     </tr>
     <tr>
@@ -3674,6 +3341,8 @@ Bank elevation range:
       <td>332.399994</td>
       <td>332.440002</td>
       <td>332.440002</td>
+      <td>323.970001</td>
+      <td>8.470001</td>
       <td>795.0</td>
     </tr>
     <tr>
@@ -3686,6 +3355,8 @@ Bank elevation range:
       <td>328.369995</td>
       <td>328.739990</td>
       <td>328.739990</td>
+      <td>318.380005</td>
+      <td>10.359985</td>
       <td>553.0</td>
     </tr>
     <tr>
@@ -3698,6 +3369,8 @@ Bank elevation range:
       <td>325.679993</td>
       <td>325.679993</td>
       <td>325.679993</td>
+      <td>316.290009</td>
+      <td>9.389984</td>
       <td>877.0</td>
     </tr>
     <tr>
@@ -3710,6 +3383,8 @@ Bank elevation range:
       <td>321.619995</td>
       <td>320.619995</td>
       <td>321.619995</td>
+      <td>314.910004</td>
+      <td>6.709991</td>
       <td>148.0</td>
     </tr>
     <tr>
@@ -3722,6 +3397,8 @@ Bank elevation range:
       <td>320.029999</td>
       <td>319.970001</td>
       <td>320.029999</td>
+      <td>314.980011</td>
+      <td>5.049988</td>
       <td>1494.0</td>
     </tr>
     <tr>
@@ -3734,6 +3411,8 @@ Bank elevation range:
       <td>313.519989</td>
       <td>313.190002</td>
       <td>313.519989</td>
+      <td>304.750000</td>
+      <td>8.769989</td>
       <td>456.0</td>
     </tr>
     <tr>
@@ -3746,6 +3425,8 @@ Bank elevation range:
       <td>310.529999</td>
       <td>310.820007</td>
       <td>310.820007</td>
+      <td>303.980011</td>
+      <td>6.839996</td>
       <td>320.0</td>
     </tr>
   </tbody>
@@ -3762,7 +3443,7 @@ Bank elevation range:
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">rs_float</span><span class="p">,</span> <span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;controlling_bank_elev&#39;</span><span class="p">],</span> <span class="s1">&#39;k--&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Controlling Bank&#39;</span><span class="p">)</span>
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;River Station (ft)&#39;</span><span class="p">)</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;Elevation (ft)&#39;</span><span class="p">)</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;Elevation (ft NAVD88)&#39;</span><span class="p">)</span>
 </span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">BLE_REACH_NAME</span><span class="si">}</span><span class="s1"> - Bank Elevations&#39;</span><span class="p">)</span>
 </span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
 </span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="n">ax</span><span class="o">.</span><span class="n">invert_xaxis</span><span class="p">()</span>  <span class="c1"># Downstream to right</span>
@@ -3794,13 +3475,9 @@ preserves each profile as a separate column — essential for capacity analysis.
 </span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>
 </span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="n">wse_df</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO - Extracting steady-state profiles from: SHILOH BRANCH.p01.hdf
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Profiles found: [&#39;10-year&#39;, &#39;25-year&#39;, &#39;50-year&#39;, &#39;1pct_min&#39;, &#39;100-year&#39;, &#39;1pct_plu&#39;, &#39;500-year&#39;]
 
 
-2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO - Extracted 7 steady profiles for 40 cross sections from SHILOH BRANCH.p01.hdf
-
-
-Profiles found: [&#39;10-year&#39;, &#39;25-year&#39;, &#39;50-year&#39;, &#39;1pct_min&#39;, &#39;100-year&#39;, &#39;1pct_plu&#39;, &#39;500-year&#39;]
 Cross sections: 40
 
 Selected AEP profiles: [&#39;10P&#39;, &#39;4P&#39;, &#39;2P&#39;, &#39;1P&#39;, &#39;0.2P&#39;]
@@ -3964,7 +3641,7 @@ Excluded: 1pct_min, 1pct_plu (confidence bounds)
 </span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">bank_rs</span><span class="p">,</span> <span class="n">bank_df</span><span class="p">[</span><span class="s1">&#39;controlling_bank_elev&#39;</span><span class="p">],</span> <span class="s1">&#39;k--&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Controlling Bank&#39;</span><span class="p">)</span>
 </span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>
 </span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;River Station (ft)&#39;</span><span class="p">)</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;WSE (ft)&#39;</span><span class="p">)</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;WSE (ft NAVD88)&#39;</span><span class="p">)</span>
 </span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">BLE_REACH_NAME</span><span class="si">}</span><span class="s1"> - Water Surface Profiles vs Bank Elevation&#39;</span><span class="p">)</span>
 </span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="s1">&#39;upper right&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">9</span><span class="p">)</span>
 </span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="n">ax</span><span class="o">.</span><span class="n">invert_xaxis</span><span class="p">()</span>
@@ -3991,29 +3668,14 @@ without the WSE exceeding the controlling bank elevation.</p>
 </span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="n">capacity_df</span><span class="p">[[</span><span class="s1">&#39;RS&#39;</span><span class="p">,</span> <span class="s1">&#39;controlling_bank_elev&#39;</span><span class="p">,</span> <span class="s1">&#39;capacity_level&#39;</span><span class="p">,</span> 
 </span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>             <span class="s1">&#39;capacity_category&#39;</span><span class="p">,</span> <span class="s1">&#39;last_contained_storm&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">15</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO -   Level 1 (X &lt;= 10%): 15 XS
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO -   Level 2 (10% &lt; X &lt;= 4%): 4 XS
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO -   Level 3 (4% &lt; X &lt;= 2%): 5 XS
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO -   Level 4 (2% &lt; X &lt;= 1%): 1 XS
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO -   Level 7 (All overtop): 15 XS
-
-
-Cross sections analyzed: 40
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Cross sections analyzed: 40
 
 Capacity distribution:
-  Level 1 (X &lt;= 10%): 15 XS
-  Level 2 (10% &lt; X &lt;= 4%): 4 XS
-  Level 3 (4% &lt; X &lt;= 2%): 5 XS
-  Level 4 (2% &lt; X &lt;= 1%): 1 XS
-  Level 7 (All overtop): 15 XS
+  Level 1 (&lt;=2-yr): 15 XS
+  Level 3 (10-yr): 15 XS
+  Level 4 (25-yr): 4 XS
+  Level 5 (50-yr): 5 XS
+  Level 6 (100-yr): 1 XS
 </code></pre></div>
 <div>
 <style scoped>
@@ -4045,120 +3707,120 @@ Capacity distribution:
       <th>0</th>
       <td>25147</td>
       <td>337.649994</td>
-      <td>2</td>
-      <td>10% &lt; X &lt;= 4%</td>
+      <td>4</td>
+      <td>25-yr</td>
       <td>4P</td>
     </tr>
     <tr>
       <th>1</th>
       <td>24729</td>
       <td>336.500000</td>
-      <td>2</td>
-      <td>10% &lt; X &lt;= 4%</td>
+      <td>4</td>
+      <td>25-yr</td>
       <td>4P</td>
     </tr>
     <tr>
       <th>2</th>
       <td>24115</td>
       <td>334.750000</td>
-      <td>1</td>
-      <td>X &lt;= 10%</td>
+      <td>3</td>
+      <td>10-yr</td>
       <td>10P</td>
     </tr>
     <tr>
       <th>3</th>
       <td>23581</td>
       <td>332.440002</td>
-      <td>1</td>
-      <td>X &lt;= 10%</td>
+      <td>3</td>
+      <td>10-yr</td>
       <td>10P</td>
     </tr>
     <tr>
       <th>4</th>
       <td>22786</td>
       <td>328.739990</td>
-      <td>1</td>
-      <td>X &lt;= 10%</td>
+      <td>3</td>
+      <td>10-yr</td>
       <td>10P</td>
     </tr>
     <tr>
       <th>5</th>
       <td>22233</td>
       <td>325.679993</td>
-      <td>1</td>
-      <td>X &lt;= 10%</td>
+      <td>3</td>
+      <td>10-yr</td>
       <td>10P</td>
     </tr>
     <tr>
       <th>6</th>
       <td>21356</td>
       <td>321.619995</td>
-      <td>3</td>
-      <td>4% &lt; X &lt;= 2%</td>
+      <td>5</td>
+      <td>50-yr</td>
       <td>2P</td>
     </tr>
     <tr>
       <th>7</th>
       <td>21208</td>
       <td>320.029999</td>
-      <td>7</td>
-      <td>All overtop</td>
+      <td>1</td>
+      <td>&lt;=2-yr</td>
       <td>None</td>
     </tr>
     <tr>
       <th>8</th>
       <td>19714</td>
       <td>313.519989</td>
-      <td>1</td>
-      <td>X &lt;= 10%</td>
+      <td>3</td>
+      <td>10-yr</td>
       <td>10P</td>
     </tr>
     <tr>
       <th>9</th>
       <td>19258</td>
       <td>310.820007</td>
-      <td>2</td>
-      <td>10% &lt; X &lt;= 4%</td>
+      <td>4</td>
+      <td>25-yr</td>
       <td>4P</td>
     </tr>
     <tr>
       <th>10</th>
       <td>18938</td>
       <td>309.250000</td>
-      <td>1</td>
-      <td>X &lt;= 10%</td>
+      <td>3</td>
+      <td>10-yr</td>
       <td>10P</td>
     </tr>
     <tr>
       <th>11</th>
       <td>18427</td>
       <td>306.619995</td>
-      <td>4</td>
-      <td>2% &lt; X &lt;= 1%</td>
+      <td>6</td>
+      <td>100-yr</td>
       <td>1P</td>
     </tr>
     <tr>
       <th>12</th>
       <td>17575</td>
       <td>300.890015</td>
-      <td>3</td>
-      <td>4% &lt; X &lt;= 2%</td>
+      <td>5</td>
+      <td>50-yr</td>
       <td>2P</td>
     </tr>
     <tr>
       <th>13</th>
       <td>16667</td>
       <td>298.640015</td>
-      <td>3</td>
-      <td>4% &lt; X &lt;= 2%</td>
+      <td>5</td>
+      <td>50-yr</td>
       <td>2P</td>
     </tr>
     <tr>
       <th>14</th>
       <td>16195</td>
       <td>295.160004</td>
-      <td>1</td>
-      <td>X &lt;= 10%</td>
+      <td>3</td>
+      <td>10-yr</td>
       <td>10P</td>
     </tr>
   </tbody>
@@ -4171,37 +3833,51 @@ Capacity distribution:
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">rs_float</span> <span class="o">=</span> <span class="n">capacity_df</span><span class="p">[</span><span class="s1">&#39;RS&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">)</span>
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">levels</span> <span class="o">=</span> <span class="n">capacity_df</span><span class="p">[</span><span class="s1">&#39;capacity_level&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Color map: green (good capacity) to red (poor capacity)</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Color map: red (lower capacity) to green (higher capacity)</span>
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="n">capacity_colors</span> <span class="o">=</span> <span class="p">{</span>
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>    <span class="mi">1</span><span class="p">:</span> <span class="s1">&#39;#D32F2F&#39;</span><span class="p">,</span>  <span class="c1"># Red - poor</span>
 </span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>    <span class="mi">2</span><span class="p">:</span> <span class="s1">&#39;#F57C00&#39;</span><span class="p">,</span>  <span class="c1"># Orange</span>
 </span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>    <span class="mi">3</span><span class="p">:</span> <span class="s1">&#39;#FBC02D&#39;</span><span class="p">,</span>  <span class="c1"># Yellow</span>
 </span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>    <span class="mi">4</span><span class="p">:</span> <span class="s1">&#39;#7CB342&#39;</span><span class="p">,</span>  <span class="c1"># Light green</span>
 </span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>    <span class="mi">5</span><span class="p">:</span> <span class="s1">&#39;#388E3C&#39;</span><span class="p">,</span>  <span class="c1"># Green</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>    <span class="mi">6</span><span class="p">:</span> <span class="s1">&#39;#1B5E20&#39;</span><span class="p">,</span>  <span class="c1"># Dark green - excellent</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>    <span class="mi">7</span><span class="p">:</span> <span class="s1">&#39;#B71C1C&#39;</span><span class="p">,</span>  <span class="c1"># Dark red - worst</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>    <span class="mi">6</span><span class="p">:</span> <span class="s1">&#39;#1B5E20&#39;</span><span class="p">,</span>  <span class="c1"># Dark green</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>    <span class="mi">7</span><span class="p">:</span> <span class="s1">&#39;#0B3D0B&#39;</span><span class="p">,</span>  <span class="c1"># Deep green - highest tested capacity</span>
 </span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="p">}</span>
 </span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>
-</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">rs_float</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
-</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a>    <span class="n">color</span> <span class="o">=</span> <span class="n">capacity_colors</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">levels</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="s1">&#39;#888888&#39;</span><span class="p">)</span>
-</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">barh</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">rs_float</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">rs_float</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">],</span> 
-</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>            <span class="n">left</span><span class="o">=</span><span class="n">rs_float</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">],</span> <span class="n">height</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span> <span class="n">edgecolor</span><span class="o">=</span><span class="s1">&#39;white&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
-</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a>
-</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="c1"># Legend</span>
-</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="kn">from</span><span class="w"> </span><span class="nn">matplotlib.patches</span><span class="w"> </span><span class="kn">import</span> <span class="n">Patch</span>
-</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="n">legend_elements</span> <span class="o">=</span> <span class="p">[</span>
-</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a>    <span class="n">Patch</span><span class="p">(</span><span class="n">facecolor</span><span class="o">=</span><span class="n">capacity_colors</span><span class="p">[</span><span class="n">lv</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;Level </span><span class="si">{</span><span class="n">lv</span><span class="si">}</span><span class="s1">: </span><span class="si">{</span><span class="n">LEVEL_TO_CATEGORY</span><span class="p">[</span><span class="n">lv</span><span class="p">]</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
-</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a>    <span class="k">for</span> <span class="n">lv</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">capacity_colors</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="k">if</span> <span class="n">lv</span> <span class="ow">in</span> <span class="n">levels</span>
-</span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a><span class="p">]</span>
-</span><span id="__span-9-29"><a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a><span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">handles</span><span class="o">=</span><span class="n">legend_elements</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="s1">&#39;upper left&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">ncol</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-</span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a>
-</span><span id="__span-9-31"><a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;River Station (ft)&#39;</span><span class="p">)</span>
-</span><span id="__span-9-32"><a id="__codelineno-9-32" name="__codelineno-9-32" href="#__codelineno-9-32"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">BLE_REACH_NAME</span><span class="si">}</span><span class="s1"> - Channel Capacity by Cross Section&#39;</span><span class="p">)</span>
-</span><span id="__span-9-33"><a id="__codelineno-9-33" name="__codelineno-9-33" href="#__codelineno-9-33"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_yticks</span><span class="p">([])</span>
-</span><span id="__span-9-34"><a id="__codelineno-9-34" name="__codelineno-9-34" href="#__codelineno-9-34"></a><span class="n">ax</span><span class="o">.</span><span class="n">invert_xaxis</span><span class="p">()</span>
-</span><span id="__span-9-35"><a id="__codelineno-9-35" name="__codelineno-9-35" href="#__codelineno-9-35"></a><span class="n">ax</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="s1">&#39;x&#39;</span><span class="p">)</span>
-</span><span id="__span-9-36"><a id="__codelineno-9-36" name="__codelineno-9-36" href="#__codelineno-9-36"></a><span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
-</span><span id="__span-9-37"><a id="__codelineno-9-37" name="__codelineno-9-37" href="#__codelineno-9-37"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="n">plot_order</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argsort</span><span class="p">(</span><span class="n">rs_float</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>    <span class="n">rs_float</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">plot_order</span><span class="p">],</span>
+</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>    <span class="n">levels</span><span class="p">[</span><span class="n">plot_order</span><span class="p">],</span>
+</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a>    <span class="n">color</span><span class="o">=</span><span class="s1">&#39;#555555&#39;</span><span class="p">,</span>
+</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a>    <span class="n">linewidth</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a>    <span class="n">alpha</span><span class="o">=</span><span class="mf">0.6</span><span class="p">,</span>
+</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a>    <span class="n">zorder</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="p">)</span>
+</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a>
+</span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a><span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">levels</span><span class="p">)):</span>
+</span><span id="__span-9-29"><a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a>    <span class="n">mask</span> <span class="o">=</span> <span class="n">levels</span> <span class="o">==</span> <span class="n">level</span>
+</span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a>    <span class="n">ax</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span>
+</span><span id="__span-9-31"><a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a>        <span class="n">rs_float</span><span class="p">[</span><span class="n">mask</span><span class="p">],</span>
+</span><span id="__span-9-32"><a id="__codelineno-9-32" name="__codelineno-9-32" href="#__codelineno-9-32"></a>        <span class="n">levels</span><span class="p">[</span><span class="n">mask</span><span class="p">],</span>
+</span><span id="__span-9-33"><a id="__codelineno-9-33" name="__codelineno-9-33" href="#__codelineno-9-33"></a>        <span class="n">s</span><span class="o">=</span><span class="mi">52</span><span class="p">,</span>
+</span><span id="__span-9-34"><a id="__codelineno-9-34" name="__codelineno-9-34" href="#__codelineno-9-34"></a>        <span class="n">color</span><span class="o">=</span><span class="n">capacity_colors</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="s1">&#39;#888888&#39;</span><span class="p">),</span>
+</span><span id="__span-9-35"><a id="__codelineno-9-35" name="__codelineno-9-35" href="#__codelineno-9-35"></a>        <span class="n">edgecolor</span><span class="o">=</span><span class="s1">&#39;white&#39;</span><span class="p">,</span>
+</span><span id="__span-9-36"><a id="__codelineno-9-36" name="__codelineno-9-36" href="#__codelineno-9-36"></a>        <span class="n">linewidth</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span>
+</span><span id="__span-9-37"><a id="__codelineno-9-37" name="__codelineno-9-37" href="#__codelineno-9-37"></a>        <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;Level </span><span class="si">{</span><span class="n">level</span><span class="si">}</span><span class="s1">: </span><span class="si">{</span><span class="n">LEVEL_TO_CATEGORY</span><span class="p">[</span><span class="n">level</span><span class="p">]</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">,</span>
+</span><span id="__span-9-38"><a id="__codelineno-9-38" name="__codelineno-9-38" href="#__codelineno-9-38"></a>        <span class="n">zorder</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+</span><span id="__span-9-39"><a id="__codelineno-9-39" name="__codelineno-9-39" href="#__codelineno-9-39"></a>    <span class="p">)</span>
+</span><span id="__span-9-40"><a id="__codelineno-9-40" name="__codelineno-9-40" href="#__codelineno-9-40"></a>
+</span><span id="__span-9-41"><a id="__codelineno-9-41" name="__codelineno-9-41" href="#__codelineno-9-41"></a><span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="s1">&#39;upper left&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">ncol</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+</span><span id="__span-9-42"><a id="__codelineno-9-42" name="__codelineno-9-42" href="#__codelineno-9-42"></a>
+</span><span id="__span-9-43"><a id="__codelineno-9-43" name="__codelineno-9-43" href="#__codelineno-9-43"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;River Station (ft)&#39;</span><span class="p">)</span>
+</span><span id="__span-9-44"><a id="__codelineno-9-44" name="__codelineno-9-44" href="#__codelineno-9-44"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;Capacity level (1 = &lt;=2-yr, 7 = &gt;=500-yr)&#39;</span><span class="p">)</span>
+</span><span id="__span-9-45"><a id="__codelineno-9-45" name="__codelineno-9-45" href="#__codelineno-9-45"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">BLE_REACH_NAME</span><span class="si">}</span><span class="s1"> - Channel Capacity by Cross Section&#39;</span><span class="p">)</span>
+</span><span id="__span-9-46"><a id="__codelineno-9-46" name="__codelineno-9-46" href="#__codelineno-9-46"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">7.5</span><span class="p">)</span>
+</span><span id="__span-9-47"><a id="__codelineno-9-47" name="__codelineno-9-47" href="#__codelineno-9-47"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_yticks</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+</span><span id="__span-9-48"><a id="__codelineno-9-48" name="__codelineno-9-48" href="#__codelineno-9-48"></a><span class="n">ax</span><span class="o">.</span><span class="n">invert_xaxis</span><span class="p">()</span>
+</span><span id="__span-9-49"><a id="__codelineno-9-49" name="__codelineno-9-49" href="#__codelineno-9-49"></a><span class="n">ax</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+</span><span id="__span-9-50"><a id="__codelineno-9-50" name="__codelineno-9-50" href="#__codelineno-9-50"></a><span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+</span><span id="__span-9-51"><a id="__codelineno-9-51" name="__codelineno-9-51" href="#__codelineno-9-51"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
 <p><img alt="png" src="../430_1d_channel_capacity_analysis_files/430_1d_channel_capacity_analysis_14_0.png" /></p>
 <h2 id="step-4-segment-aggregation">Step 4: Segment Aggregation<a class="headerlink" href="#step-4-segment-aggregation" title="Permanent link">&para;</a></h2>
@@ -4217,10 +3893,7 @@ and computes a weighted average capacity for each segment. The capacity is round
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="n">segments_df</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO - Created 17 segments across 1 reaches
-
-
-Segments created: 17
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Segments created: 17
 Segment length: 1320 ft (0.25 mi)
 </code></pre></div>
 <div>
@@ -4243,13 +3916,21 @@ Segment length: 1320 ft (0.25 mi)
       <th></th>
       <th>River</th>
       <th>Reach</th>
+      <th>river</th>
+      <th>reach</th>
       <th>segment_id</th>
       <th>segment_start_rs</th>
       <th>segment_end_rs</th>
+      <th>start_distance</th>
+      <th>end_distance</th>
+      <th>segment_length_ft</th>
+      <th>segment_length_miles</th>
       <th>weighted_capacity</th>
       <th>capacity_level</th>
       <th>capacity_category</th>
+      <th>system_capacity</th>
       <th>channel_length</th>
+      <th>cross_section_count</th>
       <th>xs_count</th>
     </tr>
   </thead>
@@ -4258,254 +3939,372 @@ Segment length: 1320 ft (0.25 mi)
       <th>0</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>1</td>
       <td>25147</td>
-      <td>24729</td>
-      <td>2.00</td>
-      <td>2</td>
-      <td>10% &lt; X &lt;= 4%</td>
-      <td>1032.0</td>
-      <td>2</td>
+      <td>24115</td>
+      <td>0.0</td>
+      <td>1320.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>3.66</td>
+      <td>3</td>
+      <td>10-yr</td>
+      <td>10-yr</td>
+      <td>1320.0</td>
+      <td>3</td>
+      <td>3</td>
     </tr>
     <tr>
       <th>1</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>2</td>
-      <td>24115</td>
       <td>23581</td>
-      <td>1.00</td>
-      <td>1</td>
-      <td>X &lt;= 10%</td>
-      <td>1329.0</td>
+      <td>22786</td>
+      <td>1320.0</td>
+      <td>2640.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>3.00</td>
+      <td>3</td>
+      <td>10-yr</td>
+      <td>10-yr</td>
+      <td>1320.0</td>
+      <td>2</td>
       <td>2</td>
     </tr>
     <tr>
       <th>2</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>3</td>
-      <td>22786</td>
-      <td>21356</td>
-      <td>1.19</td>
+      <td>22233</td>
+      <td>21208</td>
+      <td>2640.0</td>
+      <td>3960.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>1.93</td>
       <td>1</td>
-      <td>X &lt;= 10%</td>
-      <td>1578.0</td>
+      <td>&lt;=2-yr</td>
+      <td>&lt;=2-yr</td>
+      <td>1320.0</td>
+      <td>3</td>
       <td>3</td>
     </tr>
     <tr>
       <th>3</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>5</td>
-      <td>21208</td>
-      <td>19258</td>
-      <td>5.09</td>
-      <td>5</td>
-      <td>1% &lt; X &lt;= 0.2%</td>
-      <td>2270.0</td>
+      <td>19714</td>
+      <td>18938</td>
+      <td>5280.0</td>
+      <td>6600.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>3.25</td>
+      <td>3</td>
+      <td>10-yr</td>
+      <td>10-yr</td>
+      <td>1320.0</td>
+      <td>3</td>
       <td>3</td>
     </tr>
     <tr>
       <th>4</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>6</td>
-      <td>18938</td>
       <td>18427</td>
-      <td>2.88</td>
+      <td>17575</td>
+      <td>6600.0</td>
+      <td>7920.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>5.48</td>
+      <td>5</td>
+      <td>50-yr</td>
+      <td>50-yr</td>
+      <td>1320.0</td>
       <td>2</td>
-      <td>10% &lt; X &lt;= 4%</td>
-      <td>1363.0</td>
       <td>2</td>
     </tr>
     <tr>
       <th>5</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>7</td>
-      <td>17575</td>
-      <td>16195</td>
-      <td>2.85</td>
-      <td>2</td>
-      <td>10% &lt; X &lt;= 4%</td>
-      <td>1495.0</td>
+      <td>16667</td>
+      <td>16080</td>
+      <td>7920.0</td>
+      <td>9240.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>4.09</td>
+      <td>4</td>
+      <td>25-yr</td>
+      <td>25-yr</td>
+      <td>1320.0</td>
+      <td>3</td>
       <td>3</td>
     </tr>
     <tr>
       <th>6</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>8</td>
-      <td>16080</td>
-      <td>15239</td>
-      <td>5.74</td>
-      <td>5</td>
-      <td>1% &lt; X &lt;= 0.2%</td>
-      <td>1322.0</td>
+      <td>15803</td>
+      <td>14758</td>
+      <td>9240.0</td>
+      <td>10560.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>1.00</td>
+      <td>1</td>
+      <td>&lt;=2-yr</td>
+      <td>&lt;=2-yr</td>
+      <td>1320.0</td>
+      <td>6</td>
       <td>6</td>
     </tr>
     <tr>
       <th>7</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>9</td>
-      <td>14758</td>
-      <td>14758</td>
-      <td>7.00</td>
-      <td>7</td>
-      <td>All overtop</td>
-      <td>732.0</td>
+      <td>14026</td>
+      <td>14026</td>
+      <td>10560.0</td>
+      <td>11880.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>5.00</td>
+      <td>5</td>
+      <td>50-yr</td>
+      <td>50-yr</td>
+      <td>1320.0</td>
+      <td>1</td>
       <td>1</td>
     </tr>
     <tr>
       <th>8</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>10</td>
-      <td>14026</td>
-      <td>12700</td>
-      <td>5.03</td>
-      <td>5</td>
-      <td>1% &lt; X &lt;= 0.2%</td>
-      <td>1867.0</td>
+      <td>13107</td>
+      <td>12159</td>
+      <td>11880.0</td>
+      <td>13200.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>1.00</td>
+      <td>1</td>
+      <td>&lt;=2-yr</td>
+      <td>&lt;=2-yr</td>
+      <td>1320.0</td>
+      <td>3</td>
       <td>3</td>
     </tr>
     <tr>
       <th>9</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>11</td>
-      <td>12159</td>
-      <td>11353</td>
-      <td>4.35</td>
-      <td>4</td>
-      <td>2% &lt; X &lt;= 1%</td>
-      <td>1140.0</td>
+      <td>11857</td>
+      <td>11019</td>
+      <td>13200.0</td>
+      <td>14520.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>2.48</td>
+      <td>2</td>
+      <td>5-yr</td>
+      <td>5-yr</td>
+      <td>1320.0</td>
+      <td>3</td>
       <td>3</td>
     </tr>
     <tr>
       <th>10</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>12</td>
-      <td>11019</td>
-      <td>10041</td>
-      <td>3.29</td>
+      <td>10561</td>
+      <td>9655</td>
+      <td>14520.0</td>
+      <td>15840.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>2.59</td>
+      <td>2</td>
+      <td>5-yr</td>
+      <td>5-yr</td>
+      <td>1320.0</td>
       <td>3</td>
-      <td>4% &lt; X &lt;= 2%</td>
-      <td>1364.0</td>
       <td>3</td>
     </tr>
     <tr>
       <th>11</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>13</td>
-      <td>9655</td>
-      <td>9655</td>
-      <td>1.00</td>
+      <td>8015</td>
+      <td>8015</td>
+      <td>15840.0</td>
+      <td>17160.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>4.00</td>
+      <td>4</td>
+      <td>25-yr</td>
+      <td>25-yr</td>
+      <td>1320.0</td>
       <td>1</td>
-      <td>X &lt;= 10%</td>
-      <td>1640.0</td>
       <td>1</td>
     </tr>
     <tr>
       <th>12</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>15</td>
-      <td>8015</td>
       <td>6333</td>
-      <td>1.77</td>
-      <td>1</td>
-      <td>X &lt;= 10%</td>
-      <td>2181.0</td>
+      <td>5834</td>
+      <td>18480.0</td>
+      <td>19800.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>3.00</td>
+      <td>3</td>
+      <td>10-yr</td>
+      <td>10-yr</td>
+      <td>1320.0</td>
+      <td>2</td>
       <td>2</td>
     </tr>
     <tr>
       <th>13</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>16</td>
-      <td>5834</td>
-      <td>5834</td>
+      <td>4729</td>
+      <td>4729</td>
+      <td>19800.0</td>
+      <td>21120.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
       <td>1.00</td>
       <td>1</td>
-      <td>X &lt;= 10%</td>
-      <td>1105.0</td>
+      <td>&lt;=2-yr</td>
+      <td>&lt;=2-yr</td>
+      <td>1320.0</td>
+      <td>1</td>
       <td>1</td>
     </tr>
     <tr>
       <th>14</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>17</td>
-      <td>4729</td>
       <td>3701</td>
-      <td>4.15</td>
-      <td>4</td>
-      <td>2% &lt; X &lt;= 1%</td>
-      <td>1957.0</td>
+      <td>2772</td>
+      <td>21120.0</td>
+      <td>22440.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>2.15</td>
+      <td>2</td>
+      <td>5-yr</td>
+      <td>5-yr</td>
+      <td>1320.0</td>
+      <td>2</td>
       <td>2</td>
     </tr>
     <tr>
       <th>15</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>18</td>
-      <td>2772</td>
-      <td>2772</td>
-      <td>7.00</td>
-      <td>7</td>
-      <td>All overtop</td>
-      <td>693.0</td>
+      <td>2079</td>
+      <td>2079</td>
+      <td>22440.0</td>
+      <td>23760.0</td>
+      <td>1320.0</td>
+      <td>0.250000</td>
+      <td>5.00</td>
+      <td>5</td>
+      <td>50-yr</td>
+      <td>50-yr</td>
+      <td>1320.0</td>
+      <td>1</td>
       <td>1</td>
     </tr>
     <tr>
       <th>16</th>
       <td>SHILOH BRANCH</td>
       <td>Reach-1</td>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
       <td>19</td>
-      <td>2079</td>
       <td>832</td>
-      <td>3.00</td>
-      <td>3</td>
-      <td>4% &lt; X &lt;= 2%</td>
-      <td>1247.0</td>
-      <td>2</td>
+      <td>832</td>
+      <td>23760.0</td>
+      <td>24315.0</td>
+      <td>555.0</td>
+      <td>0.105114</td>
+      <td>1.00</td>
+      <td>1</td>
+      <td>&lt;=2-yr</td>
+      <td>&lt;=2-yr</td>
+      <td>555.0</td>
+      <td>1</td>
+      <td>1</td>
     </tr>
   </tbody>
 </table>
 </div>
 
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">summary_df</span> <span class="o">=</span> <span class="n">HdfChannelCapacity</span><span class="o">.</span><span class="n">system_capacity_summary</span><span class="p">(</span><span class="n">capacity_df</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">summary_df</span> <span class="o">=</span> <span class="n">HdfChannelCapacity</span><span class="o">.</span><span class="n">system_capacity_summary</span><span class="p">(</span><span class="n">segments_df</span><span class="p">)</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total channel length: </span><span class="si">{</span><span class="n">summary_df</span><span class="p">[</span><span class="s1">&#39;channel_length_ft&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="si">:</span><span class="s2">,.0f</span><span class="si">}</span><span class="s2"> ft &quot;</span><span class="p">)</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;                    = </span><span class="si">{</span><span class="n">summary_df</span><span class="p">[</span><span class="s1">&#39;channel_length_ft&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">/</span><span class="mi">5280</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> mi&quot;</span><span class="p">)</span>
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="nb">print</span><span class="p">()</span>
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="n">summary_df</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO - System Capacity Summary:
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO -   Level 1 (X &lt;= 10%): 9639 ft (39.6%)
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO -   Level 2 (10% &lt; X &lt;= 4%): 3034 ft (12.5%)
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO -   Level 3 (4% &lt; X &lt;= 2%): 3694 ft (15.2%)
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO -   Level 4 (2% &lt; X &lt;= 1%): 852 ft (3.5%)
-
-
-2026-04-28 23:39:41 - ras_commander.hdf.HdfChannelCapacity - INFO -   Level 7 (All overtop): 7096 ft (29.2%)
-
-
-Total channel length: 24,315 ft 
-                    = 4.61 mi
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Total channel length: 21,675 ft 
+                    = 4.11 mi
 </code></pre></div>
 <div>
 <style scoped>
@@ -4536,47 +4335,47 @@ Total channel length: 24,315 ft
     <tr>
       <th>0</th>
       <td>1</td>
-      <td>X &lt;= 10%</td>
-      <td>9639.0</td>
-      <td>39.6</td>
-      <td>15</td>
+      <td>&lt;=2-yr</td>
+      <td>5835.0</td>
+      <td>26.9</td>
+      <td>5</td>
     </tr>
     <tr>
       <th>1</th>
       <td>2</td>
-      <td>10% &lt; X &lt;= 4%</td>
-      <td>3034.0</td>
-      <td>12.5</td>
-      <td>4</td>
+      <td>5-yr</td>
+      <td>3960.0</td>
+      <td>18.3</td>
+      <td>3</td>
     </tr>
     <tr>
       <th>2</th>
       <td>3</td>
-      <td>4% &lt; X &lt;= 2%</td>
-      <td>3694.0</td>
-      <td>15.2</td>
-      <td>5</td>
+      <td>10-yr</td>
+      <td>5280.0</td>
+      <td>24.4</td>
+      <td>4</td>
     </tr>
     <tr>
       <th>3</th>
       <td>4</td>
-      <td>2% &lt; X &lt;= 1%</td>
-      <td>852.0</td>
-      <td>3.5</td>
-      <td>1</td>
+      <td>25-yr</td>
+      <td>2640.0</td>
+      <td>12.2</td>
+      <td>2</td>
     </tr>
     <tr>
       <th>4</th>
       <td>5</td>
-      <td>1% &lt; X &lt;= 0.2%</td>
-      <td>0.0</td>
-      <td>0.0</td>
-      <td>0</td>
+      <td>50-yr</td>
+      <td>3960.0</td>
+      <td>18.3</td>
+      <td>3</td>
     </tr>
     <tr>
       <th>5</th>
       <td>6</td>
-      <td>X &gt; 0.2%</td>
+      <td>100-yr</td>
       <td>0.0</td>
       <td>0.0</td>
       <td>0</td>
@@ -4584,22 +4383,220 @@ Total channel length: 24,315 ft
     <tr>
       <th>6</th>
       <td>7</td>
-      <td>All overtop</td>
-      <td>7096.0</td>
-      <td>29.2</td>
-      <td>15</td>
+      <td>&gt;=500-yr</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0</td>
     </tr>
   </tbody>
 </table>
 </div>
 
+<h2 id="step-5-compare-existing-and-proposed-conditions">Step 5: Compare Existing and Proposed Conditions<a class="headerlink" href="#step-5-compare-existing-and-proposed-conditions" title="Permanent link">&para;</a></h2>
+<p><code>compare_conditions()</code> compares segment-level capacity between two analysis result dictionaries.
+The public BLE example has one condition, so this cell uses the same real HDF-derived analysis for both
+inputs as a no-change baseline. In project work, replace <code>proposed_results</code> with an analysis from the
+proposed condition geometry/results HDFs.</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">existing_results</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>    <span class="s1">&#39;xs_capacity&#39;</span><span class="p">:</span> <span class="n">capacity_df</span><span class="p">,</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="s1">&#39;segments&#39;</span><span class="p">:</span> <span class="n">segments_df</span><span class="p">,</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="s1">&#39;summary&#39;</span><span class="p">:</span> <span class="n">summary_df</span><span class="p">,</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="s1">&#39;bank_elevations&#39;</span><span class="p">:</span> <span class="n">bank_df</span><span class="p">,</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>    <span class="s1">&#39;max_wse&#39;</span><span class="p">:</span> <span class="n">wse_df</span><span class="p">,</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="p">}</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="n">proposed_results</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>    <span class="s1">&#39;xs_capacity&#39;</span><span class="p">:</span> <span class="n">capacity_df</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>    <span class="s1">&#39;segments&#39;</span><span class="p">:</span> <span class="n">segments_df</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>    <span class="s1">&#39;summary&#39;</span><span class="p">:</span> <span class="n">summary_df</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>    <span class="s1">&#39;bank_elevations&#39;</span><span class="p">:</span> <span class="n">bank_df</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>    <span class="s1">&#39;max_wse&#39;</span><span class="p">:</span> <span class="n">wse_df</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="p">}</span>
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>
+</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="n">comparison_df</span> <span class="o">=</span> <span class="n">HdfChannelCapacity</span><span class="o">.</span><span class="n">compare_conditions</span><span class="p">(</span><span class="n">existing_results</span><span class="p">,</span> <span class="n">proposed_results</span><span class="p">)</span>
+</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="n">classification_lengths</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a>    <span class="n">comparison_df</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">channel_length_miles</span><span class="o">=</span><span class="n">segments_df</span><span class="p">[</span><span class="s1">&#39;segment_length_ft&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">values</span> <span class="o">/</span> <span class="mf">5280.0</span><span class="p">)</span>
+</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a>    <span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s1">&#39;classification&#39;</span><span class="p">,</span> <span class="n">as_index</span><span class="o">=</span><span class="kc">False</span><span class="p">)[</span><span class="s1">&#39;channel_length_miles&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a><span class="p">)</span>
+</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a>
+</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a><span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Segment comparison counts:&#39;</span><span class="p">)</span>
+</span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a><span class="nb">print</span><span class="p">(</span><span class="n">comparison_df</span><span class="p">[</span><span class="s1">&#39;classification&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span><span class="o">.</span><span class="n">to_string</span><span class="p">())</span>
+</span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a><span class="n">comparison_df</span><span class="p">[[</span><span class="s1">&#39;River&#39;</span><span class="p">,</span> <span class="s1">&#39;Reach&#39;</span><span class="p">,</span> <span class="s1">&#39;segment_id&#39;</span><span class="p">,</span> <span class="s1">&#39;existing_level&#39;</span><span class="p">,</span> <span class="s1">&#39;proposed_level&#39;</span><span class="p">,</span> <span class="s1">&#39;level_change&#39;</span><span class="p">,</span> <span class="s1">&#39;classification&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Segment comparison counts:
+classification
+No Change    17
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>River</th>
+      <th>Reach</th>
+      <th>segment_id</th>
+      <th>existing_level</th>
+      <th>proposed_level</th>
+      <th>level_change</th>
+      <th>classification</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
+      <td>1</td>
+      <td>3</td>
+      <td>3</td>
+      <td>0</td>
+      <td>No Change</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
+      <td>2</td>
+      <td>3</td>
+      <td>3</td>
+      <td>0</td>
+      <td>No Change</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
+      <td>3</td>
+      <td>1</td>
+      <td>1</td>
+      <td>0</td>
+      <td>No Change</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
+      <td>5</td>
+      <td>3</td>
+      <td>3</td>
+      <td>0</td>
+      <td>No Change</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
+      <td>6</td>
+      <td>5</td>
+      <td>5</td>
+      <td>0</td>
+      <td>No Change</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
+      <td>7</td>
+      <td>4</td>
+      <td>4</td>
+      <td>0</td>
+      <td>No Change</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
+      <td>8</td>
+      <td>1</td>
+      <td>1</td>
+      <td>0</td>
+      <td>No Change</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
+      <td>9</td>
+      <td>5</td>
+      <td>5</td>
+      <td>0</td>
+      <td>No Change</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
+      <td>10</td>
+      <td>1</td>
+      <td>1</td>
+      <td>0</td>
+      <td>No Change</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>SHILOH BRANCH</td>
+      <td>Reach-1</td>
+      <td>11</td>
+      <td>2</td>
+      <td>2</td>
+      <td>0</td>
+      <td>No Change</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mf">4.5</span><span class="p">))</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">class_order</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Improved&#39;</span><span class="p">,</span> <span class="s1">&#39;No Change&#39;</span><span class="p">,</span> <span class="s1">&#39;Degraded&#39;</span><span class="p">,</span> <span class="s1">&#39;Incomplete&#39;</span><span class="p">]</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">class_colors</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="s1">&#39;Improved&#39;</span><span class="p">:</span> <span class="s1">&#39;#2E7D32&#39;</span><span class="p">,</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="s1">&#39;No Change&#39;</span><span class="p">:</span> <span class="s1">&#39;#546E7A&#39;</span><span class="p">,</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="s1">&#39;Degraded&#39;</span><span class="p">:</span> <span class="s1">&#39;#C62828&#39;</span><span class="p">,</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="s1">&#39;Incomplete&#39;</span><span class="p">:</span> <span class="s1">&#39;#6A1B9A&#39;</span><span class="p">,</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="p">}</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="n">plot_df</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>    <span class="n">classification_lengths</span><span class="o">.</span><span class="n">set_index</span><span class="p">(</span><span class="s1">&#39;classification&#39;</span><span class="p">)</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>    <span class="o">.</span><span class="n">reindex</span><span class="p">(</span><span class="n">class_order</span><span class="p">,</span> <span class="n">fill_value</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>    <span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="p">)</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="n">bars</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">bar</span><span class="p">(</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>    <span class="n">plot_df</span><span class="p">[</span><span class="s1">&#39;classification&#39;</span><span class="p">],</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>    <span class="n">plot_df</span><span class="p">[</span><span class="s1">&#39;channel_length_miles&#39;</span><span class="p">],</span>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>    <span class="n">color</span><span class="o">=</span><span class="p">[</span><span class="n">class_colors</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">plot_df</span><span class="p">[</span><span class="s1">&#39;classification&#39;</span><span class="p">]],</span>
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>    <span class="n">edgecolor</span><span class="o">=</span><span class="s1">&#39;black&#39;</span><span class="p">,</span>
+</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a>    <span class="n">linewidth</span><span class="o">=</span><span class="mf">0.6</span><span class="p">,</span>
+</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="p">)</span>
+</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a><span class="n">max_length</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">plot_df</span><span class="p">[</span><span class="s1">&#39;channel_length_miles&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
+</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">max_length</span> <span class="o">*</span> <span class="mf">1.18</span> <span class="k">if</span> <span class="n">max_length</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mf">1.0</span><span class="p">)</span>
+</span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a><span class="n">ax</span><span class="o">.</span><span class="n">bar_label</span><span class="p">(</span><span class="n">bars</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">v</span><span class="si">:</span><span class="s1">.2f</span><span class="si">}</span><span class="s1">&#39;</span> <span class="k">if</span> <span class="n">v</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">plot_df</span><span class="p">[</span><span class="s1">&#39;channel_length_miles&#39;</span><span class="p">]],</span> <span class="n">padding</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+</span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">BLE_REACH_NAME</span><span class="si">}</span><span class="s1"> - Segment Capacity Change&#39;</span><span class="p">)</span>
+</span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s1">&#39;Capacity change classification&#39;</span><span class="p">)</span>
+</span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s1">&#39;Channel length (mi)&#39;</span><span class="p">)</span>
+</span><span id="__span-13-27"><a id="__codelineno-13-27" name="__codelineno-13-27" href="#__codelineno-13-27"></a><span class="n">ax</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="s1">&#39;y&#39;</span><span class="p">)</span>
+</span><span id="__span-13-28"><a id="__codelineno-13-28" name="__codelineno-13-28" href="#__codelineno-13-28"></a><span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+</span><span id="__span-13-29"><a id="__codelineno-13-29" name="__codelineno-13-29" href="#__codelineno-13-29"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</span></code></pre></div>
+<p><img alt="png" src="../430_1d_channel_capacity_analysis_files/430_1d_channel_capacity_analysis_20_0.png" /></p>
 <h2 id="key-takeaways">Key Takeaways<a class="headerlink" href="#key-takeaways" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong><code>extract_bank_elevations()</code></strong> reads bank station elevations from the geometry HDF using <code>np.interp()</code> on station-elevation data.</li>
 <li><strong><code>extract_steady_profile_wse()</code></strong> extracts individual steady-state profiles from a single plan HDF, preserving each AEP event as a separate column.</li>
 <li><strong><code>determine_capacity()</code></strong> tests storms from smallest to largest, classifying each cross section into capacity levels 1-7.</li>
 <li><strong><code>segment_channel()</code></strong> aggregates XS-level capacity into fixed-length segments with conservative (FLOOR) weighting.</li>
-<li><strong><code>system_capacity_summary()</code></strong> produces the capacity distribution.</li>
+<li><strong><code>system_capacity_summary()</code></strong> produces the segment-weighted capacity distribution.</li>
+<li><strong><code>compare_conditions()</code></strong> classifies segment-level capacity change as Improved, No Change, or Degraded.</li>
 </ol>
 <p><strong>Validation notes</strong>:
 - This 1D steady reach does not rely on terrain or land-cover layers for the channel-capacity workflow.
@@ -4631,7 +4628,7 @@ Total channel length: 24,315 ft
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 17:06:53 UTC">May 31, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 17:21:59 UTC">May 31, 2026</span>
   </span>
 
     
@@ -4641,7 +4638,7 @@ Total channel length: 24,315 ft
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 17:06:53 UTC">May 31, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 17:21:59 UTC">May 31, 2026</span>
   </span>
 
     
