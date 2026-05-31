@@ -1970,13 +1970,13 @@ class RasUtils:
 
         Returns:
             Dict[str, Path]: Mapping of version string -> Path to Ras.exe
-            Example: {"7.0": Path("C:/Program Files (x86)/HEC/HEC-RAS/6.6/Ras.exe")}
+            Example: {"6.6": Path("C:/Program Files (x86)/HEC/HEC-RAS/6.6/Ras.exe")}
         """
         discovered: Dict[str, Path] = {}
 
         # Version folder names matching RasPrj.get_ras_exe()
         ras_version_folders = [
-            "7.0", "6.7 Beta 5", "6.7 Beta 4", "7.0", "6.5", "6.4.1", "6.3.1", "6.3", "6.2",
+            "7.0", "6.7 Beta 5", "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2",
             "6.1", "6.0", "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3",
             "5.0.1", "5.0", "4.1.0", "4.0"
         ]
@@ -1987,7 +1987,7 @@ class RasUtils:
             "504": "5.0.4", "505": "5.0.5", "506": "5.0.6", "507": "5.0.7",
             "60": "6.0", "61": "6.1", "62": "6.2", "63": "6.3",
             "631": "6.3.1", "6.4": "6.4.1", "64": "6.4.1", "641": "6.4.1",
-            "65": "6.5", "66": "7.0", "6.7": "6.7 Beta 5", "67": "6.7 Beta 5",
+            "65": "6.5", "66": "6.6", "6.7": "6.7 Beta 5", "67": "6.7 Beta 5",
             "70": "7.0",
         }
 
