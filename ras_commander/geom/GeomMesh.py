@@ -62,7 +62,7 @@ import sys
 from dataclasses import dataclass, field
 from numbers import Number
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 from ..Decorators import log_call
 from .._gdal_runtime import (
@@ -1584,6 +1584,195 @@ def _normalise_polygon_coords(polygon) -> "numpy.ndarray":
     return coords
 
 
+_BUFFER_CAP_STYLES = {"round": 1, "flat": 2, "square": 3}
+_BUFFER_JOIN_STYLES = {"round": 1, "mitre": 2, "miter": 2, "bevel": 3}
+
+
+def _buffer_style_value(value: Union[str, int], mapping: dict[str, int], label: str) -> int:
+    if isinstance(value, str):
+        key = value.strip().lower()
+        if key not in mapping:
+            options = ", ".join(sorted(mapping))
+            raise ValueError(f"{label} must be one of: {options}.")
+        return mapping[key]
+    return int(value)
+
+
+def _spatial_input_crs(value) -> Optional[object]:
+    if value is None:
+        return None
+    try:
+        import geopandas as gpd
+    except Exception:
+        gpd = None
+
+    if gpd is not None and isinstance(value, (gpd.GeoDataFrame, gpd.GeoSeries)):
+        return value.crs
+    return getattr(value, "crs", None)
+
+
+def _coerce_geospatial_records(
+    value,
+    *,
+    target_crs: Optional[object] = None,
+) -> list[dict]:
+    """Return records with index, properties, and a shapely geometry."""
+    if value is None:
+        return []
+
+    try:
+        import geopandas as gpd
+    except Exception:
+        gpd = None
+
+    if gpd is not None and isinstance(value, gpd.GeoDataFrame):
+        gdf = value.copy()
+        if target_crs is not None and gdf.crs is not None:
+            gdf = gdf.to_crs(target_crs)
+        geom_col = gdf.geometry.name
+        records = []
+        for idx, row in gdf.iterrows():
+            records.append({
+                "index": idx,
+                "properties": {
+                    col: row[col] for col in gdf.columns if col != geom_col
+                },
+                "geometry": row.geometry,
+            })
+        return records
+
+    if gpd is not None and isinstance(value, gpd.GeoSeries):
+        series = value.copy()
+        if target_crs is not None and series.crs is not None:
+            series = series.to_crs(target_crs)
+        return [
+            {"index": idx, "properties": {}, "geometry": geom}
+            for idx, geom in series.items()
+        ]
+
+    if hasattr(value, "geom_type"):
+        return [{"index": 0, "properties": {}, "geometry": value}]
+
+    records = []
+    try:
+        iterator = list(value)
+    except TypeError as exc:
+        raise TypeError(
+            "Expected a GeoDataFrame, GeoSeries, shapely geometry, or iterable "
+            "of shapely geometries."
+        ) from exc
+
+    for idx, item in enumerate(iterator):
+        if isinstance(item, dict) and "geometry" in item:
+            records.append({
+                "index": item.get("index", idx),
+                "properties": {
+                    key: val for key, val in item.items()
+                    if key not in {"geometry", "index"}
+                },
+                "geometry": item["geometry"],
+            })
+        elif hasattr(item, "geometry") and hasattr(item.geometry, "geom_type"):
+            records.append({
+                "index": getattr(item, "name", idx),
+                "properties": {},
+                "geometry": item.geometry,
+            })
+        else:
+            records.append({"index": idx, "properties": {}, "geometry": item})
+    return records
+
+
+def _collect_line_parts(geometry) -> list:
+    from shapely.geometry import LineString
+
+    if geometry is None or getattr(geometry, "is_empty", False):
+        return []
+
+    geom_type = getattr(geometry, "geom_type", None)
+    if geom_type == "LineString":
+        return [geometry]
+    if geom_type == "LinearRing":
+        return [LineString(geometry)]
+    if geom_type == "MultiLineString":
+        return list(geometry.geoms)
+    if geom_type == "GeometryCollection":
+        parts = []
+        for sub_geom in geometry.geoms:
+            parts.extend(_collect_line_parts(sub_geom))
+        return parts
+    return []
+
+
+def _ensure_line_geometry(geometry, source_index):
+    from shapely.geometry import MultiLineString
+
+    parts = _collect_line_parts(geometry)
+    if not parts:
+        geom_type = getattr(geometry, "geom_type", type(geometry).__name__)
+        raise ValueError(
+            f"Flowline {source_index!r} must be a LineString or MultiLineString; "
+            f"got {geom_type}."
+        )
+    if len(parts) == 1:
+        return parts[0]
+    return MultiLineString(parts)
+
+
+def _iter_polygon_geometries(geometry):
+    if geometry is None or getattr(geometry, "is_empty", False):
+        return
+
+    if not getattr(geometry, "is_valid", True):
+        geometry = geometry.buffer(0)
+        if geometry.is_empty:
+            return
+
+    geom_type = getattr(geometry, "geom_type", None)
+    if geom_type == "Polygon":
+        if geometry.area > 0:
+            yield geometry
+        return
+    if geom_type == "MultiPolygon":
+        for polygon in geometry.geoms:
+            yield from _iter_polygon_geometries(polygon)
+        return
+    if geom_type == "GeometryCollection":
+        for sub_geom in geometry.geoms:
+            yield from _iter_polygon_geometries(sub_geom)
+
+
+def _prepare_trim_union(
+    trim_geometries,
+    *,
+    target_crs: Optional[object] = None,
+    trim_distance: float = 0.0,
+):
+    if trim_geometries is None:
+        return None
+    if trim_distance < 0:
+        raise ValueError("trim_distance must be non-negative.")
+
+    from shapely.ops import unary_union
+
+    geoms = []
+    for record in _coerce_geospatial_records(trim_geometries, target_crs=target_crs):
+        geom = record["geometry"]
+        if geom is None or getattr(geom, "is_empty", False):
+            continue
+        if trim_distance > 0:
+            geom = geom.buffer(trim_distance)
+        if not geom.is_empty:
+            geoms.append(geom)
+
+    return unary_union(geoms) if geoms else None
+
+
+def _truncate_ras_name(name: str, max_bytes: int = 32) -> str:
+    encoded = str(name).encode("utf-8")[:max_bytes]
+    return encoded.decode("utf-8", errors="ignore")
+
+
 def _create_hdf_dataset(hf, key: str, data: "numpy.ndarray") -> None:
     """Create an HDF5 dataset matching HEC-RAS conventions.
 
@@ -2282,6 +2471,239 @@ class GeomMesh:
             f"vertices={n_pts}) → {hdf_path.name}"
         )
         return new_fid
+
+    @staticmethod
+    @log_call
+    def add_flowline_refinement_regions(
+        geom_number: Union[str, Number, Path],
+        flowlines,
+        buffer_width: float,
+        spacing_dx: Optional[float] = None,
+        spacing_dy: Optional[float] = None,
+        name_prefix: str = "FlowlineRR",
+        name_column: Optional[str] = None,
+        simplify_tolerance: Optional[float] = None,
+        preserve_topology: bool = True,
+        trim_geometries=None,
+        trim_distance: float = 0.0,
+        trim_hook: Optional[Callable] = None,
+        trim_overlaps: bool = False,
+        cap_style: Union[str, int] = "flat",
+        join_style: Union[str, int] = "round",
+        mitre_limit: float = 5.0,
+        min_area: float = 0.0,
+        project_crs: Optional[object] = None,
+        hecras_dir: Optional[Union[str, Path]] = None,
+        ras_object=None,
+    ) -> list[dict]:
+        """
+        Buffer channel flowlines into HEC-RAS refinement regions.
+
+        This is the high-level API equivalent of the HEC-RAS Mapper workflow
+        that filters flowlines, buffers them to refinement-region polygons,
+        and sets the region X/Y cell spacing to the selected buffer width.
+        The final write still goes through ``add_refinement_region()`` so the
+        generated HDF datasets use the same schema as the lower-level helper.
+
+        Args:
+            geom_number: Geometry number, .g## text path, or resolvable geometry
+                selector.  A current compiled .g##.hdf workspace must exist.
+            flowlines: GeoDataFrame, GeoSeries, LineString, MultiLineString,
+                or iterable of shapely line geometries. GeoDataFrame inputs are
+                reprojected to the project CRS when both CRS values are known;
+                inputs without a CRS are assumed to already be in project CRS.
+            buffer_width: Distance used to buffer each flowline, in project
+                units. Defaults ``spacing_dx`` and ``spacing_dy`` to this value.
+            spacing_dx: Refinement-region X spacing. Defaults to
+                ``buffer_width``.
+            spacing_dy: Refinement-region Y spacing. Defaults to
+                ``spacing_dx``.
+            name_prefix: Prefix used when ``name_column`` is not supplied.
+            name_column: Optional GeoDataFrame column for region names.
+            simplify_tolerance: Optional line simplification tolerance applied
+                before buffering.
+            preserve_topology: Passed to shapely ``simplify()``.
+            trim_geometries: Optional GeoDataFrame, geometry, or iterable of
+                geometries to subtract from generated buffers. Use this for
+                bridge, confluence, levee, or other overlap avoidance zones.
+            trim_distance: Optional buffer distance applied to
+                ``trim_geometries`` before subtraction.
+            trim_hook: Optional callable ``f(polygon, line, source)`` that can
+                return a custom trimmed polygon, MultiPolygon, or ``None`` to
+                skip a flowline. ``source`` contains ``index`` and
+                ``properties`` from the input record.
+            trim_overlaps: If True, subtract previously-created flowline
+                regions from later regions. This is order-dependent but useful
+                for quickly removing confluence overlaps.
+            cap_style: Shapely buffer cap style: ``"round"``, ``"flat"``, or
+                ``"square"``; integer shapely style values are also accepted.
+            join_style: Shapely buffer join style: ``"round"``, ``"mitre"`` /
+                ``"miter"``, or ``"bevel"``.
+            mitre_limit: Shapely buffer mitre limit.
+            min_area: Skip trimmed polygon parts smaller than this area.
+            project_crs: Optional CRS override for GeoDataFrame reprojection.
+                If omitted, the method attempts to read the project CRS from
+                the compiled geometry HDF/RASMapper files when needed.
+            hecras_dir: Override HEC-RAS installation directory for HDF
+                resolution consistency with other ``GeomMesh`` methods.
+            ras_object: Optional RasPrj instance.
+
+        Returns:
+            List of dictionaries mapping each written region to its HDF FID,
+            stored name, source feature index, spacing, buffer width, and area.
+
+        Raises:
+            ValueError: If spacing/buffer inputs are non-positive, if
+                ``flowlines`` contains non-line geometries, or if
+                ``name_column`` is requested but absent.
+        """
+        if buffer_width <= 0:
+            raise ValueError(f"buffer_width must be positive (got {buffer_width}).")
+        if spacing_dx is None:
+            spacing_dx = buffer_width
+        if spacing_dy is None:
+            spacing_dy = spacing_dx
+        if spacing_dx <= 0 or spacing_dy <= 0:
+            raise ValueError(
+                f"Spacing must be positive (got dx={spacing_dx}, dy={spacing_dy})."
+            )
+        if simplify_tolerance is not None and simplify_tolerance < 0:
+            raise ValueError("simplify_tolerance must be non-negative.")
+        if min_area < 0:
+            raise ValueError("min_area must be non-negative.")
+
+        target_crs = project_crs
+        if target_crs is None and (
+            _spatial_input_crs(flowlines) is not None
+            or _spatial_input_crs(trim_geometries) is not None
+        ):
+            try:
+                hdf_path = _resolve_geom_hdf_path(
+                    geom_number,
+                    hecras_dir=hecras_dir,
+                    ras_object=ras_object,
+                )
+                from ..hdf.HdfBase import HdfBase
+
+                target_crs = HdfBase.get_projection(hdf_path)
+            except Exception as exc:
+                logger.debug(f"Could not read project CRS for flowline regions: {exc}")
+            if target_crs is None:
+                logger.warning(
+                    "Flowline or trim geometries have a CRS, but the project CRS "
+                    "could not be determined. Coordinates will be used as-is."
+                )
+
+        records = _coerce_geospatial_records(flowlines, target_crs=target_crs)
+        if not records:
+            raise ValueError("flowlines is empty.")
+
+        cap_value = _buffer_style_value(cap_style, _BUFFER_CAP_STYLES, "cap_style")
+        join_value = _buffer_style_value(join_style, _BUFFER_JOIN_STYLES, "join_style")
+        trim_union = _prepare_trim_union(
+            trim_geometries,
+            target_crs=target_crs,
+            trim_distance=trim_distance,
+        )
+
+        if trim_overlaps:
+            from shapely.ops import unary_union
+        else:
+            unary_union = None
+
+        created_polygons = []
+        mappings: list[dict] = []
+        source_ordinal = 0
+
+        for record in records:
+            source_index = record["index"]
+            properties = record["properties"]
+            line = _ensure_line_geometry(record["geometry"], source_index)
+            if line.is_empty:
+                continue
+
+            source_ordinal += 1
+            if simplify_tolerance is not None and simplify_tolerance > 0:
+                line = line.simplify(
+                    simplify_tolerance,
+                    preserve_topology=preserve_topology,
+                )
+                if line.is_empty:
+                    continue
+
+            region_geom = line.buffer(
+                buffer_width,
+                cap_style=cap_value,
+                join_style=join_value,
+                mitre_limit=mitre_limit,
+            )
+            if trim_union is not None and not region_geom.is_empty:
+                region_geom = region_geom.difference(trim_union)
+
+            if trim_hook is not None and not region_geom.is_empty:
+                source = {"index": source_index, "properties": properties}
+                region_geom = trim_hook(region_geom, line, source)
+                if region_geom is None:
+                    continue
+
+            if trim_overlaps and created_polygons and not region_geom.is_empty:
+                region_geom = region_geom.difference(unary_union(created_polygons))
+
+            polygons = [
+                polygon for polygon in _iter_polygon_geometries(region_geom)
+                if polygon.area >= min_area
+            ]
+            if not polygons:
+                continue
+
+            if name_column is not None:
+                if name_column not in properties:
+                    raise ValueError(f"name_column {name_column!r} not found.")
+                raw_name = properties.get(name_column)
+                base_name = str(raw_name).strip() if raw_name is not None else ""
+                if not base_name:
+                    base_name = f"{name_prefix}_{source_ordinal:03d}"
+            else:
+                base_name = f"{name_prefix}_{source_ordinal:03d}"
+
+            part_count = len(polygons)
+            for part_index, polygon in enumerate(polygons):
+                if getattr(polygon, "interiors", None) and len(polygon.interiors):
+                    logger.warning(
+                        "Flowline refinement region trim produced an interior "
+                        "hole for source %r; add_refinement_region() writes the "
+                        "exterior ring only. Use a trim_hook that returns split "
+                        "hole-free polygons if the hole must be preserved.",
+                        source_index,
+                    )
+                region_name = (
+                    base_name
+                    if part_count == 1
+                    else f"{base_name}_{part_index + 1}"
+                )
+                fid = GeomMesh.add_refinement_region(
+                    geom_number,
+                    polygon,
+                    spacing_dx=spacing_dx,
+                    spacing_dy=spacing_dy,
+                    name=region_name,
+                    hecras_dir=hecras_dir,
+                    ras_object=ras_object,
+                )
+                created_polygons.append(polygon)
+                mappings.append({
+                    "fid": fid,
+                    "name": _truncate_ras_name(region_name),
+                    "source_index": source_index,
+                    "part_index": part_index,
+                    "spacing_dx": float(spacing_dx),
+                    "spacing_dy": float(spacing_dy),
+                    "buffer_width": float(buffer_width),
+                    "area": float(polygon.area),
+                })
+
+        logger.info("Added %s flowline refinement regions", len(mappings))
+        return mappings
 
     @staticmethod
     @log_call

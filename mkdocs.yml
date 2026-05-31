@@ -133,6 +133,7 @@ nav:
     - Workflows & Patterns: user-guide/workflows-and-patterns.md
     - Boundary Conditions: user-guide/boundary-conditions.md
     - Spatial Data & RASMapper: user-guide/spatial-data.md
+    - Flowline Refinement Regions: user-guide/flowline-refinement-regions.md
     - HEC-RAS Supplementary Guide Coverage: user-guide/hec-ras-supplementary-guides.md
     - eBFE Delivery Validation: user-guide/ebfe-delivery-validation.md
     - HDF Data Extraction: user-guide/hdf-data-extraction.md
