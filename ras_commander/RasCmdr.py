@@ -1616,7 +1616,10 @@ class RasCmdr:
 
         # Determine geometry number from plan file
         plan_path = RasPlan.get_plan_path(plan_num_str, ras_obj)
-        geom_num = "01"  # default
+        # Resolve the geometry number from the plan file. Fail fast rather than
+        # silently defaulting to "01" — running an unknown/wrong geometry would
+        # produce results for the wrong model (CLB-884).
+        geom_num = None
         try:
             plan_text = Path(plan_path).read_text(errors='replace')
             for line in plan_text.splitlines():
@@ -1629,7 +1632,16 @@ class RasCmdr:
                         geom_num = m.group(1)
                     break
         except Exception as e:
-            logger.warning(f"Could not read geom number from plan file: {e}")
+            raise RuntimeError(
+                f"Could not read the geometry reference from plan file {plan_path}: {e}. "
+                f"Refusing to run Linux compute without a resolved geometry."
+            )
+        if geom_num is None:
+            raise RuntimeError(
+                f"Could not resolve a geometry number from plan file {plan_path} "
+                f"(no parseable 'Geom File=' entry). Refusing to fall back to a default "
+                f"geometry for Linux compute — that could silently run the wrong geometry."
+            )
 
         # Verify prerequisite files exist
         tmp_hdf = project_dir / f"{project_name}.p{plan_num_str}.tmp.hdf"
@@ -1762,11 +1774,26 @@ class RasCmdr:
                     end_time = time.time()
                     run_time = end_time - start_time
                     if rc == 0:
-                        success = True
-                        logger.info(
-                            f"RasUnsteady completed for plan {plan_num_str} "
-                            f"in {run_time:.1f}s (exit code 0)"
+                        # RasUnsteady can exit 0 even when the solve failed in-band
+                        # (e.g. "Unsteady flow encountered an error"). Validate the
+                        # solver log and result HDF before declaring success so a bad
+                        # result HDF is never promoted .tmp.hdf -> .hdf (CLB-882).
+                        ok, reason = RasCmdr._validate_linux_solve(
+                            log_path, tmp_hdf, plan_num_str
                         )
+                        if ok:
+                            success = True
+                            logger.info(
+                                f"RasUnsteady completed for plan {plan_num_str} "
+                                f"in {run_time:.1f}s (exit code 0, validated)"
+                            )
+                        else:
+                            success = False
+                            err_msg = (
+                                f"RasUnsteady exited 0 but the solve did not produce a "
+                                f"valid result: {reason}"
+                            )
+                            logger.error(f"Plan {plan_num_str}: {err_msg}")
                     else:
                         try:
                             tail = log_path.read_text(errors='replace')[-500:]
@@ -1825,6 +1852,47 @@ class RasCmdr:
                         pass
 
                 return ComputeResult(success=False, results_df_row=None)
+
+    @staticmethod
+    def _validate_linux_solve(log_path, result_hdf, plan_num_str: str):
+        """Validate a Linux RasUnsteady solve beyond exit-code 0 (CLB-882).
+
+        RasUnsteady can exit 0 even when the unsteady solve failed in-band
+        (convergence failure, "encountered an error", etc.), leaving an
+        unpopulated result HDF. This scans the solver log for error markers and
+        confirms the result HDF actually contains an Unsteady results group
+        (not just the skeleton groups carried over from Phase-1 preprocessing).
+
+        Returns:
+            tuple[bool, str]: ``(ok, reason)`` — ``ok`` is False with a
+            human-readable reason when the solve did not produce a valid result.
+        """
+        error_markers = [
+            "encountered an error",
+            "did not complete",
+            "failed to converge",
+            "computations were stopped",
+            "fatal error",
+        ]
+        try:
+            log_text = Path(log_path).read_text(errors="replace")
+        except OSError:
+            return False, "solver log unreadable"
+        low = log_text.lower()
+        for marker in error_markers:
+            if marker in low:
+                return False, f"solver log reports failure ('{marker}')"
+        try:
+            import h5py
+            with h5py.File(str(result_hdf), "r") as hf:
+                results = hf.get("Results")
+                if results is None:
+                    return False, "result HDF missing /Results group"
+                if results.get("Unsteady") is None:
+                    return False, "result HDF missing /Results/Unsteady group"
+        except Exception as e:
+            return False, f"result HDF unreadable or invalid: {e}"
+        return True, "ok"
 
     @staticmethod
     def _windows_path_to_wsl(path: Union[str, Path]) -> str:
