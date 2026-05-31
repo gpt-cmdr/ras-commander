@@ -26,6 +26,8 @@ Functions:
     extract_boundary_timeseries(boundaries_df, project_dir=None, ras_object=None):
         Extracts DSS time series for DSS-defined boundary conditions in a
         DataFrame and appends results as a new column.
+    write_grid_timeseries(dss_file, pathname, data, times, grid_info):
+        Writes spatial grid records such as SHG gridded precipitation to DSS.
     shutdown_jvm():
         Placeholder for JVM lifecycle management (not typically required with
         pyjnius).
@@ -44,7 +46,7 @@ Lazy Loading:
 import sys
 import os
 from pathlib import Path
-from typing import List, Dict, Optional, Union
+from typing import Any, List, Dict, Optional, Tuple, Union
 import logging
 
 # Lazy imports - these are always needed for type hints and basic operations
@@ -1072,6 +1074,207 @@ class RasDss:
 
     @staticmethod
     @log_call
+    def write_grid_timeseries(
+        dss_file: Union[str, Path],
+        pathname: str,
+        data: np.ndarray,
+        times: Union[List, np.ndarray, pd.DatetimeIndex],
+        grid_info: Dict[str, Any],
+        create_if_missing: bool = True,
+    ) -> List[str]:
+        """
+        Write a time-varying spatial grid series to HEC-DSS.
+
+        Creates one DSS grid record per timestep using the HEC Monolith Java
+        bridge. The method is designed for HEC-RAS gridded precipitation DSS
+        records such as::
+
+            /SHG/MARFC/PRECIP/01SEP2018:0200/01SEP2018:0300/NEXRAD/
+
+        Args:
+            dss_file: Path to DSS file (created if missing and
+                create_if_missing=True).
+            pathname: DSS grid pathname template. Parts A, B, C, and F are
+                preserved; Parts D and E are replaced with each timestep's
+                start/end window.
+            data: 3-D array with shape ``(n_times, n_rows, n_cols)``.
+                NaN/inf values and values equal to ``grid_info["nodata_value"]``
+                are written as the HEC grid no-data sentinel.
+            times: Datetime values. Pass ``n_times + 1`` values to provide
+                explicit interval boundaries, or ``n_times`` values to provide
+                interval end times. For ``n_times`` period data, the interval is
+                inferred from ``grid_info["interval_minutes"]``, consecutive
+                times, the pathname D/E parts, or 60 minutes.
+            grid_info: Grid metadata. Common keys are:
+                - ``cellsize`` or ``cell_size``: cell size in CRS units.
+                - ``origin``: physical lower-left coordinate ``(x, y)``.
+                - ``lower_left_cell_x`` / ``lower_left_cell_y``: explicit HEC
+                  cell indexes, used instead of ``origin`` when provided.
+                - ``x_coord_cell_zero`` / ``y_coord_cell_zero``: physical
+                  coordinate of HEC cell zero, default 0.
+                - ``crs``: ``"SHG"``/``"EPSG:5070"`` for HEC SHG Albers
+                  metadata, or WKT for a specified grid.
+                - ``units``: data units, default ``"mm"``.
+                - ``data_type``: DSS grid data type, default ``"PER-CUM"``.
+                - ``compression``: ``"PRECIP_2_BYTE"``, ``"ZLIB"``, or
+                  ``None``. Defaults to ``"PRECIP_2_BYTE"``.
+            create_if_missing: Create DSS file if it doesn't exist.
+
+        Returns:
+            List of DSS pathnames written, one per timestep.
+
+        Raises:
+            FileNotFoundError: If DSS file doesn't exist and
+                create_if_missing=False.
+            ValueError: If inputs are malformed or grid metadata is incomplete.
+            ImportError: If pyjnius is not installed.
+            RuntimeError: If the Java grid write operation fails.
+
+        Notes:
+            HEC Monolith 3.3.x exposes ``hec.io.GridContainer`` and
+            ``hec.heclib.grid.GridData/GridInfo`` for grid records. This method
+            writes through ``hec.heclib.grid.GriddedData.storeGriddedData()``
+            because it is the stable Java API path from pyjnius for grid data.
+        """
+        RasDss._configure_jvm()
+
+        from jnius import autoclass
+        from ras_commander.RasUtils import RasUtils
+
+        if grid_info is None:
+            raise ValueError("grid_info is required")
+
+        grid_array = np.asarray(data, dtype=np.float32)
+        if grid_array.ndim != 3:
+            raise ValueError(
+                "data must have shape (n_times, n_rows, n_cols); "
+                f"got {grid_array.shape}"
+            )
+
+        n_times, n_rows, n_cols = grid_array.shape
+        if n_times == 0 or n_rows == 0 or n_cols == 0:
+            raise ValueError(
+                "data dimensions must be non-empty; "
+                f"got {grid_array.shape}"
+            )
+
+        prefix, path_parts = RasDss._split_dss_pathname(pathname)
+        data_type = str(grid_info.get("data_type", "PER-CUM")).upper().replace("_", "-")
+        data_type_code = RasDss._grid_data_type_code(data_type)
+        time_windows = RasDss._grid_time_windows(
+            times=times,
+            n_times=n_times,
+            data_type_code=data_type_code,
+            grid_info=grid_info,
+            pathname_parts=path_parts,
+        )
+
+        dss_path = Path(dss_file)
+        if not dss_path.exists():
+            if not create_if_missing:
+                raise FileNotFoundError(f"DSS file not found: {dss_path}")
+            dss_path.parent.mkdir(parents=True, exist_ok=True)
+            logger.info(f"DSS file will be created: {dss_path}")
+
+        dss_file_str = str(RasUtils.safe_resolve(dss_path))
+
+        GridInfo = autoclass('hec.heclib.grid.GridInfo')
+        GridData = autoclass('hec.heclib.grid.GridData')
+        GriddedData = autoclass('hec.heclib.grid.GriddedData')
+        HecTime = autoclass('hec.heclib.util.HecTime')
+        AlbersInfo = autoclass('hec.heclib.grid.AlbersInfo')
+        SpecifiedGridInfo = autoclass('hec.heclib.grid.SpecifiedGridInfo')
+        HrapInfo = autoclass('hec.heclib.grid.HrapInfo')
+
+        hec_nodata = float(GridInfo.getGridNodataValue())
+        source_nodata = grid_info.get("nodata_value", None)
+        written_pathnames: List[str] = []
+
+        writer = None
+        try:
+            writer = GriddedData()
+            status = writer.setDSSFileName(dss_file_str)
+            if status != 0:
+                raise RuntimeError(f"setDSSFileName returned status {status}")
+
+            for index, (start_time, end_time) in enumerate(time_windows):
+                d_part = RasDss._format_grid_dss_datetime(start_time)
+                e_part = RasDss._format_grid_dss_datetime(end_time)
+                record_parts = list(path_parts)
+                record_parts[3] = d_part
+                record_parts[4] = e_part
+                record_pathname = RasDss._build_dss_pathname(prefix, record_parts)
+
+                java_grid_info = RasDss._create_java_grid_info(
+                    grid_info=grid_info,
+                    n_rows=n_rows,
+                    n_cols=n_cols,
+                    start_part=d_part,
+                    end_part=e_part,
+                    data_type_code=data_type_code,
+                    GridInfo=GridInfo,
+                    AlbersInfo=AlbersInfo,
+                    SpecifiedGridInfo=SpecifiedGridInfo,
+                    HrapInfo=HrapInfo,
+                )
+
+                frame = np.asarray(grid_array[index], dtype=np.float32)
+                flat = frame.ravel(order="C").astype(np.float32, copy=True)
+                nodata_mask = ~np.isfinite(flat)
+                if source_nodata is not None:
+                    nodata_mask |= flat == np.float32(source_nodata)
+                flat[nodata_mask] = np.float32(hec_nodata)
+
+                java_grid_data = GridData(flat.tolist(), java_grid_info)
+                java_grid_data.updateStatistics()
+
+                writer.setPathname(record_pathname)
+                writer.setGriddedPathnameParts(
+                    record_parts[0],
+                    record_parts[1],
+                    record_parts[2],
+                    record_parts[5],
+                )
+
+                start_date, start_clock = RasDss._split_grid_datetime_part(d_part)
+                end_date, end_clock = RasDss._split_grid_datetime_part(e_part)
+                if data_type_code in (2, 3):  # INST-VAL or INST-CUM
+                    writer.setGridTime(HecTime(end_date, end_clock))
+                else:
+                    writer.setGriddedTimeWindow(
+                        HecTime(start_date, start_clock),
+                        HecTime(end_date, end_clock),
+                    )
+
+                status = writer.storeGriddedData(java_grid_info, java_grid_data)
+                if status != 0:
+                    raise RuntimeError(
+                        f"storeGriddedData returned status {status} for {record_pathname}"
+                    )
+
+                written_pathnames.append(record_pathname)
+
+            logger.info(
+                f"Wrote {len(written_pathnames)} grid records to {Path(dss_file_str).name} "
+                f"(shape={n_rows}x{n_cols}, units={grid_info.get('units', 'mm')}, "
+                f"type={data_type})"
+            )
+            return written_pathnames
+        except ValueError:
+            raise
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to write grid time series to DSS: {e}\n"
+                f"  File: {dss_file_str}\n"
+                f"  Pathname template: {pathname}\n"
+                f"  Data shape: {grid_array.shape}"
+            ) from e
+        finally:
+            if writer is not None:
+                writer.done()
+
+    @staticmethod
+    @log_call
     def write_timeseries(
         dss_file: Union[str, Path],
         pathname: str,
@@ -1256,6 +1459,316 @@ class RasDss:
             data_type=data_type,
             create_if_missing=create_if_missing,
         )
+
+    @staticmethod
+    def _split_dss_pathname(pathname: str) -> Tuple[str, List[str]]:
+        """Return DSS pathname prefix and six A-F parts."""
+        if (
+            not isinstance(pathname, str)
+            or not pathname.startswith("/")
+            or not pathname.endswith("/")
+        ):
+            raise ValueError(f"DSS pathname must start and end with '/': {pathname}")
+
+        prefix = "//" if pathname.startswith("//") else "/"
+        parts = pathname.split("/")
+        path_parts = parts[2:-1] if prefix == "//" else parts[1:-1]
+        if len(path_parts) != 6:
+            raise ValueError(
+                "DSS pathname must have 6 parts (/A/B/C/D/E/F/), "
+                f"got {len(path_parts)}: {pathname}"
+            )
+        return prefix, path_parts
+
+    @staticmethod
+    def _build_dss_pathname(prefix: str, parts: List[str]) -> str:
+        """Build a DSS pathname from a prefix and A-F parts."""
+        if len(parts) != 6:
+            raise ValueError(f"Expected 6 DSS pathname parts, got {len(parts)}")
+        if prefix == "//":
+            return f"//{'/'.join(parts)}/"
+        return f"/{'/'.join(parts)}/"
+
+    @staticmethod
+    def _format_grid_dss_datetime(value: pd.Timestamp) -> str:
+        """Format datetime for DSS grid D/E pathname parts."""
+        return pd.Timestamp(value).strftime("%d%b%Y:%H%M").upper()
+
+    @staticmethod
+    def _parse_grid_dss_datetime(value: str) -> Optional[pd.Timestamp]:
+        """Parse a DSS grid D/E datetime part, returning None when blank."""
+        if not value:
+            return None
+        try:
+            return pd.Timestamp(pd.to_datetime(value, format="%d%b%Y:%H%M"))
+        except ValueError:
+            try:
+                return pd.Timestamp(pd.to_datetime(value.replace(":", " ")))
+            except Exception:
+                return None
+
+    @staticmethod
+    def _split_grid_datetime_part(value: str) -> Tuple[str, str]:
+        """Split a DSS grid datetime part into HecTime date and time strings."""
+        if ":" not in value:
+            raise ValueError(f"Grid datetime part must contain ':': {value}")
+        date_part, time_part = value.split(":", 1)
+        return date_part, time_part
+
+    @staticmethod
+    def _grid_data_type_code(data_type: str) -> int:
+        """Return HEC grid data type code for a DSS data type string."""
+        data_type_codes = {
+            "PER-AVER": 0,
+            "PER-CUM": 1,
+            "INST-VAL": 2,
+            "INST-CUM": 3,
+            "FREQ": 4,
+            "PER-MIN": 6,
+            "PER-MAX": 7,
+        }
+        normalized = str(data_type).upper().replace("_", "-")
+        if normalized not in data_type_codes:
+            raise ValueError(
+                f"Unsupported grid data_type '{data_type}'. "
+                f"Valid values: {sorted(data_type_codes)}"
+            )
+        return data_type_codes[normalized]
+
+    @staticmethod
+    def _grid_time_windows(
+        times: Union[List, np.ndarray, pd.DatetimeIndex],
+        n_times: int,
+        data_type_code: int,
+        grid_info: Dict[str, Any],
+        pathname_parts: List[str],
+    ) -> List[Tuple[pd.Timestamp, pd.Timestamp]]:
+        """Convert user times into per-grid start/end windows."""
+        dt_index = pd.DatetimeIndex(pd.to_datetime(times))
+        if dt_index.tz is not None:
+            dt_index = dt_index.tz_convert(None)
+
+        if len(dt_index) == n_times + 1:
+            return [
+                (pd.Timestamp(dt_index[i]), pd.Timestamp(dt_index[i + 1]))
+                for i in range(n_times)
+            ]
+
+        if len(dt_index) != n_times:
+            raise ValueError(
+                "times must contain n_times end times or n_times + 1 boundary "
+                f"times; got {len(dt_index)} times for {n_times} grid frames"
+            )
+
+        end_times = [pd.Timestamp(value) for value in dt_index]
+        if data_type_code in (2, 3):  # INST-VAL or INST-CUM
+            return [(value, value) for value in end_times]
+
+        interval_minutes = grid_info.get("interval_minutes")
+        if interval_minutes is None and len(end_times) > 1:
+            deltas = np.diff(np.array(end_times, dtype="datetime64[m]")).astype(int)
+            positive_deltas = deltas[deltas > 0]
+            if len(positive_deltas):
+                interval_minutes = int(np.median(positive_deltas))
+
+        if interval_minutes is None:
+            pathname_start = RasDss._parse_grid_dss_datetime(pathname_parts[3])
+            pathname_end = RasDss._parse_grid_dss_datetime(pathname_parts[4])
+            if pathname_start is not None and pathname_end is not None:
+                delta = pathname_end - pathname_start
+                interval_minutes = int(delta.total_seconds() // 60)
+
+        if interval_minutes is None:
+            interval_minutes = 60
+
+        interval = pd.Timedelta(minutes=int(interval_minutes))
+        if interval <= pd.Timedelta(0):
+            raise ValueError(
+                f"Grid interval must be positive, got {interval_minutes} minutes"
+            )
+
+        return [(value - interval, value) for value in end_times]
+
+    @staticmethod
+    def _grid_info_number(
+        grid_info: Dict[str, Any],
+        keys: List[str],
+        default: Any = None,
+    ) -> Any:
+        """Return first present grid_info numeric value."""
+        for key in keys:
+            if key in grid_info and grid_info[key] is not None:
+                return grid_info[key]
+        return default
+
+    @staticmethod
+    def _grid_origin_xy(
+        grid_info: Dict[str, Any]
+    ) -> Tuple[Optional[float], Optional[float]]:
+        """Extract optional physical lower-left origin from grid_info."""
+        if "origin" not in grid_info or grid_info["origin"] is None:
+            return (
+                grid_info.get("origin_x"),
+                grid_info.get("origin_y"),
+            )
+
+        origin = grid_info["origin"]
+        if isinstance(origin, dict):
+            return (
+                origin.get("x", origin.get("origin_x")),
+                origin.get("y", origin.get("origin_y")),
+            )
+        if isinstance(origin, (list, tuple)) and len(origin) >= 2:
+            return origin[0], origin[1]
+        raise ValueError("grid_info['origin'] must be (x, y) or a dict with x/y")
+
+    @staticmethod
+    def _hec_projection_datum(GridInfo: Any, datum: Any) -> int:
+        """Normalize projection datum to a HEC GridInfo datum code."""
+        if isinstance(datum, int):
+            return datum
+        datum_text = str(datum or "NAD83").upper().replace("_", "")
+        if datum_text == "NAD27":
+            return GridInfo.getNad27()
+        if datum_text == "UNDEFINED":
+            return GridInfo.getUndefinedProjectionDatum()
+        return GridInfo.getNad83()
+
+    @staticmethod
+    def _create_java_grid_info(
+        grid_info: Dict[str, Any],
+        n_rows: int,
+        n_cols: int,
+        start_part: str,
+        end_part: str,
+        data_type_code: int,
+        GridInfo: Any,
+        AlbersInfo: Any,
+        SpecifiedGridInfo: Any,
+        HrapInfo: Any,
+    ) -> Any:
+        """Create and populate the Java GridInfo subclass for one record."""
+        cell_size = RasDss._grid_info_number(
+            grid_info,
+            ["cellsize", "cell_size", "cell_size_m", "dx", "resolution"],
+        )
+        if cell_size is None:
+            raise ValueError("grid_info must include cellsize or cell_size")
+        cell_size = float(cell_size)
+        if cell_size <= 0:
+            raise ValueError(f"cellsize must be positive, got {cell_size}")
+
+        x_cell_zero = float(
+            RasDss._grid_info_number(
+                grid_info,
+                ["x_coord_cell_zero", "x_coord_of_grid_cell_zero", "x_cell_zero"],
+                0.0,
+            )
+        )
+        y_cell_zero = float(
+            RasDss._grid_info_number(
+                grid_info,
+                ["y_coord_cell_zero", "y_coord_of_grid_cell_zero", "y_cell_zero"],
+                0.0,
+            )
+        )
+
+        origin_x, origin_y = RasDss._grid_origin_xy(grid_info)
+        lower_left_cell_x = RasDss._grid_info_number(
+            grid_info,
+            ["lower_left_cell_x", "lowerLeftCellX", "ll_cell_x"],
+        )
+        lower_left_cell_y = RasDss._grid_info_number(
+            grid_info,
+            ["lower_left_cell_y", "lowerLeftCellY", "ll_cell_y"],
+        )
+        if lower_left_cell_x is None:
+            if origin_x is None:
+                lower_left_cell_x = 0
+            else:
+                lower_left_cell_x = int(
+                    round((float(origin_x) - x_cell_zero) / cell_size)
+                )
+        if lower_left_cell_y is None:
+            if origin_y is None:
+                lower_left_cell_y = 0
+            else:
+                lower_left_cell_y = int(
+                    round((float(origin_y) - y_cell_zero) / cell_size)
+                )
+
+        crs = str(grid_info.get("crs", "SHG"))
+        grid_type = str(grid_info.get("grid_type", "")).lower()
+        crs_upper = crs.upper()
+        if not grid_type:
+            if crs_upper in {"SHG", "EPSG:5070", "5070"} or "ALBERS" in crs_upper:
+                grid_type = "albers"
+            else:
+                grid_type = "specified"
+
+        if grid_type == "hrap":
+            java_grid_info = HrapInfo()
+            data_source = grid_info.get("data_source")
+            if data_source:
+                java_grid_info.setDataSource(str(data_source))
+        elif grid_type == "specified":
+            java_grid_info = SpecifiedGridInfo()
+            java_grid_info.setSpatialReference(
+                str(grid_info.get("crs_name", "Specified Grid")),
+                crs,
+                x_cell_zero,
+                y_cell_zero,
+            )
+        else:
+            java_grid_info = AlbersInfo()
+            java_grid_info.setProjectionInfo(
+                RasDss._hec_projection_datum(
+                    GridInfo,
+                    grid_info.get("projection_datum", "NAD83"),
+                ),
+                str(grid_info.get("projection_units", "METERS")),
+                float(grid_info.get("standard_parallel_1", 29.5)),
+                float(grid_info.get("standard_parallel_2", 45.5)),
+                float(grid_info.get("central_meridian", -96.0)),
+                float(grid_info.get("latitude_of_origin", 23.0)),
+                float(grid_info.get("false_easting", 0.0)),
+                float(grid_info.get("false_northing", 0.0)),
+                x_cell_zero,
+                y_cell_zero,
+            )
+
+        java_grid_info.setCellInfo(
+            int(lower_left_cell_x),
+            int(lower_left_cell_y),
+            int(n_cols),
+            int(n_rows),
+            cell_size,
+        )
+        java_grid_info.setParameterInfo(str(grid_info.get("units", "mm")), data_type_code)
+        java_grid_info.setGridTimes(start_part, end_part)
+
+        compression = grid_info.get("compression", "PRECIP_2_BYTE")
+        if compression is not None:
+            if isinstance(compression, int):
+                compression_method = compression
+            else:
+                compression_text = str(compression).upper().replace("-", "_")
+                if compression_text in {"PRECIP", "PRECIP2BYTE", "PRECIP_2_BYTE"}:
+                    compression_method = GridInfo.getPrecip2Byte()
+                elif compression_text in {"ZLIB", "ZLIB_DEFLATE"}:
+                    compression_method = GridInfo.getZlibDeflate()
+                elif compression_text in {"NONE", "UNDEFINED"}:
+                    compression_method = GridInfo.getUndefinedCompressionMethod()
+                else:
+                    raise ValueError(f"Unsupported grid compression: {compression}")
+            java_grid_info.setCompressionInfo(
+                int(compression_method),
+                int(grid_info.get("compression_element_size", 0)),
+                float(grid_info.get("compression_base", 0.0)),
+                float(grid_info.get("compression_scale_factor", 100.0)),
+            )
+
+        return java_grid_info
 
     @staticmethod
     def _datetimes_to_hec_times(
