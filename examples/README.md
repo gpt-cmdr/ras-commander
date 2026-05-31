@@ -1,452 +1,182 @@
 # RAS Commander Examples
 
-This directory contains example notebooks demonstrating how to use the `ras-commander` library for automating HEC-RAS operations. These examples cover basic to advanced usage scenarios and provide a practical guide for hydraulic modelers looking to automate their workflows.
-
-## Overview
-
-HEC-RAS (Hydrologic Engineering Center's River Analysis System) is widely used for hydraulic modeling. The `ras-commander` library provides a Python interface to automate HEC-RAS operations without using the graphical user interface. This enables batch processing, sensitivity analysis, and integration with other Python tools for water resources engineering.
-
-These example notebooks are designed to:
-- Demonstrate key functionalities of the `ras-commander` library
-- Provide practical use cases for automation
-- Guide users from basic to advanced operations
-- Serve as templates for your own automation scripts
-
-## Examples
-
-### [00_Using_RasExamples.ipynb](00_Using_RasExamples.ipynb)
-
-This notebook introduces the `RasExamples` class, which provides easy access to HEC-RAS example projects for testing and demonstration purposes.
-
-**Key contents:**
-- Installing `ras-commander` from pip
-- Using flexible imports for development without installation
-- Extracting specific HEC-RAS example projects by folder name
-- Advanced usage options for managing example projects
-- Listing available example projects and categories
-- Working with the new pipes and conduits examples (version 6.6)
-
-### [01_project_initialization.ipynb](01_project_initialization.ipynb)
-
-This notebook covers initializing and working with HEC-RAS projects using the `ras-commander` library.
-
-**Key contents:**
-- Setting up and configuring the RAS Commander environment
-- Downloading and extracting example HEC-RAS projects
-- Initializing HEC-RAS projects using the global `ras` object
-- Initializing multiple HEC-RAS projects using custom RAS objects
-- Accessing various project components (plans, geometries, flows, boundaries)
-- Understanding the RAS object structure and its components
-- Working with boundary conditions
-- Comparing multiple projects
-
-### [02_plan_and_geometry_operations.ipynb](02_plan_and_geometry_operations.ipynb)
-
-This notebook demonstrates operations on HEC-RAS plan and geometry files using the RAS Commander library.
-
-**Key contents:**
-- Project initialization and understanding plan/geometry files
-- Cloning plans to create new simulation scenarios
-- Cloning geometry files for modified versions
-- Setting geometry files for plans
-- Clearing geometry preprocessor files
-- Configuring simulation parameters and intervals
-- Setting run flags and updating descriptions
-- Cloning and configuring unsteady flow files
-- Computing plans and verifying results
-- Working with advanced HDF data
-- Best practices for plan and geometry operations
-
-### [03_unsteady_flow_operations.ipynb](03_unsteady_flow_operations.ipynb)
-
-This notebook demonstrates operations on unsteady flow files using the RAS Commander library.
-
-**Key contents:**
-- Understanding unsteady flow files in HEC-RAS
-- Extracting boundary conditions and tables from unsteady flow files
-- Inspecting and analyzing boundary condition structures
-- Working with different boundary condition types (flow hydrographs, stage hydrographs, etc.)
-- Modifying flow titles in unsteady flow files
-- Configuring restart settings for continuing simulations
-- Extracting and working with flow tables
-- Modifying flow tables and writing them back to files
-- Applying updated unsteady flow to a plan and computing results
-
-### [04_multiple_project_operations.ipynb](04_multiple_project_operations.ipynb)
-
-This notebook demonstrates how to work with multiple HEC-RAS projects simultaneously using the RAS Commander library.
-
-**Key contents:**
-- Initializing and managing multiple HEC-RAS projects
-- Cloning and modifying plans across different projects
-- Running computations for multiple projects in parallel
-- Optimizing computing resources when working with multiple models
-- Analyzing and comparing results from different projects
-- Building comprehensive multi-project workflows
-- Best practices for multiple project management
-- Setting up compute folders for multiple projects
-- Comparing project structures and results
-
-### [05_single_plan_execution.ipynb](05_single_plan_execution.ipynb)
-
-This notebook focuses specifically on executing a single HEC-RAS plan with various configuration options.
-
-**Key contents:**
-- Understanding the `RasCmdr.compute_plan` method and its parameters
-- Executing a plan with a specified number of processor cores
-- Creating and managing destination folders for computations
-- Overwriting existing destination folders
-- Verifying computation results
-- Options for single plan execution (basic execution, destination folder, number of cores, etc.)
-- Best practices for single plan execution
-
-### [06_executing_plan_sets.ipynb](06_executing_plan_sets.ipynb)
-
-This notebook demonstrates different ways to specify and execute HEC-RAS plans using the RAS Commander library.
-
-**Key contents:**
-- Understanding plan specification in HEC-RAS
-- Sequential execution of specific plans
-- Selective plan execution based on criteria
-- Running only plans without HDF results
-- Verifying execution results
-- Best practices for plan specification
-- Choosing appropriate execution methods based on scenario
-- Understanding the importance of plan selection for efficiency
-
-### [07_sequential_plan_execution.ipynb](07_sequential_plan_execution.ipynb)
-
-This notebook demonstrates how to sequentially execute multiple HEC-RAS plans using the RAS Commander library.
-
-**Key contents:**
-- Understanding sequential execution in HEC-RAS
-- Using the `RasCmdr.compute_test_mode` method
-- Executing all plans in a project sequentially
-- Analyzing the test folder after sequential execution
-- Executing specific plans with geometry preprocessor clearing
-- Best practices for sequential execution
-- Environment setup and test folder management
-- Benefits of sequential execution (controlled resource usage, dependency management, etc.)
-
-### [08_parallel_execution.ipynb](08_parallel_execution.ipynb)
-
-This notebook demonstrates how to execute multiple HEC-RAS plans in parallel to maximize computational efficiency.
-
-**Key contents:**
-- Understanding parallel execution in HEC-RAS
-- Setting up a working environment for parallel execution
-- Checking system resources for optimal parallel execution
-- Executing all plans in a project in parallel
-- Executing specific plans in parallel
-- Dynamic worker allocation based on available resources
-- Balancing workers and cores per worker
-- Analyzing parallel execution results
-- Performance comparison between different parallel configurations
-- Best practices for parallel execution
-
-### [09_plan_parameter_operations.ipynb](09_plan_parameter_operations.ipynb)
-
-This notebook demonstrates how to perform key operations on HEC-RAS plan files, focusing on modifying simulation parameters.
-
-**Key contents:**
-- Understanding plan files in HEC-RAS
-- Retrieving specific values from plan files
-- Updating run flags to control which components will run
-- Modifying computation and output time intervals
-- Reading and updating plan descriptions
-- Changing simulation start and end dates
-- Verifying updated plan values
-- Best practices for plan operations
-- Automating parameter adjustments for sensitivity analysis
-- Managing documentation through plan descriptions
-
-### [10_1d_hdf_data_extraction.ipynb](10_1d_hdf_data_extraction.ipynb)
-
-This notebook demonstrates how to extract and analyze 1D data from HEC-RAS HDF files using the RAS Commander library.
-
-**Key contents:**
-- Accessing and extracting base geometry attributes from HDF files
-- Working with 1D cross-section data, including station-elevation profiles
-- Visualizing cross-section properties like Manning's n values
-- Extracting river centerlines, bank lines, and edge lines
-- Analyzing runtime data and compute messages
-- Processing and visualizing ineffective flow areas
-- Extracting time series data for 1D cross sections
-- Plotting cross-section elevation profiles with bank stations
-
-### [11_2d_hdf_data_extraction.ipynb](11_2d_hdf_data_extraction.ipynb)
-
-This notebook shows how to extract and analyze 2D data from HEC-RAS HDF files using the RAS Commander library.
-
-**Key contents:**
-- Working with 2D flow area attributes and perimeter polygons
-- Extracting and visualizing mesh cell faces, polygons, and points
-- Finding nearest faces and cells to specific points
-- Extracting boundary condition lines and breaklines
-- Analyzing maximum water surface elevations and timing
-- Working with maximum face velocities and water surface errors
-- Visualizing 2D model results with terrain data
-- Extracting and interpreting cell and face time series data
-
-### [12_2d_hdf_data_extraction pipes and pumps.ipynb](12_2d_hdf_data_extraction%20pipes%20and%20pumps.ipynb)
-
-This notebook focuses on extracting and analyzing data related to pipes, conduits, and pump stations from HEC-RAS HDF files.
-
-**Key contents:**
-- Working with pipe conduits and associated geometries
-- Extracting pipe node information and properties
-- Analyzing pipe network connectivity and structures
-- Visualizing pipe networks with node elevations
-- Working with pump stations and pump groups
-- Extracting pipe and node time series data
-- Analyzing face flow, velocity, and water surface values
-- Processing and visualizing pump station operation data
-
-### [13_2d_detail_face_data_extraction.ipynb](13_2d_detail_face_data_extraction.ipynb)
-
-This notebook demonstrates techniques for detailed face data extraction from 2D HEC-RAS models.
-
-**Key contents:**
-- Extracting and analyzing detailed face property tables
-- Working with profile lines to identify cell faces
-- Finding faces perpendicular to flow for discharge calculations
-- Converting face velocities and flows to positive values
-- Calculating discharge-weighted velocities for profile lines
-- Comparing discharge-weighted and simple average velocities
-- Visualizing time series data for selected faces
-- Creating profile-specific result datasets for analysis
-
-### [413_profile_line_flow_extraction.ipynb](413_profile_line_flow_extraction.ipynb)
-
-This notebook demonstrates the callable profile-line flow API for completed 2D plan HDF results.
-
-**Key contents:**
-- Extracting a flow time series across a named RAS Mapper profile/reference line
-- Retrieving peak Q and peak time for the same line
-- Comparing absolute and signed face-flow aggregation
-- Validating API output against manual selected-face aggregation
-
-### [14_fluvial_pluvial_delineation.ipynb](14_fluvial_pluvial_delineation.ipynb)
-
-This notebook demonstrates how to delineate fluvial and pluvial flooding areas based on the timing of maximum water surface elevations.
-
-**Key contents:**
-- Extracting maximum water surface elevation and timing data
-- Identifying adjacent cells with dissimilar flood timing
-- Calculating boundaries between fluvial and pluvial flooding
-- Filtering boundaries based on length thresholds
-- Visualizing the fluvial-pluvial boundary on a map
-- Exporting boundaries to GeoJSON format
-- Understanding the difference between river-driven and rainfall-driven flooding
-- Using cell polygon geometry for spatial analysis
-
-### [105_mannings_sensitivity_bulk_analysis.ipynb](105_mannings_sensitivity_bulk_analysis.ipynb)
-
-This notebook provides tools for analyzing the sensitivity of HEC-RAS models to changes in Manning's n values applied *in bulk* across land cover types based on literature ranges.
-
-**Key contents:**
-- Defining Manning's n ranges (min/max) for various land cover types.
-- Automating the creation of scenarios (min, max, current n values).
-- Applying bulk changes to base and/or regional Manning's overrides.
-- Running sensitivity scenarios in parallel.
-- Extracting results at a point of interest.
-- Comparing and visualizing the impact of bulk Manning's n changes on water surface elevation.
-
-### [106_mannings_sensitivity_multi-interval.ipynb](106_mannings_sensitivity_multi-interval.ipynb)
-
-This notebook performs a more detailed Manning's n sensitivity analysis by varying the roughness coefficient for *individual significant land uses* across a range of values.
-
-**Key contents:**
-- Analyzing land cover statistics within 2D mesh areas.
-- Identifying significant land cover types based on area threshold.
-- Generating multiple test plans by varying the n value for one land cover type at a time, across its literature-based range (min to max).
-- Applying changes individually to base or regional overrides.
-- Running sensitivity scenarios in parallel.
-- Extracting and visualizing results to show sensitivity to specific land cover roughness.
-- Estimating the number of plans to be generated and managing potential HEC-RAS limits.
-
-### [101_Core_Sensitivity.ipynb](101_Core_Sensitivity.ipynb)
-
-This notebook tests HEC-RAS performance with different CPU core configurations to optimize computational efficiency.
-
-**Key contents:**
-- Setting up a controlled testing environment
-- Running the same plan with varying core counts
-- Measuring execution time for each configuration
-- Analyzing performance scaling with increased cores
-- Creating visualization of performance metrics
-- Calculating unit runtime based on single-core performance
-- Understanding diminishing returns with multiple cores
-- Identifying optimal core count for specific models
-
-### [102_benchmarking_versions_6.1_to_6.6.ipynb](102_benchmarking_versions_6.1_to_6.6.ipynb)
-
-This notebook compares performance across different versions of HEC-RAS by running the same plan across multiple software versions.
-
-**Key contents:**
-- Running the same model across multiple HEC-RAS versions
-- Measuring preprocessing, computation, and postprocessing times
-- Analyzing volume error changes between versions
-- Creating visualizations of performance trends
-- Identifying performance improvements between versions
-- Understanding version-specific computational differences
-- Setting up flexible testing environments for multiple versions
-- Interpreting HEC-RAS version performance evolution
-
-### [103_Running_AEP_Events_from_Atlas_14.ipynb](103_Running_AEP_Events_from_Atlas_14.ipynb)
-
-This notebook demonstrates an end-to-end workflow for generating and analyzing multiple Annual Exceedance Probability events.
-
-**Key contents:**
-- Generating hyetographs from NOAA Atlas 14 precipitation frequency data
-- Parsing duration strings and interpolating precipitation depths
-- Applying the Alternating Block Method for hyetograph creation
-- Cloning and configuring HEC-RAS plans for different AEP events
-- Executing multiple plans in parallel with resource optimization
-- Extracting and visualizing results for multiple AEP scenarios
-- Creating a complete workflow from data to flood analysis
-- Comparing results across different return period events
-
-### [17_legacy_1d_automation_with_hecrascontroller_and_rascontrol.ipynb](17_legacy_1d_automation_with_hecrascontroller_and_rascontrol.ipynb)
-
-This notebook demonstrates the **RasControl** class for working with legacy HEC-RAS versions (3.x-4.x) using the HECRASController COM interface.
-
-**Key contents:**
-- Introduction to RasControl wrapper for HECRASController
-- Using ras-commander style API with plan numbers instead of file paths
-- Running steady state plans and extracting profile results
-- Running unsteady plans and extracting time series results
-- Understanding output times and the "Max WS" special timestep
-- Extracting and plotting steady state profiles across multiple profiles
-- Visualizing unsteady time series at cross sections
-- Supported versions: 3.1, 4.1, 5.0.x (501-507), 6.0, 6.3, 6.6
-- Multi-version comparison for migration validation
-- Integration with `init_ras_project()` and the global `ras` object
-- Open-operate-close pattern to prevent conflicts with modern workflows
-
-### [29_usgs_gauge_data_integration.ipynb](29_usgs_gauge_data_integration.ipynb)
-
-This notebook demonstrates the complete workflow for integrating USGS gauge data into HEC-RAS models for boundary conditions and validation.
-
-**Key contents:**
-- Querying USGS stream gauges using the National Water Information System (NWIS)
-- Spatial queries to find gauges within or near project extents
-- Retrieving historical and real-time flow and stage data
-- Matching gauges to model cross sections and boundaries
-- Generating initial conditions from gauge data
-- Creating boundary condition hydrographs from USGS observations
-- Resampling data to match HEC-RAS time intervals
-- Data quality checks and gap detection
-- Model validation using observed vs modeled comparisons
-- Calculating validation metrics (NSE, KGE, peak error, RMSE, bias)
-- Creating publication-quality comparison plots
-
-**Dependencies:** Requires `pip install dataretrieval` for USGS NWIS access
-
-### [30_usgs_real_time_monitoring.ipynb](30_usgs_real_time_monitoring.ipynb)
-
-This notebook demonstrates real-time monitoring capabilities using live USGS gauge data for operational forecasting scenarios.
-
-**Key contents:**
-- Checking gauge metadata and available parameters
-- Visualizing project geometry and gauge locations
-- Getting the latest real-time reading from active gauges
-- Analyzing recent data trends (48-hour window)
-- Implementing incremental cache refresh for efficient data management
-- Setting up threshold detection for operational triggers
-- Detecting rapid changes and rate-of-rise conditions
-- Continuous monitoring with callback functions
-- Building production monitoring systems
-- Automated model triggering based on gauge conditions
-- Real-time status dashboards and alerts
-
-**Use case:** Enables continuous monitoring of watershed conditions for flood warning systems and automated model execution
-
-### [31_bc_generation_from_live_gauge.ipynb](31_bc_generation_from_live_gauge.ipynb)
-
-This notebook demonstrates generating HEC-RAS boundary conditions from live USGS gauge data with drainage area scaling.
-
-**Key contents:**
-- Identifying boundary conditions for real-time updates
-- Querying live flow data from upstream USGS gauges
-- Applying drainage area scaling to match model locations
-- Converting gauge data to HEC-RAS hydrograph format
-- Generating properly formatted boundary condition tables
-- Updating unsteady flow files (.u##) with new BCs
-- Verifying boundary condition updates
-- Creating working copies for safe modifications
-- Operational forecasting workflow implementation
-- Automated BC generation for continuous model runs
-
-**Use case:** Enables operational forecasting where current gauge conditions drive model boundary conditions for real-time predictions
-
-### [32_model_validation_with_usgs.ipynb](32_model_validation_with_usgs.ipynb)
-
-This notebook demonstrates comprehensive model validation by comparing HEC-RAS results against observed USGS gauge data.
-
-**Key contents:**
-- Extracting modeled flow timeseries from HDF results
-- Querying observed data from downstream validation gauges
-- Aligning modeled and observed timeseries for comparison
-- Calculating Nash-Sutcliffe Efficiency (NSE) metrics
-- Computing Kling-Gupta Efficiency (KGE) with components
-- Analyzing peak flow errors and timing differences
-- Calculating RMSE, MAE, bias, and correlation metrics
-- Creating timeseries comparison plots with metrics
-- Generating scatter plots with 1:1 reference lines
-- 4-panel residual diagnostic plots for error analysis
-- Performance rating and calibration recommendations
-- Identifying systematic biases and timing errors
-
-**Use case:** Provides quantitative assessment of model performance and guides calibration efforts for improved accuracy
-
-### [33_gauge_catalog_generation.ipynb](33_gauge_catalog_generation.ipynb)
-
-This notebook demonstrates generating and using a standardized USGS gauge data catalog for your HEC-RAS project.
-
-**Key contents:**
-- One-command gauge discovery and data download
-- Creating standardized "USGS Gauge Data" folder structure
-- Generating master catalog (CSV) with all gauges in project extent
-- Creating spatial data (GeoJSON) for mapping applications
-- Downloading historical data for each gauge (flow and stage)
-- Organizing data in individual gauge folders with metadata
-- Auto-generating README documentation
-- Loading catalog and gauge data using helper functions
-- Processing all gauges in catalog for batch operations
-- Updating existing catalog with latest data
-- Integrating catalog data with boundary condition generation
-
-**Folder structure created:**
-```
-project_folder/USGS Gauge Data/
-├── gauge_catalog.csv          # Master catalog
-├── gauge_locations.geojson    # Spatial data
-├── README.md                  # Documentation
-├── USGS-{site_id}/            # Individual gauge folders
-│   ├── metadata.json
-│   ├── historical_flow.csv
-│   ├── historical_stage.csv
-│   └── data_availability.json
-```
-
-**Use case:** Provides standard project organization similar to precipitation module, enables engineering review of all available gauges, and serves as foundation for automated workflows
-
-
-### eBFE Delivery Validation (950s)
-
-These notebooks validate FEMA eBFE and BLE deliveries after they are normalized
-through `RasEbfeModels.organize_model(...)`.
-
-**Current notebooks:**
-- `950_ebfe_spring_creek.ipynb` - Single-archive 2D Spring Creek delivery normalization, DSS checks, and result-HDF review
-- `951_ebfe_north_galveston_bay.ipynb` - Compound HMS plus nested RAS delivery organization and validation
-- `952_ebfe_upper_guadalupe_cascade.ipynb` - Cascaded 2D watershed delivery organization and validation
-- `953_ebfe_rio_hondo_steady_collection.ipynb` - 1D steady BLE reach-model organization and sequential plan validation
-- `954_ebfe_lake_maurepas_validation.ipynb` - Preprocessor-valid Louisiana delivery with the source result-HDF gap documented
-- `955_ebfe_tickfaw_validation.ipynb` - Results-ready Louisiana delivery with seven local plan HDFs
-- `957_ebfe_spring_river_validation.ipynb` - Distinct Spring River 6.1 delivery validation with legacy `Land Classification` compatibility evidence
-
-## Contributing
-
-If you have suggestions for additional examples or improvements to existing ones, please feel free to contribute by submitting pull requests or opening issues in the repository.
+This directory contains canonical example notebooks for `ras-commander`.
+The notebooks are reference workflows for hydraulic modelers and developers;
+use them to understand API patterns, then move repeatable production logic into
+library code or scripts.
+
+The current git inventory contains **115 canonical notebooks** under
+`examples/`. Executed copies, temporary test notebooks, extracted HEC-RAS
+projects, and generated artifacts are intentionally excluded from this README.
+
+## Numbering Bands
+
+| Band | Focus |
+|------|-------|
+| `100s` | project initialization, plan operations, execution, callbacks, RASMapper review |
+| `200s` | plain-text geometry parsing, structures, roughness, authoring, calibration, mesh workflows |
+| `300s` | unsteady flow files, DSS boundaries, HMS matching, terrain modifications, boundary visualization |
+| `400s` | HDF geometry, hydraulic results, breach results, velocity profiles, channel capacity |
+| `500s` | remote execution, Linux execution, ModPuls result extraction |
+| `600s` | floodplain mapping, fluvial-pluvial delineation, map-layer validation |
+| `700s` | sensitivity testing, benchmarking, Atlas 14, design storms, precipitation workflows |
+| `800s` | RasCheck and structure-validation QA workflows |
+| `900s` | AORC, USGS, real-time forecasting, STOFS-3D, terrain, operational workflows |
+| `950s` | FEMA eBFE/BLE delivery organization and validation |
+| `960s` | cloud-native geometry and results export |
+
+## Recommended Entry Points
+
+- [100_using_ras_examples.ipynb](100_using_ras_examples.ipynb) - extract official HEC-RAS example projects.
+- [101_project_initialization.ipynb](101_project_initialization.ipynb) - initialize projects and inspect project DataFrames.
+- [110_single_plan_execution.ipynb](110_single_plan_execution.ipynb) and [113_parallel_execution.ipynb](113_parallel_execution.ipynb) - run plans through RAS Commander.
+- [201_1d_plaintext_geometry.ipynb](201_1d_plaintext_geometry.ipynb), [203_htab_parameter_optimization.ipynb](203_htab_parameter_optimization.ipynb), and [205_extract_xs_xyz_from_geometry.ipynb](205_extract_xs_xyz_from_geometry.ipynb) - geometry and HTAB workflows.
+- [312_boundary_df_qmult_dss_paths.ipynb](312_boundary_df_qmult_dss_paths.ipynb) and [318_validating_dss_paths.ipynb](318_validating_dss_paths.ipynb) - DSS boundary workflows.
+- [410_2d_hdf_data_extraction.ipynb](410_2d_hdf_data_extraction.ipynb), [412_2d_detail_face_data_extraction.ipynb](412_2d_detail_face_data_extraction.ipynb), and [413_profile_line_flow_extraction.ipynb](413_profile_line_flow_extraction.ipynb) - HDF mesh and results extraction.
+- [720_precipitation_methods_comprehensive.ipynb](720_precipitation_methods_comprehensive.ipynb), [721_precipitation_hyetograph_comparison.ipynb](721_precipitation_hyetograph_comparison.ipynb), and [725_atlas14_spatial_variance.ipynb](725_atlas14_spatial_variance.ipynb) - precipitation methods.
+- [910_usgs_gauge_catalog.ipynb](910_usgs_gauge_catalog.ipynb) through [923_stofs3d_coastal_boundary.ipynb](923_stofs3d_coastal_boundary.ipynb) - gauge, validation, forecast, and coastal boundary workflows.
+- [920_terrain_creation.ipynb](920_terrain_creation.ipynb), [925_xs_interpolation_surface.ipynb](925_xs_interpolation_surface.ipynb), and [930_terrain_modification_analysis.ipynb](930_terrain_modification_analysis.ipynb) - terrain and geometry surface workflows.
+- [950_ebfe_spring_creek.ipynb](950_ebfe_spring_creek.ipynb) through [958_model_sources_showcase.ipynb](958_model_sources_showcase.ipynb) - FEMA eBFE/BLE organization and validation.
+- [960_cloud_native_geometry_export.ipynb](960_cloud_native_geometry_export.ipynb) through [962_cloud_native_cog_results_export.ipynb](962_cloud_native_cog_results_export.ipynb) - cloud-native export with `ras2cng`.
+
+## Current Inventory
+
+### 100s
+
+`100_using_ras_examples.ipynb`, `101_project_initialization.ipynb`,
+`102_multiple_project_operations.ipynb`,
+`103_plan_and_geometry_operations.ipynb`,
+`104_plan_parameter_operations.ipynb`, `110_single_plan_execution.ipynb`,
+`111_executing_plan_sets.ipynb`, `112_sequential_plan_execution.ipynb`,
+`113_parallel_execution.ipynb`, `114_parameter_permutation.ipynb`,
+`115_real_time_execution_monitoring.ipynb`,
+`116_hdf_output_options_benchmark.ipynb`,
+`120_automating_ras_with_win32com.ipynb`,
+`121_legacy_hecrascontroller_and_rascontrol.ipynb`,
+`122_rasmapper_spatial_review.ipynb`,
+`123_rasmapper_geometry_layer_updates.ipynb`,
+`124_rasmapper_bank_lines.ipynb`, `150_results_dataframe.ipynb`
+
+### 200s
+
+`201_1d_plaintext_geometry.ipynb`, `202_2d_plaintext_geometry.ipynb`,
+`203_htab_parameter_optimization.ipynb`,
+`205_extract_xs_xyz_from_geometry.ipynb`,
+`206_structures_and_metadata.ipynb`,
+`207_reference_lines_and_points.ipynb`,
+`208_bridge_method_comparison.ipynb`, `209_culvert_authoring.ipynb`,
+`210_xs_interpolation_settings.ipynb`,
+`211_final_mannings_and_infiltration.ipynb`,
+`212_landcover_mannings_n_write.ipynb`,
+`213_land_classification_polygon_authoring.ipynb`,
+`214_connection_authoring.ipynb`,
+`215_sa2d_bridge_connection_authoring.ipynb`,
+`216_1d_bridge_authoring.ipynb`, `217_1d_levee_authoring.ipynb`,
+`218_infiltration_base_override_authoring.ipynb`,
+`219_1d_bridge_xs_plotting.ipynb`, `220_calibration_workflow.ipynb`,
+`221_calibration_1d_workflow.ipynb`, `222_steady_flow_calibration.ipynb`,
+`223_steady_floodway_encroachment.ipynb`,
+`224_steady_flow_authoring.ipynb`,
+`225_fixit_blocked_obstructions.ipynb`,
+`230_mesh_sensitivity_analysis.ipynb`,
+`231_pipe_network_mesh_generation.ipynb`
+
+### 300s
+
+`300_unsteady_flow_operations.ipynb`,
+`301_flow_hydrograph_optimization.ipynb`,
+`310_dss_boundary_extraction.ipynb`,
+`311_2d_floodway_encroachment.ipynb`,
+`312_boundary_df_qmult_dss_paths.ipynb`,
+`313_hms_to_ras_boundary_matching.ipynb`,
+`314_reference_line_generation.ipynb`,
+`315_2d_computation_options.ipynb`, `316_terrain_modifications.ipynb`,
+`317_restart_file_settings.ipynb`, `318_validating_dss_paths.ipynb`,
+`320_1d_boundary_condition_visualization.ipynb`
+
+### 400s
+
+`400_1d_hdf_data_extraction.ipynb`, `401_steady_flow_analysis.ipynb`,
+`410_2d_hdf_data_extraction.ipynb`,
+`411_2d_hdf_pipes_and_pumps.ipynb`,
+`412_2d_detail_face_data_extraction.ipynb`,
+`413_profile_line_flow_extraction.ipynb`,
+`414_depth_varying_mannings_n.ipynb`,
+`415_2d_spatial_result_queries.ipynb`,
+`416_2d_velocity_profile_line.ipynb`,
+`420_breach_results_extraction.ipynb`,
+`430_1d_channel_capacity_analysis.ipynb`
+
+### 500s
+
+`500_remote_execution_psexec.ipynb`, `510_linux_execution.ipynb`,
+`560_modpuls_routing_extraction.ipynb`
+
+### 600s
+
+`600_floodplain_mapping_gui.ipynb`,
+`601_floodplain_mapping_rasprocess.ipynb`,
+`610_fluvial_pluvial_delineation.ipynb`,
+`611_validating_map_layers.ipynb`
+
+### 700s
+
+`700_core_sensitivity.ipynb`,
+`701_benchmarking_versions_6.1_to_6.6.ipynb`,
+`710_mannings_sensitivity_bulk_analysis.ipynb`,
+`711_mannings_sensitivity_multi_interval.ipynb`,
+`720_precipitation_methods_comprehensive.ipynb`,
+`721_precipitation_hyetograph_comparison.ipynb`,
+`722_gridded_precipitation_atlas14.ipynb`,
+`723_storm_generator_abm_validation.ipynb`,
+`725_atlas14_spatial_variance.ipynb`, `726_abm_hyetograph_grid.ipynb`
+
+### 800s
+
+`800_quality_assurance_rascheck.ipynb`,
+`801_advanced_structure_validation.ipynb`
+
+### 900s
+
+`900_aorc_precipitation.ipynb`,
+`901_aorc_precipitation_catalog.ipynb`, `910_usgs_gauge_catalog.ipynb`,
+`911_usgs_gauge_data_integration.ipynb`,
+`912_usgs_real_time_monitoring.ipynb`,
+`913_bc_generation_from_live_gauge.ipynb`,
+`914_historical_event_validation.ipynb`,
+`915_realtime_forecast_workflow.ipynb`,
+`916_hrrr_precipitation_forecast.ipynb`,
+`917_mrms_precipitation_qpe.ipynb`,
+`918_hms_ras_coupled_forecast.ipynb`,
+`919_operational_forecast_cycling.ipynb`, `920_terrain_creation.ipynb`,
+`921_usgs_study_package_from_primitives.ipynb`,
+`922_model_validation_with_usgs.ipynb`,
+`923_stofs3d_coastal_boundary.ipynb`,
+`925_xs_interpolation_surface.ipynb`,
+`930_terrain_modification_analysis.ipynb`
+
+### 950s
+
+`950_ebfe_spring_creek.ipynb`,
+`951_ebfe_north_galveston_bay.ipynb`,
+`952_ebfe_upper_guadalupe_cascade.ipynb`,
+`953_ebfe_rio_hondo_steady_collection.ipynb`,
+`954_ebfe_lake_maurepas_validation.ipynb`,
+`955_ebfe_tickfaw_validation.ipynb`,
+`957_ebfe_spring_river_validation.ipynb`,
+`958_model_sources_showcase.ipynb`
+
+### 960s
+
+`960_cloud_native_geometry_export.ipynb`,
+`961_cloud_native_results_export.ipynb`,
+`962_cloud_native_cog_results_export.ipynb`
+
+## Working Rules
+
+- Keep notebook edits minimal; notebooks are human reference material.
+- Use `RasExamples.extract_project()` and RAS Commander APIs for model work.
+- Put generated data, executed notebooks, screenshots, and scratch outputs in
+  ignored working folders or issue artifact folders, not beside committed
+  source notebooks.
+- Keep the first notebook cell as a markdown H1 title.

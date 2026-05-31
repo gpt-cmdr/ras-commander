@@ -464,7 +464,7 @@ for aep_pct, total_depth in aep_depths.items():
 Complete workflow demonstrations:
 
 - `examples/720_precipitation_methods_comprehensive.ipynb` - Side-by-side comparison of all four hyetograph methods (Atlas14Storm, FrequencyStorm, ScsTypeStorm, StormGenerator) with validation
-- `examples/721_Precipitation_Hyetograph_Comparison.ipynb` - Multi-method, multi-AEP workflow; parallel HEC-RAS execution; pre-execution validation
+- `examples/721_precipitation_hyetograph_comparison.ipynb` - Multi-method, multi-AEP workflow; parallel HEC-RAS execution; pre-execution validation
 - `examples/722_gridded_precipitation_atlas14.ipynb` - Gridded precipitation workflow; spatial variance analysis; mesh polygon visualization
 - `examples/725_atlas14_spatial_variance.ipynb` - Spatial variance analysis for uniform vs. distributed rainfall assessment; HUC12 watershed option
 

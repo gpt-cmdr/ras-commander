@@ -225,9 +225,9 @@ ai_tools/llm_knowledge_bases/
 ├── examples.txt                          # All example content
 ├── ras-commander_gpt.txt                 # GPT-optimized summary
 └── example_notebooks_cleaned/            # Cleaned Jupyter notebooks
-    ├── 00_Using_RasExamples.ipynb
-    ├── 01_project_initialization.ipynb
-    └── ... (25+ notebooks)
+    ├── 100_using_ras_examples.ipynb
+    ├── 101_project_initialization.ipynb
+    └── ... (100+ notebooks)
 ```
 
 ### Choosing the Right Knowledge Base

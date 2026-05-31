@@ -121,5 +121,5 @@ class TestDrainageAreaComparison:
 
 class TestExampleNotebook:
     def test_example_notebook_exists_for_workflow_assembly(self):
-        notebook_path = Path("examples/911a_usgs_study_package_from_primitives.ipynb")
+        notebook_path = Path("examples/921_usgs_study_package_from_primitives.ipynb")
         assert notebook_path.exists()
