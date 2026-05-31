@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Protocol, Union
+from typing import Any, Dict, List, Optional, Protocol, Union
 
 
 class ModelType(str, Enum):
@@ -23,6 +23,7 @@ class SourceStatus(str, Enum):
     AVAILABLE = "available"
     UNAVAILABLE = "unavailable"
     DEPRECATED = "deprecated"
+    REQUIRES_AUTH = "requires_auth"
 
 
 @dataclass
@@ -38,6 +39,12 @@ class ModelMetadata:
     hecras_version: Optional[str] = None
     doi: Optional[str] = None
     url: Optional[str] = None
+    file_size_mb: Optional[float] = None
+    study_date: Optional[str] = None
+    last_modified: Optional[Any] = None
+    projection: Optional[str] = None
+    spatial_extent: Optional[Any] = None
+    effective_date: Optional[str] = None
     tags: List[str] = field(default_factory=list)
     extra: Dict[str, object] = field(default_factory=dict)
 
