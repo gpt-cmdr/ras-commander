@@ -108,7 +108,7 @@ New cell after execution results validation:
 
 ## Files to Modify
 
-1. **`examples/721_Precipitation_Hyetograph_Comparison.ipynb`** (PRIMARY)
+1. **`examples/721_precipitation_hyetograph_comparison.ipynb`** (PRIMARY)
    - Add new visualization cell at end showing dominant method map
    - One figure per AEP event
 
@@ -470,7 +470,7 @@ else:
 
 | File | Changes |
 |------|---------|
-| `examples/721_Precipitation_Hyetograph_Comparison.ipynb` | Add new cell 7.3 with dominant method analysis (after current 7.2 WSE map) |
+| `examples/721_precipitation_hyetograph_comparison.ipynb` | Add new cell 7.3 with dominant method analysis (after current 7.2 WSE map) |
 | `examples/722_gridded_precipitation_atlas14.ipynb` | Fix existing WSE visualization; optionally add similar comparison if multiple plans exist |
 
 ## Implementation Order
