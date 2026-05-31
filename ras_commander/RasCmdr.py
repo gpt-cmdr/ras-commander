@@ -105,6 +105,104 @@ class RasCmdr:
         return Path(ras_object.project_folder) / f"{ras_object.project_name}.p{plan_num_str}.hdf"
 
     @staticmethod
+    def _plan_entries_with_expected_hdf_paths(
+        plan_entries: Optional[pd.DataFrame],
+        project_folder: Union[str, Path],
+        project_name: str,
+        plan_numbers: List[Union[str, Number]],
+    ) -> pd.DataFrame:
+        """
+        Return plan metadata with expected HDF paths without rereading the .prj.
+        """
+        normalized_plan_numbers = [
+            RasUtils.normalize_ras_number(plan_number)
+            for plan_number in plan_numbers
+        ]
+        project_folder = Path(project_folder)
+
+        if plan_entries is None or plan_entries.empty:
+            cached_plan_entries = pd.DataFrame(
+                {"plan_number": normalized_plan_numbers}
+            )
+        else:
+            cached_plan_entries = plan_entries.copy()
+
+        if "plan_number" not in cached_plan_entries.columns:
+            cached_plan_entries["plan_number"] = normalized_plan_numbers[:len(
+                cached_plan_entries
+            )]
+
+        cached_plan_entries["plan_number"] = cached_plan_entries[
+            "plan_number"
+        ].map(RasUtils.normalize_ras_number)
+
+        for column_name in ("HDF_Results_Path", "full_path"):
+            if column_name not in cached_plan_entries.columns:
+                cached_plan_entries[column_name] = None
+
+        missing_plan_numbers = [
+            plan_number
+            for plan_number in normalized_plan_numbers
+            if plan_number not in set(cached_plan_entries["plan_number"])
+        ]
+        if missing_plan_numbers:
+            cached_plan_entries = pd.concat(
+                [
+                    cached_plan_entries,
+                    pd.DataFrame(
+                        {"plan_number": missing_plan_numbers}
+                    ),
+                ],
+                ignore_index=True,
+            )
+
+        for plan_number in normalized_plan_numbers:
+            plan_mask = cached_plan_entries["plan_number"] == plan_number
+            expected_plan_path = project_folder / f"{project_name}.p{plan_number}"
+            expected_hdf_path = Path(f"{expected_plan_path}.hdf")
+            cached_plan_entries.loc[
+                plan_mask, "full_path"
+            ] = str(expected_plan_path)
+            cached_plan_entries.loc[
+                plan_mask, "HDF_Results_Path"
+            ] = str(expected_hdf_path)
+
+        return cached_plan_entries
+
+    @staticmethod
+    def _update_results_from_cached_plan_entries(
+        ras_object: 'RasPrj',
+        plan_numbers: List[Union[str, Number]],
+        project_folder: Union[str, Path, None] = None,
+        project_name: Optional[str] = None,
+        plan_entries: Optional[pd.DataFrame] = None,
+    ) -> pd.DataFrame:
+        """
+        Update results_df using cached plan metadata when the .prj is unavailable.
+        """
+        normalized_plan_numbers = [
+            RasUtils.normalize_ras_number(plan_number)
+            for plan_number in plan_numbers
+        ]
+        project_folder = Path(project_folder or ras_object.project_folder)
+        project_name = project_name or ras_object.project_name
+        cached_plan_entries = (
+            plan_entries
+            if plan_entries is not None
+            else getattr(ras_object, "plan_df", None)
+        )
+
+        ras_object.plan_df = RasCmdr._plan_entries_with_expected_hdf_paths(
+            cached_plan_entries,
+            project_folder,
+            project_name,
+            normalized_plan_numbers,
+        )
+        return ras_object.update_results_df(
+            plan_numbers=normalized_plan_numbers
+        )
+
+    @staticmethod
     def _normalize_requested_plan_numbers(
         plan_number: Union[str, Number, List[Union[str, Number]], None]
     ) -> Optional[List[str]]:
@@ -739,6 +837,30 @@ class RasCmdr:
                             logger.debug(f"Could not extract results_df_row: {e}")
                 except Exception as e_refresh:
                     logger.warning(f"Error refreshing DataFrames after compute_plan: {e_refresh}")
+                    if _did_execute:
+                        try:
+                            normalized_plan_number = RasUtils.normalize_ras_number(
+                                plan_number
+                            )
+                            RasCmdr._update_results_from_cached_plan_entries(
+                                _ras_obj,
+                                [normalized_plan_number],
+                            )
+                            mask = (
+                                _ras_obj.results_df["plan_number"]
+                                == normalized_plan_number
+                            )
+                            if mask.any():
+                                _results_df_row = (
+                                    _ras_obj.results_df[mask].iloc[0].copy()
+                                )
+                        except Exception as e_results:
+                            logger.warning(
+                                "Could not summarize plan %s after refresh "
+                                "failure: %s",
+                                plan_number,
+                                e_results,
+                            )
 
         return ComputeResult(success=_success, results_df_row=_results_df_row)
 
@@ -863,6 +985,9 @@ class RasCmdr:
 
             - verify is passed through to compute_plan() for each worker execution.
         """
+        execution_results: Dict[str, bool] = {}
+        filtered_plan_numbers: List[str] = []
+
         try:
             ras_obj = ras_object or ras
             ras_obj.check_initialized()
@@ -891,9 +1016,6 @@ class RasCmdr:
                 plan_number
             )
             filtered_plan_numbers = list(filtered_plan_entries["plan_number"])
-
-            # Initialize execution_results dict
-            execution_results: Dict[str, bool] = {}
 
             # Filter out plans with existing results if skip_existing is True
             if skip_existing:
@@ -1075,11 +1197,32 @@ class RasCmdr:
                 logger.info(f"Plan {plan_num}: {status}")
 
             ras_obj = ras_object or ras
-            ras_obj.plan_df = ras_obj.get_plan_entries()
-            ras_obj.geom_df = ras_obj.get_geom_entries()
-            ras_obj.flow_df = ras_obj.get_flow_entries()
-            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-            ras_obj.update_results_df(plan_numbers=list(execution_results.keys()))
+            try:
+                ras_obj.plan_df = ras_obj.get_plan_entries()
+                ras_obj.geom_df = ras_obj.get_geom_entries()
+                ras_obj.flow_df = ras_obj.get_flow_entries()
+                ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+                ras_obj.update_results_df(plan_numbers=list(execution_results.keys()))
+            except Exception as e_refresh:
+                logger.warning(
+                    "Error refreshing DataFrames after compute_parallel: %s. "
+                    "Using cached plan metadata and expected result paths.",
+                    e_refresh,
+                )
+                try:
+                    RasCmdr._update_results_from_cached_plan_entries(
+                        ras_obj,
+                        list(execution_results.keys()),
+                        project_folder=final_dest_folder,
+                        project_name=ras_obj.project_name,
+                        plan_entries=filtered_plan_entries,
+                    )
+                except Exception as e_results:
+                    logger.error(
+                        "Could not summarize parallel results after refresh "
+                        "failure: %s",
+                        e_results,
+                    )
 
             # Extract results_df rows for executed plans
             _results_df = pd.DataFrame()
@@ -1096,7 +1239,9 @@ class RasCmdr:
 
         except Exception as e:
             logger.critical(f"Error in compute_parallel: {str(e)}")
-            return ComputeParallelResult()
+            for plan_num in filtered_plan_numbers:
+                execution_results.setdefault(plan_num, False)
+            return ComputeParallelResult(execution_results=execution_results)
 
     @staticmethod
     @log_call

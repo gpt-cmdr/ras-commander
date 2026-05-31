@@ -113,6 +113,45 @@ def _project_name_from_plan_hdf(plan_hdf_path: Path) -> str:
     return match.group(1) if match else stem
 
 
+def _resolve_geometry_hdf_from_plan_text(plan_hdf_path: Path) -> Optional[Path]:
+    """Resolve a geometry HDF from the sibling .p## plan text file."""
+    plan_match = re.search(
+        r"\.p(\d{1,2})$",
+        plan_hdf_path.stem,
+        flags=re.IGNORECASE,
+    )
+    if not plan_match:
+        return None
+
+    project_folder = plan_hdf_path.parent
+    project_name = _project_name_from_plan_hdf(plan_hdf_path)
+    plan_number = plan_match.group(1).zfill(2)
+    plan_path = project_folder / f"{project_name}.p{plan_number}"
+    if not plan_path.exists():
+        return None
+
+    try:
+        plan_text = plan_path.read_text(encoding="utf-8", errors="ignore")
+    except Exception as exc:
+        logger.debug("Could not read plan text %s: %s", plan_path, exc)
+        return None
+
+    geom_number = None
+    for line in plan_text.splitlines():
+        if line.strip().startswith("Geom File="):
+            geom_number = _extract_geometry_number(line.split("=", 1)[1])
+            break
+
+    if geom_number is None:
+        return None
+
+    geom_hdf_path = project_folder / f"{project_name}.g{geom_number}.hdf"
+    if geom_hdf_path.exists():
+        return geom_hdf_path
+
+    raise FileNotFoundError(f"Geometry HDF not found: {geom_hdf_path}")
+
+
 def _paths_match(path_a: Any, path_b: Any) -> bool:
     """Compare paths without forcing symlink or UNC resolution."""
     try:
@@ -189,6 +228,10 @@ def _resolve_geometry_hdf(
                 return plan_hdf_path
     except Exception:
         pass
+
+    plan_text_geom_hdf = _resolve_geometry_hdf_from_plan_text(plan_hdf_path)
+    if plan_text_geom_hdf is not None:
+        return plan_text_geom_hdf
 
     _ras = ras_object if ras_object is not None else _get_global_ras()
     plan_df = getattr(_ras, "plan_df", None)

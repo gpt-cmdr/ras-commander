@@ -4,6 +4,7 @@ import importlib
 from pathlib import Path
 from types import SimpleNamespace
 
+import pandas as pd
 import pytest
 
 from ras_commander.ComputeResults import ComputeResult
@@ -73,6 +74,81 @@ def test_compute_plan_does_not_swallow_keyboard_interrupt():
         RasCmdr.compute_plan("01", ras_object=ras_obj)
 
     assert ras_obj.refresh_calls == ["plan", "geom", "flow", "unsteady"]
+
+
+def test_compute_plan_uses_cached_plan_entries_when_prj_refresh_fails(
+    monkeypatch, tmp_path
+):
+    """A deleted worker .prj should not prevent result-row recovery."""
+    plan_path = tmp_path / "TestProject.p01"
+    hdf_path = tmp_path / "TestProject.p01.hdf"
+    plan_path.write_text("Plan Title=Plan 01\n", encoding="utf-8")
+
+    class MissingPrjAfterRunRas:
+        def __init__(self):
+            self.project_folder = tmp_path
+            self.project_name = "TestProject"
+            self.prj_file = tmp_path / "TestProject.prj"
+            self.ras_exe_path = "Ras.exe"
+            self.plan_df = pd.DataFrame(
+                {
+                    "plan_number": ["01"],
+                    "full_path": [str(plan_path)],
+                    "HDF_Results_Path": [None],
+                }
+            )
+            self.results_df = pd.DataFrame()
+
+        def check_initialized(self):
+            return None
+
+        def get_plan_entries(self):
+            raise FileNotFoundError(self.prj_file)
+
+        def get_geom_entries(self):
+            return pd.DataFrame()
+
+        def get_flow_entries(self):
+            return pd.DataFrame()
+
+        def get_unsteady_entries(self):
+            return pd.DataFrame()
+
+        def update_results_df(self, plan_numbers=None):
+            self.results_df = pd.DataFrame(
+                {
+                    "plan_number": list(plan_numbers),
+                    "HDF_Results_Path": [str(hdf_path)],
+                    "hdf_path": [str(hdf_path)],
+                }
+            )
+            return self.results_df
+
+    def fake_run(*args, **kwargs):
+        hdf_path.write_text("computed\n", encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda plan_number, ras_object: plan_path),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda plan_path: None),
+    )
+    monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        ras_object=MissingPrjAfterRunRas(),
+    )
+
+    assert result.success is True
+    assert result.results_df_row["plan_number"] == "01"
+    assert result.results_df_row["hdf_path"] == str(hdf_path)
 
 
 def test_windows_path_to_wsl_decodes_utf8(monkeypatch):
