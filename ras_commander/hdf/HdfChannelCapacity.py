@@ -368,7 +368,8 @@ class HdfChannelCapacity:
     def extract_max_wse(
         plan_inputs: Union[str, Path, List[Union[str, Path]]],
         profile_names: Optional[List[str]] = None,
-        ras_object: Optional[Any] = None
+        ras_object: Optional[Any] = None,
+        warn_on_missing: bool = True,
     ) -> pd.DataFrame:
         """
         Extract maximum water surface elevation at each XS from one or more plans.
@@ -384,6 +385,9 @@ class HdfChannelCapacity:
             profile_names: Optional list of profile/storm names corresponding to
                           each plan input. If None, uses "Plan_01", "Plan_02", etc.
             ras_object: Optional RAS project object for multi-project workflows.
+            warn_on_missing: If True, log a warning when no 1D cross-section WSE
+                             data is found. Set False when probing before a
+                             planned 2D fallback.
 
         Returns:
             DataFrame with columns:
@@ -464,7 +468,11 @@ class HdfChannelCapacity:
                         pass
 
             if max_wse_values is None:
-                logger.warning(f"Could not extract WSE from {hdf_path.name}")
+                message = f"Could not extract WSE from {hdf_path.name}"
+                if warn_on_missing:
+                    logger.warning(message)
+                else:
+                    logger.debug(message)
                 continue
 
             plan_df = pd.DataFrame({

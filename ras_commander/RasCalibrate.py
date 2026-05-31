@@ -2020,7 +2020,7 @@ class RasCalibrate:
         )
 
         if method_name == "Nelder-Mead":
-            logger.warning(
+            logger.info(
                 "SciPy's Nelder-Mead bound handling varies by version; "
                 "midpoint initialization stays inside the requested bounds, "
                 "but strict bound enforcement depends on SciPy."

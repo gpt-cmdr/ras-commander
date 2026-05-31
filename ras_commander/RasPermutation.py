@@ -421,6 +421,7 @@ class RasPermutation:
                 hdf_path,
                 profile_names=["max_wse"],
                 ras_object=ras_object,
+                warn_on_missing=False,
             )
             if not xs_df.empty and "max_wse" in xs_df.columns:
                 values = pd.to_numeric(xs_df["max_wse"], errors="coerce")

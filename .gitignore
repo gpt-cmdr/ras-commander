@@ -4,6 +4,10 @@ examples/example_projects/
 # Ignore parallel notebook extraction folders (example_projects_* pattern)
 examples/example_projects_*/
 
+# Ignore notebook 220 generated calibration figures
+examples/calibration_grid_search.png
+examples/calibration_optimization.png
+
 # Ignore workspace, projects, and my_projects folders
 workspace/
 projects/
