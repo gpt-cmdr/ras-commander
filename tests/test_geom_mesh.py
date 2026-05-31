@@ -1468,3 +1468,173 @@ class TestAddRefinementRegion:
         assert fid == 0
         regions = GeomMesh.get_refinement_regions(geom_text)
         assert regions[0]["name"] == "ShapelyRgn"
+
+
+class TestFlowlineRefinementRegions:
+
+    def test_linestring_defaults_spacing_to_buffer_width(self, empty_geom_hdf):
+        pytest.importorskip("shapely")
+        from shapely.geometry import LineString
+
+        geom_text, hdf_path = empty_geom_hdf
+        mappings = GeomMesh.add_flowline_refinement_regions(
+            geom_text,
+            LineString([(0.0, 0.0), (100.0, 0.0)]),
+            buffer_width=20.0,
+            name_prefix="Channel",
+        )
+
+        assert mappings == [{
+            "fid": 0,
+            "name": "Channel_001",
+            "source_index": 0,
+            "part_index": 0,
+            "spacing_dx": 20.0,
+            "spacing_dy": 20.0,
+            "buffer_width": 20.0,
+            "area": pytest.approx(4000.0),
+        }]
+        regions = GeomMesh.get_refinement_regions(geom_text)
+        assert regions[0]["name"] == "Channel_001"
+        assert abs(regions[0]["spacing_dx"] - 20.0) < 0.01
+        with h5py.File(str(hdf_path), "r") as hf:
+            points = hf["Geometry/2D Flow Area Refinement Regions/Polygon Points"][:]
+            assert np.isclose(points[:, 0].min(), 0.0)
+            assert np.isclose(points[:, 0].max(), 100.0)
+            assert np.isclose(points[:, 1].min(), -20.0)
+            assert np.isclose(points[:, 1].max(), 20.0)
+
+    def test_geodataframe_name_column(self, empty_geom_hdf):
+        pytest.importorskip("shapely")
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import LineString
+
+        geom_text, _ = empty_geom_hdf
+        flowlines = gpd.GeoDataFrame(
+            {"rr_name": ["Main", "Trib"]},
+            geometry=[
+                LineString([(0.0, 0.0), (100.0, 0.0)]),
+                LineString([(0.0, 50.0), (100.0, 50.0)]),
+            ],
+        )
+
+        mappings = GeomMesh.add_flowline_refinement_regions(
+            geom_text,
+            flowlines,
+            buffer_width=10.0,
+            name_column="rr_name",
+        )
+
+        assert [m["fid"] for m in mappings] == [0, 1]
+        assert [m["name"] for m in mappings] == ["Main", "Trib"]
+        assert [m["source_index"] for m in mappings] == [0, 1]
+        regions = GeomMesh.get_refinement_regions(geom_text)
+        assert [r["name"] for r in regions] == ["Main", "Trib"]
+
+    def test_simplifies_flowline_before_buffering(self, empty_geom_hdf):
+        pytest.importorskip("shapely")
+        from shapely.geometry import LineString
+
+        geom_text, hdf_path = empty_geom_hdf
+        sinuous = LineString([
+            (0.0, 0.0),
+            (10.0, 1.0),
+            (20.0, -1.0),
+            (30.0, 1.0),
+            (40.0, 0.0),
+        ])
+        GeomMesh.add_flowline_refinement_regions(
+            geom_text,
+            sinuous,
+            buffer_width=5.0,
+            name_prefix="Raw",
+        )
+        GeomMesh.add_flowline_refinement_regions(
+            geom_text,
+            sinuous,
+            buffer_width=5.0,
+            name_prefix="Simple",
+            simplify_tolerance=5.0,
+        )
+
+        with h5py.File(str(hdf_path), "r") as hf:
+            info = hf["Geometry/2D Flow Area Refinement Regions/Polygon Info"][:]
+            raw_point_count = info[0, 1]
+            simplified_point_count = info[1, 1]
+        assert simplified_point_count < raw_point_count
+
+    def test_trim_geometries_split_bridge_overlap(self, empty_geom_hdf):
+        pytest.importorskip("shapely")
+        from shapely.geometry import LineString
+
+        geom_text, _ = empty_geom_hdf
+        mappings = GeomMesh.add_flowline_refinement_regions(
+            geom_text,
+            LineString([(0.0, 0.0), (100.0, 0.0)]),
+            buffer_width=10.0,
+            name_prefix="BridgeTrim",
+            trim_geometries=LineString([(50.0, -30.0), (50.0, 30.0)]),
+            trim_distance=2.0,
+        )
+
+        assert len(mappings) == 2
+        assert [m["fid"] for m in mappings] == [0, 1]
+        assert [m["name"] for m in mappings] == [
+            "BridgeTrim_001_1",
+            "BridgeTrim_001_2",
+        ]
+        assert all(m["area"] < 1000.0 for m in mappings)
+
+    def test_trim_hook_can_return_custom_polygon(self, empty_geom_hdf):
+        pytest.importorskip("shapely")
+        from shapely.geometry import LineString, box
+
+        geom_text, hdf_path = empty_geom_hdf
+
+        def left_half(polygon, line, source):
+            assert source["index"] == 0
+            assert line.length == pytest.approx(100.0)
+            return polygon.intersection(box(-1000.0, -1000.0, 50.0, 1000.0))
+
+        mappings = GeomMesh.add_flowline_refinement_regions(
+            geom_text,
+            LineString([(0.0, 0.0), (100.0, 0.0)]),
+            buffer_width=10.0,
+            name_prefix="Hooked",
+            trim_hook=left_half,
+        )
+
+        assert len(mappings) == 1
+        assert mappings[0]["name"] == "Hooked_001"
+        with h5py.File(str(hdf_path), "r") as hf:
+            points = hf["Geometry/2D Flow Area Refinement Regions/Polygon Points"][:]
+            assert points[:, 0].max() <= 50.0
+
+    def test_trim_overlaps_skips_duplicate_flowline_region(self, empty_geom_hdf):
+        pytest.importorskip("shapely")
+        from shapely.geometry import LineString
+
+        geom_text, _ = empty_geom_hdf
+        line = LineString([(0.0, 0.0), (100.0, 0.0)])
+        mappings = GeomMesh.add_flowline_refinement_regions(
+            geom_text,
+            [line, line],
+            buffer_width=10.0,
+            name_prefix="NoOverlap",
+            trim_overlaps=True,
+        )
+
+        assert len(mappings) == 1
+        assert mappings[0]["name"] == "NoOverlap_001"
+
+    def test_rejects_non_line_geometry(self, empty_geom_hdf):
+        pytest.importorskip("shapely")
+        from shapely.geometry import Polygon
+
+        geom_text, _ = empty_geom_hdf
+        with pytest.raises(ValueError, match="LineString or MultiLineString"):
+            GeomMesh.add_flowline_refinement_regions(
+                geom_text,
+                Polygon([(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)]),
+                buffer_width=5.0,
+            )

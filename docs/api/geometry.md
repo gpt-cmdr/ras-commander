@@ -143,6 +143,19 @@ For result-guided orientation, pass `orientation="velocity"` or
 `orientation="depth_velocity"` with `orientation_plan_hdf`. Generated lines fall
 back to normal-to-line orientation unless `orientation_fallback="raise"` is set.
 
+## GeomMesh
+
+Headless 2D mesh generation helpers and compiled geometry HDF refinement-region
+utilities.
+
+### Refinement Region Methods
+
+- `add_refinement_region(geom_number, polygon, spacing_dx, ...)` - Add one refinement polygon to an existing compiled geometry HDF.
+- `add_flowline_refinement_regions(geom_number, flowlines, buffer_width, ...)` - Buffer GeoDataFrame or LineString channel flowlines into refinement-region polygons, optionally simplify/trim them, write them through `add_refinement_region()`, and return FID/name/spacing mappings.
+- `get_refinement_regions(geom_number)` - Read refinement-region FID, name, and spacing values from a compiled geometry HDF.
+- `set_refinement_region_spacing(geom_number, spacing_dx, ...)` - Update spacing for one or more existing refinement regions.
+- `set_refinement_region_name(geom_number, new_name, ...)` - Rename an existing refinement region.
+
 ## RasStruct
 
 Inline structure parsing.
