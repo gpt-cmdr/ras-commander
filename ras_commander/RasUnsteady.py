@@ -42,6 +42,7 @@ List of Functions in RasUnsteady:
 - write_table_to_file()
 - get_met_precipitation_config()
 - set_precipitation_hyetograph()
+- set_constant_precipitation()
 - set_gridded_precipitation()
 - configure_gridded_dss_precipitation()
 - set_meteorological_station()
@@ -3906,6 +3907,161 @@ class RasUnsteady:
             f"{num_values} time steps, interval={interval_str}, "
             f"total depth={total_depth:.4f} inches"
         )
+
+    @staticmethod
+    @log_call
+    def set_constant_precipitation(
+        unsteady_file: Union[str, Path],
+        value: float = 1.0,
+        units: str = "in/hr",
+        ras_object: Optional[Any] = None,
+    ) -> None:
+        """
+        Configure constant (spatially and temporally uniform) precipitation.
+
+        .. note::
+            Constant precipitation is a **testing and 2D model-commissioning
+            convenience**, not an engineering-deliverable forcing. Real event
+            modeling uses a time-varying hyetograph
+            (:meth:`set_precipitation_hyetograph`) or a gridded record
+            (:meth:`set_gridded_precipitation` /
+            :meth:`configure_gridded_dss_precipitation`). A uniform rate is
+            useful for rain-on-grid mesh shakedown, where
+            ``depth = rate * duration`` makes the 2D solver mass balance
+            trivially hand-checkable, for numerical / stability sensitivity
+            runs, and for cheap CI smoke-test fixtures.
+
+        Writes the ``Precipitation Mode`` switch and the constant-mode
+        ``Met BC=Precipitation|...`` keys, and updates the
+        ``<unsteady_file>.hdf`` sidecar attributes when it exists.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##) or unsteady number (e.g. "01").
+        value : float, default 1.0
+            Constant precipitation rate (must be finite and >= 0).
+        units : {"in/hr", "mm/hr"}, default "in/hr"
+            Constant precipitation rate units.
+        ras_object : optional
+            Custom RAS object used to resolve an unsteady number.
+
+        Returns
+        -------
+        None
+            Modifies the .u## file in-place and updates the .u##.hdf sidecar
+            when present.
+
+        Raises
+        ------
+        ValueError
+            If ``value`` is not a finite, non-negative real number, or ``units``
+            is not ``"in/hr"`` or ``"mm/hr"``.
+
+        Examples
+        --------
+        >>> # Commission a 2D rain-on-grid mesh with 1 in/hr uniform rain
+        >>> RasUnsteady.set_constant_precipitation("01", value=1.0, units="in/hr")
+
+        See Also
+        --------
+        set_precipitation_hyetograph : Time-varying hyetograph (real events).
+        set_gridded_precipitation : Gridded NetCDF precipitation (real events).
+        configure_gridded_dss_precipitation : Gridded DSS precipitation.
+        """
+        if isinstance(value, bool) or not isinstance(value, numbers.Real):
+            raise ValueError(f"value must be a real number, got {type(value).__name__}")
+        constant_value = float(value)
+        if not np.isfinite(constant_value):
+            raise ValueError(f"value must be finite, got {constant_value!r}")
+        if constant_value < 0:
+            raise ValueError(f"value must be >= 0, got {constant_value!r}")
+        if units not in {"in/hr", "mm/hr"}:
+            raise ValueError("units must be either 'in/hr' or 'mm/hr'")
+
+        unsteady_path = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_file,
+            ras_object=ras_object,
+        )
+        # HEC-RAS writes constant values compactly (e.g. "1", "0.25").
+        formatted_value = f"{constant_value:g}"
+
+        logger.info(
+            "Configuring constant precipitation in %s: value=%s, units=%s",
+            unsteady_path, formatted_value, units,
+        )
+
+        with open(unsteady_path, "r", encoding="utf-8", errors="ignore") as file:
+            lines = file.readlines()
+
+        new_keys = {
+            "Precipitation Mode": "Enable",
+            "Met BC=Precipitation|Mode": "Constant",
+            "Met BC=Precipitation|Constant Value": formatted_value,
+            "Met BC=Precipitation|Constant Units": units,
+        }
+
+        # Update existing keys in place; track those still needing insertion.
+        remaining = dict(new_keys)
+        for i, line in enumerate(lines):
+            for key in list(remaining):
+                if line.startswith(key + "="):
+                    lines[i] = f"{key}={remaining.pop(key)}\n"
+
+        # Insert any missing keys at a stable meteorology location.
+        if remaining:
+            insert_at = RasUnsteady._get_default_met_insert_index(lines)
+            block = [f"{k}={v}\n" for k, v in remaining.items()]
+            lines[insert_at:insert_at] = block
+
+        with open(unsteady_path, "w", encoding="utf-8") as file:
+            file.writelines(lines)
+
+        hdf_path = Path(str(unsteady_path) + ".hdf")
+        if hdf_path.exists():
+            RasUnsteady._update_constant_precipitation_hdf(
+                hdf_path, constant_value, units
+            )
+        else:
+            logger.warning(
+                f"HDF file not found: {hdf_path} - constant precipitation "
+                "attributes not written"
+            )
+
+        ras_obj = ras_object or ras
+        if ras_obj is not None and hasattr(ras_obj, "get_unsteady_entries"):
+            try:
+                ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            except Exception as exc:
+                logger.debug(f"unsteady_df refresh skipped: {exc}")
+
+    @staticmethod
+    def _update_constant_precipitation_hdf(
+        hdf_path: Path,
+        value: float,
+        units: str,
+    ) -> None:
+        """Write constant-mode precipitation attributes to an unsteady .u##.hdf."""
+        import h5py
+
+        met_path = "Event Conditions/Meteorology"
+        precip_grp_path = f"{met_path}/Precipitation"
+        logger.info(f"Updating constant precipitation HDF attributes: {hdf_path}")
+        try:
+            with h5py.File(hdf_path, "a") as hdf_file:
+                hdf_file.require_group("Event Conditions")
+                hdf_file.require_group(met_path)
+                precip_grp = hdf_file.require_group(precip_grp_path)
+
+                precip_grp.attrs["Enabled"] = np.uint8(1)
+                precip_grp.attrs["Mode"] = np.bytes_("Constant")
+                precip_grp.attrs["Constant Value"] = np.float64(value)
+                precip_grp.attrs["Constant Units"] = np.bytes_(units)
+
+                RasUnsteady._ensure_meteorology_attributes_dataset(hdf_file, met_path)
+        except Exception as e:
+            logger.error(f"Error updating constant precipitation HDF attributes: {e}")
+            raise
 
     @staticmethod
     def _update_precipitation_hdf(
