@@ -863,6 +863,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../user-guide/flowline-refinement-regions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flowline Refinement Regions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../user-guide/hec-ras-supplementary-guides/" class="md-nav__link">
         
   
@@ -1186,10 +1214,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_18" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_19" >
         
           
-          <label class="md-nav__link" for="__nav_2_18" id="__nav_2_18_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_19" id="__nav_2_19_label" tabindex="0">
             
   
   
@@ -1207,8 +1235,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2122,6 +2150,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#geommesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GeomMesh
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GeomMesh">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#refinement-region-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refinement Region Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#rasstruct" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2687,6 +2743,34 @@
     
   
     Geometry Parsing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/culvert-taxonomy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Culvert Taxonomy
   
 
     
@@ -3448,6 +3532,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#geommesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GeomMesh
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GeomMesh">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#refinement-region-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refinement Region Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#rasstruct" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3877,6 +3989,17 @@ reference-line output.</p>
 <p>For result-guided orientation, pass <code>orientation="velocity"</code> or
 <code>orientation="depth_velocity"</code> with <code>orientation_plan_hdf</code>. Generated lines fall
 back to normal-to-line orientation unless <code>orientation_fallback="raise"</code> is set.</p>
+<h2 id="geommesh">GeomMesh<a class="headerlink" href="#geommesh" title="Permanent link">&para;</a></h2>
+<p>Headless 2D mesh generation helpers and compiled geometry HDF refinement-region
+utilities.</p>
+<h3 id="refinement-region-methods">Refinement Region Methods<a class="headerlink" href="#refinement-region-methods" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>add_refinement_region(geom_number, polygon, spacing_dx, ...)</code> - Add one refinement polygon to an existing compiled geometry HDF.</li>
+<li><code>add_flowline_refinement_regions(geom_number, flowlines, buffer_width, ...)</code> - Buffer GeoDataFrame or LineString channel flowlines into refinement-region polygons, optionally simplify/trim them, write them through <code>add_refinement_region()</code>, and return FID/name/spacing mappings.</li>
+<li><code>get_refinement_regions(geom_number)</code> - Read refinement-region FID, name, and spacing values from a compiled geometry HDF.</li>
+<li><code>set_refinement_region_spacing(geom_number, spacing_dx, ...)</code> - Update spacing for one or more existing refinement regions.</li>
+<li><code>set_refinement_region_name(geom_number, new_name, ...)</code> - Rename an existing refinement region.</li>
+</ul>
 <h2 id="rasstruct">RasStruct<a class="headerlink" href="#rasstruct" title="Permanent link">&para;</a></h2>
 <p>Inline structure parsing.</p>
 <h3 id="inline-weir-methods">Inline Weir Methods<a class="headerlink" href="#inline-weir-methods" title="Permanent link">&para;</a></h3>
@@ -4056,7 +4179,7 @@ Unsupported combinations, such as disabling the selected low-flow method or sele
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 11, 2026 20:09:50 UTC">May 11, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 17:03:24 UTC">May 31, 2026</span>
   </span>
 
     

@@ -12,9 +12,13 @@
         <meta name="author" content="William Katzenmeyer, P.E., C.F.M.">
       
       
-        <link rel="canonical" href="https://gpt-cmdr.github.io/ras-commander/notebooks/413_profile_line_flow_extraction/">
+        <link rel="canonical" href="https://gpt-cmdr.github.io/ras-commander/user-guide/flowline-refinement-regions/">
       
       
+        <link rel="prev" href="../spatial-data/">
+      
+      
+        <link rel="next" href="../hec-ras-supplementary-guides/">
       
       
         
@@ -25,7 +29,7 @@
     
     
       
-        <title>Profile Line Flow Extraction - RAS Commander Documentation</title>
+        <title>Flowline Refinement Regions - RAS Commander Documentation</title>
       
     
     
@@ -80,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#profile-line-flow-extraction" class="md-skip">
+        <a href="#flowline-refinement-regions" class="md-skip">
           Skip to content
         </a>
       
@@ -143,7 +147,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Profile Line Flow Extraction
+              Flowline Refinement Regions
             
           </span>
         </div>
@@ -273,6 +277,8 @@
   
   
   
+    
+  
   
     
     
@@ -280,10 +286,12 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
+      <li class="md-tabs__item md-tabs__item--active">
         <a href="../../getting-started/installation/" class="md-tabs__link">
           
   
@@ -514,28 +522,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
-        
-          
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
             
   
   
@@ -553,7 +564,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -577,10 +588,13 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
@@ -589,7 +603,7 @@
         <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_1" >
         
           
-          <label class="md-nav__link" for="__nav_2_1" id="__nav_2_1_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_1" id="__nav_2_1_label" tabindex="">
             
   
   
@@ -717,7 +731,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/overview/" class="md-nav__link">
+      <a href="../overview/" class="md-nav__link">
         
   
   
@@ -745,7 +759,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/plan-execution/" class="md-nav__link">
+      <a href="../plan-execution/" class="md-nav__link">
         
   
   
@@ -773,7 +787,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/workflows-and-patterns/" class="md-nav__link">
+      <a href="../workflows-and-patterns/" class="md-nav__link">
         
   
   
@@ -801,7 +815,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/boundary-conditions/" class="md-nav__link">
+      <a href="../boundary-conditions/" class="md-nav__link">
         
   
   
@@ -829,7 +843,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/spatial-data/" class="md-nav__link">
+      <a href="../spatial-data/" class="md-nav__link">
         
   
   
@@ -854,10 +868,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../user-guide/flowline-refinement-regions/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flowline Refinement Regions
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -873,6 +914,92 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controlling-spacing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controlling spacing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#smoothing-sinuous-centerlines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Smoothing sinuous centerlines
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#avoiding-bridges-and-confluences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Avoiding bridges and confluences
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verifying-face-alignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying face alignment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -885,7 +1012,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/hec-ras-supplementary-guides/" class="md-nav__link">
+      <a href="../hec-ras-supplementary-guides/" class="md-nav__link">
         
   
   
@@ -913,7 +1040,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/ebfe-delivery-validation/" class="md-nav__link">
+      <a href="../ebfe-delivery-validation/" class="md-nav__link">
         
   
   
@@ -941,7 +1068,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/hdf-data-extraction/" class="md-nav__link">
+      <a href="../hdf-data-extraction/" class="md-nav__link">
         
   
   
@@ -969,7 +1096,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/geometry-operations/" class="md-nav__link">
+      <a href="../geometry-operations/" class="md-nav__link">
         
   
   
@@ -997,7 +1124,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/steady-flow-analysis/" class="md-nav__link">
+      <a href="../steady-flow-analysis/" class="md-nav__link">
         
   
   
@@ -1025,7 +1152,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/dam-breach-analysis/" class="md-nav__link">
+      <a href="../dam-breach-analysis/" class="md-nav__link">
         
   
   
@@ -1053,7 +1180,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/dss-operations/" class="md-nav__link">
+      <a href="../dss-operations/" class="md-nav__link">
         
   
   
@@ -1081,7 +1208,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/usgs-gauge-data/" class="md-nav__link">
+      <a href="../usgs-gauge-data/" class="md-nav__link">
         
   
   
@@ -1109,7 +1236,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/gridded-precipitation/" class="md-nav__link">
+      <a href="../gridded-precipitation/" class="md-nav__link">
         
   
   
@@ -1137,7 +1264,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/atlas14-precipitation/" class="md-nav__link">
+      <a href="../atlas14-precipitation/" class="md-nav__link">
         
   
   
@@ -1165,7 +1292,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/project-file-validation/" class="md-nav__link">
+      <a href="../project-file-validation/" class="md-nav__link">
         
   
   
@@ -1199,10 +1326,13 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
@@ -1211,7 +1341,7 @@
         <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_19" >
         
           
-          <label class="md-nav__link" for="__nav_2_19" id="__nav_2_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_19" id="__nav_2_19_label" tabindex="">
             
   
   
@@ -1247,7 +1377,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/quality-assurance/" class="md-nav__link">
+      <a href="../quality-assurance/" class="md-nav__link">
         
   
   
@@ -1275,7 +1405,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/quality-assurance/nt-check/" class="md-nav__link">
+      <a href="../quality-assurance/nt-check/" class="md-nav__link">
         
   
   
@@ -1303,7 +1433,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/quality-assurance/xs-check/" class="md-nav__link">
+      <a href="../quality-assurance/xs-check/" class="md-nav__link">
         
   
   
@@ -1331,7 +1461,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/quality-assurance/structure-check/" class="md-nav__link">
+      <a href="../quality-assurance/structure-check/" class="md-nav__link">
         
   
   
@@ -1359,7 +1489,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/quality-assurance/floodway-check/" class="md-nav__link">
+      <a href="../quality-assurance/floodway-check/" class="md-nav__link">
         
   
   
@@ -1387,7 +1517,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/quality-assurance/profiles-check/" class="md-nav__link">
+      <a href="../quality-assurance/profiles-check/" class="md-nav__link">
         
   
   
@@ -1423,7 +1553,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/legacy-com-interface/" class="md-nav__link">
+      <a href="../legacy-com-interface/" class="md-nav__link">
         
   
   
@@ -1451,7 +1581,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/remote-execution/" class="md-nav__link">
+      <a href="../remote-execution/" class="md-nav__link">
         
   
   
@@ -1479,7 +1609,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/cloud-native-export/" class="md-nav__link">
+      <a href="../cloud-native-export/" class="md-nav__link">
         
   
   
@@ -2878,6 +3008,80 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controlling-spacing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controlling spacing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#smoothing-sinuous-centerlines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Smoothing sinuous centerlines
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#avoiding-bridges-and-confluences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Avoiding bridges and confluences
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verifying-face-alignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying face alignment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2896,436 +3100,124 @@
   
 
 
-<h1 id="profile-line-flow-extraction">Profile Line Flow Extraction<a class="headerlink" href="#profile-line-flow-extraction" title="Permanent link">&para;</a></h1>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<h1 id="flowline-refinement-regions">Flowline Refinement Regions<a class="headerlink" href="#flowline-refinement-regions" title="Permanent link">&para;</a></h1>
+<p>Aligning 2D cell faces along channels is one of the most effective ways to
+improve conveyance accuracy in HEC-RAS. The HEC-RAS guide <em>"Aligning Cell Faces
+in Channels with Refinement Regions"</em> describes the manual RAS Mapper workflow:
+draw a polygon along the channel, set a tighter cell spacing inside it, and
+regenerate the mesh so cell faces line up with the flow direction.</p>
+<p><code>GeomMesh.add_flowline_refinement_regions()</code> is the programmatic equivalent. It
+takes channel flowlines (a GeoDataFrame, GeoSeries, or shapely line geometries),
+buffers each into a refinement-region polygon, sets the region's X/Y cell
+spacing, and writes the regions into an existing compiled geometry HDF through
+<code>GeomMesh.add_refinement_region()</code>. It returns a list of FID / name / spacing
+mappings so you can audit exactly what was written.</p>
+<blockquote>
+<p><strong>Prerequisite:</strong> a current compiled <code>.g##.hdf</code> workspace must exist for the
+target geometry (the same precondition as <code>add_refinement_region()</code> and
+<code>generate()</code>). The helper does not regenerate the mesh itself — call
+<code>GeomMesh.generate()</code> afterward to rebuild with the new regions.</p>
+</blockquote>
+<h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">geopandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">gpd</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">GeomMesh</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfResultsMesh</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;path\to\BaldEagleCrkMulti2D&quot;</span><span class="p">,</span> <span class="s2">&quot;6.6&quot;</span><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1"># Channel centerlines in any known CRS; reprojected to the project CRS</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># automatically when both CRS values are known.</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">flowlines</span> <span class="o">=</span> <span class="n">gpd</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;path\to\bald_eagle_channels.shp&quot;</span><span class="p">)</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">mappings</span> <span class="o">=</span> <span class="n">GeomMesh</span><span class="o">.</span><span class="n">add_flowline_refinement_regions</span><span class="p">(</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">geom_number</span><span class="o">=</span><span class="s2">&quot;01&quot;</span><span class="p">,</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">flowlines</span><span class="o">=</span><span class="n">flowlines</span><span class="p">,</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">buffer_width</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span>        <span class="c1"># project units; also becomes the default cell spacing</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">name_column</span><span class="o">=</span><span class="s2">&quot;Name&quot;</span><span class="p">,</span>       <span class="c1"># optional: name regions from a GeoDataFrame column</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="p">)</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">mappings</span><span class="p">:</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">m</span><span class="p">[</span><span class="s2">&quot;fid&quot;</span><span class="p">],</span> <span class="n">m</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span> <span class="n">m</span><span class="p">[</span><span class="s2">&quot;spacing_dx&quot;</span><span class="p">],</span> <span class="nb">round</span><span class="p">(</span><span class="n">m</span><span class="p">[</span><span class="s2">&quot;area&quot;</span><span class="p">],</span> <span class="mi">1</span><span class="p">))</span>
 </span></code></pre></div>
-<p>Development mode: run this notebook with <code>PYTHONPATH</code> pointed at the repository root when testing local source changes. The committed import cell above intentionally uses the installed/importable package form.</p>
-<h1 id="profile-line-flow-extraction_1">Profile-Line Flow Extraction<a class="headerlink" href="#profile-line-flow-extraction_1" title="Permanent link">&para;</a></h1>
-<p>This workflow extracts a modeled flow time series and peak Q across a RAS Mapper profile/reference line from completed 2D plan HDF results.</p>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">validation_root</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>        <span class="s2">&quot;CLB214_PROFILE_LINE_VALIDATION&quot;</span><span class="p">,</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>        <span class="sa">r</span><span class="s2">&quot;H:/Symphony/ras-commander/CLB-214/profile_line_flow_validation&quot;</span><span class="p">,</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="p">)</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">)</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">project_dir</span> <span class="o">=</span> <span class="n">validation_root</span> <span class="o">/</span> <span class="s2">&quot;project&quot;</span> <span class="o">/</span> <span class="s2">&quot;Chippewa_2D_profile_line_flow&quot;</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">plan_hdf</span> <span class="o">=</span> <span class="n">project_dir</span> <span class="o">/</span> <span class="s2">&quot;Chippewa_2D.p02.hdf&quot;</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">profile_lines_path</span> <span class="o">=</span> <span class="n">validation_root</span> <span class="o">/</span> <span class="s2">&quot;profile_line_input&quot;</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">line_name</span> <span class="o">=</span> <span class="s2">&quot;Upstream&quot;</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">mesh_name</span> <span class="o">=</span> <span class="s2">&quot;Perimeter 1&quot;</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">plan_hdf</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>        <span class="sa">f</span><span class="s2">&quot;Completed plan HDF not found: </span><span class="si">{</span><span class="n">plan_hdf</span><span class="si">}</span><span class="s2">. &quot;</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>        <span class="s2">&quot;Set CLB214_PROFILE_LINE_VALIDATION or replace plan_hdf/profile_lines_path &quot;</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>        <span class="s2">&quot;with a completed project that outputs Face Flow.&quot;</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="p">)</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
-</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Plan HDF: </span><span class="si">{</span><span class="n">plan_hdf</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Profile line source: </span><span class="si">{</span><span class="n">profile_lines_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<p>Each returned dictionary contains <code>fid</code>, <code>name</code>, <code>source_index</code>, <code>part_index</code>,
+<code>spacing_dx</code>, <code>spacing_dy</code>, <code>buffer_width</code>, and <code>area</code>.</p>
+<h2 id="controlling-spacing">Controlling spacing<a class="headerlink" href="#controlling-spacing" title="Permanent link">&para;</a></h2>
+<p><code>buffer_width</code> doubles as the default cell spacing. Decouple them when you want a
+wide refinement corridor but tighter cells (or vice versa):</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">GeomMesh</span><span class="o">.</span><span class="n">add_flowline_refinement_regions</span><span class="p">(</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">geom_number</span><span class="o">=</span><span class="s2">&quot;01&quot;</span><span class="p">,</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">flowlines</span><span class="o">=</span><span class="n">flowlines</span><span class="p">,</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">buffer_width</span><span class="o">=</span><span class="mf">80.0</span><span class="p">,</span>   <span class="c1"># corridor half-width</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">spacing_dx</span><span class="o">=</span><span class="mf">20.0</span><span class="p">,</span>     <span class="c1"># cell size inside the corridor</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">spacing_dy</span><span class="o">=</span><span class="mf">20.0</span><span class="p">,</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Plan HDF: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-Profile line source: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\profile_line_input
-</code></pre></div>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">flow_ts</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_profile_line_flow_timeseries</span><span class="p">(</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">plan_hdf</span><span class="p">,</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">line_name</span><span class="p">,</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">mesh_name</span><span class="o">=</span><span class="n">mesh_name</span><span class="p">,</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">profile_lines_path</span><span class="o">=</span><span class="n">profile_lines_path</span><span class="p">,</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">direction</span><span class="o">=</span><span class="s2">&quot;absolute&quot;</span><span class="p">,</span>
+<h2 id="smoothing-sinuous-centerlines">Smoothing sinuous centerlines<a class="headerlink" href="#smoothing-sinuous-centerlines" title="Permanent link">&para;</a></h2>
+<p>Digitized centerlines often carry more vertices than the mesh needs. Pass
+<code>simplify_tolerance</code> to apply a shapely <code>simplify()</code> before buffering, which
+yields cleaner corridors and fewer near-duplicate faces:</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">GeomMesh</span><span class="o">.</span><span class="n">add_flowline_refinement_regions</span><span class="p">(</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">geom_number</span><span class="o">=</span><span class="s2">&quot;01&quot;</span><span class="p">,</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">flowlines</span><span class="o">=</span><span class="n">flowlines</span><span class="p">,</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">buffer_width</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">simplify_tolerance</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span>       <span class="c1"># project units</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">preserve_topology</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">peak_q</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_profile_line_peak_flow</span><span class="p">(</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">plan_hdf</span><span class="p">,</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">line_name</span><span class="p">,</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">mesh_name</span><span class="o">=</span><span class="n">mesh_name</span><span class="p">,</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="n">profile_lines_path</span><span class="o">=</span><span class="n">profile_lines_path</span><span class="p">,</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="p">)</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="n">display</span><span class="p">(</span><span class="n">flow_ts</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="n">display</span><span class="p">(</span><span class="n">peak_q</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-05-01 12:58:20 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.g01.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.g01.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
-1. HDF file projection attribute: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-2. RASMapper projection file H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
-To fix this:
-1. Open RASMapper
-2. Click Map &gt; Set Projection
-3. Select an appropriate projection file or coordinate system
-4. Save the RASMapper project
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfMesh - INFO - Found 6 faces along profile line
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:20 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.g01.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.g01.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
-1. HDF file projection attribute: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-2. RASMapper projection file H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
-To fix this:
-1. Open RASMapper
-2. Click Map &gt; Set Projection
-3. Select an appropriate projection file or coordinate system
-4. Save the RASMapper project
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Found 6 faces along profile line
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-</code></pre></div>
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>time</th>
-      <th>flow</th>
-      <th>line_name</th>
-      <th>mesh_name</th>
-      <th>direction</th>
-      <th>face_count</th>
-      <th>selection_source</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>2019-04-02 00:00:00</td>
-      <td>1948.334485</td>
-      <td>Upstream</td>
-      <td>Perimeter 1</td>
-      <td>absolute</td>
-      <td>6</td>
-      <td>profile_lines_geometry</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>2019-04-02 00:30:00</td>
-      <td>1945.119192</td>
-      <td>Upstream</td>
-      <td>Perimeter 1</td>
-      <td>absolute</td>
-      <td>6</td>
-      <td>profile_lines_geometry</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>2019-04-02 01:00:00</td>
-      <td>1919.116215</td>
-      <td>Upstream</td>
-      <td>Perimeter 1</td>
-      <td>absolute</td>
-      <td>6</td>
-      <td>profile_lines_geometry</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>2019-04-02 01:30:00</td>
-      <td>1881.967214</td>
-      <td>Upstream</td>
-      <td>Perimeter 1</td>
-      <td>absolute</td>
-      <td>6</td>
-      <td>profile_lines_geometry</td>
-    </tr>
-    <tr>
-      <th>4</th>
-      <td>2019-04-02 02:00:00</td>
-      <td>1849.279263</td>
-      <td>Upstream</td>
-      <td>Perimeter 1</td>
-      <td>absolute</td>
-      <td>6</td>
-      <td>profile_lines_geometry</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>line_name</th>
-      <th>mesh_name</th>
-      <th>peak_time</th>
-      <th>peak_flow</th>
-      <th>direction</th>
-      <th>face_count</th>
-      <th>selection_source</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>Upstream</td>
-      <td>Perimeter 1</td>
-      <td>2019-04-21 01:00:00</td>
-      <td>2316.140572</td>
-      <td>absolute</td>
-      <td>6</td>
-      <td>profile_lines_geometry</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">signed_flow_ts</span> <span class="o">=</span> <span class="n">HdfResultsMesh</span><span class="o">.</span><span class="n">get_profile_line_flow_timeseries</span><span class="p">(</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">plan_hdf</span><span class="p">,</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">line_name</span><span class="p">,</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">mesh_name</span><span class="o">=</span><span class="n">mesh_name</span><span class="p">,</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">profile_lines_path</span><span class="o">=</span><span class="n">profile_lines_path</span><span class="p">,</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">direction</span><span class="o">=</span><span class="s2">&quot;signed&quot;</span><span class="p">,</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="p">)</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">comparison</span> <span class="o">=</span> <span class="n">flow_ts</span><span class="p">[[</span><span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="s2">&quot;flow&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;flow&quot;</span><span class="p">:</span> <span class="s2">&quot;absolute_flow&quot;</span><span class="p">})</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">signed_flow_ts</span><span class="p">[[</span><span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="s2">&quot;flow&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;flow&quot;</span><span class="p">:</span> <span class="s2">&quot;signed_flow&quot;</span><span class="p">}),</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">on</span><span class="o">=</span><span class="s2">&quot;time&quot;</span><span class="p">,</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="p">)</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">display</span><span class="p">(</span><span class="n">comparison</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
+<p>Buffering is performed with shapely (<code>LineString.buffer</code>), so bends and
+confluences are joined robustly without the self-intersections a naive
+segment-offset would produce. Tune the corner treatment with <code>cap_style</code>
+(<code>"flat"</code>, <code>"round"</code>, <code>"square"</code>), <code>join_style</code> (<code>"round"</code>, <code>"mitre"</code>,
+<code>"bevel"</code>), and <code>mitre_limit</code>.</p>
+<h2 id="avoiding-bridges-and-confluences">Avoiding bridges and confluences<a class="headerlink" href="#avoiding-bridges-and-confluences" title="Permanent link">&para;</a></h2>
+<p>Refinement corridors should not overlap structures or merge across confluences.
+Three mechanisms are available:</p>
+<ul>
+<li><strong><code>trim_geometries</code></strong> — a GeoDataFrame / geometry / iterable of geometries to
+  subtract from every buffer. Use it for bridge decks, levee footprints, or
+  storage-area perimeters. <code>trim_distance</code> dilates these zones before
+  subtraction.</li>
+<li><strong><code>trim_overlaps=True</code></strong> — subtract previously-created flowline regions from
+  later ones (order-dependent), a quick way to remove confluence overlaps.</li>
+<li><strong><code>trim_hook</code></strong> — a callable <code>f(polygon, line, source)</code> returning a custom
+  polygon / MultiPolygon, or <code>None</code> to skip a flowline entirely.</li>
+</ul>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">bridges</span> <span class="o">=</span> <span class="n">gpd</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;path\to\bridge_footprints.shp&quot;</span><span class="p">)</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">GeomMesh</span><span class="o">.</span><span class="n">add_flowline_refinement_regions</span><span class="p">(</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">geom_number</span><span class="o">=</span><span class="s2">&quot;01&quot;</span><span class="p">,</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">flowlines</span><span class="o">=</span><span class="n">flowlines</span><span class="p">,</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">buffer_width</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">trim_geometries</span><span class="o">=</span><span class="n">bridges</span><span class="p">,</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">trim_distance</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>      <span class="c1"># keep cells clear of the deck</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">trim_overlaps</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>      <span class="c1"># de-overlap at confluences</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">min_area</span><span class="o">=</span><span class="mf">500.0</span><span class="p">,</span>          <span class="c1"># drop slivers left after trimming</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-05-01 12:58:21 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.g01.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.g01.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:21 - ras_commander.hdf.HdfBase - CRITICAL - No valid projection found. Checked:
-1. HDF file projection attribute: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-2. RASMapper projection file H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\.Winona_Upload\LifeSim model\Winona Levee SQRA 2019\RAS\AW\MMC_Projection.prj found in RASMapper file, but was invalid
-To fix this:
-1. Open RASMapper
-2. Click Map &gt; Set Projection
-3. Select an appropriate projection file or coordinate system
-4. Save the RASMapper project
-
-
-2026-05-01 12:58:22 - ras_commander.hdf.HdfMesh - INFO - Found 6 faces along profile line
-
-
-2026-05-01 12:58:22 - ras_commander.hdf.HdfResultsMesh - INFO - Using existing Path object HDF file: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-
-
-2026-05-01 12:58:22 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Symphony\ras-commander\CLB-214\profile_line_flow_validation\project\Chippewa_2D_profile_line_flow\Chippewa_2D.p02.hdf
-</code></pre></div>
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>time</th>
-      <th>absolute_flow</th>
-      <th>signed_flow</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>2019-04-02 00:00:00</td>
-      <td>1948.334485</td>
-      <td>494.805432</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>2019-04-02 00:30:00</td>
-      <td>1945.119192</td>
-      <td>490.561087</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>2019-04-02 01:00:00</td>
-      <td>1919.116215</td>
-      <td>466.979741</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>2019-04-02 01:30:00</td>
-      <td>1881.967214</td>
-      <td>432.740896</td>
-    </tr>
-    <tr>
-      <th>4</th>
-      <td>2019-04-02 02:00:00</td>
-      <td>1849.279263</td>
-      <td>406.301601</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">manual_validation_csv</span> <span class="o">=</span> <span class="n">validation_root</span> <span class="o">/</span> <span class="s2">&quot;manual_face_flow_validation.csv&quot;</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">if</span> <span class="n">manual_validation_csv</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">manual</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">manual_validation_csv</span><span class="p">,</span> <span class="n">parse_dates</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;time&quot;</span><span class="p">])</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">validation</span> <span class="o">=</span> <span class="n">comparison</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">manual</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;time&quot;</span><span class="p">)</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="nb">print</span><span class="p">(</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>        <span class="s2">&quot;Max absolute-flow difference:&quot;</span><span class="p">,</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>        <span class="n">validation</span><span class="p">[</span><span class="s2">&quot;absolute_difference&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">abs</span><span class="p">()</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="p">)</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="nb">print</span><span class="p">(</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>        <span class="s2">&quot;Max signed-flow difference:&quot;</span><span class="p">,</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>        <span class="n">validation</span><span class="p">[</span><span class="s2">&quot;signed_difference&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">abs</span><span class="p">()</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>    <span class="p">)</span>
+<p>When a trim splits a buffer into several pieces, each part is written as its own
+region (<code>&lt;name&gt;_1</code>, <code>&lt;name&gt;_2</code>, …). If a trim leaves an interior hole, the helper
+logs a warning: <code>add_refinement_region()</code> writes the exterior ring only, so use a
+<code>trim_hook</code> that returns split, hole-free polygons when a hole must be preserved.</p>
+<h2 id="verifying-face-alignment">Verifying face alignment<a class="headerlink" href="#verifying-face-alignment" title="Permanent link">&para;</a></h2>
+<p>After writing the regions, regenerate the mesh and compare cell-face angles
+inside the channel against the flow direction. A typical check buffers the
+centerline, selects the faces that fall inside the corridor, and reports the mean
+absolute deviation between each face normal and the local flow azimuth before and
+after refinement:</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">GeomMesh</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">geom_number</span><span class="o">=</span><span class="s2">&quot;01&quot;</span><span class="p">)</span>   <span class="c1"># rebuild the mesh with the new regions</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Pull 2D face geometry from the results/geometry HDF and compare the</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># angle between each in-channel face and the flowline tangent. A lower mean</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># deviation after refinement confirms the faces now align with the channel.</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Max absolute-flow difference: 0.0
-Max signed-flow difference: 0.0
-</code></pre></div>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">flow_ts</span><span class="p">[</span><span class="s2">&quot;time&quot;</span><span class="p">],</span> <span class="n">flow_ts</span><span class="p">[</span><span class="s2">&quot;flow&quot;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;Absolute flow&quot;</span><span class="p">)</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">signed_flow_ts</span><span class="p">[</span><span class="s2">&quot;time&quot;</span><span class="p">],</span> <span class="n">signed_flow_ts</span><span class="p">[</span><span class="s2">&quot;flow&quot;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;Signed flow&quot;</span><span class="p">)</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">&quot;Flow (cfs)&quot;</span><span class="p">)</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">line_name</span><span class="si">}</span><span class="s2"> profile-line flow&quot;</span><span class="p">)</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">ax</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">fig</span><span class="o">.</span><span class="n">autofmt_xdate</span><span class="p">()</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
-</span></code></pre></div>
-<p><img alt="png" src="../413_profile_line_flow_extraction_files/413_profile_line_flow_extraction_8_0.png" /></p>
+<p>Well-aligned faces reduce numerical diffusion of momentum across the channel and
+improve the stability of the conveyance solution — the goal of the source guide.</p>
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../geometry-operations/">Geometry Operations</a> — broader <code>GeomMesh</code> workflow</li>
+<li><a href="../../examples/"><code>230_mesh_sensitivity_analysis.ipynb</code></a> — refinement-region
+  spacing sensitivity</li>
+<li>API reference: <a href="../../api/geometry/#geommesh"><code>GeomMesh</code></a></li>
+</ul>
 
 
 
@@ -3348,7 +3240,7 @@ Max signed-flow difference: 0.0
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 17:06:53 UTC">May 31, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 17:03:24 UTC">May 31, 2026</span>
   </span>
 
     
@@ -3358,7 +3250,7 @@ Max signed-flow difference: 0.0
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 17:06:53 UTC">May 31, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 17:03:24 UTC">May 31, 2026</span>
   </span>
 
     
