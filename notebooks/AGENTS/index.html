@@ -2954,13 +2954,15 @@
 <h2 id="notebook-families">Notebook Families<a class="headerlink" href="#notebook-families" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>100s</code> - project initialization, plan operations, execution, callbacks</li>
-<li><code>200s</code> - plain-text geometry parsing and HTAB workflows</li>
-<li><code>300s</code> - unsteady flow files, DSS boundaries, boundary visualization</li>
-<li><code>400s</code> - HDF geometry and results extraction</li>
-<li><code>700s</code> - Atlas 14, design storms, and precipitation workflows</li>
+<li><code>200s</code> - plain-text geometry parsing, structures, roughness, geometry authoring, calibration, and mesh workflows</li>
+<li><code>300s</code> - unsteady flow files, DSS boundaries, HMS matching, terrain modifications, and boundary visualization</li>
+<li><code>400s</code> - HDF geometry, hydraulic results, breach results, velocity profiles, and channel-capacity extraction</li>
+<li><code>500s</code> - remote execution, Linux execution, and ModPuls result extraction</li>
+<li><code>600s</code> - floodplain mapping, fluvial-pluvial delineation, and map-layer validation</li>
+<li><code>700s</code> - sensitivity testing, benchmarking, Atlas 14, design storms, and precipitation workflows</li>
 <li><code>800s</code> - QA and validation workflows</li>
-<li><code>900s</code> - forecasting, terrain, USGS, and operational workflows</li>
-<li><code>950s</code> - FEMA eBFE model organization</li>
+<li><code>900s</code> - AORC, USGS, real-time forecasting, STOFS-3D, terrain, and operational workflows</li>
+<li><code>950s</code> - FEMA eBFE model organization and validation</li>
 <li><code>960s</code> - cloud-native export workflows</li>
 </ul>
 <h2 id="high-value-reference-notebooks">High-Value Reference Notebooks<a class="headerlink" href="#high-value-reference-notebooks" title="Permanent link">&para;</a></h2>
@@ -2969,23 +2971,23 @@
 <li><code>101_project_initialization.ipynb</code> - project metadata and DataFrame patterns</li>
 <li><code>110_single_plan_execution.ipynb</code> and <code>113_parallel_execution.ipynb</code> - execution patterns</li>
 <li><code>201_1d_plaintext_geometry.ipynb</code>, <code>203_htab_parameter_optimization.ipynb</code>, <code>205_extract_xs_xyz_from_geometry.ipynb</code> - geometry parsing and HTAB work</li>
-<li><code>218_infiltration_base_override_authoring.ipynb</code> - programmatic infiltration group creation and Base Override round-trip</li>
-<li><code>310_validating_dss_paths.ipynb</code> and <code>312_boundary_df_qmult_dss_paths.ipynb</code> - DSS workflows</li>
-<li><code>410_2d_hdf_data_extraction.ipynb</code> and <code>412_2d_detail_face_data_extraction.ipynb</code> - mesh and results extraction</li>
-<li><code>421_usgs_gauge_data_integration.ipynb</code> through <code>424_model_validation_with_usgs.ipynb</code> - USGS integration</li>
-<li><code>720_atlas14_aep_events.ipynb</code>, <code>725_atlas14_spatial_variance.ipynb</code>, <code>726_abm_hyetograph_grid.ipynb</code> - precipitation methods</li>
+<li><code>218_infiltration_base_override_authoring.ipynb</code> and <code>225_fixit_blocked_obstructions.ipynb</code> - infiltration and repair workflows</li>
+<li><code>312_boundary_df_qmult_dss_paths.ipynb</code> and <code>318_validating_dss_paths.ipynb</code> - DSS workflows</li>
+<li><code>410_2d_hdf_data_extraction.ipynb</code>, <code>412_2d_detail_face_data_extraction.ipynb</code>, <code>413_profile_line_flow_extraction.ipynb</code>, and <code>416_2d_velocity_profile_line.ipynb</code> - mesh and results extraction</li>
+<li><code>910_usgs_gauge_catalog.ipynb</code> through <code>919_operational_forecast_cycling.ipynb</code> - USGS, AORC validation, and forecast workflows</li>
+<li><code>921_usgs_study_package_from_primitives.ipynb</code> through <code>923_stofs3d_coastal_boundary.ipynb</code> - USGS study, validation, and coastal boundary workflows</li>
+<li><code>720_precipitation_methods_comprehensive.ipynb</code>, <code>721_precipitation_hyetograph_comparison.ipynb</code>, <code>725_atlas14_spatial_variance.ipynb</code>, and <code>726_abm_hyetograph_grid.ipynb</code> - precipitation methods</li>
 <li><code>915_realtime_forecast_workflow.ipynb</code> through <code>919_operational_forecast_cycling.ipynb</code> - operational forecast patterns</li>
-<li><code>925_xs_interpolation_surface.ipynb</code> - XS interpolation surface (channel bathymetry TIN)</li>
-<li><code>930_terrain_modification_analysis.ipynb</code> - terrain modification workflows</li>
+<li><code>920_terrain_creation.ipynb</code>, <code>925_xs_interpolation_surface.ipynb</code>, and <code>930_terrain_modification_analysis.ipynb</code> - terrain and geometry surface workflows</li>
+<li><code>950_ebfe_spring_creek.ipynb</code> through <code>958_model_sources_showcase.ipynb</code> - eBFE delivery and model source workflows</li>
 <li><code>960_cloud_native_geometry_export.ipynb</code> through <code>962_cloud_native_cog_results_export.ipynb</code> - <code>ras2cng</code> export patterns</li>
 </ul>
 <h2 id="import-cell-convention">Import Cell Convention<a class="headerlink" href="#import-cell-convention" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Default committed state:</li>
-<li>Cell 0 is active pip-mode import code.</li>
-<li>Cell 1 is markdown containing dev-mode instructions.</li>
-<li>For local development testing, temporarily flip those cells, then restore the committed state before finishing.</li>
-<li>Never leave both cells active as code.</li>
+<li>Cell 0 is markdown with an H1 title matching the notebook topic.</li>
+<li>The first setup code cell keeps the active import/development toggle state used by that notebook.</li>
+<li>For local development testing, temporarily adjust setup toggles, then restore the committed state before finishing.</li>
 </ul>
 <h2 id="notebook-only-logic">Notebook-Only Logic<a class="headerlink" href="#notebook-only-logic" title="Permanent link">&para;</a></h2>
 <ul>

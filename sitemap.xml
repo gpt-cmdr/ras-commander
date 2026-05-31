@@ -217,10 +217,6 @@
          <lastmod>2026-05-31</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/211_fixit_blocked_obstructions/</loc>
-         <lastmod>2026-05-31</lastmod>
-    </url>
-    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/212_landcover_mannings_n_write/</loc>
          <lastmod>2026-05-31</lastmod>
     </url>
@@ -273,6 +269,10 @@
          <lastmod>2026-05-31</lastmod>
     </url>
     <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/225_fixit_blocked_obstructions/</loc>
+         <lastmod>2026-05-31</lastmod>
+    </url>
+    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/230_mesh_sensitivity_analysis/</loc>
          <lastmod>2026-05-31</lastmod>
     </url>
@@ -313,15 +313,15 @@
          <lastmod>2026-05-31</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/315_validating_dss_paths/</loc>
-         <lastmod>2026-05-31</lastmod>
-    </url>
-    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/316_terrain_modifications/</loc>
          <lastmod>2026-05-31</lastmod>
     </url>
     <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/317_restart_file_settings/</loc>
+         <lastmod>2026-05-31</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/318_validating_dss_paths/</loc>
          <lastmod>2026-05-31</lastmod>
     </url>
     <url>
@@ -421,7 +421,7 @@
          <lastmod>2026-05-31</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/721_Precipitation_Hyetograph_Comparison/</loc>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/721_precipitation_hyetograph_comparison/</loc>
          <lastmod>2026-05-31</lastmod>
     </url>
     <url>
@@ -465,10 +465,6 @@
          <lastmod>2026-05-31</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/911a_usgs_study_package_from_primitives/</loc>
-         <lastmod>2026-05-31</lastmod>
-    </url>
-    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/912_usgs_real_time_monitoring/</loc>
          <lastmod>2026-05-31</lastmod>
     </url>
@@ -497,19 +493,23 @@
          <lastmod>2026-05-31</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/918_model_validation_with_usgs/</loc>
-         <lastmod>2026-05-31</lastmod>
-    </url>
-    <url>
          <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/919_operational_forecast_cycling/</loc>
          <lastmod>2026-05-31</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/919_stofs3d_coastal_boundary/</loc>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/920_terrain_creation/</loc>
          <lastmod>2026-05-31</lastmod>
     </url>
     <url>
-         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/920_terrain_creation/</loc>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/921_usgs_study_package_from_primitives/</loc>
+         <lastmod>2026-05-31</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/922_model_validation_with_usgs/</loc>
+         <lastmod>2026-05-31</lastmod>
+    </url>
+    <url>
+         <loc>https://gpt-cmdr.github.io/ras-commander/notebooks/923_stofs3d_coastal_boundary/</loc>
          <lastmod>2026-05-31</lastmod>
     </url>
     <url>

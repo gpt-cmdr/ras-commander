@@ -3269,14 +3269,14 @@
 
 
 <h1 id="example-notebooks">Example Notebooks<a class="headerlink" href="#example-notebooks" title="Permanent link">&para;</a></h1>
-<p>The repository currently ships <strong>108 canonical notebooks</strong> under <code>examples/</code>.
-This overview tracks the live notebook inventory in git. Executed copies such as
-<code>*_executed.ipynb</code> and local <code>_test_*.py</code> helpers are intentionally excluded.</p>
+<p>The repository currently ships <strong>115 canonical notebooks</strong> under <code>examples/</code>.
+This page tracks the live notebook inventory in git. Executed copies such as
+<code>*_executed.ipynb</code>, extracted HEC-RAS projects, and local test helpers are
+intentionally excluded.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>The published docs track notebook inventory and source links. Rendered
-per-notebook markdown pages are not checked into this repository, so the
-canonical source of truth is the <code>examples/</code> tree itself.</p>
+<p>Rendered per-notebook markdown pages are generated during documentation
+builds. The canonical source of truth is the <code>examples/</code> tree itself.</p>
 </div>
 <h2 id="running-examples-locally">Running Examples Locally<a class="headerlink" href="#running-examples-locally" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><span class="filename">Bash</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/gpt-cmdr/ras-commander.git
@@ -3296,7 +3296,7 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 <tbody>
 <tr>
 <td><code>100s</code></td>
-<td>project initialization, execution control, parameter sweeps, RASMapper review, bank line generation, results summaries</td>
+<td>project initialization, execution control, parameter sweeps, RASMapper review, bank-line generation, results summaries</td>
 </tr>
 <tr>
 <td><code>200s</code></td>
@@ -3308,11 +3308,11 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 </tr>
 <tr>
 <td><code>400s</code></td>
-<td>1D and 2D HDF extraction, reference-line queries, breach and channel-capacity analysis</td>
+<td>1D and 2D HDF extraction, reference-line queries, breach results, velocity profiles, channel-capacity analysis</td>
 </tr>
 <tr>
 <td><code>500s</code></td>
-<td>remote, Linux, and ModPuls execution workflows</td>
+<td>remote execution, Linux execution, ModPuls result extraction</td>
 </tr>
 <tr>
 <td><code>600s</code></td>
@@ -3320,7 +3320,7 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 </tr>
 <tr>
 <td><code>700s</code></td>
-<td>sensitivity testing, benchmarking, Atlas 14, and gridded precipitation workflows</td>
+<td>sensitivity testing, benchmarking, Atlas 14, design storms, and gridded precipitation workflows</td>
 </tr>
 <tr>
 <td><code>800s</code></td>
@@ -3328,11 +3328,11 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 </tr>
 <tr>
 <td><code>900s</code></td>
-<td>AORC, USGS, forecasting, STOFS-3D, terrain creation, and terrain modification</td>
+<td>AORC, USGS, real-time forecasting, STOFS-3D, terrain creation, and terrain modification</td>
 </tr>
 <tr>
 <td><code>950s</code></td>
-<td>eBFE delivery organization and validation</td>
+<td>FEMA eBFE/BLE delivery organization and validation</td>
 </tr>
 <tr>
 <td><code>960s</code></td>
@@ -3341,7 +3341,8 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 </tbody>
 </table>
 <h2 id="drift-sensitive-notebooks">Drift-Sensitive Notebooks<a class="headerlink" href="#drift-sensitive-notebooks" title="Permanent link">&para;</a></h2>
-<p>These are the notebooks most directly tied to the April 2026 docs-drift sweep.</p>
+<p>These notebooks are tied closely to docs, source adapters, or recurring QAQC
+sweeps.</p>
 <table>
 <thead>
 <tr>
@@ -3368,23 +3369,35 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 </tr>
 <tr>
 <td><a href="https://github.com/gpt-cmdr/ras-commander/blob/main/examples/213_land_classification_polygon_authoring.ipynb">213_land_classification_polygon_authoring.ipynb</a></td>
-<td>Executed land-classification polygon authoring workflow with sidecar HDF extraction and roughness map evidence</td>
+<td>Land-classification polygon authoring workflow</td>
+</tr>
+<tr>
+<td><a href="https://github.com/gpt-cmdr/ras-commander/blob/main/examples/318_validating_dss_paths.ipynb">318_validating_dss_paths.ipynb</a></td>
+<td>DSS path validation reference</td>
 </tr>
 <tr>
 <td><a href="https://github.com/gpt-cmdr/ras-commander/blob/main/examples/611_validating_map_layers.ipynb">611_validating_map_layers.ipynb</a></td>
 <td>RASMapper layer and HDF asset validation</td>
 </tr>
 <tr>
-<td><a href="https://github.com/gpt-cmdr/ras-commander/blob/main/examples/920_terrain_creation.ipynb">920_terrain_creation.ipynb</a></td>
-<td>HEC-RAS terrain tutorial workflow: single-raster terrain, USGS 3DEP terrain, multi-source priority ordering, RASMapper registration, and geometry association</td>
+<td><a href="https://github.com/gpt-cmdr/ras-commander/blob/main/examples/721_precipitation_hyetograph_comparison.ipynb">721_precipitation_hyetograph_comparison.ipynb</a></td>
+<td>Multi-method precipitation hyetograph comparison</td>
 </tr>
 <tr>
-<td><a href="https://github.com/gpt-cmdr/ras-commander/blob/main/examples/950_ebfe_spring_creek.ipynb">950_ebfe_spring_creek.ipynb</a> through <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/examples/957_ebfe_spring_river_validation.ipynb">957_ebfe_spring_river_validation.ipynb</a></td>
-<td>Current eBFE delivery-validation notebook set</td>
+<td><a href="https://github.com/gpt-cmdr/ras-commander/blob/main/examples/920_terrain_creation.ipynb">920_terrain_creation.ipynb</a></td>
+<td>HEC-RAS terrain tutorial workflow</td>
+</tr>
+<tr>
+<td><a href="https://github.com/gpt-cmdr/ras-commander/blob/main/examples/921_usgs_study_package_from_primitives.ipynb">921_usgs_study_package_from_primitives.ipynb</a></td>
+<td>USGS study package assembly from primitives</td>
+</tr>
+<tr>
+<td><a href="https://github.com/gpt-cmdr/ras-commander/blob/main/examples/950_ebfe_spring_creek.ipynb">950_ebfe_spring_creek.ipynb</a> through <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/examples/958_model_sources_showcase.ipynb">958_model_sources_showcase.ipynb</a></td>
+<td>eBFE delivery-validation and model-source workflows</td>
 </tr>
 <tr>
 <td><a href="https://github.com/gpt-cmdr/ras-commander/blob/main/examples/960_cloud_native_geometry_export.ipynb">960_cloud_native_geometry_export.ipynb</a> through <a href="https://github.com/gpt-cmdr/ras-commander/blob/main/examples/962_cloud_native_cog_results_export.ipynb">962_cloud_native_cog_results_export.ipynb</a></td>
-<td>Current cloud-native export workflow family</td>
+<td>Cloud-native export workflow family</td>
 </tr>
 </tbody>
 </table>
@@ -3402,44 +3415,39 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 <code>121_legacy_hecrascontroller_and_rascontrol.ipynb</code>,
 <code>122_rasmapper_spatial_review.ipynb</code>,
 <code>123_rasmapper_geometry_layer_updates.ipynb</code>,
-<code>124_rasmapper_bank_lines.ipynb</code>,
-<code>150_results_dataframe.ipynb</code></p>
+<code>124_rasmapper_bank_lines.ipynb</code>, <code>150_results_dataframe.ipynb</code></p>
 <h3 id="200s">200s<a class="headerlink" href="#200s" title="Permanent link">&para;</a></h3>
 <p><code>201_1d_plaintext_geometry.ipynb</code>, <code>202_2d_plaintext_geometry.ipynb</code>,
 <code>203_htab_parameter_optimization.ipynb</code>,
 <code>205_extract_xs_xyz_from_geometry.ipynb</code>,
 <code>206_structures_and_metadata.ipynb</code>,
 <code>207_reference_lines_and_points.ipynb</code>,
-<code>208_bridge_method_comparison.ipynb</code>,
-<code>209_culvert_authoring.ipynb</code>,
-<code>210_fixit_blocked_obstructions.ipynb</code>,
+<code>208_bridge_method_comparison.ipynb</code>, <code>209_culvert_authoring.ipynb</code>,
 <code>210_xs_interpolation_settings.ipynb</code>,
 <code>211_final_mannings_and_infiltration.ipynb</code>,
 <code>212_landcover_mannings_n_write.ipynb</code>,
 <code>213_land_classification_polygon_authoring.ipynb</code>,
 <code>214_connection_authoring.ipynb</code>,
-<code>215_bridge_connection_authoring.ipynb</code>,
-<code>216_bridge_authoring.ipynb</code>,
-<code>217_levee_read_write.ipynb</code>,
-<code>220_calibration_workflow.ipynb</code>,
-<code>221_calibration_1d_workflow.ipynb</code>,
-<code>222_steady_flow_calibration.ipynb</code>,
+<code>215_sa2d_bridge_connection_authoring.ipynb</code>,
+<code>216_1d_bridge_authoring.ipynb</code>, <code>217_1d_levee_authoring.ipynb</code>,
+<code>218_infiltration_base_override_authoring.ipynb</code>,
+<code>219_1d_bridge_xs_plotting.ipynb</code>, <code>220_calibration_workflow.ipynb</code>,
+<code>221_calibration_1d_workflow.ipynb</code>, <code>222_steady_flow_calibration.ipynb</code>,
 <code>223_steady_floodway_encroachment.ipynb</code>,
 <code>224_steady_flow_authoring.ipynb</code>,
+<code>225_fixit_blocked_obstructions.ipynb</code>,
 <code>230_mesh_sensitivity_analysis.ipynb</code>,
 <code>231_pipe_network_mesh_generation.ipynb</code></p>
 <h3 id="300s">300s<a class="headerlink" href="#300s" title="Permanent link">&para;</a></h3>
 <p><code>300_unsteady_flow_operations.ipynb</code>,
 <code>301_flow_hydrograph_optimization.ipynb</code>,
 <code>310_dss_boundary_extraction.ipynb</code>,
-<code>311_validating_dss_paths.ipynb</code>,
 <code>311_2d_floodway_encroachment.ipynb</code>,
 <code>312_boundary_df_qmult_dss_paths.ipynb</code>,
 <code>313_hms_to_ras_boundary_matching.ipynb</code>,
 <code>314_reference_line_generation.ipynb</code>,
-<code>315_2d_computation_options.ipynb</code>,
-<code>316_terrain_modifications.ipynb</code>,
-<code>317_restart_file_settings.ipynb</code>,
+<code>315_2d_computation_options.ipynb</code>, <code>316_terrain_modifications.ipynb</code>,
+<code>317_restart_file_settings.ipynb</code>, <code>318_validating_dss_paths.ipynb</code>,
 <code>320_1d_boundary_condition_visualization.ipynb</code></p>
 <h3 id="400s">400s<a class="headerlink" href="#400s" title="Permanent link">&para;</a></h3>
 <p><code>400_1d_hdf_data_extraction.ipynb</code>, <code>401_steady_flow_analysis.ipynb</code>,
@@ -3447,7 +3455,9 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 <code>411_2d_hdf_pipes_and_pumps.ipynb</code>,
 <code>412_2d_detail_face_data_extraction.ipynb</code>,
 <code>413_profile_line_flow_extraction.ipynb</code>,
+<code>414_depth_varying_mannings_n.ipynb</code>,
 <code>415_2d_spatial_result_queries.ipynb</code>,
+<code>416_2d_velocity_profile_line.ipynb</code>,
 <code>420_breach_results_extraction.ipynb</code>,
 <code>430_1d_channel_capacity_analysis.ipynb</code></p>
 <h3 id="500s">500s<a class="headerlink" href="#500s" title="Permanent link">&para;</a></h3>
@@ -3459,32 +3469,34 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 <code>610_fluvial_pluvial_delineation.ipynb</code>,
 <code>611_validating_map_layers.ipynb</code></p>
 <h3 id="700s">700s<a class="headerlink" href="#700s" title="Permanent link">&para;</a></h3>
-<p><code>700_core_sensitivity.ipynb</code>, <code>701_benchmarking_versions_6.1_to_6.6.ipynb</code>,
+<p><code>700_core_sensitivity.ipynb</code>,
+<code>701_benchmarking_versions_6.1_to_6.6.ipynb</code>,
 <code>710_mannings_sensitivity_bulk_analysis.ipynb</code>,
 <code>711_mannings_sensitivity_multi_interval.ipynb</code>,
 <code>720_precipitation_methods_comprehensive.ipynb</code>,
-<code>721_Precipitation_Hyetograph_Comparison.ipynb</code>,
+<code>721_precipitation_hyetograph_comparison.ipynb</code>,
 <code>722_gridded_precipitation_atlas14.ipynb</code>,
 <code>723_storm_generator_abm_validation.ipynb</code>,
-<code>725_atlas14_spatial_variance.ipynb</code>,
-<code>726_abm_hyetograph_grid.ipynb</code></p>
+<code>725_atlas14_spatial_variance.ipynb</code>, <code>726_abm_hyetograph_grid.ipynb</code></p>
 <h3 id="800s">800s<a class="headerlink" href="#800s" title="Permanent link">&para;</a></h3>
 <p><code>800_quality_assurance_rascheck.ipynb</code>,
 <code>801_advanced_structure_validation.ipynb</code></p>
 <h3 id="900s">900s<a class="headerlink" href="#900s" title="Permanent link">&para;</a></h3>
-<p><code>900_aorc_precipitation.ipynb</code>, <code>901_aorc_precipitation_catalog.ipynb</code>,
-<code>910_usgs_gauge_catalog.ipynb</code>,
+<p><code>900_aorc_precipitation.ipynb</code>,
+<code>901_aorc_precipitation_catalog.ipynb</code>, <code>910_usgs_gauge_catalog.ipynb</code>,
 <code>911_usgs_gauge_data_integration.ipynb</code>,
-<code>911a_usgs_study_package_from_primitives.ipynb</code>,
 <code>912_usgs_real_time_monitoring.ipynb</code>,
 <code>913_bc_generation_from_live_gauge.ipynb</code>,
 <code>914_historical_event_validation.ipynb</code>,
-<code>914_model_validation_with_usgs.ipynb</code>,
 <code>915_realtime_forecast_workflow.ipynb</code>,
 <code>916_hrrr_precipitation_forecast.ipynb</code>,
-<code>917_stofs3d_coastal_boundary.ipynb</code>,
+<code>917_mrms_precipitation_qpe.ipynb</code>,
 <code>918_hms_ras_coupled_forecast.ipynb</code>,
 <code>919_operational_forecast_cycling.ipynb</code>, <code>920_terrain_creation.ipynb</code>,
+<code>921_usgs_study_package_from_primitives.ipynb</code>,
+<code>922_model_validation_with_usgs.ipynb</code>,
+<code>923_stofs3d_coastal_boundary.ipynb</code>,
+<code>925_xs_interpolation_surface.ipynb</code>,
 <code>930_terrain_modification_analysis.ipynb</code></p>
 <h3 id="950s">950s<a class="headerlink" href="#950s" title="Permanent link">&para;</a></h3>
 <p><code>950_ebfe_spring_creek.ipynb</code>,
@@ -3493,7 +3505,8 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 <code>953_ebfe_rio_hondo_steady_collection.ipynb</code>,
 <code>954_ebfe_lake_maurepas_validation.ipynb</code>,
 <code>955_ebfe_tickfaw_validation.ipynb</code>,
-<code>957_ebfe_spring_river_validation.ipynb</code></p>
+<code>957_ebfe_spring_river_validation.ipynb</code>,
+<code>958_model_sources_showcase.ipynb</code></p>
 <h3 id="960s">960s<a class="headerlink" href="#960s" title="Permanent link">&para;</a></h3>
 <p><code>960_cloud_native_geometry_export.ipynb</code>,
 <code>961_cloud_native_results_export.ipynb</code>,
@@ -3501,9 +3514,9 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
 <h2 id="using-notebooks-as-reference-workflows">Using Notebooks as Reference Workflows<a class="headerlink" href="#using-notebooks-as-reference-workflows" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Use <code>examples/</code> as the live source of truth for runnable workflows.</li>
-<li>Use <a href="../getting-started/project-initialization/">Project Initialization</a> and
-  <a href="../reference/dataframe-reference/">DataFrame Reference</a> when you need the
-  stable API surface behind the notebooks.</li>
+<li>Use <a href="../getting-started/project-initialization/">Project Initialization</a>
+  and <a href="../reference/dataframe-reference/">DataFrame Reference</a> when you need
+  the stable API surface behind the notebooks.</li>
 <li>Use <a href="../user-guide/spatial-data/">Spatial Data &amp; RASMapper</a> for the public
   RASMapper workflow narrative behind notebooks <code>122</code>, <code>123</code>, <code>611</code>, and <code>920</code>.</li>
 </ul>
@@ -3529,7 +3542,7 @@ canonical source of truth is the <code>examples/</code> tree itself.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 11, 2026 20:09:50 UTC">May 11, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 16:59:44 UTC">May 31, 2026</span>
   </span>
 
     

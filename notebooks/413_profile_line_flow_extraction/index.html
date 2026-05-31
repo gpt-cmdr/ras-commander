@@ -25,7 +25,7 @@
     
     
       
-        <title>413 profile line flow extraction - RAS Commander Documentation</title>
+        <title>Profile Line Flow Extraction - RAS Commander Documentation</title>
       
     
     
@@ -143,7 +143,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              413 profile line flow extraction
+              Profile Line Flow Extraction
             
           </span>
         </div>
@@ -2840,6 +2840,7 @@
   
 
 
+<h1 id="profile-line-flow-extraction">Profile Line Flow Extraction<a class="headerlink" href="#profile-line-flow-extraction" title="Permanent link">&para;</a></h1>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
@@ -2849,7 +2850,7 @@
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">HdfResultsMesh</span>
 </span></code></pre></div>
 <p>Development mode: run this notebook with <code>PYTHONPATH</code> pointed at the repository root when testing local source changes. The committed import cell above intentionally uses the installed/importable package form.</p>
-<h1 id="profile-line-flow-extraction">Profile-Line Flow Extraction<a class="headerlink" href="#profile-line-flow-extraction" title="Permanent link">&para;</a></h1>
+<h1 id="profile-line-flow-extraction_1">Profile-Line Flow Extraction<a class="headerlink" href="#profile-line-flow-extraction_1" title="Permanent link">&para;</a></h1>
 <p>This workflow extracts a modeled flow time series and peak Q across a RAS Mapper profile/reference line from completed 2D plan HDF results.</p>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">validation_root</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
@@ -3268,7 +3269,7 @@ Max signed-flow difference: 0.0
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">fig</span><span class="o">.</span><span class="n">autofmt_xdate</span><span class="p">()</span>
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
-<p><img alt="png" src="../413_profile_line_flow_extraction_files/413_profile_line_flow_extraction_7_0.png" /></p>
+<p><img alt="png" src="../413_profile_line_flow_extraction_files/413_profile_line_flow_extraction_8_0.png" /></p>
 
 
 
@@ -3291,7 +3292,7 @@ Max signed-flow difference: 0.0
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 16:15:53 UTC">May 31, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 17:02:59 UTC">May 31, 2026</span>
   </span>
 
     
@@ -3301,7 +3302,7 @@ Max signed-flow difference: 0.0
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 16:15:53 UTC">May 31, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 17:02:59 UTC">May 31, 2026</span>
   </span>
 
     
