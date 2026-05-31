@@ -2124,6 +2124,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#write_timeseriesdss_file-pathname-times-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_timeseries(dss_file, pathname, times, values)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#write_grid_timeseriesdss_file-pathname-data-times-grid_info" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_grid_timeseries(dss_file, pathname, data, times, grid_info)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#extract_boundary_timeseriesboundaries_df-ras_object" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2160,6 +2182,17 @@
     <span class="md-ellipsis">
       
         Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#grid-java-api-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grid Java API Mapping
       
     </span>
   </a>
@@ -3053,6 +3086,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#write_timeseriesdss_file-pathname-times-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_timeseries(dss_file, pathname, times, values)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#write_grid_timeseriesdss_file-pathname-data-times-grid_info" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_grid_timeseries(dss_file, pathname, data, times, grid_info)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#extract_boundary_timeseriesboundaries_df-ras_object" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3096,6 +3151,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#grid-java-api-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grid Java API Mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#requirements" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3127,9 +3193,10 @@
 
 
 <h1 id="dss-modules">DSS Modules<a class="headerlink" href="#dss-modules" title="Permanent link">&para;</a></h1>
-<p>Classes for reading HEC-DSS files.</p>
+<p>Classes for reading and writing HEC-DSS files.</p>
 <h2 id="rasdss">RasDss<a class="headerlink" href="#rasdss" title="Permanent link">&para;</a></h2>
-<p>Read HEC-DSS files for boundary condition extraction.</p>
+<p>Read HEC-DSS files for boundary condition extraction and write DSS time-series
+or gridded precipitation records.</p>
 <h3 id="methods">Methods<a class="headerlink" href="#methods" title="Permanent link">&para;</a></h3>
 <h4 id="get_catalogdss_file">get_catalog(dss_file)<a class="headerlink" href="#get_catalogdss_file" title="Permanent link">&para;</a></h4>
 <p>Get catalog of all paths in a DSS file.</p>
@@ -3148,6 +3215,36 @@
 - <code>dss_file</code> (str|Path): Path to DSS file
 - <code>pathnames</code> (list): List of DSS pathnames</p>
 <p><strong>Returns:</strong> Dict of {pathname: DataFrame}</p>
+<h4 id="write_timeseriesdss_file-pathname-times-values">write_timeseries(dss_file, pathname, times, values)<a class="headerlink" href="#write_timeseriesdss_file-pathname-times-values" title="Permanent link">&para;</a></h4>
+<p>Write a single time series to DSS.</p>
+<p><strong>Parameters:</strong>
+- <code>dss_file</code> (str|Path): Path to DSS file
+- <code>pathname</code> (str): Full DSS pathname
+- <code>times</code> (list|DatetimeIndex|ndarray): Datetime values
+- <code>values</code> (list|ndarray): Numeric values
+- <code>units</code> (str): Units, default <code>CFS</code>
+- <code>data_type</code> (str): DSS data type, default <code>INST-VAL</code></p>
+<h4 id="write_grid_timeseriesdss_file-pathname-data-times-grid_info">write_grid_timeseries(dss_file, pathname, data, times, grid_info)<a class="headerlink" href="#write_grid_timeseriesdss_file-pathname-data-times-grid_info" title="Permanent link">&para;</a></h4>
+<p>Write a time-varying spatial grid series to DSS.</p>
+<p><strong>Parameters:</strong>
+- <code>dss_file</code> (str|Path): Path to DSS file
+- <code>pathname</code> (str): DSS grid pathname template; A/B/C/F are preserved and D/E
+  are replaced per timestep
+- <code>data</code> (ndarray): Shape <code>(n_times, n_rows, n_cols)</code>
+- <code>times</code> (list|DatetimeIndex|ndarray): <code>n_times + 1</code> interval boundaries or
+  <code>n_times</code> interval end times
+- <code>grid_info</code> (dict): Grid metadata such as <code>cellsize</code>, <code>origin</code>, <code>crs</code>,
+  <code>units</code>, and <code>data_type</code></p>
+<p><strong>Returns:</strong> List of DSS pathnames written.</p>
+<p>Common SHG precipitation metadata:</p>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">grid_info</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="s2">&quot;cellsize&quot;</span><span class="p">:</span> <span class="mi">2000</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="s2">&quot;origin&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1096000</span><span class="p">,</span> <span class="mi">1516000</span><span class="p">),</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="s2">&quot;crs&quot;</span><span class="p">:</span> <span class="s2">&quot;SHG&quot;</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="s2">&quot;units&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="s2">&quot;data_type&quot;</span><span class="p">:</span> <span class="s2">&quot;PER-CUM&quot;</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">}</span>
+</span></code></pre></div>
 <h4 id="extract_boundary_timeseriesboundaries_df-ras_object">extract_boundary_timeseries(boundaries_df, ras_object)<a class="headerlink" href="#extract_boundary_timeseriesboundaries_df-ras_object" title="Permanent link">&para;</a></h4>
 <p>Extract all DSS boundary conditions from a project.</p>
 <p><strong>Parameters:</strong>
@@ -3160,22 +3257,98 @@
 - <code>dss_file</code> (str|Path): Path to DSS file</p>
 <p><strong>Returns:</strong> Dict with version, num_records, pathnames, file_size</p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Get catalog of DSS contents</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">catalog</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">get_catalog</span><span class="p">(</span><span class="s2">&quot;/path/to/file.dss&quot;</span><span class="p">)</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">catalog</span><span class="p">)</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Read time series</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">pathname</span> <span class="o">=</span> <span class="s2">&quot;/BASIN/GAGE1/FLOW/01JAN2020/1HOUR/OBS/&quot;</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">df</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">read_timeseries</span><span class="p">(</span><span class="s2">&quot;/path/to/file.dss&quot;</span><span class="p">,</span> <span class="n">pathname</span><span class="p">)</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="nb">print</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># Extract all boundary conditions from project</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="s2">&quot;/path/to/project&quot;</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">)</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="n">bc_data</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">extract_boundary_timeseries</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">,</span> <span class="n">ras</span><span class="p">)</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.dss</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasDss</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># Get catalog of DSS contents</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">catalog</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">get_catalog</span><span class="p">(</span><span class="s2">&quot;/path/to/file.dss&quot;</span><span class="p">)</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">catalog</span><span class="p">)</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Read time series</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">pathname</span> <span class="o">=</span> <span class="s2">&quot;/BASIN/GAGE1/FLOW/01JAN2020/1HOUR/OBS/&quot;</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">df</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">read_timeseries</span><span class="p">(</span><span class="s2">&quot;/path/to/file.dss&quot;</span><span class="p">,</span> <span class="n">pathname</span><span class="p">)</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="nb">print</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Write a small SHG gridded precipitation DSS</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">5</span> <span class="o">*</span> <span class="mi">10</span> <span class="o">*</span> <span class="mi">10</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;float32&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="n">times</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">date_range</span><span class="p">(</span><span class="s2">&quot;2020-01-01 01:00&quot;</span><span class="p">,</span> <span class="n">periods</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">freq</span><span class="o">=</span><span class="s2">&quot;h&quot;</span><span class="p">)</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="n">written</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">write_grid_timeseries</span><span class="p">(</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="s2">&quot;/path/to/precip.dss&quot;</span><span class="p">,</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>    <span class="s2">&quot;/SHG/WATERSHED/PRECIP/01JAN2020:0000/01JAN2020:0100/SYNTHETIC/&quot;</span><span class="p">,</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    <span class="n">data</span><span class="p">,</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    <span class="n">times</span><span class="p">,</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    <span class="p">{</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>        <span class="s2">&quot;cellsize&quot;</span><span class="p">:</span> <span class="mi">2000</span><span class="p">,</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>        <span class="s2">&quot;origin&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1096000</span><span class="p">,</span> <span class="mi">1516000</span><span class="p">),</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>        <span class="s2">&quot;crs&quot;</span><span class="p">:</span> <span class="s2">&quot;SHG&quot;</span><span class="p">,</span>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>        <span class="s2">&quot;units&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">,</span>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>        <span class="s2">&quot;data_type&quot;</span><span class="p">:</span> <span class="s2">&quot;PER-CUM&quot;</span><span class="p">,</span>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>    <span class="p">},</span>
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="p">)</span>
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="nb">print</span><span class="p">(</span><span class="n">written</span><span class="p">)</span>
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="c1"># Extract all boundary conditions from project</span>
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander</span><span class="w"> </span><span class="kn">import</span> <span class="n">init_ras_project</span><span class="p">,</span> <span class="n">ras</span>
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="n">init_ras_project</span><span class="p">(</span><span class="s2">&quot;/path/to/project&quot;</span><span class="p">,</span> <span class="s2">&quot;6.5&quot;</span><span class="p">)</span>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="n">bc_data</span> <span class="o">=</span> <span class="n">RasDss</span><span class="o">.</span><span class="n">extract_boundary_timeseries</span><span class="p">(</span><span class="n">ras</span><span class="o">.</span><span class="n">boundaries_df</span><span class="p">,</span> <span class="n">ras</span><span class="p">)</span>
 </span></code></pre></div>
+<h2 id="grid-java-api-mapping">Grid Java API Mapping<a class="headerlink" href="#grid-java-api-mapping" title="Permanent link">&para;</a></h2>
+<p><code>write_grid_timeseries()</code> uses the same lazy pyjnius/HEC Monolith setup as the
+time-series methods. The Python inputs map to Java objects as follows:</p>
+<table>
+<thead>
+<tr>
+<th>Python input</th>
+<th>HEC Monolith class/member</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dss_file</code></td>
+<td><code>hec.heclib.grid.GriddedData.setDSSFileName()</code></td>
+</tr>
+<tr>
+<td>A/B/C/F parts of <code>pathname</code></td>
+<td><code>GriddedData.setGriddedPathnameParts()</code></td>
+</tr>
+<tr>
+<td>Generated D/E timestep windows</td>
+<td><code>GridInfo.setGridTimes()</code> and <code>GriddedData.setGriddedTimeWindow()</code></td>
+</tr>
+<tr>
+<td><code>data[i]</code> flattened row-major</td>
+<td><code>hec.heclib.grid.GridData(float[], GridInfo)</code></td>
+</tr>
+<tr>
+<td><code>grid_info["crs"] == "SHG"</code></td>
+<td><code>hec.heclib.grid.AlbersInfo</code> with NAD83 SHG parameters</td>
+</tr>
+<tr>
+<td>Other WKT CRS strings</td>
+<td><code>hec.heclib.grid.SpecifiedGridInfo.setSpatialReference()</code></td>
+</tr>
+<tr>
+<td><code>cellsize</code>, <code>origin</code>, cell counts</td>
+<td><code>GridInfo.setCellInfo()</code></td>
+</tr>
+<tr>
+<td><code>units</code>, <code>data_type</code></td>
+<td><code>GridInfo.setParameterInfo()</code></td>
+</tr>
+<tr>
+<td>compression settings</td>
+<td><code>GridInfo.setCompressionInfo()</code></td>
+</tr>
+</tbody>
+</table>
+<p>The bundled HEC Monolith exposes <code>hec.io.GridContainer</code>, but the ras-commander
+Monolith cache does not include a <code>SpatialGridBean</code> class. The equivalent grid
+payload is <code>GridData</code> plus a <code>GridInfo</code> subclass (<code>AlbersInfo</code>,
+<code>SpecifiedGridInfo</code>, or <code>HrapInfo</code>). This writer stores records through
+<code>GriddedData.storeGriddedData()</code> because that is the stable grid write path from
+pyjnius for the Monolith version used by ras-commander.</p>
 <h2 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>pip install pyjnius</code></li>
@@ -3204,7 +3377,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="December 5, 2025 02:57:55 UTC">December 5, 2025</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 31, 2026 03:44:48 UTC">May 31, 2026</span>
   </span>
 
     
