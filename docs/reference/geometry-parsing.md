@@ -248,6 +248,9 @@ Culvert Bottom n={bottom_n}
 | 8 | High Profile Arch |
 | 9 | Con Span |
 
+For validation-grade chart/scale combinations, barrel/group limits, GUI field
+labels, and HDF storage mapping, see [Culvert Taxonomy](culvert-taxonomy.md).
+
 `GeomCulvert.get_culverts()` returns both record types with a common schema. Single-barrel `Culvert=` records populate `UpstreamStation`, `DownstreamStation`, and `BarrelStations=[(upstream, downstream)]`. `Multiple Barrel Culv=` records populate `NumBarrels`, `BarrelStations`, `UpstreamStations`, and `DownstreamStations`; `UpstreamStation` and `DownstreamStation` are only set when there is exactly one barrel pair.
 
 Use `GeomCulvert.set_culverts()` to replace the culvert records at an existing bridge/culvert structure. Use `GeomCulvert.set_culvert()` to update one record by `culvert_index` or `culvert_name`, or append a new record when no selector is supplied. Both methods validate shape codes/names, required fields, and multi-barrel station-pair counts before modifying the file. A `.bak` backup is created before writing.

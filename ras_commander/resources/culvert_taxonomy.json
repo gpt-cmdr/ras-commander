@@ -1,0 +1,1366 @@
+{
+  "schema_version": "1.0.0",
+  "title": "HEC-RAS Culvert Shape and Parameter Taxonomy",
+  "scope": "Validation reference for ras-commander culvert parsing/authoring APIs. Covers HEC-RAS 7.0 GUI/RASMapper culvert shapes, chart/scale combinations, geometry-file records, barrel/group constraints, and HDF storage names.",
+  "evidence": {
+    "rasdecomp_repository": "https://github.com/AjithSun/RASDecomp.git",
+    "rasdecomp_commit": "3d2daef",
+    "rasdecomp_outputs": [
+      "working/rasdecomp_70/rasmapper_public_70.json",
+      "working/rasdecomp_70/rasmapper_public_70.md",
+      "working/rasdecomp_70/ras70_strings.json",
+      "working/rasdecomp_70/culvert_reflection_70.json"
+    ],
+    "hec_ras": {
+      "version": "7.0",
+      "ras_exe": "C:/Program Files (x86)/HEC/HEC-RAS/7.0/Ras.exe",
+      "rasmapperlib": "C:/Program Files (x86)/HEC/HEC-RAS/7.0/RasMapperLib.dll",
+      "rasmapperlib_assembly_version": "2.0.0.0"
+    },
+    "official_documentation": [
+      "https://www.hec.usace.army.mil/confluence/rasdocs/rasum/6.6/entering-and-editing-geometric-data/bridges-and-culverts/entering-and-editing-culvert-data",
+      "https://www.hec.usace.army.mil/confluence/rasdocs/ras1dtechref/latest/modeling-culverts/general-culvert-modeling-guidelines/types-of-culverts",
+      "https://www.hec.usace.army.mil/confluence/rasdocs/ras1dtechref/latest/modeling-culverts/culvert-data-and-coefficients/fhwa-chart-and-scale-numbers",
+      "https://www.hec.usace.army.mil/confluence/rasdocs/ras1dtechref/6.3/modeling-culverts/culvert-data-and-coefficients/culvert-shape-and-size"
+    ],
+    "known_reflection_discrepancies": [
+      {
+        "item": "ConSpan chart 60/61 third scale",
+        "rasmapperlib_70_reflection": "AvailableScaleNumbers resolves the third ConspanArch scale to NinetyDegreeHeadwall with ID 1.",
+        "official_hec_ras_fhwa_table": "Scale 3 is 90 degree wingwall angle for chart 60 and chart 61.",
+        "taxonomy_resolution": "Use the official HEC-RAS GUI/FHWA chart table value for validation, while retaining this note for RASMapperLib 7.0 evidence traceability."
+      }
+    ]
+  },
+  "global_constraints": {
+    "shape_codes": {
+      "minimum": 1,
+      "maximum": 9,
+      "source": "RASMapperLib.CulvertGroupLayer+CulvertShape enum"
+    },
+    "culvert_groups_per_crossing": {
+      "minimum": 1,
+      "maximum": 10,
+      "source": "HEC-RAS User Manual Culvert Group"
+    },
+    "identical_barrels_per_group": {
+      "minimum": 1,
+      "maximum": 25,
+      "source": "HEC-RAS User Manual # Barrels"
+    },
+    "barrel_centerline_station_pairs": "Each barrel requires upstream and downstream centerline stations. Multiple Barrel Culv continuation lines store station pairs in 8-character fixed-width fields.",
+    "group_identity_rule": "Create a separate culvert group when shape, size, slope, roughness, chart number, scale number, invert elevations, or loss coefficients differ.",
+    "user_defined_shape_code": "No user-defined shape code was found in HEC-RAS 7.0 RASMapperLib or the RASDecomp GUI string scan. Nonstandard arch/ConSpan dimensions are handled by interpolation/scaling within the nine supported shape codes.",
+    "numeric_ranges": {
+      "Span": "positive length; circular and semi-circular GUI workflows use diameter semantics",
+      "Rise": "positive length for rise/span shapes; blank for circular GUI workflows",
+      "Length": "positive length along culvert barrel centerline",
+      "ManningsN": "positive roughness coefficient",
+      "EntranceLoss": "nonnegative loss coefficient; used in outlet-control computations",
+      "ExitLoss": "nonnegative loss coefficient; used in outlet-control computations",
+      "UpstreamInvert": "project elevation units",
+      "DownstreamInvert": "project elevation units",
+      "BottomN": "optional positive roughness coefficient for bottom zone",
+      "BottomDepth": "optional nonnegative depth up to which BottomN applies",
+      "DepthBlocked": "optional nonnegative depth blocked from the culvert bottom through the barrel"
+    }
+  },
+  "geometry_file_records": {
+    "single_barrel": {
+      "prefix": "Culvert=",
+      "ordered_fields": [
+        {
+          "index": 0,
+          "name": "Shape",
+          "gui_label": "Shape",
+          "validation": "shapes[].code"
+        },
+        {
+          "index": 1,
+          "name": "Span",
+          "gui_label": "Span / Diameter",
+          "validation": "positive length"
+        },
+        {
+          "index": 2,
+          "name": "Rise",
+          "gui_label": "Rise",
+          "validation": "positive length unless blank for circular GUI records"
+        },
+        {
+          "index": 3,
+          "name": "Length",
+          "gui_label": "Culvert Length",
+          "validation": "positive length"
+        },
+        {
+          "index": 4,
+          "name": "ManningsN",
+          "gui_label": "Manning's n for Top",
+          "validation": "positive roughness coefficient"
+        },
+        {
+          "index": 5,
+          "name": "EntranceLoss",
+          "gui_label": "Entrance Loss Coefficient",
+          "validation": "nonnegative coefficient"
+        },
+        {
+          "index": 6,
+          "name": "ExitLoss",
+          "gui_label": "Exit Loss Coefficient",
+          "validation": "nonnegative coefficient"
+        },
+        {
+          "index": 7,
+          "name": "InletType",
+          "gui_label": "Chart #",
+          "validation": "chart_id in selected shape allowed_charts",
+          "api_note": "Legacy ras-commander field name; HEC-RAS GUI nomenclature is Chart #."
+        },
+        {
+          "index": 8,
+          "name": "OutletType",
+          "gui_label": "Scale#",
+          "validation": "scale_id allowed for selected chart",
+          "api_note": "Legacy ras-commander field name; HEC-RAS GUI nomenclature is Scale#."
+        },
+        {
+          "index": 9,
+          "name": "UpstreamInvert",
+          "gui_label": "Upstream Invert Elevation",
+          "validation": "elevation"
+        },
+        {
+          "index": 10,
+          "name": "UpstreamStation",
+          "gui_label": "Barrel Centerline Stations - upstream",
+          "validation": "station value"
+        },
+        {
+          "index": 11,
+          "name": "DownstreamInvert",
+          "gui_label": "Downstream Invert Elevation",
+          "validation": "elevation"
+        },
+        {
+          "index": 12,
+          "name": "DownstreamStation",
+          "gui_label": "Barrel Centerline Stations - downstream",
+          "validation": "station value"
+        },
+        {
+          "index": 13,
+          "name": "CulvertName",
+          "gui_label": "Culvert Group / Rename",
+          "validation": "string; HEC-RAS User Manual says GUI rename accepts up to 12 characters"
+        },
+        {
+          "index": 14,
+          "name": "CulvertCode",
+          "gui_label": "Solution Criteria / culvert code",
+          "validation": "integer; preserve when round-tripping unless semantics are explicitly updated"
+        },
+        {
+          "index": 15,
+          "name": "ChartNumber",
+          "gui_label": "Auxiliary culvert integer",
+          "validation": "integer; current ras-commander parser preserves this field as ChartNumber"
+        }
+      ],
+      "detail_records": [
+        "Culvert Bottom n=",
+        "Culvert Bottom Depth=",
+        "BC Culvert Barrel="
+      ]
+    },
+    "multiple_barrel": {
+      "prefix": "Multiple Barrel Culv=",
+      "ordered_fields": [
+        {
+          "index": 0,
+          "name": "Shape",
+          "gui_label": "Shape",
+          "validation": "shapes[].code"
+        },
+        {
+          "index": 1,
+          "name": "Span",
+          "gui_label": "Span / Diameter",
+          "validation": "positive length"
+        },
+        {
+          "index": 2,
+          "name": "Rise",
+          "gui_label": "Rise",
+          "validation": "positive length unless blank for circular GUI records"
+        },
+        {
+          "index": 3,
+          "name": "Length",
+          "gui_label": "Culvert Length",
+          "validation": "positive length"
+        },
+        {
+          "index": 4,
+          "name": "ManningsN",
+          "gui_label": "Manning's n for Top",
+          "validation": "positive roughness coefficient"
+        },
+        {
+          "index": 5,
+          "name": "EntranceLoss",
+          "gui_label": "Entrance Loss Coefficient",
+          "validation": "nonnegative coefficient"
+        },
+        {
+          "index": 6,
+          "name": "ExitLoss",
+          "gui_label": "Exit Loss Coefficient",
+          "validation": "nonnegative coefficient"
+        },
+        {
+          "index": 7,
+          "name": "InletType",
+          "gui_label": "Chart #",
+          "validation": "chart_id in selected shape allowed_charts",
+          "api_note": "Legacy ras-commander field name."
+        },
+        {
+          "index": 8,
+          "name": "OutletType",
+          "gui_label": "Scale#",
+          "validation": "scale_id allowed for selected chart",
+          "api_note": "Legacy ras-commander field name."
+        },
+        {
+          "index": 9,
+          "name": "UpstreamInvert",
+          "gui_label": "Upstream Invert Elevation",
+          "validation": "elevation"
+        },
+        {
+          "index": 10,
+          "name": "DownstreamInvert",
+          "gui_label": "Downstream Invert Elevation",
+          "validation": "elevation"
+        },
+        {
+          "index": 11,
+          "name": "NumBarrels",
+          "gui_label": "# Barrels",
+          "validation": "1..25 and equals BarrelStations pair count"
+        },
+        {
+          "index": 12,
+          "name": "CulvertName",
+          "gui_label": "Culvert Group / Rename",
+          "validation": "string"
+        },
+        {
+          "index": 13,
+          "name": "CulvertCode",
+          "gui_label": "Solution Criteria / culvert code",
+          "validation": "integer; preserve when round-tripping"
+        },
+        {
+          "index": 14,
+          "name": "ChartNumber",
+          "gui_label": "Auxiliary culvert integer",
+          "validation": "integer; current ras-commander parser preserves this field as ChartNumber"
+        }
+      ],
+      "continuation": {
+        "name": "BarrelStations",
+        "format": "8-character fixed-width upstream/downstream station pairs",
+        "pair_count": "NumBarrels"
+      },
+      "detail_records": [
+        "Culvert Bottom n=",
+        "Culvert Bottom Depth=",
+        "BC Culvert Barrel="
+      ]
+    }
+  },
+  "gui_nomenclature": {
+    "culvert_editor_fields": [
+      "Culvert Group",
+      "Solution Criteria",
+      "Rename",
+      "Shape",
+      "Span",
+      "Rise",
+      "Chart #",
+      "Scale#",
+      "Distance to Upstream XS",
+      "Culvert Length",
+      "Entrance Loss Coefficient",
+      "Exit Loss Coefficient",
+      "Manning's n for Top",
+      "Manning's n for Bottom",
+      "Depth to use Bottom n",
+      "Depth Blocked",
+      "Upstream Invert Elevation",
+      "Downstream Invert Elevation",
+      "# Barrels",
+      "Barrel Centerline Stations",
+      "Barrel GIS Data",
+      "Individual Barrel Centerlines"
+    ],
+    "rasmapper_culvert_group_columns": [
+      {
+        "field": "StructureIdx",
+        "value": "Structure ID"
+      },
+      {
+        "field": "StructureGroupName",
+        "value": "Structure Group Name"
+      },
+      {
+        "field": "Name",
+        "value": "Group Name"
+      },
+      {
+        "field": "ShapeID",
+        "value": "Shape ID"
+      },
+      {
+        "field": "ShapeName",
+        "value": "Shape Name"
+      },
+      {
+        "field": "ChartID",
+        "value": "Chart ID"
+      },
+      {
+        "field": "ChartDesc",
+        "value": "Chart Name"
+      },
+      {
+        "field": "ScaleID",
+        "value": "Scale ID"
+      },
+      {
+        "field": "ScaleDesc",
+        "value": "Scale Name"
+      },
+      {
+        "field": "Rise",
+        "value": "Rise"
+      },
+      {
+        "field": "Span",
+        "value": "Span"
+      },
+      {
+        "field": "Length",
+        "value": "Barrel Length"
+      },
+      {
+        "field": "USDistance",
+        "value": "Upstream Distance"
+      },
+      {
+        "field": "TopMann",
+        "value": "Top Manning's n"
+      },
+      {
+        "field": "BotMann",
+        "value": "Bottom Manning's n"
+      },
+      {
+        "field": "DepthBotMann",
+        "value": "Bottom Mann. Depth"
+      },
+      {
+        "field": "DepthBlocked",
+        "value": "Depth Blocked"
+      },
+      {
+        "field": "EntranceLossCoef",
+        "value": "Entrance Loss Coef."
+      },
+      {
+        "field": "ExitLossCoef",
+        "value": "Exit Loss Coef."
+      },
+      {
+        "field": "InvertUS",
+        "value": "Invert US"
+      },
+      {
+        "field": "InvertDS",
+        "value": "Invert DS"
+      },
+      {
+        "field": "UseMomentum",
+        "value": "Use Momentum"
+      }
+    ],
+    "rasmapper_culvert_barrel_columns": [
+      {
+        "field": "GroupId",
+        "value": "Group ID"
+      },
+      {
+        "field": "GroupName",
+        "value": "Group Name"
+      },
+      {
+        "field": "Key",
+        "value": "Key"
+      },
+      {
+        "field": "BarrelName",
+        "value": "Barrel Name"
+      },
+      {
+        "field": "USStation",
+        "value": "US Station"
+      },
+      {
+        "field": "DSStation",
+        "value": "DS Station"
+      },
+      {
+        "field": "IsDefaultCenterline",
+        "value": "Default Centerline"
+      }
+    ]
+  },
+  "hdf_mapping": {
+    "geometry_hdf": {
+      "culvert_group_layer_name": "Culvert Groups",
+      "culvert_group_dataset": "Geometry/Structures/Culvert Groups",
+      "culvert_barrel_layer_name": "Culvert Barrels",
+      "culvert_barrel_dataset": "Geometry/Structures/Culvert Groups/Barrels",
+      "base_structure_datasets": [
+        "Geometry/Structures/Attributes",
+        "Geometry/Structures/Centerline Info",
+        "Geometry/Structures/Centerline Points",
+        "Geometry/Structures/Table Info",
+        "Geometry/Structures/Profile Data"
+      ],
+      "note": "HEC-RAS 7.0 RASMapper stores culvert group metadata separately from individual barrel centerlines. Shape, chart, scale, roughness, invert, and loss-coefficient fields are group-level columns; stationing and default centerline state are barrel-level columns."
+    },
+    "plan_results_hdf": {
+      "shape_specific_storage": false,
+      "note": "Plan result datasets are keyed by structure and culvert group names, not by shape code. Shape code remains geometry metadata used to interpret the group.",
+      "rasmapper_methods": [
+        "StructureLayer.GetCulvertVariablesDataset(fid)",
+        "StructureLayer.GetCulvertVariablesDatasetSteady(fid)",
+        "StructureLayer.GetCulvertGroupDataset(fid, culvGroupFid)",
+        "StructureLayer.GetCulvertGroupDatasetSteady(fid, culvGroupFid)",
+        "CulvertGroupLayer.ReadResultVariables(fid)",
+        "CulvertGroupLayer.ReadResultVariables_DSSHydrograph(fid)",
+        "CulvertGroupLayer.ReadResultVariables_DSSProfile(fid)"
+      ],
+      "name_builder_contexts": [
+        {
+          "context": "1D bridge/culvert crossing",
+          "rasmapper_name_class": "RasMapperLib.Names.Culverts",
+          "methods": [
+            "GroupName(lsName)",
+            "CulvertVariables(lsName)"
+          ]
+        },
+        {
+          "context": "inline structure",
+          "rasmapper_name_class": "RasMapperLib.Names.InlineStructures",
+          "methods": [
+            "CulvertGroup(lsName, cgName)"
+          ]
+        },
+        {
+          "context": "lateral structure",
+          "rasmapper_name_class": "RasMapperLib.Names.LateralStructures",
+          "methods": [
+            "CulvertGroup(lsName, cgName)"
+          ]
+        },
+        {
+          "context": "SA/2D Area Connection",
+          "rasmapper_name_class": "RasMapperLib.Names.SA2DConnections",
+          "methods": [
+            "CulvertGroup(connName, cgName)",
+            "CulvertGroup(meshName, connName, cgName)"
+          ]
+        }
+      ]
+    }
+  },
+  "shapes": [
+    {
+      "code": 1,
+      "ras_commander_shape_name": "Circular",
+      "hec_ras_gui_label": "Circular",
+      "rasmapper_enum": "Circle",
+      "rasmapper_static_field": "Circle",
+      "dimension_model": {
+        "gui_mode": "diameter",
+        "required_geometry_fields": [
+          "Span"
+        ],
+        "optional_geometry_fields": [
+          "Rise"
+        ]
+      },
+      "notes": "Circular pipe. HEC-RAS GUI treats the inside diameter as the controlling dimension; ras-commander stores that value in Span and leaves Rise blank for authored circular records.",
+      "allowed_charts": [
+        {
+          "chart_id": 1,
+          "hec_ras_gui_label": "Concrete pipe culvert",
+          "rasmapper_static_field": "ConcretePipeCulvert",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Square edge with headwall",
+              "rasmapper_static_field": "SquareEdgeWithHeadwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Groove end entrance with headwall",
+              "rasmapper_static_field": "GrooveEndEntranceWHW"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Groove end entrance; pipe projecting from fill",
+              "rasmapper_static_field": "GrooveEndEntrancePPFF"
+            }
+          ]
+        },
+        {
+          "chart_id": 2,
+          "hec_ras_gui_label": "Corrugated metal pipe culvert",
+          "rasmapper_static_field": "CorrMetalPipeCulvert",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Headwall",
+              "rasmapper_static_field": "Headwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Mitered to conform to slope",
+              "rasmapper_static_field": "MiteredToConformToSlope"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Pipe projecting from fill",
+              "rasmapper_static_field": "PipeProjectingFromFill"
+            }
+          ]
+        },
+        {
+          "chart_id": 3,
+          "hec_ras_gui_label": "Concrete pipe; Beveled ring entrance",
+          "rasmapper_static_field": "ConcPipeBevRingEntrance",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "A Small bevel; b/D=0.042;a/D=0.063;c/D=0.042;d/D=0.083",
+              "rasmapper_static_field": "ASmallBevel"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "B Large bevel' b/D=0.083; a/D=0.125;c/D=0.042;d/D=0.125",
+              "rasmapper_static_field": "BLargeBevel"
+            }
+          ]
+        },
+        {
+          "chart_id": 55,
+          "hec_ras_gui_label": "Circular culvert",
+          "rasmapper_static_field": "CircularCulvert",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Smooth tapered inlet throat",
+              "rasmapper_static_field": "SmoothTaperedInletThroat"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Rough tapered inlet throat",
+              "rasmapper_static_field": "RoughTaperedInletThroat"
+            }
+          ]
+        },
+        {
+          "chart_id": 56,
+          "hec_ras_gui_label": "Elliptical inlet face",
+          "rasmapper_static_field": "EllipticalInletFace",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Tapered inlet; Beveled edges",
+              "rasmapper_static_field": "TaperedInletBeveledEdges"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Tapered inlet; Square edges",
+              "rasmapper_static_field": "TaperedInletSquareEdges"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Tapered inlet; Thin edge projecting",
+              "rasmapper_static_field": "TaperedInletThinEdgeProjecting"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": 2,
+      "ras_commander_shape_name": "Box",
+      "hec_ras_gui_label": "Box",
+      "rasmapper_enum": "Box",
+      "rasmapper_static_field": "Box",
+      "dimension_model": {
+        "gui_mode": "rise_and_span",
+        "required_geometry_fields": [
+          "Span",
+          "Rise"
+        ],
+        "optional_geometry_fields": []
+      },
+      "notes": "Rectangular/box culvert. HEC-RAS ignores internal chamfers for hydraulic area unless the user reduces Span.",
+      "allowed_charts": [
+        {
+          "chart_id": 8,
+          "hec_ras_gui_label": "Flared wingwalls",
+          "rasmapper_static_field": "FlaredWingwalls",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Wingwall flared 30 to 75 deg.",
+              "rasmapper_static_field": "WingwallFlared30To75Deg"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Wingwall flared 90 or 15 deg.",
+              "rasmapper_static_field": "WingwallFlared90Or15Deg"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Wingwall flared 0 deg. (sides extended straight)",
+              "rasmapper_static_field": "WingwallFlared0Deg"
+            }
+          ]
+        },
+        {
+          "chart_id": 9,
+          "hec_ras_gui_label": "Flared wingwalls and inlet top edge bevel",
+          "rasmapper_static_field": "FlaredWingwallsAndITEB",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "45 deg Wingwall flare; inlet top edge bevel=0.043D",
+              "rasmapper_static_field": "FortyfiveDegWingwallFlare"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Wingwall flared 18 to 33.7 deg.; inlet top edge bevel=0.083D",
+              "rasmapper_static_field": "WingwallFlared18To33Deg"
+            }
+          ]
+        },
+        {
+          "chart_id": 10,
+          "hec_ras_gui_label": "90 Degree headwall; Chamfered or beveled inlet",
+          "rasmapper_static_field": "NinetyDegreeHeadwall",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Inlet edges chamfered 3/4 inch",
+              "rasmapper_static_field": "InletEdgesChamfered"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Inlet edges beveled 1/2 inch at 45 degrees (1:1)",
+              "rasmapper_static_field": "InletEdgesBeveledHalfInch"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Inlet edges beveled 1 in/ft at 33.7 degrees (1:1.5)",
+              "rasmapper_static_field": "InletEdgesBeveled1Inch"
+            }
+          ]
+        },
+        {
+          "chart_id": 11,
+          "hec_ras_gui_label": "Skewed Headwall; Chamfered or beveled nlet",
+          "rasmapper_static_field": "SkewedHeadWall",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Headwall skewed 45 deg.; inlet edges chamfered 3/4 inch",
+              "rasmapper_static_field": "HeadwallSkewed45DegInletChamfered"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Headwall skewed 30 deg.; inlet edges chamfered 3/4 inch",
+              "rasmapper_static_field": "HeadwallSkewed30Deg"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Headwall skewed 15 deg.; inlet edges chamfered 3/4 inch",
+              "rasmapper_static_field": "HeadwallSkewed15Deg"
+            },
+            {
+              "scale_id": 4,
+              "hec_ras_gui_label": "Headwall skewed 10 to 45 deg.; inlet edges beveled",
+              "rasmapper_static_field": "HeawallSkewed10To45Deg"
+            }
+          ]
+        },
+        {
+          "chart_id": 12,
+          "hec_ras_gui_label": "Non-offset flared wingwalls; 3/4-inch chamfered inlet",
+          "rasmapper_static_field": "NonOffsetFlaredWingwalls",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Wingwalls flared 45 deg. (1:1); inlet not skewed",
+              "rasmapper_static_field": "WingwallsFlared45Deg"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Wingwalls flared 18.4 deg. (3:1); inlet not skewed",
+              "rasmapper_static_field": "WingwallsFlared18Deg3To1"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Wingwalls flared 18.4 deg. (1:1); inlet skewed 30 degrees",
+              "rasmapper_static_field": "WingwallsFlared18Deg1To1"
+            }
+          ]
+        },
+        {
+          "chart_id": 13,
+          "hec_ras_gui_label": "Offset flared wingalls; Beveled edge at top of inlet",
+          "rasmapper_static_field": "OffsetFlaredWingwalls",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Wingwalls flared 45 deg. (1:1); inlet top edge bevel=0.042D",
+              "rasmapper_static_field": "WingwallsFlared45TopEdgeBezel"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Wingwalls flared 33.7 deg. (1.5:1); inlet top edge bevel=0.083D",
+              "rasmapper_static_field": "WingwallsFlared33Deg"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Wingwalls flared 18.4 deg. (3:1); inlet top edge bevel=0.083D",
+              "rasmapper_static_field": "WingwallsFlared18DegInletTopEdgeBez"
+            }
+          ]
+        },
+        {
+          "chart_id": 16,
+          "hec_ras_gui_label": "Corrugated metal box culvert",
+          "rasmapper_static_field": "CorrugatedMetalBoxCulvert16",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "90 degree headwall",
+              "rasmapper_static_field": "NinetyDegreeHeadwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Thick wall projecting",
+              "rasmapper_static_field": "ThickWallProjecting"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Thin wall projecting",
+              "rasmapper_static_field": "ThinWallProjecting3"
+            }
+          ]
+        },
+        {
+          "chart_id": 17,
+          "hec_ras_gui_label": "Corrugated metal box culvert",
+          "rasmapper_static_field": "CorrugatedMetalBoxCulvert17",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "90 degree headwall",
+              "rasmapper_static_field": "NinetyDegreeHeadwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Thick wall projecting",
+              "rasmapper_static_field": "ThickWallProjecting"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Thin wall projecting",
+              "rasmapper_static_field": "ThinWallProjecting3"
+            }
+          ]
+        },
+        {
+          "chart_id": 18,
+          "hec_ras_gui_label": "Corrugated metal box culvert",
+          "rasmapper_static_field": "CorrugatedMetalBoxCulvert18",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "90 degree headwall",
+              "rasmapper_static_field": "NinetyDegreeHeadwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Thick wall projecting",
+              "rasmapper_static_field": "ThickWallProjecting"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Thin wall projecting",
+              "rasmapper_static_field": "ThinWallProjecting3"
+            }
+          ]
+        },
+        {
+          "chart_id": 19,
+          "hec_ras_gui_label": "Corrugated metal box culvert",
+          "rasmapper_static_field": "CorrugatedMetalBoxCulvert19",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "90 degree headwall",
+              "rasmapper_static_field": "NinetyDegreeHeadwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Thick wall projecting",
+              "rasmapper_static_field": "ThickWallProjecting"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Thin wall projecting",
+              "rasmapper_static_field": "ThinWallProjecting3"
+            }
+          ]
+        },
+        {
+          "chart_id": 57,
+          "hec_ras_gui_label": "Rectangular",
+          "rasmapper_static_field": "Rectangular",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Tapered inlet throat",
+              "rasmapper_static_field": "TaperedInletThroat"
+            }
+          ]
+        },
+        {
+          "chart_id": 58,
+          "hec_ras_gui_label": "Rectangular concerte",
+          "rasmapper_static_field": "RectangularConcrete58",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Side tapered; Less favorable edges",
+              "rasmapper_static_field": "SideTaperedLessFavorable"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Side tapered; More favorable edges",
+              "rasmapper_static_field": "SideTaperedMoreFavorable"
+            }
+          ]
+        },
+        {
+          "chart_id": 59,
+          "hec_ras_gui_label": "Rectangular concrete",
+          "rasmapper_static_field": "RectangularConcrete59",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Slope tapered; Less favorable edges",
+              "rasmapper_static_field": "SlopeTaperedLessFavorable"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Slope tapered; More favorable edges",
+              "rasmapper_static_field": "SlopeTaperedMoreFavorable"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": 3,
+      "ras_commander_shape_name": "Pipe Arch",
+      "hec_ras_gui_label": "Pipe Arch",
+      "rasmapper_enum": "PipeArch",
+      "rasmapper_static_field": "PipeArch",
+      "dimension_model": {
+        "gui_mode": "rise_and_span",
+        "required_geometry_fields": [
+          "Span",
+          "Rise"
+        ],
+        "optional_geometry_fields": []
+      },
+      "notes": "Pipe arch. Uses predefined FHWA chart families and interpolated hydraulic properties for nonstandard sizes.",
+      "allowed_charts": [
+        {
+          "chart_id": 34,
+          "hec_ras_gui_label": "18 Inch corner radius; Corrugated metal",
+          "rasmapper_static_field": "EighteenInchCornerRadius34",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "90 degree headwall",
+              "rasmapper_static_field": "NinetyDegreeHeadwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Mitered to conform to slope",
+              "rasmapper_static_field": "MiteredToConformToSlope"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Projecting",
+              "rasmapper_static_field": "Projecting3"
+            }
+          ]
+        },
+        {
+          "chart_id": 35,
+          "hec_ras_gui_label": "18 Inch corner radius; Corrugated metal",
+          "rasmapper_static_field": "EighteenInchCornerRadius35",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Projecting",
+              "rasmapper_static_field": "Projecting1"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "No bevels",
+              "rasmapper_static_field": "NoBeveles"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "33.7 degree bevels",
+              "rasmapper_static_field": "ThirtyThreeDegBevels"
+            }
+          ]
+        },
+        {
+          "chart_id": 36,
+          "hec_ras_gui_label": "31 Inch corner radius; Corrugated metal",
+          "rasmapper_static_field": "ThirtyoneInchCornerRadius",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Projecting",
+              "rasmapper_static_field": "Projecting1"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "No bevels",
+              "rasmapper_static_field": "NoBeveles"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "33.7 degree bevels",
+              "rasmapper_static_field": "ThirtyThreeDegBevels"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": 4,
+      "ras_commander_shape_name": "Ellipse",
+      "hec_ras_gui_label": "Ellipse",
+      "rasmapper_enum": "Ellipse",
+      "rasmapper_static_field": "Ellipse",
+      "dimension_model": {
+        "gui_mode": "rise_and_span",
+        "required_geometry_fields": [
+          "Span",
+          "Rise"
+        ],
+        "optional_geometry_fields": []
+      },
+      "notes": "Elliptical culvert. Chart selection distinguishes horizontal and vertical ellipse families.",
+      "allowed_charts": [
+        {
+          "chart_id": 29,
+          "hec_ras_gui_label": "Horizontal ellipse; Concrete",
+          "rasmapper_static_field": "HorizontalEllipseConcrete",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Square edge with headwall",
+              "rasmapper_static_field": "SquareEdgeWithHeadwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Grooved end with headwall",
+              "rasmapper_static_field": "GroovedEndWithHeadwall"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Grooved end projecting",
+              "rasmapper_static_field": "GroovedEndProjecting"
+            }
+          ]
+        },
+        {
+          "chart_id": 30,
+          "hec_ras_gui_label": "Vertical ellipse; Concrete",
+          "rasmapper_static_field": "VerticalEllipseConcrete",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Square edge with headwall",
+              "rasmapper_static_field": "SquareEdgeWithHeadwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Grooved end with headwall",
+              "rasmapper_static_field": "GroovedEndWithHeadwall"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Grooved end projecting",
+              "rasmapper_static_field": "GroovedEndProjecting"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": 5,
+      "ras_commander_shape_name": "Arch",
+      "hec_ras_gui_label": "Arch",
+      "rasmapper_enum": "Arch",
+      "rasmapper_static_field": "Arch",
+      "dimension_model": {
+        "gui_mode": "rise_and_span",
+        "required_geometry_fields": [
+          "Span",
+          "Rise"
+        ],
+        "optional_geometry_fields": []
+      },
+      "notes": "Arch culvert. Uses predefined arch-size families and interpolation for nonstandard sizes.",
+      "allowed_charts": [
+        {
+          "chart_id": 41,
+          "hec_ras_gui_label": "Arch; Corrugated metal",
+          "rasmapper_static_field": "ArchCorrugatedMetal41",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "90 degree headwall",
+              "rasmapper_static_field": "NinetyDegreeHeadwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Mitered to slope",
+              "rasmapper_static_field": "MiteredToSlope2"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Thin wall projecting",
+              "rasmapper_static_field": "ThinWallProjecting3"
+            }
+          ]
+        },
+        {
+          "chart_id": 42,
+          "hec_ras_gui_label": "Arch; Corrugated metal",
+          "rasmapper_static_field": "ArchCorrugatedMetal42",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "90 degree headwall",
+              "rasmapper_static_field": "NinetyDegreeHeadwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Mitered to slope",
+              "rasmapper_static_field": "MiteredToSlope2"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Thin wall projecting",
+              "rasmapper_static_field": "ThinWallProjecting3"
+            }
+          ]
+        },
+        {
+          "chart_id": 43,
+          "hec_ras_gui_label": "Arch; Corrugated metal",
+          "rasmapper_static_field": "ArchCorrugatedMetal43",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "90 degree headwall",
+              "rasmapper_static_field": "NinetyDegreeHeadwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Mitered to slope",
+              "rasmapper_static_field": "MiteredToSlope2"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Thin wall projecting",
+              "rasmapper_static_field": "ThinWallProjecting3"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": 6,
+      "ras_commander_shape_name": "Semi-Circle",
+      "hec_ras_gui_label": "Semi-Circle",
+      "rasmapper_enum": "SemiCircle",
+      "rasmapper_static_field": "SemiCircle",
+      "dimension_model": {
+        "gui_mode": "diameter",
+        "required_geometry_fields": [
+          "Span"
+        ],
+        "optional_geometry_fields": [
+          "Rise"
+        ]
+      },
+      "notes": "Semi-circular culvert. HEC-RAS documentation describes the size by diameter; verify record-level Span/Rise handling before extending authoring beyond read validation.",
+      "allowed_charts": [
+        {
+          "chart_id": 41,
+          "hec_ras_gui_label": "Arch; Corrugated metal",
+          "rasmapper_static_field": "ArchCorrugatedMetal41",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "90 degree headwall",
+              "rasmapper_static_field": "NinetyDegreeHeadwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Mitered to slope",
+              "rasmapper_static_field": "MiteredToSlope2"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Thin wall projecting",
+              "rasmapper_static_field": "ThinWallProjecting3"
+            }
+          ]
+        },
+        {
+          "chart_id": 42,
+          "hec_ras_gui_label": "Arch; Corrugated metal",
+          "rasmapper_static_field": "ArchCorrugatedMetal42",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "90 degree headwall",
+              "rasmapper_static_field": "NinetyDegreeHeadwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Mitered to slope",
+              "rasmapper_static_field": "MiteredToSlope2"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Thin wall projecting",
+              "rasmapper_static_field": "ThinWallProjecting3"
+            }
+          ]
+        },
+        {
+          "chart_id": 43,
+          "hec_ras_gui_label": "Arch; Corrugated metal",
+          "rasmapper_static_field": "ArchCorrugatedMetal43",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "90 degree headwall",
+              "rasmapper_static_field": "NinetyDegreeHeadwall"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Mitered to slope",
+              "rasmapper_static_field": "MiteredToSlope2"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Thin wall projecting",
+              "rasmapper_static_field": "ThinWallProjecting3"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": 7,
+      "ras_commander_shape_name": "Low Profile Arch",
+      "hec_ras_gui_label": "Low Arch",
+      "rasmapper_enum": "LowArch",
+      "rasmapper_static_field": "LowArch",
+      "dimension_model": {
+        "gui_mode": "rise_and_span",
+        "required_geometry_fields": [
+          "Span",
+          "Rise"
+        ],
+        "optional_geometry_fields": []
+      },
+      "notes": "Low-profile arch culvert. RASMapper enum shortens this label to LowArch; current ras-commander name is Low Profile Arch.",
+      "allowed_charts": [
+        {
+          "chart_id": 52,
+          "hec_ras_gui_label": "Low and high corrugated metal arch",
+          "rasmapper_static_field": "LowAndHighCorrugatedMetalArch",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Mitered to slope",
+              "rasmapper_static_field": "MiteredToSlope1"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Thin wall projecting",
+              "rasmapper_static_field": "ThinWallProjecting2"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Square edges; 90 Degree headwall",
+              "rasmapper_static_field": "SquareEdges90DegreesHW"
+            },
+            {
+              "scale_id": 4,
+              "hec_ras_gui_label": "Beveled edges; 90 Degree headwall",
+              "rasmapper_static_field": "BeveledEdges90DegreesHW"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": 8,
+      "ras_commander_shape_name": "High Profile Arch",
+      "hec_ras_gui_label": "High Arch",
+      "rasmapper_enum": "HighArch",
+      "rasmapper_static_field": "HighArch",
+      "dimension_model": {
+        "gui_mode": "rise_and_span",
+        "required_geometry_fields": [
+          "Span",
+          "Rise"
+        ],
+        "optional_geometry_fields": []
+      },
+      "notes": "High-profile arch culvert. RASMapper enum shortens this label to HighArch; current ras-commander name is High Profile Arch.",
+      "allowed_charts": [
+        {
+          "chart_id": 52,
+          "hec_ras_gui_label": "Low and high corrugated metal arch",
+          "rasmapper_static_field": "LowAndHighCorrugatedMetalArch",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "Mitered to slope",
+              "rasmapper_static_field": "MiteredToSlope1"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "Thin wall projecting",
+              "rasmapper_static_field": "ThinWallProjecting2"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "Square edges; 90 Degree headwall",
+              "rasmapper_static_field": "SquareEdges90DegreesHW"
+            },
+            {
+              "scale_id": 4,
+              "hec_ras_gui_label": "Beveled edges; 90 Degree headwall",
+              "rasmapper_static_field": "BeveledEdges90DegreesHW"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": 9,
+      "ras_commander_shape_name": "Con Span",
+      "hec_ras_gui_label": "Conspan Arch",
+      "rasmapper_enum": "ConspanArch",
+      "rasmapper_static_field": "ConspanArch",
+      "dimension_model": {
+        "gui_mode": "rise_and_span",
+        "required_geometry_fields": [
+          "Span",
+          "Rise"
+        ],
+        "optional_geometry_fields": []
+      },
+      "notes": "ConSpan/Conspan arch culvert. HEC-RAS 7.0 exposes the GUI label as Conspan Arch; current ras-commander name is Con Span.",
+      "allowed_charts": [
+        {
+          "chart_id": 60,
+          "hec_ras_gui_label": "Span/Rise ratio approximate 2:1",
+          "rasmapper_static_field": "SpanRiseRatioApproximate21",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "0 degree wing wall angle",
+              "rasmapper_static_field": "ZeroDegreeWingWallAngle"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "45 degree wing wall angle",
+              "rasmapper_static_field": "FortyFiveDegreeWingWallAngle"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "90 degree wingwall angle",
+              "rasmapper_static_field": "NinetyDegreeWingWallAngle",
+              "source_note": "Official HEC-RAS FHWA table value; RASMapperLib 7.0 reflection resolves this slot to NinetyDegreeHeadwall/ID 1."
+            }
+          ]
+        },
+        {
+          "chart_id": 61,
+          "hec_ras_gui_label": "Span/Rise ratio approximate 4:1",
+          "rasmapper_static_field": "SpanRiseRatioApproximate41",
+          "allowed_scales": [
+            {
+              "scale_id": 1,
+              "hec_ras_gui_label": "0 degree wing wall angle",
+              "rasmapper_static_field": "ZeroDegreeWingWallAngle"
+            },
+            {
+              "scale_id": 2,
+              "hec_ras_gui_label": "45 degree wing wall angle",
+              "rasmapper_static_field": "FortyFiveDegreeWingWallAngle"
+            },
+            {
+              "scale_id": 3,
+              "hec_ras_gui_label": "90 degree wingwall angle",
+              "rasmapper_static_field": "NinetyDegreeWingWallAngle",
+              "source_note": "Official HEC-RAS FHWA table value; RASMapperLib 7.0 reflection resolves this slot to NinetyDegreeHeadwall/ID 1."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
