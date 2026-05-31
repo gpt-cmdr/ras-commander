@@ -39,6 +39,7 @@ setup(
     include_package_data=True,
     package_data={
         "ras_commander": [
+            "resources/*.json",
             "resources/land_classification/*.hdf",
         ],
         "ras_commander.native": [

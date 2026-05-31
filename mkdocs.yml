@@ -176,6 +176,7 @@ nav:
     - Overview: reference/file-formats.md
     - PRJ File Parsing: reference/prj-parsing.md
     - Geometry Parsing: reference/geometry-parsing.md
+    - Culvert Taxonomy: reference/culvert-taxonomy.md
     - Unsteady File Parsing: reference/unsteady-parsing.md
     - Steady File Parsing: reference/steady-parsing.md
     - HDF Structure: reference/hdf-structure.md
