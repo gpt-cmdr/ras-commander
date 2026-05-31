@@ -2,7 +2,10 @@ import os
 import time
 from pathlib import Path
 
-from ras_commander.geom.GeomPreprocessor import GeomPreprocessor
+from ras_commander.geom.GeomPreprocessor import (
+    GEOMETRY_PREPROCESSOR_GEOMETRY_ONLY_RUN_FLAGS,
+    GeomPreprocessor,
+)
 from ras_commander.hdf.HdfResultsPlan import HdfResultsPlan
 
 
@@ -78,3 +81,31 @@ def test_preprocessor_artifacts_include_fresh_tmp_hdf_only(tmp_path):
     )
 
     assert artifacts == [fresh_tmp_hdf]
+
+
+def test_geometry_only_run_flags_disable_unsteady_flow(tmp_path):
+    plan_path = tmp_path / "Model.p01"
+    plan_path.write_text(
+        "\n".join(
+            [
+                "Run HTab=-1 ",
+                "Run UNet=-1 ",
+                "Run PostProcess=-1 ",
+                "Run RASMapper=-1 ",
+                "Run Sediment=-1 ",
+                "Run WQNet=-1 ",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    GeomPreprocessor._set_plan_run_flags(
+        plan_path,
+        GEOMETRY_PREPROCESSOR_GEOMETRY_ONLY_RUN_FLAGS,
+    )
+
+    updated = plan_path.read_text(encoding="utf-8")
+    assert "Run UNet= 0" in updated
+    assert "Run PostProcess= 0" in updated
+    assert "Run RASMapper= 0" in updated

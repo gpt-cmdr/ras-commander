@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import os
+import shutil
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -251,6 +252,56 @@ def should_include_project(
     return True
 
 
+def resolve_plan_result_hdf_path(
+    ras_obj: RasPrj,
+    project_folder: Path,
+    project_name: str,
+    plan_number: str,
+) -> Path:
+    """Resolve the plan result HDF that HEC-RAS may replace during preprocessing."""
+    plan_num = str(plan_number).zfill(2)
+    try:
+        if getattr(ras_obj, "plan_df", None) is not None and not ras_obj.plan_df.empty:
+            plan_df = ras_obj.plan_df.copy()
+            if "plan_number" in plan_df.columns and "HDF_Results_Path" in plan_df.columns:
+                matching = plan_df[
+                    plan_df["plan_number"].astype(str).str.zfill(2) == plan_num
+                ]
+                if not matching.empty:
+                    value = matching.iloc[0].get("HDF_Results_Path")
+                    if value:
+                        return Path(str(value))
+    except Exception:
+        pass
+    return project_folder / f"{project_name}.p{plan_num}.hdf"
+
+
+def backup_result_hdf(
+    result_hdf_path: Path,
+    output_dir: Path,
+    project_name: str,
+    plan_number: str,
+) -> Path | None:
+    """Copy an existing result HDF before HEC-RAS geometry preprocessing."""
+    if not result_hdf_path.exists():
+        return None
+    backup_dir = output_dir / "_result_hdf_backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_path = backup_dir / f"{project_name}.p{str(plan_number).zfill(2)}.hdf"
+    shutil.copy2(result_hdf_path, backup_path)
+    return backup_path
+
+
+def restore_result_hdf(result_hdf_path: Path, backup_path: Path | None) -> bool:
+    """Restore a result HDF backup created before preprocessing."""
+    if backup_path is None or not backup_path.exists():
+        return False
+    result_hdf_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(backup_path, result_hdf_path)
+    backup_path.unlink()
+    return True
+
+
 def run_project(
     study: str,
     project_info: dict[str, Any],
@@ -285,29 +336,73 @@ def run_project(
 
         project_success = True
         for plan_number in selected_plans:
-            result = GeomPreprocessor.run_geometry_preprocessor(
+            plan_num = str(plan_number).zfill(2)
+            result_hdf_path = resolve_plan_result_hdf_path(
+                ras_obj,
+                project_folder,
+                ras_obj.project_name,
                 plan_number,
-                ras_object=ras_obj,
-                max_wait=args.max_wait,
-                force=not args.no_force,
-                clear_messages=True,
-                clear_geompre=args.clear_geompre,
-                geometry_only=not args.run_until_flow_start,
-                restore_plan_settings=True,
             )
-            plan_payload = result_to_dict(result)
+            backup_path = (
+                backup_result_hdf(
+                    result_hdf_path,
+                    Path(args.output_dir),
+                    ras_obj.project_name,
+                    plan_number,
+                )
+                if args.preserve_result_hdf
+                else None
+            )
+            restored_result_hdf = False
+
+            try:
+                result = GeomPreprocessor.run_geometry_preprocessor(
+                    plan_number,
+                    ras_object=ras_obj,
+                    max_wait=args.max_wait,
+                    force=not args.no_force,
+                    clear_messages=True,
+                    clear_geompre=args.clear_geompre,
+                    geometry_only=not args.run_until_flow_start,
+                    restore_plan_settings=True,
+                )
+                plan_payload = result_to_dict(result)
+            except Exception as exc:
+                plan_payload = {
+                    "success": False,
+                    "plan_number": plan_num,
+                    "geometry_number": None,
+                    "flow_type": "Unknown",
+                    "elapsed_seconds": 0.0,
+                    "command": "",
+                    "return_code": None,
+                    "signal_detected": None,
+                    "compute_message_paths": [],
+                    "artifact_paths": [],
+                    "error_count": 1,
+                    "warning_count": 0,
+                    "first_error_line": str(exc),
+                    "error": str(exc),
+                }
+            finally:
+                restored_result_hdf = restore_result_hdf(result_hdf_path, backup_path)
+
+            plan_payload["preserved_result_hdf"] = rel_path(result_hdf_path)
+            plan_payload["restored_result_hdf"] = restored_result_hdf
             project_record["plans"].append(plan_payload)
 
-            if result.success:
+            if plan_payload.get("success"):
                 print(
                     f"PASS {study}: {project_folder.name} plan {plan_number} "
-                    f"geom {result.geometry_number} ({result.elapsed_seconds:.1f}s)"
+                    f"geom {plan_payload.get('geometry_number')} "
+                    f"({plan_payload.get('elapsed_seconds', 0.0):.1f}s)"
                 )
             else:
                 project_success = False
                 print(
                     f"FAIL {study}: {project_folder.name} plan {plan_number} "
-                    f"geom {result.geometry_number}: {result.error}"
+                    f"geom {plan_payload.get('geometry_number')}: "
+                    f"{plan_payload.get('error')}"
                 )
                 if args.stop_on_failure:
                     break
@@ -479,6 +574,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-force", action="store_true", help="Do not set Run HTab=-1 before running.")
     parser.add_argument("--clear-geompre", action="store_true", help="Delete stale .c## files first.")
+    parser.add_argument(
+        "--no-preserve-result-hdf",
+        action="store_false",
+        dest="preserve_result_hdf",
+        help="Do not back up and restore an existing plan result HDF around preprocessing.",
+    )
     parser.add_argument(
         "--run-until-flow-start",
         action="store_true",

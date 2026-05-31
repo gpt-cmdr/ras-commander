@@ -65,6 +65,14 @@ GEOMETRY_PREPROCESSOR_BLOCKING_PATTERNS = [
     ]
 ]
 
+GEOMETRY_PREPROCESSOR_GEOMETRY_ONLY_RUN_FLAGS = {
+    "Run UNet": "0",
+    "Run PostProcess": "0",
+    "Run RASMapper": "0",
+    "Run Sediment": "0",
+    "Run WQNet": "0",
+}
+
 
 class GeomPreprocessor:
     """
@@ -232,12 +240,7 @@ class GeomPreprocessor:
                 if geometry_only:
                     GeomPreprocessor._set_plan_run_flags(
                         plan_path,
-                        {
-                            "Run PostProcess": "0",
-                            "Run RASMapper": "0",
-                            "Run Sediment": "0",
-                            "Run WQNet": "0",
-                        },
+                        GEOMETRY_PREPROCESSOR_GEOMETRY_ONLY_RUN_FLAGS,
                     )
 
                 command_text = (
