@@ -867,7 +867,7 @@ class RasTerrainModWriter:
             mod_grp = mods.create_group(name)
 
             # Set type attributes
-            mod_grp.attrs['Type'] = np.bytes_('Levee')
+            mod_grp.attrs['Type'] = np.bytes_(subtype)
             mod_grp.attrs['Subtype'] = np.bytes_(subtype)
             mod_grp.attrs['Priority'] = np.int32(0)
 
@@ -891,6 +891,7 @@ class RasTerrainModWriter:
             )
             mod_grp['Polyline Info'].attrs['Feature Type'] = np.bytes_('Polyline')
 
+            profile_data = np.asarray(profile_data, dtype=np.float64)
             profile_info = np.array([[0, len(profile_data)]], dtype=np.int32)
             RasTerrainModWriter._create_hdf_dataset(
                 mod_grp, 'Profile Info', profile_info
@@ -1791,6 +1792,13 @@ class RasTerrainModWriter:
 
     @staticmethod
     def _read_profile_array(mod_grp) -> np.ndarray:
+        if "Profile" in mod_grp:
+            values = np.asarray(mod_grp["Profile"][:], dtype=np.float64)
+            if "Profile Info" in mod_grp and len(mod_grp["Profile Info"]) > 0:
+                start, count = np.asarray(mod_grp["Profile Info"][0], dtype=np.int64)
+                values = values[start : start + count]
+            return values
+
         if "Profile Values" in mod_grp:
             values = np.asarray(mod_grp["Profile Values"][:], dtype=np.float64)
             if "Profile Info" in mod_grp and len(mod_grp["Profile Info"]) > 0:
@@ -1798,10 +1806,7 @@ class RasTerrainModWriter:
                 values = values[start : start + count]
             return values
 
-        if "Profile" in mod_grp:
-            return np.asarray(mod_grp["Profile"][:], dtype=np.float64)
-
-        raise KeyError(f"Modification profile not found: {mod_grp.name}/Profile Values")
+        raise KeyError(f"Modification profile not found: {mod_grp.name}/Profile")
 
     @staticmethod
     def _read_ground_line_modification(
@@ -2200,6 +2205,11 @@ class RasTerrainModWriter:
             if child.get('Type') == 'ElevationModificationGroup':
                 mod_group = child
                 break
+
+        if mod_group is None:
+            raise RuntimeError(
+                "ElevationModificationGroup not found after rasmap update"
+            )
 
         # Check if modification layer already exists
         for child in mod_group.findall('Layer'):
