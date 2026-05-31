@@ -62,7 +62,7 @@ import sys
 from dataclasses import dataclass, field
 from numbers import Number
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 from ..Decorators import log_call
 from .._gdal_runtime import (
@@ -1117,6 +1117,171 @@ def _sync_breakline_spacing_text_to_hdf(
         )
 
 
+def _parse_optional_float(value: str | None) -> float | None:
+    """Parse a geometry numeric field, returning None for blanks."""
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+    try:
+        return float(stripped)
+    except ValueError:
+        return None
+
+
+def _decode_hdf_text(value: Any) -> str:
+    """Decode an HDF scalar/string value to text."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace").strip()
+    if hasattr(value, "decode"):
+        try:
+            return value.decode("utf-8", errors="replace").strip()
+        except Exception:
+            pass
+    return str(value).strip()
+
+
+def _read_mesh_metadata_from_text(
+    geom_text_path: Path,
+) -> dict[str, dict[str, float | int | None]]:
+    """Read per-2D-area mesh seed count and spacing from geometry text."""
+    text = geom_text_path.read_text(encoding="utf-8", errors="replace")
+    metadata: dict[str, dict[str, float | int | None]] = {}
+    current_area: str | None = None
+
+    for line in text.splitlines():
+        if line.startswith("Storage Area="):
+            current_area = line.split("=", 1)[1].split(",", 1)[0].strip()
+            metadata.setdefault(
+                current_area,
+                {
+                    "seed_count": None,
+                    "spacing_dx": None,
+                    "spacing_dy": None,
+                },
+            )
+            continue
+
+        if current_area is None:
+            continue
+
+        if line.startswith("Storage Area Point Generation Data="):
+            parts = line.split("=", 1)[1].split(",")
+            spacing_dx = _parse_optional_float(parts[2] if len(parts) > 2 else None)
+            spacing_dy = _parse_optional_float(parts[3] if len(parts) > 3 else None)
+            metadata[current_area]["spacing_dx"] = spacing_dx
+            metadata[current_area]["spacing_dy"] = spacing_dy
+            continue
+
+        if line.startswith("Storage Area 2D Points="):
+            try:
+                metadata[current_area]["seed_count"] = int(
+                    line.split("=", 1)[1].strip()
+                )
+            except (IndexError, ValueError):
+                metadata[current_area]["seed_count"] = None
+
+    return metadata
+
+
+def _read_mesh_metadata_from_hdf(
+    hdf_path: Path,
+) -> dict[str, dict[str, float | int | str | None]]:
+    """Read per-2D-area mesh cell count and spacing from compiled geometry HDF."""
+    import h5py
+
+    metadata: dict[str, dict[str, float | int | str | None]] = {}
+    attrs_key = "Geometry/2D Flow Areas/Attributes"
+    flow_areas_key = "Geometry/2D Flow Areas"
+
+    with h5py.File(str(hdf_path), "r") as hf:
+        if attrs_key in hf:
+            data = hf[attrs_key][:]
+            dtype_names = data.dtype.names or ()
+            for i in range(len(data)):
+                if "Name" in dtype_names:
+                    area_name = _decode_hdf_text(data["Name"][i])
+                else:
+                    area_name = f"<index {i}>"
+                if not area_name:
+                    continue
+
+                row = metadata.setdefault(
+                    area_name,
+                    {
+                        "cell_count": None,
+                        "cell_count_source": None,
+                        "spacing_dx": None,
+                        "spacing_dy": None,
+                    },
+                )
+                if "Cell Count" in dtype_names:
+                    try:
+                        row["cell_count"] = int(data["Cell Count"][i])
+                        row["cell_count_source"] = "Attributes/Cell Count"
+                    except (TypeError, ValueError):
+                        pass
+                if "Spacing dx" in dtype_names:
+                    try:
+                        row["spacing_dx"] = float(data["Spacing dx"][i])
+                    except (TypeError, ValueError):
+                        pass
+                if "Spacing dy" in dtype_names:
+                    try:
+                        row["spacing_dy"] = float(data["Spacing dy"][i])
+                    except (TypeError, ValueError):
+                        pass
+
+        if flow_areas_key in hf:
+            for area_name in hf[flow_areas_key].keys():
+                if area_name == "Attributes":
+                    continue
+                row = metadata.setdefault(
+                    area_name,
+                    {
+                        "cell_count": None,
+                        "cell_count_source": None,
+                        "spacing_dx": None,
+                        "spacing_dy": None,
+                    },
+                )
+                if row.get("cell_count") is None:
+                    cells_key = f"{flow_areas_key}/{area_name}/Cells Center Coordinate"
+                    if cells_key in hf:
+                        row["cell_count"] = int(hf[cells_key].shape[0])
+                        row["cell_count_source"] = "Cells Center Coordinate"
+
+    return metadata
+
+
+def _read_cell_size_from_text(
+    geom_text_path: Path,
+    mesh_name: str | None = None,
+    mesh_index: int = 0,
+) -> float | None:
+    """Read base mesh cell size from geometry text point-generation data."""
+    metadata = _read_mesh_metadata_from_text(geom_text_path)
+    if mesh_name is not None:
+        area = metadata.get(mesh_name)
+        if area is None:
+            return None
+        dx = area.get("spacing_dx")
+        return float(dx) if isinstance(dx, (int, float)) and dx > 0 else None
+
+    areas = list(metadata.values())
+    if 0 <= mesh_index < len(areas):
+        dx = areas[mesh_index].get("spacing_dx")
+        if isinstance(dx, (int, float)) and dx > 0:
+            return float(dx)
+
+    for area in areas:
+        dx = area.get("spacing_dx")
+        if isinstance(dx, (int, float)) and dx > 0:
+            return float(dx)
+    return None
+
+
 def _read_cell_size_from_hdf(
     hdf_path: Path, mesh_name: str | None = None
 ) -> float:
@@ -1459,11 +1624,215 @@ def _geometry_hdf_unavailable_message(
     )
 
 
+def _normalize_component_number(value: Any) -> str | None:
+    """Normalize a RAS component number, accepting values like g09 or 9.0."""
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw or raw.lower() in {"nan", "none"}:
+        return None
+    if raw[0].lower() in {"g", "p", "f", "u", "c"}:
+        raw = raw[1:]
+    try:
+        from ..RasUtils import RasUtils
+        return RasUtils.normalize_ras_number(raw)
+    except Exception:
+        digits = raw.split(".", 1)[0]
+        return digits.zfill(2) if digits.isdigit() else None
+
+
+def _geometry_number_from_path(
+    geom_text_path: Path,
+    ras_object=None,
+) -> str | None:
+    """Resolve a geometry number from a geometry text path and project metadata."""
+    suffix = geom_text_path.suffix
+    if len(suffix) > 2 and suffix[1].lower() == "g":
+        normalized = _normalize_component_number(suffix[2:])
+        if normalized is not None:
+            return normalized
+
+    ras_obj = ras_object
+    if ras_obj is not None and getattr(ras_obj, "geom_df", None) is not None:
+        try:
+            for _, row in ras_obj.geom_df.iterrows():
+                row_path = row.get("full_path")
+                if row_path is not None and _paths_equivalent(row_path, geom_text_path):
+                    return _normalize_component_number(row.get("geom_number"))
+        except Exception:
+            pass
+    return None
+
+
+def _find_plan_for_geometry(
+    geom_text_path: Path,
+    ras_object=None,
+) -> str:
+    """Find a plan number that references a geometry text file."""
+    if ras_object is None:
+        from ..RasPrj import ras as ras_object
+
+    try:
+        ras_object.check_initialized()
+    except Exception as exc:
+        raise RuntimeError(
+            "recompile_via_rasexe=True requires an initialized RasPrj object "
+            "so ras-commander can find a plan that references the geometry."
+        ) from exc
+
+    geom_number = _geometry_number_from_path(geom_text_path, ras_object=ras_object)
+    try:
+        plan_df = ras_object.get_plan_entries()
+    except Exception as exc:
+        raise RuntimeError(
+            "Could not read plan entries needed for geometry HDF recompilation."
+        ) from exc
+
+    for _, row in plan_df.iterrows():
+        plan_number = _normalize_component_number(row.get("plan_number"))
+        if plan_number is None:
+            continue
+
+        geom_path = row.get("Geom Path")
+        if geom_path is not None and _paths_equivalent(geom_path, geom_text_path):
+            return plan_number
+
+        for column_name in ("geometry_number", "geom_number", "Geom File"):
+            if column_name not in row:
+                continue
+            row_geom_number = _normalize_component_number(row.get(column_name))
+            if (
+                geom_number is not None
+                and row_geom_number is not None
+                and row_geom_number == geom_number
+            ):
+                return plan_number
+
+    raise RuntimeError(
+        "recompile_via_rasexe=True could not find a plan referencing "
+        f"{geom_text_path.name}. Clone or assign a plan to this geometry before "
+        "requesting Ras.exe recompilation."
+    )
+
+
+def _recompile_geometry_hdf_via_rasexe(
+    geom_text_path: Path,
+    hdf_path: Path,
+    *,
+    ras_object=None,
+) -> Path:
+    """Refresh a compiled geometry HDF from text through HEC-RAS/Ras.exe."""
+    plan_number = _find_plan_for_geometry(geom_text_path, ras_object=ras_object)
+    from .GeomPreprocessor import GeomPreprocessor
+
+    logger.info(
+        f"Refreshing compiled geometry HDF for {geom_text_path.name} "
+        f"through Ras.exe using plan p{plan_number}"
+    )
+    preprocess_result = GeomPreprocessor.run_geometry_preprocessor(
+        plan_number,
+        ras_object=ras_object,
+        clear_geompre=True,
+        force=True,
+        geometry_only=True,
+    )
+    if not preprocess_result.success:
+        raise RuntimeError(
+            "Ras.exe geometry preprocessing failed while refreshing "
+            f"{hdf_path.name}: {preprocess_result.error or preprocess_result.first_error_line}"
+        )
+    if not hdf_path.exists():
+        raise RuntimeError(
+            "Ras.exe geometry preprocessing completed but did not create "
+            f"{hdf_path}"
+        )
+    return hdf_path
+
+
+def _mesh_metadata_is_meaningful(
+    area: dict[str, float | int | None],
+) -> bool:
+    seed_count = area.get("seed_count")
+    spacing_dx = area.get("spacing_dx")
+    spacing_dy = area.get("spacing_dy")
+    return (
+        (isinstance(seed_count, int) and seed_count > 0)
+        or (isinstance(spacing_dx, (int, float)) and spacing_dx > 0)
+        or (isinstance(spacing_dy, (int, float)) and spacing_dy > 0)
+    )
+
+
+def _mesh_hdf_consistency_issues(
+    geom_text_path: Path,
+    hdf_path: Path,
+    *,
+    mesh_name: str | None = None,
+) -> list[str]:
+    """Return content mismatches between geometry text seeds and HDF metadata."""
+    text_metadata = _read_mesh_metadata_from_text(geom_text_path)
+    if mesh_name is not None:
+        text_metadata = {
+            name: area
+            for name, area in text_metadata.items()
+            if name == mesh_name
+        }
+    if not text_metadata:
+        return []
+
+    hdf_metadata = _read_mesh_metadata_from_hdf(hdf_path)
+    issues: list[str] = []
+
+    for area_name, text_area in text_metadata.items():
+        if not _mesh_metadata_is_meaningful(text_area):
+            continue
+
+        hdf_area = hdf_metadata.get(area_name)
+        if hdf_area is None:
+            issues.append(f"{area_name}: missing from compiled HDF")
+            continue
+
+        text_seed_count = text_area.get("seed_count")
+        hdf_cell_count = hdf_area.get("cell_count")
+        hdf_count_source = hdf_area.get("cell_count_source")
+        if (
+            isinstance(text_seed_count, int)
+            and isinstance(hdf_cell_count, int)
+            and hdf_count_source == "Attributes/Cell Count"
+            and text_seed_count != hdf_cell_count
+        ):
+            issues.append(
+                f"{area_name}: text Storage Area 2D Points={text_seed_count} "
+                f"but HDF Cell Count={hdf_cell_count}"
+            )
+
+        for axis in ("dx", "dy"):
+            text_spacing = text_area.get(f"spacing_{axis}")
+            hdf_spacing = hdf_area.get(f"spacing_{axis}")
+            if not isinstance(text_spacing, (int, float)) or text_spacing <= 0:
+                continue
+            if not isinstance(hdf_spacing, (int, float)) or hdf_spacing <= 0:
+                issues.append(
+                    f"{area_name}: text Spacing {axis}={text_spacing:g} "
+                    "but HDF spacing is missing"
+                )
+                continue
+            if abs(float(text_spacing) - float(hdf_spacing)) > 0.001:
+                issues.append(
+                    f"{area_name}: text Spacing {axis}={text_spacing:g} "
+                    f"but HDF Spacing {axis}={float(hdf_spacing):g}"
+                )
+
+    return issues
+
+
 def _ensure_hdf(
     geom_text_path: Path,
     hecras_dir=None,
     *,
     require_current: bool = True,
+    ras_object=None,
+    mesh_name: str | None = None,
+    recompile_via_rasexe: bool = False,
 ) -> Path:
     """Return an existing compiled HDF for *geom_text_path*.
 
@@ -1473,15 +1842,48 @@ def _ensure_hdf(
     """
     hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
     if not hdf_path.exists():
+        if recompile_via_rasexe:
+            _recompile_geometry_hdf_via_rasexe(
+                geom_text_path,
+                hdf_path,
+                ras_object=ras_object,
+            )
+            if hdf_path.exists():
+                return hdf_path
         raise RuntimeError(
             _geometry_hdf_unavailable_message(geom_text_path, hdf_path, "missing")
         )
-    # 2-second tolerance: file copy/extraction can leave text slightly newer
-    if geom_text_path.stat().st_mtime - hdf_path.stat().st_mtime > 2.0:
+
+    try:
+        consistency_issues = _mesh_hdf_consistency_issues(
+            geom_text_path,
+            hdf_path,
+            mesh_name=mesh_name,
+        )
+    except Exception as exc:
+        consistency_issues = [f"unreadable; {exc}"]
+
+    if consistency_issues:
+        reason = "stale; " + "; ".join(consistency_issues)
+        if recompile_via_rasexe:
+            _recompile_geometry_hdf_via_rasexe(
+                geom_text_path,
+                hdf_path,
+                ras_object=ras_object,
+            )
+            consistency_issues = _mesh_hdf_consistency_issues(
+                geom_text_path,
+                hdf_path,
+                mesh_name=mesh_name,
+            )
+            if not consistency_issues:
+                return hdf_path
+            reason = "stale after Ras.exe refresh; " + "; ".join(consistency_issues)
+
         message = _geometry_hdf_unavailable_message(
             geom_text_path,
             hdf_path,
-            f"stale; {geom_text_path.name} is newer than {hdf_path.name}",
+            reason,
         )
         if require_current:
             raise RuntimeError(message)
@@ -1526,6 +1928,7 @@ def _resolve_geom_hdf_path(
         geom_text_path,
         hecras_dir=hecras_dir,
         require_current=require_current,
+        ras_object=ras_object,
     )
 
 
@@ -1845,7 +2248,11 @@ class GeomMesh:
         import h5py
 
         geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
-        hdf_path = _ensure_hdf(geom_text_path, hecras_dir=hecras_dir)
+        hdf_path = _ensure_hdf(
+            geom_text_path,
+            hecras_dir=hecras_dir,
+            ras_object=ras_object,
+        )
 
         rr_key = "Geometry/2D Flow Area Refinement Regions/Attributes"
         result = []
@@ -1902,7 +2309,11 @@ class GeomMesh:
             raise ValueError("Provide region_fid or old_name, not both.")
 
         geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
-        hdf_path = _ensure_hdf(geom_text_path, hecras_dir=hecras_dir)
+        hdf_path = _ensure_hdf(
+            geom_text_path,
+            hecras_dir=hecras_dir,
+            ras_object=ras_object,
+        )
 
         rr_key = "Geometry/2D Flow Area Refinement Regions/Attributes"
         with h5py.File(str(hdf_path), "r+") as hf:
@@ -1974,7 +2385,11 @@ class GeomMesh:
         import h5py
 
         geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
-        hdf_path = _ensure_hdf(geom_text_path, hecras_dir=hecras_dir)
+        hdf_path = _ensure_hdf(
+            geom_text_path,
+            hecras_dir=hecras_dir,
+            ras_object=ras_object,
+        )
 
         rr_key = "Geometry/2D Flow Area Refinement Regions/Attributes"
         result = []
@@ -2059,7 +2474,11 @@ class GeomMesh:
             spacing_dy = spacing_dx
 
         geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
-        hdf_path = _ensure_hdf(geom_text_path, hecras_dir=hecras_dir)
+        hdf_path = _ensure_hdf(
+            geom_text_path,
+            hecras_dir=hecras_dir,
+            ras_object=ras_object,
+        )
 
         rr_key = "Geometry/2D Flow Area Refinement Regions/Attributes"
         with h5py.File(str(hdf_path), "r+") as hf:
@@ -2196,7 +2615,11 @@ class GeomMesh:
             coords = np.vstack([coords, coords[:1]])
 
         geom_text_path = _resolve_geom_text_path(geom_number, ras_object)
-        hdf_path = _ensure_hdf(geom_text_path, hecras_dir=hecras_dir)
+        hdf_path = _ensure_hdf(
+            geom_text_path,
+            hecras_dir=hecras_dir,
+            ras_object=ras_object,
+        )
 
         rr_group_key = "Geometry/2D Flow Area Refinement Regions"
         attr_key = f"{rr_group_key}/Attributes"
@@ -2484,7 +2907,11 @@ class GeomMesh:
 
         _load_dlls(hecras_dir)
 
-        hdf_path = _ensure_hdf(geom_text_path, hecras_dir=hecras_dir)
+        hdf_path = _ensure_hdf(
+            geom_text_path,
+            hecras_dir=hecras_dir,
+            ras_object=ras_object,
+        )
 
         ns = _imports()
         geom = ns["RASGeometry"](str(hdf_path))
@@ -2546,6 +2973,7 @@ class GeomMesh:
         bl_spacing_near: Optional[float] = None,
         bl_spacing_far: Optional[float] = None,
         ras_object=None,
+        recompile_via_rasexe: bool = False,
         _require_current_hdf: bool = True,
     ) -> MeshResult:
         """
@@ -2556,7 +2984,8 @@ class GeomMesh:
         center extraction. ras-commander does not generate .g##.hdf from text.
 
         Workflow:
-            1. Validate an existing current compiled .g##.hdf workspace.
+            1. Validate an existing content-current compiled .g##.hdf
+               workspace, optionally refreshing it through HEC-RAS/Ras.exe.
             2. Read per-breakline spacing from .g01 text (preserve existing)
             3. Sync text spacing -> HDF (RegenerateMeshPoints reads HDF)
             4. Load .NET geometry -> perimeter, breaklines
@@ -2576,9 +3005,10 @@ class GeomMesh:
             mesh_name: Name of 2D flow area (None = use mesh_index).
             mesh_index: 0-based index if mesh_name not provided.
             cell_size: Base grid spacing in project units.  When ``None``
-                (default), the value is read from the compiled geometry
-                HDF (``Spacing dx``).  Falls back to 100.0 if the HDF
-                attribute is missing or zero.
+                (default), the value is read from geometry text
+                ``Storage Area Point Generation Data`` first, then from the
+                compiled HDF (``Spacing dx``) only as a fallback.  This avoids
+                trusting byte-copied stale HDF metadata after geometry clones.
             bl_spacing: Legacy alias that applies the same positive value to both
                 near and far breakline spacing when explicit values are omitted.
             near_repeats: Number of offset seed rows on each side of breaklines.
@@ -2594,6 +3024,9 @@ class GeomMesh:
             bl_spacing_far: Optional override for far spacing in project units.
                 If omitted, existing per-breakline values are preserved.
             ras_object: Optional RasPrj instance for multi-project support.
+            recompile_via_rasexe: If True, refresh a missing or content-stale
+                compiled geometry HDF through ``GeomPreprocessor``/Ras.exe.
+                The geometry must be referenced by a plan in *ras_object*.
 
         Returns:
             MeshResult with status, cell_count, face_count, fixes_applied, and
@@ -2640,14 +3073,27 @@ class GeomMesh:
                 text_path,
                 hecras_dir=hecras_dir,
                 require_current=_require_current_hdf,
+                ras_object=ras_object,
+                mesh_name=mesh_name,
+                recompile_via_rasexe=recompile_via_rasexe,
             )
 
-            # ── Step 1a: Auto-detect cell size from HDF if not provided ──
+            # ── Step 1a: Auto-detect cell size from text if not provided ──
             if not cell_size_provided:
-                cell_size = _read_cell_size_from_hdf(hdf_path, mesh_name)
-                logger.info(
-                    f"Auto-detected cell size {cell_size} from HDF Spacing dx"
+                cell_size = _read_cell_size_from_text(
+                    text_path,
+                    mesh_name=mesh_name,
+                    mesh_index=mesh_index,
                 )
+                if cell_size is not None:
+                    logger.info(
+                        f"Auto-detected cell size {cell_size} from geometry text"
+                    )
+                else:
+                    cell_size = _read_cell_size_from_hdf(hdf_path, mesh_name)
+                    logger.info(
+                        f"Auto-detected cell size {cell_size} from HDF Spacing dx"
+                    )
 
             # Only modify .g01 text breakline properties if explicitly provided.
             # Otherwise the geometry's existing per-breakline values are
@@ -3018,6 +3464,7 @@ class GeomMesh:
         max_iterations: int = 8,
         hecras_dir: Optional[Union[str, Path]] = None,
         ras_object: Optional['RasPrj'] = None,
+        recompile_via_rasexe: bool = False,
     ) -> List[MeshResult]:
         """Generate/repair all 2D mesh areas in a geometry file.
 
@@ -3028,7 +3475,8 @@ class GeomMesh:
             geom_number: Geometry number (e.g. ``"01"`` or ``1``),
                 or a direct path to a ``.g##`` text file.
             cell_size: Default mesh cell size.  When ``None`` (default),
-                each mesh area reads its spacing from the compiled HDF.
+                each mesh area reads its spacing from geometry text first,
+                then from the compiled HDF as a fallback.
             bl_spacing: Shorthand — sets both near and far breakline spacing.
             bl_spacing_near: Breakline near-spacing override.
             bl_spacing_far: Breakline far-spacing override.
@@ -3038,6 +3486,8 @@ class GeomMesh:
             max_iterations: Maximum fix-loop iterations per mesh area.
             hecras_dir: Override path to the HEC-RAS installation directory.
             ras_object: Optional RasPrj instance for multi-project support.
+            recompile_via_rasexe: If True, refresh a missing or content-stale
+                compiled geometry HDF through ``GeomPreprocessor``/Ras.exe.
 
         Returns:
             List of MeshResult, one per 2D flow area.
@@ -3049,6 +3499,8 @@ class GeomMesh:
             text_path,
             hecras_dir=hecras_dir,
             require_current=True,
+            ras_object=ras_object,
+            recompile_via_rasexe=recompile_via_rasexe,
         )
         geom = ns["RASGeometry"](str(hdf_path))
         d2fa = geom.D2FlowArea
@@ -3069,6 +3521,7 @@ class GeomMesh:
                 max_iterations=max_iterations,
                 hecras_dir=hecras_dir,
                 ras_object=ras_object,
+                recompile_via_rasexe=recompile_via_rasexe,
                 _require_current_hdf=False,
             )
             results.append(r)
