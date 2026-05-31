@@ -4,21 +4,21 @@
 
 Determines the capacity level of each 1D cross section by comparing maximum
 water surface elevations from multiple AEP storm simulations against bank
-elevations. Results are aggregated into segments and summarized as a
+elevations. Results are aggregated into 0.25-mile segments and summarized as a
 system-wide capacity distribution.
 
-This analysis follows the HCFCD (Harris County Flood Control District) channel
-capacity methodology, testing storms from smallest to largest and recording the
-largest storm each cross section can contain without overtopping.
+This analysis uses an AEP (annual-exceedance-probability) storm-sweep
+methodology, testing storms from smallest to largest and recording the largest
+storm each cross section can contain without overtopping.
 
 Capacity Levels:
-    1: X <= 10% AEP (contained by 10-year or smaller)
-    2: 10% < X <= 4% AEP
-    3: 4% < X <= 2% AEP
-    4: 2% < X <= 1% AEP
-    5: 1% < X <= 0.2% AEP
-    6: X > 0.2% AEP (contains all tested storms)
-    7: All overtop (overtopped by smallest tested storm)
+    1: Contains 50% AEP (2-year) or less
+    2: Contains 20% AEP (5-year)
+    3: Contains 10% AEP (10-year)
+    4: Contains 4% AEP (25-year)
+    5: Contains 2% AEP (50-year)
+    6: Contains 1% AEP (100-year)
+    7: Contains 0.2% AEP (500-year)
 
 Example:
     >>> from ras_commander import init_ras_project, HdfChannelCapacity
@@ -34,8 +34,7 @@ Example:
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
-import logging
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -51,27 +50,50 @@ logger = get_logger(__name__)
 # Storm order from most frequent (smallest) to least frequent (largest)
 STORM_ORDER = ['50P', '20P', '10P', '4P', '2P', '1P', '0.2P']
 
-# Capacity category labels by level
-CATEGORY_TO_LEVEL = {
+# Capacity category labels by level.
+LEVEL_TO_CATEGORY = {
+    1: '<=2-yr',
+    2: '5-yr',
+    3: '10-yr',
+    4: '25-yr',
+    5: '50-yr',
+    6: '100-yr',
+    7: '>=500-yr',
+}
+
+CATEGORY_TO_LEVEL = {category: level for level, category in LEVEL_TO_CATEGORY.items()}
+CATEGORY_TO_LEVEL.update({
+    '<= 2-yr': 1,
+    '2-yr': 1,
+    '5-year': 2,
+    '10-year': 3,
+    '25-year': 4,
+    '50-year': 5,
+    '100-year': 6,
+    '500-year': 7,
     'X <= 10%': 1,
     '10% < X <= 4%': 2,
     '4% < X <= 2%': 3,
     '2% < X <= 1%': 4,
     '1% < X <= 0.2%': 5,
     'X > 0.2%': 6,
-    'All overtop': 7,
-}
-LEVEL_TO_CATEGORY = {v: k for k, v in CATEGORY_TO_LEVEL.items()}
+    'X > 0.2% (500-yr)': 7,
+    'Unknown': 0,
+})
 
 # Maps last-contained storm to capacity category
 CAPACITY_MAP = {
-    '50P': 'X <= 10%',
-    '20P': '10% < X <= 4%',
-    '10P': '4% < X <= 2%',
-    '4P': '2% < X <= 1%',
-    '2P': '1% < X <= 0.2%',
-    '1P': 'X > 0.2%',
+    None: LEVEL_TO_CATEGORY[1],
+    '50P': LEVEL_TO_CATEGORY[1],
+    '20P': LEVEL_TO_CATEGORY[2],
+    '10P': LEVEL_TO_CATEGORY[3],
+    '4P': LEVEL_TO_CATEGORY[4],
+    '2P': LEVEL_TO_CATEGORY[5],
+    '1P': LEVEL_TO_CATEGORY[6],
+    '0.2P': LEVEL_TO_CATEGORY[7],
 }
+
+STORM_TO_LEVEL = {storm: CATEGORY_TO_LEVEL[category] for storm, category in CAPACITY_MAP.items()}
 
 # Default segment length: 0.25 miles = 1320 feet
 DEFAULT_SEGMENT_LENGTH = 1320.0
@@ -164,6 +186,185 @@ class HdfChannelCapacity:
                 return Path(ras_object.folder) / f"unknown.p{plan_number}.hdf"
             raise ValueError(f"Failed to resolve {label} '{input_str}': {e}")
 
+    @staticmethod
+    def _decode_hdf_value(value: Any) -> str:
+        """Decode bytes, numpy bytes, or scalar HDF values to stripped strings."""
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="ignore").strip()
+        if hasattr(value, "decode"):
+            try:
+                return value.decode("utf-8", errors="ignore").strip()
+            except TypeError:
+                pass
+        return str(value).strip()
+
+    @staticmethod
+    def _decode_hdf_strings(values: Sequence[Any]) -> List[str]:
+        """Decode an HDF string vector to Python strings."""
+        return [HdfChannelCapacity._decode_hdf_value(value) for value in values]
+
+    @staticmethod
+    def _structured_field_names(array: np.ndarray) -> Dict[str, str]:
+        """Map normalized structured-array field names to their original names."""
+        dtype_names = array.dtype.names or ()
+        return {name.lower().replace(" ", "").replace("_", ""): name for name in dtype_names}
+
+    @staticmethod
+    def _get_structured_value(record: Any, field_map: Dict[str, str], candidates: Sequence[str]) -> str:
+        """Read the first matching field from a structured HDF attribute record."""
+        for candidate in candidates:
+            key = candidate.lower().replace(" ", "").replace("_", "")
+            field_name = field_map.get(key)
+            if field_name is not None:
+                return HdfChannelCapacity._decode_hdf_value(record[field_name])
+        return ""
+
+    @staticmethod
+    def _read_cross_section_attributes(hdf: Any, n_xs: int) -> Tuple[List[str], List[str], List[str]]:
+        """
+        Read River, Reach, and RS values from known HEC-RAS HDF result paths.
+
+        RAS plan HDF files vary by version and result type. This helper searches
+        summary output, unsteady time series, steady profiles, and embedded
+        geometry metadata before falling back to positional station labels.
+        """
+        attr_paths = [
+            "Results/Unsteady/Output/Output Blocks/Base Output/Summary Output/Cross Sections/Cross Section Attributes",
+            "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Cross Sections/Cross Section Attributes",
+            "Results/Unsteady/Output/Geometry Info/Cross Section Attributes",
+            "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Cross Sections/Cross Section Attributes",
+            "Results/Steady/Output/Geometry Info/Cross Section Attributes",
+            "Geometry/Cross Sections/Attributes",
+        ]
+
+        for attr_path in attr_paths:
+            if attr_path not in hdf:
+                continue
+
+            attrs = hdf[attr_path][:]
+            if len(attrs) == 0 or attrs.dtype.names is None:
+                continue
+
+            field_map = HdfChannelCapacity._structured_field_names(attrs)
+            rivers = [
+                HdfChannelCapacity._get_structured_value(row, field_map, ("River", "River Name"))
+                for row in attrs
+            ]
+            reaches = [
+                HdfChannelCapacity._get_structured_value(row, field_map, ("Reach", "Reach Name"))
+                for row in attrs
+            ]
+            stations = [
+                HdfChannelCapacity._get_structured_value(row, field_map, ("Station", "RS", "River Station"))
+                for row in attrs
+            ]
+
+            if len(stations) >= n_xs and any(stations):
+                return rivers[:n_xs], reaches[:n_xs], stations[:n_xs]
+
+        logger.warning(
+            "Could not find cross-section attributes in HDF; using positional station labels."
+        )
+        return (
+            [""] * n_xs,
+            [""] * n_xs,
+            [str(i + 1) for i in range(n_xs)],
+        )
+
+    @staticmethod
+    def _as_1d_wse(values: np.ndarray, reducer: str) -> np.ndarray:
+        """Normalize HDF WSE arrays to one value per cross section."""
+        array = np.asarray(values, dtype=float)
+        if array.ndim == 0:
+            return array.reshape(1)
+        if array.ndim == 1:
+            return array
+        if reducer == "first":
+            return array[0, :]
+        return np.nanmax(array, axis=0)
+
+    @staticmethod
+    def _select_profile_index(profile_names: List[str], profile_name: Optional[str]) -> Optional[int]:
+        """Find a steady-profile index using exact or case-insensitive matching."""
+        if profile_name is None:
+            return None
+
+        normalized_target = profile_name.strip().lower()
+        for idx, name in enumerate(profile_names):
+            if name.strip().lower() == normalized_target:
+                return idx
+        return None
+
+    @staticmethod
+    def _extract_single_plan_wse(
+        hdf_path: Path,
+        profile_name: Optional[str] = None
+    ) -> Tuple[np.ndarray, Tuple[List[str], List[str], List[str]], str]:
+        """
+        Extract one WSE vector from a plan HDF using production fallback order.
+
+        Detection order:
+        1. RAS 6.x unsteady summary Maximum Water Surface
+        2. RAS 5.x/6.x unsteady Water Surface time series max
+        3. Steady Water Surface profile selection or profile-wise max
+        """
+        import h5py
+
+        summary_path = (
+            "Results/Unsteady/Output/Output Blocks/Base Output/"
+            "Summary Output/Cross Sections/Maximum Water Surface"
+        )
+        unsteady_path = (
+            "Results/Unsteady/Output/Output Blocks/Base Output/"
+            "Unsteady Time Series/Cross Sections/Water Surface"
+        )
+        steady_base = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles"
+        steady_wse_path = f"{steady_base}/Cross Sections/Water Surface"
+        steady_names_path = f"{steady_base}/Profile Names"
+
+        with h5py.File(hdf_path, "r") as hdf:
+            if summary_path in hdf:
+                wse = HdfChannelCapacity._as_1d_wse(hdf[summary_path][:], reducer="first")
+                attrs = HdfChannelCapacity._read_cross_section_attributes(hdf, len(wse))
+                return wse, attrs, "unsteady_summary"
+
+            if unsteady_path in hdf:
+                wse = HdfChannelCapacity._as_1d_wse(hdf[unsteady_path][:], reducer="max")
+                attrs = HdfChannelCapacity._read_cross_section_attributes(hdf, len(wse))
+                return wse, attrs, "unsteady_timeseries"
+
+            if steady_wse_path in hdf:
+                wse_data = np.asarray(hdf[steady_wse_path][:], dtype=float)
+                if wse_data.ndim == 1:
+                    wse = wse_data
+                    profile_source = "steady_single_profile"
+                else:
+                    profile_names = []
+                    if steady_names_path in hdf:
+                        profile_names = HdfChannelCapacity._decode_hdf_strings(hdf[steady_names_path][:])
+
+                    profile_idx = HdfChannelCapacity._select_profile_index(profile_names, profile_name)
+                    if profile_idx is not None:
+                        wse = wse_data[profile_idx, :]
+                        profile_source = f"steady_profile:{profile_names[profile_idx]}"
+                    elif profile_name is not None:
+                        available = ", ".join(profile_names) if profile_names else "no profile names found"
+                        raise ValueError(
+                            f"Steady profile '{profile_name}' not found in {hdf_path.name}; "
+                            f"available profiles: {available}"
+                        )
+                    else:
+                        wse = np.nanmax(wse_data, axis=0)
+                        profile_source = "steady_profile_max"
+
+                attrs = HdfChannelCapacity._read_cross_section_attributes(hdf, len(wse))
+                return wse, attrs, profile_source
+
+        raise ValueError(
+            f"No supported 1D WSE dataset found in {hdf_path.name}. "
+            "Expected unsteady summary, unsteady time series, or steady profiles."
+        )
+
     # -----------------------------------------------------------------
     # Public methods
     # -----------------------------------------------------------------
@@ -190,7 +391,7 @@ class HdfChannelCapacity:
             DataFrame with columns:
                 River, Reach, RS, Left Bank, Right Bank,
                 left_bank_elev, right_bank_elev, controlling_bank_elev,
-                Len Channel
+                thalweg_elev, channel_depth, Len Channel
         """
         from ras_commander.hdf import HdfXsec
         from ras_commander import ras as global_ras
@@ -216,7 +417,7 @@ class HdfChannelCapacity:
         if not geom_path.exists():
             raise FileNotFoundError(f"Geometry HDF not found: {geom_path}")
 
-        logger.debug(f"Extracting bank elevations from: {geom_path.name}")
+        logger.info(f"Extracting bank elevations from: {geom_path.name}")
 
         xs_gdf = HdfXsec.get_cross_sections(str(geom_path), ras_object=_ras)
 
@@ -241,6 +442,7 @@ class HdfChannelCapacity:
             left_elev = float(np.interp(left_bank_sta, stations, elevations))
             right_elev = float(np.interp(right_bank_sta, stations, elevations))
             controlling = max(left_elev, right_elev)
+            thalweg = float(np.nanmin(elevations))
 
             rows.append({
                 'River': row['River'],
@@ -251,11 +453,13 @@ class HdfChannelCapacity:
                 'left_bank_elev': left_elev,
                 'right_bank_elev': right_elev,
                 'controlling_bank_elev': controlling,
+                'thalweg_elev': thalweg,
+                'channel_depth': controlling - thalweg,
                 'Len Channel': row.get('Len Channel', 0.0),
             })
 
         bank_df = pd.DataFrame(rows)
-        logger.debug(f"Extracted bank elevations for {len(bank_df)} cross sections")
+        logger.info(f"Extracted bank elevations for {len(bank_df)} cross sections")
         return bank_df
 
     @staticmethod
@@ -304,7 +508,7 @@ class HdfChannelCapacity:
         if not hdf_path.exists():
             raise FileNotFoundError(f"HDF file not found: {hdf_path}")
 
-        logger.debug(f"Extracting steady-state profiles from: {hdf_path.name}")
+        logger.info(f"Extracting steady-state profiles from: {hdf_path.name}")
 
         base_steady = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles"
 
@@ -317,15 +521,16 @@ class HdfChannelCapacity:
                     f"This method requires a steady-state plan HDF."
                 )
 
-            ws_data = hdf[ws_path][:]  # shape: (n_profiles, n_xs)
+            ws_data = np.asarray(hdf[ws_path][:], dtype=float)
+            if ws_data.ndim == 1:
+                ws_data = ws_data.reshape(1, -1)
             n_profiles, n_xs = ws_data.shape
 
             # Read profile names from HDF if not provided
             names_path = f"{base_steady}/Profile Names"
             if profile_names is None:
                 if names_path in hdf:
-                    hdf_names = [n.decode().strip() for n in hdf[names_path][:]]
-                    profile_names = hdf_names
+                    profile_names = HdfChannelCapacity._decode_hdf_strings(hdf[names_path][:])
                 else:
                     profile_names = [f"Profile_{i+1:02d}" for i in range(n_profiles)]
 
@@ -335,16 +540,9 @@ class HdfChannelCapacity:
                     f"contains {n_profiles} profiles"
                 )
 
-            # Read cross section attributes
-            attrs_path = f"{base_steady}/Cross Sections/Cross Section Attributes"
-            if attrs_path not in hdf:
-                # Fallback: try geometry info
-                attrs_path = "Results/Steady/Output/Geometry Info/Cross Section Attributes"
-
-            attrs = hdf[attrs_path][:]
-            xs_rivers = [a['River'].decode().strip() for a in attrs]
-            xs_reaches = [a['Reach'].decode().strip() for a in attrs]
-            xs_stations = [a['Station'].decode().strip() for a in attrs]
+            xs_rivers, xs_reaches, xs_stations = HdfChannelCapacity._read_cross_section_attributes(
+                hdf, n_xs
+            )
 
         # Build DataFrame with one column per profile
         result = {
@@ -357,7 +555,7 @@ class HdfChannelCapacity:
 
         result_df = pd.DataFrame(result)
 
-        logger.debug(
+        logger.info(
             f"Extracted {n_profiles} steady profiles for {n_xs} cross sections "
             f"from {hdf_path.name}"
         )
@@ -366,23 +564,33 @@ class HdfChannelCapacity:
     @staticmethod
     @log_call
     def extract_max_wse(
-        plan_inputs: Union[str, Path, List[Union[str, Path]]],
+        plan_inputs: Union[
+            str,
+            Path,
+            Dict[str, Union[str, Path, Tuple[Union[str, Path], str]]],
+            List[Union[str, Path]]
+        ],
         profile_names: Optional[List[str]] = None,
+        steady_profile_names: Optional[Union[str, List[Optional[str]], Dict[str, str]]] = None,
         ras_object: Optional[Any] = None
     ) -> pd.DataFrame:
         """
         Extract maximum water surface elevation at each XS from one or more plans.
 
-        Auto-detects format using a 3-level detection chain:
-        1. RAS 6.x unsteady (pre-calculated Maximum Water Surface)
-        2. RAS 5.x unsteady (Water Surface time series → max across time)
-        3. Steady-state (Water Surface profiles → max across profiles)
+        Auto-detects format using the following fallback chain:
+        1. RAS 6.x unsteady summary output (Maximum Water Surface)
+        2. RAS 5.x/6.x unsteady time series (Water Surface -> max across time)
+        3. Steady-state profiles (selected profile or max across profiles)
 
         Args:
             plan_inputs: Single plan path/number or list of plan paths/numbers.
-                        Each entry is resolved via _standardize_hdf_input.
+                        A dict may be used as {output_column: plan_input}; dict
+                        values may also be (plan_input, steady_profile_name).
             profile_names: Optional list of profile/storm names corresponding to
                           each plan input. If None, uses "Plan_01", "Plan_02", etc.
+            steady_profile_names: Optional steady-state profile name(s) to select
+                          from plan HDF files. Use a string for one input, a list
+                          matching plan_inputs, or a dict keyed by output column.
             ras_object: Optional RAS project object for multi-project workflows.
 
         Returns:
@@ -390,13 +598,27 @@ class HdfChannelCapacity:
                 River, Reach, RS, plus one WSE column per plan
                 (named by profile_names or "Plan_XX")
         """
-        import h5py
         from ras_commander import ras as global_ras
 
         _ras = ras_object if ras_object is not None else global_ras
 
-        # Normalize to list
-        if not isinstance(plan_inputs, list):
+        steady_profiles_by_name: Dict[str, Optional[str]] = {}
+
+        if isinstance(plan_inputs, dict):
+            normalized_inputs = []
+            normalized_names = []
+            for name, value in plan_inputs.items():
+                if isinstance(value, tuple):
+                    plan_value, steady_name = value
+                    steady_profiles_by_name[name] = steady_name
+                else:
+                    plan_value = value
+                normalized_names.append(name)
+                normalized_inputs.append(plan_value)
+            plan_inputs = normalized_inputs
+            if profile_names is None:
+                profile_names = normalized_names
+        elif not isinstance(plan_inputs, list):
             plan_inputs = [plan_inputs]
 
         if profile_names is None:
@@ -407,9 +629,34 @@ class HdfChannelCapacity:
                 f"Length mismatch: {len(plan_inputs)} plans but {len(profile_names)} profile names"
             )
 
+        if isinstance(steady_profile_names, str):
+            steady_profile_lookup = [steady_profile_names]
+        elif isinstance(steady_profile_names, dict):
+            steady_profile_lookup = [
+                steady_profile_names.get(name, steady_profiles_by_name.get(name))
+                for name in profile_names
+            ]
+        elif steady_profile_names is None:
+            steady_profile_lookup = [
+                steady_profiles_by_name.get(name)
+                for name in profile_names
+            ]
+        else:
+            steady_profile_lookup = list(steady_profile_names)
+
+        if len(steady_profile_lookup) == 1 and len(plan_inputs) > 1:
+            steady_profile_lookup = steady_profile_lookup * len(plan_inputs)
+
+        if len(steady_profile_lookup) != len(plan_inputs):
+            raise ValueError(
+                "steady_profile_names must be a string, dict, or list matching plan_inputs"
+            )
+
         result_df = None
 
-        for plan_input, pname in zip(plan_inputs, profile_names):
+        for plan_input, pname, steady_profile_name in zip(
+            plan_inputs, profile_names, steady_profile_lookup
+        ):
             hdf_path = HdfChannelCapacity._standardize_hdf_input(
                 plan_input, f"plan ({pname})", _ras
             )
@@ -418,53 +665,19 @@ class HdfChannelCapacity:
                 logger.warning(f"HDF not found for {pname}: {hdf_path}")
                 continue
 
-            logger.debug(f"Extracting Max WSE from {hdf_path.name} as '{pname}'")
+            logger.info(f"Extracting Max WSE from {hdf_path.name} as '{pname}'")
 
-            max_wse_values = None
-            xs_rivers = None
-            xs_reaches = None
-            xs_stations = None
-
-            with h5py.File(hdf_path, 'r') as hdf:
-                # Path constants
-                base_unsteady = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Cross Sections"
-                base_steady = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Cross Sections"
-
-                # --- Format 1: RAS 6.x unsteady (pre-calculated max) ---
-                try:
-                    ws_ds = hdf[f"{base_unsteady}/Water Surface"]
-                    ws_data = ws_ds[:]
-                    max_wse_values = np.max(ws_data, axis=0)
-
-                    attrs_ds = hdf[f"{base_unsteady}/Cross Section Attributes"]
-                    attrs = attrs_ds[:]
-                    xs_rivers = [a['River'].decode('utf-8').strip() for a in attrs]
-                    xs_reaches = [a['Reach'].decode('utf-8').strip() for a in attrs]
-                    xs_stations = [a['Station'].decode('utf-8').strip() for a in attrs]
-
-                    logger.debug(f"  Format: RAS 6.x/5.x unsteady ({len(max_wse_values)} XS)")
-                except KeyError:
-                    pass
-
-                # --- Format 2: Steady-state profiles ---
-                if max_wse_values is None:
-                    try:
-                        ws_ds = hdf[f"{base_steady}/Water Surface"]
-                        ws_data = ws_ds[:]  # shape: (n_profiles, n_xs)
-                        max_wse_values = np.max(ws_data, axis=0)
-
-                        attrs_ds = hdf[f"{base_steady}/Cross Section Attributes"]
-                        attrs = attrs_ds[:]
-                        xs_rivers = [a['River'].decode('utf-8').strip() for a in attrs]
-                        xs_reaches = [a['Reach'].decode('utf-8').strip() for a in attrs]
-                        xs_stations = [a['Station'].decode('utf-8').strip() for a in attrs]
-
-                        logger.debug(f"  Format: Steady-state ({len(max_wse_values)} XS)")
-                    except KeyError:
-                        pass
-
-            if max_wse_values is None:
-                logger.warning(f"Could not extract WSE from {hdf_path.name}")
+            try:
+                max_wse_values, attrs, source = HdfChannelCapacity._extract_single_plan_wse(
+                    hdf_path,
+                    profile_name=steady_profile_name,
+                )
+                xs_rivers, xs_reaches, xs_stations = attrs
+                logger.debug(
+                    f"  Format: {source} ({len(max_wse_values)} XS)"
+                )
+            except Exception as exc:
+                logger.warning(f"Could not extract WSE from {hdf_path.name}: {exc}")
                 continue
 
             plan_df = pd.DataFrame({
@@ -484,7 +697,7 @@ class HdfChannelCapacity:
         if result_df is None:
             raise ValueError("No WSE data extracted from any plan input.")
 
-        logger.debug(
+        logger.info(
             f"Extracted Max WSE: {len(result_df)} XS, "
             f"{len([c for c in result_df.columns if c not in ('River','Reach','RS')])} plans"
         )
@@ -503,6 +716,8 @@ class HdfChannelCapacity:
         Tests storms from smallest (most frequent) to largest (least frequent).
         For each XS, the capacity level corresponds to the largest storm the
         channel can contain without the WSE exceeding the controlling bank elevation.
+        The sweep stops at the first overtopping event for each cross section,
+        which is the conservative interpretation of channel capacity.
 
         Args:
             bank_elevations: DataFrame from extract_bank_elevations() with columns:
@@ -537,50 +752,32 @@ class HdfChannelCapacity:
 
         bank_elev = merged['controlling_bank_elev'].values
 
-        # Vectorized capacity determination
-        # Start assuming all XS are contained (level 6 = contains all storms)
-        capacity_level = np.full(n_xs, 6, dtype=int)
-        last_contained_storm = np.full(n_xs, '', dtype=object)
-        still_contained = np.ones(n_xs, dtype=bool)
+        # Vectorized capacity determination. Start at Level 1, then promote
+        # cross sections as they contain progressively larger events.
+        capacity_level = np.ones(n_xs, dtype=int)
+        last_contained_storm = np.full(n_xs, 'None', dtype=object)
+        still_testing = np.ones(n_xs, dtype=bool)
 
-        for i, storm in enumerate(storm_order):
+        for storm in storm_order:
             if storm not in merged.columns:
                 logger.warning(f"Storm column '{storm}' not found in WSE data, skipping")
                 continue
 
             wse_values = merged[storm].values
-            # Mark NaN WSE as not overtopping (no data = not overtopping)
-            overtops = np.where(np.isnan(wse_values), False, wse_values > bank_elev)
+            valid = ~np.isnan(wse_values)
+            contained = still_testing & valid & (wse_values <= bank_elev)
+            overtops = still_testing & valid & (wse_values > bank_elev)
 
             # Create boolean overtop column
             merged[f'overtop_{storm}'] = overtops
 
-            # XS that were still contained but now overtop
-            newly_overtopped = still_contained & overtops
+            if np.any(contained):
+                capacity_level[contained] = STORM_TO_LEVEL.get(storm, capacity_level[contained])
+                last_contained_storm[contained] = storm
 
-            if i == 0:
-                # Overtopped by smallest storm → level 7 (All overtop)
-                capacity_level[newly_overtopped] = 7
-            else:
-                # Capacity = level corresponding to this storm index
-                # Level 1 = overtopped at 2nd storm (was only contained by 1st)
-                # etc.
-                capacity_level[newly_overtopped] = i
-
-            # Update last contained storm for XS that were contained before this storm
-            if i > 0:
-                # XS that are about to lose containment had their last contained = previous storm
-                last_contained_storm[newly_overtopped] = storm_order[i - 1]
-
-            still_contained = still_contained & ~overtops
-
-        # XS still contained after all storms → level 6
-        capacity_level[still_contained] = 6
-        last_contained_storm[still_contained] = storm_order[-1] if storm_order else ''
-
-        # XS overtopped by first storm have no last contained storm
-        level7_mask = capacity_level == 7
-        last_contained_storm[level7_mask] = 'None'
+            # Stop testing after first overtopping. This preserves the
+            # production behavior when bad/nonmonotonic WSE data are present.
+            still_testing[overtops] = False
 
         # Map levels to categories
         capacity_category = np.array([LEVEL_TO_CATEGORY.get(lv, 'Unknown') for lv in capacity_level])
@@ -593,7 +790,7 @@ class HdfChannelCapacity:
         for level in sorted(LEVEL_TO_CATEGORY.keys()):
             count = np.sum(capacity_level == level)
             if count > 0:
-                logger.debug(f"  Level {level} ({LEVEL_TO_CATEGORY[level]}): {count} XS")
+                logger.info(f"  Level {level} ({LEVEL_TO_CATEGORY[level]}): {count} XS")
 
         return merged
 
@@ -640,29 +837,42 @@ class HdfChannelCapacity:
             group = group.sort_values('RS_float', ascending=False)  # Downstream order
 
             # Compute cumulative channel length
-            len_channel = group['Len Channel'].values
-            cumulative_length = np.cumsum(len_channel)
+            if 'Len Channel' in group.columns:
+                len_channel = pd.to_numeric(group['Len Channel'], errors='coerce').fillna(0.0).values
+            else:
+                len_channel = np.zeros(len(group), dtype=float)
+            cumulative_length = np.zeros(len(group), dtype=float)
+            if len(group) > 1:
+                cumulative_length[1:] = np.cumsum(len_channel[:-1])
+            group['cumulative_distance_ft'] = cumulative_length
 
             # Determine segment boundaries
-            total_length = cumulative_length[-1] if len(cumulative_length) > 0 else 0
+            total_length = float(np.nansum(len_channel))
+            if total_length <= 0 and len(cumulative_length) > 0:
+                total_length = float(cumulative_length[-1])
             n_segments = max(1, int(np.ceil(total_length / segment_length)))
 
             for seg_idx in range(n_segments):
                 seg_start = seg_idx * segment_length
                 seg_end = min((seg_idx + 1) * segment_length, total_length)
+                if total_length <= 0:
+                    seg_end = segment_length
 
                 # Find XS in this segment
-                if seg_idx == 0:
-                    mask = cumulative_length <= seg_end
+                if seg_idx == n_segments - 1:
+                    mask = (cumulative_length >= seg_start) & (cumulative_length <= seg_end)
                 else:
-                    mask = (cumulative_length > seg_start) & (cumulative_length <= seg_end)
+                    mask = (cumulative_length >= seg_start) & (cumulative_length < seg_end)
 
                 seg_xs = group[mask]
                 if len(seg_xs) == 0:
                     continue
 
                 # Weighted average capacity
-                weights = seg_xs['Len Channel'].values
+                if 'Len Channel' in seg_xs.columns:
+                    weights = pd.to_numeric(seg_xs['Len Channel'], errors='coerce').fillna(0.0).values
+                else:
+                    weights = np.zeros(len(seg_xs), dtype=float)
                 capacities = seg_xs['capacity_level'].values
                 total_weight = weights.sum()
 
@@ -674,22 +884,32 @@ class HdfChannelCapacity:
                 # FLOOR for conservative assessment
                 floored_level = int(np.floor(weighted_cap))
                 floored_level = max(1, min(7, floored_level))  # Clamp to valid range
+                capacity_category = LEVEL_TO_CATEGORY.get(floored_level, 'Unknown')
+                actual_segment_length = max(0.0, seg_end - seg_start)
 
                 segments.append({
                     'River': river,
                     'Reach': reach,
+                    'river': river,
+                    'reach': reach,
                     'segment_id': seg_idx + 1,
                     'segment_start_rs': seg_xs['RS'].iloc[0],
                     'segment_end_rs': seg_xs['RS'].iloc[-1],
+                    'start_distance': seg_start,
+                    'end_distance': seg_end,
+                    'segment_length_ft': actual_segment_length,
+                    'segment_length_miles': actual_segment_length / 5280.0,
                     'weighted_capacity': round(weighted_cap, 2),
                     'capacity_level': floored_level,
-                    'capacity_category': LEVEL_TO_CATEGORY.get(floored_level, 'Unknown'),
-                    'channel_length': total_weight,
+                    'capacity_category': capacity_category,
+                    'system_capacity': capacity_category,
+                    'channel_length': actual_segment_length,
+                    'cross_section_count': len(seg_xs),
                     'xs_count': len(seg_xs),
                 })
 
         result = pd.DataFrame(segments)
-        logger.debug(f"Created {len(result)} segments across {capacity_df[['River','Reach']].drop_duplicates().shape[0]} reaches")
+        logger.info(f"Created {len(result)} segments across {capacity_df[['River','Reach']].drop_duplicates().shape[0]} reaches")
         return result
 
     @staticmethod
@@ -700,12 +920,13 @@ class HdfChannelCapacity:
         """
         Generate system-wide capacity distribution summary (Table 2).
 
-        Groups cross sections by capacity level and computes the total
-        channel length and percentage at each level.
+        Groups cross sections or channel segments by capacity level and computes
+        the total channel length and percentage at each level.
 
         Args:
-            capacity_df: DataFrame from determine_capacity() with columns:
-                        capacity_level, Len Channel
+            capacity_df: DataFrame from segment_channel() with columns
+                        capacity_level and segment_length_ft/channel_length, or
+                        from determine_capacity() with capacity_level and Len Channel.
 
         Returns:
             DataFrame with columns:
@@ -717,15 +938,42 @@ class HdfChannelCapacity:
         if len(capacity_df) == 0:
             return pd.DataFrame()
 
-        summary = capacity_df.groupby('capacity_level').agg(
-            channel_length_ft=('Len Channel', 'sum'),
-            xs_count=('RS', 'count')
+        work_df = capacity_df.copy()
+        if 'capacity_level' not in work_df.columns and 'system_capacity' in work_df.columns:
+            work_df['capacity_level'] = work_df['system_capacity'].map(CATEGORY_TO_LEVEL)
+
+        if 'segment_length_ft' in work_df.columns:
+            length_col = 'segment_length_ft'
+        elif 'channel_length' in work_df.columns:
+            length_col = 'channel_length'
+        elif 'Len Channel' in work_df.columns:
+            length_col = 'Len Channel'
+        elif 'segment_length_miles' in work_df.columns:
+            work_df['segment_length_ft'] = work_df['segment_length_miles'] * 5280.0
+            length_col = 'segment_length_ft'
+        else:
+            raise ValueError(
+                "capacity_df must contain segment_length_ft, channel_length, "
+                "segment_length_miles, or Len Channel."
+            )
+
+        count_col = 'segment_id' if 'segment_id' in work_df.columns else 'RS'
+        if count_col not in work_df.columns:
+            work_df['_row_count'] = 1
+            count_col = '_row_count'
+
+        summary = work_df.groupby('capacity_level').agg(
+            channel_length_ft=(length_col, 'sum'),
+            xs_count=(count_col, 'count')
         ).reset_index()
 
         total_length = summary['channel_length_ft'].sum()
-        summary['percent_of_total'] = (
-            summary['channel_length_ft'] / total_length * 100
-        ).round(1)
+        if total_length > 0:
+            summary['percent_of_total'] = (
+                summary['channel_length_ft'] / total_length * 100
+            ).round(1)
+        else:
+            summary['percent_of_total'] = 0.0
 
         summary['capacity_category'] = summary['capacity_level'].map(LEVEL_TO_CATEGORY)
 
@@ -811,7 +1059,7 @@ class HdfChannelCapacity:
         )
 
         # Step 5: System summary
-        summary = HdfChannelCapacity.system_capacity_summary(xs_capacity)
+        summary = HdfChannelCapacity.system_capacity_summary(segments)
 
         logger.info("Channel capacity analysis complete")
         return {
@@ -825,61 +1073,113 @@ class HdfChannelCapacity:
     @staticmethod
     @log_call
     def compare_conditions(
-        existing_results: Dict[str, Any],
-        proposed_results: Dict[str, Any]
+        existing_results: Union[Dict[str, Any], pd.DataFrame],
+        proposed_results: Union[Dict[str, Any], pd.DataFrame],
+        level: str = "segments"
     ) -> pd.DataFrame:
         """
         Compare channel capacity between existing and proposed conditions.
 
-        Produces a side-by-side comparison at each cross section showing
-        capacity level changes between two analysis results.
+        Produces a side-by-side segment-level comparison showing capacity level
+        changes between two analysis results. A positive level change is an
+        improvement because higher capacity levels contain larger events.
 
         Args:
-            existing_results: Dict from analyze_channel_capacity() for existing conditions
-            proposed_results: Dict from analyze_channel_capacity() for proposed conditions
+            existing_results: Dict from analyze_channel_capacity() or a capacity
+                DataFrame for existing conditions.
+            proposed_results: Dict from analyze_channel_capacity() or a capacity
+                DataFrame for proposed conditions.
+            level: "segments" for default segment-level comparison, or "xs" for
+                cross-section comparison.
 
         Returns:
             DataFrame with columns:
-                River, Reach, RS,
+                River, Reach, segment_id (or RS for level="xs"),
                 existing_level, existing_category,
                 proposed_level, proposed_category,
-                change (positive = improved),
-                improved (bool)
+                level_change, classification
         """
-        existing_cap = existing_results['xs_capacity'][
-            ['River', 'Reach', 'RS', 'capacity_level', 'capacity_category']
-        ].rename(columns={
+        def _capacity_frame(results: Union[Dict[str, Any], pd.DataFrame], comparison_level: str) -> pd.DataFrame:
+            if isinstance(results, pd.DataFrame):
+                return results.copy()
+            if comparison_level == "xs":
+                return results["xs_capacity"].copy()
+            if "segments" in results and len(results["segments"]) > 0:
+                return results["segments"].copy()
+            return results["xs_capacity"].copy()
+
+        if level not in {"segments", "xs"}:
+            raise ValueError("level must be 'segments' or 'xs'")
+
+        existing_frame = _capacity_frame(existing_results, level)
+        proposed_frame = _capacity_frame(proposed_results, level)
+
+        if 'capacity_level' not in existing_frame.columns and 'system_capacity' in existing_frame.columns:
+            existing_frame['capacity_level'] = existing_frame['system_capacity'].map(CATEGORY_TO_LEVEL)
+            existing_frame['capacity_category'] = existing_frame['system_capacity']
+        if 'capacity_level' not in proposed_frame.columns and 'system_capacity' in proposed_frame.columns:
+            proposed_frame['capacity_level'] = proposed_frame['system_capacity'].map(CATEGORY_TO_LEVEL)
+            proposed_frame['capacity_category'] = proposed_frame['system_capacity']
+
+        key_cols = ['River', 'Reach', 'RS'] if level == "xs" else ['River', 'Reach', 'segment_id']
+        if level == "segments":
+            for frame in (existing_frame, proposed_frame):
+                if 'River' not in frame.columns and 'river' in frame.columns:
+                    frame['River'] = frame['river']
+                if 'Reach' not in frame.columns and 'reach' in frame.columns:
+                    frame['Reach'] = frame['reach']
+
+        missing_existing = [col for col in key_cols + ['capacity_level'] if col not in existing_frame.columns]
+        missing_proposed = [col for col in key_cols + ['capacity_level'] if col not in proposed_frame.columns]
+        if missing_existing or missing_proposed:
+            raise ValueError(
+                f"Missing comparison columns. existing missing={missing_existing}; "
+                f"proposed missing={missing_proposed}"
+            )
+
+        keep_cols = key_cols + ['capacity_level']
+        if 'capacity_category' in existing_frame.columns:
+            keep_cols.append('capacity_category')
+        existing_cap = existing_frame[keep_cols].rename(columns={
             'capacity_level': 'existing_level',
-            'capacity_category': 'existing_category'
+            'capacity_category': 'existing_category',
         })
 
-        proposed_cap = proposed_results['xs_capacity'][
-            ['River', 'Reach', 'RS', 'capacity_level', 'capacity_category']
-        ].rename(columns={
+        keep_cols = key_cols + ['capacity_level']
+        if 'capacity_category' in proposed_frame.columns:
+            keep_cols.append('capacity_category')
+        proposed_cap = proposed_frame[keep_cols].rename(columns={
             'capacity_level': 'proposed_level',
-            'capacity_category': 'proposed_category'
+            'capacity_category': 'proposed_category',
         })
 
-        comparison = existing_cap.merge(proposed_cap, on=['River', 'Reach', 'RS'], how='outer')
+        comparison = existing_cap.merge(proposed_cap, on=key_cols, how='outer')
+        comparison['existing_category'] = comparison.get('existing_category', pd.Series(index=comparison.index)).fillna(
+            comparison['existing_level'].map(LEVEL_TO_CATEGORY)
+        )
+        comparison['proposed_category'] = comparison.get('proposed_category', pd.Series(index=comparison.index)).fillna(
+            comparison['proposed_level'].map(LEVEL_TO_CATEGORY)
+        )
 
-        # Map levels to effective ordering for comparison.
-        # Level 7 (overtopped by smallest storm) is WORSE than Level 1,
-        # so map it to 0 for correct change calculation.
-        # Ordering: 7(worst=0) < 1 < 2 < 3 < 4 < 5 < 6(best)
-        def _effective(level):
-            return 0 if level == 7 else level
+        comparison['level_change'] = comparison['proposed_level'] - comparison['existing_level']
+        comparison['classification'] = np.select(
+            [
+                comparison['level_change'] > 0,
+                comparison['level_change'] < 0,
+                comparison['level_change'] == 0,
+            ],
+            ['Improved', 'Degraded', 'No Change'],
+            default='Incomplete',
+        )
+        comparison['improved'] = comparison['classification'] == 'Improved'
 
-        eff_existing = comparison['existing_level'].apply(_effective)
-        eff_proposed = comparison['proposed_level'].apply(_effective)
+        n_improved = int((comparison['classification'] == 'Improved').sum())
+        n_degraded = int((comparison['classification'] == 'Degraded').sum())
+        n_unchanged = int((comparison['classification'] == 'No Change').sum())
 
-        # Positive change = improvement (higher effective level = more capacity)
-        comparison['change'] = eff_proposed - eff_existing
-        comparison['improved'] = comparison['change'] > 0
-
-        n_improved = comparison['improved'].sum()
-        n_degraded = (comparison['change'] < 0).sum()
-        n_unchanged = (comparison['change'] == 0).sum()
-
-        logger.info(f"Capacity comparison: {n_improved} improved, {n_degraded} degraded, {n_unchanged} unchanged")
+        logger.info(
+            f"Capacity comparison: {n_improved} improved, "
+            f"{n_degraded} degraded, {n_unchanged} unchanged"
+        )
 
         return comparison
