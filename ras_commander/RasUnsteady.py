@@ -127,6 +127,142 @@ class RasUnsteady:
     """
     Class for all operations related to HEC-RAS unsteady flow files.
     """
+    _PRECIP_VARIABLE_CANDIDATES = (
+        "APCP_surface",
+        "APCP",
+        "precip",
+        "precipitation",
+        "rain",
+    )
+
+    @staticmethod
+    def _find_precipitation_variable(
+        dataset: Any,
+        preferred: Optional[str] = None,
+    ) -> Optional[str]:
+        """Return the precipitation variable name used by HEC-RAS GDAL import."""
+        candidates: List[str] = []
+        if preferred:
+            candidates.append(str(preferred))
+        candidates.extend(
+            name
+            for name in RasUnsteady._PRECIP_VARIABLE_CANDIDATES
+            if name not in candidates
+        )
+        for var_name in candidates:
+            if var_name in dataset.data_vars:
+                return var_name
+        return None
+
+    @staticmethod
+    def _open_netcdf_dataset(netcdf_path: Path, xarray_module: Any) -> Any:
+        """Open a NetCDF dataset, preferring the quieter h5netcdf backend."""
+        try:
+            return xarray_module.open_dataset(netcdf_path, engine="h5netcdf")
+        except Exception as h5netcdf_error:
+            logger.debug(
+                "h5netcdf could not open %s; falling back to xarray default backend: %s",
+                netcdf_path,
+                h5netcdf_error,
+            )
+            return xarray_module.open_dataset(netcdf_path)
+
+    @staticmethod
+    def _decode_netcdf_text(value: Any) -> str:
+        """Decode NetCDF string-like metadata to plain text."""
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="ignore").strip()
+        if isinstance(value, np.bytes_):
+            return value.tobytes().decode("utf-8", errors="ignore").strip()
+        if isinstance(value, np.ndarray):
+            if value.shape == ():
+                return RasUnsteady._decode_netcdf_text(value.item())
+            if value.dtype.kind in {"S", "U"}:
+                return "".join(
+                    RasUnsteady._decode_netcdf_text(item)
+                    for item in value.tolist()
+                ).strip()
+        return str(value).strip()
+
+    @staticmethod
+    def _crs_metadata_to_wkt(value: Any) -> Optional[str]:
+        """Convert NetCDF CRS metadata to the WKT string written by HEC-RAS."""
+        crs_text = RasUnsteady._decode_netcdf_text(value)
+        if not crs_text:
+            return None
+
+        upper_text = crs_text.upper()
+        if upper_text.startswith(("PROJCS[", "GEOGCS[")):
+            return crs_text
+
+        try:
+            from pyproj import CRS
+
+            return CRS.from_user_input(crs_text).to_wkt(version="WKT1_GDAL")
+        except Exception as exc:
+            if upper_text.startswith(("PROJCRS[", "GEOGCRS[")):
+                return crs_text
+            raise ValueError(
+                f"Could not parse NetCDF CRS metadata as WKT/EPSG: {crs_text!r}"
+            ) from exc
+
+    @staticmethod
+    def _get_netcdf_crs_wkt(dataset: Any, precip_var: str) -> str:
+        """Read CRS WKT from CF/rioxarray-style NetCDF metadata."""
+        data_array = dataset[precip_var]
+        metadata_sources: List[Any] = []
+        metadata_source_names: set[str] = set()
+
+        grid_mapping_name = data_array.attrs.get("grid_mapping")
+        if grid_mapping_name and grid_mapping_name in dataset.variables:
+            metadata_sources.append(dataset[grid_mapping_name])
+            metadata_source_names.add(str(grid_mapping_name))
+
+        for var_name in ("spatial_ref", "crs"):
+            if var_name in dataset.variables and var_name not in metadata_source_names:
+                metadata_sources.append(dataset[var_name])
+                metadata_source_names.add(var_name)
+
+        metadata_sources.extend([data_array, dataset])
+
+        for source in metadata_sources:
+            attrs = getattr(source, "attrs", {})
+            for attr_name in (
+                "spatial_ref",
+                "crs_wkt",
+                "crs",
+                "epsg_code",
+                "proj4",
+            ):
+                if attr_name not in attrs:
+                    continue
+                wkt = RasUnsteady._crs_metadata_to_wkt(attrs[attr_name])
+                if wkt:
+                    return wkt
+
+        raise ValueError(
+            f"NetCDF precipitation variable {precip_var!r} does not define CRS "
+            "metadata. Add a CF grid_mapping variable with spatial_ref/crs_wkt "
+            "or a parseable CRS attribute."
+        )
+
+    @staticmethod
+    def _netcdf_interval_hours(times: Any) -> np.ndarray:
+        """Return per-row interval hours for instantaneous-rate NetCDF rasters."""
+        timestamps = pd.to_datetime(times)
+        n_times = len(timestamps)
+        interval_hours = np.zeros(n_times, dtype=np.float32)
+        if n_times <= 1:
+            return interval_hours
+
+        deltas = (timestamps[1:] - timestamps[:-1]).total_seconds() / 3600.0
+        deltas = np.asarray(deltas, dtype=np.float32)
+        if not np.all(np.isfinite(deltas)) or np.any(deltas <= 0):
+            raise ValueError("NetCDF precipitation times must be strictly increasing")
+
+        interval_hours[1:] = deltas
+        return interval_hours
+
     @staticmethod
     @log_call
     def update_flow_title(unsteady_file: str, new_title: str, ras_object: Optional[Any] = None) -> None:
@@ -4068,7 +4204,8 @@ class RasUnsteady:
         hdf_path: Path,
         netcdf_path: Path,
         netcdf_rel_path: str,
-        interpolation: str = "Nearest"
+        interpolation: str = "Nearest",
+        dataset_name: Optional[str] = None,
     ) -> None:
         """
         Import precipitation raster data into HDF in HEC-RAS 6.6 format.
@@ -4098,6 +4235,9 @@ class RasUnsteady:
         interpolation : str
             Interpolation method ("Bilinear" or "Nearest"). Default is "Nearest"
             which matches HEC-RAS 6.6 GUI default.
+        dataset_name : str, optional
+            NetCDF data variable name to import. If omitted, a common
+            precipitation variable name is detected from the file.
         """
         import h5py
         import numpy as np
@@ -4117,30 +4257,24 @@ class RasUnsteady:
             return
 
         try:
-            ds = xr.open_dataset(netcdf_path)
+            with RasUnsteady._open_netcdf_dataset(netcdf_path, xr) as ds:
+                precip_var = RasUnsteady._find_precipitation_variable(ds, dataset_name)
+                if precip_var is None:
+                    logger.warning(f"Could not find precipitation variable in {netcdf_path}")
+                    return
 
-            # Get precipitation variable
-            precip_var = None
-            for var_name in ['APCP_surface', 'APCP', 'precip', 'precipitation', 'rain']:
-                if var_name in ds.data_vars:
-                    precip_var = var_name
-                    break
-
-            if precip_var is None:
-                logger.warning(f"Could not find precipitation variable in {netcdf_path}")
-                ds.close()
-                return
-
-            precip_data = ds[precip_var].values  # Shape: (time, y, x)
-            times = ds['time'].values
-            x_coords = ds['x'].values
-            y_coords = ds['y'].values
-
-            ds.close()
+                precip_data = ds[precip_var].values  # Shape: (time, y, x)
+                times = ds['time'].values
+                x_coords = ds['x'].values
+                y_coords = ds['y'].values
+                srs_wkt = RasUnsteady._get_netcdf_crs_wkt(ds, precip_var)
 
             n_times, n_rows, n_cols = precip_data.shape
             logger.info(f"  NetCDF: {n_times} timesteps, {n_rows}x{n_cols} grid")
 
+        except ValueError as e:
+            logger.error(f"Invalid NetCDF precipitation metadata: {e}")
+            raise
         except Exception as e:
             logger.warning(f"Error reading NetCDF file: {e}")
             return
@@ -4160,28 +4294,19 @@ class RasUnsteady:
         precip_flat = precip_data.reshape(n_times, n_rows * n_cols)
 
         # Replace NaN with 0 for cumsum calculation
-        precip_flat = np.nan_to_num(precip_flat, nan=0.0)
+        precip_flat = np.nan_to_num(precip_flat, nan=0.0).astype(np.float32)
 
-        # Convert from instantaneous rate (mm/hr) to cumulative total (mm)
-        precip_cumulative = np.cumsum(precip_flat, axis=0).astype(np.float32)
+        # HEC-RAS 6.6 writes the first cumulative row as zero, then integrates
+        # instantaneous rates by each raster interval.
+        interval_hours = RasUnsteady._netcdf_interval_hours(times)
+        precip_amounts = precip_flat * interval_hours[:, np.newaxis]
+        precip_cumulative = np.cumsum(precip_amounts, axis=0).astype(np.float32)
 
         # Create timestamp strings in HEC-RAS 6.6 format (ISO 8601)
         # Format: 'YYYY-MM-DD HH:MM:SS' stored as |S19 fixed-length bytes
         import pandas as pd
         timestamps = pd.to_datetime(times)
         timestamp_strs = [t.strftime('%Y-%m-%d %H:%M:%S') for t in timestamps]
-
-        # EPSG:5070 WKT string (NAD83 / Conus Albers)
-        srs_wkt = ('PROJCS["NAD83 / Conus Albers",GEOGCS["NAD83",DATUM["North_American_Datum_1983",'
-                   'SPHEROID["GRS 1980",6378137,298.257222101,AUTHORITY["EPSG","7019"]],'
-                   'AUTHORITY["EPSG","6269"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],'
-                   'UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],'
-                   'AUTHORITY["EPSG","4269"]],PROJECTION["Albers_Conic_Equal_Area"],'
-                   'PARAMETER["latitude_of_center",23],PARAMETER["longitude_of_center",-96],'
-                   'PARAMETER["standard_parallel_1",29.5],PARAMETER["standard_parallel_2",45.5],'
-                   'PARAMETER["false_easting",0],PARAMETER["false_northing",0],'
-                   'UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],'
-                   'AXIS["Northing",NORTH],AUTHORITY["EPSG","5070"]]')
 
         # Generate GUID for dataset
         guid = str(uuid.uuid4())
@@ -4209,21 +4334,13 @@ class RasUnsteady:
                 precip_grp.attrs['Mode'] = np.bytes_('Gridded')
                 precip_grp.attrs['Source'] = np.bytes_('GDAL Raster File(s)')
                 precip_grp.attrs['GDAL Filename'] = np.bytes_(netcdf_rel_path)
-                precip_grp.attrs['GDAL Datasetname'] = np.bytes_('')
+                precip_grp.attrs['GDAL Datasetname'] = np.bytes_(precip_var)
                 precip_grp.attrs['GDAL Filter'] = np.bytes_('')
                 precip_grp.attrs['GDAL Folder'] = np.bytes_('')
                 precip_grp.attrs['Interpolation Method'] = np.bytes_(interpolation)
 
                 # HEC-RAS 6.6 requires Meteorology/Attributes dataset for indexing
-                attrs_path = f'{met_path}/Attributes'
-                if attrs_path not in f:
-                    # Create compound dtype for Attributes dataset
-                    attr_dtype = np.dtype([('Variable', 'S32'), ('Group', 'S42')])
-                    attr_data = np.array(
-                        [(b'Precipitation', b'Event Conditions/Meteorology/Precipitation')],
-                        dtype=attr_dtype
-                    )
-                    f.create_dataset(attrs_path, data=attr_data, chunks=(1,), compression='gzip')
+                RasUnsteady._ensure_meteorology_attributes_dataset(f, met_path)
 
                 # Create/recreate Imported Raster Data group
                 # HEC-RAS 6.6: NO attributes on this group (grid attrs go on Values dataset)
@@ -4367,6 +4484,7 @@ class RasUnsteady:
                 chunks=(1,),
                 maxshape=(None,),
                 compression="gzip",
+                compression_opts=1,
             )
             return
 
@@ -4397,6 +4515,7 @@ class RasUnsteady:
             chunks=(len(new_data),),
             maxshape=(None,),
             compression="gzip",
+            compression_opts=1,
         )
 
     @staticmethod
@@ -4593,7 +4712,8 @@ class RasUnsteady:
         unsteady_file: Union[str, Path],
         netcdf_path: Union[str, Path],
         interpolation: str = "Bilinear",
-        ras_object: Optional[Any] = None
+        ras_object: Optional[Any] = None,
+        dataset_name: Optional[str] = None,
     ) -> None:
         """
         Configure gridded precipitation from a NetCDF file in an unsteady flow file.
@@ -4614,6 +4734,10 @@ class RasUnsteady:
             Spatial interpolation method. Options: "Bilinear", "Nearest"
         ras_object : optional
             Custom RAS object to use instead of the global one
+        dataset_name : str, optional
+            NetCDF data variable name. If omitted and the NetCDF exists, a
+            common precipitation variable name is detected and written to the
+            HEC-RAS ``Gridded GDAL Group`` field.
 
         Returns
         -------
@@ -4661,35 +4785,65 @@ class RasUnsteady:
         if not unsteady_path.exists():
             raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
 
+        interpolation = RasUnsteady._normalize_gridded_interpolation(interpolation)
+
         # Convert netcdf_path to relative path if within project folder
         netcdf_path = Path(netcdf_path)
         if netcdf_path.is_absolute():
+            netcdf_full_path = netcdf_path
             try:
                 netcdf_rel = netcdf_path.relative_to(ras_obj.project_folder)
                 netcdf_str = f".\\{netcdf_rel}".replace("/", "\\")
             except ValueError:
                 netcdf_str = str(netcdf_path)
         else:
+            netcdf_full_path = ras_obj.project_folder / netcdf_path
             netcdf_str = f".\\{netcdf_path}".replace("/", "\\")
+
+        if dataset_name is None and netcdf_full_path.exists():
+            try:
+                import xarray as xr
+
+                with RasUnsteady._open_netcdf_dataset(netcdf_full_path, xr) as ds:
+                    dataset_name = RasUnsteady._find_precipitation_variable(ds)
+            except Exception as e:
+                logger.warning(f"Could not detect NetCDF precipitation variable: {e}")
 
         logger.info(f"Configuring gridded precipitation in {unsteady_path}")
         logger.info(f"  NetCDF file: {netcdf_str}")
         logger.info(f"  Interpolation: {interpolation}")
+        if dataset_name:
+            logger.info(f"  Dataset: {dataset_name}")
 
         # Read the file
         with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
         # Track what we need to update
+        precip_mode_updated = False
+        mode_updated = False
         source_updated = False
         source_line = -1
         interp_updated = False
+        interp_line = -1
         gdal_filename_updated = False
         gdal_filename_line = -1
+        gdal_group_updated = False
+        gdal_group_insert_line = -1
 
         for i, line in enumerate(lines):
+            # Enable top-level Meteorological Data precipitation
+            if line.startswith("Precipitation Mode="):
+                lines[i] = "Precipitation Mode=Enable\n"
+                precip_mode_updated = True
+
+            # Ensure the precipitation variable itself is gridded
+            elif line.startswith("Met BC=Precipitation|Mode="):
+                lines[i] = "Met BC=Precipitation|Mode=Gridded\n"
+                mode_updated = True
+
             # Update Gridded Source to GDAL Raster File(s)
-            if line.startswith("Met BC=Precipitation|Gridded Source="):
+            elif line.startswith("Met BC=Precipitation|Gridded Source="):
                 lines[i] = "Met BC=Precipitation|Gridded Source=GDAL Raster File(s)\n"
                 source_updated = True
                 source_line = i
@@ -4699,13 +4853,26 @@ class RasUnsteady:
             elif line.startswith("Met BC=Precipitation|Gridded Interpolation="):
                 lines[i] = f"Met BC=Precipitation|Gridded Interpolation={interpolation}\n"
                 interp_updated = True
+                interp_line = i
                 logger.debug(f"Updated Gridded Interpolation at line {i+1}")
 
             # Update or track GDAL Filename line
             elif line.startswith("Met BC=Precipitation|Gridded GDAL Filename="):
                 lines[i] = f"Met BC=Precipitation|Gridded GDAL Filename={netcdf_str}\n"
                 gdal_filename_updated = True
+                gdal_filename_line = i + 1
+                gdal_group_insert_line = i + 1
                 logger.debug(f"Updated GDAL Filename at line {i+1}")
+
+            # Update GDAL Group/Dataset line
+            elif line.startswith((
+                "Met BC=Precipitation|Gridded GDAL Group=",
+                "Met BC=Precipitation|Gridded GDAL Datasetname=",
+            )):
+                if dataset_name:
+                    lines[i] = f"Met BC=Precipitation|Gridded GDAL Group={dataset_name}\n"
+                gdal_group_updated = True
+                logger.debug(f"Updated GDAL Group at line {i+1}")
 
             # Track location after DSS Pathname for inserting GDAL Filename if needed
             elif line.startswith("Met BC=Precipitation|Gridded DSS Pathname="):
@@ -4715,25 +4882,50 @@ class RasUnsteady:
         if not interp_updated and source_line >= 0:
             lines.insert(source_line + 1, f"Met BC=Precipitation|Gridded Interpolation={interpolation}\n")
             interp_updated = True
+            interp_line = source_line + 1
             # Adjust line numbers for subsequent inserts
             if gdal_filename_line > source_line:
                 gdal_filename_line += 1
             logger.debug(f"Inserted Gridded Interpolation at line {source_line+2}")
 
-        # If GDAL Filename line didn't exist, insert it after DSS Pathname
+        # If GDAL Filename line didn't exist, insert it after the GDAL source
+        # block. Empty GUI GDAL fixtures do not have DSS pathname lines, so
+        # that older insertion anchor is optional.
         if not gdal_filename_updated and gdal_filename_line > 0:
             lines.insert(gdal_filename_line, f"Met BC=Precipitation|Gridded GDAL Filename={netcdf_str}\n")
             gdal_filename_updated = True
+            gdal_group_insert_line = gdal_filename_line + 1
             logger.debug(f"Inserted GDAL Filename at line {gdal_filename_line+1}")
+            if interp_line >= gdal_filename_line:
+                interp_line += 1
+        elif not gdal_filename_updated:
+            insert_after = interp_line if interp_line >= 0 else source_line
+            if insert_after >= 0:
+                gdal_filename_line = insert_after + 1
+                lines.insert(gdal_filename_line, f"Met BC=Precipitation|Gridded GDAL Filename={netcdf_str}\n")
+                gdal_filename_updated = True
+                gdal_group_insert_line = gdal_filename_line + 1
+                logger.debug(f"Inserted GDAL Filename at line {gdal_filename_line+1}")
+
+        if dataset_name and not gdal_group_updated:
+            insert_at = gdal_group_insert_line if gdal_filename_updated else -1
+            if insert_at > 0:
+                lines.insert(insert_at, f"Met BC=Precipitation|Gridded GDAL Group={dataset_name}\n")
+                gdal_group_updated = True
+                logger.debug(f"Inserted GDAL Group at line {insert_at+1}")
 
         # Verify all updates were made
+        if not precip_mode_updated:
+            logger.warning("Could not find 'Precipitation Mode=' line")
+        if not mode_updated:
+            logger.warning("Could not find 'Met BC=Precipitation|Mode=' line")
         if not source_updated:
             logger.warning("Could not find 'Met BC=Precipitation|Gridded Source=' line")
         if not gdal_filename_updated:
             logger.warning("Could not add GDAL Filename line")
 
         # Write the updated file
-        with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as f:
+        with open(unsteady_path, 'w', encoding='utf-8', errors='replace', newline='\r\n') as f:
             f.writelines(lines)
 
         logger.info(f"Successfully configured gridded precipitation in {unsteady_path}")
@@ -4741,17 +4933,12 @@ class RasUnsteady:
         # Import precipitation data into the HDF file
         hdf_path = Path(str(unsteady_path) + '.hdf')
         if hdf_path.exists():
-            # Resolve full path to NetCDF
-            if netcdf_path.is_absolute():
-                netcdf_full_path = netcdf_path
-            else:
-                netcdf_full_path = ras_obj.project_folder / netcdf_path
-
             RasUnsteady._update_precipitation_hdf(
                 hdf_path=hdf_path,
                 netcdf_path=netcdf_full_path,
                 netcdf_rel_path=netcdf_str,
-                interpolation=interpolation
+                interpolation=interpolation,
+                dataset_name=dataset_name,
             )
         else:
             logger.warning(f"HDF file not found: {hdf_path} - precipitation data not imported")
