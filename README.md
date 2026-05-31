@@ -570,25 +570,25 @@ boundary = HdfFluvialPluvial.calculate_fluvial_pluvial_boundary(
 Check out the examples in the repository to learn how to use RAS Commander:
 
 ### Project Setup
-- `00_Using_RasExamples.ipynb`: Download and extract HEC-RAS example projects
-- `01_project_initialization.ipynb`: Initialize HEC-RAS projects and explore their components
+- `100_using_ras_examples.ipynb`: Download and extract HEC-RAS example projects
+- `101_project_initialization.ipynb`: Initialize HEC-RAS projects and explore their components
 
 ### File Operations
-- `02_plan_and_geometry_operations.ipynb`: Clone and modify plan and geometry files
-- `03_unsteady_flow_operations.ipynb`: Extract and modify boundary conditions
-- `09_plan_parameter_operations.ipynb`: Retrieve and update plan parameters
+- `103_plan_and_geometry_operations.ipynb`: Clone and modify plan and geometry files
+- `300_unsteady_flow_operations.ipynb`: Extract and modify boundary conditions
+- `104_plan_parameter_operations.ipynb`: Retrieve and update plan parameters
 
 ### Execution Modes
-- `05_single_plan_execution.ipynb`: Execute a single plan with specific options
-- `06_executing_plan_sets.ipynb`: Different ways to specify and execute plan sets
-- `07_sequential_plan_execution.ipynb`: Run multiple plans in sequence
-- `08_parallel_execution.ipynb`: Run multiple plans in parallel
+- `110_single_plan_execution.ipynb`: Execute a single plan with specific options
+- `111_executing_plan_sets.ipynb`: Different ways to specify and execute plan sets
+- `112_sequential_plan_execution.ipynb`: Run multiple plans in sequence
+- `113_parallel_execution.ipynb`: Run multiple plans in parallel
 
 ### Legacy Version Support
-- `17_legacy_1d_automation_with_hecrascontroller_and_rascontrol.ipynb`: Using RasControl for HEC-RAS 3.x-6.x via COM interface
+- `121_legacy_hecrascontroller_and_rascontrol.ipynb`: Using RasControl for HEC-RAS 3.x-6.x via COM interface
 
 ### Advanced Operations
-- `04_multiple_project_operations.ipynb`: Work with multiple HEC-RAS projects simultaneously
+- `102_multiple_project_operations.ipynb`: Work with multiple HEC-RAS projects simultaneously
 
 These examples demonstrate practical applications of RAS Commander for automating HEC-RAS workflows, from basic operations to advanced scenarios.
 

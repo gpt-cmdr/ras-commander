@@ -404,7 +404,7 @@ else:
 
 Validation framework demonstrations:
 
-- [DSS Path Validation](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/311_validating_dss_paths.ipynb) - DSS boundary validation
+- [DSS Path Validation](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/318_validating_dss_paths.ipynb) - DSS boundary validation
 - [Map Layer Validation](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/611_validating_map_layers.ipynb) - Terrain and land cover validation
 
 ## See Also

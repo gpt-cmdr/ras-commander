@@ -30,7 +30,9 @@ This file is the canonical local instruction file for `ras_commander/precip/`.
 
 ## Reference Notebooks
 
-- `examples/720_atlas14_aep_events.ipynb`
+- `examples/720_precipitation_methods_comprehensive.ipynb`
+- `examples/721_precipitation_hyetograph_comparison.ipynb`
+- `examples/722_gridded_precipitation_atlas14.ipynb`
 - `examples/725_atlas14_spatial_variance.ipynb`
 - `examples/726_abm_hyetograph_grid.ipynb`
 - `examples/900_aorc_precipitation.ipynb`

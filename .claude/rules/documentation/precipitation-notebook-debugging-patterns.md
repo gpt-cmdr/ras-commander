@@ -320,7 +320,7 @@ total = hyeto['cumulative_depth'].iloc[-1]
 - All 4 methods demonstrated
 - DataFrame API usage throughout
 
-**Notebook 721**: `examples/721_Precipitation_Hyetograph_Comparison.ipynb`
+**Notebook 721**: `examples/721_precipitation_hyetograph_comparison.ipynb`
 - Multi-method multi-AEP workflow
 - Parallel execution pattern
 - Pre-execution validation cells

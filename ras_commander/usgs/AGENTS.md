@@ -45,9 +45,9 @@ This file is the canonical local instruction file for `ras_commander/usgs/`.
 
 ## Reference Notebooks
 
-- `examples/420_usgs_gauge_catalog.ipynb`
-- `examples/421_usgs_gauge_data_integration.ipynb`
-- `examples/422_usgs_real_time_monitoring.ipynb`
-- `examples/423_bc_generation_from_live_gauge.ipynb`
-- `examples/424_model_validation_with_usgs.ipynb`
-- `examples/911a_usgs_study_package_from_primitives.ipynb`
+- `examples/910_usgs_gauge_catalog.ipynb`
+- `examples/911_usgs_gauge_data_integration.ipynb`
+- `examples/912_usgs_real_time_monitoring.ipynb`
+- `examples/913_bc_generation_from_live_gauge.ipynb`
+- `examples/921_usgs_study_package_from_primitives.ipynb`
+- `examples/922_model_validation_with_usgs.ipynb`

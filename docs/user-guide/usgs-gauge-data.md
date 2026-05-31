@@ -571,7 +571,7 @@ Comprehensive workflow demonstrations:
 - [USGS Gauge Data Integration](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/911_usgs_gauge_data_integration.ipynb) - Complete workflow
 - [USGS Real-Time Monitoring](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/912_usgs_real_time_monitoring.ipynb) - Real-time data access
 - [BC from Live Gauge](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/913_bc_generation_from_live_gauge.ipynb) - Boundary condition generation
-- [Model Validation with USGS](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/914_model_validation_with_usgs.ipynb) - Validation workflow
+- [Model Validation with USGS](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/922_model_validation_with_usgs.ipynb) - Validation workflow
 
 ## See Also
 

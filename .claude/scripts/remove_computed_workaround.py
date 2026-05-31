@@ -203,7 +203,7 @@ def main():
     examples_dir = Path(__file__).parent.parent.parent / 'examples'
 
     notebooks_to_process = [
-        '721_Precipitation_Hyetograph_Comparison.ipynb',
+        '721_precipitation_hyetograph_comparison.ipynb',
         '722_gridded_precipitation_atlas14.ipynb',
         '900_aorc_precipitation.ipynb',
         '901_aorc_precipitation_catalog.ipynb'

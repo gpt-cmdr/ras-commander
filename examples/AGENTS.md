@@ -18,13 +18,15 @@ This file is the canonical local instruction file for `examples/`.
 ## Notebook Families
 
 - `100s` - project initialization, plan operations, execution, callbacks
-- `200s` - plain-text geometry parsing and HTAB workflows
-- `300s` - unsteady flow files, DSS boundaries, boundary visualization
-- `400s` - HDF geometry and results extraction
-- `700s` - Atlas 14, design storms, and precipitation workflows
+- `200s` - plain-text geometry parsing, structures, roughness, geometry authoring, calibration, and mesh workflows
+- `300s` - unsteady flow files, DSS boundaries, HMS matching, terrain modifications, and boundary visualization
+- `400s` - HDF geometry, hydraulic results, breach results, velocity profiles, and channel-capacity extraction
+- `500s` - remote execution, Linux execution, and ModPuls result extraction
+- `600s` - floodplain mapping, fluvial-pluvial delineation, and map-layer validation
+- `700s` - sensitivity testing, benchmarking, Atlas 14, design storms, and precipitation workflows
 - `800s` - QA and validation workflows
-- `900s` - forecasting, terrain, USGS, and operational workflows
-- `950s` - FEMA eBFE model organization
+- `900s` - AORC, USGS, real-time forecasting, STOFS-3D, terrain, and operational workflows
+- `950s` - FEMA eBFE model organization and validation
 - `960s` - cloud-native export workflows
 
 ## High-Value Reference Notebooks
@@ -33,23 +35,23 @@ This file is the canonical local instruction file for `examples/`.
 - `101_project_initialization.ipynb` - project metadata and DataFrame patterns
 - `110_single_plan_execution.ipynb` and `113_parallel_execution.ipynb` - execution patterns
 - `201_1d_plaintext_geometry.ipynb`, `203_htab_parameter_optimization.ipynb`, `205_extract_xs_xyz_from_geometry.ipynb` - geometry parsing and HTAB work
-- `218_infiltration_base_override_authoring.ipynb` - programmatic infiltration group creation and Base Override round-trip
-- `310_validating_dss_paths.ipynb` and `312_boundary_df_qmult_dss_paths.ipynb` - DSS workflows
-- `410_2d_hdf_data_extraction.ipynb` and `412_2d_detail_face_data_extraction.ipynb` - mesh and results extraction
-- `421_usgs_gauge_data_integration.ipynb` through `424_model_validation_with_usgs.ipynb` - USGS integration
-- `720_atlas14_aep_events.ipynb`, `725_atlas14_spatial_variance.ipynb`, `726_abm_hyetograph_grid.ipynb` - precipitation methods
+- `218_infiltration_base_override_authoring.ipynb` and `225_fixit_blocked_obstructions.ipynb` - infiltration and repair workflows
+- `312_boundary_df_qmult_dss_paths.ipynb` and `318_validating_dss_paths.ipynb` - DSS workflows
+- `410_2d_hdf_data_extraction.ipynb`, `412_2d_detail_face_data_extraction.ipynb`, `413_profile_line_flow_extraction.ipynb`, and `416_2d_velocity_profile_line.ipynb` - mesh and results extraction
+- `910_usgs_gauge_catalog.ipynb` through `919_operational_forecast_cycling.ipynb` - USGS, AORC validation, and forecast workflows
+- `921_usgs_study_package_from_primitives.ipynb` through `923_stofs3d_coastal_boundary.ipynb` - USGS study, validation, and coastal boundary workflows
+- `720_precipitation_methods_comprehensive.ipynb`, `721_precipitation_hyetograph_comparison.ipynb`, `725_atlas14_spatial_variance.ipynb`, and `726_abm_hyetograph_grid.ipynb` - precipitation methods
 - `915_realtime_forecast_workflow.ipynb` through `919_operational_forecast_cycling.ipynb` - operational forecast patterns
-- `925_xs_interpolation_surface.ipynb` - XS interpolation surface (channel bathymetry TIN)
-- `930_terrain_modification_analysis.ipynb` - terrain modification workflows
+- `920_terrain_creation.ipynb`, `925_xs_interpolation_surface.ipynb`, and `930_terrain_modification_analysis.ipynb` - terrain and geometry surface workflows
+- `950_ebfe_spring_creek.ipynb` through `958_model_sources_showcase.ipynb` - eBFE delivery and model source workflows
 - `960_cloud_native_geometry_export.ipynb` through `962_cloud_native_cog_results_export.ipynb` - `ras2cng` export patterns
 
 ## Import Cell Convention
 
 - Default committed state:
-  - Cell 0 is active pip-mode import code.
-  - Cell 1 is markdown containing dev-mode instructions.
-- For local development testing, temporarily flip those cells, then restore the committed state before finishing.
-- Never leave both cells active as code.
+  - Cell 0 is markdown with an H1 title matching the notebook topic.
+  - The first setup code cell keeps the active import/development toggle state used by that notebook.
+- For local development testing, temporarily adjust setup toggles, then restore the committed state before finishing.
 
 ## Notebook-Only Logic
 
