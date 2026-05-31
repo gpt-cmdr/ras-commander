@@ -735,6 +735,7 @@ class RasPrj:
                 'Met BC=Precipitation|Mode': r'Met BC=Precipitation\|Mode=(.+)',
                 'Met BC=Evapotranspiration|Mode': r'Met BC=Evapotranspiration\|Mode=(.+)',
                 'Met BC=Precipitation|Expanded View': r'Met BC=Precipitation\|Expanded View=(.+)',
+                'Met BC=Precipitation|Constant Value': r'Met BC=Precipitation\|Constant Value=(.+)',
                 'Met BC=Precipitation|Constant Units': r'Met BC=Precipitation\|Constant Units=(.+)',
                 'Met BC=Precipitation|Gridded Source': r'Met BC=Precipitation\|Gridded Source=(.+)'
             }

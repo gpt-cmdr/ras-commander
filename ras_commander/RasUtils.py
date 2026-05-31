@@ -515,7 +515,9 @@ class RasUtils:
         max_attempts (int): Maximum number of removal attempts.
         initial_delay (float): Initial delay between attempts in seconds.
         is_folder (bool): If True, the path is treated as a folder; if False, it's treated as a file.
-        ras_object (RasPrj, optional): RAS object to use. If None, uses the default ras object.
+        ras_object (RasPrj, optional): Accepted for backward compatibility. The
+            cleanup does not require an initialized RAS project, so it can be used
+            before project extraction or during worker-folder cleanup.
 
         Returns:
         bool: True if the file or folder was successfully removed, False otherwise.
@@ -524,10 +526,6 @@ class RasUtils:
         >>> success = RasUtils.remove_with_retry(Path("temp_folder"), is_folder=True)
         >>> print(f"Removal successful: {success}")
         """
-        
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-
         path = Path(path)
         for attempt in range(1, max_attempts + 1):
             try:

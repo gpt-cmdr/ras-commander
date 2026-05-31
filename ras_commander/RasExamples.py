@@ -52,6 +52,7 @@ import re
 from tqdm import tqdm
 from ras_commander import get_logger
 from ras_commander.LoggingConfig import log_call
+from ras_commander.RasUtils import RasUtils
 
 logger = get_logger(__name__)
 
@@ -258,7 +259,8 @@ class RasExamples:
             if final_folder_path.exists():
                 logger.debug(f"Folder '{folder_name}' already exists. Deleting existing folder...")
                 try:
-                    shutil.rmtree(final_folder_path)
+                    if not RasUtils.remove_with_retry(final_folder_path, ras_object=None):
+                        raise PermissionError(f"Unable to remove existing folder: {final_folder_path}")
                     logger.debug(f"Existing folder '{folder_name}' has been deleted.")
                 except Exception as e:
                     raise RuntimeError(

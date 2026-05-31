@@ -873,7 +873,8 @@ class RasCmdr:
                 dest_folder_path = Path(dest_folder)
                 if dest_folder_path.exists():
                     if overwrite_dest:
-                        shutil.rmtree(dest_folder_path)
+                        if not RasUtils.remove_with_retry(dest_folder_path, ras_object=None):
+                            raise PermissionError(f"Unable to remove destination folder: {dest_folder_path}")
                         logger.info(f"Destination folder '{dest_folder_path}' exists. Overwriting as per overwrite_dest=True.")
                     elif any(dest_folder_path.iterdir()):
                         error_msg = f"Destination folder '{dest_folder_path}' exists and is not empty. Use overwrite_dest=True to overwrite."
@@ -936,7 +937,8 @@ class RasCmdr:
             for worker_id in range(1, max_workers + 1):
                 worker_folder = project_folder.parent / f"{project_folder.name} [Worker {worker_id}]"
                 if worker_folder.exists():
-                    shutil.rmtree(worker_folder)
+                    if not RasUtils.remove_with_retry(worker_folder, ras_object=None):
+                        raise PermissionError(f"Unable to remove existing worker folder: {worker_folder}")
                     logger.info(f"Removed existing worker folder: {worker_folder}")
                 shutil.copytree(project_folder, worker_folder, ignore=RasUtils.ignore_windows_reserved)
                 logger.info(f"Created worker folder: {worker_folder}")
@@ -1038,7 +1040,8 @@ class RasCmdr:
                             
                             # Try to remove the worker folder
                             if worker_folder.exists():
-                                shutil.rmtree(worker_folder)
+                                if not RasUtils.remove_with_retry(worker_folder, ras_object=None):
+                                    raise PermissionError(f"Unable to remove worker folder: {worker_folder}")
                             break  # If successful, break the retry loop
                             
                         except PermissionError as pe:
