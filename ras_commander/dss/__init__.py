@@ -1,7 +1,7 @@
 """
 ras-commander DSS subpackage: HEC-DSS file operations.
 
-This subpackage provides DSS file reading capabilities using HEC Monolith
+This subpackage provides DSS file read/write capabilities using HEC Monolith
 Java libraries via pyjnius. All dependencies are lazy-loaded to minimize
 import time and keep optional dependencies truly optional.
 
@@ -29,14 +29,23 @@ Usage:
     df = RasDss.read_timeseries("file.dss", paths[0])
     print(df.attrs['units'])  # Access metadata
 
+    # Write SHG gridded precipitation records
+    written_paths = RasDss.write_grid_timeseries(
+        "precip.dss",
+        "/SHG/WATERSHED/PRECIP/01JAN2020:0000/01JAN2020:0100/SYNTHETIC/",
+        data,
+        times,
+        {"cellsize": 2000, "origin": (1096000, 1516000), "crs": "SHG"}
+    )
+
     # Extract all DSS boundary conditions
     from ras_commander import init_ras_project
     ras = init_ras_project("project_path", "7.0")
     enhanced = RasDss.extract_boundary_timeseries(ras.boundaries_df, ras_object=ras)
 
 See Also:
-    - examples/22_dss_boundary_extraction.ipynb for complete workflow
-    - CLAUDE.md for API documentation
+    - examples/310_dss_boundary_extraction.ipynb for complete workflow
+    - ras_commander/dss/AGENTS.md for package-local development guidance
 """
 
 from .RasDss import RasDss
