@@ -377,6 +377,7 @@ def test_add_channel_modification_keeps_take_lower_mode(tmp_path):
 
     with h5py.File(terrain_hdf, "r") as hdf:
         mod = hdf["Modifications/Pilot Channel"]
+        assert _decode(mod.attrs["Type"]) == "Channel"
         assert _decode(mod.attrs["Subtype"]) == "Channel"
         np.testing.assert_allclose(
             mod["Profile Values"][:],
@@ -388,6 +389,73 @@ def test_add_channel_modification_keeps_take_lower_mode(tmp_path):
     assert layer.find("DefaultModificationType").get("Value") == str(
         MODIFICATION_TAKE_LOWER
     )
+
+
+def test_profile_readback_prefers_float64_profile_for_large_stations(tmp_path):
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    profile_points = np.array(
+        [
+            [500000.123456, 601.1234567],
+            [500250.654321, 601.7654321],
+        ],
+        dtype=np.float64,
+    )
+
+    RasTerrainModWriter.add_high_ground_modification(
+        terrain_hdf,
+        rasmap,
+        name="Precision Levee",
+        polyline_points=np.array(
+            [[500000.1, 300000.2], [500250.6, 300000.3]],
+            dtype=np.float64,
+        ),
+        profile_points=profile_points,
+    )
+
+    with h5py.File(terrain_hdf, "r") as hdf:
+        mod = hdf["Modifications/Precision Levee"]
+        assert mod["Profile Values"].dtype == np.dtype("float32")
+        assert mod["Profile"].dtype == np.dtype("float64")
+        assert not np.allclose(
+            mod["Profile Values"][:], profile_points, rtol=0.0, atol=1e-12
+        )
+        np.testing.assert_allclose(
+            mod["Profile"][:], profile_points, rtol=0.0, atol=1e-12
+        )
+
+    profile = RasTerrainModWriter.get_modification_profile(
+        terrain_hdf, "Precision Levee"
+    )
+    np.testing.assert_allclose(
+        profile[["station", "elevation"]].to_numpy(),
+        profile_points,
+        rtol=0.0,
+        atol=1e-12,
+    )
+
+
+def test_update_rasmap_xml_raises_clear_error_when_group_missing(
+    tmp_path, monkeypatch
+):
+    terrain_hdf, rasmap = _write_minimal_terrain(tmp_path)
+    monkeypatch.setattr(
+        RasTerrainModWriter,
+        "_ensure_modification_group_in_rasmap",
+        staticmethod(lambda *args, **kwargs: None),
+    )
+
+    with pytest.raises(
+        RuntimeError, match="ElevationModificationGroup not found after rasmap update"
+    ):
+        RasTerrainModWriter._update_rasmap_xml(
+            rasmap,
+            terrain_hdf,
+            name="Missing Group",
+            mod_type="GroundLineModificationLayer",
+            default_mod_type=MODIFICATION_TAKE_HIGHER,
+            elev_pt_tolerance=50.0,
+            group_name="Modifications",
+        )
 
 
 def test_sample_modification_surface_applies_take_higher(tmp_path):
