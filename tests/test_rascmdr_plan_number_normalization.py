@@ -20,6 +20,7 @@ class FakeRasProject:
         self.project_name = "TestProject"
         self.ras_exe_path = Path("C:/HEC-RAS/6.6/Ras.exe")
         self._plan_numbers = list(plan_numbers or self.DEFAULT_PLAN_NUMBERS)
+        self.raise_on_get_plan_entries = False
         self.project_folder = (
             Path(project_folder) if project_folder is not None else Path.cwd()
         )
@@ -40,6 +41,8 @@ class FakeRasProject:
         self.plan_df = self.get_plan_entries()
 
     def get_plan_entries(self):
+        if self.raise_on_get_plan_entries:
+            raise FileNotFoundError(self.prj_file)
         return pd.DataFrame(
             {
                 "plan_number": self._plan_numbers,
@@ -59,10 +62,16 @@ class FakeRasProject:
 
     def update_results_df(self, plan_numbers=None):
         plan_numbers = [] if plan_numbers is None else list(plan_numbers)
+        hdf_paths = [
+            str(self.project_folder / f"{self.project_name}.p{plan_number}.hdf")
+            for plan_number in plan_numbers
+        ]
         self.results_df = pd.DataFrame(
             {
                 "plan_number": plan_numbers,
                 "status": ["done"] * len(plan_numbers),
+                "HDF_Results_Path": hdf_paths,
+                "hdf_path": hdf_paths,
             }
         )
 
@@ -284,6 +293,44 @@ def test_compute_parallel_dest_folder_keeps_fresh_outputs_when_workers_share_sta
     assert (dest_folder / "TestProject.p02.hdf").read_text(encoding="utf-8") == (
         "fresh hdf 02\n"
     )
+
+
+def test_compute_parallel_uses_cached_plan_entries_when_prj_refresh_fails(
+    monkeypatch, tmp_path
+):
+    project_folder = tmp_path / "parallel-project"
+    project_folder.mkdir()
+    _seed_parallel_project(project_folder)
+    ras_object = FakeRasProject(
+        project_folder=project_folder,
+        plan_numbers=["01"],
+    )
+    ras_object.raise_on_get_plan_entries = True
+
+    def fake_compute_plan(plan_number, **kwargs):
+        worker_folder = Path(kwargs["ras_object"].project_folder)
+        (worker_folder / f"TestProject.p{plan_number}.hdf").write_text(
+            f"fresh hdf {plan_number}\n",
+            encoding="utf-8",
+        )
+        return ComputeResult(success=True)
+
+    monkeypatch.setattr(rascmdr_module, "RasPrj", FakeRasProject)
+    monkeypatch.setattr(rascmdr_module, "init_ras_project", fake_init_ras_project)
+    monkeypatch.setattr(rascmdr_module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(RasCmdr, "compute_plan", staticmethod(fake_compute_plan))
+
+    result = RasCmdr.compute_parallel(
+        plan_number=["01"],
+        max_workers=1,
+        ras_object=ras_object,
+    )
+
+    assert result.execution_results == {"01": True}
+    assert result.results_df["plan_number"].tolist() == ["01"]
+    assert result.results_df["hdf_path"].tolist() == [
+        str(project_folder / "TestProject.p01.hdf")
+    ]
 
 
 def test_filter_plan_entries_none_returns_all_plans():

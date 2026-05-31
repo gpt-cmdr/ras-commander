@@ -763,19 +763,44 @@ class RasPermutation:
 
             summary_df = compute_result.results_df.copy()
             if summary_df.empty:
-                summary_df = batch_ras.update_results_df(plan_numbers=plan_numbers)
-                summary_df = summary_df[
-                    summary_df["plan_number"].isin(plan_numbers)
-                ].copy()
+                try:
+                    summary_df = batch_ras.update_results_df(
+                        plan_numbers=plan_numbers
+                    )
+                    summary_df = summary_df[
+                        summary_df["plan_number"].isin(plan_numbers)
+                    ].copy()
+                except Exception as exc:
+                    logger.warning(
+                        "Could not refresh batch result summaries for %s: %s",
+                        batch_folder,
+                        exc,
+                    )
+                    summary_df = pd.DataFrame()
 
             if summary_df.empty:
                 batch_summary = batch_log_df[
                     ["absolute_perm_id", "plan_number"]
                 ].copy()
-                batch_summary["status"] = "not_run"
+                batch_summary["status"] = batch_summary["plan_number"].map(
+                    lambda plan_num: RasPermutation._derive_status(
+                        pd.Series(dtype="object"),
+                        compute_result.execution_results.get(plan_num),
+                    )
+                )
                 batch_summary["max_wse"] = np.nan
                 batch_summary["runtime_seconds"] = np.nan
-                batch_summary["hdf_path"] = np.nan
+                batch_summary["hdf_path"] = batch_summary["plan_number"].map(
+                    lambda plan_num: str(
+                        batch_folder
+                        / f"{batch_ras.project_name}.p{plan_num}.hdf"
+                    )
+                    if (
+                        batch_folder
+                        / f"{batch_ras.project_name}.p{plan_num}.hdf"
+                    ).exists()
+                    else np.nan
+                )
                 batch_results.append(batch_summary)
                 continue
 

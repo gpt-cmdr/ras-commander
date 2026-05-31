@@ -792,6 +792,42 @@ def _aggregate_objectives(
     return float(np.mean(finite))
 
 
+def _raise_if_grid_search_unscored(
+    grid_results: pd.DataFrame,
+    metric: str,
+) -> None:
+    """Fail loudly when no calibration permutation has a finite objective."""
+    if grid_results.empty:
+        raise RuntimeError("Calibration grid search produced no result rows.")
+
+    objectives = pd.to_numeric(
+        grid_results.get("overall_objective", pd.Series(dtype=float)),
+        errors="coerce",
+    )
+    if objectives.notna().any():
+        return
+
+    if "status" in grid_results.columns:
+        status_counts = grid_results["status"].fillna("missing").value_counts()
+        status_text = ", ".join(
+            f"{status}={count}" for status, count in status_counts.items()
+        )
+    else:
+        status_text = "status column missing"
+
+    hdf_count = 0
+    if "hdf_path" in grid_results.columns:
+        hdf_count = int(grid_results["hdf_path"].notna().sum())
+
+    raise RuntimeError(
+        "Calibration grid search produced no finite "
+        f"{metric} objective values. Execution status counts: {status_text}. "
+        f"HDF paths present for {hdf_count} of {len(grid_results)} "
+        "permutation(s). Check compute_parallel execution and calibration "
+        "point extraction errors before selecting a best fit."
+    )
+
+
 def _calculate_point_metrics(
     observed: Observation,
     modeled: Union[float, pd.Series],
@@ -1771,10 +1807,12 @@ class RasCalibrate:
                 prefix = f"point_{idx:02d}_{suffix_name}"
                 row[f"{prefix}_modeled"] = point_result["modeled"]
                 row[f"{prefix}_objective"] = point_result["objective"]
+                row[f"{prefix}_error"] = point_result["error"]
 
             augmented_rows.append(row)
 
         augmented_df = pd.DataFrame(augmented_rows)
+        _raise_if_grid_search_unscored(augmented_df, metric_name)
         ascending = metric_name in _LOWER_IS_BETTER
         return augmented_df.sort_values(
             "overall_objective",
@@ -2080,6 +2118,19 @@ class RasCalibrate:
             bounds=bounds,
             options={"maxiter": max_iterations},
         )
+        history_df = pd.DataFrame(iteration_history)
+        history_objectives = pd.to_numeric(
+            history_df.get("raw_objective", pd.Series(dtype=float)),
+            errors="coerce",
+        )
+        if not history_objectives.notna().any():
+            raise RuntimeError(
+                "Calibration optimization produced no finite "
+                f"{metric_name} objective values across "
+                f"{len(history_df)} evaluation(s). Check HEC-RAS execution "
+                "and calibration point extraction errors before selecting a "
+                "best fit."
+            )
 
         best_parameters = {
             parameter_name: float(value)
@@ -2098,6 +2149,14 @@ class RasCalibrate:
             force_geompre=force_geompre,
             ras_object=ras_object,
         )
+        best_objective = best_evaluation.get("overall_objective")
+        if pd.isna(best_objective):
+            raise RuntimeError(
+                "Calibration optimization best evaluation produced no finite "
+                f"{metric_name} objective value. Check HEC-RAS execution and "
+                "calibration point extraction errors before selecting a best "
+                "fit."
+            )
 
         return {
             "metric": metric_name,
@@ -2109,7 +2168,7 @@ class RasCalibrate:
                 for parameter_name, value in zip(parameter_names, x0)
             },
             "best_parameters": best_parameters,
-            "best_objective": best_evaluation.get("overall_objective"),
+            "best_objective": best_objective,
             "nit": getattr(optimization_result, "nit", None),
             "nfev": getattr(optimization_result, "nfev", None),
             "bounds": {
