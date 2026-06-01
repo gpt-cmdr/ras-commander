@@ -327,7 +327,18 @@ def _mock_generate_success(monkeypatch, geom_text_path: Path, *, has_breaklines:
     """
     captured = {}
     hdf_path = geom_text_path.with_suffix(geom_text_path.suffix + ".hdf")
-    hdf_path.write_text("compiled", encoding="utf-8")
+    _write_mesh_hdf(
+        hdf_path,
+        [
+            {
+                "name": "MainArea",
+                "spacing_dx": 50.0,
+                "spacing_dy": 50.0,
+                "cell_count": 0,
+                "dataset_count": 2,
+            }
+        ],
+    )
     hdf_mtime = geom_text_path.stat().st_mtime + 1.0
     os.utime(hdf_path, (hdf_mtime, hdf_mtime))
 
@@ -415,6 +426,35 @@ def _mock_generate_success(monkeypatch, geom_text_path: Path, *, has_breaklines:
     )
     captured["geom"] = mock_geom_obj
     return captured
+
+
+def _write_mesh_hdf(hdf_path: Path, areas):
+    """Write minimal HEC-RAS geometry HDF mesh metadata for tests."""
+    hdf_path.parent.mkdir(parents=True, exist_ok=True)
+    dtype = np.dtype(
+        [
+            ("Name", "S64"),
+            ("Spacing dx", "<f4"),
+            ("Spacing dy", "<f4"),
+            ("Cell Count", "<i4"),
+        ]
+    )
+    records = []
+    with h5py.File(str(hdf_path), "w") as hf:
+        flow_areas = hf.create_group("Geometry/2D Flow Areas")
+        for area in areas:
+            name = area["name"]
+            spacing_dx = float(area.get("spacing_dx", 0.0))
+            spacing_dy = float(area.get("spacing_dy", spacing_dx))
+            cell_count = int(area.get("cell_count", 0))
+            dataset_count = int(area.get("dataset_count", cell_count))
+            records.append((name.encode("utf-8"), spacing_dx, spacing_dy, cell_count))
+            area_group = flow_areas.create_group(name)
+            area_group.create_dataset(
+                "Cells Center Coordinate",
+                data=np.zeros((max(dataset_count, 0), 2), dtype=np.float64),
+            )
+        flow_areas.create_dataset("Attributes", data=np.array(records, dtype=dtype))
 
 
 def _install_fake_rasmapper_scripting(monkeypatch):
@@ -597,15 +637,94 @@ class TestGeometryHdfAvailability:
         with pytest.raises(RuntimeError, match="Compiled geometry HDF is missing"):
             _ensure_hdf(breakline_geom_text)
 
-    def test_ensure_hdf_rejects_stale_compiled_geometry(self, breakline_geom_text):
+    def test_ensure_hdf_rejects_stale_compiled_geometry_content(self, breakline_geom_text):
         hdf_path = breakline_geom_text.with_suffix(breakline_geom_text.suffix + ".hdf")
-        hdf_path.write_text("compiled", encoding="utf-8")
-        text_mtime = breakline_geom_text.stat().st_mtime + 10.0
-        os.utime(hdf_path, (text_mtime - 5.0, text_mtime - 5.0))
-        os.utime(breakline_geom_text, (text_mtime, text_mtime))
+        _write_mesh_hdf(
+            hdf_path,
+            [
+                {
+                    "name": "MainArea",
+                    "spacing_dx": 100.0,
+                    "spacing_dy": 100.0,
+                    "cell_count": 0,
+                }
+            ],
+        )
+        shared_mtime = breakline_geom_text.stat().st_mtime
+        os.utime(hdf_path, (shared_mtime, shared_mtime))
 
-        with pytest.raises(RuntimeError, match="is newer than"):
+        with pytest.raises(RuntimeError, match="text Spacing dx=50"):
             _ensure_hdf(breakline_geom_text)
+
+    def test_ensure_hdf_rejects_stale_compiled_geometry_cell_count(
+        self, storage_area_geom_text
+    ):
+        hdf_path = storage_area_geom_text.with_suffix(storage_area_geom_text.suffix + ".hdf")
+        _write_mesh_hdf(
+            hdf_path,
+            [
+                {
+                    "name": "MainArea",
+                    "spacing_dx": 25.0,
+                    "spacing_dy": 25.0,
+                    "cell_count": 2,
+                }
+            ],
+        )
+
+        with pytest.raises(RuntimeError, match="Storage Area 2D Points=3"):
+            _ensure_hdf(storage_area_geom_text)
+
+    def test_ensure_hdf_accepts_matching_content(self, breakline_geom_text):
+        hdf_path = breakline_geom_text.with_suffix(breakline_geom_text.suffix + ".hdf")
+        _write_mesh_hdf(
+            hdf_path,
+            [
+                {
+                    "name": "MainArea",
+                    "spacing_dx": 50.0,
+                    "spacing_dy": 50.0,
+                    "cell_count": 0,
+                }
+            ],
+        )
+
+        assert _ensure_hdf(breakline_geom_text) == hdf_path
+
+    def test_ensure_hdf_recompiles_missing_geometry_when_opted_in(
+        self, monkeypatch, breakline_geom_text
+    ):
+        hdf_path = breakline_geom_text.with_suffix(breakline_geom_text.suffix + ".hdf")
+        calls = []
+
+        def fake_recompile(geom_text_path, compiled_hdf_path, *, ras_object=None):
+            calls.append((geom_text_path, compiled_hdf_path, ras_object))
+            _write_mesh_hdf(
+                compiled_hdf_path,
+                [
+                    {
+                        "name": "MainArea",
+                        "spacing_dx": 50.0,
+                        "spacing_dy": 50.0,
+                        "cell_count": 0,
+                    }
+                ],
+            )
+            return compiled_hdf_path
+
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_recompile_geometry_hdf_via_rasexe",
+            fake_recompile,
+        )
+        ras_object = object()
+
+        assert _ensure_hdf(
+            breakline_geom_text,
+            ras_object=ras_object,
+            recompile_via_rasexe=True,
+        ) == hdf_path
+        assert calls == [(breakline_geom_text, hdf_path, ras_object)]
 
 
 class TestGeometryAssociation:
@@ -801,10 +920,10 @@ class TestGenerate:
         assert result.ok
         assert result.geom_hdf_path
         assert Path(result.geom_hdf_path).exists()
-        assert captured["cell_size"] == pytest.approx(100.0)
+        assert captured["cell_size"] == pytest.approx(50.0)
 
         text = breakline_geom_text.read_text(encoding="utf-8")
-        assert "Storage Area Point Generation Data=,,100.000000,100.000000" in text
+        assert "Storage Area Point Generation Data=,,50.000000,50.000000" in text
         assert "BreakLine CellSize Min=50.000000" in text
         assert "BreakLine CellSize Max=200.000000" in text
         assert "Storage Area 2D Points= 2 " in text
