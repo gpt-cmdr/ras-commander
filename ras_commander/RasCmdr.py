@@ -1895,6 +1895,211 @@ class RasCmdr:
         return True, "ok"
 
     @staticmethod
+    @log_call
+    def preprocess_geometry_linux(
+        plan_number: Union[str, Number],
+        ras_exe_dir: Union[str, Path],
+        ras_object=None,
+        timeout_sec: int = 7200,
+        dos2unix: bool = True,
+    ) -> 'ComputeResult':
+        """Run the native Linux ``RasGeomPreprocess`` geometry preprocessor (CLB-885).
+
+        This regenerates the geometry preprocessor tables (1D cross-section
+        property tables and 2D cell/face HTab property tables) inside an
+        existing ``{project}.p{plan}.tmp.hdf``, headlessly on Linux — mirroring
+        :meth:`compute_plan_linux` (LD_LIBRARY_PATH auto-detect, dos2unix,
+        output validation).
+
+        **Scope / honest limitation:** the native ``RasGeomPreprocess`` binary
+        operates *in place* on an existing ``.tmp.hdf`` that already contains the
+        raw ``/Geometry`` group. It does **not** build the ``.tmp.hdf`` skeleton
+        (nor the ``.b##``/``.x##`` files) from raw ``.prj``/``.g##``/``.u##``
+        text — that initial assembly is still the Windows Phase-1 step. Use this
+        to (re)compute geometry HTab tables on Linux after a geometry-only change,
+        or to refresh ``/Geometry/GeomPreprocess`` before
+        :meth:`compute_plan_linux` without round-tripping to Windows.
+
+        Args:
+            plan_number: Plan number whose ``.tmp.hdf`` to preprocess (e.g. "04").
+            ras_exe_dir: Directory containing the ``RasGeomPreprocess`` binary and
+                sibling ``libs/`` directory (e.g. ``/opt/hecras/6.6``).
+            ras_object: Optional RAS project object. If None, uses global ``ras``.
+            timeout_sec: Maximum preprocessing time in seconds (default 7200).
+            dos2unix: Convert CRLF->LF in text files first (default True).
+
+        Returns:
+            ComputeResult: ``success`` True when the preprocessor finished and the
+            ``.tmp.hdf`` contains a populated ``/Geometry/GeomPreprocess`` group.
+
+        Raises:
+            FileNotFoundError: If the ``RasGeomPreprocess`` binary or the
+                ``.tmp.hdf``/``.x##`` prerequisites are missing.
+        """
+        ras_obj = ras_object if ras_object is not None else ras
+        ras_obj.check_initialized()
+
+        plan_num_str = RasUtils.normalize_ras_number(plan_number)
+
+        ras_exe_dir = Path(str(ras_exe_dir).replace("\\", "/").rstrip("/"))
+        geom_exe = ras_exe_dir / "RasGeomPreprocess"
+        if not geom_exe.exists():
+            raise FileNotFoundError(
+                f"RasGeomPreprocess binary not found at {geom_exe}. "
+                "Native Linux geometry preprocessing requires HEC-RAS 6.x Linux "
+                "binaries (RasGeomPreprocess is bundled alongside RasUnsteady)."
+            )
+
+        project_dir = Path(ras_obj.project_folder)
+        project_name = ras_obj.project_name
+
+        # Resolve geometry number from the plan file (mirror compute_plan_linux).
+        geom_num = "01"
+        try:
+            plan_path = RasPlan.get_plan_path(plan_num_str, ras_obj)
+            if plan_path is None:
+                raise ValueError(
+                    f"Could not resolve plan path for plan {plan_num_str}; "
+                    "ensure the project is initialized and the plan exists."
+                )
+            plan_text = Path(plan_path).read_text(errors="replace")
+            for line in plan_text.splitlines():
+                if line.startswith("Geom File="):
+                    import re as _re
+                    m = _re.search(r"(\d+)", line.split("=", 1)[1])
+                    if m:
+                        geom_num = m.group(1)
+                    break
+        except Exception as e:
+            logger.warning(f"Could not read geom number from plan file: {e}")
+
+        tmp_hdf = project_dir / f"{project_name}.p{plan_num_str}.tmp.hdf"
+        x_file = project_dir / f"{project_name}.x{geom_num}"
+        missing = []
+        if not tmp_hdf.exists():
+            missing.append(f".p{plan_num_str}.tmp.hdf")
+        if not x_file.exists():
+            missing.append(f".x{geom_num}")
+        if missing:
+            raise FileNotFoundError(
+                f"Missing prerequisites for Linux geometry preprocessing: "
+                f"{', '.join(missing)}. The .tmp.hdf (with raw /Geometry) and .x## "
+                f"must already exist (Windows Phase-1 builds these). "
+                f"See examples/510_linux_execution.ipynb."
+            )
+
+        # Build LD_LIBRARY_PATH — auto-detect library subdirectories (mirror compute_plan_linux).
+        lib_base = ras_exe_dir / "libs"
+        if not lib_base.exists():
+            lib_base = ras_exe_dir.parent / "libs"
+        ld_path_parts = []
+        if lib_base.exists():
+            ld_path_parts.append(str(lib_base))
+            for subdir in sorted(lib_base.iterdir()):
+                if subdir.is_dir():
+                    ld_path_parts.append(str(subdir))
+        else:
+            logger.warning(f"No libs/ directory found near {ras_exe_dir}")
+            ld_path_parts.append(str(ras_exe_dir))
+        ld_path = ":".join(ld_path_parts)
+        logger.info(f"LD_LIBRARY_PATH: {ld_path}")
+
+        if dos2unix:
+            try:
+                RasUtils.dos2unix(project_dir)
+            except Exception as e:
+                logger.warning(f"dos2unix failed: {e}")
+
+        env = os.environ.copy()
+        env["LD_LIBRARY_PATH"] = ld_path
+
+        log_path = project_dir / f"geompre_linux_{plan_num_str}.log"
+        try:
+            start_time = time.time()
+            with open(log_path, "w") as log_fh:
+                proc = subprocess.Popen(
+                    [str(geom_exe), str(tmp_hdf), f"x{geom_num}"],
+                    stdout=log_fh,
+                    stderr=subprocess.STDOUT,
+                    env=env,
+                    cwd=str(project_dir),
+                )
+            try:
+                rc = proc.wait(timeout=timeout_sec)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                logger.error(f"Plan {plan_num_str}: geometry preprocessing timed out after {timeout_sec}s")
+                return ComputeResult(success=False, results_df_row=None)
+            run_time = time.time() - start_time
+        except FileNotFoundError:
+            raise RuntimeError(f"RasGeomPreprocess binary not found at {geom_exe}.")
+
+        if rc != 0:
+            try:
+                tail = log_path.read_text(errors="replace")[-500:]
+            except OSError:
+                tail = "(log unreadable)"
+            logger.error(
+                f"Plan {plan_num_str}: RasGeomPreprocess exited with code {rc}. Log tail: {tail}"
+            )
+            return ComputeResult(success=False, results_df_row=None)
+
+        ok, reason = RasCmdr._validate_geom_preprocess(log_path, tmp_hdf)
+        if ok:
+            logger.info(
+                f"RasGeomPreprocess completed for plan {plan_num_str} "
+                f"in {run_time:.1f}s (exit code 0, validated)"
+            )
+            return ComputeResult(success=True, results_df_row=None)
+        logger.error(
+            f"Plan {plan_num_str}: RasGeomPreprocess exited 0 but did not produce "
+            f"a valid geometry preprocess result: {reason}"
+        )
+        return ComputeResult(success=False, results_df_row=None)
+
+    @staticmethod
+    def _validate_geom_preprocess(log_path, tmp_hdf):
+        """Validate a Linux RasGeomPreprocess run beyond exit-code 0 (CLB-885).
+
+        RasGeomPreprocess can exit 0 even when it failed in-band. This scans the
+        log for error markers and confirms the .tmp.hdf gained a populated
+        ``/Geometry/GeomPreprocess`` group (the 1D/2D hydraulic property tables
+        the unsteady solver consumes).
+
+        Returns:
+            tuple[bool, str]: ``(ok, reason)``.
+        """
+        error_markers = [
+            "encountered an error",
+            "fatal error",
+            "must be closed if it is being used",
+            "hdf_error",
+        ]
+        try:
+            log_low = Path(log_path).read_text(errors="replace").lower()
+        except OSError:
+            return False, "geompre log unreadable"
+        for marker in error_markers:
+            if marker in log_low:
+                return False, f"geompre log reports failure ('{marker}')"
+        # The "Finished Processing Geometry" banner is the success signal.
+        if "finished processing geometry" not in log_low:
+            return False, "geompre log missing 'Finished Processing Geometry' banner"
+        try:
+            import h5py
+            with h5py.File(str(tmp_hdf), "r") as hf:
+                geom = hf.get("Geometry")
+                if geom is None:
+                    return False, "tmp.hdf missing /Geometry group"
+                gp = geom.get("GeomPreprocess")
+                if gp is None or len(list(gp.keys())) == 0:
+                    return False, "tmp.hdf missing/empty /Geometry/GeomPreprocess group"
+        except Exception as e:
+            return False, f"tmp.hdf unreadable or invalid: {e}"
+        return True, "ok"
+
+    @staticmethod
     def _windows_path_to_wsl(path: Union[str, Path]) -> str:
         """Translate a Windows path to its WSL path using the active distro."""
         path_arg = str(path).replace("\\", "/")
