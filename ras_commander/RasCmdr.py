@@ -1546,9 +1546,21 @@ class RasCmdr:
             - {project}.p{plan_num}.tmp.hdf — preprocessed plan HDF
             - {project}.b{plan_num} — boundary conditions file
             - {project}.x{geom_num} — cross-section preprocessor file
+            - {project}.c{geom_num} — computed-geometry file (5.0.7 layout only)
 
-        Compatible with HEC-RAS Linux versions 6.3.1, 6.4, 6.5, 6.6, 6.7.
-        Auto-detects library subdirectory layout (libs/, libs/mkl/, libs/rhel_8/).
+        Supported native Linux install layouts (auto-detected from ``ras_exe_dir``):
+
+        * **canonical (6.3.1-7.0)** — ``RasUnsteady`` at the install root with a
+          sibling ``libs/`` tree (``libs/``, ``libs/mkl/``, ``libs/rhel_8/``).
+          Invoked as ``RasUnsteady {proj}.p{plan}.tmp.hdf x{geom}``.
+        * **bin_ras (5.0.7)** — ``bin_ras/rasUnsteady64`` with libraries colocated
+          in ``bin_ras/`` (no ``libs/`` tree). Invoked as
+          ``rasUnsteady64 {proj}.c{geom} b{plan}`` and additionally requires the
+          ``.c{geom}`` computed-geometry file. (CLB-886)
+
+        Detection and binary resolution mirror
+        :meth:`RasUtils._scan_native_linux_ras` (root ``RasUnsteady`` →
+        ``bin_ras/{rasUnsteady64,RasUnsteady,rasUnsteady}``).
 
         The Linux RasUnsteady binary uses Fortran I/O conventions that require
         files to be accessible with a base name of "io" (e.g., io.b, io.X).
@@ -1556,8 +1568,9 @@ class RasCmdr:
 
         Args:
             plan_number (Union[str, Number]): Plan number to execute (e.g., "01").
-            ras_exe_dir (Union[str, Path]): Directory containing the RasUnsteady
-                binary and sibling libs/ directory.
+            ras_exe_dir (Union[str, Path]): HEC-RAS Linux install directory. For the
+                canonical layout this holds ``RasUnsteady`` + ``libs/``; for the
+                5.0.7 layout it holds ``bin_ras/rasUnsteady64`` + its libraries.
             ras_object: Optional RAS project object. If None, uses global ras.
             timeout_sec (int): Maximum execution time in seconds (default 14400 = 4 hours).
             dos2unix (bool): Convert CRLF→LF in text files before execution (default True).
@@ -1604,11 +1617,12 @@ class RasCmdr:
                 )
         else:
             ras_exe_dir = Path(ras_exe_dir)
-            ras_exe = ras_exe_dir / "RasUnsteady"
+            layout = RasCmdr._resolve_linux_layout(ras_exe_dir)
+            ras_exe = layout["ras_exe"]
             if not ras_exe.exists():
                 raise FileNotFoundError(
-                    f"RasUnsteady binary not found at {ras_exe}. "
-                    "Ensure HEC-RAS Linux binaries are installed."
+                    f"Linux RasUnsteady binary not found under {ras_exe_dir} "
+                    f"(looked for {ras_exe}). Ensure HEC-RAS Linux binaries are installed."
                 )
 
         project_dir = Path(ras_obj.project_folder)
@@ -1647,6 +1661,10 @@ class RasCmdr:
         tmp_hdf = project_dir / f"{project_name}.p{plan_num_str}.tmp.hdf"
         b_file = project_dir / f"{project_name}.b{plan_num_str}"
         x_file = project_dir / f"{project_name}.x{geom_num}"
+        # 5.0.7 (bin_ras/rasUnsteady64) additionally consumes the computed-geometry
+        # ".c{geom}" binary file and is invoked as `rasUnsteady64 {proj}.c{geom} b{plan}`
+        # rather than the 6.x/7.0 `RasUnsteady {tmp.hdf} x{geom}` convention (CLB-886).
+        c_file = project_dir / f"{project_name}.c{geom_num}"
 
         missing = []
         if not tmp_hdf.exists():
@@ -1655,10 +1673,13 @@ class RasCmdr:
             missing.append(f".b{plan_num_str}")
         if not x_file.exists():
             missing.append(f".x{geom_num}")
+        if layout["needs_c_file"] and not c_file.exists():
+            missing.append(f".c{geom_num}")
 
         if missing:
             raise FileNotFoundError(
-                f"Missing prerequisite files for Linux execution: {', '.join(missing)}. "
+                f"Missing prerequisite files for Linux execution ({layout['label']} layout): "
+                f"{', '.join(missing)}. "
                 f"Run RasPreprocess.preprocess_plan() on Windows first (Phase 1). "
                 f"See examples/510_linux_execution.ipynb for the complete workflow."
             )
@@ -1687,24 +1708,11 @@ class RasCmdr:
                 ras_obj=ras_obj,
             )
 
-        # Build LD_LIBRARY_PATH — auto-detect library subdirectories
-        # HEC-RAS Linux versions have varying layouts:
+        # Build LD_LIBRARY_PATH — auto-detect library locations per layout:
+        #   5.0.7:     libs live alongside the binary in bin_ras/
         #   6.3.1-6.5: libs/, libs/mkl/
         #   6.6-6.7:   libs/, libs/mkl/, libs/rhel_8/
-        lib_base = ras_exe_dir / "libs"
-        if not lib_base.exists():
-            lib_base = ras_exe_dir.parent / "libs"
-        ld_path_parts = []
-        if lib_base.exists():
-            ld_path_parts.append(str(lib_base))
-            for subdir in sorted(lib_base.iterdir()):
-                if subdir.is_dir():
-                    ld_path_parts.append(str(subdir))
-                    logger.debug(f"Added library path: {subdir}")
-        else:
-            logger.warning(f"No libs/ directory found near {ras_exe_dir}")
-            ld_path_parts.append(str(ras_exe_dir))
-        ld_path = ":".join(ld_path_parts)
+        ld_path = RasCmdr._build_linux_ld_path(ras_exe_dir, layout)
         logger.info(f"LD_LIBRARY_PATH: {ld_path}")
 
         # dos2unix text files
@@ -1761,9 +1769,16 @@ class RasCmdr:
 
             try:
                 start_time = time.time()
+                # Argument convention differs by layout (CLB-886):
+                #   5.0.7:    rasUnsteady64 {proj}.c{geom} b{plan}   (cwd-relative basenames)
+                #   6.x/7.0:  RasUnsteady   {proj}.p{plan}.tmp.hdf x{geom}
+                if layout["needs_c_file"]:
+                    ras_args = [c_file.name, f"b{plan_num_str}"]
+                else:
+                    ras_args = [str(tmp_hdf), f"x{geom_num}"]
                 with open(log_path, "w") as log_fh:
                     proc = subprocess.Popen(
-                        [str(ras_exe), str(tmp_hdf), f"x{geom_num}"],
+                        [str(ras_exe), *ras_args],
                         stdout=log_fh,
                         stderr=subprocess.STDOUT,
                         env=env,
@@ -1852,6 +1867,86 @@ class RasCmdr:
                         pass
 
                 return ComputeResult(success=False, results_df_row=None)
+
+    @staticmethod
+    def _resolve_linux_layout(ras_exe_dir: Path) -> dict:
+        """Detect the HEC-RAS Linux install layout and return its execution adapter (CLB-886).
+
+        Two native layouts are supported:
+
+        * **canonical (6.3.1-7.0)** — ``RasUnsteady`` at the install root, with a
+          sibling ``libs/`` (plus ``libs/mkl/``, ``libs/rhel_8/``). Invoked as
+          ``RasUnsteady {proj}.p{plan}.tmp.hdf x{geom}``.
+        * **bin_ras (5.0.7)** — ``bin_ras/rasUnsteady64`` with the shared libraries
+          alongside the binary in ``bin_ras/`` (no ``libs/`` tree). Invoked as
+          ``rasUnsteady64 {proj}.c{geom} b{plan}`` and additionally requires the
+          computed-geometry ``.c{geom}`` file.
+
+        Resolution prefers a root ``RasUnsteady`` (canonical) and otherwise falls
+        back to ``bin_ras/rasUnsteady64`` / ``bin_ras/RasUnsteady`` — mirroring the
+        binary names :meth:`RasUtils._scan_native_linux_ras` recognizes.
+
+        Returns:
+            dict: ``ras_exe`` (Path), ``needs_c_file`` (bool), ``lib_dirs``
+            (list[Path] explicit lib dirs, or ``[]`` to auto-detect ``libs/``),
+            and ``label`` (str).
+        """
+        ras_exe_dir = Path(ras_exe_dir)
+        # Canonical layout: RasUnsteady at the install root.
+        root_exe = ras_exe_dir / "RasUnsteady"
+        if root_exe.exists():
+            return {
+                "ras_exe": root_exe,
+                "needs_c_file": False,
+                "lib_dirs": [],          # auto-detect libs/ tree
+                "label": "canonical",
+            }
+        # bin_ras layout (5.0.7): rasUnsteady64 (or RasUnsteady) under bin_ras/,
+        # libraries colocated in the same bin_ras/ directory.
+        bin_ras = ras_exe_dir / "bin_ras"
+        for binname in ("rasUnsteady64", "RasUnsteady", "rasUnsteady"):
+            cand = bin_ras / binname
+            if cand.exists():
+                return {
+                    "ras_exe": cand,
+                    "needs_c_file": True,
+                    "lib_dirs": [bin_ras],
+                    "label": "bin_ras (5.0.7)",
+                }
+        # Nothing matched — return the canonical guess so the caller raises a
+        # clear FileNotFoundError pointing at the expected location.
+        return {
+            "ras_exe": root_exe,
+            "needs_c_file": False,
+            "lib_dirs": [],
+            "label": "canonical",
+        }
+
+    @staticmethod
+    def _build_linux_ld_path(ras_exe_dir: Path, layout: dict) -> str:
+        """Build LD_LIBRARY_PATH for a Linux RasUnsteady run, per layout (CLB-886)."""
+        ras_exe_dir = Path(ras_exe_dir)
+        ld_path_parts = []
+        # Explicit lib dirs (e.g. 5.0.7 bin_ras/) take precedence.
+        for d in layout.get("lib_dirs") or []:
+            if Path(d).exists():
+                ld_path_parts.append(str(d))
+        if ld_path_parts:
+            return ":".join(ld_path_parts)
+        # Canonical: auto-detect a libs/ tree next to the binary.
+        lib_base = ras_exe_dir / "libs"
+        if not lib_base.exists():
+            lib_base = ras_exe_dir.parent / "libs"
+        if lib_base.exists():
+            ld_path_parts.append(str(lib_base))
+            for subdir in sorted(lib_base.iterdir()):
+                if subdir.is_dir():
+                    ld_path_parts.append(str(subdir))
+                    logger.debug(f"Added library path: {subdir}")
+        else:
+            logger.warning(f"No libs/ directory found near {ras_exe_dir}")
+            ld_path_parts.append(str(ras_exe_dir))
+        return ":".join(ld_path_parts)
 
     @staticmethod
     def _validate_linux_solve(log_path, result_hdf, plan_num_str: str):
