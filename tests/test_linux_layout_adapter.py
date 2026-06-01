@@ -72,6 +72,10 @@ def test_resolve_layout_missing_returns_canonical_guess(tmp_path):
     assert lay["ras_exe"] == root / "RasUnsteady"
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="LD_LIBRARY_PATH is ':'-separated; Windows drive-letter colons break the split assertion",
+)
 def test_build_ld_path_canonical(tmp_path):
     root = _make_canonical(tmp_path / "6.6")
     lay = RasCmdr._resolve_linux_layout(root)
