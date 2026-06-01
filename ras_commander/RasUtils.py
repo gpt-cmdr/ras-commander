@@ -1955,6 +1955,35 @@ class RasUtils:
         return modified_count
 
     @staticmethod
+    def _scan_native_linux_ras(roots) -> Dict[str, Path]:
+        """Scan native-Linux HEC-RAS install roots for RasUnsteady solver binaries.
+
+        A native Linux install has no Ras.exe; the executable is the RasUnsteady
+        solver (under ``bin_ras/`` for some 5.0.x layouts). Returns a mapping of
+        ``{version-folder-name: Path(RasUnsteady)}``. Platform-agnostic so it is
+        directly unit-testable (CLB-883).
+        """
+        found: Dict[str, Path] = {}
+        for root in roots:
+            root = Path(root)
+            if not root.exists():
+                continue
+            for child in sorted(root.iterdir()):
+                if not child.is_dir():
+                    continue
+                exe = None
+                for binname in ("RasUnsteady", "rasUnsteady", "rasUnsteady64"):
+                    for cand in (child / binname, child / "bin_ras" / binname):
+                        if cand.is_file():
+                            exe = cand
+                            break
+                    if exe is not None:
+                        break
+                if exe is not None:
+                    found.setdefault(child.name, exe)
+        return found
+
+    @staticmethod
     @log_call
     def discover_ras_versions() -> Dict[str, Path]:
         """
@@ -1964,10 +1993,15 @@ class RasUtils:
         Resolution order:
         1. Windows Registry (HKLM, WOW6432Node, HKCU) -- Windows only
         2. Standard filesystem paths (Program Files) -- Windows only
-        3. Wine prefix paths (~/.wine, /opt/hecras-wine, etc.) -- Linux only
+        3. Native Linux installs (/opt/hecras/<ver>, /opt/HEC-RAS/<ver>,
+           ~/hecras/<ver>, or $RAS_COMMANDER_LINUX_RAS_ROOT) -- Linux only
+        4. Wine prefix paths (~/.wine, /opt/hecras-wine, etc.) -- Linux only
 
         Returns:
-            Dict[str, Path]: Mapping of version string -> Path to Ras.exe
+            Dict[str, Path]: Mapping of version string -> Path to the executable.
+            On Windows/Wine this is ``Ras.exe``; for native Linux installs there
+            is no Ras.exe, so it maps to the ``RasUnsteady`` solver binary (use
+            ``.parent`` as ``ras_exe_dir`` for ``RasCmdr.compute_plan_linux``).
             Example: {"6.6": Path("C:/Program Files (x86)/HEC/HEC-RAS/6.6/Ras.exe")}
         """
         discovered: Dict[str, Path] = {}
@@ -2090,8 +2124,24 @@ class RasUtils:
             _scan_root(Path("C:/Program Files (x86)/HEC/HEC-RAS"), "filesystem (x86)")
             _scan_root(Path("C:/Program Files/HEC/HEC-RAS"), "filesystem")
 
-        # --- Linux: Wine prefix scan ---
+        # --- Linux: native install scan ---
         else:
+            # Native Linux HEC-RAS installs have no Ras.exe; the RasUnsteady
+            # solver binary is the executable. Maps version -> RasUnsteady path
+            # (callers for compute_plan_linux use ``.parent`` as ras_exe_dir).
+            # Roots are configurable via $RAS_COMMANDER_LINUX_RAS_ROOT (CLB-883).
+            linux_native_roots = [
+                Path(os.path.expanduser("~/hecras")),
+                Path("/opt/hecras"),
+                Path("/opt/HEC-RAS"),
+            ]
+            env_root = os.environ.get("RAS_COMMANDER_LINUX_RAS_ROOT")
+            if env_root:
+                linux_native_roots.insert(0, Path(env_root))
+            for _folder, _exe in RasUtils._scan_native_linux_ras(linux_native_roots).items():
+                _add(_normalize_version(_folder, _exe.parent), _exe, "linux native")
+
+            # --- Linux: Wine prefix scan ---
             wine_prefix_candidates = [
                 Path(os.path.expanduser("~/.wine")),
                 Path("/opt/hecras-wine"),
