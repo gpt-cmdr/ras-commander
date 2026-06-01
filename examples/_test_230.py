@@ -193,33 +193,9 @@ for scenario in SCENARIOS:
         ].values[0]
     )
 
-    # 2. Apply per-breakline spacing if specified
-    if bl_by_name:
-        set_breakline_spacing_by_name(new_geom_path, bl_by_name)
-
-    # 3. Delete the cloned HDF so generate() recompiles from modified text
-    cloned_hdf = new_geom_path.with_suffix(new_geom_path.suffix + '.hdf')
-    if cloned_hdf.exists():
-        cloned_hdf.unlink()
-        print(f"  Removed stale HDF: {cloned_hdf.name}")
-
-    # 4. Generate mesh (cell_size and breakline spacing applied internally)
-    mesh_result = GeomMesh.generate(
-        geom_number=new_geom_path,
-        mesh_name="BaldEagleCr",
-        cell_size=cell_size,
-        bl_spacing_near=bl_near,
-        bl_spacing_far=bl_far,
-        max_iterations=8,
-        ras_object=ras,
-    )
-
-    print(f"  Mesh: status={mesh_result.status}, "
-          f"cells={mesh_result.cell_count}, faces={mesh_result.face_count}")
-    if mesh_result.fixes_applied:
-        print(f"  Fixes: {mesh_result.fixes_applied}")
-
-    # 5. Clone plan and assign the new geometry
+    # 2. Clone plan and assign the new geometry before mesh generation.
+    # If the compiled geometry HDF is missing or stale, generate() can now
+    # refresh it through Ras.exe/HTab using this plan reference.
     new_plan = RasPlan.clone_plan(
         TEMPLATE_PLAN,
         new_plan_shortid=name[:12],
@@ -228,6 +204,29 @@ for scenario in SCENARIOS:
         ras_object=ras,
     )
     print(f"  Cloned plan: p{TEMPLATE_PLAN} -> p{new_plan} (geom=g{new_geom})")
+
+    # 3. Apply per-breakline spacing if specified
+    if bl_by_name:
+        set_breakline_spacing_by_name(new_geom_path, bl_by_name)
+
+    # 4. Generate mesh. Keep the cloned HDF; it is the .NET workspace.
+    # recompile_via_rasexe=True is an opt-in recovery path for content-stale
+    # or missing HDFs and never relies on deleting the HDF.
+    mesh_result = GeomMesh.generate(
+        geom_number=new_geom_path,
+        mesh_name="BaldEagleCr",
+        cell_size=cell_size,
+        bl_spacing_near=bl_near,
+        bl_spacing_far=bl_far,
+        max_iterations=8,
+        ras_object=ras,
+        recompile_via_rasexe=True,
+    )
+
+    print(f"  Mesh: status={mesh_result.status}, "
+          f"cells={mesh_result.cell_count}, faces={mesh_result.face_count}")
+    if mesh_result.fixes_applied:
+        print(f"  Fixes: {mesh_result.fixes_applied}")
 
     scenario_results.append({
         "name": name,
