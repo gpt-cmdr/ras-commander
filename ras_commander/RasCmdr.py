@@ -698,6 +698,21 @@ class RasCmdr:
             logger.info("Running HEC-RAS from the Command Line:")
             logger.info(f"Running command: {cmd}")
 
+            # Per-plan stdio log. HEC-RAS stdout/stderr are redirected to this file
+            # rather than a PIPE to avoid an inherited-pipe deadlock (CLB-880): with
+            # shell=True the pipe's write handle is inherited by the whole
+            # cmd.exe -> Ras.exe -> RasUnsteady.exe tree, and the parent blocks on
+            # pipe EOF until EVERY descendant closes it. If a solver grandchild
+            # lingers past compute completion (intermittent, and far more likely
+            # under CPU contention) the read end never reaches EOF and the call
+            # hangs forever. HEC-RAS emits no compute messages to stdio -- they go
+            # to .bco##/.computeMsgs.txt, which the library already parses -- so a
+            # file loses no diagnostics while removing the EOF dependency entirely.
+            _run_log_path = (
+                Path(compute_ras.project_folder)
+                / f"_compute_p{RasUtils.normalize_ras_number(plan_number)}.log"
+            )
+
             # Callback: execution start
             if stream_callback and hasattr(stream_callback, 'on_exec_start'):
                 stream_callback.on_exec_start(str(plan_number), cmd)
@@ -713,31 +728,49 @@ class RasCmdr:
 
                 # Choose execution method based on whether callback is provided
                 if stream_callback and bco_monitor:
-                    # Use Popen for real-time monitoring
-                    process = subprocess.Popen(
-                        cmd,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        cwd=str(compute_ras.project_folder),
-                        shell=True
-                    )
-                    if _watchdog:
-                        _watchdog.add_pid(process.pid)
+                    # Use Popen for real-time monitoring. Redirect stdio to the
+                    # per-plan log file (not PIPE) to avoid the inherited-pipe
+                    # deadlock (CLB-880). monitor_until_signal() polls the .bco
+                    # file and process.poll(); it never reads process.stdout, so
+                    # nothing here depends on a pipe.
+                    with open(_run_log_path, "w", encoding="utf-8", errors="ignore") as _run_log_fh:
+                        process = subprocess.Popen(
+                            cmd,
+                            stdout=_run_log_fh,
+                            stderr=subprocess.STDOUT,
+                            cwd=str(compute_ras.project_folder),
+                            shell=True
+                        )
+                        if _watchdog:
+                            _watchdog.add_pid(process.pid)
 
-                    # Monitor .bco file until process completes
-                    # (BcoMonitor will call on_exec_message callback as messages appear)
-                    bco_monitor.monitor_until_signal(process)
+                        # Monitor .bco file until process completes
+                        # (BcoMonitor will call on_exec_message callback as messages appear)
+                        bco_monitor.monitor_until_signal(process)
 
-                    # Wait for process to complete
-                    return_code = process.wait()
+                        # Wait for process to complete
+                        return_code = process.wait()
 
                     # Check if subprocess succeeded
                     if return_code != 0:
                         raise subprocess.CalledProcessError(return_code, cmd)
 
                 else:
-                    # Original behavior when no callback
-                    subprocess.run(cmd, check=True, shell=True, capture_output=True, text=True)
+                    # Original behavior when no callback. Redirect stdio to the
+                    # per-plan log file instead of capture_output/PIPE: with
+                    # shell=True the PIPE write handle is inherited by the
+                    # cmd.exe -> Ras.exe -> RasUnsteady.exe tree, and
+                    # subprocess.run() blocks on pipe EOF until every grandchild
+                    # exits -- the intermittent CLB-880 hang. A file handle has no
+                    # EOF wait, so run() returns as soon as the process exits.
+                    with open(_run_log_path, "w", encoding="utf-8", errors="ignore") as _run_log_fh:
+                        subprocess.run(
+                            cmd,
+                            check=True,
+                            shell=True,
+                            stdout=_run_log_fh,
+                            stderr=subprocess.STDOUT,
+                        )
 
                 end_time = time.time()
                 run_time = end_time - start_time
@@ -772,9 +805,19 @@ class RasCmdr:
             except subprocess.CalledProcessError as e:
                 end_time = time.time()
                 run_time = end_time - start_time
-                logger.error(f"Error running plan: {plan_number}")
-                logger.error(f"Error message: {e.output}")
+                logger.error(f"Error running plan: {plan_number} (exit code {e.returncode})")
                 logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+
+                # stdout/stderr were redirected to a file (no PIPE), so e.output is
+                # None; surface the tail of the run log for context. The substantive
+                # compute messages are read from the .bco/.computeMsgs files below.
+                try:
+                    if _run_log_path.exists():
+                        _log_text = _run_log_path.read_text(encoding="utf-8", errors="ignore").strip()
+                        if _log_text:
+                            logger.error(f"HEC-RAS console output ({_run_log_path.name}):\n{_log_text[-2000:]}")
+                except Exception as _log_err:
+                    logger.debug(f"Could not read run log {_run_log_path}: {_log_err}")
 
                 # Read compute message files (.bco## for 5.x, .computeMsgs.txt/.comp_msgs.txt for 6.x+)
                 plan_num_str = RasUtils.normalize_ras_number(plan_number)
