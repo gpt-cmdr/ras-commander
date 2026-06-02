@@ -1826,6 +1826,8 @@ class RasMonteCarlo:
         max_plans_per_batch: int = 99,
         ras_object: Any = None,
         timeout_sec: Optional[int] = None,
+        clear_geompre: bool = False,
+        clone_geom: bool = False,
     ) -> dict:
         """
         Run a Monte Carlo ensemble using RasPermutation as the execution engine.
@@ -1863,6 +1865,7 @@ class RasMonteCarlo:
             apply_fn=apply_fn,
             suffix=suffix,
             max_plans_per_batch=max_plans_per_batch,
+            clone_geom=clone_geom,
             ras_object=ras_object,
         )
 
@@ -1872,6 +1875,7 @@ class RasMonteCarlo:
             num_cores=num_cores,
             ras_object=ras_object,
             timeout_sec=timeout_sec,
+            clear_geompre=clear_geompre,
         )
 
         if "sample_id" in results_df.columns:
@@ -1921,7 +1925,39 @@ class RasMonteCarlo:
         zone_column_map: Dict[str, str],
         path: str = "plaintext",
     ) -> Callable[[Path, pd.Series, Any], None]:
-        """Factory: return an apply_fn that modifies Manning's n."""
+        """
+        Factory: return an apply_fn that perturbs land-cover Manning's n.
+
+        Args:
+            zone_column_map: ``{land-cover-class-name: sample-column-name}``.
+            path: which roughness source to edit:
+                - ``"plaintext"`` (recommended) — the ``LCMann Table`` base
+                  overrides in the ``.g##`` text (via ``GeomLandCover``). This is
+                  the canonical approach: it is per-geometry, so with
+                  ``clone_geom=True`` each sample edits its OWN ``.g##`` and the
+                  perturbation drives that sample's per-cell n.
+                - ``"sidecar"`` / ``"both"`` — also edit the land-cover sidecar
+                  HDF ``Variables``. WARNING: the sidecar is SHARED across cloned
+                  geometries in a batch, so in a parallel ensemble these writes
+                  collide (last-write-wins) and every sample reads the same
+                  values. Only use when a per-sample sidecar is guaranteed.
+
+        IMPORTANT — two conditions are required for a 2D land-cover roughness
+        perturbation to actually reach the solver (both verified empirically):
+
+        1. ``run_ensemble(..., clone_geom=True)`` — clone the geometry PER sample
+           so each ``.g##`` is independent; otherwise all samples share one
+           geometry and the apply_fn writes collide.
+        2. ``run_ensemble(..., clear_geompre=True)`` — the per-cell ``Cells Center
+           Manning's n`` is a geometry-preprocessing product cached in the
+           ``.g##.hdf``; ``clear_geompre`` (now including the in-HDF preprocessor
+           tables, association preserved) forces HEC-RAS to re-derive it from the
+           perturbed ``LCMann`` on each sample. ``force_geompre`` is NOT needed and
+           would collapse per-cell n to the uniform default.
+
+        Without both, the ensemble runs but shows ZERO roughness sensitivity
+        (identical per-cell n / WSE across all samples).
+        """
         if not isinstance(zone_column_map, dict) or not zone_column_map:
             raise ValueError(
                 "zone_column_map must be a non-empty dict of "
@@ -1929,8 +1965,8 @@ class RasMonteCarlo:
             )
 
         mode = str(path).strip().lower()
-        if mode not in {"plaintext", "sidecar"}:
-            raise ValueError("path must be either 'plaintext' or 'sidecar'")
+        if mode not in {"plaintext", "sidecar", "both"}:
+            raise ValueError("path must be 'plaintext', 'sidecar', or 'both'")
 
         normalized_map = {
             str(zone_name): str(column_name)
@@ -1957,7 +1993,7 @@ class RasMonteCarlo:
                 ras_object=ras_object,
             )
 
-            if mode == "plaintext":
+            if mode in ("plaintext", "both"):
                 geom_path = dependencies["geom_path"]
                 if geom_path is None or not geom_path.exists():
                     raise FileNotFoundError(
@@ -1986,32 +2022,32 @@ class RasMonteCarlo:
                     ] = float(param_row[column_name])
 
                 GeomLandCover.set_base_mannings_n(geom_path, mannings_df)
-                return
 
-            geom_hdf_path = dependencies["geom_hdf_path"]
-            if geom_hdf_path is None or not geom_hdf_path.exists():
-                raise FileNotFoundError(
-                    f"Could not resolve geometry HDF for {plan_path}"
+            if mode in ("sidecar", "both"):
+                geom_hdf_path = dependencies["geom_hdf_path"]
+                if geom_hdf_path is None or not geom_hdf_path.exists():
+                    raise FileNotFoundError(
+                        f"Could not resolve geometry HDF for {plan_path}"
+                    )
+
+                landcover_hdf = HdfLandCover.get_landcover_association(
+                    geom_hdf_path,
+                    ras_object=ras_object,
                 )
+                if landcover_hdf is None or not Path(landcover_hdf).exists():
+                    raise FileNotFoundError(
+                        f"Could not resolve land-cover sidecar for {geom_hdf_path}"
+                    )
 
-            landcover_hdf = HdfLandCover.get_landcover_association(
-                geom_hdf_path,
-                ras_object=ras_object,
-            )
-            if landcover_hdf is None or not Path(landcover_hdf).exists():
-                raise FileNotFoundError(
-                    f"Could not resolve land-cover sidecar for {geom_hdf_path}"
+                class_mapping = {
+                    zone_name: float(param_row[column_name])
+                    for zone_name, column_name in normalized_map.items()
+                }
+                HdfLandCover.set_landcover_raster_map(
+                    landcover_hdf,
+                    class_mapping,
+                    ras_object=ras_object,
                 )
-
-            class_mapping = {
-                zone_name: float(param_row[column_name])
-                for zone_name, column_name in normalized_map.items()
-            }
-            HdfLandCover.set_landcover_raster_map(
-                landcover_hdf,
-                class_mapping,
-                ras_object=ras_object,
-            )
 
         return apply_fn
 

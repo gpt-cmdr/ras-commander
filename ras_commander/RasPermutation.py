@@ -508,6 +508,7 @@ class RasPermutation:
         apply_fn: Callable[[Path, pd.Series, Any], None],
         suffix: str = "perms",
         max_plans_per_batch: int = 99,
+        clone_geom: bool = False,
         ras_object: Any = None,
     ) -> dict:
         """
@@ -623,6 +624,46 @@ class RasPermutation:
                     batch_ras,
                 )
 
+                # Clone the geometry per realization so geometry-modifying
+                # apply_fns (Manning's n / breach) are isolated. clone_plan only
+                # clones the .p## and leaves it pointing at the template geometry,
+                # so without this every sample edits the SAME .g## and the writes
+                # collide (last-write-wins) -> identical results.
+                if clone_geom:
+                    template_geom_number = None
+                    perm_plan_df = getattr(batch_ras, "plan_df", None)
+                    if (
+                        perm_plan_df is not None
+                        and not perm_plan_df.empty
+                        and "plan_number" in perm_plan_df.columns
+                        and "geometry_number" in perm_plan_df.columns
+                    ):
+                        normalized_plan_numbers = perm_plan_df["plan_number"].apply(
+                            RasUtils.normalize_ras_number
+                        )
+                        match = perm_plan_df[
+                            normalized_plan_numbers
+                            == RasUtils.normalize_ras_number(template_plan)
+                        ]
+                        if not match.empty:
+                            template_geom_number = RasUtils.normalize_ras_number(
+                                match.iloc[0]["geometry_number"]
+                            )
+                    if template_geom_number is None:
+                        raise ValueError(
+                            "clone_geom=True but could not resolve the geometry "
+                            f"number for template plan {template_plan}"
+                        )
+                    new_geom_number = RasPlan.clone_geom(
+                        template_geom_number,
+                        ras_object=batch_ras,
+                    )
+                    RasPlan.set_geom(
+                        new_plan_number,
+                        new_geom_number,
+                        ras_object=batch_ras,
+                    )
+
                 plan_title = RasPermutation._derive_plan_title(
                     template_title,
                     absolute_perm_id,
@@ -715,6 +756,7 @@ class RasPermutation:
         num_cores: int = 2,
         ras_object: Any = None,
         timeout_sec: Optional[int] = None,
+        clear_geompre: bool = False,
     ) -> pd.DataFrame:
         """
         Execute generated batch folders and append summary metrics to master log.
@@ -761,6 +803,7 @@ class RasPermutation:
                 num_cores=num_cores,
                 ras_object=batch_ras,
                 timeout_sec=timeout_sec,
+                clear_geompre=clear_geompre,
             )
 
             summary_df = compute_result.results_df.copy()
