@@ -95,7 +95,8 @@ sweeps.
 `224_steady_flow_authoring.ipynb`,
 `225_fixit_blocked_obstructions.ipynb`,
 `230_mesh_sensitivity_analysis.ipynb`,
-`231_pipe_network_mesh_generation.ipynb`
+`231_pipe_network_mesh_generation.ipynb`,
+`232_weise_2d_sediment_mesh_sensitivity.ipynb`
 
 ### 300s
 

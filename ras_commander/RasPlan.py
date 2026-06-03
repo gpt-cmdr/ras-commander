@@ -1868,6 +1868,127 @@ class RasPlan:
 
     @staticmethod
     @log_call
+    def get_sediment_output_variables(plan_number_or_path: Union[str, Number, Path],
+                                      ras_object: Optional['RasPrj'] = None) -> dict:
+        """
+        Read the sediment output configuration from a plan file.
+
+        HEC-RAS only writes optional per-cell 2D sediment results (e.g. active-layer
+        gradation ``Cell Active Layer Percentile Diameters - D50``) when the plan
+        requests them via ``Sediment Output Variables=`` lines. This returns the
+        current requests so they can be inspected or extended.
+
+        Args:
+            plan_number_or_path (Union[str, Number, Path]): The plan number (str, int,
+                or float) or path to the plan file.
+            ras_object (Optional['RasPrj']): The RAS project object. Defaults to None.
+
+        Returns:
+            dict: ``{"output_level": Optional[int], "variables": List[str]}``.
+
+        Raises:
+            ValueError: If the plan file is not found.
+        """
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object)
+            if plan_file_path is None or not Path(plan_file_path).exists():
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        output_level = None
+        variables = []
+        with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
+            for line in file:
+                if line.startswith("Sediment Output Level="):
+                    try:
+                        output_level = int(line.split('=', 1)[1].strip())
+                    except ValueError:
+                        output_level = None
+                elif line.startswith("Sediment Output Variables="):
+                    variables.append(line.split('=', 1)[1].strip())
+        return {"output_level": output_level, "variables": variables}
+
+    @staticmethod
+    @log_call
+    def set_sediment_output_variables(plan_number_or_path: Union[str, Number, Path],
+                                      variables: List[str],
+                                      output_level: Optional[int] = None,
+                                      append: bool = True,
+                                      ras_object: Optional['RasPrj'] = None) -> None:
+        """
+        Request per-cell sediment output variables in a plan file.
+
+        HEC-RAS only writes optional 2D sediment results when the plan asks for
+        them. For example, to make HEC-RAS write the active-layer gradation
+        datasets (read by ``HdfResultsSediment.get_active_layer_grain_class``),
+        request the ``d50``/``d10``/``d90`` tokens::
+
+            RasPlan.set_sediment_output_variables(
+                plan, ["2D Cell d50 Active", "2D Cell d10 Active", "2D Cell d90 Active"],
+                output_level=6, ras_object=ras)
+
+        Existing ``Sediment Output Variables=`` lines are normalized to sit
+        directly beneath the ``Sediment Output Level=`` line.
+
+        Args:
+            plan_number_or_path (Union[str, Number, Path]): The plan number (str, int,
+                or float) or path to the plan file.
+            variables (List[str]): Sediment output variable tokens to request (verbatim
+                HEC-RAS strings, e.g. ``"2D Cell d50 Active"``).
+            output_level (Optional[int]): If provided, set ``Sediment Output Level=`` to
+                this value (gradation outputs typically require level 6).
+            append (bool): If True (default), keep existing requested variables and add
+                the new ones (order-preserving dedupe). If False, replace them.
+            ras_object (Optional['RasPrj']): The RAS project object. Defaults to None.
+
+        Raises:
+            ValueError: If the plan file is not found, ``variables`` is empty, or the
+                plan has no ``Sediment Output Level=`` line (not a sediment plan).
+        """
+        if not variables:
+            raise ValueError("variables must be a non-empty list of output tokens.")
+
+        plan_file_path = Path(plan_number_or_path)
+        if not plan_file_path.is_file():
+            plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object)
+            if plan_file_path is None or not Path(plan_file_path).exists():
+                raise ValueError(f"Plan file not found: {plan_file_path}")
+
+        with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
+            lines = file.readlines()
+
+        level_idx = next((i for i, l in enumerate(lines)
+                          if l.startswith("Sediment Output Level=")), None)
+        if level_idx is None:
+            raise ValueError(
+                f"'Sediment Output Level=' line not found in {plan_file_path}; "
+                "the plan does not appear to be a sediment plan.")
+
+        existing = [l.split('=', 1)[1].strip() for l in lines
+                    if l.startswith("Sediment Output Variables=")]
+        merged = (existing + list(variables)) if append else list(variables)
+        # order-preserving dedupe
+        seen = set()
+        final_vars = [v for v in merged if not (v in seen or seen.add(v))]
+
+        # drop all existing variable lines, then update the level line
+        new_lines = [l for l in lines if not l.startswith("Sediment Output Variables=")]
+        level_idx = next(i for i, l in enumerate(new_lines)
+                         if l.startswith("Sediment Output Level="))
+        if output_level is not None:
+            new_lines[level_idx] = f"Sediment Output Level= {output_level}\n"
+        insert = [f"Sediment Output Variables={v}\n" for v in final_vars]
+        new_lines[level_idx + 1:level_idx + 1] = insert
+
+        with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
+            file.writelines(new_lines)
+        logger.info(f"Set {len(final_vars)} sediment output variable(s) in {plan_file_path}")
+
+        if ras_object:
+            ras_object.plan_df = ras_object.get_plan_entries()
+
+    @staticmethod
+    @log_call
     def get_shortid(plan_number_or_path: Union[str, Number, Path], ras_object=None) -> str:
         """
         Get the Short Identifier from a HEC-RAS plan file.

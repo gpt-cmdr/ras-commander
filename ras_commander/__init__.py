@@ -98,6 +98,7 @@ from .hdf import (
     HdfBase, HdfUtils, HdfPlan,
     HdfMesh, HdfXsec, HdfBndry, HdfStruc, HdfStorageArea, HdfHydraulicTables,
     HdfResultsPlan, HdfResultsMesh, HdfResultsQuery, HdfResultsXsec, HdfResultsBreach,
+    HdfResultsSediment,
     HdfPipe, HdfPump, HdfInfiltration, HdfLandCover,
     HdfPlot, HdfResultsPlot,
     HdfFluvialPluvial, HdfBenefitAreas, HdfChannelCapacity, HdfResultsAnalysis,
@@ -231,7 +232,7 @@ __all__ = [
 
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan', 'HdfProject',
-    'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsQuery', 'HdfResultsXsec',
+    'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsQuery', 'HdfResultsXsec', 'HdfResultsSediment',
     'HdfStruc', 'HdfStorageArea', 'HdfUtils', 'HdfXsec', 'HdfPump',
     'HdfPipe', 'HdfInfiltration', 'HdfLandCover', 'HdfHydraulicTables', 'HdfResultsBreach', 'RasBreach',
     'HdfBenefitAreas', 'HdfChannelCapacity', 'HdfResultsAnalysis',
