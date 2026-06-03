@@ -20,7 +20,7 @@ except PackageNotFoundError:
 setup_logging()
 
 # Core functionality
-from .RasPrj import RasPrj, init_ras_project, get_ras_exe, ras
+from .RasPrj import RasPrj, init_ras_project, get_ras_exe, ras, create_project_from_template
 from .RasPlan import RasPlan
 from .RasGeo import RasGeo  # DEPRECATED - use geom subpackage
 from .RasGeometry import RasGeometry  # DEPRECATED - use geom subpackage
@@ -174,7 +174,7 @@ def __getattr__(name):
 # Define __all__ to specify what should be imported when using "from ras_commander import *"
 __all__ = [
     # Core functionality
-    'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
+    'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras', 'create_project_from_template',
     'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils',
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
     'PreprocessResult', 'GeometryPreprocessResult',

@@ -1,0 +1,173 @@
+<RASMapper>
+  <Version>2.0.0</Version>
+  <RASProjectionFilename Filename=".\EPSG_5070.prj" />
+  <Features>
+    <Layer Name="Profile Lines" Type="PolylineFeatureLayer" Filename=".\Features\Profile Lines.shp" />
+  </Features>
+  <Geometries Checked="True" Expanded="True">
+    <Layer Name="New Geometry" Type="RASGeometry" Checked="True" Expanded="True" Filename=".\TEMPLATE.g01.hdf">
+      <Layer Type="RASRiver">
+        <LabelFeatures Checked="True" PercentPosition="0" rows="1" cols="2" r0c0="River" r0c1="Reach" Position="3" Color="-16777216" FontSize="8.25" />
+      </Layer>
+      <Layer Type="RASJunction">
+        <LabelFeatures Checked="True" PercentPosition="0" rows="1" cols="1" r0c0="Name" Position="3" Color="-16777216" FontSize="8.25" />
+      </Layer>
+      <Layer Type="RASXS" UnitsRiverStation="Feet" RiverStationDecimalPlaces="0">
+        <LabelFeatures Checked="True" PercentPosition="0" rows="1" cols="1" r0c0="River Station" Position="3" Color="-16777216" FontSize="8.25" />
+      </Layer>
+      <Layer Type="RASStorageArea">
+        <LabelFeatures Checked="True" PercentPosition="0" rows="1" cols="1" r0c0="Name" Position="3" Color="-16777216" FontSize="8.25" />
+      </Layer>
+      <Layer Type="MeshPerimeterLayer">
+        <LabelFeatures Checked="True" PercentPosition="0" rows="1" cols="1" r0c0="Name" Position="3" Color="-16777216" FontSize="8.25" />
+      </Layer>
+      <Layer Name="Culvert Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
+      <Layer Name="Culvert Barrels" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Bridges/Culverts" />
+      <Layer Name="Gate Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
+      <Layer Name="Gate Openings" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Inline Structures" />
+      <Layer Name="Culvert Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
+      <Layer Name="Culvert Barrels" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Inline Structures" />
+      <Layer Name="Rating Curve Outlets" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Inline Structures" />
+      <Layer Name="Outlet Time Series" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Inline Structures" />
+      <Layer Name="Gate Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
+      <Layer Name="Gate Openings" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Lateral Structures" />
+      <Layer Name="Culvert Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
+      <Layer Name="Culvert Barrels" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Lateral Structures" />
+      <Layer Name="Rating Curve Outlets" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Lateral Structures" />
+      <Layer Name="Outlet Time Series" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Lateral Structures" />
+      <Layer Name="Gate Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
+      <Layer Name="Gate Openings" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="SA/2D Connections" />
+      <Layer Name="Culvert Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
+      <Layer Name="Culvert Barrels" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="SA/2D Connections" />
+      <Layer Name="Rating Curve Outlets" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="SA/2D Connections" />
+      <Layer Name="Outlet Time Series" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="SA/2D Connections" />
+      <Layer Type="StructureLayer" UnitsRiverStation="Feet" RiverStationDecimalPlaces="0" />
+      <Layer Type="RASPipeNodes">
+        <SymbologyByAttributeColumns Checked="True" SelectedColumn="Node Type">
+          <ValueToSymbology Value="Start">
+            <Symbology>
+              <PointSymbol Type="1" Size="8" pA="255" pR="255" pG="255" pB="255" bA="255" bR="0" bG="128" bB="0" />
+              <HillShade On="True" Azimuth="315" Zenith="45" ZFactor="3" />
+              <Contour On="False" Interval="5" Color="-16777216" />
+              <Pen B="0" G="128" R="0" A="255" Dash="0" Width="2" />
+              <SurfaceFill Colors="-1,-16777216" Values="0,100" Stretched="True" AlphaTag="255" UseDatasetMinMax="False" RegenerateForScreen="False" />
+              <Brush Type="SolidBrush" B="0" G="128" R="0" A="50" Name="PolygonFill" />
+            </Symbology>
+          </ValueToSymbology>
+          <ValueToSymbology Value="Junction">
+            <Symbology>
+              <PointSymbol Type="1" Size="8" pA="255" pR="255" pG="255" pB="255" bA="255" bR="128" bG="0" bB="0" />
+              <HillShade On="True" Azimuth="315" Zenith="45" ZFactor="3" />
+              <Contour On="False" Interval="5" Color="-16777216" />
+              <Pen B="0" G="0" R="128" A="255" Dash="0" Width="2" />
+              <SurfaceFill Colors="-1,-16777216" Values="0,100" Stretched="True" AlphaTag="255" UseDatasetMinMax="False" RegenerateForScreen="False" />
+              <Brush Type="SolidBrush" B="0" G="0" R="128" A="50" Name="PolygonFill" />
+            </Symbology>
+          </ValueToSymbology>
+          <ValueToSymbology Value="Culvert Opening">
+            <Symbology>
+              <PointSymbol Type="1" Size="8" pA="255" pR="128" pG="128" pB="128" bA="255" bR="128" bG="128" bB="128" />
+              <HillShade On="True" Azimuth="315" Zenith="45" ZFactor="3" />
+              <Contour On="False" Interval="5" Color="-16777216" />
+              <Pen B="128" G="128" R="128" A="255" Dash="0" Width="2" />
+              <SurfaceFill Colors="-1,-16777216" Values="0,100" Stretched="True" AlphaTag="255" UseDatasetMinMax="False" RegenerateForScreen="False" />
+              <Brush Type="SolidBrush" B="128" G="128" R="128" A="50" Name="PolygonFill" />
+            </Symbology>
+          </ValueToSymbology>
+          <ValueToSymbology Value="External">
+            <Symbology>
+              <PointSymbol Type="1" Size="8" pA="255" pR="255" pG="255" pB="0" bA="255" bR="255" bG="255" bB="0" />
+              <HillShade On="True" Azimuth="315" Zenith="45" ZFactor="3" />
+              <Contour On="False" Interval="5" Color="-16777216" />
+              <Pen B="0" G="255" R="255" A="255" Dash="0" Width="2" />
+              <SurfaceFill Colors="-1,-16777216" Values="0,100" Stretched="True" AlphaTag="255" UseDatasetMinMax="False" RegenerateForScreen="False" />
+              <Brush Type="SolidBrush" B="0" G="255" R="255" A="50" Name="PolygonFill" />
+            </Symbology>
+          </ValueToSymbology>
+          <ValueToSymbology Value="Closed">
+            <Symbology>
+              <PointSymbol Type="1" Size="8" pA="255" pR="255" pG="255" pB="255" bA="255" bR="0" bG="0" bB="255" />
+              <HillShade On="True" Azimuth="315" Zenith="45" ZFactor="3" />
+              <Contour On="False" Interval="5" Color="-16777216" />
+              <Pen B="255" G="0" R="0" A="255" Dash="0" Width="2" />
+              <SurfaceFill Colors="-1,-16777216" Values="0,100" Stretched="True" AlphaTag="255" UseDatasetMinMax="False" RegenerateForScreen="False" />
+              <Brush Type="SolidBrush" B="255" G="0" R="0" A="50" Name="PolygonFill" />
+            </Symbology>
+          </ValueToSymbology>
+          <ValueToSymbology Value="Error">
+            <Symbology>
+              <PointSymbol Type="1" Size="8" pA="255" pR="255" pG="0" pB="0" bA="255" bR="255" bG="0" bB="0" />
+              <HillShade On="True" Azimuth="315" Zenith="45" ZFactor="3" />
+              <Contour On="False" Interval="5" Color="-16777216" />
+              <Pen B="0" G="0" R="255" A="255" Dash="0" Width="2" />
+              <SurfaceFill Colors="-1,-16777216" Values="0,100" Stretched="True" AlphaTag="255" UseDatasetMinMax="False" RegenerateForScreen="False" />
+              <Brush Type="SolidBrush" B="0" G="0" R="255" A="50" Name="PolygonFill" />
+            </Symbology>
+          </ValueToSymbology>
+        </SymbologyByAttributeColumns>
+      </Layer>
+      <Layer Type="FinalNValueLayer">
+        <ResampleMethod>near</ResampleMethod>
+        <Surface On="True" />
+      </Layer>
+      <Layer Name="Final Values" Type="InterpretationRasterizerLayer" Filename=".\TEMPLATE.g01.hdf">
+        <ResampleMethod>near</ResampleMethod>
+        <Surface On="True" />
+      </Layer>
+      <Layer Name="Final Values" Type="InterpretationRasterizerLayer" Filename=".\TEMPLATE.g01.hdf">
+        <ResampleMethod>near</ResampleMethod>
+        <Surface On="True" />
+      </Layer>
+    </Layer>
+  </Geometries>
+  <Plans />
+  <EventConditions />
+  <Results />
+  <MapLayers Checked="True" Expanded="True">
+    <Layer Name="USGS_05577500_nldi_basin" Type="PolygonFeatureLayer" Checked="True" Filename="..\..\workspace\Spring Creek Springfield IL\02_basin_outline\USGS_05577500_nldi_basin.geojson" />
+    <Layer Name="Google Hybrid" Type="WMSLayer" Checked="True" Filename="%LocalAppData%\HEC\Mapping\5.1\XML\Google Hybrid.xml">
+      <ResampleMethod>near</ResampleMethod>
+    </Layer>
+  </MapLayers>
+  <Terrains />
+  <CurrentView>
+    <MaxX>542556.256418415</MaxX>
+    <MinX>506596.478836628</MinX>
+    <MaxY>1900897.0314168</MaxY>
+    <MinY>1847260.9654177</MinY>
+  </CurrentView>
+  <VelocitySettings>
+    <Density>1.5</Density>
+    <Lifetime>100</Lifetime>
+    <Radius>0.75</Radius>
+    <Method>2</Method>
+    <Timestep>1</Timestep>
+    <StaticColor>Black</StaticColor>
+    <SpeedRelativeToZoom>False</SpeedRelativeToZoom>
+  </VelocitySettings>
+  <AnimationSettings>
+    <DelayTimer>0</DelayTimer>
+  </AnimationSettings>
+  <Units>SI Units</Units>
+  <RenderMode>sloping</RenderMode>
+  <FullExtentPlotting />
+  <MarksWarpMethod>False</MarksWarpMethod>
+  <CurrentSettings>
+    <ProjectSettings>
+      <RiverStationUnits>Feet</RiverStationUnits>
+      <RiverStationDecimalPlaces>0</RiverStationDecimalPlaces>
+      <HorizontalDecimalPlaces>1</HorizontalDecimalPlaces>
+      <VerticalDecimalPlaces>2</VerticalDecimalPlaces>
+      <XSMaxPoints>450</XSMaxPoints>
+      <LSMaxPoints>1000</LSMaxPoints>
+      <ProfilePointMinCount>0</ProfilePointMinCount>
+      <ShowLegend>True</ShowLegend>
+      <ShowNorthArrow>False</ShowNorthArrow>
+      <ShowScaleBar>True</ShowScaleBar>
+      <ShowGreaterThanInLegend>False</ShowGreaterThanInLegend>
+    </ProjectSettings>
+    <Folders>
+      <AddDataFolder>..\..\workspace\Spring Creek Springfield IL\02_basin_outline</AddDataFolder>
+    </Folders>
+  </CurrentSettings>
+</RASMapper>

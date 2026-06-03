@@ -41,6 +41,7 @@ setup(
         "ras_commander": [
             "resources/*.json",
             "resources/land_classification/*.hdf",
+            "resources/templates/*/*",
         ],
         "ras_commander.native": [
             "RasStoreMapHelper.exe",
