@@ -159,17 +159,14 @@ class HdfResultsSediment:
         return sa, cc, crs
 
     @staticmethod
-    def _cell_dataset_to_gdf(hdf_path, area, dataset, value_col, time_index, units):
-        """Build a per-cell GeoDataFrame for one Sediment Bed dataset at a time index.
+    def _read_cell_dataset(hdf_path, area, dataset, time_index):
+        """Read one Sediment Bed per-cell dataset and aligned geometry (numpy only).
 
-        ``units`` may be the literal string ``"length"`` to resolve to the model
-        length unit (ft/m); otherwise it is used verbatim (e.g. ``"mm"``).
-        Geometry is in the model length unit; the ``surface_area`` column is in
-        length-unit^2.
+        Returns a dict with ``area`` (resolved name), ``values`` (per-cell at the
+        requested time), ``surface_area``, ``centers``, ``crs``, and ``length_unit``
+        (ft/m). No GeoPandas dependency -- callers build the GeoDataFrame so the
+        heavy import stays at each public-method boundary.
         """
-        from geopandas import GeoDataFrame
-        from shapely.geometry import Point
-
         with h5py.File(hdf_path, 'r') as f:
             area = HdfResultsSediment._resolve_area(f, area)
             ds_path = f"{_BED_BLOCK}/{area}/{dataset}"
@@ -180,20 +177,36 @@ class HdfResultsSediment:
             sa, cc, crs = HdfResultsSediment._cell_geometry(f, area)
             length_unit = HdfResultsSediment._length_unit(f)
 
-        value_units = length_unit if units == "length" else units
         n = min(len(row), len(sa), len(cc))
+        return {
+            "area": area,
+            "values": np.asarray(row[:n], dtype=float),
+            "surface_area": np.asarray(sa[:n], dtype=float),
+            "centers": cc[:n],
+            "crs": crs,
+            "length_unit": length_unit,
+        }
+
+    @staticmethod
+    def _build_cell_gdf(GeoDataFrame, Point, data, value_col, units):
+        """Assemble the per-cell GeoDataFrame from a ``_read_cell_dataset`` dict.
+
+        GeoDataFrame/Point are passed in so the lazy GeoPandas/Shapely imports
+        live at the public-method boundary (matching the rest of the hdf package).
+        """
+        centers = data["centers"]
         gdf = GeoDataFrame(
             {
-                "mesh_name": area,
-                "cell_id": np.arange(n),
-                value_col: np.asarray(row[:n], dtype=float),
-                "surface_area": np.asarray(sa[:n], dtype=float),
-                "geometry": [Point(x, y) for x, y in cc[:n]],
+                "mesh_name": data["area"],
+                "cell_id": np.arange(len(data["values"])),
+                value_col: data["values"],
+                "surface_area": data["surface_area"],
+                "geometry": [Point(x, y) for x, y in centers],
             },
             geometry="geometry",
-            crs=crs,
+            crs=data["crs"],
         )
-        gdf.attrs.update({"units": value_units, "length_unit": length_unit})
+        gdf.attrs.update({"units": units, "length_unit": data["length_unit"]})
         return gdf
 
     # ------------------------------------------------------------------ #
@@ -212,8 +225,12 @@ class HdfResultsSediment:
         ``gdf.attrs['length_unit']``). Negative = scour, positive = deposition.
         ``time_index`` indexes the sediment output series (default -1 = final).
         """
-        return HdfResultsSediment._cell_dataset_to_gdf(
-            hdf_path, mesh_name, "Cell Bed Change", "bed_change", time_index, "length")
+        from geopandas import GeoDataFrame
+        from shapely.geometry import Point
+        data = HdfResultsSediment._read_cell_dataset(
+            hdf_path, mesh_name, "Cell Bed Change", time_index)
+        return HdfResultsSediment._build_cell_gdf(
+            GeoDataFrame, Point, data, "bed_change", data["length_unit"])
 
     @staticmethod
     @log_call
@@ -226,8 +243,12 @@ class HdfResultsSediment:
         Columns: ``mesh_name, cell_id, bed_elevation, surface_area, geometry``
         (``bed_elevation`` in the model length unit; see ``gdf.attrs['length_unit']``).
         """
-        return HdfResultsSediment._cell_dataset_to_gdf(
-            hdf_path, mesh_name, "Cell Bed Elevation", "bed_elevation", time_index, "length")
+        from geopandas import GeoDataFrame
+        from shapely.geometry import Point
+        data = HdfResultsSediment._read_cell_dataset(
+            hdf_path, mesh_name, "Cell Bed Elevation", time_index)
+        return HdfResultsSediment._build_cell_gdf(
+            GeoDataFrame, Point, data, "bed_elevation", data["length_unit"])
 
     @staticmethod
     @log_call
@@ -250,9 +271,12 @@ class HdfResultsSediment:
         pct = percentile.upper()
         if pct not in ("D10", "D50", "D90"):
             raise ValueError(f"percentile must be D10, D50, or D90 (got '{percentile}').")
+        from geopandas import GeoDataFrame
+        from shapely.geometry import Point
         dataset = f"Cell Active Layer Percentile Diameters - {pct}"
-        return HdfResultsSediment._cell_dataset_to_gdf(
-            hdf_path, mesh_name, dataset, f"{pct.lower()}_mm", time_index, "mm")
+        data = HdfResultsSediment._read_cell_dataset(hdf_path, mesh_name, dataset, time_index)
+        return HdfResultsSediment._build_cell_gdf(
+            GeoDataFrame, Point, data, f"{pct.lower()}_mm", "mm")
 
     # ------------------------------------------------------------------ #
     # Volume summary
