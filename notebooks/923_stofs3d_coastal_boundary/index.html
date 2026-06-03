@@ -3209,7 +3209,7 @@
 </span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PIP PACKAGE MODE: Loading installed ras-commander&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>LOCAL SOURCE MODE: Loading from C:\GH\ras-commander/ras_commander
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>LOCAL SOURCE MODE: Loading from G:\GH\ras-commander-wt-run923/ras_commander
 </code></pre></div>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
@@ -3219,6 +3219,9 @@
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ras_commander.boundaries</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoastalBoundary</span>
 </span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>c:\Users\bill\anaconda3\envs\rascommander\Lib\site-packages\tqdm\auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
+  from .autonotebook import tqdm as notebook_tqdm
+</code></pre></div>
 <h2 id="what-youll-learn">What You'll Learn<a class="headerlink" href="#what-youll-learn" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Download STOFS-3D forecasts</strong> from NOAA NOMADS using <code>CoastalBoundary.download_stofs3d()</code></li>
@@ -3296,39 +3299,41 @@
 <div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Latest STOFS-3D cycle available: False
 </code></pre></div>
 <h3 id="step-2-download-stofs-3d-forecast">Step 2: Download STOFS-3D Forecast<a class="headerlink" href="#step-2-download-stofs-3d-forecast" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Create output directory</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">stofs_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;example_data/stofs3d_gulf&quot;</span><span class="p">)</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">stofs_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">try</span><span class="p">:</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">stofs_files</span> <span class="o">=</span> <span class="n">CoastalBoundary</span><span class="o">.</span><span class="n">download_stofs3d</span><span class="p">(</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>        <span class="n">output_dir</span><span class="o">=</span><span class="n">stofs_dir</span><span class="p">,</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>        <span class="n">file_type</span><span class="o">=</span><span class="s2">&quot;points&quot;</span>  <span class="c1"># Point data (faster, smaller than fields)</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="p">)</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Downloaded </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">stofs_files</span><span class="p">)</span><span class="si">}</span><span class="s2"> STOFS-3D files&quot;</span><span class="p">)</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">stofs_files</span><span class="p">:</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1024</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1024</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> MB)&quot;</span><span class="p">)</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Download requires internet: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>    <span class="nb">print</span><span class="p">()</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Expected output:&quot;</span><span class="p">)</span>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  Downloaded 1-2 STOFS-3D NetCDF files&quot;</span><span class="p">)</span>
-</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  stofs_3d_atl.t00z.points.cwl.nc (~50 MB)&quot;</span><span class="p">)</span>
-</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>    <span class="n">stofs_files</span> <span class="o">=</span> <span class="p">[]</span>
+<div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># STOFS-3D sample data.</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># Prefer the committed sample dataset (examples/data/stofs3d_gulf); only</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># download from the network if it is missing. The committed file is never</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># deleted by the cleanup cell below.</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">stofs_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;data/stofs3d_gulf&quot;</span><span class="p">)</span>          <span class="c1"># relative to examples/</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">stofs_dir</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">alt</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;examples/data/stofs3d_gulf&quot;</span><span class="p">)</span>   <span class="c1"># when run from the repo root</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="k">if</span> <span class="n">alt</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>        <span class="n">stofs_dir</span> <span class="o">=</span> <span class="n">alt</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">stofs_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">existing</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">stofs_dir</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.nc&quot;</span><span class="p">))</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="k">if</span> <span class="n">existing</span><span class="p">:</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>    <span class="n">stofs_files</span> <span class="o">=</span> <span class="n">existing</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Using committed STOFS-3D sample data (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">stofs_files</span><span class="p">)</span><span class="si">}</span><span class="s2"> file(s)) in </span><span class="si">{</span><span class="n">stofs_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">stofs_files</span><span class="p">:</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1024</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1024</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> MB)&quot;</span><span class="p">)</span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="k">else</span><span class="p">:</span>
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>        <span class="n">stofs_files</span> <span class="o">=</span> <span class="n">CoastalBoundary</span><span class="o">.</span><span class="n">download_stofs3d</span><span class="p">(</span>
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>            <span class="n">output_dir</span><span class="o">=</span><span class="n">stofs_dir</span><span class="p">,</span>
+</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>            <span class="n">file_type</span><span class="o">=</span><span class="s2">&quot;points&quot;</span>  <span class="c1"># Point data (faster, smaller than fields)</span>
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>        <span class="p">)</span>
+</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Downloaded </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">stofs_files</span><span class="p">)</span><span class="si">}</span><span class="s2"> STOFS-3D files&quot;</span><span class="p">)</span>
+</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">stofs_files</span><span class="p">:</span>
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1024</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1024</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> MB)&quot;</span><span class="p">)</span>
+</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Download requires internet: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-4-29"><a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a>        <span class="nb">print</span><span class="p">()</span>
+</span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Expected output:&quot;</span><span class="p">)</span>
+</span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  Downloaded 1-2 STOFS-3D NetCDF files&quot;</span><span class="p">)</span>
+</span><span id="__span-4-32"><a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  stofs_3d_atl.t00z.points.cwl.nc (~50 MB)&quot;</span><span class="p">)</span>
+</span><span id="__span-4-33"><a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a>        <span class="n">stofs_files</span> <span class="o">=</span> <span class="p">[]</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:38:21 - ras_commander.sources.federal.coastal_boundary - INFO - No data for 20260429, using 20260428 instead
-
-
-2026-04-28 23:38:21 - ras_commander.sources.federal.coastal_boundary - INFO - Auto-detected latest available: 20260428 cycle 12z
-
-
-2026-04-28 23:38:21 - ras_commander.sources.federal.coastal_boundary - INFO - Downloading STOFS-3D: stofs_3d_atl.t12z.points.cwl.temp.salt.vel.nc
-
-
-2026-04-28 23:38:21 - ras_commander.sources.federal.coastal_boundary - INFO - Downloaded stofs_3d_atl.t12z.points.cwl.temp.salt.vel.nc (5.3 MB)
-
-
-Downloaded 1 STOFS-3D files
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Using committed STOFS-3D sample data (1 file(s)) in data\stofs3d_gulf
   stofs_3d_atl.t12z.points.cwl.temp.salt.vel.nc (5.3 MB)
 </code></pre></div>
 <h3 id="step-3-extract-wse-at-galveston-bay-entrance">Step 3: Extract WSE at Galveston Bay Entrance<a class="headerlink" href="#step-3-extract-wse-at-galveston-bay-entrance" title="Permanent link">&para;</a></h3>
@@ -3362,37 +3367,37 @@ Downloaded 1 STOFS-3D files
 </span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  ...&quot;</span><span class="p">)</span>
 </span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a>    <span class="n">wse_df</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:38:21 - ras_commander.sources.federal.coastal_boundary - INFO - Extracting WSE at (29.3500, -94.7700) from 1 file(s)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-06-02 22:55:17 - ras_commander.boundaries.coastal_boundary - INFO - Extracting WSE at (29.3500, -94.7700) from 1 file(s)
 
 
-2026-04-28 23:38:22 - ras_commander.sources.federal.coastal_boundary - INFO - Using swapped x/y orientation (NOAA data quirk)
+2026-06-02 22:55:18 - ras_commander.boundaries.coastal_boundary - INFO - Using swapped x/y orientation (NOAA data quirk)
 
 
-2026-04-28 23:38:22 - ras_commander.sources.federal.coastal_boundary - INFO - Nearest grid point: (29.3575, -94.7247), distance: 0.0459 degrees
+2026-06-02 22:55:18 - ras_commander.boundaries.coastal_boundary - INFO - Nearest grid point: (29.3575, -94.7247), distance: 0.0459 degrees
 
 
-2026-04-28 23:38:22 - ras_commander.sources.federal.coastal_boundary - INFO - Extracted 1200 valid WSE values. Range: -0.25 to 2.00 ft NAVD88
+2026-06-02 22:55:18 - ras_commander.boundaries.coastal_boundary - INFO - Extracted 1200 valid WSE values. Range: -0.19 to 2.19 ft NAVD88
 
 
 Extracted 1200 time steps at (29.35, -94.77)
 
 WSE Statistics (feet NAVD88):
-  Min:  -0.25 ft
-  Max:  2.00 ft
-  Mean: 1.07 ft
+  Min:  -0.19 ft
+  Max:  2.19 ft
+  Mean: 1.04 ft
 
 First 10 time steps:
            datetime    wse_m   wse_ft
-2026-04-27 12:06:00 0.245400 0.805118
-2026-04-27 12:12:00 0.241713 0.793023
-2026-04-27 12:18:00 0.238779 0.783397
-2026-04-27 12:24:00 0.236262 0.775139
-2026-04-27 12:30:00 0.234237 0.768495
-2026-04-27 12:36:00 0.232631 0.763224
-2026-04-27 12:42:00 0.230415 0.755954
-2026-04-27 12:48:00 0.228191 0.748657
-2026-04-27 12:54:00 0.227383 0.746007
-2026-04-27 13:00:00 0.228199 0.748685
+2026-04-20 12:06:00 0.588357 1.930306
+2026-04-20 12:12:00 0.594263 1.949682
+2026-04-20 12:18:00 0.599208 1.965906
+2026-04-20 12:24:00 0.603136 1.978793
+2026-04-20 12:30:00 0.606287 1.989131
+2026-04-20 12:36:00 0.608953 1.997877
+2026-04-20 12:42:00 0.611758 2.007081
+2026-04-20 12:48:00 0.614662 2.016606
+2026-04-20 12:54:00 0.617141 2.024740
+2026-04-20 13:00:00 0.618920 2.030577
 </code></pre></div>
 <h3 id="step-4-write-stage-boundary-condition">Step 4: Write Stage Boundary Condition<a class="headerlink" href="#step-4-write-stage-boundary-condition" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Write WSE as downstream stage boundary condition in HEC-RAS .u## file.</span>
@@ -3466,16 +3471,16 @@ First 10 time steps:
 </span></code></pre></div>
 <div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>WSE time series (input to generate_stage_bc):
            datetime    wse_m   wse_ft
-2026-04-27 12:06:00 0.245400 0.805118
-2026-04-27 12:12:00 0.241713 0.793023
-2026-04-27 12:18:00 0.238779 0.783397
-2026-04-27 12:24:00 0.236262 0.775139
-2026-04-27 12:30:00 0.234237 0.768495
-2026-04-27 12:36:00 0.232631 0.763224
-2026-04-27 12:42:00 0.230415 0.755954
-2026-04-27 12:48:00 0.228191 0.748657
-2026-04-27 12:54:00 0.227383 0.746007
-2026-04-27 13:00:00 0.228199 0.748685
+2026-04-20 12:06:00 0.588357 1.930306
+2026-04-20 12:12:00 0.594263 1.949682
+2026-04-20 12:18:00 0.599208 1.965906
+2026-04-20 12:24:00 0.603136 1.978793
+2026-04-20 12:30:00 0.606287 1.989131
+2026-04-20 12:36:00 0.608953 1.997877
+2026-04-20 12:42:00 0.611758 2.007081
+2026-04-20 12:48:00 0.614662 2.016606
+2026-04-20 12:54:00 0.617141 2.024740
+2026-04-20 13:00:00 0.618920 2.030577
 
 Total time steps: 1200
 Columns: [&#39;datetime&#39;, &#39;wse_m&#39;, &#39;wse_ft&#39;]
@@ -3535,22 +3540,22 @@ Datum adjustment:
 </span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  Tidal range: 5.70 ft (typical for Charleston)&quot;</span><span class="p">)</span>
 </span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>    <span class="n">wse_charleston</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:38:22 - ras_commander.sources.federal.coastal_boundary - INFO - Extracting WSE at (32.7800, -79.9300) from 1 file(s)
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-06-02 22:55:18 - ras_commander.boundaries.coastal_boundary - INFO - Extracting WSE at (32.7800, -79.9300) from 1 file(s)
 
 
-2026-04-28 23:38:22 - ras_commander.sources.federal.coastal_boundary - INFO - Using swapped x/y orientation (NOAA data quirk)
+2026-06-02 22:55:18 - ras_commander.boundaries.coastal_boundary - INFO - Using swapped x/y orientation (NOAA data quirk)
 
 
-2026-04-28 23:38:22 - ras_commander.sources.federal.coastal_boundary - INFO - Nearest grid point: (32.7808, -79.9236), distance: 0.0064 degrees
+2026-06-02 22:55:18 - ras_commander.boundaries.coastal_boundary - INFO - Nearest grid point: (32.7808, -79.9236), distance: 0.0064 degrees
 
 
-2026-04-28 23:38:22 - ras_commander.sources.federal.coastal_boundary - INFO - Extracted 1200 valid WSE values. Range: -1.40 to 3.61 ft NAVD88
+2026-06-02 22:55:18 - ras_commander.boundaries.coastal_boundary - INFO - Extracted 1200 valid WSE values. Range: -1.71 to 3.57 ft NAVD88
 
 
 Charleston Harbor WSE (32.78, -79.93):
   Time steps: 1200
-  WSE range: -1.40 to 3.61 ft
-  Tidal range: 5.01 ft
+  WSE range: -1.71 to 3.57 ft
+  Tidal range: 5.28 ft
 </code></pre></div>
 <h3 id="comparing-locations">Comparing Locations<a class="headerlink" href="#comparing-locations" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Comparison of Coastal Locations:&quot;</span><span class="p">)</span>
@@ -3646,7 +3651,7 @@ Key considerations:
 Organized model: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203
 Download/cache root: H:\Testing\eBFE Model Organization\Downloads
 Validation root: H:\Testing\eBFE Model Organization\Validation\ebfe_delivery
-Validation matrix: C:\GH\ras-commander\VALIDATION_MATRIX.md
+Validation matrix: G:\GH\ras-commander-wt-run923\examples\VALIDATION_MATRIX.md
 Model edit demo enabled: False
 Full unsteady simulation enabled: False
 </code></pre></div>
@@ -3696,256 +3701,59 @@ Location: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_1204020
 
 
 
-2026-04-28 23:38:23 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.rasmap
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: \\192.168.3.20\CLB-Engineering\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.g01.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.g01.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: NGB.p01.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 402 characters from HDF
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: NGB.p01.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: 100_YR
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 48.0
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: NGB.p04.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1317 characters from HDF
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: NGB.p04.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: 10_YR
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 48.0
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: NGB.p05.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1178 characters from HDF
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: NGB.p05.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: 500_YR
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 48.0
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: NGB.p07.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1317 characters from HDF
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: NGB.p07.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: 50_YR
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 48.0
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: NGB.p08.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1317 characters from HDF
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: NGB.p08.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: 25_YR
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 48.0
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: NGB.p03.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1323 characters from HDF
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: NGB.p03.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: 100_YR_PLUS
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 48.0
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Reading computation messages from HDF: NGB.p06.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Successfully extracted 1324 characters from HDF
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Extracting Plan Information from: NGB.p06.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Plan Name: 100_YR_MINUS
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Simulation Duration (hours): 48.0
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.hdf.HdfResultsPlan - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:38:23 - ras_commander.RasPrj - INFO - Updated results_df with 7 plan(s)
-
-
-2026-04-28 23:38:23 - ras_commander.RasPrj - INFO - ras-commander v0.94.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
-
-
-2026-04-28 23:38:23 - ras_commander.RasPrj - INFO - Project initialized: NGB | Folder: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model
-
-
-2026-04-28 23:38:23 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\5.0.7\Ras.exe
+2026-06-02 22:55:26 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.rasmap
+
+
+2026-06-02 22:55:30 - ras_commander.RasPrj - INFO - ras-commander v0.93.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 22:55:30 - ras_commander.RasPrj - INFO - Project initialized: NGB | Folder: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model
+
+
+2026-06-02 22:55:30 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\5.0.7\Ras.exe
+
+
+2026-06-02 22:55:30 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras.plan_df        Plans, HDF paths, geometry/flow associations
+  ras.geom_df        Geometry files and HDF preprocessor paths
+  ras.flow_df        Steady flow files
+  ras.unsteady_df    Unsteady flow files and configurations
+  ras.boundaries_df  Boundary conditions (type, name, location)
+  ras.results_df     Lightweight HDF results summaries
+  ras.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
 
 
 Plans: 7
@@ -4054,7 +3862,7 @@ Boundary conditions: 77
 </span><span id="__span-11-59"><a id="__codelineno-11-59" name="__codelineno-11-59" href="#__codelineno-11-59"></a>    <span class="n">unsteady_file</span> <span class="o">=</span> <span class="kc">None</span>
 </span><span id="__span-11-60"><a id="__codelineno-11-60" name="__codelineno-11-60" href="#__codelineno-11-60"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipped - RAS model not available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:38:23 - ras_commander.RasUnsteady - INFO - Successfully extracted boundaries and tables from H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.u01
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-06-02 22:55:30 - ras_commander.RasUnsteady - INFO - Successfully extracted boundaries and tables from H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.u01
 
 
 All Boundary Conditions:
@@ -4128,35 +3936,34 @@ Unsteady file: NGB.u01 (exists: True)
 </span><span id="__span-12-55"><a id="__codelineno-12-55" name="__codelineno-12-55" href="#__codelineno-12-55"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Synthetic tidal signal: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">wse_ebfe</span><span class="p">)</span><span class="si">}</span><span class="s2"> time steps, 48-hour duration&quot;</span><span class="p">)</span>
 </span><span id="__span-12-56"><a id="__codelineno-12-56" name="__codelineno-12-56" href="#__codelineno-12-56"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;WSE range: </span><span class="si">{</span><span class="n">wse_ebfe</span><span class="p">[</span><span class="s1">&#39;wse_ft&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">wse_ebfe</span><span class="p">[</span><span class="s1">&#39;wse_ft&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> ft NAVD88&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:38:24 - ras_commander.sources.federal.coastal_boundary - INFO - No data for 20260429, using 20260428 instead
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-06-02 22:55:32 - ras_commander.boundaries.coastal_boundary - INFO - No data for 20260603, using 20260602 instead
 
 
-2026-04-28 23:38:24 - ras_commander.sources.federal.coastal_boundary - INFO - Auto-detected latest available: 20260428 cycle 12z
+2026-06-02 22:55:32 - ras_commander.boundaries.coastal_boundary - INFO - Auto-detected latest available: 20260602 cycle 12z
 
 
-2026-04-28 23:38:24 - ras_commander.sources.federal.coastal_boundary - INFO - Downloading STOFS-3D: stofs_3d_atl.t12z.points.cwl.temp.salt.vel.nc
+2026-06-02 22:55:32 - ras_commander.boundaries.coastal_boundary - INFO - Using existing file: stofs_3d_atl.t12z.points.cwl.temp.salt.vel.nc
 
 
-2026-04-28 23:38:25 - ras_commander.sources.federal.coastal_boundary - INFO - Downloaded stofs_3d_atl.t12z.points.cwl.temp.salt.vel.nc (5.3 MB)
-
-
-2026-04-28 23:38:25 - ras_commander.sources.federal.coastal_boundary - INFO - Extracting WSE at (29.3500, -94.7700) from 1 file(s)
-
-
-2026-04-28 23:38:25 - ras_commander.sources.federal.coastal_boundary - INFO - Using swapped x/y orientation (NOAA data quirk)
-
-
-2026-04-28 23:38:25 - ras_commander.sources.federal.coastal_boundary - INFO - Nearest grid point: (29.3575, -94.7247), distance: 0.0459 degrees
-
-
-2026-04-28 23:38:25 - ras_commander.sources.federal.coastal_boundary - INFO - Extracted 1200 valid WSE values. Range: -0.25 to 2.00 ft NAVD88
+2026-06-02 22:55:32 - ras_commander.boundaries.coastal_boundary - INFO - Extracting WSE at (29.3500, -94.7700) from 1 file(s)
 
 
 Downloaded 1 STOFS-3D files
   stofs_3d_atl.t12z.points.cwl.temp.salt.vel.nc (5.3 MB)
 
+
+2026-06-02 22:55:32 - ras_commander.boundaries.coastal_boundary - INFO - Using swapped x/y orientation (NOAA data quirk)
+
+
+2026-06-02 22:55:32 - ras_commander.boundaries.coastal_boundary - INFO - Nearest grid point: (29.3575, -94.7247), distance: 0.0459 degrees
+
+
+2026-06-02 22:55:32 - ras_commander.boundaries.coastal_boundary - INFO - Extracted 1200 valid WSE values. Range: -0.54 to 2.73 ft NAVD88
+
+
+
 Extracted 1200 time steps
-WSE range: -0.25 to 2.00 ft NAVD88
+WSE range: -0.54 to 2.73 ft NAVD88
 </code></pre></div>
 <h3 id="step-5-visualize-coastal-wse-before-injection">Step 5: Visualize Coastal WSE Before Injection<a class="headerlink" href="#step-5-visualize-coastal-wse-before-injection" title="Permanent link">&para;</a></h3>
 <p>Always inspect the data being injected into a model. The plot below shows the stage hydrograph that will be written to the unsteady file.</p>
@@ -4191,9 +3998,9 @@ WSE range: -0.25 to 2.00 ft NAVD88
 <div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Stage Hydrograph Summary:
   Time steps:  1200
   Duration:    119.9 hours
-  Min WSE:     -0.25 ft NAVD88
-  Max WSE:     2.00 ft NAVD88
-  Mean WSE:    1.07 ft NAVD88
+  Min WSE:     -0.54 ft NAVD88
+  Max WSE:     2.73 ft NAVD88
+  Mean WSE:    1.29 ft NAVD88
 </code></pre></div>
 <h3 id="step-6-inject-stage-boundary-condition-into-unsteady-file">Step 6: Inject Stage Boundary Condition into Unsteady File<a class="headerlink" href="#step-6-inject-stage-boundary-condition-into-unsteady-file" title="Permanent link">&para;</a></h3>
 <p><code>CoastalBoundary.generate_stage_bc()</code> writes the WSE time series into the HEC-RAS <code>.u##</code> file at the identified coastal boundary location. It:
@@ -4659,51 +4466,12 @@ Set RUN_FULL_UNSTEADY_SIMULATION = True to launch the several-hour HEC-RAS run.
 </span><span id="__span-21-111"><a id="__codelineno-21-111" name="__codelineno-21-111" href="#__codelineno-21-111"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-21-112"><a id="__codelineno-21-112" name="__codelineno-21-112" href="#__codelineno-21-112"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipped - RAS model not available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:38:25 - ras_commander.hdf.HdfBndry - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:25 - ras_commander.hdf.HdfBase - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:25 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:25 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:25 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:25 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:25 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p01.hdf
-
-
-2026-04-28 23:38:25 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:25 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:25 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-Saved run did not execute the optional STOFS-3D HEC-RAS simulation.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Saved run did not execute the optional STOFS-3D HEC-RAS simulation.
 Inspecting existing/current HDF results near the outlet; STOFS-3D is shown only as a reference forecast.
 
 
 
-2026-04-28 23:38:29 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:29 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:29 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:29 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p01.hdf
+2026-06-02 22:55:33 - ras_commander.RasPlan - INFO - Found geometry path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.g01
 
 
 Cells nearest to &#39;NGB_Outlet&#39;:
@@ -4713,9 +4481,9 @@ Cells nearest to &#39;NGB_Outlet&#39;:
   Cell 565206: 126.6 model units from BC line
   Cell 565222: 134.6 model units from BC line
 </code></pre></div>
-<p><img alt="png" src="../923_stofs3d_coastal_boundary_files/923_stofs3d_coastal_boundary_43_16.png" /></p>
+<p><img alt="png" src="../923_stofs3d_coastal_boundary_files/923_stofs3d_coastal_boundary_43_3.png" /></p>
 <div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Boundary-adjacent HDF inspection summary:
-  Reference STOFS-3D range (not injected): -0.25 to 2.00 ft
+  Reference STOFS-3D range (not injected): -0.54 to 2.73 ft
   Existing/current HDF cell 565368 WSE range: 0.00 to 1.34 ft
   Existing/current HDF cell 565160 WSE range: 0.00 to 1.34 ft
   Existing/current HDF cell 565367 WSE range: 0.00 to 1.34 ft
@@ -4893,324 +4661,30 @@ Cells nearest to &#39;NGB_Outlet&#39;:
 </span><span id="__span-23-92"><a id="__codelineno-23-92" name="__codelineno-23-92" href="#__codelineno-23-92"></a><span class="k">else</span><span class="p">:</span>
 </span><span id="__span-23-93"><a id="__codelineno-23-93" name="__codelineno-23-93" href="#__codelineno-23-93"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Skipped - RAS model not available&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-04-28 23:38:33 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:33 - ras_commander.hdf.HdfResultsMesh - INFO - Processing summary output for variable: Maximum Water Surface
-
-
-Saved run did not execute the optional STOFS-3D HEC-RAS simulation.
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Saved run did not execute the optional STOFS-3D HEC-RAS simulation.
 Summarizing existing/current plan HDFs only. Enable RUN_FULL_UNSTEADY_SIMULATION for a fresh injected-boundary run.
 
 
 
-2026-04-28 23:38:33 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
+2026-06-02 22:55:52 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 567987 rows of summary output data
 
 
-2026-04-28 23:38:33 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
+2026-06-02 22:55:58 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 567987 rows of summary output data
 
 
-2026-04-28 23:38:33 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
+2026-06-02 22:56:04 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 567987 rows of summary output data
 
 
-2026-04-28 23:38:33 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
+2026-06-02 22:56:10 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 567987 rows of summary output data
 
 
-2026-04-28 23:38:37 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
+2026-06-02 22:56:16 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 567987 rows of summary output data
 
 
-2026-04-28 23:38:37 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
+2026-06-02 22:56:22 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 567987 rows of summary output data
 
 
-2026-04-28 23:38:37 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:37 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p01.hdf
-
-
-2026-04-28 23:38:37 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:37 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:37 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p01.hdf
-
-
-2026-04-28 23:38:37 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p01.hdf
-
-
-2026-04-28 23:38:37 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 567987 rows of summary output data
-
-
-2026-04-28 23:38:37 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:37 - ras_commander.hdf.HdfResultsMesh - INFO - Processing summary output for variable: Maximum Water Surface
-
-
-2026-04-28 23:38:38 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:38 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:38 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:38 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:41 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:41 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:41 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:41 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p04.hdf
-
-
-2026-04-28 23:38:41 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:41 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:41 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p04.hdf
-
-
-2026-04-28 23:38:41 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p04.hdf
-
-
-2026-04-28 23:38:41 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 567987 rows of summary output data
-
-
-2026-04-28 23:38:41 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:41 - ras_commander.hdf.HdfResultsMesh - INFO - Processing summary output for variable: Maximum Water Surface
-
-
-2026-04-28 23:38:42 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:42 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:42 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:42 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:45 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:45 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:45 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:45 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p05.hdf
-
-
-2026-04-28 23:38:45 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:45 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:45 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p05.hdf
-
-
-2026-04-28 23:38:45 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p05.hdf
-
-
-2026-04-28 23:38:45 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 567987 rows of summary output data
-
-
-2026-04-28 23:38:46 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:46 - ras_commander.hdf.HdfResultsMesh - INFO - Processing summary output for variable: Maximum Water Surface
-
-
-2026-04-28 23:38:46 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:46 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:46 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:46 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:49 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:49 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:49 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:49 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p07.hdf
-
-
-2026-04-28 23:38:50 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:50 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:50 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p07.hdf
-
-
-2026-04-28 23:38:50 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p07.hdf
-
-
-2026-04-28 23:38:50 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 567987 rows of summary output data
-
-
-2026-04-28 23:38:50 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:50 - ras_commander.hdf.HdfResultsMesh - INFO - Processing summary output for variable: Maximum Water Surface
-
-
-2026-04-28 23:38:50 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:50 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:50 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:50 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:53 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:53 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:53 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:53 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p08.hdf
-
-
-2026-04-28 23:38:54 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:54 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:54 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p08.hdf
-
-
-2026-04-28 23:38:54 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p08.hdf
-
-
-2026-04-28 23:38:54 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 567987 rows of summary output data
-
-
-2026-04-28 23:38:54 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:54 - ras_commander.hdf.HdfResultsMesh - INFO - Processing summary output for variable: Maximum Water Surface
-
-
-2026-04-28 23:38:54 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:54 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:54 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:54 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:57 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:57 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:57 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:57 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p03.hdf
-
-
-2026-04-28 23:38:58 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:58 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:58 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p03.hdf
-
-
-2026-04-28 23:38:58 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p03.hdf
-
-
-2026-04-28 23:38:58 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 567987 rows of summary output data
-
-
-2026-04-28 23:38:58 - ras_commander.hdf.HdfResultsMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:38:58 - ras_commander.hdf.HdfResultsMesh - INFO - Processing summary output for variable: Maximum Water Surface
-
-
-2026-04-28 23:38:58 - ras_commander.hdf.HdfMesh - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:38:58 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:38:58 - ras_commander.hdf.HdfMesh - INFO - Using existing Path object HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:38:58 - ras_commander.hdf.HdfMesh - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:39:02 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:39:02 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:39:02 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:39:02 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p06.hdf
-
-
-2026-04-28 23:39:02 - ras_commander.hdf.HdfBase - INFO - Using HDF file from h5py.File object: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:39:02 - ras_commander.hdf.HdfBase - INFO - Final validated file path: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:39:02 - ras_commander.hdf.HdfBase - INFO - Found projection in HDF file: H:\Testing\eBFE Model Organization\Organized\NorthGalvestonBay_12040203\RAS Model\NGB.p06.hdf
-
-
-2026-04-28 23:39:02 - ras_commander.hdf.HdfBase - INFO - Converted WKT to EPSG:2278 from HDF file NGB.p06.hdf
-
-
-2026-04-28 23:39:02 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 567987 rows of summary output data
+2026-06-02 22:56:28 - ras_commander.hdf.HdfResultsMesh - INFO - Processed 567987 rows of summary output data
 
 
 Existing Plan HDF Comparison
@@ -5224,7 +4698,7 @@ Existing delivery/current plan 01     567987        120.16          38.65
                       100_YR_PLUS     567987        120.31          39.14
                      100_YR_MINUS     567987        119.86          38.06
 </code></pre></div>
-<p><img alt="png" src="../923_stofs3d_coastal_boundary_files/923_stofs3d_coastal_boundary_47_107.png" /></p>
+<p><img alt="png" src="../923_stofs3d_coastal_boundary_files/923_stofs3d_coastal_boundary_47_9.png" /></p>
 <div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Note: These are existing/current result HDFs from the organized delivery, not a fresh STOFS-3D run.
 </code></pre></div>
 <h2 id="key-takeaways">Key Takeaways<a class="headerlink" href="#key-takeaways" title="Permanent link">&para;</a></h2>
@@ -5256,31 +4730,34 @@ Existing delivery/current plan 01     567987        120.16          38.65
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>
 </span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># Clean up STOFS-3D temporary download data only.</span>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;example_data/stofs3d_gulf&quot;</span><span class="p">,</span> <span class="s2">&quot;example_data/stofs3d_ebfe&quot;</span><span class="p">,</span> <span class="s2">&quot;stofs_data&quot;</span><span class="p">]:</span>
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>    <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="n">d</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
-</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cleaned up: </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>
-</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;example_data&quot;</span><span class="p">]:</span>
-</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a>    <span class="n">p</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
-</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a>    <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="n">p</span><span class="o">.</span><span class="n">is_dir</span><span class="p">()</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">iterdir</span><span class="p">()):</span>
-</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a>        <span class="n">p</span><span class="o">.</span><span class="n">rmdir</span><span class="p">()</span>
-</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed empty directory: </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a>
-</span><span id="__span-24-15"><a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a><span class="c1"># Leave the shared organized eBFE model in place for GUI inspection.</span>
-</span><span id="__span-24-16"><a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a><span class="k">if</span> <span class="n">organized_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-24-17"><a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a>    <span class="n">ras_dirs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">organized_folder</span><span class="o">.</span><span class="n">rglob</span><span class="p">(</span><span class="s2">&quot;*.prj&quot;</span><span class="p">))</span>
-</span><span id="__span-24-18"><a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a>    <span class="n">ras_prj</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">ras_dirs</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span> <span class="o">&gt;</span> <span class="mi">100</span>
-</span><span id="__span-24-19"><a id="__codelineno-24-19" name="__codelineno-24-19" href="#__codelineno-24-19"></a>               <span class="ow">and</span> <span class="s2">&quot;Proj Title=&quot;</span> <span class="ow">in</span> <span class="n">p</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;replace&quot;</span><span class="p">)]</span>
-</span><span id="__span-24-20"><a id="__codelineno-24-20" name="__codelineno-24-20" href="#__codelineno-24-20"></a>    <span class="k">if</span> <span class="n">ras_prj</span><span class="p">:</span>
-</span><span id="__span-24-21"><a id="__codelineno-24-21" name="__codelineno-24-21" href="#__codelineno-24-21"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">eBFE model available for inspection:&quot;</span><span class="p">)</span>
-</span><span id="__span-24-22"><a id="__codelineno-24-22" name="__codelineno-24-22" href="#__codelineno-24-22"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">ras_prj</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">parent</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-24-23"><a id="__codelineno-24-23" name="__codelineno-24-23" href="#__codelineno-24-23"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Open </span><span class="si">{</span><span class="n">ras_prj</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> in HEC-RAS to review coastal BC and metadata&quot;</span><span class="p">)</span>
-</span><span id="__span-24-24"><a id="__codelineno-24-24" name="__codelineno-24-24" href="#__codelineno-24-24"></a>
-</span><span id="__span-24-25"><a id="__codelineno-24-25" name="__codelineno-24-25" href="#__codelineno-24-25"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Done!&quot;</span><span class="p">)</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># NOTE: examples/data/stofs3d_gulf is committed sample data and is intentionally</span>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="c1"># NOT removed here.</span>
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;example_data/stofs3d_ebfe&quot;</span><span class="p">,</span> <span class="s2">&quot;stofs_data&quot;</span><span class="p">]:</span>
+</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>    <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="n">d</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cleaned up: </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a>
+</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;example_data&quot;</span><span class="p">]:</span>
+</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a>    <span class="n">p</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a>    <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="n">p</span><span class="o">.</span><span class="n">is_dir</span><span class="p">()</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">iterdir</span><span class="p">()):</span>
+</span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a>        <span class="n">p</span><span class="o">.</span><span class="n">rmdir</span><span class="p">()</span>
+</span><span id="__span-24-15"><a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Removed empty directory: </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-24-16"><a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a>
+</span><span id="__span-24-17"><a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a><span class="c1"># Leave the shared organized eBFE model in place for GUI inspection.</span>
+</span><span id="__span-24-18"><a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a><span class="k">if</span> <span class="n">organized_folder</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-24-19"><a id="__codelineno-24-19" name="__codelineno-24-19" href="#__codelineno-24-19"></a>    <span class="n">ras_dirs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">organized_folder</span><span class="o">.</span><span class="n">rglob</span><span class="p">(</span><span class="s2">&quot;*.prj&quot;</span><span class="p">))</span>
+</span><span id="__span-24-20"><a id="__codelineno-24-20" name="__codelineno-24-20" href="#__codelineno-24-20"></a>    <span class="n">ras_prj</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">ras_dirs</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span> <span class="o">&gt;</span> <span class="mi">100</span>
+</span><span id="__span-24-21"><a id="__codelineno-24-21" name="__codelineno-24-21" href="#__codelineno-24-21"></a>               <span class="ow">and</span> <span class="s2">&quot;Proj Title=&quot;</span> <span class="ow">in</span> <span class="n">p</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;replace&quot;</span><span class="p">)]</span>
+</span><span id="__span-24-22"><a id="__codelineno-24-22" name="__codelineno-24-22" href="#__codelineno-24-22"></a>    <span class="k">if</span> <span class="n">ras_prj</span><span class="p">:</span>
+</span><span id="__span-24-23"><a id="__codelineno-24-23" name="__codelineno-24-23" href="#__codelineno-24-23"></a>        <span class="nb">print</span><span class="p">()</span>
+</span><span id="__span-24-24"><a id="__codelineno-24-24" name="__codelineno-24-24" href="#__codelineno-24-24"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;eBFE model available for inspection:&quot;</span><span class="p">)</span>
+</span><span id="__span-24-25"><a id="__codelineno-24-25" name="__codelineno-24-25" href="#__codelineno-24-25"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">ras_prj</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">parent</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-24-26"><a id="__codelineno-24-26" name="__codelineno-24-26" href="#__codelineno-24-26"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Open </span><span class="si">{</span><span class="n">ras_prj</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> in HEC-RAS to review coastal BC and metadata&quot;</span><span class="p">)</span>
+</span><span id="__span-24-27"><a id="__codelineno-24-27" name="__codelineno-24-27" href="#__codelineno-24-27"></a>
+</span><span id="__span-24-28"><a id="__codelineno-24-28" name="__codelineno-24-28" href="#__codelineno-24-28"></a><span class="nb">print</span><span class="p">()</span>
+</span><span id="__span-24-29"><a id="__codelineno-24-29" name="__codelineno-24-29" href="#__codelineno-24-29"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Done!&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Cleaned up: example_data/stofs3d_gulf
-Cleaned up: example_data/stofs3d_ebfe
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Cleaned up: example_data/stofs3d_ebfe
 Removed empty directory: example_data
 
 
@@ -5313,7 +4790,7 @@ Done!
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 2, 2026 17:55:19 UTC">June 2, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 3, 2026 10:46:33 UTC">June 3, 2026</span>
   </span>
 
     
@@ -5323,7 +4800,7 @@ Done!
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 2, 2026 17:55:19 UTC">June 2, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 3, 2026 10:46:33 UTC">June 3, 2026</span>
   </span>
 
     
