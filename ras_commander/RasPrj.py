@@ -2420,3 +2420,128 @@ def get_ras_exe(ras_version=None):
     error_msg = f"HEC-RAS Version {ras_version} is not recognized or installed. Running HEC-RAS will fail unless a valid installed version is specified."
     logger.error(error_msg)
     return "Ras.exe"
+
+
+# Bundled seed-template versions shipped under ras_commander/resources/templates/.
+# No greenfield templates are provided for HEC-RAS versions before 6.6.
+AVAILABLE_TEMPLATE_VERSIONS = ("6.6", "7.0")
+
+
+def create_project_from_template(
+    dest_dir: Union[str, Path],
+    project_name: str = "Project",
+    version: str = "7.0",
+    target_crs: Optional[Any] = None,
+    overwrite: bool = False,
+) -> Path:
+    """
+    Create a new HEC-RAS project from a bundled, terrain-stripped seed template.
+
+    Copies the seed template for the requested HEC-RAS version into ``dest_dir``,
+    renames ``TEMPLATE.*`` -> ``{project_name}.*``, rewrites the ``.rasmap``
+    geometry references, and (optionally) reprojects the bundled projection file
+    from its default (EPSG:5070, meters) to ``target_crs``.
+
+    The seed ships a blank 2D geometry (ready for a ``Storage Area Is2D`` flow
+    area) with **no terrain**. After creating the project, attach a terrain and
+    author the 2D flow-area perimeter, then build the mesh, e.g.::
+
+        prj = create_project_from_template("out", "EtherHollow", version="7.0",
+                                           target_crs="EPSG:2256")  # ft CRS
+        init_ras_project("out", "7.0")
+        GeomStorage.set_2d_flow_area_perimeter(...)        # author perimeter
+        GeomMesh.generate_computation_points(...)          # initial mesh points
+        RasCmdr.compute_plan(..., force_geompre=True)      # HEC-RAS builds mesh
+
+    Args:
+        dest_dir: Directory for the new project (created if needed).
+        project_name: Base name for the project files (no extension). HEC-RAS
+            requires all component files to share this basename.
+        version: Bundled template version. Only ``"6.6"`` and ``"7.0"`` are
+            available; no greenfield templates exist for versions before 6.6.
+        target_crs: Optional target CRS for the bundled projection ``.prj``.
+            Accepts anything ``pyproj.CRS.from_user_input`` understands (EPSG
+            int, ``"EPSG:2256"``, WKT, a ``pyproj.CRS``). The template default is
+            EPSG:5070 (meters); for a US Customary (feet) model pass a feet-based
+            CRS. HEC-RAS does not convert projection units, so the CRS units must
+            match the project's unit system. When None, the projection is left as
+            the template default.
+        overwrite: If False (default) and ``{project_name}.prj`` already exists in
+            ``dest_dir``, raise ``FileExistsError``.
+
+    Returns:
+        Path to the created HEC-RAS project (``.prj``) file.
+
+    Raises:
+        ValueError: If ``version`` is not a bundled template.
+        FileExistsError: If the project already exists and ``overwrite`` is False.
+    """
+    import shutil
+
+    version = str(version)
+    if version not in AVAILABLE_TEMPLATE_VERSIONS:
+        raise ValueError(
+            f"No bundled template for HEC-RAS version {version!r}. Available: "
+            f"{list(AVAILABLE_TEMPLATE_VERSIONS)} (no greenfield templates before 6.6)."
+        )
+
+    template_dir = (
+        Path(__file__).resolve().parent / "resources" / "templates" / f"RAS_{version}"
+    )
+    if not template_dir.is_dir():
+        raise FileNotFoundError(
+            f"Bundled template directory not found: {template_dir}"
+        )
+
+    dest_dir = Path(dest_dir)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    new_prj = dest_dir / f"{project_name}.prj"
+    if new_prj.exists() and not overwrite:
+        raise FileExistsError(
+            f"Project '{project_name}.prj' already exists in {dest_dir}. "
+            f"Pass overwrite=True to replace it."
+        )
+
+    # 1. Copy + rename the TEMPLATE.* component files (.prj/.g01/.g01.hdf/.rasmap).
+    #    HEC-RAS references components by extension (g01, p01), so a shared
+    #    basename keeps all internal references valid.
+    renamed: Dict[str, Path] = {}
+    for src in sorted(template_dir.glob("TEMPLATE.*")):
+        out = dest_dir / src.name.replace("TEMPLATE", project_name, 1)
+        shutil.copyfile(src, out)
+        renamed[src.name] = out
+
+    # 2. Projection file -> {project}.projection.prj, reprojecting if requested.
+    proj_src = template_dir / "EPSG_5070.prj"
+    proj_out = dest_dir / f"{project_name}.projection.prj"
+    if target_crs is not None:
+        from pyproj import CRS
+
+        proj_out.write_text(
+            CRS.from_user_input(target_crs).to_wkt("WKT1_ESRI"), encoding="utf-8"
+        )
+    elif proj_src.exists():
+        shutil.copyfile(proj_src, proj_out)
+
+    # 3. Rewrite the HEC project title.
+    hec_prj = renamed.get("TEMPLATE.prj")
+    if hec_prj and hec_prj.exists():
+        txt = hec_prj.read_text(encoding="utf-8", errors="replace")
+        txt = txt.replace("Proj Title=TEMPLATE", f"Proj Title={project_name}", 1)
+        hec_prj.write_text(txt, encoding="utf-8")
+
+    # 4. Rewrite the .rasmap geometry filename references so RASMapper resolves
+    #    the renamed geometry HDF (the .rasmap references it by full filename).
+    rasmap = renamed.get("TEMPLATE.rasmap")
+    if rasmap and rasmap.exists():
+        txt = rasmap.read_text(encoding="utf-8", errors="replace")
+        txt = txt.replace("TEMPLATE.g01.hdf", f"{project_name}.g01.hdf")
+        rasmap.write_text(txt, encoding="utf-8")
+
+    logger.info(
+        f"Created project '{project_name}' from RAS {version} template in "
+        f"{dest_dir}"
+        + (f" (reprojected to {target_crs})" if target_crs is not None else "")
+    )
+    return new_prj
