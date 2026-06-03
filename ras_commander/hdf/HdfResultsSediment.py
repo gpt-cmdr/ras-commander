@@ -30,7 +30,7 @@ prefixed plan numbers, paths, or open HDF handles.
 """
 
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -173,19 +173,41 @@ class HdfResultsSediment:
             if ds_path not in f:
                 raise ValueError(f"Dataset '{dataset}' not found for area '{area}'.")
             arr = f[ds_path]
-            row = arr[time_index] if arr.ndim == 2 else arr[0]
+            row = HdfResultsSediment._select_time_row(arr, time_index, dataset, area)
             sa, cc, crs = HdfResultsSediment._cell_geometry(f, area)
             length_unit = HdfResultsSediment._length_unit(f)
 
-        n = min(len(row), len(sa), len(cc))
+        values = np.asarray(row, dtype=float)
+        sa = np.asarray(sa, dtype=float)
+        # Per-cell results must align 1:1 with the geometry cells; a mismatch
+        # would otherwise yield silently truncated (wrong) values/volumes.
+        if not (len(values) == len(sa) == len(cc)):
+            raise ValueError(
+                f"Cell array length mismatch in area '{area}': {dataset}={len(values)}, "
+                f"Cells Surface Area={len(sa)}, Cells Center Coordinate={len(cc)}.")
         return {
             "area": area,
-            "values": np.asarray(row[:n], dtype=float),
-            "surface_area": np.asarray(sa[:n], dtype=float),
-            "centers": cc[:n],
+            "values": values,
+            "surface_area": sa,
+            "centers": cc,
             "crs": crs,
             "length_unit": length_unit,
         }
+
+    @staticmethod
+    def _select_time_row(arr, time_index, dataset, area):
+        """Select a single per-cell row from a Sediment Bed dataset.
+
+        Handles the normal ``(n_time, n_cell)`` layout and a 1-D ``(n_cell,)``
+        single-snapshot layout; raises a clear error on any other rank.
+        """
+        if arr.ndim == 2:
+            return arr[time_index]
+        if arr.ndim == 1:
+            return arr[:]
+        raise ValueError(
+            f"Unexpected rank {arr.ndim} for dataset '{dataset}' in area '{area}' "
+            "(expected (n_time, n_cell) or (n_cell,)).")
 
     @staticmethod
     def _build_cell_gdf(GeoDataFrame, Point, data, value_col, units):
@@ -301,35 +323,37 @@ class HdfResultsSediment:
         """
         cols = ["mesh_name", "length_unit", "n_cells", "net_bed_volume",
                 "erosion_volume", "deposition_volume", "max_scour", "max_deposition"]
-        rows = []
         with h5py.File(hdf_path, 'r') as f:
             grp = f.get(_BED_BLOCK)
             if grp is None:
                 return pd.DataFrame(columns=cols)
-            length_unit = HdfResultsSediment._length_unit(f)
-            areas = [mesh_name] if mesh_name is not None else list(grp.keys())
-            for area in areas:
-                ds_path = f"{_BED_BLOCK}/{area}/Cell Bed Change"
-                if ds_path not in f:
-                    continue
-                bc = f[ds_path][time_index]
-                sa, _, _ = HdfResultsSediment._cell_geometry(f, area)
-                n = min(len(bc), len(sa))
-                bc = np.asarray(bc[:n], dtype=float)
-                sa = np.asarray(sa[:n], dtype=float)
-                vol = bc * sa  # native^3 per cell
-                wet = sa > 0  # exclude zero-area perimeter/ghost cells
-                bc_wet = bc[wet]
-                rows.append({
-                    "mesh_name": area,
-                    "length_unit": length_unit,
-                    "n_cells": int(wet.sum()),
-                    "net_bed_volume": float(np.nansum(vol)),
-                    "erosion_volume": float(np.nansum(vol[vol < 0])),
-                    "deposition_volume": float(np.nansum(vol[vol > 0])),
-                    "max_scour": float(np.nanmin(bc_wet)) if bc_wet.size else np.nan,
-                    "max_deposition": float(np.nanmax(bc_wet)) if bc_wet.size else np.nan,
-                })
+            # An explicit mesh_name is validated (raises on a bad name); otherwise
+            # summarize every sediment area. _resolve_area is called again inside
+            # _read_cell_dataset for the actual read.
+            if mesh_name is not None:
+                areas = [HdfResultsSediment._resolve_area(f, mesh_name)]
+            else:
+                areas = list(grp.keys())
+
+        rows = []
+        for area in areas:
+            # Reuse the shared reader: ndim handling + strict length validation.
+            data = HdfResultsSediment._read_cell_dataset(
+                hdf_path, area, "Cell Bed Change", time_index)
+            bc, sa = data["values"], data["surface_area"]
+            vol = bc * sa  # native^3 per cell
+            wet = sa > 0   # exclude zero-area perimeter/ghost cells
+            bc_wet = bc[wet]
+            rows.append({
+                "mesh_name": area,
+                "length_unit": data["length_unit"],
+                "n_cells": int(wet.sum()),
+                "net_bed_volume": float(np.nansum(vol)),
+                "erosion_volume": float(np.nansum(vol[vol < 0])),
+                "deposition_volume": float(np.nansum(vol[vol > 0])),
+                "max_scour": float(np.nanmin(bc_wet)) if bc_wet.size else np.nan,
+                "max_deposition": float(np.nanmax(bc_wet)) if bc_wet.size else np.nan,
+            })
         return pd.DataFrame(rows, columns=cols)
 
     # ------------------------------------------------------------------ #
@@ -352,8 +376,14 @@ class HdfResultsSediment:
         with h5py.File(hdf_path, 'r') as f:
             area = HdfResultsSediment._resolve_area(f, mesh_name)
             bc = f[f"{_BED_BLOCK}/{area}/Cell Bed Change"][:]
-            t = HdfResultsSediment._read_time_vector(f, bc.shape[0])
             length_unit = HdfResultsSediment._length_unit(f)
+            # Tolerate a 1-D single-snapshot dataset by promoting to (1, n_cell).
+            if bc.ndim == 1:
+                bc = bc[np.newaxis, :]
+            elif bc.ndim != 2:
+                raise ValueError(
+                    f"Unexpected rank {bc.ndim} for 'Cell Bed Change' in area '{area}'.")
+            t = HdfResultsSediment._read_time_vector(f, bc.shape[0])
         da = xr.DataArray(
             bc,
             dims=("time", "cell_id"),

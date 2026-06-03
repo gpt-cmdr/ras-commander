@@ -155,3 +155,110 @@ class TestTimeseries:
         assert da.shape == (2, 5)
         assert da.attrs["units"] == "ft"
         assert list(da.coords["time"].values) == [0.0, 1.0]
+
+    def test_timeseries_si_units(self, si_hdf):
+        # SI model -> timeseries units must be 'm', not hardcoded 'ft'
+        da = HdfResultsSediment.get_cell_bed_change_timeseries(si_hdf)
+        assert da.attrs["units"] == "m"
+
+
+class TestTimeIndexAndPercentiles:
+    def test_time_index_selects_row(self, us_hdf):
+        # time_index=0 is the all-zero first snapshot; default -1 is the active one
+        first = HdfResultsSediment.get_cell_bed_change(us_hdf, time_index=0)
+        assert first["bed_change"].tolist() == [0.0, 0.0, 0.0, 0.0, 0.0]
+        last = HdfResultsSediment.get_cell_bed_change(us_hdf, time_index=-1)
+        assert last["bed_change"].tolist() == [-1.0, 2.0, 5.0, -0.5, 9.0]
+
+    @pytest.mark.parametrize("pct", ["D10", "D50", "D90"])
+    def test_each_percentile(self, tmp_path, pct):
+        # write a model that requests all three percentiles
+        p = tmp_path / f"Grain_{pct}.p01.hdf"
+        with h5py.File(p, "w") as f:
+            f.attrs["Units System"] = np.bytes_("US Customary")
+            g = f.create_group("Geometry")
+            g.attrs["SI Units"] = np.bytes_("False")
+            ga = g.create_group("2D Flow Areas/A")
+            ga.create_dataset("Cells Surface Area", data=np.ones(3, dtype="f4"))
+            ga.create_dataset("Cells Center Coordinate", data=np.zeros((3, 2), dtype="f8"))
+            b = f.create_group(f"{_BED}/A")
+            b.create_dataset("Cell Bed Change", data=np.zeros((1, 3), dtype="f4"))
+            for q in ("D10", "D50", "D90"):
+                b.create_dataset(f"Cell Active Layer Percentile Diameters - {q}",
+                                 data=np.full((1, 3), 1.0, dtype="f4"))
+        gdf = HdfResultsSediment.get_active_layer_grain_class(str(p), pct)
+        assert f"{pct.lower()}_mm" in gdf.columns
+
+
+class TestMultiArea:
+    @pytest.fixture
+    def two_area_hdf(self, tmp_path):
+        p = tmp_path / "Multi.p01.hdf"
+        with h5py.File(p, "w") as f:
+            f.attrs["Units System"] = np.bytes_("US Customary")
+            g = f.create_group("Geometry")
+            g.attrs["SI Units"] = np.bytes_("False")
+            for area, n, bc in [("A", 3, -1.0), ("B", 2, 2.0)]:
+                ga = g.create_group(f"2D Flow Areas/{area}")
+                ga.create_dataset("Cells Surface Area", data=np.full(n, 10.0, dtype="f4"))
+                ga.create_dataset("Cells Center Coordinate", data=np.zeros((n, 2), dtype="f8"))
+                b = f.create_group(f"{_BED}/{area}")
+                b.create_dataset("Cell Bed Change", data=np.full((1, n), bc, dtype="f4"))
+        return str(p)
+
+    def test_areas_listed(self, two_area_hdf):
+        assert set(HdfResultsSediment.get_sediment_mesh_areas(two_area_hdf)) == {"A", "B"}
+
+    def test_volumes_one_row_per_area(self, two_area_hdf):
+        df = HdfResultsSediment.get_bed_change_volumes(two_area_hdf)
+        assert len(df) == 2
+
+    def test_mesh_name_selects_one(self, two_area_hdf):
+        df = HdfResultsSediment.get_bed_change_volumes(two_area_hdf, mesh_name="B")
+        assert len(df) == 1 and df.iloc[0]["mesh_name"] == "B"
+
+    def test_ambiguous_area_raises(self, two_area_hdf):
+        # multiple areas with no mesh_name -> per-cell getters must raise
+        with pytest.raises(ValueError, match="Multiple sediment 2D areas"):
+            HdfResultsSediment.get_cell_bed_change(two_area_hdf)
+
+
+class TestErrorContracts:
+    def test_bad_mesh_name_raises_per_cell(self, us_hdf):
+        with pytest.raises(ValueError, match="not found"):
+            HdfResultsSediment.get_cell_bed_change(us_hdf, mesh_name="NOPE")
+
+    def test_bad_mesh_name_raises_volumes(self, us_hdf):
+        # previously returned an empty DataFrame; must now raise
+        with pytest.raises(ValueError, match="not found"):
+            HdfResultsSediment.get_bed_change_volumes(us_hdf, mesh_name="NOPE")
+
+    def test_length_mismatch_raises(self, tmp_path):
+        p = tmp_path / "Mismatch.p01.hdf"
+        with h5py.File(p, "w") as f:
+            f.attrs["Units System"] = np.bytes_("US Customary")
+            g = f.create_group("Geometry")
+            g.attrs["SI Units"] = np.bytes_("False")
+            ga = g.create_group("2D Flow Areas/A")
+            ga.create_dataset("Cells Surface Area", data=np.ones(2, dtype="f4"))      # 2 cells
+            ga.create_dataset("Cells Center Coordinate", data=np.zeros((2, 2), dtype="f8"))
+            b = f.create_group(f"{_BED}/A")
+            b.create_dataset("Cell Bed Change", data=np.ones((1, 4), dtype="f4"))      # 4 cells
+        with pytest.raises(ValueError, match="length mismatch"):
+            HdfResultsSediment.get_bed_change_volumes(str(p))
+
+    def test_one_d_dataset_handled(self, tmp_path):
+        p = tmp_path / "OneD.p01.hdf"
+        with h5py.File(p, "w") as f:
+            f.attrs["Units System"] = np.bytes_("US Customary")
+            g = f.create_group("Geometry")
+            g.attrs["SI Units"] = np.bytes_("False")
+            ga = g.create_group("2D Flow Areas/A")
+            ga.create_dataset("Cells Surface Area", data=np.ones(3, dtype="f4"))
+            ga.create_dataset("Cells Center Coordinate", data=np.zeros((3, 2), dtype="f8"))
+            b = f.create_group(f"{_BED}/A")
+            b.create_dataset("Cell Bed Change", data=np.array([1.0, 2.0, 3.0], dtype="f4"))  # 1-D
+        gdf = HdfResultsSediment.get_cell_bed_change(str(p))
+        assert gdf["bed_change"].tolist() == [1.0, 2.0, 3.0]
+        ts = HdfResultsSediment.get_cell_bed_change_timeseries(str(p))
+        assert ts.shape == (1, 3)
