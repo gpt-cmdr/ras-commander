@@ -52,42 +52,72 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 def _get_2d_area_name(geometry_file: Path) -> Optional[str]:
-    """Parse .g## file and return the first 2D flow area name, or None."""
-    pattern = re.compile(r"^2D Flow Area=\s*(.+?)\s*,", re.MULTILINE | re.IGNORECASE)
-    text = geometry_file.read_text(errors="replace")
-    match = pattern.search(text)
-    return match.group(1).strip() if match else None
+    """Return the first 2D flow area name in a .g## file, or None.
+
+    Delegates to GeomStorage, which identifies 2D flow areas by the modern
+    HEC-RAS 6.x/7.0 ``Storage Area Is2D= -1`` representation. (The legacy
+    ``2D Flow Area=`` token this module used historically is not written by
+    current HEC-RAS, so the previous regex matched nothing.)
+    """
+    from ...geom.GeomStorage import GeomStorage
+    try:
+        df = GeomStorage.get_storage_areas(geometry_file, exclude_2d=False)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Could not read storage areas from {Path(geometry_file).name}: {e}")
+        return None
+    if df is None or df.empty or "Is2D" not in df.columns:
+        return None
+    twod = df[df["Is2D"]]
+    if twod.empty:
+        return None
+    return str(twod.iloc[0]["Name"])
 
 
 def _read_perimeter_coords(geometry_file: Path) -> Optional[List[Tuple[float, float]]]:
-    """Read the 2D Flow Area Perimeter coordinates from a .g## file."""
-    text = geometry_file.read_text(errors="replace")
+    """Read the 2D flow area perimeter ring from a .g## file.
 
-    # Match "2D Flow Area Perimeter= N" followed by N lines of "     x,y"
-    pattern = re.compile(
-        r"2D Flow Area Perimeter=\s*(\d+)\s*\n"
-        r"((?:[ \t]*-?[\d.]+\s*,\s*-?[\d.]+[ \t]*\n)*)",
-        re.MULTILINE,
-    )
-    match = pattern.search(text)
-    if not match:
+    Delegates to GeomStorage, which parses the ``Storage Area Surface Line=``
+    16-char fixed-width XY block of the 2D-flagged storage area.
+    """
+    from ...geom.GeomStorage import GeomStorage
+    try:
+        gdf = GeomStorage.get_storage_area_polygons(geometry_file, exclude_2d=False)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Could not read perimeter from {Path(geometry_file).name}: {e}")
         return None
-
-    coord_lines = match.group(2).strip().split("\n")
-    coords = []
-    for line in coord_lines:
-        line = line.strip()
-        if "," in line:
-            parts = line.split(",")
-            coords.append((float(parts[0].strip()), float(parts[1].strip())))
-    return coords
+    if gdf is None or len(gdf) == 0:
+        return None
+    twod = gdf[gdf["is_2d"]] if "is_2d" in gdf.columns else gdf
+    if len(twod) == 0:
+        return None
+    poly = twod.iloc[0].geometry
+    if poly is None:
+        return None
+    return [(float(x), float(y)) for x, y in poly.exterior.coords]
 
 
 def _read_cell_size(geometry_file: Path) -> Optional[float]:
-    """Read the 2D Flow Area Cell Size from a .g## file."""
-    text = geometry_file.read_text(errors="replace")
-    match = re.search(r"2D Flow Area Cell Size=\s*([\d.]+)", text)
-    return float(match.group(1)) if match else None
+    """Read the 2D flow area nominal cell size (point-generation dx) from a .g##.
+
+    Delegates to GeomStorage; the value lives in ``Storage Area Point Generation
+    Data=dx,dy,,`` rather than the legacy ``2D Flow Area Cell Size=`` token.
+    """
+    from ...geom.GeomStorage import GeomStorage
+    try:
+        df = GeomStorage.get_2d_flow_area_settings(geometry_file)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Could not read 2D settings from {Path(geometry_file).name}: {e}")
+        return None
+    if df is None or df.empty:
+        return None
+    pgd = df.iloc[0].get("point_generation_data")
+    if pgd is None:
+        return None
+    try:
+        first = pgd.split(",")[0] if isinstance(pgd, str) else pgd[0]
+        return float(first)
+    except (ValueError, IndexError, TypeError):
+        return None
 
 
 def _write_perimeter_and_cell_size(
@@ -96,52 +126,29 @@ def _write_perimeter_and_cell_size(
     coords: List[Tuple[float, float]],
     cell_size: float,
 ) -> bool:
-    """
-    Write simplified perimeter coordinates and cell size to .g## file.
+    """Write a (simplified) perimeter ring + nominal cell size back to the .g##.
 
-    Creates .bak backup before modifying. Auto-closes polygon.
+    Delegates to ``GeomStorage.set_2d_flow_area_perimeter``, which writes the
+    modern ``Storage Area`` / ``Storage Area Surface Line=`` /
+    ``Storage Area Point Generation Data=`` representation, auto-closes the
+    polygon, and creates a .bak backup.
     """
-    text = geometry_file.read_text(errors="replace")
-
-    # Verify the named area exists
-    area_pat = re.compile(
-        r"2D Flow Area=\s*" + re.escape(area_name) + r"\s*,",
-        re.IGNORECASE,
-    )
-    if not area_pat.search(text):
-        logger.warning(f"2D flow area '{area_name}' not found in {geometry_file.name}")
+    from ...geom.GeomStorage import GeomStorage
+    try:
+        GeomStorage.set_2d_flow_area_perimeter(
+            geom_file=geometry_file,
+            flow_area_name=area_name,
+            coordinates=[(float(x), float(y)) for x, y in coords],
+            point_generation_data=[float(cell_size), float(cell_size)],
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            f"Failed to write perimeter for '{area_name}' in {Path(geometry_file).name}: {e}"
+        )
         return False
-
-    # Backup
-    bak_path = geometry_file.with_suffix(geometry_file.suffix + ".bak")
-    bak_path.write_text(text, encoding="utf-8")
-
-    # Close polygon
-    pts = list(coords)
-    if pts and pts[0] != pts[-1]:
-        pts.append(pts[0])
-
-    coord_lines = "\n".join(f"     {x:.3f},{y:.3f}" for x, y in pts)
-    new_block = f"2D Flow Area Perimeter= {len(pts)}\n{coord_lines}\n"
-
-    # Replace perimeter block
-    perim_pat = re.compile(
-        r"(2D Flow Area Perimeter=\s*\d+\s*\n)"
-        r"((?:[ \t]*-?[\d.]+\s*,\s*-?[\d.]+[ \t]*\n)*)",
-        re.MULTILINE,
-    )
-    updated, n = perim_pat.subn(new_block, text, count=1)
-    if n == 0:
-        # Insert after the area header
-        updated = area_pat.sub(lambda m: m.group(0) + "\n" + new_block, updated, count=1)
-
-    # Update cell size
-    cs_pat = re.compile(r"2D Flow Area Cell Size=\s*[\d.]+")
-    updated = cs_pat.sub(f"2D Flow Area Cell Size= {cell_size:.1f}", updated)
-
-    geometry_file.write_text(updated, encoding="utf-8")
     logger.info(
-        f"Updated {geometry_file.name}: {len(pts)} perimeter points, cell size {cell_size:.1f}"
+        f"Updated {Path(geometry_file).name}: {len(coords)} perimeter points, "
+        f"cell size {cell_size:.1f} (via GeomStorage)"
     )
     return True
 

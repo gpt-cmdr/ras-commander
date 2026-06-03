@@ -3381,6 +3381,137 @@ class GeomMesh:
 
     @staticmethod
     @log_call
+    def generate_computation_points(
+        geom_number: Union[str, Number, Path],
+        mesh_name: Optional[str] = None,
+        mesh_index: int = 0,
+        cell_size: Optional[float] = None,
+        hecras_dir: Optional[Union[str, Path]] = None,
+        ras_object=None,
+    ) -> "MeshResult":
+        """
+        Generate initial 2D computation points for a 2D flow area directly from
+        the authored .g## perimeter text — **no pre-existing compiled .g##.hdf
+        required**.
+
+        This is the greenfield bootstrap for a brand-new 2D flow area. It builds
+        a RasMapperLib perimeter ``Polygon`` from the ``Storage Area Surface
+        Line=`` block and runs ``PointGenerator.GeneratePoints`` (RASMapper's
+        "Generate Computation Points on Regular Interval"), then writes the
+        resulting cell centers into the ``Storage Area 2D Points=`` block of the
+        .g## text. HEC-RAS builds the full Voronoi mesh from those points during
+        geometry preprocessing (e.g. ``RasCmdr.compute_plan(force_geompre=True)``).
+
+        Unlike :meth:`generate`, this does NOT load a compiled HDF and is
+        therefore the path to use *before* any mesh exists. It is
+        breakline-unaware (regular-interval grid clipped to the perimeter); use
+        :meth:`generate` for breakline-aware regeneration once a compiled HDF
+        exists.
+
+        Args:
+            geom_number: Geometry number ("01", 1) or path to .g## text file.
+            mesh_name: Name of the 2D flow area (None -> use mesh_index).
+            mesh_index: 0-based 2D-area index when mesh_name is None.
+            cell_size: Regular-interval spacing in project units. When None, it
+                is read from ``Storage Area Point Generation Data`` in the text.
+            hecras_dir: Override HEC-RAS installation directory (for RasMapperLib).
+            ras_object: Optional RasPrj instance for multi-project support.
+
+        Returns:
+            MeshResult with status, mesh_name, cell_count (= number of generated
+            computation points), and geom_text_path. Points are written to the
+            .g## text; the full mesh is produced by the subsequent HEC-RAS
+            geometry preprocess.
+        """
+        import numpy as np
+        from .GeomStorage import GeomStorage
+
+        _load_dlls(hecras_dir)
+        ns = _imports()
+        geom_path = _resolve_geom_text_path(geom_number, ras_object)
+
+        result = MeshResult(
+            mesh_name=mesh_name or f"<index {mesh_index}>",
+            status="error",
+            geom_text_path=str(geom_path),
+        )
+
+        try:
+            # ── Read the 2D-area perimeter ring from the .g## text ──────────
+            gdf = GeomStorage.get_storage_area_polygons(geom_path, exclude_2d=False)
+            twod = gdf[gdf["is_2d"]] if "is_2d" in gdf.columns else gdf
+            if mesh_name is not None:
+                twod = twod[twod["Name"] == mesh_name]
+            elif 0 <= mesh_index < len(twod):
+                twod = twod.iloc[mesh_index:mesh_index + 1]
+            if len(twod) == 0:
+                result.error_message = (
+                    f"No matching 2D flow area in {geom_path.name} "
+                    f"(mesh_name={mesh_name!r}, mesh_index={mesh_index})"
+                )
+                return result
+            row = twod.iloc[0]
+            area = mesh_name or str(row["Name"])
+            result.mesh_name = area
+            poly = row.geometry
+            if poly is None or not hasattr(poly, "exterior"):
+                result.error_message = f"2D area '{area}' has no perimeter polygon"
+                return result
+            coords = list(poly.exterior.coords)
+
+            # ── Resolve cell size (arg > text point-generation data) ───────
+            if cell_size is None:
+                cell_size = _read_cell_size_from_text(geom_path, mesh_name=area)
+            if cell_size is None or float(cell_size) <= 0:
+                result.error_message = (
+                    "cell_size not provided and not found in 'Storage Area "
+                    "Point Generation Data' of the geometry text"
+                )
+                return result
+            cell_size = float(cell_size)
+
+            # ── Build a RasMapperLib perimeter Polygon from the coords ─────
+            from RasMapperLib import PointMs as _PointMs, Polygon as _Polygon  # type: ignore
+            from RasMapperLib import PointM as _PointM  # type: ignore
+            pts = _PointMs()
+            for x, y in coords:
+                pts.Add(_PointM(float(x), float(y)))
+            perim = _Polygon(pts)
+
+            # ── Generate computation points (float32-safe GeneratePoints) ──
+            seeds = _generate_seeds_safe(perim, cell_size, ns)
+            n_pts = int(seeds.Count)
+            if n_pts <= 0:
+                result.status = "exception"
+                result.error_message = "PointGenerator returned no computation points"
+                return result
+            centers = np.empty((n_pts, 2), dtype=float)
+            for i in range(n_pts):
+                p = seeds.PointM(i)
+                centers[i, 0] = float(p.X)
+                centers[i, 1] = float(p.Y)
+
+            # ── Write points into the .g## text (sole persistent output) ───
+            _patch_text_seeds(geom_path, centers, mesh_name=area)
+
+            result.status = "success"
+            result.cell_count = n_pts
+            logger.info(
+                f"Generated {n_pts} computation points for 2D area '{area}' "
+                f"(cell_size={cell_size:g}) in {geom_path.name}; run HEC-RAS "
+                f"geometry preprocessing to build the mesh."
+            )
+            return result
+        except Exception as exc:  # noqa: BLE001
+            result.status = "exception"
+            result.error_message = f"{type(exc).__name__}: {exc}"
+            logger.error(
+                f"[{result.mesh_name}] generate_computation_points failed: {exc}"
+            )
+            return result
+
+    @staticmethod
+    @log_call
     def generate(
         geom_number: Union[str, Number, Path],
         mesh_name: Optional[str] = None,
