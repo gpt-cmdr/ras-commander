@@ -101,9 +101,18 @@ def test_missing_level_raises(tmp_path):
         RasPlan.set_sediment_output_variables(p, ["2D Cell d50 Active"])
 
 
-def test_missing_file_raises(tmp_path):
-    # A non-existent path falls through to plan-number resolution (get_plan_path),
-    # which raises when there is no initialized project -- consistent with the
-    # other RasPlan plan-file editors (e.g. update_simulation_date).
-    with pytest.raises((ValueError, RuntimeError)):
+def test_missing_explicit_path_raises_valueerror(tmp_path):
+    # An explicit (Path) plan path that does not exist raises a clean ValueError,
+    # without requiring an initialized project.
+    with pytest.raises(ValueError, match="not found"):
         RasPlan.get_sediment_output_variables(tmp_path / "nope.p01")
+
+
+def test_numeric_plan_number_does_not_typeerror():
+    # int/float plan numbers must route to get_plan_path (which normalizes them),
+    # not crash at Path(int). Regression test for the QAQC MAJOR finding.
+    for value in (1, 1.0):
+        with pytest.raises(Exception) as excinfo:
+            RasPlan.get_sediment_output_variables(value)
+        assert not isinstance(excinfo.value, TypeError), (
+            f"numeric plan number {value!r} should not raise TypeError")

@@ -1484,11 +1484,22 @@ class RasPlan:
         """
         logger = logging.getLogger(__name__)
 
-        plan_file_path = Path(plan_number_or_path)
-        if not plan_file_path.is_file():
+        # Resolve to a plan file path. Accept str/Path (file path) or a plan
+        # number (str/int/float). Avoid calling Path() on a numeric plan number
+        # (Path(1) raises TypeError) by routing non-file inputs to get_plan_path,
+        # which normalizes plan numbers via RasUtils.normalize_ras_number.
+        plan_file_path = None
+        if isinstance(plan_number_or_path, (str, Path)):
+            candidate = Path(plan_number_or_path)
+            if candidate.is_file():
+                plan_file_path = candidate
+            elif isinstance(plan_number_or_path, Path) or '/' in str(plan_number_or_path) or '\\' in str(plan_number_or_path):
+                # An explicit path that does not exist.
+                raise ValueError(f"Plan file not found: {plan_number_or_path}")
+        if plan_file_path is None:
             plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object)
             if plan_file_path is None or not Path(plan_file_path).exists():
-                raise ValueError(f"Plan file not found: {plan_file_path}")
+                raise ValueError(f"Plan file not found for plan number: {plan_number_or_path!r}")
 
         try:
             with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
@@ -1822,11 +1833,22 @@ class RasPlan:
         """
 
         # Get the plan file path
-        plan_file_path = Path(plan_number_or_path)
-        if not plan_file_path.is_file():
+        # Resolve to a plan file path. Accept str/Path (file path) or a plan
+        # number (str/int/float). Avoid calling Path() on a numeric plan number
+        # (Path(1) raises TypeError) by routing non-file inputs to get_plan_path,
+        # which normalizes plan numbers via RasUtils.normalize_ras_number.
+        plan_file_path = None
+        if isinstance(plan_number_or_path, (str, Path)):
+            candidate = Path(plan_number_or_path)
+            if candidate.is_file():
+                plan_file_path = candidate
+            elif isinstance(plan_number_or_path, Path) or '/' in str(plan_number_or_path) or '\\' in str(plan_number_or_path):
+                # An explicit path that does not exist.
+                raise ValueError(f"Plan file not found: {plan_number_or_path}")
+        if plan_file_path is None:
             plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object)
             if plan_file_path is None or not Path(plan_file_path).exists():
-                raise ValueError(f"Plan file not found: {plan_file_path}")
+                raise ValueError(f"Plan file not found for plan number: {plan_number_or_path!r}")
 
         # Format the dates
         formatted_date = f"{start_date.strftime('%d%b%Y').upper()},{start_date.strftime('%H%M')},{end_date.strftime('%d%b%Y').upper()},{end_date.strftime('%H%M')}"
@@ -1889,11 +1911,22 @@ class RasPlan:
         Raises:
             ValueError: If the plan file is not found.
         """
-        plan_file_path = Path(plan_number_or_path)
-        if not plan_file_path.is_file():
+        # Resolve to a plan file path. Accept str/Path (file path) or a plan
+        # number (str/int/float). Avoid calling Path() on a numeric plan number
+        # (Path(1) raises TypeError) by routing non-file inputs to get_plan_path,
+        # which normalizes plan numbers via RasUtils.normalize_ras_number.
+        plan_file_path = None
+        if isinstance(plan_number_or_path, (str, Path)):
+            candidate = Path(plan_number_or_path)
+            if candidate.is_file():
+                plan_file_path = candidate
+            elif isinstance(plan_number_or_path, Path) or '/' in str(plan_number_or_path) or '\\' in str(plan_number_or_path):
+                # An explicit path that does not exist.
+                raise ValueError(f"Plan file not found: {plan_number_or_path}")
+        if plan_file_path is None:
             plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object)
             if plan_file_path is None or not Path(plan_file_path).exists():
-                raise ValueError(f"Plan file not found: {plan_file_path}")
+                raise ValueError(f"Plan file not found for plan number: {plan_number_or_path!r}")
 
         output_level = None
         variables = []
@@ -1948,11 +1981,22 @@ class RasPlan:
         if not variables:
             raise ValueError("variables must be a non-empty list of output tokens.")
 
-        plan_file_path = Path(plan_number_or_path)
-        if not plan_file_path.is_file():
+        # Resolve to a plan file path. Accept str/Path (file path) or a plan
+        # number (str/int/float). Avoid calling Path() on a numeric plan number
+        # (Path(1) raises TypeError) by routing non-file inputs to get_plan_path,
+        # which normalizes plan numbers via RasUtils.normalize_ras_number.
+        plan_file_path = None
+        if isinstance(plan_number_or_path, (str, Path)):
+            candidate = Path(plan_number_or_path)
+            if candidate.is_file():
+                plan_file_path = candidate
+            elif isinstance(plan_number_or_path, Path) or '/' in str(plan_number_or_path) or '\\' in str(plan_number_or_path):
+                # An explicit path that does not exist.
+                raise ValueError(f"Plan file not found: {plan_number_or_path}")
+        if plan_file_path is None:
             plan_file_path = RasPlan.get_plan_path(plan_number_or_path, ras_object)
             if plan_file_path is None or not Path(plan_file_path).exists():
-                raise ValueError(f"Plan file not found: {plan_file_path}")
+                raise ValueError(f"Plan file not found for plan number: {plan_number_or_path!r}")
 
         with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
             lines = file.readlines()
