@@ -455,6 +455,22 @@ class Usgs3depAws:
             return None
 
     @staticmethod
+    def _s3_project_folder(product_link) -> Optional[str]:
+        """Extract the S3 StagedProducts project folder from a FESM index
+        ``product_link`` value.
+
+        e.g. ``https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1m/
+        Projects/UT_Central_QL1_B2_2018`` -> ``UT_Central_QL1_B2_2018``.
+        Returns None if the link is empty or has no ``/Projects/`` segment.
+        """
+        if not product_link:
+            return None
+        s = str(product_link).strip().rstrip('/')
+        if '/Projects/' in s:
+            return s.split('/Projects/')[-1].split('/')[0] or None
+        return None
+
+    @staticmethod
     def _get_remote_file_size(url: str) -> Optional[int]:
         """
         Get remote file size in bytes using HTTP HEAD request.
@@ -673,11 +689,16 @@ class Usgs3depAws:
             # Filter to exact project name match
             logger.info(f"  Filtering to project: {project_name}")
 
-            # Try all possible project name fields
+            # Try all possible project name fields, plus the S3 folder parsed
+            # from 'product_link' (so callers may pass either the collection
+            # name or the actual S3 StagedProducts folder).
             mask = False
             for field in ['proj_name', 'project', 'demname']:
                 if field in projects.columns:
                     mask = mask | (projects[field] == project_name)
+            if 'product_link' in projects.columns:
+                mask = mask | projects['product_link'].apply(
+                    lambda pl: Usgs3depAws._s3_project_folder(pl) == project_name)
 
             projects_filtered = projects[mask]
 
@@ -738,21 +759,28 @@ class Usgs3depAws:
         all_downloaded = []
 
         for idx, project_row in projects.iterrows():
-            # Project name field may be 'project', 'proj_name', or 'demname'
-            project_name = None
+            # The actual S3 StagedProducts folder lives in 'product_link'. The
+            # index 'project' field is a logical collection name that often
+            # differs from the S3 folder (e.g. 'UT_StateWide_2018_A18' whose
+            # tiles live under '.../Projects/UT_Central_QL1_B2_2018', or
+            # 'Wasatch_Fault_UT_LiDAR' -> '.../Projects/UT_Wasatch_L5_2014').
+            # Building the S3 path from the collection name 404s; use the link.
+            s3_folder = Usgs3depAws._s3_project_folder(project_row.get('product_link'))
+            label = None
             for field in ['proj_name', 'project', 'demname']:
                 if field in project_row.index and project_row[field]:
-                    project_name = project_row[field]
+                    label = project_row[field]
                     break
+            s3_folder = s3_folder or label  # fall back to the collection name
 
-            if not project_name:
-                logger.warning(f"No project name found in row {idx}, skipping")
+            if not s3_folder:
+                logger.warning(f"No project folder/name found in row {idx}, skipping")
                 continue
 
-            logger.info(f"\nProcessing project: {project_name}")
+            logger.info(f"\nProcessing project: {label or s3_folder} (S3 folder: {s3_folder})")
 
             # Get all tile URLs for this project
-            tile_urls = Usgs3depAws._get_project_tile_urls(project_name)
+            tile_urls = Usgs3depAws._get_project_tile_urls(s3_folder)
 
             # Skip if project not found in S3 (outdated tile index)
             if tile_urls is None:
