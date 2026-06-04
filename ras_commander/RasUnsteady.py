@@ -65,6 +65,7 @@ Meteorological Point Data Functions:
 DSS Boundary Condition Functions:
 - get_dss_boundaries() - Extract all DSS-linked BCs with full path info
 - get_inline_hydrograph_boundaries() - Extract inline table BCs with time series data
+- delete_boundary() - Remove one Boundary Location block from an unsteady file
 - update_dss_run_identifier() - Update DSS path F-part for new scenarios
 - set_boundary_dss_link() - Convert inline BC to DSS-linked (complete state transition)
 - set_boundary_inline_hydrograph() - Write inline hydrograph, convert DSS to inline
@@ -107,6 +108,7 @@ Non-Newtonian Method Selection:
 """
 import os
 import numbers
+import shutil
 from datetime import datetime
 from pathlib import Path
 from .RasPrj import ras
@@ -133,6 +135,54 @@ class RasUnsteady:
         "precip",
         "precipitation",
         "rain",
+    )
+    _BOUNDARY_TYPE_KEYWORDS: Tuple[Tuple[str, str], ...] = (
+        ("Lateral Inflow Hydrograph=", "Lateral Inflow Hydrograph"),
+        ("Uniform Lateral Inflow Hydrograph=", "Uniform Lateral Inflow Hydrograph"),
+        ("Uniform Lateral Inflow=", "Uniform Lateral Inflow"),
+        ("Observed Stage and Flow Hydrograph=", "Observed Stage and Flow"),
+        ("Flow Hydrograph=", "Flow Hydrograph"),
+        ("Stage Hydrograph=", "Stage Hydrograph"),
+        ("Precipitation Hydrograph=", "Precipitation Hydrograph"),
+        ("Rating Curve=", "Rating Curve"),
+        ("Friction Slope=", "Normal Depth"),
+        ("Gate Name=", "Gate Opening"),
+        ("Gate Openings=", "Gate Opening"),
+        ("Ground Water Interflow=", "Ground Water Interflow"),
+        ("Navigation Dam=", "Navigation Dam"),
+        ("Rule Operation=", "Rule Operation"),
+    )
+    _PROTECTED_BOUNDARY_TYPES = {
+        "Flow Hydrograph",
+        "Stage Hydrograph",
+        "Normal Depth",
+        "Rating Curve",
+    }
+    _GLOBAL_TRAILER_PREFIXES = (
+        "Met Point Raster Parameters=",
+        "Met Station Name=",
+        "Met Station Gauge Height=",
+        "Met Station LL=",
+        "Met Station XY=",
+        "Precipitation Mode=",
+        "Wind Mode=",
+        "Air Density Mode=",
+        "Met BC=",
+        "Non-Newtonian",
+        "User Yeild=",
+        "User Yield=",
+        "Herschel-Bulkley",
+        "Clastic",
+        "Coulomb",
+        "Voellmy",
+        "Lava",
+        "Temperature=",
+        "Heat Ballance=",
+        "Viscosity=",
+        "Yield Strength=",
+        "Consistency Factor=",
+        "Profile Coefficient=",
+        "Lava Param=",
     )
 
     @staticmethod
@@ -3546,6 +3596,377 @@ class RasUnsteady:
 
 
 
+
+
+    @staticmethod
+    def _clean_boundary_selector(value: Optional[Any]) -> Optional[str]:
+        """Normalize optional boundary selector values."""
+        if value is None:
+            return None
+        cleaned = str(value).strip()
+        return cleaned or None
+
+    @staticmethod
+    def _detect_boundary_type(lines: List[str], start_idx: int, end_idx: int) -> str:
+        """Return the first recognized boundary condition type in a block."""
+        for line in lines[start_idx + 1:end_idx]:
+            stripped = line.lstrip()
+            for keyword, bc_type in RasUnsteady._BOUNDARY_TYPE_KEYWORDS:
+                if stripped.startswith(keyword):
+                    return bc_type
+        return "Unknown"
+
+    @staticmethod
+    def _find_boundary_block_end(lines: List[str], start_idx: int, next_start_idx: Optional[int]) -> int:
+        """
+        Find the exclusive end of a ``Boundary Location=`` block.
+
+        HEC-RAS writes project-level meteorology and non-Newtonian settings
+        after the final boundary block in many .u## files. When there is no
+        next boundary header, stop before those known global trailers so a
+        forced deletion of the final boundary cannot erase project-level
+        settings.
+        """
+        if next_start_idx is not None:
+            return next_start_idx
+
+        for i in range(start_idx + 1, len(lines)):
+            if lines[i].startswith(RasUnsteady._GLOBAL_TRAILER_PREFIXES):
+                return i
+        return len(lines)
+
+    @staticmethod
+    def _find_boundary_blocks(lines: List[str]) -> List[Dict[str, Any]]:
+        """Collect Boundary Location block metadata from an unsteady file."""
+        starts = [
+            i for i, line in enumerate(lines)
+            if line.startswith("Boundary Location=")
+        ]
+        blocks: List[Dict[str, Any]] = []
+
+        for boundary_index, start_idx in enumerate(starts):
+            next_start = starts[boundary_index + 1] if boundary_index + 1 < len(starts) else None
+            end_idx = RasUnsteady._find_boundary_block_end(lines, start_idx, next_start)
+            loc_value = lines[start_idx][len("Boundary Location="):].rstrip("\r\n")
+            parts = [part.strip() for part in loc_value.split(",")]
+            blocks.append({
+                "boundary_index": boundary_index,
+                "start_idx": start_idx,
+                "end_idx": end_idx,
+                "location": loc_value,
+                "parts": parts,
+                "bc_type": RasUnsteady._detect_boundary_type(lines, start_idx, end_idx),
+            })
+
+        return blocks
+
+    @staticmethod
+    def _boundary_block_name(block: Dict[str, Any]) -> str:
+        """Return a readable display name for a boundary block."""
+        parts = block["parts"]
+        if len(parts) >= 8 and parts[7]:
+            if len(parts) >= 6 and parts[5]:
+                return f"{parts[5]}/{parts[7]}"
+            return parts[7]
+
+        river = parts[0] if len(parts) > 0 else ""
+        reach = parts[1] if len(parts) > 1 else ""
+        station = parts[2] if len(parts) > 2 else ""
+        if river or reach or station:
+            return "/".join(part for part in (river, reach, station) if part)
+
+        return block["location"].strip()
+
+    @staticmethod
+    def _boundary_block_matches(
+        block: Dict[str, Any],
+        river: Optional[str],
+        reach: Optional[str],
+        river_station: Optional[str],
+        sa_2d_name: Optional[str],
+        bc_line: Optional[str],
+    ) -> bool:
+        """Return True when a boundary block matches the provided selector group."""
+        parts = block["parts"]
+        if any(selector is not None for selector in (river, reach, river_station)):
+            if river is not None and (len(parts) < 1 or parts[0] != river):
+                return False
+            if reach is not None and (len(parts) < 2 or parts[1] != reach):
+                return False
+            if river_station is not None and (len(parts) < 3 or parts[2] != river_station):
+                return False
+            return True
+
+        if any(selector is not None for selector in (sa_2d_name, bc_line)):
+            if sa_2d_name is not None and (len(parts) < 6 or parts[5] != sa_2d_name):
+                return False
+            if bc_line is not None and (len(parts) < 8 or parts[7] != bc_line):
+                return False
+            return True
+
+        return False
+
+    @staticmethod
+    @log_call
+    def delete_boundary(
+        unsteady_file: Union[str, Path],
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        river_station: Optional[str] = None,
+        sa_2d_name: Optional[str] = None,
+        bc_line: Optional[str] = None,
+        boundary_index: Optional[int] = None,
+        force: bool = False,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Remove one ``Boundary Location=`` block from a HEC-RAS unsteady flow file.
+
+        The method deletes from the matched ``Boundary Location=`` header through
+        the line before the next boundary header. For the final boundary in files
+        that carry project-level meteorology or non-Newtonian settings after the
+        boundaries, deletion stops before those global trailers.
+
+        Required external boundary guard
+        --------------------------------
+        ``Flow Hydrograph``, ``Stage Hydrograph``, ``Normal Depth``, and
+        ``Rating Curve`` blocks are commonly required upstream/downstream model
+        boundaries. To avoid silently producing an uncomputable model, these
+        boundary types raise ``ValueError`` unless ``force=True`` is passed.
+        Optional/internal boundary types such as ``Lateral Inflow Hydrograph``,
+        ``Uniform Lateral Inflow Hydrograph``, observed stage/flow, gate,
+        groundwater, navigation dam, rule operation, and precipitation blocks
+        may be deleted without ``force``.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##), or a 1-2 character unsteady
+            number when a project-bound ``ras_object`` is available.
+        river, reach, river_station : str, optional
+            1D selector fields. Provided values are matched against the first
+            three comma-separated fields of ``Boundary Location=``. Partial
+            selectors are allowed but must resolve to exactly one block unless
+            ``boundary_index`` disambiguates.
+        sa_2d_name, bc_line : str, optional
+            2D selector fields. ``sa_2d_name`` matches field index 5 and
+            ``bc_line`` matches field index 7 in HEC-RAS 2D boundary location
+            records. Partial selectors are allowed with the same ambiguity
+            rules as 1D selectors.
+        boundary_index : int, optional
+            Zero-based positional index among ``Boundary Location=`` blocks.
+            Can be used alone as a fallback selector or with selectors to
+            disambiguate an otherwise ambiguous match.
+        force : bool, default False
+            Required to delete likely external upstream/downstream boundary
+            types (Flow Hydrograph, Stage Hydrograph, Normal Depth, Rating
+            Curve).
+        ras_object : optional
+            Custom RAS object. When initialized, ``boundaries_df`` is refreshed
+            after deletion.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Metadata with keys:
+
+            - ``unsteady_file`` (str): path written
+            - ``deleted`` (bool): always True on success
+            - ``name`` (str): readable boundary name/location
+            - ``matched_location`` (str): raw ``Boundary Location=`` value
+            - ``bc_type`` (str): detected boundary condition type
+            - ``boundary_index`` (int): zero-based matched block index
+            - ``backup_path`` (str): path to the ``.bak`` backup
+            - ``lines_removed`` (int): number of lines deleted
+            - ``boundaries_df_refreshed`` (bool): True if refresh succeeded
+            - ``required_boundary`` (bool): True when the guard classified the
+              block as a likely required external boundary
+
+        Raises
+        ------
+        ValueError
+            If selectors are inconsistent, no boundary matches, multiple
+            boundaries match without ``boundary_index`` disambiguation, or a
+            protected external boundary is selected without ``force=True``.
+        FileNotFoundError
+            If the resolved unsteady file does not exist.
+        """
+        river = RasUnsteady._clean_boundary_selector(river)
+        reach = RasUnsteady._clean_boundary_selector(reach)
+        river_station = RasUnsteady._clean_boundary_selector(river_station)
+        sa_2d_name = RasUnsteady._clean_boundary_selector(sa_2d_name)
+        bc_line = RasUnsteady._clean_boundary_selector(bc_line)
+
+        has_1d_selector = any(
+            selector is not None for selector in (river, reach, river_station)
+        )
+        has_2d_selector = any(
+            selector is not None for selector in (sa_2d_name, bc_line)
+        )
+        if has_1d_selector and has_2d_selector:
+            raise ValueError(
+                "Provide either 1D selectors (river, reach, river_station) "
+                "or 2D selectors (sa_2d_name, bc_line), not both"
+            )
+
+        if boundary_index is not None:
+            if isinstance(boundary_index, bool) or not isinstance(boundary_index, int):
+                raise ValueError("boundary_index must be a zero-based integer")
+            if boundary_index < 0:
+                raise ValueError("boundary_index must be >= 0")
+
+        if boundary_index is None and not (has_1d_selector or has_2d_selector):
+            raise ValueError(
+                "Provide a boundary selector or boundary_index to delete a boundary"
+            )
+
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except Exception:
+                pass
+
+        unsteady_path = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_file,
+            ras_object=ras_obj,
+        )
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(unsteady_path, "r", encoding="utf-8", errors="ignore", newline="") as f:
+            lines = f.readlines()
+
+        blocks = RasUnsteady._find_boundary_blocks(lines)
+        if not blocks:
+            raise ValueError(f"No Boundary Location blocks found in {unsteady_path.name}")
+
+        target_block: Optional[Dict[str, Any]] = None
+
+        if has_1d_selector or has_2d_selector:
+            matches = [
+                block for block in blocks
+                if RasUnsteady._boundary_block_matches(
+                    block,
+                    river,
+                    reach,
+                    river_station,
+                    sa_2d_name,
+                    bc_line,
+                )
+            ]
+            if boundary_index is not None:
+                selected = next(
+                    (block for block in blocks if block["boundary_index"] == boundary_index),
+                    None,
+                )
+                if selected is None:
+                    raise ValueError(
+                        f"boundary_index {boundary_index} is out of range; "
+                        f"{len(blocks)} boundary blocks found"
+                    )
+                if selected not in matches:
+                    raise ValueError(
+                        f"boundary_index {boundary_index} does not match the "
+                        "provided boundary selectors"
+                    )
+                target_block = selected
+            else:
+                if not matches:
+                    selector = (
+                        f"river={river!r}, reach={reach!r}, river_station={river_station!r}"
+                        if has_1d_selector
+                        else f"sa_2d_name={sa_2d_name!r}, bc_line={bc_line!r}"
+                    )
+                    raise ValueError(
+                        f"No boundary matched in {unsteady_path.name} for {selector}"
+                    )
+                if len(matches) > 1:
+                    choices = ", ".join(
+                        f"{block['boundary_index']}:{RasUnsteady._boundary_block_name(block)}"
+                        for block in matches
+                    )
+                    raise ValueError(
+                        "Boundary selector is ambiguous. Provide boundary_index "
+                        f"to disambiguate one of: {choices}"
+                    )
+                target_block = matches[0]
+        else:
+            selected = next(
+                (block for block in blocks if block["boundary_index"] == boundary_index),
+                None,
+            )
+            if selected is None:
+                raise ValueError(
+                    f"boundary_index {boundary_index} is out of range; "
+                    f"{len(blocks)} boundary blocks found"
+                )
+            target_block = selected
+
+        if target_block is None:
+            raise ValueError("No boundary selected for deletion")
+
+        bc_type = target_block["bc_type"]
+        required_boundary = bc_type in RasUnsteady._PROTECTED_BOUNDARY_TYPES
+        if required_boundary and not force:
+            raise ValueError(
+                f"Refusing to delete {bc_type} boundary "
+                f"{RasUnsteady._boundary_block_name(target_block)!r} without "
+                "force=True because it may be a required upstream/downstream "
+                "external boundary"
+            )
+        if required_boundary and force:
+            logger.warning(
+                "Deleting likely required external %s boundary %s from %s because force=True",
+                bc_type,
+                RasUnsteady._boundary_block_name(target_block),
+                unsteady_path.name,
+            )
+
+        start_idx = target_block["start_idx"]
+        end_idx = target_block["end_idx"]
+        if end_idx <= start_idx:
+            raise ValueError(
+                f"Invalid boundary block extent for index {target_block['boundary_index']}"
+            )
+
+        backup_path = Path(str(unsteady_path) + ".bak")
+        shutil.copy2(unsteady_path, backup_path)
+        lines_removed = end_idx - start_idx
+        del lines[start_idx:end_idx]
+
+        with open(unsteady_path, "w", encoding="utf-8", newline="") as f:
+            f.writelines(lines)
+
+        boundaries_df_refreshed = False
+        if ras_obj is not None:
+            try:
+                ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+                boundaries_df_refreshed = True
+            except Exception as exc:
+                logger.debug(f"boundaries_df refresh skipped: {exc}")
+
+        boundary_name = RasUnsteady._boundary_block_name(target_block)
+        logger.info(
+            "Deleted boundary %s (%s) from %s: %d lines removed",
+            boundary_name,
+            bc_type,
+            unsteady_path.name,
+            lines_removed,
+        )
+
+        return {
+            "unsteady_file": str(unsteady_path),
+            "deleted": True,
+            "name": boundary_name,
+            "matched_location": target_block["location"],
+            "bc_type": bc_type,
+            "boundary_index": target_block["boundary_index"],
+            "backup_path": str(backup_path),
+            "lines_removed": lines_removed,
+            "boundaries_df_refreshed": boundaries_df_refreshed,
+            "required_boundary": required_boundary,
+        }
 
 
 # Additional functions from the AWS webinar where the code was developed
