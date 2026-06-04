@@ -3194,6 +3194,14 @@
 </span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ras_commander</span>
 </span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Loaded: </span><span class="si">{</span><span class="n">ras_commander</span><span class="o">.</span><span class="vm">__file__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>📦 PIP PACKAGE MODE: Loading installed ras-commander
+
+
+2026-06-02 15:12:00 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+
+
+✓ Loaded: &lt;workspace&gt;\ras_commander\__init__.py
+</code></pre></div>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <p>Before running this notebook, ensure you have:</p>
 <ol>
@@ -3202,6 +3210,7 @@
 <li><strong>HEC-RAS 6.3+</strong>: <strong>REQUIRED</strong> for plan execution</li>
 <li><strong>Disk Space</strong>: ~5 GB (multiple worker folders + results)</li>
 <li><strong>CPU Cores</strong>: 2+ recommended for efficient parallelization (since core scaling is nonlinear)</li>
+<li><strong>Notebook Timeout</strong>: full verification of the Bald Eagle 2D plan set is long-running; use a 4-hour nbconvert cell timeout for automated execution</li>
 </ol>
 <h3 id="what-youll-learn">What You'll Learn<a class="headerlink" href="#what-youll-learn" title="Permanent link">&para;</a></h3>
 <p>This notebook demonstrates <strong>parallel plan execution</strong> using <code>RasCmdr.compute_parallel()</code>:</p>
@@ -3244,6 +3253,7 @@
 <p>Example: 4 plans, each taking 10 minutes
 - Sequential: 40 minutes total
 - Parallel (4+ cores): ~10-12 minutes total</p>
+<p>For this notebook's <code>BaldEagleCrkMulti2D</code> verification project, a full run on a typical multi-core workstation completed in 11,825.40 seconds (3 hr 17 min 5 sec) with <code>--ExecutePreprocessor.timeout=21600</code>. The all-plans parallel cell was the longest section at 10,513.19 seconds (2 hr 55 min 13 sec), dominated by plan 01 at 10,070.87 seconds. The later specific-plans and dynamic-worker cells completed in 565.60 seconds and 733.62 seconds, respectively. A 60-minute cell timeout is expected to stop the real 2D run before completion.</p>
 <h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
 <p>Configure these values to customize the notebook for your project.</p>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># =============================================================================</span>
@@ -3336,6 +3346,23 @@
 </span><span id="__span-3-39"><a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculate optimal number of workers based on physical cores and cores per worker.&quot;&quot;&quot;</span>
 </span><span id="__span-3-40"><a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a>    <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">physical_cores</span> <span class="o">/</span> <span class="n">cores_per_worker</span><span class="p">))</span>
 </span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-06-02 15:12:03 - ras_commander.RasExamples - INFO - Successfully extracted project &#39;BaldEagleCrkMulti2D&#39; to &lt;workspace&gt;\examples\example_projects\BaldEagleCrkMulti2D_113
+
+
+Extracted project to: &lt;workspace&gt;\examples\example_projects\BaldEagleCrkMulti2D_113
+Cleaned up stale directory: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113
+Cleaned up stale directory: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113
+Cleaned up stale directory: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113
+
+Compute folders:
+  All plans: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113
+  Specific plans: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113
+  Dynamic workers: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113
+
+System Resources:
+  Physical cores: 8
+  Logical cores: 8
+</code></pre></div>
 <h2 id="step-1-project-initialization">Step 1: Project Initialization<a class="headerlink" href="#step-1-project-initialization" title="Permanent link">&para;</a></h2>
 <p>Let's initialize the HEC-RAS project using the <code>init_ras_project()</code> function. We'll store the initialized object in a variable to use later, rather than relying on the global <code>ras</code> object. This approach is more suitable for working with multiple projects or compute folders.</p>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Initialize the source project</span>
@@ -3350,6 +3377,444 @@
 </span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">plan_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">source_project</span><span class="o">.</span><span class="n">plan_df</span><span class="p">)</span>
 </span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="n">plan_count</span><span class="si">}</span><span class="s2"> plans in the project&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 7.0 at C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.7 Beta 5 at C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 5\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.7 Beta 4 at C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 4\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.6 at C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.5 at C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.4.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.4.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.3.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.3.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.3 at C:\Program Files (x86)\HEC\HEC-RAS\6.3\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.2 at C:\Program Files (x86)\HEC\HEC-RAS\6.2\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.0 at C:\Program Files (x86)\HEC\HEC-RAS\6.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.7 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.7\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.6 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.6\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.5 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.5\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.4 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.4\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.3 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.3\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.1 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0 at C:\Program Files (x86)\HEC\HEC-RAS\5.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 4.1.0 at C:\Program Files (x86)\HEC\HEC-RAS\4.1.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 4.0 at C:\Program Files (x86)\HEC\HEC-RAS\4.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 15:12:03 - ras_commander.RasUtils - INFO - Discovered 20 installed HEC-RAS version(s)
+
+
+2026-06-02 15:12:03 - ras_commander.RasPrj - INFO - HEC-RAS 7.0 found via version discovery: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 15:12:04 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\BaldEagleCrkMulti2D_113\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 15:12:04 - ras_commander.RasPrj - INFO - ras-commander v0.98.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 15:12:04 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: &lt;workspace&gt;\examples\example_projects\BaldEagleCrkMulti2D_113
+
+
+2026-06-02 15:12:04 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 15:12:04 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras.plan_df        Plans, HDF paths, geometry/flow associations
+  ras.geom_df        Geometry files and HDF preprocessor paths
+  ras.flow_df        Steady flow files
+  ras.unsteady_df    Unsteady flow files and configurations
+  ras.boundaries_df  Boundary conditions (type, name, location)
+  ras.results_df     Lightweight HDF results summaries
+  ras.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
+
+
+Initialized source project: BaldEagleDamBrk
+
+Available plans in the project:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>plan_number</th>
+      <th>unsteady_number</th>
+      <th>geometry_number</th>
+      <th>Plan Title</th>
+      <th>Program Version</th>
+      <th>Short Identifier</th>
+      <th>Simulation Date</th>
+      <th>Computation Interval</th>
+      <th>Mapping Interval</th>
+      <th>Run HTab</th>
+      <th>...</th>
+      <th>Friction Slope Method</th>
+      <th>UNET D2 SolverType</th>
+      <th>UNET D2 Name</th>
+      <th>HDF_Results_Path</th>
+      <th>Geom File</th>
+      <th>Geom Path</th>
+      <th>Flow File</th>
+      <th>Flow Path</th>
+      <th>full_path</th>
+      <th>flow_type</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>13</td>
+      <td>07</td>
+      <td>06</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.10</td>
+      <td>PMF Multi 2D</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>30SEC</td>
+      <td>30MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>Pardiso (Direct)</td>
+      <td>193</td>
+      <td>None</td>
+      <td>06</td>
+      <td><workspace>...</td>
+      <td>07</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>15</td>
+      <td>12</td>
+      <td>08</td>
+      <td>1d-2D Dambreak Refined Grid</td>
+      <td>5.10</td>
+      <td>1D-2D Refined Grid</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>08</td>
+      <td><workspace>...</td>
+      <td>12</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>17</td>
+      <td>09</td>
+      <td>10</td>
+      <td>2D to 1D No Dam</td>
+      <td>5.00</td>
+      <td>2D to 1D No Dam</td>
+      <td>01JAN1999,1200,06JAN1999,1200</td>
+      <td>1MIN</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>Upstream2D</td>
+      <td>None</td>
+      <td>10</td>
+      <td><workspace>...</td>
+      <td>09</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>18</td>
+      <td>10</td>
+      <td>11</td>
+      <td>2D to 2D Run</td>
+      <td>5.00</td>
+      <td>2D to 2D Run</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>11</td>
+      <td><workspace>...</td>
+      <td>10</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>19</td>
+      <td>11</td>
+      <td>12</td>
+      <td>SA to 2D Dam Break Run</td>
+      <td>5.00</td>
+      <td>SA to 2D Dam Break</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+      <td>10MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>12</td>
+      <td><workspace>...</td>
+      <td>11</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>03</td>
+      <td>13</td>
+      <td>09</td>
+      <td>Single 2D Area - Internal Dam Structure</td>
+      <td>5.04</td>
+      <td>Single 2D</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>30SEC</td>
+      <td>10MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>09</td>
+      <td><workspace>...</td>
+      <td>13</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>04</td>
+      <td>01</td>
+      <td>13</td>
+      <td>SA to 2D Area Conn - 2D Levee Structure</td>
+      <td>5.00</td>
+      <td>2D Levee Struc</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>13</td>
+      <td><workspace>...</td>
+      <td>01</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>02</td>
+      <td>01</td>
+      <td>01</td>
+      <td>SA to Detailed 2D Breach</td>
+      <td>5.10</td>
+      <td>SA-2D Det Brch</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>10SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>Pardiso (Direct)</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>01</td>
+      <td><workspace>...</td>
+      <td>01</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>01</td>
+      <td>01</td>
+      <td>01</td>
+      <td>SA to Detailed 2D Breach FEQ</td>
+      <td>5.03</td>
+      <td>SA-2D Det FEQ</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>5SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>01</td>
+      <td><workspace>...</td>
+      <td>01</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>05</td>
+      <td>02</td>
+      <td>03</td>
+      <td>Single 2D area with Bridges FEQ</td>
+      <td>5.10</td>
+      <td>Single 2D Bridges FEQ</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>5SEC</td>
+      <td>10MIN</td>
+      <td>-1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>PARDISO (Direct)</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>03</td>
+      <td><workspace>...</td>
+      <td>02</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>06</td>
+      <td>03</td>
+      <td>09</td>
+      <td>Gridded Precip - Infiltration</td>
+      <td>6.00</td>
+      <td>Grid Precip Infiltration</td>
+      <td>09SEP2018,0000,14SEP2018,0000</td>
+      <td>20SEC</td>
+      <td>10MIN</td>
+      <td>-1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>Pardiso (Direct)</td>
+      <td>BaldEagleCr</td>
+      <td>None</td>
+      <td>09</td>
+      <td><workspace>...</td>
+      <td>03</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+  </tbody>
+</table>
+<p>11 rows × 36 columns</p>
+</div>
+
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Found 11 plans in the project
+</code></pre></div>
 <h2 id="understanding-the-rascmdrcompute_parallel-method">Understanding the RasCmdr.compute_parallel Method<a class="headerlink" href="#understanding-the-rascmdrcompute_parallel-method" title="Permanent link">&para;</a></h2>
 <p>Before we start executing plans in parallel, let's understand the <code>compute_parallel()</code> method from the <code>RasCmdr</code> class.</p>
 <h3 id="key-parameters">Key Parameters<a class="headerlink" href="#key-parameters" title="Permanent link">&para;</a></h3>
@@ -3383,9 +3848,9 @@
 </ol>
 <p>Now, let's see how this works in practice.</p>
 <h2 id="step-2-parallel-execution-of-all-plans">Step 2: Parallel Execution of All Plans<a class="headerlink" href="#step-2-parallel-execution-of-all-plans" title="Permanent link">&para;</a></h2>
-<p>Let's execute all plans in the project in parallel. We'll use 3 workers, with 2 cores per worker. This approach is good when you have multiple plans that are independent of each other and you want to complete them as quickly as possible.</p>
+<p>Let's execute all plans in the project in parallel. We'll use 4 workers, with 1 core per worker. This section runs the complete 2D plan set and can take nearly 3 hours on a typical multi-core workstation; use a 4-hour cell timeout when executing the notebook through nbconvert. This approach is good when you have multiple plans that are independent of each other and you want to complete them as quickly as possible.</p>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Executing all plans in parallel...&quot;</span><span class="p">)</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;This may take several minutes...&quot;</span><span class="p">)</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;This full 2D plan set can take hours; use a 4-hour cell timeout for automated verification.&quot;</span><span class="p">)</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Create compute folder if it doesn&#39;t exist</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">compute_folder</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -3428,6 +3893,718 @@
 </span><span id="__span-5-42"><a id="__codelineno-5-42" name="__codelineno-5-42" href="#__codelineno-5-42"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Execution Results:&quot;</span><span class="p">)</span>
 </span><span id="__span-5-43"><a id="__codelineno-5-43" name="__codelineno-5-43" href="#__codelineno-5-43"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">results_df</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-06-02 15:12:04 - ras_commander.RasCmdr - INFO - Destination folder &#39;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113&#39; exists. Overwriting as per overwrite_dest=True.
+
+
+2026-06-02 15:12:04 - ras_commander.RasCmdr - INFO - Copied project folder to destination: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113
+
+
+2026-06-02 15:12:04 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 4 based on the number of plans to compute: 11
+
+
+Executing all plans in parallel...
+This full 2D plan set can take hours; use a 4-hour cell timeout for automated verification.
+Using 4 parallel workers, each with 1 cores
+Destination folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113
+
+
+2026-06-02 15:12:04 - ras_commander.RasCmdr - INFO - Created worker folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]
+
+
+2026-06-02 15:12:04 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 15:12:04 - ras_commander.RasPrj - INFO - ras-commander v0.98.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 15:12:04 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]
+
+
+2026-06-02 15:12:04 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 15:12:04 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras_object.plan_df        Plans, HDF paths, geometry/flow associations
+  ras_object.geom_df        Geometry files and HDF preprocessor paths
+  ras_object.flow_df        Steady flow files
+  ras_object.unsteady_df    Unsteady flow files and configurations
+  ras_object.boundaries_df  Boundary conditions (type, name, location)
+  ras_object.results_df     Lightweight HDF results summaries
+  ras_object.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
+
+
+2026-06-02 15:12:05 - ras_commander.RasCmdr - INFO - Created worker folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]
+
+
+2026-06-02 15:12:05 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 15:12:05 - ras_commander.RasPrj - INFO - ras-commander v0.98.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 15:12:05 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]
+
+
+2026-06-02 15:12:05 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 15:12:05 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras_object.plan_df        Plans, HDF paths, geometry/flow associations
+  ras_object.geom_df        Geometry files and HDF preprocessor paths
+  ras_object.flow_df        Steady flow files
+  ras_object.unsteady_df    Unsteady flow files and configurations
+  ras_object.boundaries_df  Boundary conditions (type, name, location)
+  ras_object.results_df     Lightweight HDF results summaries
+  ras_object.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
+
+
+2026-06-02 15:12:05 - ras_commander.RasCmdr - INFO - Created worker folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]
+
+
+2026-06-02 15:12:06 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 15:12:06 - ras_commander.RasPrj - INFO - ras-commander v0.98.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 15:12:06 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]
+
+
+2026-06-02 15:12:06 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 15:12:06 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras_object.plan_df        Plans, HDF paths, geometry/flow associations
+  ras_object.geom_df        Geometry files and HDF preprocessor paths
+  ras_object.flow_df        Steady flow files
+  ras_object.unsteady_df    Unsteady flow files and configurations
+  ras_object.boundaries_df  Boundary conditions (type, name, location)
+  ras_object.results_df     Lightweight HDF results summaries
+  ras_object.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
+
+
+2026-06-02 15:12:06 - ras_commander.RasCmdr - INFO - Created worker folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 4]
+
+
+2026-06-02 15:12:06 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 4]\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 15:12:06 - ras_commander.RasPrj - INFO - ras-commander v0.98.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 15:12:06 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 4]
+
+
+2026-06-02 15:12:06 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 15:12:06 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras_object.plan_df        Plans, HDF paths, geometry/flow associations
+  ras_object.geom_df        Geometry files and HDF preprocessor paths
+  ras_object.flow_df        Steady flow files
+  ras_object.unsteady_df    Unsteady flow files and configurations
+  ras_object.boundaries_df  Boundary conditions (type, name, location)
+  ras_object.results_df     Lightweight HDF results summaries
+  ras_object.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
+
+
+2026-06-02 15:12:06 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]
+
+
+2026-06-02 15:12:06 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]
+
+
+2026-06-02 15:12:06 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]
+
+
+2026-06-02 15:12:06 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 4]
+
+
+2026-06-02 15:12:06 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]\BaldEagleDamBrk.p15
+
+
+2026-06-02 15:12:06 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]\BaldEagleDamBrk.p13
+
+
+2026-06-02 15:12:06 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]\BaldEagleDamBrk.p17
+
+
+2026-06-02 15:12:06 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 4]\BaldEagleDamBrk.p18
+
+
+2026-06-02 15:12:07 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 13
+
+
+2026-06-02 15:12:07 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 15:12:07 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]\BaldEagleDamBrk.p13&quot;
+
+
+2026-06-02 15:12:07 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 15:12:07 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 15
+
+
+2026-06-02 15:12:07 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 15:12:07 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 17
+
+
+2026-06-02 15:12:07 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]\BaldEagleDamBrk.p15&quot;
+
+
+2026-06-02 15:12:07 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 15:12:07 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 15:12:07 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]\BaldEagleDamBrk.p17&quot;
+
+
+2026-06-02 15:12:07 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 15:12:07 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 18
+
+
+2026-06-02 15:12:07 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 15:12:07 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 4]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 4]\BaldEagleDamBrk.p18&quot;
+
+
+2026-06-02 15:12:07 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 15:14:18 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 18
+
+
+2026-06-02 15:14:18 - ras_commander.RasCmdr - INFO - Total run time for plan 18: 130.60 seconds
+
+
+2026-06-02 15:14:18 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 15:14:18 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]
+
+
+2026-06-02 15:14:18 - ras_commander.RasCmdr - INFO - Plan 18 executed in worker 4: Successful
+
+
+2026-06-02 15:14:18 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]\BaldEagleDamBrk.p19
+
+
+2026-06-02 15:14:18 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 19
+
+
+2026-06-02 15:14:18 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 15:14:18 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]\BaldEagleDamBrk.p19&quot;
+
+
+2026-06-02 15:14:18 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 15:14:48 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 13
+
+
+2026-06-02 15:14:48 - ras_commander.RasCmdr - INFO - Total run time for plan 13: 161.18 seconds
+
+
+2026-06-02 15:14:48 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 15:14:49 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]
+
+
+2026-06-02 15:14:49 - ras_commander.RasCmdr - INFO - Plan 13 executed in worker 1: Successful
+
+
+2026-06-02 15:14:49 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]\BaldEagleDamBrk.p03
+
+
+2026-06-02 15:14:49 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 03
+
+
+2026-06-02 15:14:49 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 15:14:49 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]\BaldEagleDamBrk.p03&quot;
+
+
+2026-06-02 15:14:49 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 15:16:00 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 19
+
+
+2026-06-02 15:16:00 - ras_commander.RasCmdr - INFO - Total run time for plan 19: 101.69 seconds
+
+
+2026-06-02 15:16:00 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 15:16:00 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]
+
+
+2026-06-02 15:16:00 - ras_commander.RasCmdr - INFO - Plan 19 executed in worker 1: Successful
+
+
+2026-06-02 15:16:00 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]\BaldEagleDamBrk.p04
+
+
+2026-06-02 15:16:01 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 04
+
+
+2026-06-02 15:16:01 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 15:16:01 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]\BaldEagleDamBrk.p04&quot;
+
+
+2026-06-02 15:16:01 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 15:16:18 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 17
+
+
+2026-06-02 15:16:18 - ras_commander.RasCmdr - INFO - Total run time for plan 17: 251.19 seconds
+
+
+2026-06-02 15:16:18 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 15:16:19 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 4]
+
+
+2026-06-02 15:16:19 - ras_commander.RasCmdr - INFO - Plan 17 executed in worker 3: Successful
+
+
+2026-06-02 15:16:19 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 4]\BaldEagleDamBrk.p02
+
+
+2026-06-02 15:16:19 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 02
+
+
+2026-06-02 15:16:19 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 15:16:19 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 4]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 4]\BaldEagleDamBrk.p02&quot;
+
+
+2026-06-02 15:16:19 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 15:19:15 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 15
+
+
+2026-06-02 15:19:15 - ras_commander.RasCmdr - INFO - Total run time for plan 15: 427.64 seconds
+
+
+2026-06-02 15:19:15 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 15:19:15 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]
+
+
+2026-06-02 15:19:15 - ras_commander.RasCmdr - INFO - Plan 15 executed in worker 2: Successful
+
+
+2026-06-02 15:19:15 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]\BaldEagleDamBrk.p01
+
+
+2026-06-02 15:19:15 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 01
+
+
+2026-06-02 15:19:15 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 15:19:15 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 1]\BaldEagleDamBrk.p01&quot;
+
+
+2026-06-02 15:19:15 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 15:24:48 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 03
+
+
+2026-06-02 15:24:48 - ras_commander.RasCmdr - INFO - Total run time for plan 03: 598.96 seconds
+
+
+2026-06-02 15:24:48 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 15:24:48 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]
+
+
+2026-06-02 15:24:48 - ras_commander.RasCmdr - INFO - Plan 03 executed in worker 2: Successful
+
+
+2026-06-02 15:24:48 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]\BaldEagleDamBrk.p05
+
+
+2026-06-02 15:24:48 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 05
+
+
+2026-06-02 15:24:48 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 15:24:48 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 2]\BaldEagleDamBrk.p05&quot;
+
+
+2026-06-02 15:24:48 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 15:29:50 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 04
+
+
+2026-06-02 15:29:50 - ras_commander.RasCmdr - INFO - Total run time for plan 04: 829.00 seconds
+
+
+2026-06-02 15:29:50 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 15:29:50 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]
+
+
+2026-06-02 15:29:50 - ras_commander.RasCmdr - INFO - Plan 04 executed in worker 3: Successful
+
+
+2026-06-02 15:29:50 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]\BaldEagleDamBrk.p06
+
+
+2026-06-02 15:29:50 - ras_commander.RasCmdr - INFO - Set number of cores to 1 for plan: 06
+
+
+2026-06-02 15:29:50 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 15:29:50 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_113 [Worker 3]\BaldEagleDamBrk.p06&quot;
+
+
+2026-06-02 15:29:50 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 15:48:14 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 06
+
+
+2026-06-02 15:48:14 - ras_commander.RasCmdr - INFO - Total run time for plan 06: 1103.87 seconds
+
+
+2026-06-02 15:48:14 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 15:48:15 - ras_commander.RasCmdr - INFO - Plan 06 executed in worker 3: Successful
+
+
+2026-06-02 16:27:43 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 02
+
+
+2026-06-02 16:27:43 - ras_commander.RasCmdr - INFO - Total run time for plan 02: 4283.85 seconds
+
+
+2026-06-02 16:27:43 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 16:27:43 - ras_commander.RasCmdr - INFO - Plan 02 executed in worker 4: Successful
+
+
+2026-06-02 16:41:42 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 05
+
+
+2026-06-02 16:41:42 - ras_commander.RasCmdr - INFO - Total run time for plan 05: 4613.92 seconds
+
+
+2026-06-02 16:41:42 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 16:41:43 - ras_commander.RasCmdr - INFO - Plan 05 executed in worker 2: Successful
+
+
+2026-06-02 18:07:06 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 01
+
+
+2026-06-02 18:07:06 - ras_commander.RasCmdr - INFO - Total run time for plan 01: 10070.87 seconds
+
+
+2026-06-02 18:07:06 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 18:07:07 - ras_commander.RasCmdr - INFO - Plan 01 executed in worker 1: Successful
+
+
+2026-06-02 18:07:07 - ras_commander.RasCmdr - INFO - Consolidating results to destination folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113
+
+
+2026-06-02 18:07:16 - ras_commander.RasCmdr - INFO - Consolidated 47 worker artifact(s) to &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113
+
+
+2026-06-02 18:07:16 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 18:07:16 - ras_commander.RasCmdr - INFO - Re-initialized ras_object from destination folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113
+
+
+2026-06-02 18:07:16 - ras_commander.RasCmdr - INFO - 
+Execution Results:
+
+
+2026-06-02 18:07:16 - ras_commander.RasCmdr - INFO - Plan 18: Successful
+
+
+2026-06-02 18:07:16 - ras_commander.RasCmdr - INFO - Plan 13: Successful
+
+
+2026-06-02 18:07:16 - ras_commander.RasCmdr - INFO - Plan 19: Successful
+
+
+2026-06-02 18:07:16 - ras_commander.RasCmdr - INFO - Plan 17: Successful
+
+
+2026-06-02 18:07:16 - ras_commander.RasCmdr - INFO - Plan 15: Successful
+
+
+2026-06-02 18:07:16 - ras_commander.RasCmdr - INFO - Plan 03: Successful
+
+
+2026-06-02 18:07:16 - ras_commander.RasCmdr - INFO - Plan 04: Successful
+
+
+2026-06-02 18:07:16 - ras_commander.RasCmdr - INFO - Plan 06: Successful
+
+
+2026-06-02 18:07:16 - ras_commander.RasCmdr - INFO - Plan 02: Successful
+
+
+2026-06-02 18:07:16 - ras_commander.RasCmdr - INFO - Plan 05: Successful
+
+
+2026-06-02 18:07:16 - ras_commander.RasCmdr - INFO - Plan 01: Successful
+
+
+Parallel execution of all plans completed in 10513.18 seconds
+
+Execution Results:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>Plan</th>
+      <th>Success</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>10</th>
+      <td>01</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>02</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>03</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>04</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>05</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>06</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>13</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>15</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>17</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>0</th>
+      <td>18</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>19</td>
+      <td>True</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
 <h3 id="verification-parallel-execution">Verification: Parallel Execution<a class="headerlink" href="#verification-parallel-execution" title="Permanent link">&para;</a></h3>
 <p><strong>Success Criteria</strong>:
 - All worker folders created (check <code>[project] [AllWorkers]/</code> directory)
@@ -3523,11 +4700,566 @@
 </span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a>    <span class="n">file_size</span> <span class="o">=</span> <span class="n">file</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">)</span>  <span class="c1"># Size in MB</span>
 </span><span id="__span-9-31"><a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">file_size</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> MB&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 7.0 at C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.7 Beta 5 at C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 5\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.7 Beta 4 at C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 4\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.6 at C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.5 at C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.4.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.4.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.3.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.3.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.3 at C:\Program Files (x86)\HEC\HEC-RAS\6.3\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.2 at C:\Program Files (x86)\HEC\HEC-RAS\6.2\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.0 at C:\Program Files (x86)\HEC\HEC-RAS\6.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.7 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.7\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.6 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.6\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.5 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.5\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.4 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.4\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.3 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.3\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.1 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0 at C:\Program Files (x86)\HEC\HEC-RAS\5.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 4.1.0 at C:\Program Files (x86)\HEC\HEC-RAS\4.1.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 4.0 at C:\Program Files (x86)\HEC\HEC-RAS\4.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:07:17 - ras_commander.RasUtils - INFO - Discovered 20 installed HEC-RAS version(s)
+
+
+2026-06-02 18:07:17 - ras_commander.RasPrj - INFO - HEC-RAS 7.0 found via version discovery: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 18:07:17 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 18:07:17 - ras_commander.RasPrj - INFO - ras-commander v0.98.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 18:07:17 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_113
+
+
+2026-06-02 18:07:17 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 18:07:17 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras_object.plan_df        Plans, HDF paths, geometry/flow associations
+  ras_object.geom_df        Geometry files and HDF preprocessor paths
+  ras_object.flow_df        Steady flow files
+  ras_object.unsteady_df    Unsteady flow files and configurations
+  ras_object.boundaries_df  Boundary conditions (type, name, location)
+  ras_object.results_df     Lightweight HDF results summaries
+  ras_object.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
+
+
+Initialized compute project: BaldEagleDamBrk
+
+Plans in the compute folder:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>plan_number</th>
+      <th>unsteady_number</th>
+      <th>geometry_number</th>
+      <th>Plan Title</th>
+      <th>Program Version</th>
+      <th>Short Identifier</th>
+      <th>Simulation Date</th>
+      <th>Computation Interval</th>
+      <th>Mapping Interval</th>
+      <th>Run HTab</th>
+      <th>...</th>
+      <th>Friction Slope Method</th>
+      <th>UNET D2 SolverType</th>
+      <th>UNET D2 Name</th>
+      <th>HDF_Results_Path</th>
+      <th>Geom File</th>
+      <th>Geom Path</th>
+      <th>Flow File</th>
+      <th>Flow Path</th>
+      <th>full_path</th>
+      <th>flow_type</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>13</td>
+      <td>07</td>
+      <td>06</td>
+      <td>PMF with Multi 2D Areas</td>
+      <td>5.10</td>
+      <td>PMF Multi 2D</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>30SEC</td>
+      <td>30MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>Pardiso (Direct)</td>
+      <td>193</td>
+      <td><workspace>...</td>
+      <td>06</td>
+      <td><workspace>...</td>
+      <td>07</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>15</td>
+      <td>12</td>
+      <td>08</td>
+      <td>1d-2D Dambreak Refined Grid</td>
+      <td>5.10</td>
+      <td>1D-2D Refined Grid</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td><workspace>...</td>
+      <td>08</td>
+      <td><workspace>...</td>
+      <td>12</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>17</td>
+      <td>09</td>
+      <td>10</td>
+      <td>2D to 1D No Dam</td>
+      <td>5.00</td>
+      <td>2D to 1D No Dam</td>
+      <td>01JAN1999,1200,06JAN1999,1200</td>
+      <td>1MIN</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>Upstream2D</td>
+      <td><workspace>...</td>
+      <td>10</td>
+      <td><workspace>...</td>
+      <td>09</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>18</td>
+      <td>10</td>
+      <td>11</td>
+      <td>2D to 2D Run</td>
+      <td>5.00</td>
+      <td>2D to 2D Run</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td><workspace>...</td>
+      <td>11</td>
+      <td><workspace>...</td>
+      <td>10</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>19</td>
+      <td>11</td>
+      <td>12</td>
+      <td>SA to 2D Dam Break Run</td>
+      <td>5.00</td>
+      <td>SA to 2D Dam Break</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+      <td>10MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td><workspace>...</td>
+      <td>12</td>
+      <td><workspace>...</td>
+      <td>11</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>03</td>
+      <td>13</td>
+      <td>09</td>
+      <td>Single 2D Area - Internal Dam Structure</td>
+      <td>5.04</td>
+      <td>Single 2D</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>30SEC</td>
+      <td>10MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td><workspace>...</td>
+      <td>09</td>
+      <td><workspace>...</td>
+      <td>13</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>04</td>
+      <td>01</td>
+      <td>13</td>
+      <td>SA to 2D Area Conn - 2D Levee Structure</td>
+      <td>5.00</td>
+      <td>2D Levee Struc</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>20SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td><workspace>...</td>
+      <td>13</td>
+      <td><workspace>...</td>
+      <td>01</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>02</td>
+      <td>01</td>
+      <td>01</td>
+      <td>SA to Detailed 2D Breach</td>
+      <td>5.10</td>
+      <td>SA-2D Det Brch</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>10SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>Pardiso (Direct)</td>
+      <td>BaldEagleCr</td>
+      <td><workspace>...</td>
+      <td>01</td>
+      <td><workspace>...</td>
+      <td>01</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>01</td>
+      <td>01</td>
+      <td>01</td>
+      <td>SA to Detailed 2D Breach FEQ</td>
+      <td>5.03</td>
+      <td>SA-2D Det FEQ</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>5SEC</td>
+      <td>5MIN</td>
+      <td>1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>NaN</td>
+      <td>BaldEagleCr</td>
+      <td><workspace>...</td>
+      <td>01</td>
+      <td><workspace>...</td>
+      <td>01</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>05</td>
+      <td>02</td>
+      <td>03</td>
+      <td>Single 2D area with Bridges FEQ</td>
+      <td>5.10</td>
+      <td>Single 2D Bridges FEQ</td>
+      <td>01JAN1999,1200,04JAN1999,1200</td>
+      <td>5SEC</td>
+      <td>10MIN</td>
+      <td>-1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>PARDISO (Direct)</td>
+      <td>BaldEagleCr</td>
+      <td><workspace>...</td>
+      <td>03</td>
+      <td><workspace>...</td>
+      <td>02</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>06</td>
+      <td>03</td>
+      <td>09</td>
+      <td>Gridded Precip - Infiltration</td>
+      <td>6.00</td>
+      <td>Grid Precip Infiltration</td>
+      <td>09SEP2018,0000,14SEP2018,0000</td>
+      <td>20SEC</td>
+      <td>10MIN</td>
+      <td>-1</td>
+      <td>...</td>
+      <td>1</td>
+      <td>Pardiso (Direct)</td>
+      <td>BaldEagleCr</td>
+      <td><workspace>...</td>
+      <td>09</td>
+      <td><workspace>...</td>
+      <td>03</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td>Unsteady</td>
+    </tr>
+  </tbody>
+</table>
+<p>11 rows × 36 columns</p>
+</div>
+
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>Found 11 plans with results:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>plan_number</th>
+      <th>HDF_Results_Path</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>13</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>15</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>17</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>18</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>19</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>03</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>04</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>02</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>01</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>05</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>06</td>
+      <td><workspace>...</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>No worker folders remain in the compute folder (they were removed during results consolidation)
+
+Found 31 HDF files in the compute folder:
+  BaldEagleDamBrk.g01.hdf: 39.4 MB
+  BaldEagleDamBrk.g02.hdf: 1.9 MB
+  BaldEagleDamBrk.g03.hdf: 16.3 MB
+  BaldEagleDamBrk.g06.hdf: 10.9 MB
+  BaldEagleDamBrk.g08.hdf: 12.4 MB
+  BaldEagleDamBrk.g09.hdf: 11.2 MB
+  BaldEagleDamBrk.g10.hdf: 6.5 MB
+  BaldEagleDamBrk.g11.hdf: 3.6 MB
+  BaldEagleDamBrk.g12.hdf: 2.7 MB
+  BaldEagleDamBrk.g13.hdf: 8.8 MB
+  BaldEagleDamBrk.p01.hdf: 462.3 MB
+  BaldEagleDamBrk.p02.hdf: 407.1 MB
+  BaldEagleDamBrk.p03.hdf: 59.1 MB
+  BaldEagleDamBrk.p04.hdf: 81.8 MB
+  BaldEagleDamBrk.p05.hdf: 85.6 MB
+  BaldEagleDamBrk.p06.hdf: 577.2 MB
+  BaldEagleDamBrk.p13.hdf: 18.9 MB
+  BaldEagleDamBrk.p15.hdf: 88.7 MB
+  BaldEagleDamBrk.p17.hdf: 47.7 MB
+  BaldEagleDamBrk.p18.hdf: 23.3 MB
+  BaldEagleDamBrk.p19.hdf: 11.1 MB
+  BaldEagleDamBrk.u01.hdf: 0.0 MB
+  BaldEagleDamBrk.u02.hdf: 0.0 MB
+  BaldEagleDamBrk.u03.hdf: 0.0 MB
+  BaldEagleDamBrk.u07.hdf: 0.0 MB
+  BaldEagleDamBrk.u08.hdf: 0.0 MB
+  BaldEagleDamBrk.u09.hdf: 0.0 MB
+  BaldEagleDamBrk.u10.hdf: 0.0 MB
+  BaldEagleDamBrk.u11.hdf: 0.0 MB
+  BaldEagleDamBrk.u12.hdf: 0.0 MB
+  BaldEagleDamBrk.u13.hdf: 0.0 MB
+</code></pre></div>
 <h1 id="additional-examples">Additional Examples:<a class="headerlink" href="#additional-examples" title="Permanent link">&para;</a></h1>
 <h2 id="parallel-execution-of-specific-plans">Parallel Execution of Specific Plans<a class="headerlink" href="#parallel-execution-of-specific-plans" title="Permanent link">&para;</a></h2>
 <p>Now, let's execute only specific plans in the project in parallel. This approach is useful when you only want to run a subset of the available plans, perhaps for testing or comparison purposes.</p>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Executing specific plans in parallel...&quot;</span><span class="p">)</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;This may take several minutes...&quot;</span><span class="p">)</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;This subset usually runs faster than the all-plans batch, but it can still take several minutes.&quot;</span><span class="p">)</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Create specific compute folder if it doesn&#39;t exist</span>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">specific_compute_folder</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -3585,10 +5317,551 @@
 </span><span id="__span-10-57"><a id="__codelineno-10-57" name="__codelineno-10-57" href="#__codelineno-10-57"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">specific_plans_with_results</span><span class="p">)</span><span class="si">}</span><span class="s2"> plans with results:&quot;</span><span class="p">)</span>
 </span><span id="__span-10-58"><a id="__codelineno-10-58" name="__codelineno-10-58" href="#__codelineno-10-58"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">specific_plans_with_results</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]])</span>
 </span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-06-02 18:07:17 - ras_commander.RasCmdr - INFO - Destination folder &#39;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113&#39; exists. Overwriting as per overwrite_dest=True.
+
+
+Executing specific plans in parallel...
+This subset usually runs faster than the all-plans batch, but it can still take several minutes.
+Selected plans: 06, 15, 17, 19
+Using 2 parallel workers, each with 2 cores
+Destination folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113
+
+
+2026-06-02 18:07:19 - ras_commander.RasCmdr - INFO - Copied project folder to destination: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113
+
+
+2026-06-02 18:07:19 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;15&#39;, &#39;17&#39;, &#39;19&#39;, &#39;06&#39;]
+
+
+2026-06-02 18:07:19 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 2 based on the number of plans to compute: 4
+
+
+2026-06-02 18:07:20 - ras_commander.RasCmdr - INFO - Created worker folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 1]
+
+
+2026-06-02 18:07:21 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 1]\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 18:07:21 - ras_commander.RasPrj - INFO - ras-commander v0.98.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 18:07:21 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 1]
+
+
+2026-06-02 18:07:21 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 18:07:21 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras_object.plan_df        Plans, HDF paths, geometry/flow associations
+  ras_object.geom_df        Geometry files and HDF preprocessor paths
+  ras_object.flow_df        Steady flow files
+  ras_object.unsteady_df    Unsteady flow files and configurations
+  ras_object.boundaries_df  Boundary conditions (type, name, location)
+  ras_object.results_df     Lightweight HDF results summaries
+  ras_object.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
+
+
+2026-06-02 18:07:22 - ras_commander.RasCmdr - INFO - Created worker folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 2]
+
+
+2026-06-02 18:07:23 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 2]\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 18:07:23 - ras_commander.RasPrj - INFO - ras-commander v0.98.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 18:07:23 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 2]
+
+
+2026-06-02 18:07:23 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 18:07:23 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras_object.plan_df        Plans, HDF paths, geometry/flow associations
+  ras_object.geom_df        Geometry files and HDF preprocessor paths
+  ras_object.flow_df        Steady flow files
+  ras_object.unsteady_df    Unsteady flow files and configurations
+  ras_object.boundaries_df  Boundary conditions (type, name, location)
+  ras_object.results_df     Lightweight HDF results summaries
+  ras_object.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
+
+
+2026-06-02 18:07:23 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 1]
+
+
+2026-06-02 18:07:23 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 2]
+
+
+2026-06-02 18:07:23 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 2]\BaldEagleDamBrk.p17
+
+
+2026-06-02 18:07:23 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 1]\BaldEagleDamBrk.p15
+
+
+2026-06-02 18:07:23 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 17
+
+
+2026-06-02 18:07:23 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 18:07:23 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 2]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 2]\BaldEagleDamBrk.p17&quot;
+
+
+2026-06-02 18:07:23 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 18:07:24 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 15
+
+
+2026-06-02 18:07:24 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 18:07:24 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 1]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 1]\BaldEagleDamBrk.p15&quot;
+
+
+2026-06-02 18:07:24 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 18:09:05 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 17
+
+
+2026-06-02 18:09:05 - ras_commander.RasCmdr - INFO - Total run time for plan 17: 101.62 seconds
+
+
+2026-06-02 18:09:05 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 18:09:05 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 1]
+
+
+2026-06-02 18:09:05 - ras_commander.RasCmdr - INFO - Plan 17 executed in worker 2: Successful
+
+
+2026-06-02 18:09:05 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 1]\BaldEagleDamBrk.p19
+
+
+2026-06-02 18:09:06 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 19
+
+
+2026-06-02 18:09:06 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 18:09:06 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 1]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 1]\BaldEagleDamBrk.p19&quot;
+
+
+2026-06-02 18:09:06 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 18:10:45 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 15
+
+
+2026-06-02 18:10:45 - ras_commander.RasCmdr - INFO - Total run time for plan 15: 201.07 seconds
+
+
+2026-06-02 18:10:45 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 18:10:45 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 2]
+
+
+2026-06-02 18:10:45 - ras_commander.RasCmdr - INFO - Plan 15 executed in worker 1: Successful
+
+
+2026-06-02 18:10:45 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 2]\BaldEagleDamBrk.p06
+
+
+2026-06-02 18:10:45 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 06
+
+
+2026-06-02 18:10:45 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 18:10:45 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 2]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113 [Worker 2]\BaldEagleDamBrk.p06&quot;
+
+
+2026-06-02 18:10:45 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 18:12:36 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 19
+
+
+2026-06-02 18:12:36 - ras_commander.RasCmdr - INFO - Total run time for plan 19: 210.22 seconds
+
+
+2026-06-02 18:12:36 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 18:12:36 - ras_commander.RasCmdr - INFO - Plan 19 executed in worker 1: Successful
+
+
+2026-06-02 18:16:37 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 06
+
+
+2026-06-02 18:16:37 - ras_commander.RasCmdr - INFO - Total run time for plan 06: 351.66 seconds
+
+
+2026-06-02 18:16:37 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 18:16:37 - ras_commander.RasCmdr - INFO - Plan 06 executed in worker 2: Successful
+
+
+2026-06-02 18:16:37 - ras_commander.RasCmdr - INFO - Consolidating results to destination folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113
+
+
+2026-06-02 18:16:42 - ras_commander.RasCmdr - INFO - Consolidated 18 worker artifact(s) to &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113
+
+
+2026-06-02 18:16:42 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 18:16:43 - ras_commander.RasCmdr - INFO - Re-initialized ras_object from destination folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113
+
+
+2026-06-02 18:16:43 - ras_commander.RasCmdr - INFO - 
+Execution Results:
+
+
+2026-06-02 18:16:43 - ras_commander.RasCmdr - INFO - Plan 17: Successful
+
+
+2026-06-02 18:16:43 - ras_commander.RasCmdr - INFO - Plan 15: Successful
+
+
+2026-06-02 18:16:43 - ras_commander.RasCmdr - INFO - Plan 19: Successful
+
+
+2026-06-02 18:16:43 - ras_commander.RasCmdr - INFO - Plan 06: Successful
+
+
+Parallel execution of specific plans completed in 565.60 seconds
+
+Execution Results:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>Plan</th>
+      <th>Success</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>3</th>
+      <td>06</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>15</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>0</th>
+      <td>17</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>19</td>
+      <td>True</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 7.0 at C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.7 Beta 5 at C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 5\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.7 Beta 4 at C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 4\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.6 at C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.5 at C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.4.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.4.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.3.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.3.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.3 at C:\Program Files (x86)\HEC\HEC-RAS\6.3\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.2 at C:\Program Files (x86)\HEC\HEC-RAS\6.2\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.0 at C:\Program Files (x86)\HEC\HEC-RAS\6.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.7 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.7\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.6 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.6\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.5 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.5\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.4 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.4\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.3 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.3\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.1 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0 at C:\Program Files (x86)\HEC\HEC-RAS\5.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 4.1.0 at C:\Program Files (x86)\HEC\HEC-RAS\4.1.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 4.0 at C:\Program Files (x86)\HEC\HEC-RAS\4.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:16:43 - ras_commander.RasUtils - INFO - Discovered 20 installed HEC-RAS version(s)
+
+
+2026-06-02 18:16:43 - ras_commander.RasPrj - INFO - HEC-RAS 7.0 found via version discovery: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 18:16:43 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 18:16:43 - ras_commander.RasPrj - INFO - ras-commander v0.98.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 18:16:43 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_specific_113
+
+
+2026-06-02 18:16:43 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 18:16:43 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras_object.plan_df        Plans, HDF paths, geometry/flow associations
+  ras_object.geom_df        Geometry files and HDF preprocessor paths
+  ras_object.flow_df        Steady flow files
+  ras_object.unsteady_df    Unsteady flow files and configurations
+  ras_object.boundaries_df  Boundary conditions (type, name, location)
+  ras_object.results_df     Lightweight HDF results summaries
+  ras_object.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
+
+
+
+Initialized specific compute project: BaldEagleDamBrk
+Found 11 plans with results:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>plan_number</th>
+      <th>HDF_Results_Path</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>13</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>15</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>17</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>18</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>19</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>03</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>04</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>02</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>01</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>05</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>06</td>
+      <td><workspace>...</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
 <h2 id="parallel-execution-with-max-workers-defined-by-physical-cores-dynamic-worker-allocation">Parallel Execution with Max Workers Defined by Physical Cores ("Dynamic Worker Allocation")<a class="headerlink" href="#parallel-execution-with-max-workers-defined-by-physical-cores-dynamic-worker-allocation" title="Permanent link">&para;</a></h2>
 <p>In this step, we'll determine the optimal number of workers based on the physical cores available on the system. This approach ensures that we make efficient use of the available hardware without overcommitting resources.</p>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Executing plans with dynamic worker allocation...&quot;</span><span class="p">)</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;This may take several minutes...&quot;</span><span class="p">)</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;This subset usually runs faster than the all-plans batch, but it can still take several minutes.&quot;</span><span class="p">)</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Create dynamic compute folder if it doesn&#39;t exist</span>
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">dynamic_compute_folder</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -3647,6 +5920,663 @@
 </span><span id="__span-11-58"><a id="__codelineno-11-58" name="__codelineno-11-58" href="#__codelineno-11-58"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">dynamic_plans_with_results</span><span class="p">)</span><span class="si">}</span><span class="s2"> plans with results:&quot;</span><span class="p">)</span>
 </span><span id="__span-11-59"><a id="__codelineno-11-59" name="__codelineno-11-59" href="#__codelineno-11-59"></a><span class="n">display</span><span class="o">.</span><span class="n">display</span><span class="p">(</span><span class="n">dynamic_plans_with_results</span><span class="p">[[</span><span class="s1">&#39;plan_number&#39;</span><span class="p">,</span> <span class="s1">&#39;HDF_Results_Path&#39;</span><span class="p">]])</span>
 </span></code></pre></div>
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-06-02 18:16:43 - ras_commander.RasCmdr - INFO - Destination folder &#39;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113&#39; exists. Overwriting as per overwrite_dest=True.
+
+
+Executing plans with dynamic worker allocation...
+This subset usually runs faster than the all-plans batch, but it can still take several minutes.
+System has 8 physical cores
+With 2 cores per worker, optimal worker count is 4
+Destination folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113
+
+
+2026-06-02 18:16:45 - ras_commander.RasCmdr - INFO - Copied project folder to destination: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113
+
+
+2026-06-02 18:16:45 - ras_commander.RasCmdr - INFO - Filtered plans to execute: [&#39;15&#39;, &#39;17&#39;, &#39;19&#39;, &#39;06&#39;]
+
+
+2026-06-02 18:16:45 - ras_commander.RasCmdr - INFO - Adjusted max_workers to 4 based on the number of plans to compute: 4
+
+
+2026-06-02 18:16:46 - ras_commander.RasCmdr - INFO - Created worker folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 1]
+
+
+2026-06-02 18:16:46 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 1]\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 18:16:47 - ras_commander.RasPrj - INFO - ras-commander v0.98.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 18:16:47 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 1]
+
+
+2026-06-02 18:16:47 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 18:16:47 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras_object.plan_df        Plans, HDF paths, geometry/flow associations
+  ras_object.geom_df        Geometry files and HDF preprocessor paths
+  ras_object.flow_df        Steady flow files
+  ras_object.unsteady_df    Unsteady flow files and configurations
+  ras_object.boundaries_df  Boundary conditions (type, name, location)
+  ras_object.results_df     Lightweight HDF results summaries
+  ras_object.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
+
+
+2026-06-02 18:16:48 - ras_commander.RasCmdr - INFO - Created worker folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 2]
+
+
+2026-06-02 18:16:48 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 2]\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 18:16:49 - ras_commander.RasPrj - INFO - ras-commander v0.98.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 18:16:49 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 2]
+
+
+2026-06-02 18:16:49 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 18:16:49 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras_object.plan_df        Plans, HDF paths, geometry/flow associations
+  ras_object.geom_df        Geometry files and HDF preprocessor paths
+  ras_object.flow_df        Steady flow files
+  ras_object.unsteady_df    Unsteady flow files and configurations
+  ras_object.boundaries_df  Boundary conditions (type, name, location)
+  ras_object.results_df     Lightweight HDF results summaries
+  ras_object.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
+
+
+2026-06-02 18:16:50 - ras_commander.RasCmdr - INFO - Created worker folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 3]
+
+
+2026-06-02 18:16:50 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 3]\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 18:16:51 - ras_commander.RasPrj - INFO - ras-commander v0.98.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 18:16:51 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 3]
+
+
+2026-06-02 18:16:51 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 18:16:51 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras_object.plan_df        Plans, HDF paths, geometry/flow associations
+  ras_object.geom_df        Geometry files and HDF preprocessor paths
+  ras_object.flow_df        Steady flow files
+  ras_object.unsteady_df    Unsteady flow files and configurations
+  ras_object.boundaries_df  Boundary conditions (type, name, location)
+  ras_object.results_df     Lightweight HDF results summaries
+  ras_object.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
+
+
+2026-06-02 18:16:52 - ras_commander.RasCmdr - INFO - Created worker folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 4]
+
+
+2026-06-02 18:16:52 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 4]\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 18:16:52 - ras_commander.RasPrj - INFO - ras-commander v0.98.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 18:16:52 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 4]
+
+
+2026-06-02 18:16:52 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 18:16:52 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras_object.plan_df        Plans, HDF paths, geometry/flow associations
+  ras_object.geom_df        Geometry files and HDF preprocessor paths
+  ras_object.flow_df        Steady flow files
+  ras_object.unsteady_df    Unsteady flow files and configurations
+  ras_object.boundaries_df  Boundary conditions (type, name, location)
+  ras_object.results_df     Lightweight HDF results summaries
+  ras_object.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
+
+
+2026-06-02 18:16:52 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 1]
+
+
+2026-06-02 18:16:53 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 2]
+
+
+2026-06-02 18:16:53 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 3]
+
+
+2026-06-02 18:16:53 - ras_commander.RasCmdr - INFO - Using ras_object with project folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 4]
+
+
+2026-06-02 18:16:53 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 1]\BaldEagleDamBrk.p15
+
+
+2026-06-02 18:16:53 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 3]\BaldEagleDamBrk.p19
+
+
+2026-06-02 18:16:53 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 4]\BaldEagleDamBrk.p06
+
+
+2026-06-02 18:16:53 - ras_commander.RasUtils - INFO - Successfully updated file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 2]\BaldEagleDamBrk.p17
+
+
+2026-06-02 18:16:53 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 15
+
+
+2026-06-02 18:16:53 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 18:16:53 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 1]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 1]\BaldEagleDamBrk.p15&quot;
+
+
+2026-06-02 18:16:53 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 18:16:54 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 06
+
+
+2026-06-02 18:16:54 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 18:16:54 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 4]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 4]\BaldEagleDamBrk.p06&quot;
+
+
+2026-06-02 18:16:54 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 18:16:54 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 19
+
+
+2026-06-02 18:16:54 - ras_commander.RasCmdr - INFO - Set number of cores to 2 for plan: 17
+
+
+2026-06-02 18:16:54 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 18:16:54 - ras_commander.RasCmdr - INFO - Running HEC-RAS from the Command Line:
+
+
+2026-06-02 18:16:54 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 3]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 3]\BaldEagleDamBrk.p19&quot;
+
+
+2026-06-02 18:16:54 - ras_commander.RasCmdr - INFO - Running command: &quot;C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe&quot; -c &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 2]\BaldEagleDamBrk.prj&quot; &quot;&lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113 [Worker 2]\BaldEagleDamBrk.p17&quot;
+
+
+2026-06-02 18:16:54 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 18:16:54 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog started — polling every 1.5s for RAS dialog windows
+
+
+2026-06-02 18:25:22 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 19
+
+
+2026-06-02 18:25:22 - ras_commander.RasCmdr - INFO - Total run time for plan 19: 508.74 seconds
+
+
+2026-06-02 18:25:22 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 18:25:23 - ras_commander.RasCmdr - INFO - Plan 19 executed in worker 3: Successful
+
+
+2026-06-02 18:27:08 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 15
+
+
+2026-06-02 18:27:08 - ras_commander.RasCmdr - INFO - Total run time for plan 15: 615.11 seconds
+
+
+2026-06-02 18:27:08 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 18:27:09 - ras_commander.RasCmdr - INFO - Plan 15 executed in worker 1: Successful
+
+
+2026-06-02 18:28:31 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 06
+
+
+2026-06-02 18:28:31 - ras_commander.RasCmdr - INFO - Total run time for plan 06: 697.54 seconds
+
+
+2026-06-02 18:28:31 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 18:28:31 - ras_commander.RasCmdr - INFO - Plan 06 executed in worker 4: Successful
+
+
+2026-06-02 18:28:46 - ras_commander.RasCmdr - INFO - HEC-RAS execution completed for plan: 17
+
+
+2026-06-02 18:28:46 - ras_commander.RasCmdr - INFO - Total run time for plan 17: 712.86 seconds
+
+
+2026-06-02 18:28:46 - ras_commander.RasDialogWatchdog - INFO - DialogWatchdog stopped — no dialogs encountered
+
+
+2026-06-02 18:28:47 - ras_commander.RasCmdr - INFO - Plan 17 executed in worker 2: Successful
+
+
+2026-06-02 18:28:47 - ras_commander.RasCmdr - INFO - Consolidating results to destination folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113
+
+
+2026-06-02 18:28:56 - ras_commander.RasCmdr - INFO - Consolidated 18 worker artifact(s) to &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113
+
+
+2026-06-02 18:28:57 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 18:28:57 - ras_commander.RasCmdr - INFO - Re-initialized ras_object from destination folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113
+
+
+2026-06-02 18:28:57 - ras_commander.RasCmdr - INFO - 
+Execution Results:
+
+
+2026-06-02 18:28:57 - ras_commander.RasCmdr - INFO - Plan 19: Successful
+
+
+2026-06-02 18:28:57 - ras_commander.RasCmdr - INFO - Plan 15: Successful
+
+
+2026-06-02 18:28:57 - ras_commander.RasCmdr - INFO - Plan 06: Successful
+
+
+2026-06-02 18:28:57 - ras_commander.RasCmdr - INFO - Plan 17: Successful
+
+
+Parallel execution with dynamic worker allocation completed in 733.62 seconds
+
+Execution Results:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>Plan</th>
+      <th>Success</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>2</th>
+      <td>06</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>15</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>17</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>0</th>
+      <td>19</td>
+      <td>True</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="language-text highlight"><span class="filename">Text Only</span><pre><span></span><code>2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 7.0 at C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.7 Beta 5 at C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 5\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.7 Beta 4 at C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 4\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.6 at C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.5 at C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.4.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.4.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.3.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.3.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.3 at C:\Program Files (x86)\HEC\HEC-RAS\6.3\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.2 at C:\Program Files (x86)\HEC\HEC-RAS\6.2\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.1 at C:\Program Files (x86)\HEC\HEC-RAS\6.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 6.0 at C:\Program Files (x86)\HEC\HEC-RAS\6.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.7 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.7\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.6 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.6\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.5 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.5\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.4 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.4\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.3 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.3\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0.1 at C:\Program Files (x86)\HEC\HEC-RAS\5.0.1\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 5.0 at C:\Program Files (x86)\HEC\HEC-RAS\5.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 4.1.0 at C:\Program Files (x86)\HEC\HEC-RAS\4.1.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered HEC-RAS 4.0 at C:\Program Files (x86)\HEC\HEC-RAS\4.0\Ras.exe via filesystem (x86)
+
+
+2026-06-02 18:28:57 - ras_commander.RasUtils - INFO - Discovered 20 installed HEC-RAS version(s)
+
+
+2026-06-02 18:28:57 - ras_commander.RasPrj - INFO - HEC-RAS 7.0 found via version discovery: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 18:28:57 - ras_commander.RasMap - INFO - Successfully parsed RASMapper file: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113\BaldEagleDamBrk.rasmap
+
+
+2026-06-02 18:28:57 - ras_commander.RasPrj - INFO - ras-commander v0.98.0 | An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | Docs: https://ras-commander.readthedocs.io | GitHub: https://github.com/gpt-cmdr/ras-commander
+
+
+2026-06-02 18:28:57 - ras_commander.RasPrj - INFO - Project initialized: BaldEagleDamBrk | Folder: &lt;workspace&gt;\examples\example_projects\compute_test_parallel_dynamic_113
+
+
+2026-06-02 18:28:57 - ras_commander.RasPrj - INFO - Using HEC-RAS executable: C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe
+
+
+2026-06-02 18:28:57 - ras_commander.RasPrj - INFO - 
+═══════════════════════════════════════════════════════════════════════
+ras-commander | HEC-RAS Automation Library
+Docs: https://gpt-cmdr.github.io/ras-commander/
+Repo: https://github.com/gpt-cmdr/ras-commander
+═══════════════════════════════════════════════════════════════════════
+
+PROJECT DATAFRAMES (single source of truth — use these, not file globbing):
+  ras_object.plan_df        Plans, HDF paths, geometry/flow associations
+  ras_object.geom_df        Geometry files and HDF preprocessor paths
+  ras_object.flow_df        Steady flow files
+  ras_object.unsteady_df    Unsteady flow files and configurations
+  ras_object.boundaries_df  Boundary conditions (type, name, location)
+  ras_object.results_df     Lightweight HDF results summaries
+  ras_object.rasmap_df      RASMapper layers, terrain, land cover paths
+
+KEY APIS (static classes — call directly, never instantiate):
+  Execution:    RasCmdr.compute_plan() / compute_parallel() / compute_test_mode()
+  Plan Files:   RasPlan.clone_plan() / clone_geom() / set_geom()
+  Unsteady:     RasUnsteady — IC/BC management, gate openings, precipitation
+  Geometry:     GeomCrossSection, GeomBridge, GeomStorage, GeomLateral, GeomMesh
+  HDF Results:  HdfResultsPlan.get_wse() / get_compute_messages()
+                HdfResultsMesh.get_mesh_max_ws() / get_mesh_cells_timeseries()
+                HdfMesh.get_mesh_cell_points()
+  QA/QC:        RasCheck.run_check() / RasFixit (geometry repair)
+  DSS:          RasDss.get_timeseries() / check_pathname()
+  USGS:         UsgsGaugeSpatial, GaugeMatcher, RasUsgsBoundaryGeneration
+  Precipitation: StormGenerator, Atlas14Storm, PrecipAorc, Atlas14Variance
+  Terrain:      RasTerrain.create_terrain_hdf() / RasTerrainMod
+
+MULTI-PROJECT: Pass ras_object= to all API calls when using local RasPrj instances.
+
+EXAMPLES: 100+ notebooks in examples/ (100s=execution, 200s=geometry, 300s=unsteady,
+  400s=HDF results, 500s=remote, 800s=QA/QC, 900s=data integration).
+  Review relevant notebooks before assembling new workflows.
+
+PLATFORM: Most HEC-RAS operations require Windows. Linux/Wine support for
+  headless execution, data access, geometry modification, and preprocessing
+  is available via RasProcess (HEC-RAS 6.6+). See ras_commander/RasProcess.py.
+  Remote distributed execution: ras_commander/remote/ (PsExec, Docker, SSH, cloud).
+═══════════════════════════════════════════════════════════════════════
+
+
+
+Initialized dynamic compute project: BaldEagleDamBrk
+Found 11 plans with results:
+</code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>plan_number</th>
+      <th>HDF_Results_Path</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>13</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>15</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>17</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>18</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>19</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>03</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>04</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>02</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>01</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>05</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>06</td>
+      <td><workspace>...</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
 <h2 id="performance-comparison">Performance Comparison<a class="headerlink" href="#performance-comparison" title="Permanent link">&para;</a></h2>
 <p>Let's compare the performance of the different parallel execution approaches we've tried. This will help us understand the impact of worker count and plan selection on execution time.</p>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Create a DataFrame for individual plan runtimes</span>
@@ -3730,11 +6660,426 @@
 </span><span id="__span-12-79"><a id="__codelineno-12-79" name="__codelineno-12-79" href="#__codelineno-12-79"></a><span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
 </span><span id="__span-12-80"><a id="__codelineno-12-80" name="__codelineno-12-80" href="#__codelineno-12-80"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </span></code></pre></div>
+<p><img alt="png" src="../113_parallel_execution_files/113_parallel_execution_23_0.png" /></p>
 <h2 id="viewing-execution-summary-with-results_df">Viewing Execution Summary with results_df<a class="headerlink" href="#viewing-execution-summary-with-results_df" title="Permanent link">&para;</a></h2>
 <p>After parallel execution, verify all plans completed successfully.</p>
 <div class="language-python highlight"><span class="filename">Python</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Display execution summary from results_df</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">computed_project</span><span class="o">.</span><span class="n">results_df</span><span class="o">.</span><span class="n">T</span>
 </span></code></pre></div>
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>0</th>
+      <th>1</th>
+      <th>2</th>
+      <th>3</th>
+      <th>4</th>
+      <th>5</th>
+      <th>6</th>
+      <th>7</th>
+      <th>8</th>
+      <th>9</th>
+      <th>10</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>plan_number</th>
+      <td>13</td>
+      <td>15</td>
+      <td>17</td>
+      <td>18</td>
+      <td>19</td>
+      <td>03</td>
+      <td>04</td>
+      <td>02</td>
+      <td>01</td>
+      <td>05</td>
+      <td>06</td>
+    </tr>
+    <tr>
+      <th>plan_title</th>
+      <td>PMF with Multi 2D Areas</td>
+      <td>1d-2D Dambreak Refined Grid</td>
+      <td>2D to 1D No Dam</td>
+      <td>2D to 2D Run</td>
+      <td>SA to 2D Dam Break Run</td>
+      <td>Single 2D Area - Internal Dam Structure</td>
+      <td>SA to 2D Area Conn - 2D Levee Structure</td>
+      <td>SA to Detailed 2D Breach</td>
+      <td>SA to Detailed 2D Breach FEQ</td>
+      <td>Single 2D area with Bridges FEQ</td>
+      <td>Gridded Precip - Infiltration</td>
+    </tr>
+    <tr>
+      <th>flow_type</th>
+      <td>Unsteady</td>
+      <td>Unsteady</td>
+      <td>Unsteady</td>
+      <td>Unsteady</td>
+      <td>Unsteady</td>
+      <td>Unsteady</td>
+      <td>Unsteady</td>
+      <td>Unsteady</td>
+      <td>Unsteady</td>
+      <td>Unsteady</td>
+      <td>Unsteady</td>
+    </tr>
+    <tr>
+      <th>hdf_path</th>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+      <td><workspace>...</td>
+    </tr>
+    <tr>
+      <th>hdf_exists</th>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>hdf_file_modified</th>
+      <td>2026-06-02 15:14:48.372137</td>
+      <td>2026-06-02 18:27:08.556418</td>
+      <td>2026-06-02 18:28:46.593976</td>
+      <td>2026-06-02 15:14:17.970424</td>
+      <td>2026-06-02 18:25:22.437224</td>
+      <td>2026-06-02 15:24:47.856257</td>
+      <td>2026-06-02 15:29:49.780633</td>
+      <td>2026-06-02 16:27:42.920709</td>
+      <td>2026-06-02 18:07:06.421704</td>
+      <td>2026-06-02 16:41:42.452590</td>
+      <td>2026-06-02 18:28:31.192258</td>
+    </tr>
+    <tr>
+      <th>ras_version</th>
+      <td>5.10</td>
+      <td>5.10</td>
+      <td>5.00</td>
+      <td>5.00</td>
+      <td>5.00</td>
+      <td>5.04</td>
+      <td>5.00</td>
+      <td>5.10</td>
+      <td>5.03</td>
+      <td>5.10</td>
+      <td>6.00</td>
+    </tr>
+    <tr>
+      <th>completed</th>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+      <td>True</td>
+    </tr>
+    <tr>
+      <th>has_errors</th>
+      <td>False</td>
+      <td>False</td>
+      <td>True</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+    </tr>
+    <tr>
+      <th>has_warnings</th>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+      <td>False</td>
+    </tr>
+    <tr>
+      <th>error_count</th>
+      <td>0</td>
+      <td>0</td>
+      <td>47</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <th>warning_count</th>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <th>first_error_line</th>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>03JAN1999 01:21:00&nbsp;&nbsp;&nbsp;&nbsp;1D/2D Flow error\t&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>runtime_simulation_start</th>
+      <td>1999-01-01 12:00:00</td>
+      <td>1999-01-01 12:00:00</td>
+      <td>1999-01-01 12:00:00</td>
+      <td>1999-01-01 12:00:00</td>
+      <td>1999-01-01 12:00:00</td>
+      <td>1999-01-01 12:00:00</td>
+      <td>1999-01-01 12:00:00</td>
+      <td>1999-01-01 12:00:00</td>
+      <td>1999-01-01 12:00:00</td>
+      <td>1999-01-01 12:00:00</td>
+      <td>2018-09-09 00:00:00</td>
+    </tr>
+    <tr>
+      <th>runtime_simulation_end</th>
+      <td>1999-01-04 12:00:00</td>
+      <td>1999-01-04 12:00:00</td>
+      <td>1999-01-06 12:00:00</td>
+      <td>1999-01-04 12:00:00</td>
+      <td>1999-01-04 12:00:00</td>
+      <td>1999-01-04 12:00:00</td>
+      <td>1999-01-04 12:00:00</td>
+      <td>1999-01-04 12:00:00</td>
+      <td>1999-01-04 12:00:00</td>
+      <td>1999-01-04 12:00:00</td>
+      <td>2018-09-14 00:00:00</td>
+    </tr>
+    <tr>
+      <th>runtime_simulation_hours</th>
+      <td>72.0</td>
+      <td>72.0</td>
+      <td>120.0</td>
+      <td>72.0</td>
+      <td>72.0</td>
+      <td>72.0</td>
+      <td>72.0</td>
+      <td>72.0</td>
+      <td>72.0</td>
+      <td>72.0</td>
+      <td>120.0</td>
+    </tr>
+    <tr>
+      <th>runtime_complete_process_hours</th>
+      <td>0.043481</td>
+      <td>0.170287</td>
+      <td>0.197483</td>
+      <td>0.035165</td>
+      <td>0.140834</td>
+      <td>0.165556</td>
+      <td>0.229514</td>
+      <td>1.188299</td>
+      <td>2.79579</td>
+      <td>1.280655</td>
+      <td>0.193138</td>
+    </tr>
+    <tr>
+      <th>runtime_unsteady_compute_hours</th>
+      <td>0.020864</td>
+      <td>0.168511</td>
+      <td>0.194193</td>
+      <td>0.033199</td>
+      <td>0.140391</td>
+      <td>0.162526</td>
+      <td>0.227149</td>
+      <td>1.178767</td>
+      <td>2.785564</td>
+      <td>1.238103</td>
+      <td>0.189592</td>
+    </tr>
+    <tr>
+      <th>runtime_complete_process_speed</th>
+      <td>1655.891447</td>
+      <td>422.816427</td>
+      <td>607.647924</td>
+      <td>2047.490402</td>
+      <td>511.241595</td>
+      <td>434.898599</td>
+      <td>313.706126</td>
+      <td>60.590817</td>
+      <td>25.75301</td>
+      <td>56.221218</td>
+      <td>621.317221</td>
+    </tr>
+    <tr>
+      <th>runtime_source</th>
+      <td>hdf</td>
+      <td>hdf</td>
+      <td>hdf</td>
+      <td>hdf</td>
+      <td>hdf</td>
+      <td>hdf</td>
+      <td>hdf</td>
+      <td>hdf</td>
+      <td>hdf</td>
+      <td>hdf</td>
+      <td>hdf</td>
+    </tr>
+    <tr>
+      <th>vol_error</th>
+      <td>2009.016724</td>
+      <td>-6.940927</td>
+      <td>9.184675</td>
+      <td>1.521607</td>
+      <td>161.813583</td>
+      <td>112.083275</td>
+      <td>2.602982</td>
+      <td>28.357374</td>
+      <td>-4.672427</td>
+      <td>2.025828</td>
+      <td>0.610979</td>
+    </tr>
+    <tr>
+      <th>vol_accounting_units</th>
+      <td>Acre Feet</td>
+      <td>Acre Feet</td>
+      <td>Acre Feet</td>
+      <td>Acre Feet</td>
+      <td>Acre Feet</td>
+      <td>Acre Feet</td>
+      <td>Acre Feet</td>
+      <td>Acre Feet</td>
+      <td>Acre Feet</td>
+      <td>Acre Feet</td>
+      <td>Acre Feet</td>
+    </tr>
+    <tr>
+      <th>vol_error_percent</th>
+      <td>0.282184</td>
+      <td>0.001816</td>
+      <td>0.001201</td>
+      <td>0.000371</td>
+      <td>0.040804</td>
+      <td>0.029283</td>
+      <td>0.000683</td>
+      <td>0.007436</td>
+      <td>0.001225</td>
+      <td>0.001059</td>
+      <td>0.000431</td>
+    </tr>
+    <tr>
+      <th>vol_flux_in</th>
+      <td>607006.625</td>
+      <td>278420.125</td>
+      <td>760489.3125</td>
+      <td>381170.5625</td>
+      <td>381170.5625</td>
+      <td>381177.34375</td>
+      <td>381170.5625</td>
+      <td>381163.78125</td>
+      <td>381160.40625</td>
+      <td>190580.203125</td>
+      <td>141685.265625</td>
+    </tr>
+    <tr>
+      <th>vol_flux_out</th>
+      <td>660613.75</td>
+      <td>349243.84375</td>
+      <td>729456.3125</td>
+      <td>196073.34375</td>
+      <td>325873.21875</td>
+      <td>288000.5</td>
+      <td>253404.140625</td>
+      <td>254911.015625</td>
+      <td>224436.890625</td>
+      <td>21308.738281</td>
+      <td>17253.21875</td>
+    </tr>
+    <tr>
+      <th>vol_starting</th>
+      <td>104960.460938</td>
+      <td>103790.21875</td>
+      <td>4116.184082</td>
+      <td>29444.158203</td>
+      <td>28961.443359</td>
+      <td>1583.755249</td>
+      <td>76805.59375</td>
+      <td>76801.25</td>
+      <td>76799.179688</td>
+      <td>786.341003</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>vol_ending</th>
+      <td>53362.351562</td>
+      <td>32959.53125</td>
+      <td>35158.375</td>
+      <td>214542.90625</td>
+      <td>84420.617188</td>
+      <td>94872.6875</td>
+      <td>204574.625</td>
+      <td>203082.390625</td>
+      <td>233518.03125</td>
+      <td>170059.828125</td>
+      <td>124432.664062</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
 <h2 id="summary-of-parallel-plan-execution">Summary of Parallel Plan Execution<a class="headerlink" href="#summary-of-parallel-plan-execution" title="Permanent link">&para;</a></h2>
 <p>In this notebook, we've explored how to execute HEC-RAS plans in parallel using the RAS Commander library. Here's a summary of the key techniques we've covered:</p>
 <h3 id="core-techniques">Core Techniques<a class="headerlink" href="#core-techniques" title="Permanent link">&para;</a></h3>
@@ -3846,7 +7191,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 4, 2026 04:23:18 UTC">June 4, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 4, 2026 12:05:02 UTC">June 4, 2026</span>
   </span>
 
     
@@ -3856,7 +7201,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 4, 2026 04:23:18 UTC">June 4, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 4, 2026 12:05:02 UTC">June 4, 2026</span>
   </span>
 
     
