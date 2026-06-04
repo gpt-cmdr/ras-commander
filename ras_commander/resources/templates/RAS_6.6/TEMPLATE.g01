@@ -1,0 +1,15 @@
+Geom Title=New Geometry
+Program Version=6.60
+Viewing Rectangle= 0 , 1 , 1 , 0 
+
+LCMann Time=Dec/30/1899 00:00:00
+LCMann Region Time=Dec/30/1899 00:00:00
+LCMann Table=0
+Chan Stop Cuts=-1 
+
+
+
+Use User Specified Reach Order=0
+GIS Ratio Cuts To Invert=-1
+GIS Limit At Bridges=0
+Composite Channel Slope=5

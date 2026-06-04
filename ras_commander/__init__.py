@@ -20,7 +20,7 @@ except PackageNotFoundError:
 setup_logging()
 
 # Core functionality
-from .RasPrj import RasPrj, init_ras_project, get_ras_exe, ras
+from .RasPrj import RasPrj, init_ras_project, get_ras_exe, ras, create_project_from_template
 from .RasPlan import RasPlan
 from .RasGeo import RasGeo  # DEPRECATED - use geom subpackage
 from .RasGeometry import RasGeometry  # DEPRECATED - use geom subpackage
@@ -98,6 +98,7 @@ from .hdf import (
     HdfBase, HdfUtils, HdfPlan,
     HdfMesh, HdfXsec, HdfBndry, HdfStruc, HdfStorageArea, HdfHydraulicTables,
     HdfResultsPlan, HdfResultsMesh, HdfResultsQuery, HdfResultsXsec, HdfResultsBreach,
+    HdfResultsSediment,
     HdfPipe, HdfPump, HdfInfiltration, HdfLandCover,
     HdfPlot, HdfResultsPlot,
     HdfFluvialPluvial, HdfBenefitAreas, HdfChannelCapacity, HdfResultsAnalysis,
@@ -173,7 +174,7 @@ def __getattr__(name):
 # Define __all__ to specify what should be imported when using "from ras_commander import *"
 __all__ = [
     # Core functionality
-    'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras',
+    'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras', 'create_project_from_template',
     'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils',
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
     'PreprocessResult', 'GeometryPreprocessResult',
@@ -231,7 +232,7 @@ __all__ = [
 
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan', 'HdfProject',
-    'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsQuery', 'HdfResultsXsec',
+    'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsQuery', 'HdfResultsXsec', 'HdfResultsSediment',
     'HdfStruc', 'HdfStorageArea', 'HdfUtils', 'HdfXsec', 'HdfPump',
     'HdfPipe', 'HdfInfiltration', 'HdfLandCover', 'HdfHydraulicTables', 'HdfResultsBreach', 'RasBreach',
     'HdfBenefitAreas', 'HdfChannelCapacity', 'HdfResultsAnalysis',
