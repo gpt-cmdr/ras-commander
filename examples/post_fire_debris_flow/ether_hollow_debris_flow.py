@@ -218,6 +218,10 @@ def main() -> int:
                     help="base Manning's n for the 2D area. The template default "
                          "0.04 is a smooth-channel value; post-fire ash/rilled/"
                          "debris-strewn steep terrain is ~0.06-0.10.")
+    ap.add_argument("--inflow-at", choices=["head", "outlet"], default="head",
+                    help="inflow BC placement: 'head' = highest-elevation perimeter "
+                         "(basin head, whole-basin routing); 'outlet' = perimeter "
+                         "nearest the basin outlet/fan apex (basin = hydrology only)")
     ap.add_argument("--inflow-width-ft", type=float, default=200.0,
                     help="span of the upstream inflow BC line along the domain edge")
     ap.add_argument("--outflow-width-ft", type=float, default=300.0,
@@ -394,11 +398,16 @@ def main() -> int:
         print(f"[data] inflow hydrograph: {len(cfs)} ords @1MIN, "
               f"peak {max(cfs):.0f} cfs at min {cfs.index(max(cfs))+1}")
 
+        # basin outlet / fan apex in feet CRS (for the --inflow-at outlet placement)
+        from shapely.geometry import Point as _Point
+        outlet_ft = gpd.GeoSeries([_Point(*outlet_xy)], crs=src_crs_data).to_crs(feet_crs).iloc[0]
+        (prep / "outlet_ft.json").write_text(
+            json.dumps([float(outlet_ft.x), float(outlet_ft.y)]), encoding="utf-8")
         # copy the model-CRS projection into prep so the build phase can read it
         # from the default prep dir (when --data-dir is not passed explicitly).
-        import shutil
-        shutil.copy2(data_dir / "DebrisProjection_USCust.prj",
-                     prep / "DebrisProjection_USCust.prj")
+        import shutil as _shutil
+        _shutil.copy2(data_dir / "DebrisProjection_USCust.prj",
+                      prep / "DebrisProjection_USCust.prj")
 
         status({"phase": "data", "ok": True, "basin": info,
                 "perimeter_verts": len(ring), "hydrograph_ords": len(cfs),
@@ -456,8 +465,15 @@ def main() -> int:
         #     (corridor/fan toe). Sample the feet terrain at each ring vertex to
         #     locate them; friction slope = local bed slope above the outflow.
         elevs = _sample_terrain_elev(dem_ft, ring)
-        inflow_pts = _pick_bc_segment(ring, elevs, "high", args.inflow_width_ft)
         outflow_pts = _pick_bc_segment(ring, elevs, "low", args.outflow_width_ft)
+        outlet_json = ddir / "outlet_ft.json"
+        if args.inflow_at == "outlet" and outlet_json.exists():
+            outlet_pt = json.loads(outlet_json.read_text(encoding="utf-8"))
+            inflow_pts = _pick_bc_segment_near(ring, outlet_pt, args.inflow_width_ft)
+            print(f"[build] inflow at OUTLET/apex near {[round(v) for v in outlet_pt]}")
+        else:
+            inflow_pts = _pick_bc_segment(ring, elevs, "high", args.inflow_width_ft)
+            print("[build] inflow at basin HEAD (highest-elevation perimeter)")
         cx = sum(p[0] for p in ring) / len(ring)
         cy = sum(p[1] for p in ring) / len(ring)
         fslope = _bed_slope(dem_ft, outflow_pts, (cx, cy))
@@ -467,7 +483,7 @@ def main() -> int:
         ])
         (wd / "bc_meta.json").write_text(json.dumps({
             "inflow_name": "Inflow", "outflow_name": "Outflow",
-            "friction_slope": round(fslope, 5),
+            "friction_slope": round(fslope, 5), "inflow_at": args.inflow_at,
             "inflow_verts": len(inflow_pts), "outflow_verts": len(outflow_pts),
         }), encoding="utf-8")
         print(f"[build] BC lines: Inflow({len(inflow_pts)} pts) + "
@@ -597,7 +613,7 @@ def main() -> int:
             print(f"\n[run] === variant {vname} (nn={nn}) ===")
             cres = RasCmdr.compute_plan("01", num_cores=2)
             res = _results_summary(plan_hdf, geom_hdf, "DebrisFlowArea")
-            inflow = _inflow_volume(plan_hdf, "DebrisFlowArea")   # mass-balance QA
+            inflow = _inflow_volume(plan_hdf, "DebrisFlowArea")
             if res is not None and inflow is not None:
                 res = {**res, **inflow}
             try:                                   # persist each variant's plan HDF
@@ -607,7 +623,8 @@ def main() -> int:
                 print(f"[run] WARNING: could not persist {vname} HDF: {e}")
             allres[vname] = res
             status({"phase": "run", "variant": vname, "nn": nn,
-                    "mannings_n": args.mannings_n,
+                    "mannings_n": args.mannings_n, "cell_size_ft": args.cell_size_ft,
+                    "inflow_at": bcm.get("inflow_at", args.inflow_at),
                     "ok": bool(cres) and res is not None, "results": res,
                     "sim_hours": args.sim_hours, "comp_interval": args.comp_interval,
                     "compute_result": str(cres)[:120]})
@@ -671,6 +688,28 @@ def _pick_bc_segment(ring, elevs, mode, span_ft):
             for j in range(-k, k + 1)]
 
 
+def _pick_bc_segment_near(ring, pt, span_ft):
+    """Contiguous perimeter run centred on the vertex nearest point ``pt`` (e.g.
+    the basin outlet / fan apex), grown until it spans ~span_ft."""
+    pts = ring[:-1] if ring and list(ring[0]) == list(ring[-1]) else list(ring)
+    n = len(pts)
+    c = min(range(n), key=lambda i: (pts[i][0] - pt[0]) ** 2 + (pts[i][1] - pt[1]) ** 2)
+
+    def seglen(idxs):
+        return sum(math.hypot(pts[idxs[i + 1]][0] - pts[idxs[i]][0],
+                              pts[idxs[i + 1]][1] - pts[idxs[i]][1])
+                   for i in range(len(idxs) - 1))
+
+    k = 1
+    while True:
+        idxs = [(c + j) % n for j in range(-k, k + 1)]
+        if seglen(idxs) >= span_ft or (2 * k + 1) >= n:
+            break
+        k += 1
+    return [[float(pts[(c + j) % n][0]), float(pts[(c + j) % n][1])]
+            for j in range(-k, k + 1)]
+
+
 def _bed_slope(dem_path, outflow_pts, centroid_xy, probe_ft=400.0,
                lo=0.002, hi=0.5, default=0.02):
     """Local bed slope just above the outflow line (Δelev over probe_ft toward
@@ -690,11 +729,10 @@ def _nn_block(nn):
     """Full HEC-RAS Non-Newtonian block for the .u## (templated from a real
     fixture, exact keys incl. the HEC-RAS misspelling 'User Yeild'). nn keys:
     method (1=Bingham), cv, user_yield (Pa), user_viscosity (Pa*s),
-    bulking (1=Bulk Fluid Volume), max_cv.
-
-    NOTE: HEC-RAS stores volumetric concentration in PERCENT (70 = 70%). nn['cv']
-    is a fraction (0.70) for the bulking-factor math; it is written ×100 here.
-    Writing the fraction makes HEC-RAS read 0.7% -> bulking 1.007× instead of 3.33×."""
+    bulking (1=Bulk Fluid Volume), max_cv."""
+    # HEC-RAS stores volumetric concentration in PERCENT (70 = 70%), not a
+    # fraction. nn['cv'] is kept as a fraction (0.70) for the bulking-factor math;
+    # write it ×100 here. (Writing 0.70 makes HEC-RAS read 0.7% -> bulking 1.007×.)
     cv_pct = nn["cv"] * 100.0
     maxcv_pct = nn.get("max_cv", 0.75) * 100.0
     return [
