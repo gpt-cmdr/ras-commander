@@ -14,10 +14,9 @@ US Customary (feet) HEC-RAS 7.0 model of a single high-hazard basin from the
 Later phases (BC + bulked inflow, clear-water run, Bingham NN sensitivity,
 compare + hazard maps) build on the meshed project this produces.
 
-Inputs live under ``<root>/data/ether_hollow`` (the USGS DF-prediction shapefiles,
-the projection .prj, and the HMS hydrograph workbook); 3DEP lidar is downloaded on
-demand. The ``build`` and ``run`` phases drive HEC-RAS and must run on Windows in
-an interactive desktop session. See README.md in this folder.
+Inputs live under <root>/data/ether_hollow (USGS DF predictions, projection .prj,
+HMS hydrograph); 3DEP lidar is downloaded on demand. build/run drive HEC-RAS on
+Windows in an interactive session. See README.md.
 """
 from __future__ import annotations
 
@@ -231,6 +230,10 @@ def main() -> int:
     ap.add_argument("--comp-interval", default="1SEC",
                     help="HEC-RAS computation interval; small to keep Courant in "
                          "check on the steep 33 ft mesh (5SEC went unstable)")
+    ap.add_argument("--equation-set", choices=["SWE-ELM", "DWE"], default="SWE-ELM",
+                    help="2D equation set. Full Momentum (SWE-ELM) is REQUIRED for "
+                         "non-Newtonian/mobile-bed debris flow — Diffusion Wave (DWE) "
+                         "drops the inertial terms and is not applicable here.")
     ap.add_argument("--yields", default="700,2500",
                     help="comma list of Bingham yield stresses (Pa) to run as NN "
                          "variants, alongside a clear-water baseline")
@@ -609,7 +612,11 @@ def main() -> int:
                 f"Run WQ= 0\nRun PostProcess=-1\nRun RASMapper= 0\nShort ID={vname[:24]}\n"
                 f"Simulation Date=01JAN2000,0000,{end}\n"
                 f"Computation Interval={args.comp_interval}\nOutput Interval=1MIN\n"
-                "Instantaneous Interval=1MIN\nMapping Interval=1MIN\n", encoding="utf-8")
+                "Instantaneous Interval=1MIN\nMapping Interval=1MIN\n"
+                # 2D equation set: 1 = SWE-ELM (Full Momentum), required for
+                # non-Newtonian debris flow; 0 = Diffusion Wave (not applicable).
+                f"UNET D2 Equation= {1 if args.equation_set == 'SWE-ELM' else 0} \n",
+                encoding="utf-8")
             print(f"\n[run] === variant {vname} (nn={nn}) ===")
             cres = RasCmdr.compute_plan("01", num_cores=2)
             res = _results_summary(plan_hdf, geom_hdf, "DebrisFlowArea")
