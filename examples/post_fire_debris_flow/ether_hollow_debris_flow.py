@@ -394,6 +394,12 @@ def main() -> int:
         print(f"[data] inflow hydrograph: {len(cfs)} ords @1MIN, "
               f"peak {max(cfs):.0f} cfs at min {cfs.index(max(cfs))+1}")
 
+        # copy the model-CRS projection into prep so the build phase can read it
+        # from the default prep dir (when --data-dir is not passed explicitly).
+        import shutil
+        shutil.copy2(data_dir / "DebrisProjection_USCust.prj",
+                     prep / "DebrisProjection_USCust.prj")
+
         status({"phase": "data", "ok": True, "basin": info,
                 "perimeter_verts": len(ring), "hydrograph_ords": len(cfs),
                 "peak_cfs": max(cfs),
@@ -591,6 +597,9 @@ def main() -> int:
             print(f"\n[run] === variant {vname} (nn={nn}) ===")
             cres = RasCmdr.compute_plan("01", num_cores=2)
             res = _results_summary(plan_hdf, geom_hdf, "DebrisFlowArea")
+            inflow = _inflow_volume(plan_hdf, "DebrisFlowArea")   # mass-balance QA
+            if res is not None and inflow is not None:
+                res = {**res, **inflow}
             try:                                   # persist each variant's plan HDF
                 if plan_hdf.exists():
                     shutil.copy2(plan_hdf, wd / f"result_{vname}.p01.hdf")
@@ -605,11 +614,12 @@ def main() -> int:
             print(f"[run] {vname}: {res}")
 
         print("\n=== variant comparison (max over domain) ===")
-        print(f"  {'variant':18s} {'maxV(fps)':>9} {'maxD(ft)':>9} "
+        print(f"  {'variant':18s} {'inflowQ':>8} {'maxV(fps)':>9} {'maxD(ft)':>9} "
               f"{'meanD(ft)':>9} {'wet':>6}")
         for vname, res in allres.items():
             if res:
-                print(f"  {vname:18s} {res.get('max_vel_fps','-'):>9} "
+                print(f"  {vname:18s} {res.get('inflow_peak_cfs','-'):>8} "
+                      f"{res.get('max_vel_fps','-'):>9} "
                       f"{res.get('max_depth_ft','-'):>9} {res.get('mean_depth_ft','-'):>9} "
                       f"{res.get('wet_cells','-'):>6}")
         return 0 if any(allres.values()) else 1
@@ -680,10 +690,16 @@ def _nn_block(nn):
     """Full HEC-RAS Non-Newtonian block for the .u## (templated from a real
     fixture, exact keys incl. the HEC-RAS misspelling 'User Yeild'). nn keys:
     method (1=Bingham), cv, user_yield (Pa), user_viscosity (Pa*s),
-    bulking (1=Bulk Fluid Volume), max_cv."""
+    bulking (1=Bulk Fluid Volume), max_cv.
+
+    NOTE: HEC-RAS stores volumetric concentration in PERCENT (70 = 70%). nn['cv']
+    is a fraction (0.70) for the bulking-factor math; it is written ×100 here.
+    Writing the fraction makes HEC-RAS read 0.7% -> bulking 1.007× instead of 3.33×."""
+    cv_pct = nn["cv"] * 100.0
+    maxcv_pct = nn.get("max_cv", 0.75) * 100.0
     return [
         f"Non-Newtonian Method= {nn['method']} ,",
-        f"Non-Newtonian Constant Vol Conc={nn['cv']}",
+        f"Non-Newtonian Constant Vol Conc={cv_pct:g}",
         "Non-Newtonian Yield Method= 1 ,",          # User Yield
         "Non-Newtonian Yield Coef=0, 0",
         f"User Yeild=   {nn['user_yield']}",          # sic: HEC-RAS key is misspelled
@@ -697,7 +713,7 @@ def _nn_block(nn):
         "Non-Newtonian Hindered FV= 0",
         "Non-Newtonian FV K=0",
         "Non-Newtonian ds=0",
-        f"Non-Newtonian Max Cv={nn.get('max_cv', 0.75)}",
+        f"Non-Newtonian Max Cv={maxcv_pct:g}",
         f"Non-Newtonian Bulking Method= {nn['bulking']} ,",
         "Non-Newtonian High C Transport= 0 ,",
         "Viscosity=1000,,,",
@@ -731,6 +747,27 @@ def write_unsteady_2d(path, area, inflow_name, hydro_cfs, interval,
     if nn:
         L += _nn_block(nn)   # global rheology block (mud/debris flow)
     Path(path).write_text("\n".join(L) + "\n", encoding="utf-8")
+
+
+def _inflow_volume(plan_hdf, area):
+    """Realized inflow (peak cfs, volume m3) from the BC flow-per-face time series
+    — a mass-balance QA: bulked NN runs should show ~1/(1-Cv)x the clear volume."""
+    import h5py
+    import numpy as np
+    tsb = ("Results/Unsteady/Output/Output Blocks/Base Output/"
+           f"Unsteady Time Series/2D Flow Areas/{area}/Boundary Conditions")
+    try:
+        with h5py.File(plan_hdf, "r") as f:
+            fpf = f.get(f"{tsb}/Inflow - Flow per Face")
+            if fpf is None:
+                return None
+            tot = np.abs(np.asarray(fpf[:], float)).sum(axis=1)
+            vol = float(np.sum((tot[:-1] + tot[1:]) / 2.0) * 60.0) * 0.0283168  # 1-min->m3
+            return {"inflow_peak_cfs": round(float(tot.max()), 1),
+                    "inflow_vol_m3": round(vol)}
+    except Exception as e:  # noqa: BLE001
+        print(f"[run] WARNING: inflow-volume read failed: {e}")
+        return None
 
 
 def _results_summary(plan_hdf, geom_hdf, area):
