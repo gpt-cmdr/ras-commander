@@ -2979,6 +2979,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#6b-channel-breaklines-refining-the-mesh-along-the-thalweg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6b. Channel breaklines — refining the mesh along the thalweg
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#7-mass-balance-and-limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3315,6 +3326,58 @@ roughness — see limitations).</p>
 <p><em>Mesh convergence (Courant-correct) and inflow placement, Full Momentum.</em></p>
 <p><img alt="Inflow placement: head-injection sends the full flow down the steep basin channel; outlet-injection only loads the fan." src="../319_post_fire_debris_flow_nonnewtonian_files/inflow_placement.png" /></p>
 <p><em>Inflow placement: head-injection sends the full flow down the steep basin channel; outlet-injection only loads the fan.</em></p>
+<h2 id="6b-channel-breaklines-refining-the-mesh-along-the-thalweg">6b. Channel breaklines — refining the mesh along the thalweg<a class="headerlink" href="#6b-channel-breaklines-refining-the-mesh-along-the-thalweg" title="Permanent link">&para;</a></h2>
+<p>The mesh studies above flagged a <strong>resolution artifact</strong>: a uniform 33 ft cell averaged
+across a narrow, deep channel piles water artificially, over-predicting depth on the thalweg.
+The fix is to <strong>align cell faces to the channel centerline</strong> with breaklines.</p>
+<p><strong>Delineation (TauDEM).</strong> <code>delineate_channels.py</code> runs the TauDEM stream sequence
+(PitRemove → D8FlowDir → AreaD8 → Threshold → StreamNet) on the feet terrain, clips the
+centerlines to the 2D domain, and simplifies them (Douglas-Peucker, 10 ft).</p>
+<p><img alt="TauDEM channel delineation (flow-accumulation threshold 0.04 km²): white = all streams, colored = top-3 centerlines used as breaklines, cyan = 2D domain." src="../319_post_fire_debris_flow_nonnewtonian_files/taudem_centerlines.png" /></p>
+<p><em>TauDEM channel delineation (flow-accumulation threshold 0.04 km²): white = all streams, colored = top-3 centerlines used as breaklines, cyan = 2D domain.</em></p>
+<p><strong>Authoring + enforcement.</strong> The build phase authors the centerlines via
+<code>GeomStorage.set_breaklines</code> with <strong>near = far</strong> cell spacing (a uniform fine corridor, no
+coarsening) and <code>GeomMesh.set_breakline_spacing(near_repeats, protection_radius=1)</code> — sizing
+<code>near_repeats</code> to span the channel width for a constant-width refined band.
+<code>GeomMesh.generate</code> then enforces the breaklines (the .NET <code>EnforceBreaklines</code> regen) and
+repairs bad faces via its auto-fix loop; <code>HdfBndry.get_breaklines</code> confirms enforcement.</p>
+<p><img alt="Cell centers near the main thalweg (red): uniform vs breakline-refined (near=far=12 ft, near_repeats=1). The corridor follows the channel centerline." src="../319_post_fire_debris_flow_nonnewtonian_files/breakline_mesh_compare.png" /></p>
+<p><em>Cell centers near the main thalweg (red): uniform vs breakline-refined (near=far=12 ft, near_repeats=1). The corridor follows the channel centerline.</em></p>
+<p><strong>Effect</strong> (τy = 700 Pa, Full Momentum, identical conditions):</p>
+<table>
+<thead>
+<tr>
+<th>metric</th>
+<th>uniform 33 ft</th>
+<th>breakline-refined</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>max velocity (fps)</td>
+<td>17.3</td>
+<td>17.7</td>
+</tr>
+<tr>
+<td><strong>max depth (ft)</strong></td>
+<td><strong>19.1</strong></td>
+<td><strong>15.9</strong></td>
+</tr>
+<tr>
+<td>mean depth (ft)</td>
+<td>5.65</td>
+<td>5.74</td>
+</tr>
+<tr>
+<td>cells</td>
+<td>10,647</td>
+<td>11,994</td>
+</tr>
+</tbody>
+</table>
+<p>The channel-aligned refinement drops the spurious max depth <strong>19.1 → 15.9 ft</strong> while peak
+velocity stays stable (~17.5 fps) — the resolution artifact is removed where it matters.
+TauDEM 5.x + MS-MPI are required for the delineation (CPU-only; can run off the HEC-RAS host).</p>
 <h2 id="7-mass-balance-and-limitations">7. Mass balance and limitations<a class="headerlink" href="#7-mass-balance-and-limitations" title="Permanent link">&para;</a></h2>
 <p><strong>Mass balance.</strong> The clear-water hydrograph integrates to ~13,400 m³ of water; at
 Cv = 0.70 that implies ~31,000 m³ of debris — about <strong>3.5× the USGS empirically predicted
@@ -3324,7 +3387,7 @@ upper-bound scenario, not a calibrated prediction.</strong> A volume- or peak-ma
 shrink the footprints.</p>
 <p><strong>Remaining for an engineering-grade product</strong> (this notebook is a methods demonstration;
 convergence, roughness, inflow-placement, and multi-parameter sensitivity are covered above):
-channel/fan <strong>breaklines</strong> with local refinement; an <strong>equation-set</strong> comparison (full
+an <strong>equation-set</strong> comparison (full
 momentum vs. diffusion wave); a <strong>cell-centered</strong> (vs. face-max) velocity for intensity; a
 volume-/peak-matched inflow to the USGS prediction; and <strong>validation</strong> against observed
 Ether Hollow deposits / a benchmark case.</p>
@@ -3366,7 +3429,7 @@ hazard-intensity / arrival-time products with a parameter-sensitivity band.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 7, 2026 23:35:37 UTC">June 7, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 8, 2026 23:47:29 UTC">June 8, 2026</span>
   </span>
 
     
@@ -3376,7 +3439,7 @@ hazard-intensity / arrival-time products with a parameter-sensitivity band.</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 7, 2026 23:35:37 UTC">June 7, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 8, 2026 23:47:29 UTC">June 8, 2026</span>
   </span>
 
     
