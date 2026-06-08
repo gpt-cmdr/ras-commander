@@ -250,6 +250,9 @@ def main() -> int:
     ap.add_argument("--cv", type=float, default=0.70,
                     help="volumetric sediment concentration for Bulk Fluid Volume "
                          "bulking (Cv=0.70 -> bulking factor 1/(1-Cv)=3.33)")
+    ap.add_argument("--inflow-scale", type=float, default=1.0,
+                    help="scale the clear-water inflow hydrograph (e.g. to volume-match "
+                         "the USGS predicted debris volume instead of the upper-bound run)")
     ap.add_argument("--viscosity-pa", type=float, default=100.0,
                     help="Bingham dynamic viscosity (Pa*s)")
     ap.add_argument("--dem-projects",
@@ -619,6 +622,9 @@ def main() -> int:
         hyd = json.loads((ddir / "inflow_hydrograph.json").read_text(encoding="utf-8"))
         bcm = json.loads((wd / "bc_meta.json").read_text(encoding="utf-8"))
         cfs, interval = hyd["cfs"], hyd["interval"]
+        if args.inflow_scale != 1.0:
+            cfs = [round(c * args.inflow_scale, 2) for c in cfs]
+            print(f"[run] inflow scaled x{args.inflow_scale} (peak {max(cfs):.0f} cfs)")
 
         # clear-water baseline + one Bingham variant per yield stress. The inflow
         # hydrograph stays clear-water; HEC-RAS bulks it internally via Bulk Fluid
