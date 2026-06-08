@@ -207,6 +207,16 @@ def main() -> int:
                     help="HEC-RAS project workspace (created by the build phase)")
     ap.add_argument("--project-name", default="EtherHollow")
     ap.add_argument("--cell-size-ft", type=float, default=33.0)  # ~10 m, matches tutorial
+    ap.add_argument("--breaklines", action="store_true",
+                    help="refine the mesh along TauDEM channel centerlines "
+                         "(reads channel_breakline_ft.json from the data dir; "
+                         "produce it with delineate_channels.py)")
+    ap.add_argument("--channel-width-ft", type=float, default=30.0,
+                    help="approximate channel width -> width of the refined corridor")
+    ap.add_argument("--channel-cell-ft", type=float, default=12.0,
+                    help="breakline near=far spacing (uniform fine cells along the thalweg)")
+    ap.add_argument("--breakline-simplify-ft", type=float, default=10.0,
+                    help="Douglas-Peucker tolerance applied to the centerline before authoring")
     ap.add_argument("--buffer-ft", type=float, default=300.0)
     ap.add_argument("--runout-m", type=float, default=1600.0)     # ~1 mile downstream
     ap.add_argument("--corridor-width-m", type=float, default=200.0)
@@ -541,6 +551,40 @@ def main() -> int:
         cres = RasCmdr.compute_plan("01", force_geompre=True, num_cores=2)
         topo_ok, topo_detail = hdf_has_2d_mesh(geom_hdf)
         print(f"[build] mesh topology: {topo_ok} ({topo_detail})")
+
+        # 5b. (optional) channel-centerline breaklines from the TauDEM delineation:
+        #     align mesh faces to the thalweg and refine a constant-width corridor.
+        #     near=far (uniform fine spacing, no coarsening within the corridor);
+        #     near_repeats sized so the refined band ~= the channel width.
+        bl_json = ddir / "channel_breakline_ft.json"
+        if args.breaklines and bl_json.exists():
+            from shapely.geometry import LineString
+            bl_defs = json.loads(bl_json.read_text(encoding="utf-8"))
+            near = far = float(args.channel_cell_ft)
+            near_repeats = max(1, round(args.channel_width_ft / (2.0 * near)))
+            GeomStorage.set_breaklines(geom_text, "DebrisFlowArea", [
+                {"name": d["name"][:32],
+                 "coords": list(LineString(d["coords"]).simplify(
+                     args.breakline_simplify_ft, preserve_topology=True).coords),
+                 "cell_size_near": near, "cell_size_far": far}
+                for d in bl_defs])
+            GeomMesh.set_breakline_spacing(str(geom_text), near=near, far=far,
+                                           near_repeats=near_repeats, protection_radius=1,
+                                           all_breaklines=True)
+            print(f"[build] breaklines: {len(bl_defs)} centerline(s), near=far={near} ft, "
+                  f"near_repeats={near_repeats}, protection_radius=1")
+            # breakline-aware mesh regeneration (.NET EnforceBreaklines + the 8-tier
+            # auto-repair of bad faces); recompile_via_rasexe rebuilds the stale HDF.
+            mres = GeomMesh.generate(str(geom_text), mesh_name="DebrisFlowArea",
+                                     cell_size=float(cell), bl_spacing_near=near,
+                                     bl_spacing_far=far, near_repeats=near_repeats,
+                                     max_iterations=8, recompile_via_rasexe=True)
+            print(f"[build] breakline regen -> status={getattr(mres,'status',None)} "
+                  f"pts={getattr(mres,'cell_count',None)}")
+            # rebuild the mesh HDF from the new breakline-aware computation points
+            cres = RasCmdr.compute_plan("01", force_geompre=True, num_cores=2)
+            topo_ok, topo_detail = hdf_has_2d_mesh(geom_hdf)
+            print(f"[build] mesh topology (breakline): {topo_ok} ({topo_detail})")
 
         # 6. associate terrain to the COMPILED geometry HDF, then compute the 2D
         #    property tables (Cells Minimum Elevation, face profiles, ...). This

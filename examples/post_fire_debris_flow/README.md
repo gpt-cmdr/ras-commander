@@ -68,6 +68,40 @@ python rigor_analysis.py rigor_status.jsonl   # timestep convergence + Cv/viscos
 Findings here: the peaks are converged at a 1 s computation interval (0.5 s identical; 2 s
 unstable); Cv (bulking), viscosity, and yield stress are all material controls.
 
+## Channel breaklines (mesh refinement along the thalweg)
+
+A uniform mesh over-deepens the channel (a wide cell averaged across a narrow, deep thalweg
+piles water artificially). Aligning cell faces to the channel centerline with **breaklines**
+resolves the cross-section and removes that artifact.
+
+```bash
+# 1. delineate channel centerlines with TauDEM (run where TauDEM is installed; see below)
+python delineate_channels.py --dem ether_hollow_proj/EtherHollow_terrain_ft.tif \
+       --domain prep/basin_perimeter_ft.json --out data/ether_hollow/channel_breakline_ft.json \
+       --stream-area-km2 0.04 --simplify-ft 10
+
+# 2. build with breaklines (HEC-RAS, interactive): refine the mesh along the thalweg
+python ether_hollow_debris_flow.py --phase build --breaklines \
+       --channel-width-ft 30 --channel-cell-ft 12 --root . --workdir ether_hollow_proj
+```
+
+`delineate_channels.py` runs the TauDEM stream sequence (PitRemove → D8FlowDir → AreaD8 →
+Threshold → StreamNet), clips the centerlines to the 2D domain, simplifies them
+(Douglas-Peucker), and writes `channel_breakline_ft.json`. The build phase then authors them
+via `GeomStorage.set_breaklines` with **near = far** cell spacing (a uniform fine corridor,
+no coarsening) and `GeomMesh.set_breakline_spacing(near_repeats, protection_radius=1)`, sizing
+`near_repeats` to span the channel width; `GeomMesh.generate` enforces the breaklines (the
+.NET `EnforceBreaklines` regen) and repairs bad faces via its auto-fix loop. Verify with
+`HdfBndry.get_breaklines(...)`.
+
+Effect (Ether Hollow, τy = 700 Pa): max depth drops 19.1 → 15.9 ft (the resolved channel),
+peak velocity stable (~17.5 fps), mesh 10,647 → 11,994 cells.
+
+**Extra prerequisite for delineation:** **TauDEM 5.x** binaries (`PitRemove`, `D8FlowDir`,
+`AreaD8`, `Threshold`, `StreamNet`) on PATH, and **MS-MPI** (`mpiexec`) for multi-process runs
+(optional — falls back to a single process). Delineation is CPU-only and can run off the
+HEC-RAS host; stage the resulting JSON to the build machine.
+
 ## Notes
 
 - **Units:** the model is US-Customary (feet); non-Newtonian rheology is entered in **SI
