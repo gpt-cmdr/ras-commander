@@ -35,3 +35,9 @@ shapely
 rasterstats
 rtree
 psutil>=5.6.6
+
+# Interactive Leaflet maps embedded in example-notebook outputs. folium emits a
+# self-contained <iframe srcdoc> that survives nbconvert -> MkDocs (ipyleaflet
+# widgets do NOT survive the static build); branca provides the colormap legend.
+folium>=0.15
+branca>=0.7
