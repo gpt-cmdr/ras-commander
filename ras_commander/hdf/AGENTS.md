@@ -37,6 +37,10 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 ## Common Entry Points
 
 - Plan metadata and compute messages: `HdfResultsPlan`
+- Simulation start time: `HdfBase.get_simulation_start_time()` resolves across versions — 6.x
+  `Plan Information/Simulation Start Time` attr, then 5.0.x `Time Window` ("<start> to <end>"),
+  then the first `Unsteady Time Series/Time Date Stamp`. Required by all 2D summary reads
+  (`HdfResultsMesh.get_mesh_max_ws`/`get_mesh_summary_output`); 5.0.x plan HDFs omit the 6.x attr.
 - 2D cell geometry and face geometry: `HdfMesh`
 - 2D face property table write (Manning's n vs Elevation): `HdfMesh.set_mesh_face_property_tables()`, `extend_face_property_tables()`, `set_face_mannings_n_values()`, `pin_property_tables()`
 - 2D face spatial filtering (polygon mask): `HdfMesh.get_face_ids_in_polygon()`, `get_face_ids_in_calibration_region()`
