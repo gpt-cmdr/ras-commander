@@ -60,6 +60,11 @@ python sensitivity_plot.py sensitivity_status.jsonl
 and `hazard_arrival.png` (first-wetting time). `sensitivity_plot.py` plots the yield-stress
 and Manning's-n sweeps.
 
+The intensity uses a **cell-centered** velocity — HEC-RAS stores only face-normal velocities,
+so a per-cell vector is reconstructed by least-squares (`u·n_f = v_f` over the cell's faces)
+and its magnitude used. Taking the max face speed instead biases velocity ~10 % high (the
+high-hazard *area* is unchanged here — the debris-flow high class is depth-dominated).
+
 ## Convergence + sensitivity
 
 ```bash
@@ -112,7 +117,11 @@ HEC-RAS host; stage the resulting JSON to the build machine.
   peak/volume as a mass-balance check — confirm the bulked inflow ≈ 1/(1−Cv)× the clear one.
 - The 2D-area perimeter is healed (`make_valid` + orient + simplify) before meshing — a dirty
   buffered-corridor polygon otherwise produces zero mesh cells.
-- **Calibration status:** the demo's debris volume is ~3.5× the USGS empirical prediction for
-  this basin, so the footprints are an **uncalibrated upper-bound scenario**, not a calibrated
-  product. Mesh-resolution, inflow-placement, and equation-set studies plus field validation
-  are needed before relying on a hazard polygon.
+- **Calibration / scenario bracket:** the default HMS-driven run delivers ~3.5× the USGS
+  empirically predicted debris volume — an **upper-bound scenario**. `--inflow-scale` produces
+  a **volume-matched** run: scaling the inflow to ~0.29 brings the bulked debris volume to
+  ≈ the USGS 9,019 m³ (clear peak ~95 cfs, within the BAER-reported mouth range 82–221 cfs),
+  which roughly halves peak velocity (17.7 → 10.9 fps) and shrinks runout ~35 %. Report the
+  pair as a bracket. **Field validation** against observed Ether Hollow deposits still requires
+  post-event imagery / a deposit survey not in the public USGS DF-prediction dataset; the
+  volume + BAER-peak match is calibration to the available benchmarks, not deposit validation.

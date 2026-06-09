@@ -37,29 +37,43 @@ with h5py.File(G, "r") as g:
     cmin = g[f"{base}/Cells Minimum Elevation"][:]
     csa = g[f"{base}/Cells Surface Area"][:]
     fci = g[f"{base}/Faces Cell Indexes"][:]
+    nrm = g[f"{base}/Faces NormalUnitVector and Length"][:][:, :2]
     bcp = g["Geometry/Boundary Condition Lines/Polyline Points"][:]
     bpi = g["Geometry/Boundary Condition Lines/Polyline Info"][:]
 C = len(cmin)
+
+# Cell-centered velocity operator. HEC-RAS stores velocity only on faces (normal
+# component v_f = u . n_f). Taking the max face speed per cell biases intensity
+# high (~10%); instead reconstruct each cell's velocity VECTOR by least-squares
+# (u . n_f = v_f over the cell's faces) and use its magnitude. The geometry is
+# fixed, so precompute each cell's face list + the pseudo-inverse once.
+_cell_faces = [[] for _ in range(C)]
+for _fi, (_a, _b) in enumerate(fci):
+    if 0 <= _a < C:
+        _cell_faces[_a].append(_fi)
+    if 0 <= _b < C:
+        _cell_faces[_b].append(_fi)
+FACE_IDX = [np.array(ff, dtype=int) for ff in _cell_faces]
+PINV = [np.linalg.pinv(nrm[ff]) if len(ff) >= 2 else None for ff in FACE_IDX]
 
 
 def cell_metrics(hdf):
     with h5py.File(hdf, "r") as f:
         WS = f[f"{tsb}/Water Surface"][:]          # (T, C)
-        FV = np.abs(f[f"{tsb}/Face Velocity"][:])  # (T, F)
+        FV = f[f"{tsb}/Face Velocity"][:]          # (T, F) signed (normal component)
     T = WS.shape[0]
     # dry cells carry NaN / sentinel water-surface in the time series -> depth 0
     depth_t = WS[:, :C] - cmin[None, :]
     depth_t = np.nan_to_num(depth_t, nan=0.0, posinf=0.0, neginf=0.0)
     depth_t = np.clip(depth_t, 0, None)
-    # per-cell velocity each step = max |face velocity| over the cell's faces
-    a, b = fci[:, 0], fci[:, 1]
-    va, vb = a >= 0, b >= 0
+    # per-cell velocity each step = |reconstructed cell vector| (least-squares fit
+    # of u to the cell's face-normal velocities), not the biased max face speed.
     cellvel = np.zeros((T, C), np.float32)
-    for t in range(T):
-        cv = np.zeros(C, np.float32)
-        np.maximum.at(cv, a[va], FV[t, va])
-        np.maximum.at(cv, b[vb], FV[t, vb])
-        cellvel[t] = cv
+    for c in range(C):
+        if PINV[c] is None:
+            continue
+        u = PINV[c] @ FV[:, FACE_IDX[c]].T          # (2, T)
+        cellvel[:, c] = np.sqrt(u[0] ** 2 + u[1] ** 2)
     inten_t = depth_t * cellvel                    # time-synchronized d*v
     maxd = depth_t.max(0)
     maxv = cellvel.max(0)
