@@ -18,6 +18,8 @@ logger = get_logger(__name__)
 _DEPS = ["Utility.Core", "Geospatial.Core", "H5Assist", "RasMapperLib"]
 
 _HECRAS_SEARCH_PATHS = [
+    Path(r"C:\Program Files (x86)\HEC\HEC-RAS\7.0.1"),
+    Path(r"C:\Program Files\HEC\HEC-RAS\7.0.1"),
     Path(r"C:\Program Files (x86)\HEC\HEC-RAS\7.0"),
     Path(r"C:\Program Files\HEC\HEC-RAS\7.0"),
     Path(r"C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 5"),
