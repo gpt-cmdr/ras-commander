@@ -1,0 +1,65 @@
+name: Validate Documentation
+
+# Catches broken docs (bad nav entries, broken links, mkdocstrings errors) on PRs BEFORE
+# they merge to main — where they would otherwise break the self-hosted CT 210 rebuild
+# (rascommander.info) which runs `mkdocs build --strict`. Build-only; does not deploy.
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'examples/**'
+      - 'ras_commander/**'
+      - '.claude/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs-validate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # git-revision-date-localized plugin needs history
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-docs-${{ hashFiles('docs/requirements-docs.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-docs-
+
+      - name: Install documentation dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r docs/requirements-docs.txt
+          pip install -e .
+
+      - name: Prepare notebooks for docs
+        run: |
+          python .claude/scripts/prepare_notebooks_for_docs.py
+          cp examples/README.md docs/notebooks/ || true
+          cp examples/AGENTS.md docs/notebooks/ || true
+
+      - name: Generate cognitive infrastructure docs
+        run: |
+          python .claude/scripts/generate_cognitive_docs.py
+
+      - name: Build (strict) — no deploy
+        run: |
+          mkdocs build --strict
