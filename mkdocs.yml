@@ -1,7 +1,7 @@
 site_name: RAS Commander Documentation
 site_description: Python library for automating HEC-RAS operations
 site_author: William Katzenmeyer, P.E., C.F.M.
-site_url: https://gpt-cmdr.github.io/ras-commander/
+site_url: https://rascommander.info/
 
 repo_name: gpt-cmdr/ras-commander
 repo_url: https://github.com/gpt-cmdr/ras-commander

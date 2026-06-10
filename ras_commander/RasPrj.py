@@ -2224,7 +2224,7 @@ def init_ras_project(
             "\n"
             "═══════════════════════════════════════════════════════════════════════\n"
             "ras-commander | HEC-RAS Automation Library\n"
-            "Docs: https://gpt-cmdr.github.io/ras-commander/\n"
+            "Docs: https://rascommander.info/\n"
             "Repo: https://github.com/gpt-cmdr/ras-commander\n"
             "═══════════════════════════════════════════════════════════════════════\n"
             "\n"
