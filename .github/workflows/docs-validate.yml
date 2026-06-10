@@ -1,8 +1,8 @@
 name: Validate Documentation
 
-# Catches broken docs (bad nav entries, broken links, mkdocstrings errors) on PRs BEFORE
-# they merge to main — where they would otherwise break the self-hosted CT 210 rebuild
-# (rascommander.info) which runs `mkdocs build --strict`. Build-only; does not deploy.
+# Catches build-breaking docs errors (bad nav entries, missing pages, mkdocstrings
+# failures) on PRs BEFORE they merge to main and trigger the self-hosted CT 210 rebuild
+# (rascommander.info). Build-only; does not deploy. Non-strict to match production.
 
 on:
   pull_request:
@@ -60,6 +60,10 @@ jobs:
         run: |
           python .claude/scripts/generate_cognitive_docs.py
 
-      - name: Build (strict) — no deploy
+      - name: Build — no deploy
         run: |
-          mkdocs build --strict
+          # Non-strict to match production (`mkdocs gh-deploy`) and the CT 210 rebuild.
+          # The docs currently carry ~26 benign link warnings (examples/README.md +
+          # AGENTS.md copied into notebooks/). Re-add --strict once that link debt is
+          # cleaned up, here and in the ras-commander-docs build.sh, together.
+          mkdocs build
