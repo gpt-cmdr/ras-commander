@@ -393,7 +393,7 @@ def execute_psexec_plan(
         if not auth_success:
             logger.error(
                 f"Failed to authenticate to share {worker.share_path}. "
-                f"See remote setup guide: https://ras-commander.readthedocs.io/user-guide/remote-execution/"
+                f"See remote setup guide: https://rascommander.info/user-guide/remote-execution/"
             )
             return False
 
@@ -489,7 +489,7 @@ def execute_psexec_plan(
             logger.error(f"PsExec stderr: {result.stderr}")
             logger.error(
                 "Ensure session_id is set correctly (typically 2) and remote machine is configured. "
-                "See: https://ras-commander.readthedocs.io/user-guide/remote-execution/"
+                "See: https://rascommander.info/user-guide/remote-execution/"
             )
             return False
 

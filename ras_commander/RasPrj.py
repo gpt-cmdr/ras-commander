@@ -2125,7 +2125,7 @@ def init_ras_project(
         if ras_exe_path == "Ras.exe" and ras_version != "Ras.exe":
             logger.warning(
                 f"HEC-RAS Version {ras_version} was not found. Running HEC-RAS will fail. "
-                f"See: https://ras-commander.readthedocs.io/getting-started/installation/"
+                f"See: https://rascommander.info/getting-started/installation/"
             )
     else:
         # No version specified, try to detect from plan files
@@ -2180,7 +2180,7 @@ def init_ras_project(
             ras_exe_path = "Ras.exe"
             logger.warning(
                 "No valid HEC-RAS version was detected. Running HEC-RAS will fail. "
-                "See: https://ras-commander.readthedocs.io/getting-started/installation/"
+                "See: https://rascommander.info/getting-started/installation/"
             )
     
     # Initialize or re-initialize with the determined executable path
@@ -2212,7 +2212,7 @@ def init_ras_project(
     logger.info(
         f"ras-commander v{__version__} | "
         f"An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | "
-        f"Docs: https://ras-commander.readthedocs.io | "
+        f"Docs: https://rascommander.info | "
         f"GitHub: https://github.com/gpt-cmdr/ras-commander"
     )
     logger.info(f"Project initialized: {ras_object.project_name} | Folder: {ras_object.project_folder}")
