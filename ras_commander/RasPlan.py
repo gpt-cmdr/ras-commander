@@ -1268,7 +1268,7 @@ class RasPlan:
                     return None
             else:
                 logger = logging.getLogger(__name__)
-                logger.error(f"Key '{key}' not found in the plan file.")
+                logger.debug(f"Key '{key}' not found in the plan file.")
                 return None
         elif key == 'Description':
             match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
@@ -1280,7 +1280,7 @@ class RasPlan:
                 return match.group(1).strip()
             else:
                 logger = logging.getLogger(__name__)
-                logger.error(f"Key '{key}' not found in the plan file.")
+                logger.debug(f"Key '{key}' not found in the plan file.")
                 return None
 
 
