@@ -1,17 +1,21 @@
-name: Deploy Documentation
+name: Deploy Documentation (GitHub Pages — fallback)
 
+# Primary hosting is the self-hosted site at rascommander.info (CT 210), rebuilt by a
+# GitHub webhook on push to main. This GitHub Pages deploy is kept as a manual fallback
+# only — the automatic push trigger is disabled to avoid double-publishing. Run it from the
+# Actions tab (workflow_dispatch) if the self-hosted site is ever unavailable.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'docs/**'
-      - 'examples/**'  # Trigger on notebook changes
-      - 'ras_commander/**'
-      - '.claude/**'
-      - 'mkdocs.yml'
-      - '.github/workflows/docs.yml'
-  workflow_dispatch:  # Allow manual trigger
+  # push:            # DISABLED at rascommander.info cutover (2026-06-10). Re-enable to
+  #   branches:      # restore GitHub Pages as an auto-deploy target.
+  #     - main
+  #   paths:
+  #     - 'docs/**'
+  #     - 'examples/**'
+  #     - 'ras_commander/**'
+  #     - '.claude/**'
+  #     - 'mkdocs.yml'
+  #     - '.github/workflows/docs.yml'
+  workflow_dispatch:  # Manual trigger only
 
 permissions:
   contents: write  # Needed for gh-pages deployment

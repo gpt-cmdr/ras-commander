@@ -56,6 +56,10 @@ jobs:
           cp examples/README.md docs/notebooks/ || true
           cp examples/AGENTS.md docs/notebooks/ || true
 
+      - name: Generate examples index table
+        run: |
+          python .claude/scripts/generate_examples_index.py
+
       - name: Generate cognitive infrastructure docs
         run: |
           python .claude/scripts/generate_cognitive_docs.py
