@@ -88,7 +88,7 @@ from .geom import (
     GeomCrossSection, CrossSectionBankStations, CrossSectionBuildInput,
     CrossSectionBuildResult, CrossSectionManningsN, CrossSectionReachLengths,
     GeomStorage, GeomLateral,
-    GeomInlineWeir, GeomBridge, GeomCulvert,
+    GeomInlineWeir, GeomBridge, GeomCulvert, GeomCulvertGIS,
     GeomReferenceFeatures, GeomBcLines, GeomMesh,
     MeshResult, BCConflict, BCFixResult,
 )
@@ -193,7 +193,7 @@ __all__ = [
     'GeomCrossSection', 'CrossSectionBankStations', 'CrossSectionBuildInput',
     'CrossSectionBuildResult', 'CrossSectionManningsN', 'CrossSectionReachLengths',
     'GeomStorage', 'GeomLateral',
-    'GeomInlineWeir', 'GeomBridge', 'GeomCulvert',
+    'GeomInlineWeir', 'GeomBridge', 'GeomCulvert', 'GeomCulvertGIS',
     'GeomReferenceFeatures', 'GeomBcLines', 'GeomMesh',
     'MeshResult', 'BCConflict', 'BCFixResult',
 
