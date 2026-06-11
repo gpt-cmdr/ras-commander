@@ -33,18 +33,39 @@ def docs(topic=None):
     base = "https://rascommander.info"
     if topic is None:
         url = base
-    elif topic == "llms":
-        url = __llms_txt__
-    elif topic == "dataframes":
-        url = f"{base}/reference/dataframe-reference/"
     else:
-        url = f"{base}/user-guide/{topic}/"
+        slug = str(topic).strip().strip("/")
+        if slug == "llms":
+            url = __llms_txt__
+        elif slug == "dataframes":
+            url = f"{base}/reference/dataframe-reference/"
+        elif not slug:
+            url = base
+        else:
+            url = f"{base}/user-guide/{slug}/"
     print(url)
     return url
 
 
+def agent_guide_text():
+    """Return the packaged LLM_GUIDE.md content (offline agent quickstart) as a string.
+
+    Importer-safe: works for both directory and zip/non-filesystem installs.
+    Prefer this over agent_guide_path() when you just need the guide text.
+    """
+    from importlib.resources import files
+    return files("ras_commander").joinpath("LLM_GUIDE.md").read_text(encoding="utf-8")
+
+
 def agent_guide_path():
-    """Return the filesystem path to the packaged LLM_GUIDE.md (offline agent quickstart)."""
+    """Return a Traversable for the packaged LLM_GUIDE.md (offline agent quickstart).
+
+    For normal (directory) pip and source installs this behaves like a filesystem
+    path (``str(agent_guide_path())`` is a real path). Under zip/non-filesystem
+    importers it is a ``Traversable`` that is not a real path -- read its content
+    with ``agent_guide_text()``, or materialize a real path with
+    ``importlib.resources.as_file()``.
+    """
     from importlib.resources import files
     return files("ras_commander").joinpath("LLM_GUIDE.md")
 
@@ -276,7 +297,7 @@ __all__ = [
     'get_logger', 'log_call', 'standardize_input',
 
     # Documentation / LLM agent helpers
-    'docs', 'agent_guide_path',
+    'docs', 'agent_guide_path', 'agent_guide_text',
 
     # Validation framework
     'ValidationSeverity', 'ValidationResult', 'ValidationReport',
