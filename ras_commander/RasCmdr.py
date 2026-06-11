@@ -796,7 +796,7 @@ class RasCmdr:
                     else:
                         logger.error(
                             f"Verification failed for plan {plan_number}: 'Complete Process' not found in compute messages. "
-                            f"See: https://ras-commander.readthedocs.io/user-guide/plan-execution/"
+                            f"See: https://rascommander.info/user-guide/plan-execution/"
                         )
                         _success = False
                 else:

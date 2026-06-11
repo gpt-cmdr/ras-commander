@@ -7,7 +7,7 @@
 <p align="center">
   <strong>An open-source project of <a href="https://clbengineering.com/">CLB Engineering Corporation</a></strong><br>
   <em>LLM-Forward Engineering Solutions</em><br>
-  <a href="https://ras-commander.readthedocs.io/">RAS Commander Documentation</a>
+  <a href="https://rascommander.info/">RAS Commander Documentation</a>
 </p>
 
 ---
@@ -32,11 +32,11 @@ This library was developed using the **[LLM Forward](https://clbengineering.com/
 - **Multi-Level Verifiability** -- HEC-RAS GUI review + visual outputs + code audit trails
 - **Human-in-the-Loop** -- Licensed professionals in responsible charge at all times
 
-See [LLM Forward Development](https://ras-commander.readthedocs.io/en/latest/development/llm-development/) for full philosophy and best practices.
+See [LLM Forward Development](https://rascommander.info/development/llm-development/) for full philosophy and best practices.
 
-[![Documentation Status](https://readthedocs.org/projects/ras-commander/badge/?version=latest)](https://ras-commander.readthedocs.io/en/latest/?badge=latest)
+[![Documentation](https://img.shields.io/badge/docs-rascommander.info-1a365d)](https://rascommander.info/)
 
-**[📖 Full Documentation](https://ras-commander.readthedocs.io/)** | *[ASFPM Presentation](https://drive.google.com/file/d/1kX0twae8NrpLwR0iQ0Dmd8zAXdq-pYXD/view)* | **[CLB Engineering](https://clbengineering.com/)**
+**[📖 Full Documentation](https://rascommander.info/)** | *[ASFPM Presentation](https://drive.google.com/file/d/1kX0twae8NrpLwR0iQ0Dmd8zAXdq-pYXD/view)* | **[CLB Engineering](https://clbengineering.com/)**
 
 ## Repository Author
 
@@ -54,7 +54,7 @@ This repository has several methods of interaction with Large Language Models an
 
 2. **Codex Support**: Codex reads the canonical `AGENTS.md` hierarchy directly. Shared skills can be exposed through the generated `.agents/skills/` bridge without copying skill content. Claude Code and Codex are the production harnesses for this repository; other tools may still read the markdown context but are not the standard setup.
 
-3. **[Full Documentation on ReadTheDocs](https://ras-commander.readthedocs.io/)**: Comprehensive API documentation, user guides, and example notebooks. Includes installation guide, quick start, and detailed class references.
+3. **[Full Documentation](https://rascommander.info/)**: Comprehensive API documentation, user guides, and example notebooks. Includes installation guide, quick start, and detailed class references.
 
 4. **[RAS Commander Library Assistant on ChatGPT](https://chatgpt.com/g/g-TZRPR3oAO-ras-commander-library-assistant)** _(Deprecated - CLI agents preferred)_: This GPT is no longer actively maintained. For the best experience, use Claude Code or other CLI agents with the repository's built-in cognitive infrastructure.
 
@@ -594,12 +594,12 @@ These examples demonstrate practical applications of RAS Commander for automatin
 
 ## Documentation
 
-For detailed usage instructions and API documentation, visit the **[RAS Commander Documentation](https://ras-commander.readthedocs.io/)**:
+For detailed usage instructions and API documentation, visit the **[RAS Commander Documentation](https://rascommander.info/)**:
 
-- [Installation Guide](https://ras-commander.readthedocs.io/en/latest/getting-started/installation/)
-- [Quick Start](https://ras-commander.readthedocs.io/en/latest/getting-started/quickstart/)
-- [User Guide](https://ras-commander.readthedocs.io/en/latest/user-guide/overview/)
-- [API Reference](https://ras-commander.readthedocs.io/en/latest/api/)
+- [Installation Guide](https://rascommander.info/getting-started/installation/)
+- [Quick Start](https://rascommander.info/getting-started/quickstart/)
+- [User Guide](https://rascommander.info/user-guide/overview/)
+- [API Reference](https://rascommander.info/api/)
 
 ## Future Development
 
@@ -610,7 +610,7 @@ The ras-commander library is an ongoing project embodying LLM Forward engineerin
 - Enhanced verifiability and interpretability features for engineering review
 - Community-driven development of new modules following LLM Forward best practices
 
-See [LLM Forward Development Philosophy](https://ras-commander.readthedocs.io/en/latest/development/llm-development/) for contribution guidelines.
+See [LLM Forward Development Philosophy](https://rascommander.info/development/llm-development/) for contribution guidelines.
 
 ## Related Resources
 
@@ -621,7 +621,7 @@ See [LLM Forward Development Philosophy](https://ras-commander.readthedocs.io/en
 
 ## Style Guide
 
-This project follows a specific style guide to maintain consistency across the codebase. Please refer to the [Contributing Guide](https://ras-commander.readthedocs.io/en/latest/development/contributing/) for details on coding conventions, documentation standards, and best practices.
+This project follows a specific style guide to maintain consistency across the codebase. Please refer to the [Contributing Guide](https://rascommander.info/development/contributing/) for details on coding conventions, documentation standards, and best practices.
 
 ## Acknowledgments
 
