@@ -104,6 +104,7 @@ from .RasFloodway import RasFloodway
 from .RasHydroCompare import RasHydroCompare
 from .RasModPuls import RasModPuls
 from .RasPermutation import RasPermutation, RangeSpec
+from .RasMonteCarlo import RasMonteCarlo
 from .RasCalibrate import (
     CalibrationPoint,
     RasCalibrate,
@@ -230,7 +231,7 @@ __all__ = [
     'PreprocessResult', 'GeometryPreprocessResult',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
-    'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec',
+    'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',
     'compute_objective', 'extract_modeled',
     'extract_steady_profile_modeled', 'extract_steady_profile_observations',

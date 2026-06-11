@@ -87,21 +87,52 @@ from ras_commander.geom import ManningsFromLandCover
 table = ManningsFromLandCover.default_landcover_classification_table()
 ```
 
-## Required Flags for Spatial Manning's n
+## Per-cell Manning's n comes from the land-cover ASSOCIATION, not from the two flags
 
-Two flags in the plain-text `.g##` must be enabled for per-cell land cover Manning's n:
+> **Correction (2026-06-01):** a prior version of this rule claimed that
+> `spatially_varied_mann_on_faces` and `composite_classification` "must be enabled for per-cell
+> land cover Manning's n," and that with `spatially_varied_mann_on_faces=False` HEC-RAS uses a
+> uniform n regardless of land cover. **That is wrong.** Cell-center land-cover Manning's n is
+> driven by the **land-cover association** (sidecar `LandCover.hdf` + raster, referenced from the
+> `.rasmap` / geometry HDF), independent of those two flags.
+
+**Verified empirically** (`BaldEagleCrkMulti2D` g01): both flags are `False`, the `2mannings_n`
+default attribute is a single value (0.04), yet the preprocessed
+`Geometry/2D Flow Areas/<area>/Cells Center Manning's n` is spatially varied (**0.03–0.15 per cell**,
+89,879 cells) derived directly from the land-cover association. The uniform default attribute is
+only a fallback used where no association/class applies.
+
+What the two flags actually control:
+
+- `spatially_varied_mann_on_faces` — enables **depth-varying Manning's n on cell FACES**: a per-face
+  n that varies with flow depth, derived from the sub-grid land cover within each face (see the
+  CLB-757 depth-varying face-n API). This is a face-level refinement, **not** the on/off switch for
+  cell-center land-cover n.
+- `composite_classification` — composite (area-weighted) classification of face Manning's n.
 
 ```python
+# Optional refinement (depth-varying FACE n). NOT required for cell-center land-cover n,
+# which is applied whenever a land-cover association exists.
 from ras_commander.geom import GeomStorage
-
 GeomStorage.set_2d_flow_area_settings(
     geom_file, flow_area_name,
-    spatially_varied_mann_on_faces=True,   # use LCMann Table per cell
-    composite_classification=True,          # composite weighting per face
+    spatially_varied_mann_on_faces=True,
+    composite_classification=True,
 )
 ```
 
-When `spatially_varied_mann_on_faces=False`, HEC-RAS assigns uniform base Manning's n to every cell regardless of land cover.
+### Propagating an LCMann / sidecar change to per-cell n (matters for sensitivity/Monte Carlo)
+
+The preprocessed `Cells Center Manning's n` is **cached in the `.g##.hdf`**. Editing the plain-text
+`LCMann Table` (or the sidecar `Variables`) does **not** change per-cell n until the geometry
+preprocessor re-derives it. Because `clear_geompre=True` preserves the `.g##.hdf` (and its cached
+per-cell n), a plain-text `LCMann Table` edit alone is **ignored at compute time**.
+
+**Verified:** a Monte Carlo ensemble that perturbed the plain-text `LCMann Table` across 30 samples
+produced **byte-identical per-cell n and identical WSE** in every sample — the perturbation never
+reached the solver. To make a land-cover roughness perturbation take effect, the per-cell n must be
+regenerated from the (perturbed) land-cover source (e.g., perturb the sidecar `Variables` and force
+the geometry preprocessor to re-derive per-cell n, without destroying the association).
 
 ## Preprocessing: clear_geompre vs force_geompre
 
