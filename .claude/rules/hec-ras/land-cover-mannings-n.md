@@ -125,20 +125,27 @@ GeomStorage.set_2d_flow_area_settings(
 
 The preprocessed `Cells Center Manning's n` is **cached in the `.g##.hdf`**. Editing the plain-text
 `LCMann Table` (or the sidecar `Variables`) does **not** change per-cell n until the geometry
-preprocessor re-derives it. Because `clear_geompre=True` preserves the `.g##.hdf` (and its cached
-per-cell n), a plain-text `LCMann Table` edit alone is **ignored at compute time**.
+preprocessor re-derives it.
 
-**Verified:** a Monte Carlo ensemble that perturbed the plain-text `LCMann Table` across 30 samples
-produced **byte-identical per-cell n and identical WSE** in every sample — the perturbation never
-reached the solver. To make a land-cover roughness perturbation take effect, the per-cell n must be
-regenerated from the (perturbed) land-cover source (e.g., perturb the sidecar `Variables` and force
-the geometry preprocessor to re-derive per-cell n, without destroying the association).
+**Historical hazard:** earlier, `clear_geompre=True` only deleted `.c##` and **preserved** the
+`.g##.hdf` (and its cached per-cell n), so a plain-text `LCMann Table` edit was silently **ignored at
+compute time** — a Monte Carlo ensemble that perturbed the `LCMann Table` across 30 samples produced
+**byte-identical per-cell n and identical WSE** in every sample.
+
+**Resolved:** `GeomPreprocessor.clear_geompre_files()` now also calls
+`GeomPreprocessor.clear_geompre_hdf()`, which deletes the cached `Cells Center Manning's n` +
+property tables **inside the `.g##.hdf` in place** (mirroring HEC-RAS's own `CleanPropertyTables`)
+while **preserving** the mesh topology and the land-cover association. So
+`RasCmdr.compute_plan(clear_geompre=True)` now forces HEC-RAS to re-derive per-cell n from the
+(perturbed) land-cover source on the next compute — a perturbed `LCMann Table` / sidecar **does**
+reach the solver. This is what makes the `RasMonteCarlo.make_mannings_apply_fn` roughness ensemble
+actually vary results.
 
 ## Preprocessing: clear_geompre vs force_geompre
 
 When land cover associations exist in the geometry HDF:
 
-- **`clear_geompre=True`**: Deletes only `.c##` binary files. Preserves the `.g##.hdf` with its land cover filename attribute. **Use this.**
+- **`clear_geompre=True`**: Deletes `.c##` binary files **and** clears the geometry-preprocessor tables (incl. cached per-cell `Cells Center Manning's n`) inside the `.g##.hdf` in place via `clear_geompre_hdf()`, while **preserving** the land cover filename attribute / association. Forces per-cell n re-derivation on next compute. **Use this.**
 - **`force_geompre=True`**: Deletes both `.g##.hdf` AND `.c##`. Destroys the land cover filename attribute that tells HEC-RAS where the sidecar is. **Avoid when land cover is configured.**
 
 ```python

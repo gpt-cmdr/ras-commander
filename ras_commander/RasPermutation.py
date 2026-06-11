@@ -767,7 +767,10 @@ class RasPermutation:
             max_workers: Maximum parallel worker count (local execution).
             num_cores: HEC-RAS core count per plan execution.
             ras_object: Optional project object for multi-project workflows.
-            timeout_sec: Optional per-plan timeout in seconds.
+            timeout_sec: Optional per-plan timeout in seconds. NOTE: per-plan
+                timeout is not yet supported by RasCmdr.compute_parallel() on the
+                current Windows execution path; when set it is logged and ignored
+                (tracked as a follow-up). The ensemble still runs to completion.
             clear_geompre: Clear .c## preprocessor files before execution.
             workers: Optional list of remote worker objects from
                 init_ras_worker(). When provided, plans are distributed
@@ -834,12 +837,18 @@ class RasPermutation:
                     summary_df["plan_number"].isin(plan_numbers)
                 ].copy()
             else:
+                if timeout_sec is not None:
+                    logger.warning(
+                        "timeout_sec=%s ignored: per-plan timeout is not yet supported "
+                        "by RasCmdr.compute_parallel(); the ensemble runs without a "
+                        "per-plan timeout (tracked as a follow-up).",
+                        timeout_sec,
+                    )
                 compute_result = RasCmdr.compute_parallel(
                     plan_number=plan_numbers,
                     max_workers=max_workers,
                     num_cores=num_cores,
                     ras_object=batch_ras,
-                    timeout_sec=timeout_sec,
                     clear_geompre=clear_geompre,
                 )
 
@@ -859,7 +868,9 @@ class RasPermutation:
                 batch_summary["status"] = batch_summary["plan_number"].map(
                     lambda plan_num: RasPermutation._derive_status(
                         pd.Series(dtype="object"),
-                        compute_result.execution_results.get(plan_num),
+                        # Branch-neutral: execution_success_map is populated for
+                        # both local and remote paths (compute_result is local-only).
+                        execution_success_map.get(plan_num),
                     )
                 )
                 batch_summary["max_wse"] = np.nan
