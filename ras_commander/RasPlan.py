@@ -407,7 +407,10 @@ class RasPlan:
         
         plan_file_path = RasPlan.get_plan_path(plan_number, ras_obj)
         if not plan_file_path:
-            raise FileNotFoundError(f"Plan file not found: {plan_number}")
+            raise FileNotFoundError(
+                f"Plan file not found: {plan_number}. "
+                f"See: https://rascommander.info/user-guide/plan-execution/"
+            )
         
         try:
             RasUtils.update_file(plan_file_path, RasPlan._update_steady_in_file, new_steady_flow_number)
@@ -472,7 +475,10 @@ class RasPlan:
         
         plan_file_path = RasPlan.get_plan_path(plan_number, ras_obj)
         if not plan_file_path:
-            raise FileNotFoundError(f"Plan file not found: {plan_number}")
+            raise FileNotFoundError(
+                f"Plan file not found: {plan_number}. "
+                f"See: https://rascommander.info/user-guide/plan-execution/"
+            )
         
         try:
             # Read the plan file
@@ -556,7 +562,10 @@ class RasPlan:
         
         plan_file_path = RasUtils.get_plan_path(plan_number, ras_obj)
         if not plan_file_path:
-            raise FileNotFoundError(f"Plan file not found: {plan_number}. Please provide a valid plan number or path.")
+            raise FileNotFoundError(
+                f"Plan file not found: {plan_number}. Please provide a valid plan number or path. "
+                f"See: https://rascommander.info/user-guide/plan-execution/"
+            )
         
         def update_num_cores(lines):
             updated_lines = []
