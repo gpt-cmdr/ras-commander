@@ -193,7 +193,7 @@ Unsupported combinations, such as disabling the selected low-flow method or sele
 - `GeomCulvert.get_adjacent_cross_sections(geom, river, reach, station)` - Find the nearest upstream and downstream cross sections around a structure
 - `GeomCulvert.set_adjacent_ineffective_flow(geom, river, reach, station, upstream_ineffective=None, downstream_ineffective=None, ...)` - Coordinate ineffective-flow writes on adjacent cross sections
 
-`set_culverts()` accepts a DataFrame, list of dictionaries, or one dictionary. Shape can be supplied as `Shape` code or `ShapeName`. Required fields are `Shape`/`ShapeName`, `Span`, `Length`, `ManningsN`, `EntranceLoss`, `ExitLoss`, `InletType`, `OutletType`, `UpstreamInvert`, and `DownstreamInvert`; non-circular shapes also require `Rise`. Single-barrel records require `UpstreamStation` and `DownstreamStation`. Multi-barrel records require `NumBarrels` and matching `BarrelStations` pairs.
+`set_culverts()` accepts a DataFrame, list of dictionaries, or one dictionary. Shape can be supplied as `Shape` code or `ShapeName` for any taxonomy-backed HEC-RAS culvert shape: Circular, Box, Pipe Arch, Ellipse, Arch, Semi-Circle, Low Profile Arch, High Profile Arch, or Con Span. Required fields are validated against `culvert_taxonomy.json`, including shape-specific dimensions, positive/nonnegative numeric ranges, `Chart #`/`Scale#` combinations, a maximum of 10 culvert groups per crossing, and a maximum of 25 identical barrels per group. The API preserves legacy field names `InletType` and `OutletType` for HEC-RAS `Chart #` and `Scale#`; `ChartID` and `ScaleID` aliases are also accepted. Single-barrel records require `UpstreamStation` and `DownstreamStation`. Multi-barrel records require `NumBarrels` and matching `BarrelStations` pairs.
 
 ```python
 from ras_commander.geom.GeomCulvert import GeomCulvert
@@ -218,6 +218,22 @@ GeomCulvert.set_culverts(
             "DownstreamInvert": 25.0,
             "DownstreamStation": 996,
             "CulvertName": "Culvert #1",
+        },
+        {
+            "ShapeName": "Pipe Arch",
+            "Span": 7,
+            "Rise": 5,
+            "Length": 48,
+            "ManningsN": 0.024,
+            "EntranceLoss": 0.4,
+            "ExitLoss": 1.0,
+            "ChartID": 34,
+            "ScaleID": 1,
+            "UpstreamInvert": 26.2,
+            "UpstreamStation": 1000,
+            "DownstreamInvert": 25.8,
+            "DownstreamStation": 1000,
+            "CulvertName": "Pipe Arch",
         },
         {
             "ShapeName": "Box",
