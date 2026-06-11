@@ -435,7 +435,8 @@ class RasUtils:
         # Validate range (1-99 for HEC-RAS files)
         if not 1 <= ras_int <= 99:
             raise ValueError(
-                f"RAS file number must be between 1 and 99, got: {ras_int}"
+                f"RAS file number must be between 1 and 99, got: {ras_int}. "
+                f"See: https://rascommander.info/user-guide/plan-execution/"
             )
 
         # Return normalized two-digit format

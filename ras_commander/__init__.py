@@ -14,10 +14,39 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.98.1"
+    __version__ = "0.98.2"
+
+# Canonical machine-readable agent index (see docs() helper below)
+__llms_txt__ = "https://rascommander.info/llms.txt"
 
 # Set up logging
 setup_logging()
+
+
+def docs(topic=None):
+    """Return (and print) the rascommander.info URL for an optional topic.
+
+    No args -> docs home; topic='llms' -> llms.txt; topic='dataframes' ->
+    the DataFrame Reference; any other topic -> user-guide/<topic>/.
+    Designed for LLM agents to self-locate the documentation at runtime.
+    """
+    base = "https://rascommander.info"
+    if topic is None:
+        url = base
+    elif topic == "llms":
+        url = __llms_txt__
+    elif topic == "dataframes":
+        url = f"{base}/reference/dataframe-reference/"
+    else:
+        url = f"{base}/user-guide/{topic}/"
+    print(url)
+    return url
+
+
+def agent_guide_path():
+    """Return the filesystem path to the packaged LLM_GUIDE.md (offline agent quickstart)."""
+    from importlib.resources import files
+    return files("ras_commander").joinpath("LLM_GUIDE.md")
 
 # Core functionality
 from .RasPrj import RasPrj, init_ras_project, get_ras_exe, ras, create_project_from_template
@@ -245,6 +274,9 @@ __all__ = [
 
     # Utilities
     'get_logger', 'log_call', 'standardize_input',
+
+    # Documentation / LLM agent helpers
+    'docs', 'agent_guide_path',
 
     # Validation framework
     'ValidationSeverity', 'ValidationResult', 'ValidationReport',
