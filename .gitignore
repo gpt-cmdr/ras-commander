@@ -238,3 +238,16 @@ terminal-logs/
 .env.local
 .pypirc
 /agent_tasks/plans
+
+# --- working scratch / large data (do not commit) ---
+examples/data/
+/2026 Progress Update/
+agent_tasks/session_state_*.md
+examples/notebook_inventory.csv
+scripts/_clb02_rerun_issue.md
+scripts/boeuf_extract.py
+scripts/build_nb230.py
+scripts/build_nb232.py
+scripts/cog_ouachita.py
+scripts/extract_wse_ouachita.py
+scripts/ouachita_zip_probe.py

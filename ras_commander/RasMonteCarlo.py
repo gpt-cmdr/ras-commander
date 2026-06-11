@@ -1828,6 +1828,7 @@ class RasMonteCarlo:
         timeout_sec: Optional[int] = None,
         clear_geompre: bool = False,
         clone_geom: bool = False,
+        workers: Optional[list] = None,
     ) -> dict:
         """
         Run a Monte Carlo ensemble using RasPermutation as the execution engine.
@@ -1841,6 +1842,13 @@ class RasMonteCarlo:
             num_cores: HEC-RAS core count per plan execution.
             max_plans_per_batch: Limit per batch project.
             ras_object: Optional project object for multi-project workflows.
+            timeout_sec: Optional per-plan timeout in seconds.
+            clear_geompre: Clear .c## preprocessor files before execution.
+            clone_geom: Clone geometry file per sample.
+            workers: Optional list of remote worker objects from
+                init_ras_worker(). When provided, plans are distributed
+                across the remote fleet via compute_parallel_remote()
+                instead of local compute_parallel().
 
         Returns:
             Dictionary containing the master log path, enriched results
@@ -1876,6 +1884,7 @@ class RasMonteCarlo:
             ras_object=ras_object,
             timeout_sec=timeout_sec,
             clear_geompre=clear_geompre,
+            workers=workers,
         )
 
         if "sample_id" in results_df.columns:

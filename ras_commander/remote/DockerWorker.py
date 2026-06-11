@@ -553,7 +553,7 @@ def execute_docker_plan(
         # Container configuration
         container_kwargs = {
             'image': worker.docker_image,
-            'command': [worker.container_script_path, plan_number],
+            'command': [worker.container_script_path, str(int(plan_number))],
             'volumes': volumes,
             'environment': environment,
             'detach': True,
