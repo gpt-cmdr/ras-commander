@@ -2598,6 +2598,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         huc8: str,
         *,
         validate_dss: bool,
+        require_projects: bool = False,
     ) -> Dict[str, Any]:
         """Apply the shared documentation/HMS/path-correction/standardization tail.
 
@@ -2611,6 +2612,20 @@ HEC-RAS version: 5.0.1 / 5.0.3
             norm = RasEbfeModels._normalize_split_delivery_ras_folder(folders['ras'])
             if norm.get('projects_normalized', 0):
                 projects = RasEbfeModels._discover_valid_ras_projects(folders['ras'])
+        if not projects:
+            no_model_message = (
+                f"{display_name} ({huc8}): no runnable HEC-RAS project "
+                f"(.prj/.g##/.p##) was discovered under {folders['ras']}. The "
+                f"delivery was organized but contains no model. This is expected "
+                f"when the FEMA eBFE source ships Terrain/LandUse only - notably "
+                f"BayouDeLoutre (08040202), whose model and Output are absent from "
+                f"the eBFE S3 bucket - or for split/shell deliveries awaiting a "
+                f"manual component download. Pass require_projects=True to raise "
+                f"instead of warning."
+            )
+            if require_projects:
+                raise ValueError(no_model_message)
+            print(f"  WARNING: {no_model_message}")
         docs_copied = RasEbfeModels._copy_documentation_assets(
             aux_source_root, folders['docs']
         )
@@ -2650,6 +2665,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         *,
         validate_dss: bool,
         aux_source_root: Optional[Path] = None,
+        require_projects: bool = False,
     ) -> Dict[str, Any]:
         """Copy RAS projects from ``source_root`` then apply the shared tail."""
         source_root = Path(source_root)
@@ -2662,6 +2678,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             display_name,
             huc8,
             validate_dss=validate_dss,
+            require_projects=require_projects,
         )
         summary['ras_files'] = ras_files
         return summary
@@ -2725,6 +2742,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         validate_dss: bool = True,
         include_hydrology: bool = True,
         ras_version: str = "5.0.7",
+        require_projects: bool = False,
     ) -> Path:
         """Organize Lower Ouachita-Bayou De Loutre (08040202) eBFE model.
 
@@ -2733,6 +2751,12 @@ HEC-RAS version: 5.0.1 / 5.0.3
         (``LowerOuachitaBayouDLoutre_Hydraulic Models.zip``). The outer archive is
         downloaded/extracted, the nested hydraulic (and optional hydrology) zips
         are extracted, then the projects are staged and standardized.
+
+        Note: HUC 08040202's FEMA eBFE archive ships **Terrain and LandUse only**
+        - the RAS model and Output HDFs are absent from the eBFE S3 bucket - so a
+        successful organize here produces a delivery with **zero runnable RAS
+        projects**. A clear ``WARNING`` is printed in that case; pass
+        ``require_projects=True`` to raise a ``ValueError`` instead.
         """
         RasEbfeModels._ensure_console_output_safe()
         downloaded_folder = Path(
@@ -2794,6 +2818,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             "Lower Ouachita-Bayou De Loutre",
             "08040202",
             validate_dss=validate_dss,
+            require_projects=require_projects,
             aux_source_root=models_root,
         )
         print(f"  Copied {summary.get('ras_files', 0)} RAS file(s)")
@@ -2819,6 +2844,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         output_plans: Optional[List[str]] = None,
         validate_dss: bool = False,
         ras_version: str = "5.0.7",
+        require_projects: bool = False,
     ) -> Path:
         """Organize Lower Ouachita (08040207) eBFE model.
 
@@ -2925,7 +2951,8 @@ HEC-RAS version: 5.0.1 / 5.0.3
 
         print("\n[5/5] Finalizing...")
         summary = RasEbfeModels._finalize_delivery(
-            folders, input_dir, "Lower Ouachita", "08040207", validate_dss=validate_dss
+            folders, input_dir, "Lower Ouachita", "08040207",
+            validate_dss=validate_dss, require_projects=require_projects,
         )
         RasEbfeModels._write_model_log(
             folders['agent'],
@@ -2955,6 +2982,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         include_hydrology: bool = True,
         validate_dss: bool = False,
         ras_version: str = "6.6",
+        require_projects: bool = False,
     ) -> Path:
         """Organize Boeuf (08050001) eBFE model.
 
@@ -3039,7 +3067,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         if processed:
             summary = RasEbfeModels._finalize_delivery(
                 folders, downloaded_folder, "Boeuf", "08050001",
-                validate_dss=validate_dss,
+                validate_dss=validate_dss, require_projects=require_projects,
             )
             summary['ras_files'] = copied
         else:
@@ -3066,6 +3094,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         include_hydrology: bool = True,
         validate_dss: bool = False,
         ras_version: str = "6.6",
+        require_projects: bool = False,
     ) -> Path:
         """Organize Bayou D'Arbonne (08040206) eBFE model.
 
@@ -3197,7 +3226,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         print("\n[4/4] Finalizing...")
         summary = RasEbfeModels._finalize_delivery(
             folders, downloaded_folder, "Bayou D'Arbonne", "08040206",
-            validate_dss=validate_dss,
+            validate_dss=validate_dss, require_projects=require_projects,
         )
         RasEbfeModels._write_model_log(
             folders['agent'], "Bayou D'Arbonne", "08040206", output_folder, summary,
