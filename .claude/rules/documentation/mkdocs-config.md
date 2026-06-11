@@ -4,28 +4,29 @@ paths: docs/**
 
 # MkDocs Configuration - Unified Build Approach
 
-**Context**: Documentation build for GitHub Pages and ReadTheDocs
+**Context**: Documentation build for the self-hosted rascommander.info site
 **Priority**: Critical - incorrect config breaks deployment
 **Auto-loads**: Yes (all code)
 **Path-Specific**: Relevant to documentation builds
 
 ## Overview: Pre-Converted Markdown Approach
 
-Use the **same unified approach** on both documentation platforms: pre-convert notebooks to markdown before MkDocs build. This achieves ~30x faster builds than mkdocs-jupyter and ensures consistency.
+Use the unified approach: pre-convert notebooks to markdown before MkDocs build. This achieves ~30x faster builds than mkdocs-jupyter and ensures consistency.
 
 **Key insight**: `mkdocs-jupyter` plugin is slow with many notebooks. Pre-convert with `nbconvert` in batch mode instead.
 
-## Dual-Platform Deployment
+## Deployment: Self-Hosted rascommander.info
 
-Deploy ras-commander documentation to TWO platforms:
+The canonical documentation site is **https://rascommander.info** (self-hosted MkDocs served
+from CT 210 behind a Cloudflare tunnel). This replaces the prior GitHub Pages / ReadTheDocs hosting.
 
-1. **GitHub Pages**: https://gpt-cmdr.github.io/ras-commander/
-   - Build: `.github/workflows/docs.yml`
+- **Canonical host**: https://rascommander.info (`site_url` in `mkdocs.yml`)
+- **Build CI**: self-hosted docs pipeline (see PR #198/#199 history); GitHub Pages auto-deploy is **disabled**.
+- **Deprecated hosts**: `gpt-cmdr.github.io/ras-commander` (GitHub Pages) and
+  `ras-commander.readthedocs.io` (ReadTheDocs) are no longer the source of truth. Do not add new
+  references to them; point all docs links at rascommander.info.
 
-2. **ReadTheDocs**: https://ras-commander.readthedocs.io
-   - Build: `.readthedocs.yaml`
-
-**Both now use identical notebook handling** via `.claude/scripts/prepare_notebooks_for_docs.py`.
+Notebook handling is identical regardless of host via `.claude/scripts/prepare_notebooks_for_docs.py`.
 
 ## How the Unified Approach Works
 
@@ -162,15 +163,17 @@ validation:
 
 This allows AGENTS.md files with relative links to source code without breaking builds.
 
-## Platform Comparison
+## Build Pipeline (self-hosted)
 
-| Aspect | GitHub Pages | ReadTheDocs |
-|--------|--------------|-------------|
-| **Build File** | `.github/workflows/docs.yml` | `.readthedocs.yaml` |
-| **Notebook Handling** | Pre-convert to .md | Pre-convert to .md |
-| **Script Used** | `prepare_notebooks_for_docs.py` | `prepare_notebooks_for_docs.py` |
-| **Build Trigger** | Push to main | Push + PR |
-| **Deployment** | `mkdocs gh-deploy` | ReadTheDocs native |
+| Aspect | Value |
+|--------|-------|
+| **Canonical host** | https://rascommander.info (self-hosted MkDocs, CT 210 + Cloudflare tunnel) |
+| **Notebook Handling** | Pre-convert `examples/*.ipynb` → `docs/notebooks/*.md` |
+| **Script Used** | `prepare_notebooks_for_docs.py` |
+| **Build Trigger** | Push to main (self-hosted docs CI) |
+
+*Legacy GitHub Pages (`.github/workflows/docs.yml`) and ReadTheDocs (`.readthedocs.yaml`) configs may
+still exist in the tree but are no longer the deployment source of truth.*
 
 ## Agent/Automation Guidelines
 
