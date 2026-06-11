@@ -757,9 +757,22 @@ class RasPermutation:
         ras_object: Any = None,
         timeout_sec: Optional[int] = None,
         clear_geompre: bool = False,
+        workers: Optional[List[Any]] = None,
     ) -> pd.DataFrame:
         """
         Execute generated batch folders and append summary metrics to master log.
+
+        Args:
+            plan_matrix: Output from generate_plans().
+            max_workers: Maximum parallel worker count (local execution).
+            num_cores: HEC-RAS core count per plan execution.
+            ras_object: Optional project object for multi-project workflows.
+            timeout_sec: Optional per-plan timeout in seconds.
+            clear_geompre: Clear .c## preprocessor files before execution.
+            workers: Optional list of remote worker objects from
+                init_ras_worker(). When provided, plans are distributed
+                across the remote fleet via compute_parallel_remote()
+                instead of local compute_parallel().
         """
         from .RasCmdr import RasCmdr
         from .RasPrj import RasPrj, init_ras_project, ras
@@ -775,6 +788,8 @@ class RasPermutation:
 
         source_ras = ras_object or ras
         ras_exe_path = getattr(source_ras, "ras_exe_path", None)
+
+        use_remote = workers is not None and len(workers) > 0
 
         batch_results: List[pd.DataFrame] = []
         for batch_folder in plan_matrix["batch_folders"]:
@@ -797,21 +812,45 @@ class RasPermutation:
             )
 
             plan_numbers = batch_log_df["plan_number"].tolist()
-            compute_result = RasCmdr.compute_parallel(
-                plan_number=plan_numbers,
-                max_workers=max_workers,
-                num_cores=num_cores,
-                ras_object=batch_ras,
-                timeout_sec=timeout_sec,
-                clear_geompre=clear_geompre,
-            )
 
-            summary_df = compute_result.results_df.copy()
-            if summary_df.empty:
+            if use_remote:
+                from .remote import compute_parallel_remote
+
+                remote_results = compute_parallel_remote(
+                    plan_numbers=plan_numbers,
+                    workers=workers,
+                    ras_object=batch_ras,
+                    num_cores=num_cores,
+                    clear_geompre=clear_geompre,
+                )
+
+                execution_success_map = {
+                    plan_num: er.success
+                    for plan_num, er in remote_results.items()
+                }
+
                 summary_df = batch_ras.update_results_df(plan_numbers=plan_numbers)
                 summary_df = summary_df[
                     summary_df["plan_number"].isin(plan_numbers)
                 ].copy()
+            else:
+                compute_result = RasCmdr.compute_parallel(
+                    plan_number=plan_numbers,
+                    max_workers=max_workers,
+                    num_cores=num_cores,
+                    ras_object=batch_ras,
+                    timeout_sec=timeout_sec,
+                    clear_geompre=clear_geompre,
+                )
+
+                execution_success_map = compute_result.execution_results
+
+                summary_df = compute_result.results_df.copy()
+                if summary_df.empty:
+                    summary_df = batch_ras.update_results_df(plan_numbers=plan_numbers)
+                    summary_df = summary_df[
+                        summary_df["plan_number"].isin(plan_numbers)
+                    ].copy()
 
             if summary_df.empty:
                 batch_summary = batch_log_df[
@@ -831,7 +870,7 @@ class RasPermutation:
             summary_df["status"] = summary_df.apply(
                 lambda row: RasPermutation._derive_status(
                     row,
-                    compute_result.execution_results.get(row["plan_number"]),
+                    execution_success_map.get(row["plan_number"]),
                 ),
                 axis=1,
             )
