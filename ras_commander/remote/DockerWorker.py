@@ -244,7 +244,10 @@ def init_docker_worker(**kwargs) -> DockerWorker:
         remote_host_os: OS of the remote Docker host: "windows" or "linux".
             If omitted, ssh:// hosts default to "linux" and all other remote
             hosts default to "windows". Linux hosts are staged over SFTP/scp and
-            do NOT require share_path; geometry preprocessing runs in-container.
+            do NOT require share_path; with preprocess_on_host=True (default)
+            HEC-RAS geometry preprocessing runs on the Windows host and the
+            resulting .tmp.hdf/.x## are shipped to the container (the container
+            runs RasUnsteady only).
         worker_id: Custom worker ID (auto-generated if not provided)
         cores_total: Total CPU cores available for this worker
         cores_per_plan: CPU cores to allocate per plan
@@ -447,8 +450,9 @@ def execute_docker_plan(
     """
     docker = check_docker_dependencies()
 
-    # Native-Linux Docker host (ssh://): stage over SSH, preprocess in-container.
-    # Windows-Docker-Desktop path below is left unchanged for compatibility.
+    # Native-Linux Docker host (ssh://): stage over SSH; with preprocess_on_host
+    # the geometry is preprocessed on the Windows host and shipped (container runs
+    # RasUnsteady only). Windows-Docker-Desktop path below is unchanged.
     if getattr(worker, "_is_linux_host", False):
         return execute_docker_plan_linux(
             worker=worker,
