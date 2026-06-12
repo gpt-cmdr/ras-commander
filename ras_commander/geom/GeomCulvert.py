@@ -226,8 +226,17 @@ class GeomCulvert:
 
     @staticmethod
     def _find_structure_end(lines: List[str], bridge_idx: int) -> int:
-        """Find the first line after a bridge/culvert structure block."""
-        for i in range(bridge_idx + 1, min(bridge_idx + GeomCulvert.MAX_PARSE_LINES, len(lines))):
+        """Find the first line after a bridge/culvert structure block.
+
+        Scans to the next cross section / structure (``Type RM``), reach, or
+        ``Reach XS=`` boundary. The scan is NOT capped to a fixed window: in real
+        models a structure's interior (bridge deck, ineffective-flow blocks, GIS
+        cut lines) routinely pushes the culvert records and the following ``Type
+        RM`` header well past a few hundred lines. A premature cap made this
+        return end-of-file, so ``get_culverts`` swallowed every downstream
+        structure's culverts.
+        """
+        for i in range(bridge_idx + 1, len(lines)):
             line = lines[i]
             if (line.startswith("Type RM Length L Ch R =") or
                     line.startswith("River Reach=") or
@@ -257,6 +266,25 @@ class GeomCulvert:
             return float(str(value).strip())
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _is_station_line(line: str) -> bool:
+        """True for a fixed-width barrel-station line (whitespace + numbers only),
+        such as ``   95.02   86.98`` or ``     996     996    1004    1004``."""
+        stripped = line.strip()
+        if not stripped:
+            return False
+        tokens = stripped.split()
+        for tok in tokens:
+            try:
+                val = float(tok)
+            except ValueError:
+                return False
+            # real station values are finite; reject nan/inf so a stray
+            # non-numeric/sentinel line is not mistaken for a station line.
+            if val != val or val in (float("inf"), float("-inf")):
+                return False
+        return True
 
     @staticmethod
     def _coalesce_us_distance(record: Dict[str, Any]) -> Any:
@@ -438,7 +466,14 @@ class GeomCulvert:
         if isinstance(value, int):
             return str(value)
         if isinstance(value, float):
-            return f"{value:g}"
+            # Integer-valued floats render without a trailing ".0" (8.0 -> "8");
+            # otherwise preserve full precision. Plain ``:g`` defaults to only 6
+            # significant figures and silently truncates real geometry values
+            # (e.g. an invert 310.9502 -> "310.95"), so use enough precision to
+            # round-trip the value while still stripping noise/trailing zeros.
+            if value == int(value) and abs(value) < 1e15:
+                return str(int(value))
+            return f"{value:.12g}"
         return str(value).strip()
 
     @staticmethod
@@ -738,7 +773,15 @@ class GeomCulvert:
                 data['BarrelStations'] = [(data['UpstreamStation'], data['DownstreamStation'])]
                 data['UpstreamStations'] = [data['UpstreamStation']]
                 data['DownstreamStations'] = [data['DownstreamStation']]
+            # HEC-RAS writes a fixed-width station line after a single-barrel
+            # record too (stations are also inline, so this line is redundant).
+            # Consume it so the detail loop below still finds Culvert Bottom n=,
+            # Culvert Bottom Depth=, and BC Culvert Barrel= lines.
+            if (next_idx < section_end_idx
+                    and GeomCulvert._is_station_line(lines[next_idx])):
+                next_idx += 1
 
+        bc_barrel_count = 0
         while next_idx < section_end_idx:
             next_line = lines[next_idx]
             if next_line.startswith("Culvert Bottom n="):
@@ -750,13 +793,29 @@ class GeomCulvert:
                 data['BottomDepth'] = GeomCulvert._parse_float(bottom_depth)
                 next_idx += 1
             elif next_line.startswith("BC Culvert Barrel="):
-                barrel_val = GeomParser.extract_keyword_value(next_line, "BC Culvert Barrel")
-                barrel_parts = [p.strip() for p in barrel_val.split(',')]
-                if barrel_parts:
-                    data['NumBarrels'] = GeomCulvert._parse_int(barrel_parts[0]) or data['NumBarrels']
+                # "BC Culvert Barrel=<barrel_index>,<name>,<flag>" is a per-barrel
+                # BC reference. The first field is the barrel INDEX (1, 2, ...),
+                # NOT the barrel count -- counting the lines gives the count.
+                bc_barrel_count += 1
                 next_idx += 1
             else:
                 break
+
+        # NumBarrels precedence: the station-line pair count is ground truth;
+        # fall back to the count of per-barrel BC references. This keeps a real
+        # multi-barrel record (e.g. "...,N,Name,..." + an N-pair station line)
+        # from being collapsed to 1 by a trailing "BC Culvert Barrel=1" line.
+        if data['BarrelStations']:
+            declared = data['NumBarrels']
+            actual = len(data['BarrelStations'])
+            if declared and declared != actual:
+                logger.warning(
+                    "Culvert %r declares %s barrel(s) but its station line has "
+                    "%s pair(s); using the station-pair count.",
+                    (data.get('CulvertName') or '').strip(), declared, actual)
+            data['NumBarrels'] = actual
+        elif bc_barrel_count and not data['NumBarrels']:
+            data['NumBarrels'] = bc_barrel_count
 
         return data, next_idx
 
@@ -787,6 +846,14 @@ class GeomCulvert:
                 _, i = GeomCulvert._parse_culvert_record(lines, i, section_end_idx)
                 last_idx = i
             elif lines[i].startswith(GeomCulvert.CULVERT_DETAIL_PREFIXES):
+                i += 1
+                last_idx = i
+            elif GeomCulvert._is_station_line(lines[i]):
+                # HEC-RAS writes a fixed-width station line after EVERY culvert
+                # record (single-barrel included). The single-barrel parser reads
+                # stations inline and does not consume it, so skip it here -- else
+                # the range stops short and later culvert groups at the same
+                # structure are left orphaned when records are replaced.
                 i += 1
                 last_idx = i
             elif lines[i].strip() == "":
@@ -850,6 +917,19 @@ class GeomCulvert:
                 record.get('UsDistance', record.get('ChartNumber')),
             ]
             output = [f"Culvert={','.join(GeomCulvert._format_value(v) for v in fields)}\n"]
+            # HEC-RAS writes a fixed-width US/DS station line after a single-barrel
+            # Culvert= record too. Re-emit it (when stations are known) for format
+            # fidelity and to keep consecutive culvert groups at one structure
+            # unambiguously separated.
+            us_sta = record.get('UpstreamStation')
+            ds_sta = record.get('DownstreamStation')
+            if us_sta is not None and ds_sta is not None:
+                output.extend(GeomParser.format_fixed_width(
+                    [us_sta, ds_sta],
+                    column_width=GeomCulvert.FIXED_WIDTH_COLUMN,
+                    values_per_line=GeomCulvert.VALUES_PER_LINE,
+                    precision=2,
+                ))
 
         if record['BottomN'] is not None:
             output.append(f"Culvert Bottom n={GeomCulvert._format_value(record['BottomN'])}\n")
@@ -1065,6 +1145,14 @@ class GeomCulvert:
 
         Returns:
             dict with replacement counts and backup path
+
+        Note:
+            The hydraulic culvert data (shape, dimensions, inverts, stations,
+            losses, US Distance, bottom n/depth) round-trips faithfully. The
+            optional per-barrel ``BC Culvert Barrel=<index>,<name>,<flag>``
+            boundary-condition reference lines are NOT preserved on rewrite --
+            HEC-RAS regenerates them when the geometry is opened/recomputed. If a
+            workflow depends on specific BC barrel names/flags, re-author them.
 
         Raises:
             FileNotFoundError: If geometry file doesn't exist
