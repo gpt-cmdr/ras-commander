@@ -65,6 +65,24 @@ Reconstruct and validate culvert placement from geometry; complements `GeomCulve
   (`Connection Culv=` + `Conn Culvert Barrel=` + a packed `US_x US_y DS_x DS_y` line), so
   for 2D the +/-1% GIS-length rule is exact. 1D inline culverts do not store a GIS line.
 
+## SA/2D Connection Culvert Authoring (`GeomLateral`)
+
+- `get_connection_culverts(geom, connection_name)` reads the `Connection Culv=` group(s)
+  on a connection -> one row per barrel (shape/dims/inverts/loss + per-barrel US/DS
+  stations and GIS endpoint coordinates). `set_connection_culverts(geom, connection_name,
+  culverts)` authors/replaces them (list of group dicts, each with a `barrels` list of
+  `us_xy`/`ds_xy`); stations default to the connection-line projection of the barrel
+  midpoint. Format verified against production LA LWI 2D models and the authored output
+  confirmed to compute in HEC-RAS.
+- Record layout: per group `Connection Culv=Shape,Span,Rise,Length,n,Ke,Kex,Chart,Scale,
+  USinv,DSinv,NumBarrels,Name, 0 ,` then an 8-char fixed-width station line (one US/DS pair
+  per barrel), then per barrel `Conn Culvert Barrel=<id>,<name>,2` + a 16-char fixed-width
+  `US_x US_y DS_x DS_y` line, then `Conn Culv Bottom n=`. The 3 `Conn HTab` lines appear
+  ONCE after the last group. Coordinate lines may be fixed-width *packed* (no delimiter) ->
+  parse by column (`_parse_fw_floats`).
+- `set_connection_culverts` warns when a barrel's GIS endpoint distance differs from the
+  entered `Length` by > 1% (HEC-RAS may reject it).
+
 ## Land Cover Manning's n Override Architecture
 
 HEC-RAS resolves per-cell Manning's n through a layered override hierarchy:
