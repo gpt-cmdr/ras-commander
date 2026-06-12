@@ -73,6 +73,34 @@ Permanent Ineff=
 """
 
 
+def _multi_group_culvert_text() -> str:
+    """Real-world layout: a structure with TWO single-barrel culvert groups, each
+    record followed by a fixed-width station line and detail lines (as HEC-RAS
+    actually writes them). Inverts use 7 significant figures to exercise the
+    writer's numeric precision. Mirrors Squannacook RS 41."""
+    return """Geom Title=Multi-Group Culvert Fixture
+River Reach=Test River,Reach 1
+Type RM Length L Ch R = 1 ,110,100,100,100
+#XS Ineff= 0 , 0
+Permanent Ineff=
+
+Type RM Length L Ch R = 2 ,100,,,
+Bridge Culvert-0,0,0,0, 0
+Culvert=5,1.75,3.8,31,0.019,0.5,1,41,1,311.9456,95.02,310.9502,86.98,Culvert #1  , 0 ,6.56
+   95.02   86.98
+BC Culvert Barrel=1,Barrel #1,0
+Culvert Bottom n=0.019
+Culvert=5,2.2,3.7,31,0.019,0.5,1,41,1,311.9456,99.42,310.9502,91.3,Culvert #2  , 0 ,6.56
+   99.42    91.3
+BC Culvert Barrel=1,Barrel #1,0
+Culvert Bottom n=0.019
+BC Design=,, 0 ,, 0 ,,,,,,
+Type RM Length L Ch R = 1 ,90,100,100,100
+#XS Ineff= 0 , 0
+Permanent Ineff=
+"""
+
+
 def _write_geometry(tmp_path, text=None):
     geom_file = tmp_path / "fixture.g01"
     geom_file.write_text(text or _base_geometry_text(), encoding="utf-8")
@@ -300,6 +328,193 @@ def test_set_culverts_round_trips_non_integer_us_distance(tmp_path):
     )
     again = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
     assert again.loc[0, "UsDistance"] == pytest.approx(17.07)
+
+
+def test_reader_reads_details_after_station_line(tmp_path):
+    # Real HEC-RAS writes a fixed-width station line after a single-barrel
+    # Culvert= record; the reader must skip it and still read the Bottom n /
+    # Bottom Depth detail lines that follow (regression: it used to stop at the
+    # station line and drop the details).
+    geom_file = _write_geometry(tmp_path, _multi_group_culvert_text())
+
+    culverts = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+    assert len(culverts) == 2
+    assert culverts.loc[0, "BottomN"] == pytest.approx(0.019)
+    assert culverts.loc[1, "BottomN"] == pytest.approx(0.019)
+    # stations are still read from the inline record fields
+    assert culverts.loc[0, "BarrelStations"] == [(95.02, 86.98)]
+    assert culverts.loc[1, "BarrelStations"] == [(99.42, 91.3)]
+
+
+def test_multiple_culvert_groups_round_trip_no_orphan(tmp_path):
+    # A structure with two culvert groups must round-trip to exactly two records.
+    # Regression: the writer's replacement range stopped at the station line after
+    # the first record, leaving the second original record orphaned (2 -> 3).
+    geom_file = _write_geometry(tmp_path, _multi_group_culvert_text())
+
+    before = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+    assert len(before) == 2
+    assert before["CulvertName"].str.strip().tolist() == ["Culvert #1", "Culvert #2"]
+
+    GeomCulvert.set_culverts(geom_file, "Test River", "Reach 1", "100",
+                             before.to_dict("records"))
+    after = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+    assert len(after) == 2, f"expected 2 groups, got {after['CulvertName'].tolist()}"
+    assert after["CulvertName"].str.strip().tolist() == ["Culvert #1", "Culvert #2"]
+    for col in ["Span", "Rise", "Length", "UpstreamInvert", "DownstreamInvert",
+                "InletType", "UsDistance", "BottomN"]:
+        assert before[col].tolist() == pytest.approx(after[col].tolist(), nan_ok=True)
+
+
+def test_writer_preserves_invert_precision(tmp_path):
+    # The trailing-digit of a 7-significant-figure invert must survive a write.
+    # Regression: _format_value used "{:g}" (6 sig figs) and truncated
+    # 310.9502 -> 310.95 / 311.9456 -> 311.946.
+    geom_file = _write_geometry(tmp_path, _multi_group_culvert_text())
+    before = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+    GeomCulvert.set_culverts(geom_file, "Test River", "Reach 1", "100",
+                             before.to_dict("records"))
+    after = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+    assert after.loc[0, "UpstreamInvert"] == pytest.approx(311.9456)
+    assert after.loc[0, "DownstreamInvert"] == pytest.approx(310.9502)
+    # raw text must contain the full-precision value, not the 6-sig-fig truncation
+    raw = geom_file.read_text()
+    assert "311.9456" in raw and "310.9502" in raw
+    assert "311.946," not in raw and ",310.95," not in raw
+
+
+def test_format_value_precision_and_integer_floats():
+    # Unit-level guard for the formatter: integer-valued floats drop ".0";
+    # non-integers keep full precision without 6-sig-fig truncation.
+    assert GeomCulvert._format_value(8.0) == "8"
+    assert GeomCulvert._format_value(17.07) == "17.07"
+    assert GeomCulvert._format_value(310.9502) == "310.9502"
+    assert GeomCulvert._format_value(311.9456) == "311.9456"
+    assert GeomCulvert._format_value(0.019) == "0.019"
+
+
+def _multi_barrel_with_bc_barrel_lines() -> str:
+    """A 3-barrel record followed by per-barrel ``BC Culvert Barrel=`` references
+    (as production HEC-RAS models write them). The first field of those lines is
+    the barrel INDEX, not the count."""
+    return """Geom Title=Multi-Barrel BC Fixture
+River Reach=Test River,Reach 1
+Type RM Length L Ch R = 1 ,110,100,100,100
+#XS Ineff= 0 , 0
+
+Type RM Length L Ch R = 2 ,100,,,
+Bridge Culvert-0,0,0,0, 0
+Multiple Barrel Culv=2,6,10,230,0.014,0.5,1,8,1,227.9,227.6, 3,Culvert #1  , 0 ,100
+    1470    1210    1482    1222    1494    1234
+BC Culvert Barrel=1,Barrel #1,0
+BC Culvert Barrel=2,Barrel #2,0
+BC Culvert Barrel=3,Barrel #3,0
+Culvert Bottom n=0.014
+BC Design=,, 0 ,, 0 ,,,,,,
+Type RM Length L Ch R = 1 ,90,100,100,100
+#XS Ineff= 0 , 0
+"""
+
+
+def test_multi_barrel_numbarrels_not_collapsed_by_bc_barrel_lines(tmp_path):
+    # NumBarrels must come from the record/station line (3), not the index of the
+    # first BC Culvert Barrel reference. Regression: a "BC Culvert Barrel=1" line
+    # used to overwrite NumBarrels with 1, collapsing a 3-barrel culvert.
+    geom_file = _write_geometry(tmp_path, _multi_barrel_with_bc_barrel_lines())
+    culverts = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+    assert len(culverts) == 1
+    assert culverts.loc[0, "NumBarrels"] == 3
+    assert len(culverts.loc[0, "BarrelStations"]) == 3
+    assert culverts.loc[0, "BarrelStations"] == [(1470.0, 1210.0), (1482.0, 1222.0), (1494.0, 1234.0)]
+
+
+def _two_structures_with_distant_header(pad_lines: int) -> str:
+    # Structure A (RS 100) with a culvert, then `pad_lines` of GIS-like filler
+    # (numeric, no Type RM), then Structure B (RS 80) with its own culvert. When
+    # B's header is far from A's, structure-end detection must still find it.
+    pad = "\n".join("588679.07 3071901.03 588679.46 3071897.87" for _ in range(pad_lines))
+    return f"""Geom Title=Distant Header Fixture
+River Reach=Test River,Reach 1
+Type RM Length L Ch R = 1 ,110,100,100,100
+#XS Ineff= 0 , 0
+
+Type RM Length L Ch R = 2 ,100,,,
+Bridge Culvert-0,0,0,0, 0
+Culvert=1,3,3,40,0.013,0.5,1,1,1,290.4,66.69,290.7,99.15,Culvert #1  , 0 ,17
+   66.69   99.15
+Culvert Bottom n=0.013
+XS GIS Cut Line={pad_lines}
+{pad}
+Type RM Length L Ch R = 2 ,80,,,
+Bridge Culvert-0,0,0,0, 0
+Culvert=1,4,4,50,0.013,0.5,1,1,1,280.4,40.73,280.7,57.93,Culvert #2  , 0 ,9
+   40.73   57.93
+Culvert Bottom n=0.013
+BC Design=,, 0 ,, 0 ,,,,,,
+Type RM Length L Ch R = 1 ,70,100,100,100
+"""
+
+
+def test_get_culverts_scopes_structure_with_distant_next_header(tmp_path):
+    # Structure A's next structure header is >200 lines away. get_culverts(A) must
+    # return ONLY A's culvert, not bleed downstream into structure B. Regression:
+    # a fixed 200-line cap made structure-end return EOF, swallowing B's culverts.
+    geom_file = _write_geometry(tmp_path, _two_structures_with_distant_header(260))
+    a = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+    b = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "80")
+    assert a["CulvertName"].str.strip().tolist() == ["Culvert #1"]
+    assert b["CulvertName"].str.strip().tolist() == ["Culvert #2"]
+
+
+def _type4_multiple_opening_text() -> str:
+    # Culverts can live under a Type-4 "Multiple Opening" node, not just Type-2.
+    return """Geom Title=Type-4 Multiple Opening Fixture
+River Reach=Test River,Reach 1
+Type RM Length L Ch R = 1 ,110,100,100,100
+#XS Ineff= 0 , 0
+
+Type RM Length L Ch R = 4 ,100,,,
+Bridge Culvert-0,0,0,0, 0
+Multiple Barrel Culv=2,5,5,97,0.011,0.4,1,8,1,151.5,150, 5,Culvert #1  , 0 ,40
+     500     480     510     490     520     500     530     510     540     520
+Culvert Bottom n=0.011
+Multiple Barrel Culv=2,6,6,97,0.011,0.4,1,8,1,154.5,154, 2,Culvert #2  , 0 ,40
+     550     530     560     540
+Culvert Bottom n=0.011
+BC Design=,, 0 ,, 0 ,,,,,,
+Type RM Length L Ch R = 1 ,90,100,100,100
+"""
+
+
+def test_culverts_under_type4_multiple_opening_node(tmp_path):
+    # A culvert under a Type-4 node is attributed to that node's RS and reachable
+    # via get_culverts (not only Type-2 structures).
+    geom_file = _write_geometry(tmp_path, _type4_multiple_opening_text())
+    allc = GeomCulvert.get_all(geom_file)
+    assert allc["RS"].astype(str).tolist() == ["100", "100"]
+    cv = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+    assert cv["CulvertName"].str.strip().tolist() == ["Culvert #1", "Culvert #2"]
+    assert cv.loc[0, "NumBarrels"] == 5
+    assert cv.loc[1, "NumBarrels"] == 2
+
+
+def test_set_culverts_hydraulic_data_round_trips_bc_barrel_not_preserved(tmp_path):
+    # Documented behavior: hydraulic culvert data round-trips faithfully, but the
+    # per-barrel "BC Culvert Barrel=" references are intentionally NOT re-emitted
+    # (HEC-RAS regenerates them). This test pins that contract.
+    geom_file = _write_geometry(tmp_path, _multi_barrel_with_bc_barrel_lines())
+    before = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+    GeomCulvert.set_culverts(geom_file, "Test River", "Reach 1", "100",
+                             before.to_dict("records"))
+    after = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+    # hydraulic fields preserved
+    for col in ["Shape", "Span", "Rise", "Length", "ManningsN", "EntranceLoss",
+                "ExitLoss", "InletType", "OutletType", "UpstreamInvert",
+                "DownstreamInvert", "NumBarrels", "UsDistance", "BottomN"]:
+        assert before[col].tolist() == pytest.approx(after[col].tolist(), nan_ok=True)
+    assert after.loc[0, "NumBarrels"] == 3
+    # BC Culvert Barrel lines are not preserved (documented)
+    assert "BC Culvert Barrel=" not in geom_file.read_text()
 
 
 def test_set_culvert_updates_existing_record_and_appends(tmp_path):
