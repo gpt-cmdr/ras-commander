@@ -11,6 +11,7 @@ Classes:
     GeomLandCover - 2D Manning's n land cover operations
     GeomCrossSection - 1D cross section operations
     GeomStorage - Storage area operations
+    GeomProjection - Model geometry reprojection operations
     GeomLateral - Lateral structures and SA/2D connections
     GeomInlineWeir - Inline weir operations
     GeomBridge - Bridge operations
@@ -56,6 +57,7 @@ from .GeomCrossSection import (
 from .ManningsFromLandCover import ManningsFromLandCover
 from .GeomCrossSection import GeomCrossSection
 from .GeomStorage import GeomStorage
+from .GeomProjection import GeomProjection
 from .GeomLateral import GeomLateral
 from .GeomInlineWeir import GeomInlineWeir
 from .GeomBridge import GeomBridge
@@ -81,6 +83,7 @@ __all__ = [
     'CrossSectionManningsN',
     'CrossSectionReachLengths',
     'GeomStorage',
+    'GeomProjection',
     'GeomLateral',
     'GeomInlineWeir',
     'GeomBridge',
