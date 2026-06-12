@@ -44,6 +44,31 @@ theme:
 
 plugins:
   - search
+  - llmstxt:
+      full_output: llms-full.txt
+      sections:
+        LLM Agent Guide:
+          - development/llm-agents.md
+        Getting Started:
+          - getting-started/installation.md
+          - getting-started/quickstart.md
+          - getting-started/project-initialization.md
+        Reference:
+          - reference/dataframe-reference.md
+          - reference/quick-reference.md
+          - reference/file-formats.md
+        User Guide:
+          - user-guide/overview.md
+          - user-guide/plan-execution.md
+          - user-guide/workflows-and-patterns.md
+          - user-guide/hdf-data-extraction.md
+          - user-guide/geometry-operations.md
+          - user-guide/boundary-conditions.md
+        API Reference:
+          - api/index.md
+          - api/core.md
+          - api/hdf.md
+          - api/geometry.md
   - mkdocstrings:
       default_handler: python
       handlers:
@@ -187,6 +212,7 @@ nav:
     - Overview: cognitive-infrastructure/index.md
   - LLM Forward Development:
     - Overview: development/llm-development.md
+    - LLM Agent Guide: development/llm-agents.md
     - Agent Infrastructure: development/agent-infrastructure.md
     - Multi-Harness Agent Contract: development/multi-harness-agent-contract.md
     - Contributing: development/contributing.md
