@@ -120,6 +120,13 @@ class DockerWorker(RasWorker):
     share_path: Optional[str] = None  # UNC path for file transfer: \\\\host\\share
     remote_staging_path: Optional[str] = None  # Path on Docker host: C:\\RasRemote
 
+    # Remote host OS. "windows" => Windows Docker Desktop host reached via a UNC
+    # share (legacy/default behavior). "linux" => native-Linux Docker daemon
+    # reached over ssh://, staged via SFTP/scp (no UNC share). When left as None
+    # the OS is inferred: ssh:// hosts default to "linux", everything else to
+    # "windows" for backward compatibility.
+    remote_host_os: Optional[str] = None
+
     # Container paths (Linux paths inside container)
     container_input_path: str = "/app/input"
     container_output_path: str = "/app/output"
@@ -158,18 +165,48 @@ class DockerWorker(RasWorker):
         # Check if this is a remote Docker host
         self._is_remote = bool(self.docker_host and not self.docker_host.startswith("unix:"))
 
+        # Determine remote host OS. ssh:// hosts default to Linux; everything
+        # else defaults to Windows for backward compatibility. An explicit
+        # remote_host_os always wins.
+        is_ssh_host = bool(self.docker_host and self.docker_host.startswith("ssh://"))
+        if self.remote_host_os:
+            host_os = self.remote_host_os.strip().lower()
+            if host_os not in ("windows", "linux"):
+                raise ValueError(
+                    f"remote_host_os must be 'windows' or 'linux', got: {self.remote_host_os!r}"
+                )
+            self.remote_host_os = host_os
+        else:
+            self.remote_host_os = "linux" if is_ssh_host else "windows"
+
+        self._is_linux_host = self._is_remote and self.remote_host_os == "linux"
+
         # Validate remote Docker configuration
         if self._is_remote:
-            if not self.share_path:
-                raise ValueError(
-                    "share_path is required for remote Docker hosts. "
-                    "Example: '\\\\\\\\192.168.3.8\\\\RasRemote'"
-                )
-            if not self.remote_staging_path:
-                raise ValueError(
-                    "remote_staging_path is required for remote Docker hosts. "
-                    "Example: 'C:\\\\RasRemote'"
-                )
+            if self._is_linux_host:
+                # Native-Linux Docker host: staged over SSH, no UNC share needed.
+                if not is_ssh_host:
+                    raise ValueError(
+                        "remote_host_os='linux' requires an ssh:// docker_host URL "
+                        "(e.g. 'ssh://root@192.168.3.81'). File staging uses SFTP/scp."
+                    )
+                if not self.remote_staging_path:
+                    raise ValueError(
+                        "remote_staging_path is required for Linux Docker hosts. "
+                        "Example: '/opt/RasRemote'"
+                    )
+            else:
+                # Windows Docker Desktop host: staged over a UNC share (legacy).
+                if not self.share_path:
+                    raise ValueError(
+                        "share_path is required for remote Docker hosts. "
+                        "Example: '\\\\\\\\192.168.3.8\\\\RasRemote'"
+                    )
+                if not self.remote_staging_path:
+                    raise ValueError(
+                        "remote_staging_path is required for remote Docker hosts. "
+                        "Example: 'C:\\\\RasRemote'"
+                    )
 
         # Calculate parallel capacity
         if self.cores_total is not None and self.cores_per_plan:
@@ -184,6 +221,7 @@ class DockerWorker(RasWorker):
 
         logger.debug(f"DockerWorker initialized: image={self.docker_image}, "
                     f"host={self.docker_host or 'local'}, remote={self._is_remote}, "
+                    f"host_os={self.remote_host_os if self._is_remote else 'local'}, "
                     f"max_parallel={self.max_parallel_plans}")
 
 
@@ -197,10 +235,16 @@ def init_docker_worker(**kwargs) -> DockerWorker:
         docker_host: Docker daemon URL (optional, default: local)
             For remote TCP: "tcp://192.168.3.8:2375"
             For remote SSH: "ssh://user@192.168.3.8" (requires key-based auth)
-        share_path: UNC path for file transfer to remote Docker host (required for remote)
+        share_path: UNC path for file transfer to a *Windows* remote Docker host
+            (required for Windows remote hosts; NOT used for Linux hosts)
             Example: "\\\\\\\\192.168.3.8\\\\RasRemote"
         remote_staging_path: Path on Docker host for volume mounts (required for remote)
-            Example: "C:\\\\RasRemote" or "/mnt/c/RasRemote" (WSL paths)
+            Windows host: "C:\\\\RasRemote" or "/mnt/c/RasRemote" (WSL paths)
+            Linux host:   "/opt/RasRemote"
+        remote_host_os: OS of the remote Docker host: "windows" or "linux".
+            If omitted, ssh:// hosts default to "linux" and all other remote
+            hosts default to "windows". Linux hosts are staged over SFTP/scp and
+            do NOT require share_path; geometry preprocessing runs in-container.
         worker_id: Custom worker ID (auto-generated if not provided)
         cores_total: Total CPU cores available for this worker
         cores_per_plan: CPU cores to allocate per plan
@@ -229,13 +273,25 @@ def init_docker_worker(**kwargs) -> DockerWorker:
         ...     cores_per_plan=4
         ... )
 
-    Example (remote Docker via SSH):
+    Example (remote Windows Docker Desktop via SSH):
         >>> worker = init_docker_worker(
         ...     docker_image="hecras:6.6",
         ...     docker_host="ssh://user@192.168.3.8",
+        ...     remote_host_os="windows",
         ...     share_path="\\\\\\\\192.168.3.8\\\\RasRemote",
         ...     remote_staging_path="/mnt/c/RasRemote",
         ...     use_ssh_client=True,  # Use system ssh command
+        ...     cores_total=8,
+        ...     cores_per_plan=4
+        ... )
+
+    Example (native-Linux Docker host via SSH, e.g. CLB07):
+        >>> worker = init_docker_worker(
+        ...     docker_image="hecras:6.6",
+        ...     docker_host="ssh://root@192.168.3.81",
+        ...     remote_staging_path="/opt/RasRemote",
+        ...     # remote_host_os inferred as "linux" from ssh:// URL
+        ...     use_ssh_client=True,
         ...     cores_total=8,
         ...     cores_per_plan=4
         ... )
@@ -390,6 +446,19 @@ def execute_docker_plan(
         bool: True if execution succeeded, False otherwise
     """
     docker = check_docker_dependencies()
+
+    # Native-Linux Docker host (ssh://): stage over SSH, preprocess in-container.
+    # Windows-Docker-Desktop path below is left unchanged for compatibility.
+    if getattr(worker, "_is_linux_host", False):
+        return execute_docker_plan_linux(
+            worker=worker,
+            plan_number=plan_number,
+            ras_obj=ras_obj,
+            num_cores=num_cores,
+            clear_geompre=clear_geompre,
+            sub_worker_id=sub_worker_id,
+            autoclean=autoclean,
+        )
 
     # CRITICAL: Capture project info at the START of execution
     # This prevents issues if another thread modifies ras_obj during execution
@@ -653,3 +722,282 @@ def execute_docker_plan(
                 pass
         elif not autoclean:
             logger.info(f"Preserving staging: {local_staging_folder}")
+
+
+@log_call
+def execute_docker_plan_linux(
+    worker: DockerWorker,
+    plan_number: str,
+    ras_obj,
+    num_cores: int,
+    clear_geompre: bool,
+    sub_worker_id: int = 1,
+    autoclean: bool = True,
+) -> bool:
+    """
+    Execute a HEC-RAS plan on a native-Linux Docker host reached over ssh://.
+
+    Differences from the Windows-Docker-Desktop path:
+        - File staging uses SSH (SFTP via paramiko, or scp/ssh via the system
+          client) into a Linux ``remote_staging_path`` -- no UNC share required.
+        - Linux staging paths are bind-mounted directly (no ``/mnt/c`` -> ``C:``
+          rewrite).
+
+    Preprocessing (IMPORTANT):
+        The bundled HEC-RAS 6.6 Linux image runs RasUnsteady against a plan HDF
+        (``.p##.tmp.hdf``) plus an execution file (``.x##``) that HEC-RAS produces
+        during GEOMETRY PREPROCESSING. Empirically the Linux ``RasGeomPreprocess``
+        binary cannot regenerate these standalone (it reads the ``.x##`` file as
+        input on unit 5, and RasUnsteady requires the plan-structured tmp HDF, not
+        a bare geometry HDF). Therefore the controller must preprocess on Windows
+        and ship the preprocessed project; the container only runs RasUnsteady.
+
+        Accordingly, when ``preprocess_on_host=True`` (the default) this function
+        runs HEC-RAS preprocessing locally on the Windows controller before
+        upload -- exactly like the Windows-Docker-Desktop path -- and the
+        resulting ``.tmp.hdf`` + ``.x##`` are staged to the Linux host. If
+        ``preprocess_on_host=False``, the project is shipped as-is and is expected
+        to already contain a results-free ``.tmp.hdf`` and ``.x##`` (e.g. produced
+        by a prior preprocessing pass).
+
+    Args:
+        worker: DockerWorker instance (must be a Linux host: _is_linux_host True).
+        plan_number: Plan number to execute (e.g., "01").
+        ras_obj: RasPrj object with project information.
+        num_cores: Number of cores for simulation (informational here).
+        clear_geompre: Whether to clear geometry preprocessor files before upload.
+        sub_worker_id: Sub-worker identifier for parallel execution.
+        autoclean: Remove local and remote staging files after completion.
+
+    Returns:
+        bool: True if execution succeeded and an HDF result was retrieved.
+    """
+    import tempfile
+    import re as _re
+
+    docker = check_docker_dependencies()
+    from .DockerSshStaging import LinuxDockerSshStager
+    from ..RasPreprocess import RasPreprocess
+
+    # Capture project info up front (thread-safety, mirrors Windows path).
+    project_folder = Path(ras_obj.project_folder)
+    project_name = ras_obj.project_name
+
+    if not project_folder.exists():
+        logger.error(f"Project folder does not exist: {project_folder}")
+        return False
+
+    logger.info(
+        f"Starting Linux Docker execution: plan {plan_number}, "
+        f"sub-worker {sub_worker_id}, host {worker.docker_host}"
+    )
+
+    staging_id = (
+        f"ras_docker_{project_name}_p{plan_number}_sw{sub_worker_id}_{uuid.uuid4().hex[:8]}"
+    )
+
+    # Local temp staging (used only to assemble the upload set).
+    local_staging_folder = Path(tempfile.gettempdir()) / staging_id
+    local_input_staging = local_staging_folder / "input"
+
+    # Remote Linux staging layout (POSIX paths on the Docker host).
+    remote_base = str(worker.remote_staging_path).replace("\\", "/").rstrip("/")
+    remote_staging_folder = f"{remote_base}/{staging_id}"
+    remote_input = f"{remote_staging_folder}/input"
+    remote_output = f"{remote_staging_folder}/output"
+
+    stager = LinuxDockerSshStager(
+        docker_host=worker.docker_host,
+        use_ssh_client=worker.use_ssh_client,
+        ssh_key_path=worker.ssh_key_path,
+    )
+
+    try:
+        # 1. Assemble project into local temp input dir.
+        local_input_staging.mkdir(parents=True, exist_ok=True)
+        logger.info("Copying project to local staging for upload...")
+        for item in project_folder.iterdir():
+            if RasUtils.is_windows_reserved_name(item.name):
+                continue
+            if item.is_file():
+                shutil.copy2(item, local_input_staging / item.name)
+            elif item.is_dir():
+                shutil.copytree(
+                    item,
+                    local_input_staging / item.name,
+                    dirs_exist_ok=True,
+                    ignore=RasUtils.ignore_windows_reserved,
+                )
+
+        # Optionally clear stale geometry preprocessor (.c) files before a
+        # Windows preprocessing pass regenerates them. Note: the .x## execution
+        # file is REQUIRED by the Linux RasUnsteady binary, so it is only cleared
+        # when we are about to regenerate it via preprocess_on_host.
+        if clear_geompre:
+            globs = ["*.c*"]
+            if worker.preprocess_on_host:
+                globs.append("*.x*")
+            for pattern in globs:
+                for stale in local_input_staging.glob(pattern):
+                    try:
+                        stale.unlink()
+                    except OSError:
+                        pass
+
+        # Preprocess on the Windows controller (default). The Linux container
+        # cannot self-preprocess, so this produces the .tmp.hdf + .x## that
+        # RasUnsteady needs, which are then uploaded.
+        if worker.preprocess_on_host:
+            logger.info("Running Windows preprocessing locally before upload...")
+            from ..RasPrj import RasPrj, init_ras_project
+            temp_ras = RasPrj()
+            init_ras_project(
+                str(local_input_staging), ras_obj.ras_version, ras_object=temp_ras
+            )
+            preprocess_result = RasPreprocess.preprocess_plan(
+                plan_number, ras_object=temp_ras
+            )
+            if not preprocess_result:
+                logger.error(
+                    f"Windows preprocessing failed for plan {plan_number}: "
+                    f"{getattr(preprocess_result, 'error', preprocess_result)}"
+                )
+                return False
+
+        # Extract geometry number from the local plan file.
+        plan_files = list(local_input_staging.glob(f"*.p{plan_number}"))
+        geometry_number = (
+            RasPreprocess._extract_geometry_number(plan_files[0])
+            if plan_files
+            else None
+        )
+        if not geometry_number:
+            logger.error(f"Could not extract geometry number for plan {plan_number}")
+            return False
+        logger.info(f"Plan {plan_number} uses geometry {geometry_number}")
+
+        # 2. Create remote dirs and upload over SSH.
+        logger.info(f"Staging project to Linux host: {remote_staging_folder}")
+        stager.mkdirs([remote_input, remote_output])
+        uploaded = stager.upload_dir(local_input_staging, remote_input)
+        logger.info(f"Uploaded {uploaded} file(s) to {remote_input}")
+
+        # 3. Run the container with Linux bind mounts (no path rewrite).
+        client_kwargs = {"base_url": worker.docker_host}
+        if worker.use_ssh_client:
+            client_kwargs["use_ssh_client"] = True
+        client = docker.DockerClient(**client_kwargs)
+
+        volumes = {
+            remote_input: {"bind": worker.container_input_path, "mode": "rw"},
+            remote_output: {"bind": worker.container_output_path, "mode": "rw"},
+        }
+        environment = {
+            "MAX_RUNTIME_MINUTES": str(worker.max_runtime_minutes),
+            "GEOMETRY_NUMBER": geometry_number,
+        }
+        container_kwargs = {
+            "image": worker.docker_image,
+            "command": [worker.container_script_path, str(int(plan_number))],
+            "volumes": volumes,
+            "environment": environment,
+            "detach": True,
+            "remove": False,
+        }
+        if worker.cpu_limit:
+            container_kwargs["nano_cpus"] = int(float(worker.cpu_limit) * 1e9)
+        if worker.memory_limit:
+            container_kwargs["mem_limit"] = worker.memory_limit
+
+        logger.info(f"Starting container on Linux host: {worker.docker_image}")
+        container = client.containers.run(**container_kwargs)
+        logger.info(f"Container started: {container.short_id}")
+
+        timeout_seconds = worker.max_runtime_minutes * 60
+        start_time = time.time()
+        exit_code = -1
+        try:
+            result = container.wait(timeout=timeout_seconds)
+            exit_code = result.get("StatusCode", -1)
+            elapsed = time.time() - start_time
+            logger.info(f"Container finished in {elapsed:.1f}s, exit code {exit_code}")
+            logs = container.logs(stdout=True, stderr=True).decode("utf-8", errors="replace")
+            if exit_code != 0:
+                logger.error(f"Container logs:\n{logs}")
+            else:
+                logger.debug(f"Container logs:\n{logs}")
+        except Exception as e:
+            logger.error(f"Container execution failed: {e}")
+            try:
+                container.kill()
+            except Exception:
+                pass
+            return False
+        finally:
+            try:
+                container.remove()
+            except Exception:
+                pass
+            client.close()
+
+        if exit_code != 0:
+            logger.error(f"Simulation failed with exit code {exit_code}")
+            return False
+
+        # 4. Download HDF results (and logs) back from the Linux host.
+        result_patterns = [
+            f"{project_name}.p{plan_number}*.hdf",
+            f"{project_name}.p{plan_number}.tmp.hdf",
+        ]
+        remote_results = []
+        for rdir in (remote_output, remote_input):
+            remote_results.extend(stager.list_matching(rdir, result_patterns))
+        # Deduplicate by basename, preferring output dir entries (listed first).
+        seen = set()
+        ordered = []
+        for rfile in remote_results:
+            name = Path(rfile).name
+            if name in seen:
+                continue
+            seen.add(name)
+            ordered.append(rfile)
+
+        if not ordered:
+            logger.error("No HDF results found on Linux host")
+            return False
+
+        downloaded = stager.download_files(ordered, project_folder)
+        if not downloaded:
+            logger.error("Failed to download HDF results from Linux host")
+            return False
+        for path in downloaded:
+            logger.info(f"Retrieved result: {path.name}")
+
+        # Logs (best effort).
+        log_patterns = ["*.log", "*.computeMsgs.txt"]
+        remote_logs = []
+        for rdir in (remote_output, remote_input):
+            remote_logs.extend(stager.list_matching(rdir, log_patterns))
+        if remote_logs:
+            stager.download_files(remote_logs, project_folder)
+
+        logger.info(f"Linux Docker execution completed for plan {plan_number}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Linux Docker execution error: {e}", exc_info=True)
+        return False
+
+    finally:
+        if autoclean:
+            try:
+                stager.rmtree(remote_staging_folder)
+            except Exception:
+                pass
+            if local_staging_folder.exists():
+                shutil.rmtree(local_staging_folder, ignore_errors=True)
+        else:
+            logger.info(
+                f"Preserving staging: local={local_staging_folder} "
+                f"remote={remote_staging_folder}"
+            )
