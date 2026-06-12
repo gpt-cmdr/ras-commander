@@ -143,14 +143,17 @@ class GeomProjection:
         from pyproj import Transformer
 
         transformer = Transformer.from_crs(src_crs, dst_crs, always_xy=True)
-        lines = geom_path.read_text(encoding="utf-8", errors="replace").splitlines(
+        lines = GeomProjection._read_text_preserving_newlines(geom_path).splitlines(
             keepends=True
         )
         transformed_lines, stats = GeomProjection._transform_geometry_lines(
             lines,
             transformer,
         )
-        out_path.write_text("".join(transformed_lines), encoding="utf-8")
+        GeomProjection._write_text_preserving_newlines(
+            out_path,
+            "".join(transformed_lines),
+        )
 
         qa = GeomProjection._qa_geometry_lines(transformed_lines)
         result = {
@@ -201,8 +204,10 @@ class GeomProjection:
                 folder named ``<project>_reprojected``.
             geometry_files: Optional geometry filenames/paths to transform.
                 Relative names are resolved in the copied project folder.
-                Defaults to ``Geom File=`` entries in the copied project file,
-                with a ``*.g##`` fallback.
+                Absolute paths inside the source project are remapped to the
+                copied project; absolute paths outside the source or copied
+                project are rejected. Defaults to ``Geom File=`` entries in the
+                copied project file, with a ``*.g##`` fallback.
             projection_filename: Optional destination ``.prj`` filename under
                 the copied project's ``Projection`` folder.
             allow_datum_shift: See :meth:`reproject_geometry`.
@@ -255,6 +260,7 @@ class GeomProjection:
         geom_paths = GeomProjection._resolve_geometry_paths(
             dest_project,
             geometry_files,
+            source_project_folder=src_project,
         )
         geometry_results = []
         for geom_path in geom_paths:
@@ -728,6 +734,39 @@ class GeomProjection:
         )
 
     @staticmethod
+    def _relative_path_if_within(path: Path, base_folder: Path) -> Optional[Path]:
+        """Return path relative to base_folder when path is safely contained."""
+        path_resolved = RasUtils.safe_resolve(path)
+        base_resolved = RasUtils.safe_resolve(base_folder)
+        try:
+            return path_resolved.relative_to(base_resolved)
+        except ValueError:
+            pass
+
+        try:
+            common = os.path.commonpath([str(path_resolved), str(base_resolved)])
+        except ValueError:
+            return None
+        if os.path.normcase(common) != os.path.normcase(str(base_resolved)):
+            return None
+        try:
+            return Path(os.path.relpath(path_resolved, base_resolved))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _write_text_preserving_newlines(path: Path, text: str) -> None:
+        """Write transformed text without platform newline translation."""
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            handle.write(text)
+
+    @staticmethod
+    def _read_text_preserving_newlines(path: Path) -> str:
+        """Read text without normalizing existing newline sequences."""
+        with path.open("r", encoding="utf-8", errors="replace", newline="") as handle:
+            return handle.read()
+
+    @staticmethod
     def _project_name(project_folder: Path) -> str:
         for prj_path in sorted(project_folder.glob("*.prj")):
             try:
@@ -811,16 +850,60 @@ class GeomProjection:
     def _resolve_geometry_paths(
         project_folder: Path,
         geometry_files: Optional[Sequence[PathLike]],
+        *,
+        source_project_folder: Optional[Path] = None,
     ) -> List[Path]:
         if geometry_files is not None:
             paths = []
+            project_resolved = RasUtils.safe_resolve(project_folder)
+            source_resolved = (
+                RasUtils.safe_resolve(source_project_folder)
+                if source_project_folder is not None
+                else None
+            )
             for item in geometry_files:
                 candidate = Path(item)
-                if not candidate.is_absolute():
-                    candidate = project_folder / candidate
-                if not candidate.exists():
-                    raise FileNotFoundError(f"Geometry file not found: {candidate}")
-                paths.append(candidate)
+                if candidate.is_absolute():
+                    candidate_resolved = RasUtils.safe_resolve(candidate)
+                    dest_relative = GeomProjection._relative_path_if_within(
+                        candidate_resolved,
+                        project_resolved,
+                    )
+                    if dest_relative is not None:
+                        target = project_resolved / dest_relative
+                    elif source_resolved is not None:
+                        source_relative = GeomProjection._relative_path_if_within(
+                            candidate_resolved,
+                            source_resolved,
+                        )
+                        if source_relative is None:
+                            raise ValueError(
+                                "Absolute geometry_files entries must point inside "
+                                "the source project folder or the copied destination "
+                                "project folder."
+                            )
+                        target = project_resolved / source_relative
+                    else:
+                        raise ValueError(
+                            "Absolute geometry_files entries require source project "
+                            "context for copied-project reprojection."
+                        )
+                else:
+                    target = RasUtils.safe_resolve(project_resolved / candidate)
+                    if (
+                        GeomProjection._relative_path_if_within(
+                            target,
+                            project_resolved,
+                        )
+                        is None
+                    ):
+                        raise ValueError(
+                            "Relative geometry_files entries must resolve inside "
+                            "the copied destination project folder."
+                        )
+                if not target.exists():
+                    raise FileNotFoundError(f"Geometry file not found: {target}")
+                paths.append(target)
             return paths
 
         geom_ids: List[str] = []
