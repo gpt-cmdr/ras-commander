@@ -843,6 +843,342 @@ class GeomLateral:
             logger.error(f"Error reading connection line coords: {str(e)}")
             raise IOError(f"Failed to read connection line coords: {str(e)}")
 
+    # ------------------------------------------------------------------
+    # SA/2D connection culverts (Connection Culv=)
+    # ------------------------------------------------------------------
+    # Field order of a ``Connection Culv=`` record (mirrors the GUI):
+    #   Shape, Span, Rise, Length, ManningsN, EntranceLoss, ExitLoss, Chart,
+    #   Scale, UpstreamInvert, DownstreamInvert, NumBarrels, Name, <flag>, <blank>
+    # Followed by a fixed-width station line (one US/DS pair per barrel), then one
+    # ``Conn Culvert Barrel=<id>,<name>,2`` + a fixed-width ``US_x US_y DS_x DS_y``
+    # coordinate line per barrel, then ``Conn Culv Bottom n=`` and HTab lines.
+    # Verified against production LA LWI 2D models (HEC-RAS 6.31-6.41).
+    CONN_CULV_SHAPE_NAMES = {
+        1: "Circular", 2: "Box", 3: "Pipe Arch", 4: "Ellipse", 5: "Arch",
+        6: "Semi-Circle", 7: "Low Profile Arch", 8: "High Profile Arch", 9: "Con Span",
+    }
+
+    @staticmethod
+    def _parse_fw_floats(raw: str, col_width: int = 16,
+                         expected_count: Optional[int] = None) -> List[float]:
+        """Parse a coordinate/station line that may be fixed-width packed
+        (no delimiter between abutting values) or whitespace separated.
+
+        When ``expected_count`` is given, prefer whichever interpretation yields
+        exactly that many values. A whitespace token wider than ``col_width``
+        means the line is NOT fixed-width packed, so the whitespace split wins.
+        """
+        s = raw.rstrip("\n")
+        fw: List[float] = []
+        for j in range(0, len(s), col_width):
+            chunk = s[j:j + col_width].strip()
+            if chunk:
+                try:
+                    fw.append(float(chunk))
+                except ValueError:
+                    pass
+        ws: List[float] = []
+        for p in s.split():
+            try:
+                ws.append(float(p))
+            except ValueError:
+                pass
+        if expected_count is not None:
+            if len(fw) == expected_count:
+                return fw
+            if len(ws) == expected_count:
+                return ws
+        # a real token wider than the field => not packed fixed-width
+        if ws and any(len(p) > col_width for p in s.split()):
+            return ws
+        return fw if len(fw) > len(ws) else ws
+
+    @staticmethod
+    @log_call
+    def get_connection_culverts(geom_file: Union[str, Path],
+                                connection_name: str) -> pd.DataFrame:
+        """
+        Read the culvert(s) on a SA/2D connection, one row per barrel.
+
+        A 2D connection culvert stores explicit per-barrel GIS endpoint
+        coordinates (unlike a 1D inline culvert, whose barrel line is derived).
+
+        Returns:
+            pd.DataFrame with columns: CulvertName, GroupIndex, Shape, ShapeName,
+            Span, Rise, Length, ManningsN, EntranceLoss, ExitLoss, Chart, Scale,
+            UpstreamInvert, DownstreamInvert, NumBarrels, BottomN, BarrelIndex,
+            BarrelName, us_station, ds_station, us_x, us_y, ds_x, ds_y.
+            Empty DataFrame if the connection has no culverts.
+        """
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+        with open(geom_file, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+        block = GeomLateral._find_connection_block(lines, connection_name)
+        if block is None:
+            raise ValueError(f"Connection not found: {connection_name}")
+        _, _, block_lines, _ = block
+
+        rows: List[Dict[str, Any]] = []
+        group = 0
+        i = 0
+        n = len(block_lines)
+        while i < n:
+            line = block_lines[i]
+            if not line.startswith("Connection Culv="):
+                i += 1
+                continue
+            parts = line.split("=", 1)[1].split(",")
+            def fnum(idx, default=float("nan")):
+                try:
+                    return float(parts[idx].strip())
+                except (IndexError, ValueError):
+                    return default
+            shape = int(fnum(0)) if fnum(0) == fnum(0) else None
+            span, rise, length = fnum(1), fnum(2), fnum(3)
+            mann, ke, kex = fnum(4), fnum(5), fnum(6)
+            chart, scale = int(fnum(7, 0)), int(fnum(8, 0))
+            us_inv, ds_inv = fnum(9), fnum(10)
+            nbar = int(fnum(11, 1))
+            name = parts[12].strip() if len(parts) > 12 else ""
+
+            # station line(s): one US/DS pair per barrel, 8-char fixed width.
+            # >5 barrels wrap onto multiple lines (10 values/line), so accumulate
+            # across lines until 2*NumBarrels values are read.
+            station_count = max(0, 2 * nbar)
+            stations: List[float] = []
+            i += 1
+            while i < n and len(stations) < station_count:
+                if block_lines[i].startswith(("Conn Culvert Barrel=", "Connection Culv=",
+                                              "Conn Culv Bottom n=")):
+                    break
+                stations.extend(GeomLateral._parse_fw_floats(
+                    block_lines[i], col_width=GeomLateral.FIXED_WIDTH_COLUMN))
+                i += 1
+            bottom_n = float("nan")
+            barrels: List[Dict[str, Any]] = []
+            while i < n and block_lines[i].startswith("Conn Culvert Barrel="):
+                bparts = block_lines[i].split("=", 1)[1].split(",")
+                b_name = bparts[1].strip() if len(bparts) > 1 else ""
+                i += 1
+                coords = (GeomLateral._parse_fw_floats(block_lines[i], col_width=16,
+                                                       expected_count=4)
+                          if i < n else [])
+                barrels.append({"name": b_name, "coords": coords})
+                i += 1
+            # trailing culvert metadata
+            while i < n and not block_lines[i].startswith(("Connection Culv=", "Conn Culvert Barrel=")) \
+                    and block_lines[i].strip():
+                if block_lines[i].startswith("Conn Culv Bottom n="):
+                    try:
+                        bottom_n = float(block_lines[i].split("=", 1)[1].strip())
+                    except ValueError:
+                        pass
+                i += 1
+
+            for b_idx, b in enumerate(barrels):
+                us_sta = stations[2 * b_idx] if 2 * b_idx < len(stations) else float("nan")
+                ds_sta = stations[2 * b_idx + 1] if 2 * b_idx + 1 < len(stations) else float("nan")
+                c = b["coords"]
+                rows.append({
+                    "CulvertName": name, "GroupIndex": group,
+                    "Shape": shape, "ShapeName": GeomLateral.CONN_CULV_SHAPE_NAMES.get(shape),
+                    "Span": span, "Rise": rise, "Length": length, "ManningsN": mann,
+                    "EntranceLoss": ke, "ExitLoss": kex, "Chart": chart, "Scale": scale,
+                    "UpstreamInvert": us_inv, "DownstreamInvert": ds_inv,
+                    "NumBarrels": nbar, "BottomN": bottom_n,
+                    "BarrelIndex": b_idx + 1, "BarrelName": b["name"],
+                    "us_station": us_sta, "ds_station": ds_sta,
+                    "us_x": c[0] if len(c) > 0 else float("nan"),
+                    "us_y": c[1] if len(c) > 1 else float("nan"),
+                    "ds_x": c[2] if len(c) > 2 else float("nan"),
+                    "ds_y": c[3] if len(c) > 3 else float("nan"),
+                })
+            group += 1
+        return pd.DataFrame(rows)
+
+    @staticmethod
+    @log_call
+    def set_connection_culverts(geom_file: Union[str, Path],
+                                connection_name: str,
+                                culverts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Author (replace) the culvert group(s) on a SA/2D connection, writing the
+        ``Connection Culv=`` records with explicit per-barrel GIS endpoint
+        coordinates. Verified to compute in HEC-RAS.
+
+        Parameters:
+            geom_file: Path to geometry file (.g##). A ``.bak`` backup is created.
+            connection_name: Connection (must already exist with a ``Connection Line=``).
+            culverts: list of culvert-group dicts, each with::
+
+                {
+                  "Shape": 2, "Span": 8.0, "Rise": 6.0, "Length": 60.0,
+                  "ManningsN": 0.024, "EntranceLoss": 0.5, "ExitLoss": 1.0,
+                  "Chart": 8, "Scale": 1, "Name": "Retrofit Culv",
+                  "UpstreamInvert": 539.56, "DownstreamInvert": 539.06,
+                  "BottomN": 0.024,                     # optional (-> ManningsN)
+                  "barrels": [
+                    {"name": "Barrel #1", "us_xy": (x, y), "ds_xy": (x, y),
+                     "us_station": 7113.55, "ds_station": 7113.55},  # stations optional
+                  ],
+                }
+
+            If a barrel omits ``us_station``/``ds_station`` they default to the
+            arc-length projection of the barrel midpoint onto the connection line.
+
+        Returns:
+            dict: {culverts_written, barrels_written, backup_path, length_warnings}
+        """
+        import math
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+        if not culverts:
+            raise ValueError("Provide at least one culvert group")
+
+        with open(geom_file, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+        block = GeomLateral._find_connection_block(lines, connection_name)
+        if block is None:
+            raise ValueError(f"Connection not found: {connection_name}")
+        start_idx, end_idx, block_lines, _ = block
+
+        # connection line (for default station projection)
+        try:
+            conn_xy = GeomLateral.get_connection_line_coords(geom_file, connection_name)
+            from shapely.geometry import LineString, Point
+            conn_ls = LineString(conn_xy[["X", "Y"]].to_numpy())
+        except Exception:
+            conn_ls = None
+
+        def fw_coords(pairs):
+            return GeomStorage._format_breakline_coord_lines(pairs)[0].rstrip("\n")
+
+        length_warnings: List[str] = []
+        new_lines: List[str] = []
+        n_barrels_total = 0
+        for ci, cv in enumerate(culverts):
+            barrels = cv.get("barrels") or []
+            if not barrels:
+                raise ValueError(f"Culvert group {ci} ('{cv.get('Name','')}') has no barrels")
+            shape = int(cv["Shape"])
+            span = float(cv["Span"])
+            rise = float(cv["Rise"])
+            length = float(cv["Length"])
+            mann = float(cv["ManningsN"])
+            ke = float(cv.get("EntranceLoss", 0.5))
+            kex = float(cv.get("ExitLoss", 1.0))
+            chart = int(cv.get("Chart", 1))
+            scale = int(cv.get("Scale", 1))
+            us_inv = float(cv["UpstreamInvert"])
+            ds_inv = float(cv["DownstreamInvert"])
+            name = str(cv.get("Name", f"Culvert #{ci + 1}"))[:12].ljust(12)
+            bottom_n = float(cv.get("BottomN", mann))
+            nbar = len(barrels)
+
+            # record line (flag field is 0; trailing comma + empty field per HEC-RAS)
+            new_lines.append(
+                f"Connection Culv={shape},{span},{rise},{length},{mann},{ke},{kex},"
+                f"{chart},{scale},{us_inv},{ds_inv}, {nbar} ,{name}, 0 ,\n")
+
+            # station line (8-char fixed width, one US/DS pair per barrel)
+            stations: List[float] = []
+            for b in barrels:
+                us_xy = tuple(map(float, b["us_xy"]))
+                ds_xy = tuple(map(float, b["ds_xy"]))
+                if "us_station" in b and "ds_station" in b:
+                    us_s, ds_s = float(b["us_station"]), float(b["ds_station"])
+                elif conn_ls is not None:
+                    mid = ((us_xy[0] + ds_xy[0]) / 2, (us_xy[1] + ds_xy[1]) / 2)
+                    us_s = ds_s = float(conn_ls.project(Point(*mid)))
+                else:
+                    us_s = ds_s = 0.0
+                stations.extend([us_s, ds_s])
+                # length consistency (HEC-RAS rejects > ~1%)
+                glen = math.dist(us_xy, ds_xy)
+                if length and abs(glen - length) / length > 0.01:
+                    length_warnings.append(
+                        f"{name.strip()} barrel '{b.get('name','')}' GIS length "
+                        f"{glen:.2f} differs from Length {length:.2f} by "
+                        f"{abs(glen - length) / length * 100:.1f}% (>1%; HEC-RAS may reject)")
+            new_lines.extend(
+                GeomParser.format_fixed_width(
+                    stations, column_width=GeomLateral.FIXED_WIDTH_COLUMN,
+                    values_per_line=GeomLateral.VALUES_PER_LINE, precision=2))
+            # per-barrel record + GIS coordinate line
+            for bi, b in enumerate(barrels, start=1):
+                bname = str(b.get("name", f"Barrel #{bi}"))
+                new_lines.append(f"Conn Culvert Barrel={bi},{bname},2\n")
+                us_xy = tuple(map(float, b["us_xy"]))
+                ds_xy = tuple(map(float, b["ds_xy"]))
+                new_lines.append(fw_coords([us_xy, ds_xy]) + "\n")
+            new_lines.append(f"Conn Culv Bottom n={bottom_n}\n")
+            n_barrels_total += nbar
+
+        # shared HTab lines (once, after all groups) + trailing blank
+        new_lines.append("Conn HTab FreeFlow Pts= 100 \n")
+        new_lines.append("Conn HTab Sub Flow Curves= 60 \n")
+        new_lines.append("Conn HTab Sub Flow Pts= 50 \n")
+        new_lines.append("\n")
+
+        # locate insertion / replacement range within the block (absolute indices)
+        abs_lines = lines
+        first_culv = None
+        for bi, bl in enumerate(block_lines):
+            if bl.startswith("Connection Culv="):
+                first_culv = start_idx + bi
+                break
+        if first_culv is not None:
+            # Replace ONLY the culvert section: from the first Connection Culv= up
+            # to the first line that is a different record. Consume culvert keys,
+            # their numeric station/coordinate continuation lines, and blanks.
+            # BOUNDED by end_idx and the connection terminator so a connection that
+            # lacks a trailing Conn Outlet Rating Curve= (or a legacy
+            # "SA/2D Area Conn=" block, or a following Conn BR:/Storage Area/River
+            # Reach) cannot be swept up and deleted.
+            culv_keys = ("Connection Culv=", "Conn Culvert Barrel=",
+                         "Conn Culv Bottom n=", "Conn HTab")
+            j = first_culv
+            while j < end_idx:
+                ln = abs_lines[j]
+                if ln.startswith(culv_keys):
+                    j += 1
+                    continue
+                if ln.strip() == "":  # blank within / trailing the culvert section
+                    j += 1
+                    continue
+                if j != first_culv and GeomLateral._is_connection_block_terminator(ln):
+                    break
+                if "=" in ln and not ln[:1].isspace():  # a different record key -> stop
+                    break
+                # numeric station/coordinate continuation line (no key)
+                j += 1
+            replace_start, replace_end = first_culv, j
+        else:
+            # insert before Conn Outlet Rating Curve= (else end of block)
+            ins = None
+            for bi, bl in enumerate(block_lines):
+                if bl.startswith("Conn Outlet Rating Curve="):
+                    ins = start_idx + bi
+                    break
+            if ins is None:
+                ins = end_idx
+            replace_start, replace_end = ins, ins
+
+        backup_path = geom_file.with_suffix(geom_file.suffix + ".bak")
+        backup_path.write_text("".join(lines), encoding="utf-8")
+        out_lines = abs_lines[:replace_start] + new_lines + abs_lines[replace_end:]
+        geom_file.write_text("".join(out_lines), encoding="utf-8")
+
+        return {
+            "culverts_written": len(culverts),
+            "barrels_written": n_barrels_total,
+            "backup_path": str(backup_path),
+            "length_warnings": length_warnings,
+        }
+
     @staticmethod
     @log_call
     def get_connection_profile(geom_file: Union[str, Path],
