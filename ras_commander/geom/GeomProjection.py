@@ -230,6 +230,7 @@ class GeomProjection:
             if dest_folder is not None
             else src_project.with_name(f"{src_project.name}_reprojected")
         )
+        GeomProjection._validate_destination_project(src_project, dest_project)
         if dest_project.exists():
             if not overwrite:
                 raise FileExistsError(
@@ -693,16 +694,37 @@ class GeomProjection:
 
     @staticmethod
     def _resolve_project_folder(project_path: PathLike) -> Path:
+        if hasattr(project_path, "project_folder"):
+            return RasUtils.safe_resolve(Path(project_path.project_folder))
+
         path = Path(project_path)
         if path.is_dir():
             return RasUtils.safe_resolve(path)
         if path.suffix.lower() in {".prj", ".rasmap"}:
             return RasUtils.safe_resolve(path.parent)
-        if hasattr(project_path, "project_folder"):
-            return RasUtils.safe_resolve(Path(project_path.project_folder))
         raise ValueError(
             "project_path must be a project folder, .prj file, .rasmap file, "
             "or RasPrj-like object with project_folder."
+        )
+
+    @staticmethod
+    def _validate_destination_project(src_project: Path, dest_project: Path) -> None:
+        """Reject destination folders that would overwrite or nest in the source."""
+        src_resolved = RasUtils.safe_resolve(src_project)
+        dest_resolved = RasUtils.safe_resolve(dest_project)
+        if dest_resolved == src_resolved:
+            raise ValueError(
+                "dest_folder must be different from the source project folder. "
+                "GeomProjection.reproject_model_geometry() copies the project "
+                "before transforming geometry."
+            )
+        try:
+            dest_resolved.relative_to(src_resolved)
+        except ValueError:
+            return
+        raise ValueError(
+            "dest_folder must not be inside the source project folder. Choose a "
+            "sibling or separate working directory for the copied project."
         )
 
     @staticmethod
@@ -761,6 +783,7 @@ class GeomProjection:
                 projection_path,
             )
             projection_elem.set("Filename", new_ref)
+            projection_elem.text = None
             tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
             updates.append(
                 {
@@ -1060,6 +1083,11 @@ class GeomProjection:
                 "compiled_hdf_exists": hdf_path.exists(),
                 "geometry_preprocess_required": True,
                 "refinement_region_count": None,
+                "refinement_region_integrity": {
+                    "checked": False,
+                    "is_valid": None,
+                    "issues": [],
+                },
                 "refinement_region_requirement": (
                     "Compiled refinement regions are not transformed by "
                     "GeomProjection; rebuild geometry preprocessing after "
@@ -1076,7 +1104,95 @@ class GeomProjection:
                         )
                         if rr_attrs is not None:
                             record["refinement_region_count"] = int(len(rr_attrs))
+                        record["refinement_region_integrity"] = (
+                            GeomProjection._inspect_refinement_region_integrity(hdf)
+                        )
                 except Exception as exc:
                     record["compiled_hdf_warning"] = str(exc)
             records.append(record)
         return records
+
+    @staticmethod
+    def _inspect_refinement_region_integrity(hdf: Any) -> Dict[str, Any]:
+        group_path = "Geometry/2D Flow Area Refinement Regions"
+        group = hdf.get(group_path)
+        if group is None:
+            return {
+                "checked": True,
+                "is_valid": True,
+                "issues": [],
+                "dataset_names": [],
+            }
+
+        required = ("Attributes", "Polygon Info", "Polygon Parts", "Polygon Points")
+        dataset_names = sorted(group.keys())
+        issues = [
+            f"Missing refinement region dataset: {name}"
+            for name in required
+            if name not in group
+        ]
+        if issues:
+            return {
+                "checked": True,
+                "is_valid": False,
+                "issues": issues,
+                "dataset_names": dataset_names,
+            }
+
+        attrs = group["Attributes"]
+        polygon_info = group["Polygon Info"]
+        polygon_parts = group["Polygon Parts"]
+        polygon_points = group["Polygon Points"]
+
+        region_count = int(len(attrs))
+        if len(polygon_info) != region_count:
+            issues.append(
+                "Refinement region Attributes and Polygon Info row counts differ: "
+                f"{region_count} != {len(polygon_info)}"
+            )
+        if len(getattr(polygon_info, "shape", ())) != 2 or polygon_info.shape[1] < 4:
+            issues.append("Refinement region Polygon Info must be an Nx4 dataset.")
+        if len(getattr(polygon_points, "shape", ())) != 2 or polygon_points.shape[1] != 2:
+            issues.append("Refinement region Polygon Points must be an Nx2 dataset.")
+        if len(getattr(polygon_parts, "shape", ())) != 2 or polygon_parts.shape[1] != 2:
+            issues.append("Refinement region Polygon Parts must be an Nx2 dataset.")
+
+        if not issues:
+            points = polygon_points[:]
+            parts = polygon_parts[:]
+            for region_index, row in enumerate(polygon_info[:]):
+                pnt_start, pnt_count, part_start, part_count = [
+                    int(value) for value in row[:4]
+                ]
+                if pnt_count < 4:
+                    issues.append(
+                        f"Refinement region {region_index} has fewer than four "
+                        "polygon points."
+                    )
+                    continue
+                if pnt_start < 0 or pnt_start + pnt_count > len(points):
+                    issues.append(
+                        f"Refinement region {region_index} polygon point range "
+                        "is outside Polygon Points."
+                    )
+                    continue
+                if part_start < 0 or part_start + part_count > len(parts):
+                    issues.append(
+                        f"Refinement region {region_index} polygon part range "
+                        "is outside Polygon Parts."
+                    )
+                ring = points[pnt_start:pnt_start + pnt_count]
+                if len(ring) >= 2 and not (
+                    math.isclose(float(ring[0][0]), float(ring[-1][0]), abs_tol=1e-6)
+                    and math.isclose(float(ring[0][1]), float(ring[-1][1]), abs_tol=1e-6)
+                ):
+                    issues.append(
+                        f"Refinement region {region_index} polygon is not closed."
+                    )
+
+        return {
+            "checked": True,
+            "is_valid": not issues,
+            "issues": issues,
+            "dataset_names": dataset_names,
+        }

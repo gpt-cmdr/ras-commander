@@ -18,6 +18,10 @@ because HEC-RAS project reprojection cannot reproduce geodetic datum
 transformations. Set `allow_datum_shift=True` only after a project-specific
 engineering review.
 
+`reproject_model_geometry()` always works on a copied project folder. The
+destination cannot be the source project folder or a child of it, even with
+`overwrite=True`.
+
 ```python
 from ras_commander import GeomProjection
 
@@ -39,8 +43,8 @@ point positions. It intentionally does **not** transform station/elevation
 tables, bank stations, compiled `.g##.hdf` geometry, refinement-region HDF
 datasets, terrain HDF/raster pixels, land-cover rasters, infiltration rasters,
 or sediment bed-material rasters. The returned report identifies compiled
-geometry preprocessing requirements and terrain layers whose CRS no longer
-matches the destination project CRS.
+geometry preprocessing requirements, refinement-region HDF integrity findings,
+and terrain layers whose CRS no longer matches the destination project CRS.
 
 Use existing CRS inspection and validation APIs with the returned report:
 

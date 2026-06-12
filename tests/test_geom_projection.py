@@ -193,6 +193,21 @@ def test_reproject_model_geometry_copies_project_updates_rasmap_and_reports_terr
     with h5py.File(project / f"{project_name}.g01.hdf", "w") as hdf:
         rr = hdf.create_group("Geometry/2D Flow Area Refinement Regions")
         rr.create_dataset("Attributes", data=np.array([(b"Region 1",)], dtype=[("Name", "S32")]))
+        rr.create_dataset("Polygon Info", data=np.array([[0, 5, 0, 1]], dtype=np.int32))
+        rr.create_dataset("Polygon Parts", data=np.array([[0, 5]], dtype=np.int32))
+        rr.create_dataset(
+            "Polygon Points",
+            data=np.array(
+                [
+                    [0.0, 0.0],
+                    [100.0, 0.0],
+                    [100.0, 100.0],
+                    [0.0, 100.0],
+                    [0.0, 0.0],
+                ],
+                dtype=np.float64,
+            ),
+        )
 
     (project / f"{project_name}.rasmap").write_text(
         (
@@ -228,6 +243,7 @@ def test_reproject_model_geometry_copies_project_updates_rasmap_and_reports_terr
     assert result["terrain_requirements"][0]["terrain_crs"] == "EPSG:5070"
     assert result["compiled_geometry"][0]["compiled_hdf_exists"] is True
     assert result["compiled_geometry"][0]["refinement_region_count"] == 1
+    assert result["compiled_geometry"][0]["refinement_region_integrity"]["is_valid"] is True
 
 
 def test_reproject_geometry_rejects_datum_shift_by_default(tmp_path):
@@ -277,3 +293,45 @@ def test_reproject_geometry_reports_duplicate_perimeter_points(tmp_path):
     assert duplicates[0]["name"] == "Area 1"
     assert duplicates[0]["duplicate_vertices"][0]["first_index"] == 1
     assert duplicates[0]["duplicate_vertices"][0]["duplicate_index"] == 3
+
+
+def test_reproject_model_geometry_rejects_source_destination_folder(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_geometry(project / "Model.g01")
+    (project / "Model.prj").write_text(
+        "Proj Title=Model\nGeom File=g01\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="different from the source project"):
+        GeomProjection.reproject_model_geometry(
+            project,
+            SOURCE_CRS,
+            DEST_CRS,
+            dest_folder=project,
+            overwrite=True,
+        )
+
+    with pytest.raises(ValueError, match="must not be inside"):
+        GeomProjection.reproject_model_geometry(
+            project,
+            SOURCE_CRS,
+            DEST_CRS,
+            dest_folder=project / "nested_copy",
+        )
+
+
+def test_compiled_geometry_reports_invalid_refinement_region_integrity(tmp_path):
+    geom = _write_geometry(tmp_path / "Model.g01")
+    with h5py.File(tmp_path / "Model.g01.hdf", "w") as hdf:
+        rr = hdf.create_group("Geometry/2D Flow Area Refinement Regions")
+        rr.create_dataset("Attributes", data=np.array([(b"Region 1",)], dtype=[("Name", "S32")]))
+
+    result = GeomProjection._inspect_compiled_geometry_hdfs([geom])
+    integrity = result[0]["refinement_region_integrity"]
+
+    assert result[0]["refinement_region_count"] == 1
+    assert integrity["checked"] is True
+    assert integrity["is_valid"] is False
+    assert "Missing refinement region dataset: Polygon Points" in integrity["issues"]
