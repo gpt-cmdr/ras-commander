@@ -7,6 +7,8 @@ testing policy). These tests cover the deterministic helper logic that needs no
 HEC-RAS project: HDS-5 entrance-loss lookup, taxonomy inlet-label resolution,
 and the per-zone reach-length selector.
 """
+from pathlib import Path
+
 import pytest
 
 from ras_commander.geom import GeomCulvertGIS
@@ -138,3 +140,88 @@ class TestReconstructionRegression:
         geom = squannacook_dir / "Squannacook.g06"
         barrels = GeomCulvertGIS.reconstruct_barrels(geom, *MEADOW)
         assert not barrels["planimetric_length"].isna().any()
+
+
+# ---------------------------------------------------------------------------
+# 2D: terrain-based mesh-cell-minimum invert validation. Requires rasterio, a
+# generated 2D mesh, and a terrain raster; uses the BaldEagleCrkMulti2D example
+# (downloaded once). Skips cleanly when rasterio or the model is unavailable.
+# ---------------------------------------------------------------------------
+@pytest.fixture(scope="module")
+def baldeagle_2d(tmp_path_factory):
+    pytest.importorskip("rasterio")
+    from ras_commander import RasExamples
+    out = tmp_path_factory.mktemp("baldeagle2d")
+    try:
+        proj = Path(RasExamples.extract_project(
+            "BaldEagleCrkMulti2D", output_path=out, suffix="culv2dtest"))
+    except Exception as exc:
+        pytest.skip(f"BaldEagleCrkMulti2D unavailable: {exc}")
+    geom_hdf = proj / "BaldEagleDamBrk.g01.hdf"
+    geom = proj / "BaldEagleDamBrk.g01"
+    if not geom_hdf.exists():
+        pytest.skip("BaldEagle geometry HDF not extracted")
+    return geom, geom_hdf
+
+
+def _connection_points(geom):
+    from ras_commander.geom import GeomLateral
+    from shapely.geometry import LineString
+    import numpy as np
+    conns = GeomLateral.get_connections(geom)
+    twod = conns[conns["Type"] == "2D to 2D"]
+    name = (twod.iloc[0] if len(twod) else conns.iloc[0])["Name"]
+    line = GeomLateral.get_connection_line_coords(geom, name)
+    ls = LineString(line[["X", "Y"]].to_numpy())
+    return [(p.x, p.y) for p in (ls.interpolate(d, normalized=True)
+                                 for d in np.linspace(0.2, 0.8, 4))]
+
+
+class TestTerrainCellMin:
+    def test_cell_min_from_terrain(self, baldeagle_2d):
+        geom, geom_hdf = baldeagle_2d
+        pts = _connection_points(geom)
+        df = GeomCulvertGIS.mesh_cell_min_from_terrain(geom_hdf, pts)
+        assert len(df) == len(pts)
+        assert df["cell_id"].notna().all()
+        assert df["cell_terrain_min"].notna().all()
+        # Bald Eagle terrain elevations are a few hundred feet
+        assert df["cell_terrain_min"].between(400, 900).all()
+
+    def test_validate_2d_inverts_flags_too_low(self, baldeagle_2d):
+        geom, geom_hdf = baldeagle_2d
+        pts = _connection_points(geom)
+        cmins = GeomCulvertGIS.mesh_cell_min_from_terrain(geom_hdf, pts)["cell_terrain_min"]
+        too_low = [m - 5.0 for m in cmins]      # 5 ft below cell min -> all FAIL
+        at_grade = [m + 1.0 for m in cmins]     # 1 ft above cell min -> all PASS
+        rep_low = GeomCulvertGIS.validate_2d_inverts(geom_hdf, pts, too_low)
+        rep_ok = GeomCulvertGIS.validate_2d_inverts(geom_hdf, pts, at_grade)
+        assert (rep_low["status"] == "FAIL").all()
+        assert (rep_ok["status"] == "PASS").all()
+
+    def test_validate_2d_inverts_length_mismatch_raises(self, baldeagle_2d):
+        geom, geom_hdf = baldeagle_2d
+        pts = _connection_points(geom)
+        with pytest.raises(ValueError):
+            GeomCulvertGIS.validate_2d_inverts(geom_hdf, pts, [500.0])  # wrong length
+
+    def test_offmesh_point_reported_not_validated(self, baldeagle_2d):
+        # QAQC H2: a point far off the mesh must be OFF_MESH, not validated
+        # against an arbitrary distant cell.
+        geom, geom_hdf = baldeagle_2d
+        pts = _connection_points(geom)
+        off = [(pts[0][0] + 1_000_000.0, pts[0][1])]
+        rep = GeomCulvertGIS.validate_2d_inverts(geom_hdf, off, [500.0],
+                                                 max_dist_to_cell=500.0)
+        assert rep.iloc[0]["status"] == "OFF_MESH"
+
+    def test_all_touched_false_not_below_all_touched_true(self, baldeagle_2d):
+        # QAQC H1: the default (pixel-center) minimum must not be LOWER than the
+        # all_touched=True minimum (which can import neighbour-cell lows).
+        geom, geom_hdf = baldeagle_2d
+        pts = _connection_points(geom)
+        strict = GeomCulvertGIS.mesh_cell_min_from_terrain(geom_hdf, pts, all_touched=False)
+        loose = GeomCulvertGIS.mesh_cell_min_from_terrain(geom_hdf, pts, all_touched=True)
+        for s, l in zip(strict["cell_terrain_min"], loose["cell_terrain_min"]):
+            if s is not None and l is not None:
+                assert s >= l - 1e-6

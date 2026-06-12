@@ -38,6 +38,20 @@ is therefore reported as an informational ``REVIEW`` flag, not a hard pass/fail.
 The strict +/-1% GIS-length rule that HEC-RAS enforces applies to an *authored*
 culvert centerline; this read-only module does not write geometry, so it cannot
 and does not claim to enforce that rule.
+
+2D structures
+-------------
+For culverts on SA/2D connections, the planimetric line *is* stored (the
+connection cut line), and the relevant streambed at each culvert end is the
+minimum terrain elevation of the 2D mesh cell it discharges into.
+``mesh_cell_min_from_terrain`` computes that cell minimum **directly from the
+terrain raster** (rasterio zonal minimum over the mesh-cell polygon), so the
+check does not require the HEC-RAS 2D hydraulic-table (cell property) preprocessor
+and reflects terrain modifications baked into the raster. It DOES require a
+**generated 2D mesh** in the geometry HDF (mesh generation is a RAS Mapper
+geometry step, separate from the compute-time preprocessor). ``validate_2d_inverts``
+flags proposed inverts that fall below their cell minimum. These methods require
+``rasterio``.
 """
 
 from __future__ import annotations
@@ -45,7 +59,7 @@ from __future__ import annotations
 import math
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -459,6 +473,218 @@ class GeomCulvertGIS:
                 "detail": "exit loss coefficient vs typical full-expansion value",
             })
         return pd.DataFrame(records)
+
+    # ------------------------------------------------------------------
+    # 2D: structure invert vs terrain-derived mesh-cell minimum
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _resolve_terrain_path(geom_hdf: Path,
+                              terrain_path: Optional[Union[str, Path]]) -> Path:
+        """Resolve a readable terrain raster (.vrt/.tif) for a 2D geometry.
+
+        Uses the explicit ``terrain_path`` if given, else the ``Terrain Filename``
+        referenced by the geometry HDF (mapping the terrain ``.hdf`` to its
+        sibling ``.vrt``/``.tif``).
+        """
+        if terrain_path is not None:
+            p = Path(terrain_path)
+            if not p.exists():
+                raise FileNotFoundError(f"terrain_path does not exist: {p}")
+            return p
+        from ras_commander.hdf.HdfStorageArea import HdfStorageArea
+        ref = HdfStorageArea.get_terrain_path_from_geom_hdf(Path(geom_hdf))
+        if ref is None:
+            raise ValueError(
+                f"No terrain referenced by {Path(geom_hdf).name}; pass terrain_path."
+            )
+        ref = Path(ref)
+        for cand in (ref.with_suffix(".vrt"), ref.with_suffix(".tif"), ref):
+            if cand.exists():
+                return cand
+        # search the geometry HDF's directory for the terrain basename
+        stem = ref.stem
+        for ext in (".vrt", ".tif"):
+            hits = list(Path(geom_hdf).parent.rglob(f"{stem}{ext}"))
+            if hits:
+                return hits[0]
+        raise FileNotFoundError(
+            f"Could not resolve a readable terrain raster for {ref}; pass terrain_path."
+        )
+
+    @staticmethod
+    @log_call
+    def mesh_cell_min_from_terrain(geom_hdf: Union[str, Path],
+                                   points_xy: Sequence[Tuple[float, float]],
+                                   terrain_path: Optional[Union[str, Path]] = None,
+                                   max_dist_to_cell: Optional[float] = None,
+                                   all_touched: bool = False) -> pd.DataFrame:
+        """Terrain-derived minimum ground elevation of the 2D mesh cell nearest
+        each (x, y) point -- computed directly from the terrain raster, so it does
+        not require the HEC-RAS 2D hydraulic-table preprocessor (it does require a
+        **generated mesh** in the geometry HDF) and reflects terrain modifications
+        baked into the raster.
+
+        Each point is matched to the NEAREST mesh cell (connection/structure cut
+        lines sit on the mesh boundary, so strict point-in-cell containment is not
+        reliable). A point farther than ``max_dist_to_cell`` from any cell (i.e.
+        off the mesh) yields ``cell_terrain_min = None``.
+
+        Parameters:
+            geom_hdf: 2D geometry HDF (``*.g##.hdf``) with a generated mesh.
+            points_xy: iterable of (x, y) in the mesh CRS.
+            terrain_path: optional explicit terrain raster (.vrt/.tif); auto-resolved
+                from the geometry HDF when omitted.
+            max_dist_to_cell: max distance (mesh units) a point may sit from its
+                nearest cell before it is treated as off-mesh (None = no limit).
+            all_touched: rasterize policy. Default False (pixel-center): for a
+                *minimum* statistic, including edge-touched pixels pulls in
+                neighbour-cell lows and understates the cell minimum. Set True only
+                as a diagnostic.
+
+        Returns:
+            pd.DataFrame with columns: point, x, y, cell_id, dist_to_cell,
+            cell_terrain_min, on_mesh.
+        """
+        try:
+            import geopandas as gpd
+            from shapely.geometry import Point
+        except ImportError as exc:  # pragma: no cover
+            raise ImportError("geopandas/shapely are required for 2D cell association") from exc
+        try:
+            import numpy as _np
+            import rasterio
+            from rasterio.mask import mask as rio_mask
+        except ImportError as exc:  # pragma: no cover
+            raise ImportError(
+                "rasterio is required for terrain-based mesh-cell minimums "
+                "(pip install rasterio)."
+            ) from exc
+        from ras_commander.hdf.HdfMesh import HdfMesh
+
+        geom_hdf = Path(geom_hdf)
+        cells = HdfMesh.get_mesh_cell_polygons(geom_hdf)
+        if cells is None or len(cells) == 0:
+            raise ValueError(f"No 2D mesh cells found in {geom_hdf.name}")
+        if cells.crs is None:
+            raise ValueError(
+                f"Mesh cell polygons from {geom_hdf.name} have no CRS; cannot "
+                "safely align with the terrain raster."
+            )
+
+        pts = [(float(x), float(y)) for x, y in points_xy]  # materialize once
+        gpts = gpd.GeoDataFrame(
+            {"point": range(len(pts))},
+            geometry=[Point(x, y) for x, y in pts],
+            crs=cells.crs,
+        )
+        # keep the matched cell's geometry from the join (cell_id alone is not
+        # unique across multiple 2D areas).
+        joined = gpd.sjoin_nearest(
+            gpts, cells[["cell_id", "geometry"]].rename_geometry("cell_geometry"),
+            how="left", distance_col="dist_to_cell").drop_duplicates(subset="point")
+        matched = cells.loc[joined["index_right"].to_numpy(), "geometry"]
+        joined = joined.assign(cell_poly=matched.to_numpy())
+
+        terrain = GeomCulvertGIS._resolve_terrain_path(geom_hdf, terrain_path)
+        rows: List[Dict[str, Any]] = []
+        with rasterio.open(terrain) as src:
+            nodata = src.nodata
+            need_reproject = (src.crs is not None and str(cells.crs) != str(src.crs))
+            transformer = None
+            if need_reproject:
+                cell_gs = gpd.GeoSeries(joined["cell_poly"].to_numpy(), crs=cells.crs).to_crs(src.crs)
+                polys = list(cell_gs)
+            else:
+                polys = list(joined["cell_poly"].to_numpy())
+
+            for pos, (_, r) in enumerate(joined.iterrows()):
+                idx = int(r["point"])
+                x, y = pts[idx]
+                dist = float(r["dist_to_cell"]) if pd.notna(r["dist_to_cell"]) else None
+                on_mesh = dist is not None and (max_dist_to_cell is None
+                                                or dist <= max_dist_to_cell)
+                cmin = None
+                if on_mesh:
+                    poly = polys[pos]
+                    try:
+                        out, _ = rio_mask(src, [poly.__geo_interface__], crop=True,
+                                          all_touched=all_touched, filled=True,
+                                          nodata=nodata if nodata is not None else _np.nan)
+                        band = _np.asarray(out[0], dtype="float64").ravel()
+                        if nodata is not None:
+                            band = band[band != nodata]
+                        band = band[_np.isfinite(band)]
+                        if band.size:
+                            cmin = float(band.min())
+                    except ValueError:
+                        # rasterio raises ValueError when the polygon does not
+                        # overlap the raster -> no terrain here (leave cmin None).
+                        cmin = None
+                rows.append({
+                    "point": idx, "x": x, "y": y,
+                    "cell_id": None if pd.isna(r["cell_id"]) else int(r["cell_id"]),
+                    "dist_to_cell": dist,
+                    "cell_terrain_min": cmin,
+                    "on_mesh": bool(on_mesh),
+                })
+        return pd.DataFrame(rows).sort_values("point").reset_index(drop=True)
+
+    @staticmethod
+    @log_call
+    def validate_2d_inverts(geom_hdf: Union[str, Path],
+                            points_xy: Sequence[Tuple[float, float]],
+                            inverts: Sequence[float],
+                            terrain_path: Optional[Union[str, Path]] = None,
+                            invert_tol: Optional[float] = None,
+                            max_dist_to_cell: Optional[float] = None) -> pd.DataFrame:
+        """Validate proposed culvert/structure inverts at 2D locations: each
+        invert must not sit below the terrain minimum of its associated mesh cell
+        (within ``invert_tol``). Terrain-based; needs a generated mesh but not the
+        2D hydraulic-table preprocessor.
+
+        Parameters:
+            geom_hdf: 2D geometry HDF with a generated mesh.
+            points_xy: (x, y) locations of the culvert/structure ends in mesh CRS.
+            inverts: proposed invert elevation at each point (same length/order).
+            terrain_path: optional explicit terrain raster.
+            invert_tol: ft below the cell minimum tolerated (default INVERT_TOLERANCE).
+            max_dist_to_cell: points farther than this from any cell are reported
+                ``OFF_MESH`` rather than validated against a distant cell.
+
+        Returns:
+            pd.DataFrame: point, x, y, cell_id, dist_to_cell, cell_terrain_min,
+            invert, status (PASS/FAIL/OFF_MESH/N/A), detail.
+        """
+        if invert_tol is None:
+            invert_tol = GeomCulvertGIS.INVERT_TOLERANCE
+        pts = [(float(x), float(y)) for x, y in points_xy]
+        inverts = [float(v) for v in inverts]
+        if len(inverts) != len(pts):
+            raise ValueError("points_xy and inverts must be the same length")
+        cmins = GeomCulvertGIS.mesh_cell_min_from_terrain(
+            geom_hdf, pts, terrain_path=terrain_path, max_dist_to_cell=max_dist_to_cell)
+        out: List[Dict[str, Any]] = []
+        for _, row in cmins.iterrows():
+            inv = inverts[int(row["point"])]
+            cmin = row["cell_terrain_min"]
+            if not row["on_mesh"]:
+                status = "OFF_MESH"
+                detail = (f"point is {row['dist_to_cell']:.0f} units from the nearest "
+                          f"cell; not validated")
+            elif cmin is None:
+                status, detail = "N/A", "no terrain pixels in associated cell"
+            elif inv >= cmin - invert_tol:
+                status, detail = "PASS", f"invert {inv:.2f} >= cell terrain min {cmin:.2f}"
+            else:
+                status, detail = "FAIL", (f"invert {inv:.2f} is "
+                                          f"{cmin - inv:.2f} ft below cell terrain min {cmin:.2f}")
+            out.append({
+                "point": int(row["point"]), "x": row["x"], "y": row["y"],
+                "cell_id": row["cell_id"], "dist_to_cell": row["dist_to_cell"],
+                "cell_terrain_min": cmin, "invert": inv,
+                "status": status, "detail": detail,
+            })
+        return pd.DataFrame(out)
 
 
 __all__ = ["GeomCulvertGIS"]
