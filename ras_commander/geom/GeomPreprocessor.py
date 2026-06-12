@@ -846,6 +846,97 @@ class GeomPreprocessor:
                 blocking_lines.append(stripped[:300])
         return blocking_lines
 
+    # Geometry-preprocessor datasets written INTO the .g##.hdf during
+    # preprocessing. Deleting these (while preserving the base mesh topology and
+    # the land-cover association) forces HEC-RAS to re-derive per-cell Manning's
+    # n from the current land-cover source on the next compute.
+    _GEOMPRE_HDF_ABSOLUTE_PATHS = (
+        "Geometry/GeomPreprocess",
+        "Geometry/Cross Sections/Property Tables",
+        "Geometry/Cross Sections/Flow Distribution",
+        "Geometry/Boundary Condition Lines/External Faces",
+        "Geometry/Storage Areas/Polygon Area",
+        "Geometry/Land Cover (Manning's n)/External Faces",
+        "Geometry/Land Cover (Manning's n)/Internal Cells",
+        "Geometry/Land Cover (Manning's n)/Internal Faces",
+    )
+    # Per-2D-flow-area preprocessor property tables (deleted under each area group).
+    _GEOMPRE_HDF_AREA_DATASETS = (
+        "Cells Center Manning's n",
+        "Cells Minimum Elevation",
+        "Cells Surface Area",
+        "Cells Volume Elevation Info",
+        "Cells Volume Elevation Values",
+        "Faces Area Elevation Info",
+        "Faces Area Elevation Values",
+        "Faces Low Elevation Centroid",
+        "Faces Minimum Elevation",
+    )
+
+    @staticmethod
+    @log_call
+    def clear_geompre_hdf(geom_hdf_path: Union[str, Path]) -> List[str]:
+        """
+        Delete geometry-preprocessor datasets from a ``.g##.hdf`` in place.
+
+        Removes the cached preprocessor output (the ``Geometry/GeomPreprocess``
+        group, the 2D cell/face property tables including ``Cells Center
+        Manning's n``, the land-cover per-cell/face assignments, and the 1D
+        cross-section property tables) while PRESERVING the base mesh topology
+        and the land-cover association (``Calibration Table``, ``Polygon
+        Points``). On the next compute, HEC-RAS re-derives per-cell Manning's n
+        from the current land-cover source, so edits to the sidecar ``Variables``
+        or the plain-text ``LCMann Table`` actually propagate to the solver.
+
+        This is the missing piece for 2D land-cover preprocessing: ``.c##``
+        files do not hold the 2D per-cell n (it lives in the ``.g##.hdf``).
+        It also makes ``force_geompre`` unnecessary for land-cover models --
+        ``force_geompre`` deletes the whole ``.g##.hdf`` and destroys the
+        land-cover association, collapsing per-cell n to the uniform default.
+
+        Args:
+            geom_hdf_path: Path to a geometry HDF (``<project>.g##.hdf``).
+
+        Returns:
+            List[str]: HDF paths that were deleted (empty if none/no file).
+        """
+        geom_hdf_path = Path(geom_hdf_path)
+        if not geom_hdf_path.exists():
+            return []
+        try:
+            import h5py
+        except ImportError:
+            logger.warning(
+                "h5py not available; cannot clear in-HDF geometry preprocessing "
+                f"for {geom_hdf_path.name}"
+            )
+            return []
+
+        deleted: List[str] = []
+        with h5py.File(geom_hdf_path, "a") as hdf:
+            for path in GeomPreprocessor._GEOMPRE_HDF_ABSOLUTE_PATHS:
+                if path in hdf:
+                    del hdf[path]
+                    deleted.append(path)
+            areas_group = "Geometry/2D Flow Areas"
+            if areas_group in hdf:
+                for area_name in list(hdf[areas_group].keys()):
+                    area_obj = hdf[areas_group][area_name]
+                    if not isinstance(area_obj, h5py.Group):
+                        continue
+                    for dataset in GeomPreprocessor._GEOMPRE_HDF_AREA_DATASETS:
+                        full = f"{areas_group}/{area_name}/{dataset}"
+                        if full in hdf:
+                            del hdf[full]
+                            deleted.append(full)
+
+        if deleted:
+            logger.info(
+                f"Cleared {len(deleted)} geometry-preprocessor path(s) from "
+                f"{geom_hdf_path.name}"
+            )
+        return deleted
+
     @staticmethod
     @log_call
     def clear_geompre_files(
@@ -859,12 +950,14 @@ class GeomPreprocessor:
         from the geometry. These should be cleared when the geometry changes to ensure that
         HEC-RAS recomputes all hydraulic tables with updated geometry information.
 
+        This deletes the `.c##` geometry preprocessor file AND clears the geometry-preprocessor
+        tables baked into the `.g##.hdf` (incl. the 2D per-cell `Cells Center Manning's n` and
+        property tables) in place via `clear_geompre_hdf()`, while preserving the mesh topology and
+        the land-cover association. This ensures a 2D roughness / geometry edit actually propagates
+        (the `.c##` file alone does not hold the per-cell n, so clearing it is not sufficient).
+
         Limitations/Future Work:
-        - This function only deletes the geometry preprocessor file.
-        - It does not clear the IB tables.
-        - It also does not clear geometry preprocessor tables from the geometry HDF.
-        - All of these features will need to be added to reliably remove geometry preprocessor
-          files for 1D and 2D projects.
+        - It does not clear the IB (internal boundary) tables.
 
         Parameters:
             plan_files (Union[str, Path, List[Union[str, Path]]], optional):
@@ -923,15 +1016,37 @@ class GeomPreprocessor:
                     seen.add(candidate_str)
             return unique_candidates
 
+        def _resolve_geom_hdf(plan_path: Path, ras_obj) -> Optional[Path]:
+            """Resolve the geometry HDF (<project>.g##.hdf) for a plan."""
+            plan_match = re.search(r"\.p(\d+)$", plan_path.name, re.IGNORECASE)
+            plan_number = RasUtils.normalize_ras_number(plan_match.group(1)) if plan_match else None
+            geom_number = None
+            if (
+                plan_number is not None
+                and getattr(ras_obj, "plan_df", None) is not None
+                and not ras_obj.plan_df.empty
+                and "plan_number" in ras_obj.plan_df.columns
+                and "geometry_number" in ras_obj.plan_df.columns
+            ):
+                normalized_plan_numbers = ras_obj.plan_df["plan_number"].apply(RasUtils.normalize_ras_number)
+                matching = ras_obj.plan_df[normalized_plan_numbers == plan_number]
+                if not matching.empty:
+                    geom_number = RasUtils.normalize_ras_number(matching.iloc[0]["geometry_number"])
+            if geom_number is None:
+                return None
+            return plan_path.with_name(f"{plan_path.stem}.g{geom_number}.hdf")
+
         def clear_single_file(plan_file: Union[str, Path], ras_obj) -> None:
             plan_path = Path(plan_file)
+            cleared_any = False
             for geom_preprocessor_file in _resolve_geompre_candidates(plan_path, ras_obj):
                 if not geom_preprocessor_file.exists():
                     continue
                 try:
                     geom_preprocessor_file.unlink()
                     logger.debug(f"Deleted geometry preprocessor file: {geom_preprocessor_file}")
-                    return
+                    cleared_any = True
+                    break
                 except PermissionError:
                     logger.error(f"Permission denied: Unable to delete geometry preprocessor file: {geom_preprocessor_file}")
                     raise PermissionError(f"Unable to delete geometry preprocessor file: {geom_preprocessor_file}. Permission denied.")
@@ -939,7 +1054,19 @@ class GeomPreprocessor:
                     logger.error(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
                     raise OSError(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
 
-            logger.warning(f"No geometry preprocessor file found for: {plan_file}")
+            # Also clear the geometry-preprocessor tables baked into the .g##.hdf
+            # (notably the 2D per-cell "Cells Center Manning's n" + property
+            # tables). The .c## file does NOT hold these, so without this step a
+            # 2D roughness/geometry edit silently fails to propagate because the
+            # cached per-cell n is reused. Base mesh + land-cover association are
+            # preserved, so HEC-RAS re-derives per-cell n on the next compute.
+            geom_hdf = _resolve_geom_hdf(plan_path, ras_obj)
+            if geom_hdf is not None and geom_hdf.exists():
+                if GeomPreprocessor.clear_geompre_hdf(geom_hdf):
+                    cleared_any = True
+
+            if not cleared_any:
+                logger.warning(f"No geometry preprocessor file found for: {plan_file}")
 
         if plan_files is None:
             logger.info("Clearing all geometry preprocessor files in the project directory.")
