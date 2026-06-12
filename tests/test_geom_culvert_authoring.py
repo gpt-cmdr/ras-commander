@@ -202,6 +202,11 @@ def test_set_culverts_round_trips_circular_box_and_multi_barrel(tmp_path):
     assert culverts.loc[2, "BarrelStations"] == [(980.0, 980.0), (1000.0, 1000.0), (1020.0, 1020.0)]
     assert culverts.loc[2, "BottomN"] == pytest.approx(0.02)
     assert culverts.loc[2, "ChartNumber"] == 30
+    # Backward compat: records carry ChartNumber but no UsDistance key. The
+    # trailing field must still serialize from ChartNumber (legacy behavior), so
+    # UsDistance reads back equal to ChartNumber.
+    assert culverts.loc[0, "UsDistance"] == pytest.approx(5)
+    assert culverts.loc[2, "UsDistance"] == pytest.approx(30)
 
     all_culverts = GeomCulvert.get_all(geom_file)
     assert all_culverts[["River", "Reach", "RS"]].drop_duplicates().values.tolist() == [
@@ -263,6 +268,38 @@ def test_reader_parses_existing_culvert_and_multiple_barrel_records(tmp_path):
     assert culverts.loc[1, "ShapeName"] == "Box"
     assert culverts.loc[1, "NumBarrels"] == 2
     assert culverts.loc[1, "BarrelStations"] == [(988.5, 988.5), (1011.5, 1011.5)]
+
+
+def test_reader_exposes_us_distance(tmp_path):
+    # The trailing record field is the structure's US Distance (offset of the
+    # upstream face into the reach), not the chart number. Both fixture records
+    # carry US Distance = 5.
+    geom_file = _write_geometry(tmp_path, _real_world_culvert_text())
+
+    culverts = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+
+    assert "UsDistance" in culverts.columns
+    assert culverts.loc[0, "UsDistance"] == pytest.approx(5.0)
+    assert culverts.loc[1, "UsDistance"] == pytest.approx(5.0)
+
+
+def test_set_culverts_round_trips_non_integer_us_distance(tmp_path):
+    # US Distance is a float in real models (e.g. 17.07). It must survive a
+    # read -> set -> read cycle without being truncated to an int (the field was
+    # previously mislabeled/parsed as the integer ChartNumber).
+    geom_file = _write_geometry(tmp_path)
+    record = {**_culvert_records()[0], "UsDistance": 17.07}
+
+    GeomCulvert.set_culverts(geom_file, "Test River", "Reach 1", "100", [record])
+    culverts = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+    assert culverts.loc[0, "UsDistance"] == pytest.approx(17.07)
+
+    # round-trip the read-back records and confirm the value is stable
+    GeomCulvert.set_culverts(
+        geom_file, "Test River", "Reach 1", "100", culverts.to_dict("records")
+    )
+    again = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+    assert again.loc[0, "UsDistance"] == pytest.approx(17.07)
 
 
 def test_set_culvert_updates_existing_record_and_appends(tmp_path):
