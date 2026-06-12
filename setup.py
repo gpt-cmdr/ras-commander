@@ -34,11 +34,12 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.98.1",
+    version="0.98.2",
     packages=find_packages(include=['ras_commander', 'ras_commander.*']),
     include_package_data=True,
     package_data={
         "ras_commander": [
+            "LLM_GUIDE.md",
             "resources/*.json",
             "resources/land_classification/*.hdf",
             "resources/templates/*/*",
@@ -55,6 +56,12 @@ setup(
     long_description=open('README.md').read(),
     long_description_content_type="text/markdown",
     url="https://github.com/gpt-cmdr/ras-commander",
+    project_urls={
+        "Documentation": "https://rascommander.info",
+        "AI Agent Guide": "https://rascommander.info/llms.txt",
+        "Changelog": "https://rascommander.info/development/release-notes/",
+        "Source": "https://github.com/gpt-cmdr/ras-commander",
+    },
     cmdclass={
         'build_py': CustomBuildPy,
     },

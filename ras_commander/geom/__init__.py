@@ -60,6 +60,7 @@ from .GeomLateral import GeomLateral
 from .GeomInlineWeir import GeomInlineWeir
 from .GeomBridge import GeomBridge
 from .GeomCulvert import GeomCulvert
+from .GeomCulvertGIS import GeomCulvertGIS
 from .GeomHtabUtils import GeomHtabUtils
 from .GeomHtab import GeomHtab
 from .GeomMetadata import GeomMetadata
@@ -84,6 +85,7 @@ __all__ = [
     'GeomInlineWeir',
     'GeomBridge',
     'GeomCulvert',
+    'GeomCulvertGIS',
     'GeomHtabUtils',
     'GeomHtab',
     'GeomMetadata',

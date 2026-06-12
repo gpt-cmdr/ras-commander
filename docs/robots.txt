@@ -1,0 +1,23 @@
+# robots.txt for https://rascommander.info/
+#
+# AI agents welcome. A curated, machine-readable index of this documentation
+# is available at https://rascommander.info/llms.txt
+# (and the full concatenated corpus at https://rascommander.info/llms-full.txt).
+
+User-agent: *
+Allow: /
+
+# Explicitly allow AI / LLM crawlers.
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://rascommander.info/sitemap.xml

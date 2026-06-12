@@ -13,6 +13,9 @@ mkdocstrings[python]>=0.24.0
 # Git revision dates
 mkdocs-git-revision-date-localized-plugin>=1.2.0
 
+# llms.txt / llms-full.txt + per-page markdown mirrors for LLM agents
+mkdocs-llmstxt>=0.2
+
 # For cognitive infrastructure doc generation
 PyYAML>=6.0
 

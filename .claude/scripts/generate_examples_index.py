@@ -129,39 +129,74 @@ def _parse_ts(ts: str) -> Optional[datetime]:
         return None
 
 
-def compute_runtime_seconds(nb: Optional[dict]) -> Optional[float]:
-    """Sum per-cell execution wall time for a parsed notebook.
+def _notebook_level_runtime(nb: dict) -> Optional[float]:
+    """Authoritative total wall time stamped by the executor at notebook level.
 
-    Returns total seconds across all code cells that carry a parseable
-    ``metadata.execution`` block, or ``None`` when no code cell has execution
-    timing (-> rendered as ``N/A``).
+    The Symphony visible notebook runner records the full execution wall time and
+    stamps it as ``metadata.execution_runtime_seconds``. This is the most reliable
+    source because ``jupyter nbconvert --execute`` does not always populate per-cell
+    ``metadata.execution`` timestamps (the stdlib parser below then sees nothing and
+    falls back to ``N/A``). Prefer this when present.
+    """
+    value = nb.get("metadata", {}).get("execution_runtime_seconds")
+    if isinstance(value, bool):  # bool is an int subclass — reject it explicitly
+        return None
+    if isinstance(value, (int, float)) and value >= 0:
+        return float(value)
+    return None
+
+
+def compute_runtime_seconds(nb: Optional[dict]) -> Optional[float]:
+    """Total execution wall time for a parsed notebook, from the best available source.
+
+    Source precedence (first hit wins):
+      1. ``metadata.execution_runtime_seconds`` — total wall time stamped by the
+         Symphony runner (authoritative; survives nbconvert dropping cell timing).
+      2. Per-cell ``metadata.execution`` timestamp deltas summed across code cells
+         (JupyterLab / nbclient ``record_timing``).
+      3. Per-cell ``metadata.papermill.duration`` summed (papermill executions).
+
+    Returns total seconds, or ``None`` when no timing of any kind is present
+    (-> rendered as ``N/A``).
     """
     if nb is None:
         return None
 
+    # 1) Authoritative notebook-level total.
+    stamped = _notebook_level_runtime(nb)
+    if stamped is not None:
+        return stamped
+
+    # 2) + 3) Per-cell timing: execution timestamps, else papermill duration.
     total = 0.0
     found_any = False
     for cell in nb.get("cells", []):
         if cell.get("cell_type") != "code":
             continue
-        execution = cell.get("metadata", {}).get("execution")
-        if not execution:
-            continue
-        start_raw = execution.get("iopub.execute_input") or execution.get(
-            "iopub.status.busy"
-        )
-        end_raw = execution.get("iopub.status.idle") or execution.get(
-            "shell.execute_reply"
-        )
-        start = _parse_ts(start_raw) if start_raw else None
-        end = _parse_ts(end_raw) if end_raw else None
-        if start is None or end is None:
-            continue
-        found_any = True
-        duration = (end - start).total_seconds()
-        if duration < 0:
-            duration = 0.0
-        total += duration
+        meta = cell.get("metadata", {})
+
+        execution = meta.get("execution")
+        if execution:
+            start_raw = execution.get("iopub.execute_input") or execution.get(
+                "iopub.status.busy"
+            )
+            end_raw = execution.get("iopub.status.idle") or execution.get(
+                "shell.execute_reply"
+            )
+            start = _parse_ts(start_raw) if start_raw else None
+            end = _parse_ts(end_raw) if end_raw else None
+            if start is not None and end is not None:
+                found_any = True
+                duration = (end - start).total_seconds()
+                total += duration if duration > 0 else 0.0
+                continue
+
+        papermill = meta.get("papermill")
+        if isinstance(papermill, dict):
+            duration = papermill.get("duration")
+            if isinstance(duration, (int, float)) and not isinstance(duration, bool) and duration >= 0:
+                found_any = True
+                total += float(duration)
 
     if not found_any:
         return None

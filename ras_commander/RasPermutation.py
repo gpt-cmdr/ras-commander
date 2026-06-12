@@ -508,6 +508,7 @@ class RasPermutation:
         apply_fn: Callable[[Path, pd.Series, Any], None],
         suffix: str = "perms",
         max_plans_per_batch: int = 99,
+        clone_geom: bool = False,
         ras_object: Any = None,
     ) -> dict:
         """
@@ -623,6 +624,46 @@ class RasPermutation:
                     batch_ras,
                 )
 
+                # Clone the geometry per realization so geometry-modifying
+                # apply_fns (Manning's n / breach) are isolated. clone_plan only
+                # clones the .p## and leaves it pointing at the template geometry,
+                # so without this every sample edits the SAME .g## and the writes
+                # collide (last-write-wins) -> identical results.
+                if clone_geom:
+                    template_geom_number = None
+                    perm_plan_df = getattr(batch_ras, "plan_df", None)
+                    if (
+                        perm_plan_df is not None
+                        and not perm_plan_df.empty
+                        and "plan_number" in perm_plan_df.columns
+                        and "geometry_number" in perm_plan_df.columns
+                    ):
+                        normalized_plan_numbers = perm_plan_df["plan_number"].apply(
+                            RasUtils.normalize_ras_number
+                        )
+                        match = perm_plan_df[
+                            normalized_plan_numbers
+                            == RasUtils.normalize_ras_number(template_plan)
+                        ]
+                        if not match.empty:
+                            template_geom_number = RasUtils.normalize_ras_number(
+                                match.iloc[0]["geometry_number"]
+                            )
+                    if template_geom_number is None:
+                        raise ValueError(
+                            "clone_geom=True but could not resolve the geometry "
+                            f"number for template plan {template_plan}"
+                        )
+                    new_geom_number = RasPlan.clone_geom(
+                        template_geom_number,
+                        ras_object=batch_ras,
+                    )
+                    RasPlan.set_geom(
+                        new_plan_number,
+                        new_geom_number,
+                        ras_object=batch_ras,
+                    )
+
                 plan_title = RasPermutation._derive_plan_title(
                     template_title,
                     absolute_perm_id,
@@ -714,9 +755,27 @@ class RasPermutation:
         max_workers: int = 2,
         num_cores: int = 2,
         ras_object: Any = None,
+        timeout_sec: Optional[int] = None,
+        clear_geompre: bool = False,
+        workers: Optional[List[Any]] = None,
     ) -> pd.DataFrame:
         """
         Execute generated batch folders and append summary metrics to master log.
+
+        Args:
+            plan_matrix: Output from generate_plans().
+            max_workers: Maximum parallel worker count (local execution).
+            num_cores: HEC-RAS core count per plan execution.
+            ras_object: Optional project object for multi-project workflows.
+            timeout_sec: Optional per-plan timeout in seconds. NOTE: per-plan
+                timeout is not yet supported by RasCmdr.compute_parallel() on the
+                current Windows execution path; when set it is logged and ignored
+                (tracked as a follow-up). The ensemble still runs to completion.
+            clear_geompre: Clear .c## preprocessor files before execution.
+            workers: Optional list of remote worker objects from
+                init_ras_worker(). When provided, plans are distributed
+                across the remote fleet via compute_parallel_remote()
+                instead of local compute_parallel().
         """
         from .RasCmdr import RasCmdr
         from .RasPrj import RasPrj, init_ras_project, ras
@@ -732,6 +791,8 @@ class RasPermutation:
 
         source_ras = ras_object or ras
         ras_exe_path = getattr(source_ras, "ras_exe_path", None)
+
+        use_remote = workers is not None and len(workers) > 0
 
         batch_results: List[pd.DataFrame] = []
         for batch_folder in plan_matrix["batch_folders"]:
@@ -754,29 +815,51 @@ class RasPermutation:
             )
 
             plan_numbers = batch_log_df["plan_number"].tolist()
-            compute_result = RasCmdr.compute_parallel(
-                plan_number=plan_numbers,
-                max_workers=max_workers,
-                num_cores=num_cores,
-                ras_object=batch_ras,
-            )
 
-            summary_df = compute_result.results_df.copy()
-            if summary_df.empty:
-                try:
-                    summary_df = batch_ras.update_results_df(
-                        plan_numbers=plan_numbers
+            if use_remote:
+                from .remote import compute_parallel_remote
+
+                remote_results = compute_parallel_remote(
+                    plan_numbers=plan_numbers,
+                    workers=workers,
+                    ras_object=batch_ras,
+                    num_cores=num_cores,
+                    clear_geompre=clear_geompre,
+                )
+
+                execution_success_map = {
+                    plan_num: er.success
+                    for plan_num, er in remote_results.items()
+                }
+
+                summary_df = batch_ras.update_results_df(plan_numbers=plan_numbers)
+                summary_df = summary_df[
+                    summary_df["plan_number"].isin(plan_numbers)
+                ].copy()
+            else:
+                if timeout_sec is not None:
+                    logger.warning(
+                        "timeout_sec=%s ignored: per-plan timeout is not yet supported "
+                        "by RasCmdr.compute_parallel(); the ensemble runs without a "
+                        "per-plan timeout (tracked as a follow-up).",
+                        timeout_sec,
                     )
+                compute_result = RasCmdr.compute_parallel(
+                    plan_number=plan_numbers,
+                    max_workers=max_workers,
+                    num_cores=num_cores,
+                    ras_object=batch_ras,
+                    clear_geompre=clear_geompre,
+                )
+
+                execution_success_map = compute_result.execution_results
+
+                summary_df = compute_result.results_df.copy()
+                if summary_df.empty:
+                    summary_df = batch_ras.update_results_df(plan_numbers=plan_numbers)
                     summary_df = summary_df[
                         summary_df["plan_number"].isin(plan_numbers)
                     ].copy()
-                except Exception as exc:
-                    logger.warning(
-                        "Could not refresh batch result summaries for %s: %s",
-                        batch_folder,
-                        exc,
-                    )
-                    summary_df = pd.DataFrame()
 
             if summary_df.empty:
                 batch_summary = batch_log_df[
@@ -785,7 +868,9 @@ class RasPermutation:
                 batch_summary["status"] = batch_summary["plan_number"].map(
                     lambda plan_num: RasPermutation._derive_status(
                         pd.Series(dtype="object"),
-                        compute_result.execution_results.get(plan_num),
+                        # Branch-neutral: execution_success_map is populated for
+                        # both local and remote paths (compute_result is local-only).
+                        execution_success_map.get(plan_num),
                     )
                 )
                 batch_summary["max_wse"] = np.nan
@@ -811,7 +896,7 @@ class RasPermutation:
             summary_df["status"] = summary_df.apply(
                 lambda row: RasPermutation._derive_status(
                     row,
-                    compute_result.execution_results.get(row["plan_number"]),
+                    execution_success_map.get(row["plan_number"]),
                 ),
                 axis=1,
             )

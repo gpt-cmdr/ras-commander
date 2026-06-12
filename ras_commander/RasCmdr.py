@@ -554,23 +554,30 @@ class RasCmdr:
             if dest_folder is not None:
                 dest_folder = Path(ras_obj.project_folder).parent / dest_folder if isinstance(dest_folder, str) else Path(dest_folder)
 
-                if dest_folder.exists():
-                    if overwrite_dest:
-                        shutil.rmtree(dest_folder)
-                        logger.info(f"Destination folder '{dest_folder}' exists. Overwriting as per overwrite_dest=True.")
-                    elif any(dest_folder.iterdir()):
-                        error_msg = f"Destination folder '{dest_folder}' exists and is not empty. Use overwrite_dest=True to overwrite."
-                        logger.error(error_msg)
-                        raise ValueError(error_msg)
+                if dest_folder.resolve() == Path(ras_obj.project_folder).resolve():
+                    logger.info("Destination folder matches the active project folder; executing in place.")
+                    dest_folder = None
+                    compute_ras = ras_obj
+                    compute_prj_path = ras_obj.prj_file
+                else:
+                    if dest_folder.exists():
+                        if overwrite_dest:
+                            if not RasUtils.remove_with_retry(dest_folder, ras_object=ras_obj):
+                                raise PermissionError(f"Unable to remove destination folder: {dest_folder}")
+                            logger.info(f"Destination folder '{dest_folder}' exists. Overwriting as per overwrite_dest=True.")
+                        elif any(dest_folder.iterdir()):
+                            error_msg = f"Destination folder '{dest_folder}' exists and is not empty. Use overwrite_dest=True to overwrite."
+                            logger.error(error_msg)
+                            raise ValueError(error_msg)
 
-                dest_folder.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(ras_obj.project_folder, dest_folder, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
-                logger.info(f"Copied project folder to destination: {dest_folder}")
+                    dest_folder.mkdir(parents=True, exist_ok=True)
+                    shutil.copytree(ras_obj.project_folder, dest_folder, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
+                    logger.info(f"Copied project folder to destination: {dest_folder}")
 
-                compute_ras = RasPrj()
-                compute_ras.initialize(dest_folder, ras_obj.ras_exe_path)
-                compute_prj_path = compute_ras.prj_file
-            else:
+                    compute_ras = RasPrj()
+                    compute_ras.initialize(dest_folder, ras_obj.ras_exe_path)
+                    compute_prj_path = compute_ras.prj_file
+            if dest_folder is None:
                 compute_ras = ras_obj
                 compute_prj_path = ras_obj.prj_file
 
