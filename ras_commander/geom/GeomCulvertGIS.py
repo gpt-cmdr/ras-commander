@@ -57,7 +57,6 @@ flags proposed inverts that fall below their cell minimum. These methods require
 from __future__ import annotations
 
 import math
-import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -69,16 +68,6 @@ from ras_commander.geom.GeomCulvert import GeomCulvert
 from ras_commander.geom.GeomCrossSection import GeomCrossSection
 
 logger = get_logger(__name__)
-
-
-def _normalize_rs(rs: str) -> str:
-    """Normalize a river-station string for tolerant comparison (numeric when
-    possible, else stripped text)."""
-    s = str(rs).strip()
-    try:
-        return repr(float(s.replace("*", "")))
-    except (ValueError, AttributeError):
-        return s.casefold()
 
 
 class GeomCulvertGIS:
@@ -121,55 +110,6 @@ class GeomCulvertGIS:
     ENTRANCE_LOSS_TOLERANCE = 0.15  # warn if |Ke - recommended| exceeds this
     TYPICAL_EXIT_LOSS = 1.0
     INVERT_TOLERANCE = 0.1  # ft; invert below thalweg by less than this is survey noise
-
-    # ------------------------------------------------------------------
-    # raw culvert-record parsing (US Distance is not exposed by get_culverts)
-    # ------------------------------------------------------------------
-    @staticmethod
-    def _structure_us_distances(geom_text: str, river: str, reach: str,
-                                struct_rs: str) -> List[float]:
-        """Return the ``US Distance`` (last field) of each culvert record in the
-        structure block at ``river``/``reach``/``struct_rs``, in file order.
-
-        Scoped to the correct ``River Reach=`` block so a duplicate river station
-        in another reach cannot be matched. (``US Distance`` is not exposed by
-        ``GeomCulvert.get_culverts``.)
-        """
-        out: List[float] = []
-        in_reach = False
-        in_block = False
-        target_river = str(river).strip().casefold()
-        target_reach = str(reach).strip().casefold()
-        rs_clean = str(struct_rs).strip()
-        # tolerate trailing zeros / formatting on the RS field
-        rs_pat = re.compile(r"^Type RM Length L Ch R = 2\s*,\s*([^,]+),")
-        for line in geom_text.splitlines():
-            if line.startswith("River Reach="):
-                payload = line.split("=", 1)[1]
-                parts = [p.strip().casefold() for p in payload.split(",")]
-                in_reach = (len(parts) >= 2
-                            and parts[0] == target_river
-                            and parts[1] == target_reach)
-                in_block = False
-                continue
-            if not in_reach:
-                continue
-            m = rs_pat.match(line)
-            if m:
-                this_rs = m.group(1).strip()
-                in_block = (this_rs == rs_clean
-                            or _normalize_rs(this_rs) == _normalize_rs(rs_clean))
-                continue
-            if in_block and line.startswith("Type RM Length L Ch R"):
-                in_block = False
-                continue
-            if in_block and (line.startswith("Culvert=")
-                             or line.startswith("Multiple Barrel Culv=")):
-                try:
-                    out.append(float(line.rsplit(",", 1)[-1].strip()))
-                except (ValueError, IndexError):
-                    out.append(float("nan"))
-        return out
 
     # ------------------------------------------------------------------
     # geometry helpers
@@ -272,20 +212,15 @@ class GeomCulvertGIS:
                 - length_error_pct  (|planimetric - entered| / entered * 100)
         """
         geom_file = Path(geom_file)
-        text = geom_file.read_text(encoding="utf-8", errors="replace")
 
         culverts = GeomCulvert.get_culverts(geom_file, river, reach, rs)
         if culverts.empty:
             return pd.DataFrame()
 
-        us_dists = GeomCulvertGIS._structure_us_distances(text, river, reach, rs)
-        if len(us_dists) != len(culverts):
-            raise ValueError(
-                f"US Distance parse mismatch for {river}/{reach}/RS {rs}: found "
-                f"{len(us_dists)} culvert records in the geometry block but "
-                f"get_culverts returned {len(culverts)}. Refusing to align by "
-                f"index (could assign foreign US Distance values)."
-            )
+        # US Distance is exposed per-culvert by get_culverts (no separate raw
+        # parse / index-alignment needed).
+        us_dists = [float(v) if v is not None and v == v else float("nan")
+                    for v in culverts.get("UsDistance", [float("nan")] * len(culverts))]
 
         adj = GeomCulvert.get_adjacent_cross_sections(geom_file, river, reach, rs)
         us_rs = str(adj["upstream"]["RS"])

@@ -177,6 +177,11 @@ class GeomCulvert:
         'chartnumber': 'ChartNumber',
         'culvert_code': 'CulvertCode',
         'culvertcode': 'CulvertCode',
+        'usdistance': 'UsDistance',
+        'us_distance': 'UsDistance',
+        'us distance': 'UsDistance',
+        'upstreamdistance': 'UsDistance',
+        'upstream_distance': 'UsDistance',
     }
 
     REQUIRED_FIELDS = (
@@ -252,6 +257,16 @@ class GeomCulvert:
             return float(str(value).strip())
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _coalesce_us_distance(record: Dict[str, Any]) -> Any:
+        """Pick the trailing-field value for a culvert record: ``UsDistance`` when
+        present and not NaN, otherwise the legacy ``ChartNumber`` alias. Both
+        derive from the same source token, so this keeps them from diverging."""
+        us = record.get('UsDistance')
+        if not GeomCulvert._is_missing(us):
+            return us
+        return record.get('ChartNumber')
 
     @staticmethod
     def _parse_int(value: Any) -> Optional[int]:
@@ -525,6 +540,11 @@ class GeomCulvert:
             'BottomDepth': GeomCulvert._parse_float(record.get('BottomDepth')),
             'ChartNumber': GeomCulvert._parse_int(record.get('ChartNumber')),
             'CulvertCode': GeomCulvert._parse_int(record.get('CulvertCode')),
+            # US Distance is the trailing record field (legacy alias: ChartNumber).
+            # Fall back to ChartNumber when UsDistance is absent *or* NaN so the two
+            # (which always derive from the same source token) never diverge.
+            'UsDistance': GeomCulvert._parse_float(
+                GeomCulvert._coalesce_us_distance(record)),
         }
 
         for field in GeomCulvert.REQUIRED_FIELDS:
@@ -587,6 +607,10 @@ class GeomCulvert:
             normalized['CulvertCode'] = 0
         if normalized['ChartNumber'] is None:
             normalized['ChartNumber'] = 0
+        # The trailing field defaults to ChartNumber (0 when unset) so a record
+        # with no US Distance serializes byte-identically to the legacy behavior.
+        if GeomCulvert._is_missing(normalized['UsDistance']):
+            normalized['UsDistance'] = normalized['ChartNumber']
 
         return normalized
 
@@ -654,6 +678,7 @@ class GeomCulvert:
             'BarrelStations': [],
             'ChartNumber': None,
             'CulvertCode': None,
+            'UsDistance': None,
             'BottomN': None,
             'BottomDepth': None,
             'NumBarrels': 1,
@@ -679,7 +704,12 @@ class GeomCulvert:
             data['NumBarrels'] = GeomCulvert._parse_int(parts[11]) if len(parts) > 11 else 1
             data['CulvertName'] = GeomCulvert._parse_text(parts[12]) if len(parts) > 12 else None
             data['CulvertCode'] = GeomCulvert._parse_int(parts[13]) if len(parts) > 13 else None
+            # trailing field is the structure's US Distance (distance from the
+            # upstream bounding XS to the culvert), historically mislabeled
+            # ChartNumber. Expose it properly as a float; keep ChartNumber for
+            # backward compatibility.
             data['ChartNumber'] = GeomCulvert._parse_int(parts[14]) if len(parts) > 14 else None
+            data['UsDistance'] = GeomCulvert._parse_float(parts[14]) if len(parts) > 14 else None
 
             expected_values = max(data['NumBarrels'] or 0, 0) * 2
             station_values, next_idx = GeomCulvert._parse_station_values(
@@ -701,7 +731,9 @@ class GeomCulvert:
             data['DownstreamStation'] = GeomCulvert._parse_float(parts[12]) if len(parts) > 12 else None
             data['CulvertName'] = GeomCulvert._parse_text(parts[13]) if len(parts) > 13 else None
             data['CulvertCode'] = GeomCulvert._parse_int(parts[14]) if len(parts) > 14 else None
+            # trailing field is the structure's US Distance (see multi-barrel note)
             data['ChartNumber'] = GeomCulvert._parse_int(parts[15]) if len(parts) > 15 else None
+            data['UsDistance'] = GeomCulvert._parse_float(parts[15]) if len(parts) > 15 else None
             if data['UpstreamStation'] is not None and data['DownstreamStation'] is not None:
                 data['BarrelStations'] = [(data['UpstreamStation'], data['DownstreamStation'])]
                 data['UpstreamStations'] = [data['UpstreamStation']]
@@ -786,7 +818,7 @@ class GeomCulvert:
                 record['NumBarrels'],
                 record['CulvertName'],
                 record['CulvertCode'],
-                record['ChartNumber'],
+                record.get('UsDistance', record.get('ChartNumber')),
             ]
             output = [f"Multiple Barrel Culv={','.join(GeomCulvert._format_value(v) for v in fields)}\n"]
             station_values = []
@@ -815,7 +847,7 @@ class GeomCulvert:
                 record['DownstreamStation'],
                 record['CulvertName'],
                 record['CulvertCode'],
-                record['ChartNumber'],
+                record.get('UsDistance', record.get('ChartNumber')),
             ]
             output = [f"Culvert={','.join(GeomCulvert._format_value(v) for v in fields)}\n"]
 
@@ -858,7 +890,12 @@ class GeomCulvert:
             - UpstreamStation: Upstream station location
             - DownstreamInvert: Downstream invert elevation
             - DownstreamStation: Downstream station location
-            - ChartNumber: Inlet control chart number
+            - ChartNumber: Inlet control chart number (legacy alias of the
+              trailing record field; kept as an int for backward compatibility)
+            - UsDistance: Structure US Distance (float) -- the offset of the
+              culvert's upstream face downstream of the upstream bounding cross
+              section. This is the trailing field of the plain-text record;
+              ``set_culverts`` preserves it. Do not treat it as the chart number.
             - BottomN: Bottom Manning's n (if different)
             - NumBarrels: Number of barrels
 

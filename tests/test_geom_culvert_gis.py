@@ -135,8 +135,8 @@ class TestReconstructionRegression:
         assert status(rep_box, "ds_invert") == "PASS"
 
     def test_us_distance_scoped_to_reach(self, squannacook_dir):
-        # _structure_us_distances must find exactly the culverts in this reach's
-        # structure block (count matches get_culverts -> no raise, all placed).
+        # reconstruct_barrels reads UsDistance from get_culverts (per-culvert,
+        # reach-scoped), so every culvert in this structure block is placed.
         geom = squannacook_dir / "Squannacook.g06"
         barrels = GeomCulvertGIS.reconstruct_barrels(geom, *MEADOW)
         assert not barrels["planimetric_length"].isna().any()

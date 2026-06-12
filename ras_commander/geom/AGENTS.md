@@ -54,6 +54,9 @@ Reconstruct and validate culvert placement from geometry; complements `GeomCulve
   basis). Accuracy ~mean 2.6% vs HEC-RAS, so the length check is an informational
   `REVIEW`. `validate_placement` runs: invert vs the **local bed under the opening**
   (not a far-off XS minimum), HDS-5 entrance/exit-loss guidance, and the length indicator.
+  The `US Distance` (trailing field of each plain-text `Culvert=` / `Multiple Barrel Culv=`
+  record) is exposed by `GeomCulvert.get_culverts` as the `UsDistance` column and preserved
+  by `set_culverts` -- it is a float (do not treat it as the integer chart number).
 - **2D connection culverts** (`mesh_cell_min_from_terrain`, `validate_2d_inverts`): for a
   culvert/structure end on a SA/2D connection, the relevant streambed is the minimum
   terrain elevation of the nearest 2D mesh cell. Computed **directly from the terrain
