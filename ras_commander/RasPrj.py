@@ -2101,11 +2101,17 @@ def init_ras_project(
         if input_path.suffix.lower() == '.prj':
             error_msg = f"The specified .prj file does not exist: {input_path}"
             logger.error(error_msg)
-            raise FileNotFoundError(f"{error_msg}. Please check the path and try again.")
+            raise FileNotFoundError(
+                f"{error_msg}. Please check the path and try again. "
+                f"See: https://rascommander.info/getting-started/project-initialization/"
+            )
         else:
             error_msg = f"The specified RAS project folder does not exist: {input_path}"
             logger.error(error_msg)
-            raise FileNotFoundError(f"{error_msg}. Please check the path and try again.")
+            raise FileNotFoundError(
+                f"{error_msg}. Please check the path and try again. "
+                f"See: https://rascommander.info/getting-started/project-initialization/"
+            )
 
     # Determine which RasPrj instance to use
     if ras_object is None:
@@ -2226,6 +2232,7 @@ def init_ras_project(
             "ras-commander | HEC-RAS Automation Library\n"
             "Docs: https://rascommander.info/\n"
             "Repo: https://github.com/gpt-cmdr/ras-commander\n"
+            "LLM agents: https://rascommander.info/llms.txt\n"
             "═══════════════════════════════════════════════════════════════════════\n"
             "\n"
             "PROJECT DATAFRAMES (single source of truth — use these, not file globbing):\n"

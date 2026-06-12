@@ -65,25 +65,40 @@ from project metadata.
 `plan_df` is the main execution and metadata table. It is assembled from the
 `.prj` file, parsed `.p##` contents, and project-relative path resolution.
 
-Key columns you can rely on:
+Key columns you can rely on (column names preserve the HEC-RAS plan-file keys
+verbatim, including spaces and the HEC-RAS spelling of `Reoccurance`). Values
+parsed from the plan text are strings unless noted:
 
-| Column | Meaning |
-|--------|---------|
-| `plan_number` | normalized two-digit plan id such as `01` |
-| `geometry_number` | normalized geometry id used by the plan |
-| `unsteady_number` | normalized unsteady-flow id when the plan is unsteady |
-| `Plan Title` | HEC-RAS plan title |
-| `Short Identifier` | HEC-RAS short id used by stored-map/result folders |
-| `Geom File` / `Geom Path` | geometry reference and resolved path |
-| `Flow File` / `Flow Path` | steady or unsteady flow reference and resolved path |
-| `Computation Interval` / `Output Interval` | time-step metadata |
-| `Write IC File` / `IC Time` | restart / hot-start output-save settings when present |
-| `Write IC File Reoccurance` | restart output recurrence interval, preserving the HEC-RAS spelling |
-| `Write IC File at Sim End` | final-step restart output flag |
-| `Program Version` | HEC-RAS version recorded in the plan |
-| `HDF_Results_Path` | resolved `.p##.hdf` path when present |
-| `full_path` | resolved `.p##` path |
-| `flow_type` | convenience flow-type classification |
+| Column | Dtype | Meaning |
+|--------|-------|---------|
+| `plan_number` | str | normalized two-digit plan id such as `01` |
+| `geometry_number` | str | normalized geometry id used by the plan |
+| `unsteady_number` | str / None | normalized unsteady-flow id when the plan is unsteady; `None` for steady plans |
+| `Plan Title` | str | HEC-RAS plan title (`Plan Title=`) |
+| `Short Identifier` | str | HEC-RAS short id used by stored-map/result folders |
+| `Geom File` | str | geometry reference number from the plan (`Geom File=`) |
+| `Geom Path` | str | resolved absolute `.g##` path |
+| `Flow File` | str | steady/unsteady flow reference number (`Flow File=`) |
+| `Flow Path` | str | resolved absolute `.f##` / `.u##` path |
+| `Computation Interval` | str | computation time step (`Computation Interval=`) |
+| `Mapping Interval` | str | RAS Mapper output interval (`Mapping Interval=`) |
+| `Simulation Date` | str | simulation date/time window (`Simulation Date=`) |
+| `Run HTab` / `Run UNet` / `Run PostProcess` / `Run Sediment` / `Run WQNet` | str | run-flag toggles parsed from the plan |
+| `UNET D1 Cores` / `UNET D2 Cores` / `PS Cores` | int / None | core counts; cast to `int` when present, else `None` |
+| `Write IC File` / `IC Time` | str | restart / hot-start output-save settings when present |
+| `Write IC File at Fixed DateTime` | str | restart-at-fixed-datetime flag when present |
+| `Write IC File Reoccurance` | str | restart output recurrence interval (HEC-RAS spelling preserved) |
+| `Write IC File at Sim End` | str | final-step restart output flag |
+| `Program Version` | str | HEC-RAS version recorded in the plan |
+| `description` | str / None | plan `BEGIN DESCRIPTION` block when present |
+| `HDF_Results_Path` | str / None | resolved `.p##.hdf` path; `None` when results do not exist yet |
+| `full_path` | str | resolved absolute `.p##` path |
+| `flow_type` | str | `"Unsteady"`, `"Steady"`, or `"Unknown"` (derived from `unsteady_number`) |
+
+!!! note
+    Columns derive directly from `_parse_plan_file()` in `ras_commander/RasPrj.py`,
+    so any plan key present in the file appears as a same-named column. Not every plan
+    contains every key; missing keys are simply absent or `None`.
 
 Common patterns:
 
@@ -103,31 +118,63 @@ paths = ras.get_hdf_paths("01")
 
 `geom_df` inventories geometry files and compiled HDF companions.
 
-Useful columns:
+Columns (the metadata columns come from `GeomMetadata`, which prefers fast
+HDF-based extraction when `.g##.hdf` exists and falls back to plain-text parsing):
 
-| Column | Meaning |
-|--------|---------|
-| `geom_number` | normalized geometry id |
-| `geom_file` | raw `.g##` reference from the project |
-| `full_path` | resolved `.g##` path |
-| `hdf_path` | expected compiled `.g##.hdf` path |
-| `geom_title` | parsed geometry title when present |
-| `description` | geometry description block when present |
+| Column | Dtype | Meaning |
+|--------|-------|---------|
+| `geom_file` | str | raw `.g##` reference token from the project (e.g. `g01`) |
+| `geom_number` | str | normalized geometry id (e.g. `01`) |
+| `full_path` | str | resolved absolute `.g##` path |
+| `hdf_path` | str | expected compiled `.g##.hdf` path |
+| `geom_title` | str / None | parsed `Geom Title=` value when present |
+| `description` | str / None | geometry `BEGIN DESCRIPTION` block when present |
+| `has_1d_xs` | bool | `True` if the geometry has 1D cross sections |
+| `has_2d_mesh` | bool | `True` if the geometry has 2D mesh / flow areas |
+| `num_cross_sections` | int | count of 1D cross sections |
+| `num_inline_structures` | int | total inline structures (bridges + culverts + weirs) |
+| `num_bridges` | int | count of bridge structures |
+| `num_culverts` | int | count of culvert structures |
+| `num_weirs` | int | count of inline weir structures |
+| `num_gates` | int | count of gate structures |
+| `num_lateral_structures` | int | count of lateral structures |
+| `num_sa_2d_connections` | int | count of SA/2D connections |
+| `mesh_cell_count` | int | total 2D mesh cells across all areas |
+| `mesh_area_names` | list[str] | names of 2D flow areas |
 
-The table may also include counts or metadata parsed from the geometry file.
-Use it for geometry discovery first, then move to `RasGeometry`, `Geom*`, or
-HDF readers for detailed geometry content.
+When metadata extraction fails for a geometry, counts default to `0`, booleans to
+`False`, and `mesh_area_names` to an empty list. Use this table for geometry
+discovery first, then move to `RasGeometry`, `Geom*`, or HDF readers for detail.
 
 ## `flow_df` and `unsteady_df`
 
 These inventory steady and unsteady flow files referenced by the project.
+Both come from `_parse_flow_file()` / `_parse_unsteady_file()` in `RasPrj.py`.
 
-Typical columns:
+`flow_df` (steady `.f##`):
 
-| DataFrame | Common columns |
-|-----------|----------------|
-| `flow_df` | `flow_number`, `full_path`, `description` |
-| `unsteady_df` | `unsteady_number`, `full_path`, `description`, `Use Restart`, `Restart Filename`, plus parsed unsteady metadata |
+| Column | Dtype | Meaning |
+|--------|-------|---------|
+| `flow_number` | str | normalized steady-flow id |
+| `unsteady_number` | None | always `None` for steady-flow rows |
+| `full_path` | str | resolved absolute `.f##` path |
+| `Flow Title` | str / None | parsed `Flow Title=` value |
+| `Program Version` | str / None | HEC-RAS version recorded in the flow file |
+| `description` | str | flow `BEGIN DESCRIPTION` block (empty string when absent) |
+
+`unsteady_df` (unsteady `.u##`):
+
+| Column | Dtype | Meaning |
+|--------|-------|---------|
+| `unsteady_number` | str | normalized unsteady-flow id |
+| `full_path` | str | resolved absolute `.u##` path |
+| `Flow Title` | str / None | parsed `Flow Title=` value |
+| `Program Version` | str / None | HEC-RAS version recorded in the file |
+| `Use Restart` | str / None | restart/hot-start flag (`Use Restart=`) |
+| `Restart Filename` | str / None | restart source file when restart is enabled |
+| `Precipitation Mode` / `Wind Mode` | str / None | meteorology mode toggles when present |
+| `Met BC=Precipitation\|...` | str / None | parsed gridded-precip / met-BC settings when present |
+| `description` | str | unsteady `BEGIN DESCRIPTION` block (empty string when absent) |
 
 Use these tables when you need to audit which `.f##` / `.u##` files exist
 before editing them through `RasPlan` or `RasUnsteady`.
@@ -137,21 +184,31 @@ before editing them through `RasPlan` or `RasUnsteady`.
 `boundaries_df` is built from the unsteady boundary blocks and is the main
 table for DSS-path audits and boundary-condition summaries.
 
-Common columns:
+Common columns (from `_parse_boundary_condition()` in `RasPrj.py`; DSS/typed
+columns appear only when the source line is present):
 
-| Column | Meaning |
-|--------|---------|
-| `unsteady_number` | parent `.u##` file |
-| `boundary_condition_number` | boundary sequence within the file |
-| `bc_type` | high-level boundary type |
-| `hydrograph_type` | parsed hydrograph subtype when present |
-| `river_reach_name` / `river_station` | 1D location metadata |
-| `storage_area_name` | 2D/storage-area location when present |
-| `Interval` | time interval |
-| `Use DSS` | whether the boundary uses DSS |
-| `DSS File` / `DSS Path` | raw DSS references |
-| `dss_part_a` ... `dss_part_f` | parsed DSS pathname components |
-| `hydrograph_num_values` | number of inline hydrograph values |
+| Column | Dtype | Meaning |
+|--------|-------|---------|
+| `unsteady_number` | str | parent `.u##` file |
+| `boundary_condition_number` | int | boundary sequence within the file (1-based) |
+| `bc_type` | str | high-level boundary type (e.g. `Flow Hydrograph`, `Normal Depth`, `Unknown`) |
+| `hydrograph_type` | str / None | hydrograph subtype when the BC is a hydrograph, else `None` |
+| `river_reach_name` | str | 1D river/reach location field (may be empty string) |
+| `river_station` | str | 1D river-station field (may be empty string) |
+| `storage_area_name` | str | storage-area location field when present |
+| `pump_station_name` | str | pump-station field when present |
+| `area_2d` | str | 2D flow-area name field when present |
+| `bc_line_name` | str | boundary-condition line name when present |
+| `Interval` | str | time interval (`Interval=`) |
+| `Use DSS` | str | `"True"` / `"False"` string (note: string, not bool) |
+| `DSS File` | str | raw DSS file reference |
+| `DSS Path` | str | raw DSS pathname |
+| `dss_part_a` … `dss_part_f` | str | parsed DSS pathname components A–F |
+| `Friction Slope` | str | raw friction-slope field for `Normal Depth` BCs |
+| `friction_slope_value` | float / None | parsed friction-slope value |
+| `critical_fallback_flag` | int / None | parsed critical-boundary fallback flag |
+| `hydrograph_num_values` | int | number of inline hydrograph values (0 if none) |
+| `hydrograph_values` | list[str] | inline hydrograph values when present |
 
 Examples:
 
@@ -169,18 +226,21 @@ flow_bcs = ras.boundaries_df[ras.boundaries_df["bc_type"] == "Flow Hydrograph"]
 Several columns contain lists because the dataframe is optimized for project
 overview, not one-row-per-layer discovery.
 
-Current default columns:
+Current default columns (each cell is one element because the DataFrame is a
+single row; "Dtype" describes the value inside that cell):
 
-| Column | Shape | Meaning |
+| Column | Dtype | Meaning |
 |--------|-------|---------|
-| `projection_path` | scalar | project projection reference |
-| `profile_lines_path` | list | profile/reference line paths |
-| `soil_layer_path` | list | soils sidecar paths |
-| `infiltration_hdf_path` | list | infiltration sidecar HDFs |
-| `landcover_hdf_path` | list | land-cover sidecar HDFs |
-| `terrain_hdf_path` | list | terrain HDFs |
-| `reference_map_layer_names` / `reference_map_layer_path` | list | reference map layers |
-| `basemap_layer_names` / `basemap_layer_path` | list | basemap layers |
+| `projection_path` | str / None | project projection (`.prj`) reference |
+| `profile_lines_path` | list[str] | profile/reference line paths |
+| `soil_layer_path` | list[str] | soils sidecar paths |
+| `infiltration_hdf_path` | list[str] | infiltration sidecar HDFs |
+| `landcover_hdf_path` | list[str] | land-cover sidecar HDFs |
+| `terrain_hdf_path` | list[str] | terrain HDFs |
+| `reference_map_layer_names` | list[str] | reference map layer names |
+| `reference_map_layer_path` | list[str] | reference map layer paths |
+| `basemap_layer_names` | list[str] | basemap layer names |
+| `basemap_layer_path` | list[str] | basemap layer paths |
 | `current_settings` | dict | compact `.rasmap` settings summary |
 
 ```python
@@ -209,21 +269,37 @@ For compiled HDF asset resolution, pair the `.rasmap` summary with
 `ResultsSummary`. It is intended for fast execution-status and runtime queries,
 not heavy spatial extraction.
 
-Typical columns:
+Columns (from `ResultsSummary.summarize_plan()` /
+`get_summary_columns()` in `ras_commander/results/ResultsSummary.py`; identity,
+health, and runtime columns are always present, `None`/`0` when unavailable):
 
-| Column | Meaning |
-|--------|---------|
-| `plan_number` / `plan_title` / `flow_type` | copied project metadata |
-| `hdf_path` / `hdf_exists` / `hdf_file_modified` | result-file status |
-| `completed` | completion flag parsed from compute metadata |
-| `has_errors` / `has_warnings` | summary health flags |
-| `error_count` / `warning_count` | parsed message counts |
-| `first_error_line` | first blocking compute-message line when present |
-| `runtime_simulation_hours` | simulation duration |
-| `runtime_complete_process_hours` | end-to-end runtime |
-| `runtime_unsteady_compute_hours` | unsteady compute runtime when present |
-| `runtime_complete_process_speed` | normalized throughput metric |
-| `runtime_source` | whether runtime came from HDF metadata or compute-message fallback |
+| Column | Dtype | Meaning |
+|--------|-------|---------|
+| `plan_number` | str | copied plan id |
+| `plan_title` | str / None | copied plan title |
+| `flow_type` | str / None | `Steady` / `Unsteady` classification |
+| `hdf_path` | str | path to the `.p##.hdf` result file |
+| `hdf_exists` | bool | whether the HDF result file exists |
+| `hdf_file_modified` | datetime / None | HDF modification timestamp |
+| `ras_version` | str / None | HEC-RAS version (`Program Version`) |
+| `completed` | bool | completion flag parsed from compute metadata |
+| `has_errors` | bool | summary error flag |
+| `has_warnings` | bool | summary warning flag |
+| `error_count` | int | parsed error-message count |
+| `warning_count` | int | parsed warning-message count |
+| `first_error_line` | str / None | first blocking compute-message line when present |
+| `runtime_simulation_start` | datetime / None | simulation start time |
+| `runtime_simulation_end` | datetime / None | simulation end time |
+| `runtime_simulation_hours` | float / None | simulated duration (hours) |
+| `runtime_complete_process_hours` | float / None | end-to-end wall-clock runtime (hours) |
+| `runtime_unsteady_compute_hours` | float / None | unsteady compute runtime (hours) |
+| `runtime_complete_process_speed` | float / None | normalized throughput (sim hr / wall hr) |
+| `runtime_source` | str / None | `'hdf'` or `'compute_messages'` provenance |
+| `vol_error` | float / None | volume-accounting error (unsteady only) |
+| `vol_accounting_units` | str / None | volume units |
+| `vol_error_percent` | float / None | volume error as percent |
+| `vol_flux_in` / `vol_flux_out` | float / None | total inflow / outflow volume |
+| `vol_starting` / `vol_ending` | float / None | starting / ending storage volume |
 
 ```python
 print(ras.results_df[[

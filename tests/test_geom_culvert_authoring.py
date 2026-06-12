@@ -79,6 +79,46 @@ def _write_geometry(tmp_path, text=None):
     return geom_file
 
 
+def _shape_specs():
+    return {
+        int(shape["code"]): shape
+        for shape in GeomCulvert.CULVERT_TAXONOMY["shapes"]
+    }
+
+
+def _first_chart_scale(shape_code):
+    shape = _shape_specs()[shape_code]
+    chart = shape["allowed_charts"][0]
+    scale = chart["allowed_scales"][0]
+    return int(chart["chart_id"]), int(scale["scale_id"])
+
+
+def _record_for_shape(shape_code, index=0, **overrides):
+    shape = _shape_specs()[shape_code]
+    chart_id, scale_id = _first_chart_scale(shape_code)
+    required_dimensions = set(shape["dimension_model"]["required_geometry_fields"])
+
+    record = {
+        "ShapeName": "ConSpan" if shape_code == 9 else shape["ras_commander_shape_name"],
+        "Span": 5.0 + index,
+        "Length": 40.0 + index,
+        "ManningsN": 0.013 + (index * 0.001),
+        "EntranceLoss": 0.2,
+        "ExitLoss": 1.0,
+        "InletType": chart_id,
+        "OutletType": scale_id,
+        "UpstreamInvert": 25.0 + index,
+        "UpstreamStation": 970.0 + (index * 5.0),
+        "DownstreamInvert": 24.5 + index,
+        "DownstreamStation": 970.0 + (index * 5.0),
+        "CulvertName": f"{shape['ras_commander_shape_name']} {index + 1}",
+    }
+    if "Rise" in required_dimensions:
+        record["Rise"] = 3.0 + index
+    record.update(overrides)
+    return record
+
+
 def _culvert_records():
     return [
         {
@@ -170,6 +210,45 @@ def test_set_culverts_round_trips_circular_box_and_multi_barrel(tmp_path):
     assert len(all_culverts) == 3
 
 
+def test_set_culverts_round_trips_all_taxonomy_shapes(tmp_path):
+    geom_file = _write_geometry(tmp_path)
+    records = [
+        _record_for_shape(shape_code, index)
+        for index, shape_code in enumerate(sorted(_shape_specs()))
+    ]
+
+    result = GeomCulvert.set_culverts(
+        geom_file,
+        "Test River",
+        "Reach 1",
+        "100",
+        records,
+    )
+
+    assert result["culverts_written"] == 9
+    culverts = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+    expected_shapes = sorted(_shape_specs())
+    expected_names = [
+        _shape_specs()[shape_code]["ras_commander_shape_name"]
+        for shape_code in expected_shapes
+    ]
+
+    assert culverts["Shape"].tolist() == expected_shapes
+    assert culverts["ShapeName"].tolist() == expected_names
+    assert culverts.loc[8, "ShapeName"] == "Con Span"
+
+    for index, shape_code in enumerate(expected_shapes):
+        chart_id, scale_id = _first_chart_scale(shape_code)
+        assert culverts.loc[index, "InletType"] == chart_id
+        assert culverts.loc[index, "OutletType"] == scale_id
+        assert culverts.loc[index, "Span"] == pytest.approx(records[index]["Span"])
+        assert culverts.loc[index, "Length"] == pytest.approx(records[index]["Length"])
+        if "Rise" in records[index]:
+            assert culverts.loc[index, "Rise"] == pytest.approx(records[index]["Rise"])
+        else:
+            assert pd.isna(culverts.loc[index, "Rise"])
+
+
 def test_reader_parses_existing_culvert_and_multiple_barrel_records(tmp_path):
     geom_file = _write_geometry(tmp_path, _real_world_culvert_text())
 
@@ -220,7 +299,7 @@ def test_set_culverts_validates_shape_required_fields_and_barrel_pairs(tmp_path)
     geom_file = _write_geometry(tmp_path)
     valid = _culvert_records()[0]
 
-    with pytest.raises(ValueError, match="Unsupported culvert shape"):
+    with pytest.raises(ValueError, match="Unsupported HEC-RAS Shape"):
         GeomCulvert.set_culverts(geom_file, "Test River", "Reach 1", "100", [{**valid, "Shape": 99}])
 
     missing_span = dict(valid)
@@ -229,8 +308,127 @@ def test_set_culverts_validates_shape_required_fields_and_barrel_pairs(tmp_path)
         GeomCulvert.set_culverts(geom_file, "Test River", "Reach 1", "100", [missing_span])
 
     bad_barrels = {**_culvert_records()[2], "NumBarrels": 4}
-    with pytest.raises(ValueError, match="NumBarrels=4"):
+    with pytest.raises(ValueError, match="# Barrels=4"):
         GeomCulvert.set_culverts(geom_file, "Test River", "Reach 1", "100", [bad_barrels])
+
+
+def test_set_culverts_validates_taxonomy_chart_scale_and_numeric_ranges(tmp_path):
+    geom_file = _write_geometry(tmp_path)
+
+    pipe_arch = _record_for_shape(3)
+    box_chart_id, _ = _first_chart_scale(2)
+    with pytest.raises(ValueError, match="Chart #"):
+        GeomCulvert.set_culverts(
+            geom_file,
+            "Test River",
+            "Reach 1",
+            "100",
+            [{**pipe_arch, "InletType": box_chart_id}],
+        )
+
+    chart_specific_scale = _record_for_shape(1, InletType=3, OutletType=3)
+    with pytest.raises(ValueError, match=r"Scale# 3.*Chart # 3"):
+        GeomCulvert.set_culverts(
+            geom_file,
+            "Test River",
+            "Reach 1",
+            "100",
+            [chart_specific_scale],
+        )
+
+    missing_rise = _record_for_shape(4)
+    missing_rise.pop("Rise")
+    with pytest.raises(ValueError, match="Rise"):
+        GeomCulvert.set_culverts(
+            geom_file,
+            "Test River",
+            "Reach 1",
+            "100",
+            [missing_rise],
+        )
+
+    semi_circle_without_rise = _record_for_shape(6)
+    assert "Rise" not in semi_circle_without_rise
+    GeomCulvert.set_culverts(
+        geom_file,
+        "Test River",
+        "Reach 1",
+        "100",
+        [semi_circle_without_rise],
+    )
+
+    with pytest.raises(ValueError, match="positive value"):
+        GeomCulvert.set_culverts(
+            geom_file,
+            "Test River",
+            "Reach 1",
+            "100",
+            [{**_record_for_shape(1), "Span": 0}],
+        )
+
+    with pytest.raises(ValueError, match="nonnegative value"):
+        GeomCulvert.set_culverts(
+            geom_file,
+            "Test River",
+            "Reach 1",
+            "100",
+            [{**_record_for_shape(1), "EntranceLoss": -0.1}],
+        )
+
+
+def test_set_culverts_validates_group_and_identical_barrel_limits(tmp_path):
+    geom_file = _write_geometry(tmp_path)
+
+    too_many_groups = [
+        _record_for_shape(1, index=i)
+        for i in range(GeomCulvert.MAX_CULVERT_GROUPS_PER_CROSSING + 1)
+    ]
+    with pytest.raises(ValueError, match="at most 10.*Culvert Group"):
+        GeomCulvert.set_culverts(
+            geom_file,
+            "Test River",
+            "Reach 1",
+            "100",
+            too_many_groups,
+        )
+
+    too_many_barrels = _record_for_shape(
+        2,
+        NumBarrels=GeomCulvert.MAX_IDENTICAL_BARRELS_PER_GROUP + 1,
+        BarrelStations=[
+            (900 + i, 900 + i)
+            for i in range(GeomCulvert.MAX_IDENTICAL_BARRELS_PER_GROUP + 1)
+        ],
+    )
+    with pytest.raises(ValueError, match="# Barrels=26"):
+        GeomCulvert.set_culverts(
+            geom_file,
+            "Test River",
+            "Reach 1",
+            "100",
+            [too_many_barrels],
+        )
+
+
+def test_set_culverts_accepts_chart_scale_aliases(tmp_path):
+    geom_file = _write_geometry(tmp_path)
+    record = _record_for_shape(7)
+    chart_id = record.pop("InletType")
+    scale_id = record.pop("OutletType")
+    record["ChartID"] = chart_id
+    record["ScaleID"] = scale_id
+
+    GeomCulvert.set_culverts(
+        geom_file,
+        "Test River",
+        "Reach 1",
+        "100",
+        [record],
+    )
+
+    culverts = GeomCulvert.get_culverts(geom_file, "Test River", "Reach 1", "100")
+    assert culverts.loc[0, "InletType"] == chart_id
+    assert culverts.loc[0, "OutletType"] == scale_id
 
 
 def test_adjacent_cross_sections_coordinate_ineffective_flow_updates(tmp_path):

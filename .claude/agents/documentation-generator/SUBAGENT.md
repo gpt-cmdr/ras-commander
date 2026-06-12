@@ -163,16 +163,18 @@ project_path = Path("/Users/me/Documents/Muncie")
 
 **Why**: `execute: false` in mkdocs.yml means notebooks aren't run during build.
 
-### Dual-Platform Deployment
+### Deployment: Self-Hosted rascommander.info
 
-| Platform | URL | Build File | Notebook Handling |
-|----------|-----|------------|-------------------|
-| **GitHub Pages** | https://gpt-cmdr.github.io/ras-commander/ | `.github/workflows/docs.yml` | `cp -r` |
-| **ReadTheDocs** | https://ras-commander.readthedocs.io | `.readthedocs.yaml` | `cp -r` (MUST use copy) |
+The canonical site is **https://rascommander.info** (self-hosted MkDocs on CT 210 behind a
+Cloudflare tunnel). GitHub Pages auto-deploy is disabled and ReadTheDocs is deprecated; do not
+add new references to `gpt-cmdr.github.io` or `ras-commander.readthedocs.io`.
 
-**Key Difference**: ReadTheDocs strips symlinks; GitHub Actions preserves them.
+| Aspect | Value |
+|--------|-------|
+| **Canonical URL** | https://rascommander.info (`site_url` in `mkdocs.yml`) |
+| **Notebook Handling** | `cp -r examples docs/notebooks` (copy, never symlink) |
 
-**Solution**: Use `cp -r examples docs/notebooks` in both for consistency.
+**Why copy, not symlink**: some build runners strip symlinks. Use `cp -r examples docs/notebooks`.
 
 ### MkDocs Configuration Reference
 
@@ -318,8 +320,8 @@ docs/notebooks/
 
 ## Deployment URLs
 
-- **GitHub Pages**: https://gpt-cmdr.github.io/ras-commander/
-- **ReadTheDocs**: https://ras-commander.readthedocs.io
+- **Canonical (self-hosted)**: https://rascommander.info
+- *(Deprecated: `gpt-cmdr.github.io/ras-commander`, `ras-commander.readthedocs.io` — do not link to these.)*
 
 ## Quality Checklist
 

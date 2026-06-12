@@ -14,10 +14,60 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.97.0"
+    __version__ = "0.98.2"
+
+# Canonical machine-readable agent index (see docs() helper below)
+__llms_txt__ = "https://rascommander.info/llms.txt"
 
 # Set up logging
 setup_logging()
+
+
+def docs(topic=None):
+    """Return (and print) the rascommander.info URL for an optional topic.
+
+    No args -> docs home; topic='llms' -> llms.txt; topic='dataframes' ->
+    the DataFrame Reference; any other topic -> user-guide/<topic>/.
+    Designed for LLM agents to self-locate the documentation at runtime.
+    """
+    base = "https://rascommander.info"
+    if topic is None:
+        url = base
+    else:
+        slug = str(topic).strip().strip("/")
+        if slug == "llms":
+            url = __llms_txt__
+        elif slug == "dataframes":
+            url = f"{base}/reference/dataframe-reference/"
+        elif not slug:
+            url = base
+        else:
+            url = f"{base}/user-guide/{slug}/"
+    print(url)
+    return url
+
+
+def agent_guide_text():
+    """Return the packaged LLM_GUIDE.md content (offline agent quickstart) as a string.
+
+    Importer-safe: works for both directory and zip/non-filesystem installs.
+    Prefer this over agent_guide_path() when you just need the guide text.
+    """
+    from importlib.resources import files
+    return files("ras_commander").joinpath("LLM_GUIDE.md").read_text(encoding="utf-8")
+
+
+def agent_guide_path():
+    """Return a Traversable for the packaged LLM_GUIDE.md (offline agent quickstart).
+
+    For normal (directory) pip and source installs this behaves like a filesystem
+    path (``str(agent_guide_path())`` is a real path). Under zip/non-filesystem
+    importers it is a ``Traversable`` that is not a real path -- read its content
+    with ``agent_guide_text()``, or materialize a real path with
+    ``importlib.resources.as_file()``.
+    """
+    from importlib.resources import files
+    return files("ras_commander").joinpath("LLM_GUIDE.md")
 
 # Core functionality
 from .RasPrj import RasPrj, init_ras_project, get_ras_exe, ras, create_project_from_template
@@ -54,6 +104,7 @@ from .RasFloodway import RasFloodway
 from .RasHydroCompare import RasHydroCompare
 from .RasModPuls import RasModPuls
 from .RasPermutation import RasPermutation, RangeSpec
+from .RasMonteCarlo import RasMonteCarlo
 from .RasCalibrate import (
     CalibrationPoint,
     RasCalibrate,
@@ -88,7 +139,7 @@ from .geom import (
     GeomCrossSection, CrossSectionBankStations, CrossSectionBuildInput,
     CrossSectionBuildResult, CrossSectionManningsN, CrossSectionReachLengths,
     GeomStorage, GeomLateral,
-    GeomInlineWeir, GeomBridge, GeomCulvert,
+    GeomInlineWeir, GeomBridge, GeomCulvert, GeomCulvertGIS,
     GeomReferenceFeatures, GeomBcLines, GeomMesh,
     MeshResult, BCConflict, BCFixResult,
 )
@@ -180,7 +231,7 @@ __all__ = [
     'PreprocessResult', 'GeometryPreprocessResult',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
-    'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec',
+    'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',
     'compute_objective', 'extract_modeled',
     'extract_steady_profile_modeled', 'extract_steady_profile_observations',
@@ -193,7 +244,7 @@ __all__ = [
     'GeomCrossSection', 'CrossSectionBankStations', 'CrossSectionBuildInput',
     'CrossSectionBuildResult', 'CrossSectionManningsN', 'CrossSectionReachLengths',
     'GeomStorage', 'GeomLateral',
-    'GeomInlineWeir', 'GeomBridge', 'GeomCulvert',
+    'GeomInlineWeir', 'GeomBridge', 'GeomCulvert', 'GeomCulvertGIS',
     'GeomReferenceFeatures', 'GeomBcLines', 'GeomMesh',
     'MeshResult', 'BCConflict', 'BCFixResult',
 
@@ -245,6 +296,9 @@ __all__ = [
 
     # Utilities
     'get_logger', 'log_call', 'standardize_input',
+
+    # Documentation / LLM agent helpers
+    'docs', 'agent_guide_path', 'agent_guide_text',
 
     # Validation framework
     'ValidationSeverity', 'ValidationResult', 'ValidationReport',

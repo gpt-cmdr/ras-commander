@@ -65,7 +65,7 @@ Multiple Barrel Culv={shape},{span},{rise},{length},{mannings_n},{entrance_loss}
 `Multiple Barrel Culv=` is followed by fixed-width upstream/downstream station
 pairs. The current `GeomCulvert` API preserves historical field names
 `InletType` and `OutletType`; the taxonomy maps them to the GUI labels
-`Chart #` and `Scale#` so future validation can use HEC-RAS nomenclature.
+`Chart #` and `Scale#` so validation errors can use HEC-RAS nomenclature.
 
 Optional detail records are:
 

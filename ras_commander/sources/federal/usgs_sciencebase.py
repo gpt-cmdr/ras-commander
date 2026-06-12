@@ -180,6 +180,29 @@ class UsgsScienceBase:
                 "Excel calibration table + CSV model output for easy comparison."
             ),
         },
+        "squannacook": {
+            "name": "Squannacook River Stream Crossings, MA",
+            "sciencebase_id": "62c73389d34eeb1417bb1320",
+            "doi": None,
+            "ras_version": "6.x",
+            "model_type": "1D steady",
+            "license": "USGS data release",
+            "crs": None,
+            "calibration_data": False,
+            "hdf_results": False,
+            "dss_file": False,
+            "files": {
+                "HECRAS_model_files.zip": {"size_mb": 9, "required": True},
+            },
+            "project_file": "Squannacook.prj",
+            "notes": (
+                "Georeferenced 1D steady HEC-RAS models for 16 stream crossings "
+                "in the Squannacook/Nissitissit basin (MA). Each crossing has "
+                "design alternatives comparing culvert shapes (pipe, arch, box) "
+                "and survey vs lidar cross sections. Used by the culvert GIS "
+                "reconstruction and hydraulic-validity example."
+            ),
+        },
     }
 
     _MODEL_ALIASES = {
@@ -193,6 +216,9 @@ class UsgsScienceBase:
         "stjoseph": "st-joseph",
         "elkhart": "st-joseph",
         "F7QZ2836": "st-joseph",
+        "squannacook": "squannacook",
+        "squannacook-river": "squannacook",
+        "squannacook-crossings": "squannacook",
     }
 
     @staticmethod
