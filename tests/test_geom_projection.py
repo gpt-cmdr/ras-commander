@@ -165,6 +165,22 @@ def test_reproject_geometry_transforms_1d_2d_and_line_features(tmp_path):
     assert result["qa"]["breaklines"]["invalid"] == []
 
 
+def test_reproject_geometry_preserves_crlf_line_endings(tmp_path):
+    geom = _write_geometry(tmp_path / "Model.g01")
+    lf_text = geom.read_text(encoding="utf-8")
+    geom.write_bytes(lf_text.replace("\n", "\r\n").encode("utf-8"))
+
+    result = GeomProjection.reproject_geometry(
+        geom,
+        SOURCE_CRS,
+        DEST_CRS,
+    )
+
+    output_bytes = Path(result["output_geometry"]).read_bytes()
+    assert b"\r\r\n" not in output_bytes
+    assert b"\n" not in output_bytes.replace(b"\r\n", b"")
+
+
 def test_reproject_model_geometry_copies_project_updates_rasmap_and_reports_terrain(tmp_path):
     project = tmp_path / "project"
     project.mkdir()
@@ -244,6 +260,52 @@ def test_reproject_model_geometry_copies_project_updates_rasmap_and_reports_terr
     assert result["compiled_geometry"][0]["compiled_hdf_exists"] is True
     assert result["compiled_geometry"][0]["refinement_region_count"] == 1
     assert result["compiled_geometry"][0]["refinement_region_integrity"]["is_valid"] is True
+
+
+def test_reproject_model_geometry_remaps_absolute_source_geometry_to_copy(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    project_name = "Model"
+    geom = _write_geometry(project / f"{project_name}.g01")
+    original_geom_text = geom.read_text(encoding="utf-8")
+    (project / f"{project_name}.prj").write_text(
+        "Proj Title=Model\nGeom File=g01\n",
+        encoding="utf-8",
+    )
+
+    result = GeomProjection.reproject_model_geometry(
+        project,
+        SOURCE_CRS,
+        DEST_CRS,
+        geometry_files=[geom.resolve()],
+    )
+
+    dest_geom = project.with_name("project_reprojected") / f"{project_name}.g01"
+    assert geom.read_text(encoding="utf-8") == original_geom_text
+    assert dest_geom.read_text(encoding="utf-8") != original_geom_text
+    assert (
+        Path(result["geometry_results"][0]["source_geometry"]).resolve()
+        == dest_geom.resolve()
+    )
+
+
+def test_reproject_model_geometry_rejects_absolute_geometry_outside_project_copy(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_geometry(project / "Model.g01")
+    outside_geom = _write_geometry(tmp_path / "Outside.g01")
+    (project / "Model.prj").write_text(
+        "Proj Title=Model\nGeom File=g01\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Absolute geometry_files entries"):
+        GeomProjection.reproject_model_geometry(
+            project,
+            SOURCE_CRS,
+            DEST_CRS,
+            geometry_files=[outside_geom.resolve()],
+        )
 
 
 def test_reproject_geometry_rejects_datum_shift_by_default(tmp_path):

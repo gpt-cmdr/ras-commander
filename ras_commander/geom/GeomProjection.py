@@ -143,14 +143,19 @@ class GeomProjection:
         from pyproj import Transformer
 
         transformer = Transformer.from_crs(src_crs, dst_crs, always_xy=True)
-        lines = geom_path.read_text(encoding="utf-8", errors="replace").splitlines(
-            keepends=True
-        )
+        with geom_path.open(
+            "r",
+            encoding="utf-8",
+            errors="replace",
+            newline="",
+        ) as input_file:
+            lines = input_file.read().splitlines(keepends=True)
         transformed_lines, stats = GeomProjection._transform_geometry_lines(
             lines,
             transformer,
         )
-        out_path.write_text("".join(transformed_lines), encoding="utf-8")
+        with out_path.open("w", encoding="utf-8", newline="") as output_file:
+            output_file.write("".join(transformed_lines))
 
         qa = GeomProjection._qa_geometry_lines(transformed_lines)
         result = {
@@ -201,6 +206,9 @@ class GeomProjection:
                 folder named ``<project>_reprojected``.
             geometry_files: Optional geometry filenames/paths to transform.
                 Relative names are resolved in the copied project folder.
+                Absolute paths under the source project are remapped to their
+                copied-project counterparts. Absolute paths outside the source
+                or destination project folders are rejected.
                 Defaults to ``Geom File=`` entries in the copied project file,
                 with a ``*.g##`` fallback.
             projection_filename: Optional destination ``.prj`` filename under
@@ -253,6 +261,7 @@ class GeomProjection:
         )
 
         geom_paths = GeomProjection._resolve_geometry_paths(
+            src_project,
             dest_project,
             geometry_files,
         )
@@ -809,15 +818,41 @@ class GeomProjection:
 
     @staticmethod
     def _resolve_geometry_paths(
+        source_project: Path,
         project_folder: Path,
         geometry_files: Optional[Sequence[PathLike]],
     ) -> List[Path]:
+        source_resolved = RasUtils.safe_resolve(source_project)
+        project_resolved = RasUtils.safe_resolve(project_folder)
         if geometry_files is not None:
             paths = []
             for item in geometry_files:
                 candidate = Path(item)
-                if not candidate.is_absolute():
-                    candidate = project_folder / candidate
+                if candidate.is_absolute():
+                    candidate = RasUtils.safe_resolve(candidate)
+                    if GeomProjection._path_is_relative_to(candidate, source_resolved):
+                        candidate = project_resolved / candidate.relative_to(
+                            source_resolved
+                        )
+                    elif not GeomProjection._path_is_relative_to(
+                        candidate,
+                        project_resolved,
+                    ):
+                        raise ValueError(
+                            "Absolute geometry_files entries must be inside the "
+                            "source project folder or copied destination project "
+                            f"folder: {candidate}"
+                        )
+                else:
+                    candidate = RasUtils.safe_resolve(project_folder / candidate)
+                    if not GeomProjection._path_is_relative_to(
+                        candidate,
+                        project_resolved,
+                    ):
+                        raise ValueError(
+                            "Relative geometry_files entries must resolve inside "
+                            f"the copied destination project folder: {item}"
+                        )
                 if not candidate.exists():
                     raise FileNotFoundError(f"Geometry file not found: {candidate}")
                 paths.append(candidate)
@@ -845,6 +880,14 @@ class GeomProjection:
             for path in project_folder.glob("*.g[0-9][0-9]*")
             if not path.name.lower().endswith(".hdf")
         )
+
+    @staticmethod
+    def _path_is_relative_to(path: Path, base_folder: Path) -> bool:
+        try:
+            path.relative_to(base_folder)
+        except ValueError:
+            return False
+        return True
 
     @staticmethod
     def _qa_geometry_lines(lines: List[str]) -> Dict[str, Any]:

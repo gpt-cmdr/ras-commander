@@ -20,7 +20,10 @@ engineering review.
 
 `reproject_model_geometry()` always works on a copied project folder. The
 destination cannot be the source project folder or a child of it, even with
-`overwrite=True`.
+`overwrite=True`. When `geometry_files` is supplied, relative paths are resolved
+inside the copied project. Absolute paths under the source project are remapped
+to the copied project; absolute paths outside the source or copied project are
+rejected.
 
 ```python
 from ras_commander import GeomProjection
