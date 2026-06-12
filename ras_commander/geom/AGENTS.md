@@ -12,7 +12,7 @@ This file is the canonical local instruction file for `ras_commander/geom/`.
 - Parsing utilities: `GeomParser`
 - Cross sections: `GeomCrossSection`
 - Storage and 2D areas: `GeomStorage`, `GeomLandCover`
-- Structures: `GeomLateral`, `GeomInlineWeir`, `GeomBridge`, `GeomCulvert`
+- Structures: `GeomLateral`, `GeomInlineWeir`, `GeomBridge`, `GeomCulvert`, `GeomCulvertGIS`
 - HTAB logic: `GeomHtab`, `GeomHtabUtils`
 - Metadata and reference features: `GeomMetadata`, `GeomReferenceFeatures`
 - Preprocessor helpers: `GeomPreprocessor`
@@ -40,7 +40,30 @@ This file is the canonical local instruction file for `ras_commander/geom/`.
 - 2D flow area settings and storage curves: `GeomStorage`
 - SA/2D connections and laterals: `GeomLateral`
 - Structure geometry and metadata: `GeomBridge`, `GeomInlineWeir`, `GeomCulvert`
+- Culvert GIS reconstruction / hydraulic-validity checks: `GeomCulvertGIS`
 - HTAB optimization from results: `GeomHtab`
+
+## Culvert GIS Validation (`GeomCulvertGIS`)
+
+Reconstruct and validate culvert placement from geometry; complements `GeomCulvert`
+(plain-text record authoring). All static.
+
+- **1D inline culverts** (`reconstruct_barrels`, `validate_placement`): a 1D culvert has
+  no stored GIS line; the barrel is *reconstructed* from the bounding XS GIS cut lines +
+  culvert US/DS stations + `US Distance` + reach lengths (one per-barrel reach-length
+  basis). Accuracy ~mean 2.6% vs HEC-RAS, so the length check is an informational
+  `REVIEW`. `validate_placement` runs: invert vs the **local bed under the opening**
+  (not a far-off XS minimum), HDS-5 entrance/exit-loss guidance, and the length indicator.
+- **2D connection culverts** (`mesh_cell_min_from_terrain`, `validate_2d_inverts`): for a
+  culvert/structure end on a SA/2D connection, the relevant streambed is the minimum
+  terrain elevation of the nearest 2D mesh cell. Computed **directly from the terrain
+  raster** (rasterio zonal-min over the `HdfMesh` cell polygon), so it needs no 2D
+  hydraulic-table preprocessor (a generated mesh is still required). `all_touched=False`
+  by default (pixel-center; `True` understates a minimum). Off-mesh points (beyond
+  `max_dist_to_cell`) report `OFF_MESH`. Requires `rasterio`.
+- 2D SA/2D connection culverts DO store explicit per-barrel GIS endpoint coordinates
+  (`Connection Culv=` + `Conn Culvert Barrel=` + a packed `US_x US_y DS_x DS_y` line), so
+  for 2D the +/-1% GIS-length rule is exact. 1D inline culverts do not store a GIS line.
 
 ## Land Cover Manning's n Override Architecture
 

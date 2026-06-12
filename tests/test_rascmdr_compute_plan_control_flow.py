@@ -151,6 +151,45 @@ def test_compute_plan_uses_cached_plan_entries_when_prj_refresh_fails(
     assert result.results_df_row["hdf_path"] == str(hdf_path)
 
 
+def test_compute_plan_same_dest_folder_does_not_remove_active_project(
+    monkeypatch, tmp_path
+):
+    """Passing the active project folder as dest_folder should run in place."""
+    from ras_commander.RasCurrency import RasCurrency
+
+    prj_path = tmp_path / "TestProject.prj"
+    plan_path = tmp_path / "TestProject.p01"
+    prj_path.write_text("Proj Title=TestProject\n", encoding="utf-8")
+    plan_path.write_text("Plan Title=Plan 01\n", encoding="utf-8")
+
+    ras_obj = _DummyRas()
+    ras_obj.project_folder = tmp_path
+    ras_obj.prj_file = prj_path
+    ras_obj.ras_exe_path = "Ras.exe"
+
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda plan_number, ras_object: plan_path),
+    )
+    monkeypatch.setattr(
+        RasCurrency,
+        "are_plan_results_current",
+        staticmethod(lambda plan_number, ras_object: (True, "already current")),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        dest_folder=tmp_path,
+        overwrite_dest=True,
+        ras_object=ras_obj,
+    )
+
+    assert result.success is True
+    assert prj_path.exists()
+    assert plan_path.exists()
+
+
 def test_windows_path_to_wsl_decodes_utf8(monkeypatch):
     calls = []
 
