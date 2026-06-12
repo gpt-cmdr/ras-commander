@@ -2,6 +2,57 @@
 
 Classes for parsing and modifying HEC-RAS geometry files.
 
+## GeomProjection
+
+Model geometry reprojection helpers for copied HEC-RAS projects and plain-text
+geometry files.
+
+### Methods
+
+- `reproject_model_geometry(project_path, source_crs, destination_crs, dest_folder=None, ...)` - Copy a project folder, transform authored `.g##` model geometry coordinates, write a destination ESRI projection file, update copied `.rasmap` `RASProjectionFilename` references, and return terrain / compiled-geometry rebuild requirements.
+- `reproject_geometry(geom_file, source_crs, destination_crs, output_geom=None, ...)` - Transform one plain-text `.g##` file. By default writes a sibling copied geometry named `*_reprojected.g##`.
+
+Both methods accept CRS inputs supported by `pyproj.CRS.from_user_input()`,
+plus ESRI `.prj` file paths or WKT text. Datum shifts are rejected by default
+because HEC-RAS project reprojection cannot reproduce geodetic datum
+transformations. Set `allow_datum_shift=True` only after a project-specific
+engineering review.
+
+`reproject_model_geometry()` always works on a copied project folder. The
+destination cannot be the source project folder or a child of it, even with
+`overwrite=True`.
+
+```python
+from ras_commander import GeomProjection
+
+report = GeomProjection.reproject_model_geometry(
+    project_path="Muncie.prj",
+    source_crs="EPSG:5070",
+    destination_crs="EPSG:26915",
+    dest_folder="Muncie_reprojected",
+)
+
+print(report["projection_file"])
+print(report["terrain_requirements"])
+```
+
+The reprojection writer transforms authored text geometry such as river reach
+XY lines, cross-section GIS cut lines, storage-area and 2D perimeters, 2D seed
+points, breaklines, SA/2D connection lines, BC lines, reference lines, and IC
+point positions. It intentionally does **not** transform station/elevation
+tables, bank stations, compiled `.g##.hdf` geometry, refinement-region HDF
+datasets, terrain HDF/raster pixels, land-cover rasters, infiltration rasters,
+or sediment bed-material rasters. The returned report identifies compiled
+geometry preprocessing requirements, refinement-region HDF integrity findings,
+and terrain layers whose CRS no longer matches the destination project CRS.
+
+Use existing CRS inspection and validation APIs with the returned report:
+
+- `RasPrj.refresh_project_crs()` to refresh the active project's inferred CRS.
+- `RasMap.parse_rasmap()` to inspect `.rasmap` projection and terrain paths.
+- `RasMapValidation.check_layer_crs()` to validate GIS/raster layers against an expected EPSG code.
+- `HdfBase.get_projection()` to inspect HDF or rasmap-associated projection metadata.
+
 ## RasGeometry
 
 Comprehensive 1D geometry parsing and modification.
