@@ -146,8 +146,24 @@ def compute_parallel_remote(
     # Results dictionary
     results: Dict[str, ExecutionResult] = {}
 
-    # Execute plans using thread pool
-    with ThreadPoolExecutor(max_workers=max_concurrent) as executor:
+    # No-progress watchdog: a single hung worker thread (e.g. an unbounded
+    # SSH/SFTP call) must not be able to deadlock the whole ensemble. The
+    # ThreadPoolExecutor context manager blocks on shutdown(wait=True) until
+    # every submitted thread returns, and as_completed() never yields a future
+    # that never finishes -- so an unbounded worker.run() would hang forever.
+    # We bound the wait by the slowest worker's max_runtime_minutes plus a
+    # staging/copy-back margin: if NO plan completes within that window the
+    # fleet is presumed deadlocked, the stragglers are marked failed, and the
+    # executor is torn down without waiting on the wedged threads.
+    import time as _wtime
+
+    _max_rt_min = max(
+        (getattr(w, "max_runtime_minutes", 600) or 600) for w in sorted_workers
+    )
+    no_progress_timeout_sec = _max_rt_min * 60 + 900  # + 15 min staging margin
+
+    executor = ThreadPoolExecutor(max_workers=max_concurrent)
+    try:
         futures = {}
 
         for idx, plan_number in enumerate(plan_numbers):
@@ -173,31 +189,65 @@ def compute_parallel_remote(
             )
             futures[future] = plan_number
 
-        # Collect results as they complete
-        for future in as_completed(futures):
-            plan_number = futures[future]
-            try:
-                result = future.result()
-                results[plan_number] = result
+        # Collect results as they complete, with a no-progress watchdog.
+        pending = set(futures)
+        last_progress = _wtime.monotonic()
+        while pending:
+            done = {f for f in pending if f.done()}
+            if not done:
+                if _wtime.monotonic() - last_progress > no_progress_timeout_sec:
+                    for f in list(pending):
+                        pn = futures[f]
+                        f.cancel()
+                        logger.error(
+                            f"Plan {pn} abandoned: no plan completed in "
+                            f"{no_progress_timeout_sec}s (fleet watchdog) -- "
+                            f"a worker thread is presumed hung."
+                        )
+                        results[pn] = ExecutionResult(
+                            plan_number=pn,
+                            worker_id="unknown",
+                            success=False,
+                            error_message=(
+                                f"fleet watchdog: no progress in "
+                                f"{no_progress_timeout_sec}s"
+                            ),
+                        )
+                    pending.clear()
+                    break
+                _wtime.sleep(3)
+                continue
 
-                if result.success:
-                    logger.info(
-                        f"Plan {plan_number} completed successfully "
-                        f"({result.execution_time:.1f}s)"
-                    )
-                else:
-                    logger.error(
-                        f"Plan {plan_number} failed: {result.error_message}"
-                    )
+            last_progress = _wtime.monotonic()
+            for future in done:
+                pending.discard(future)
+                plan_number = futures[future]
+                try:
+                    result = future.result()
+                    results[plan_number] = result
 
-            except Exception as e:
-                logger.error(f"Plan {plan_number} raised exception: {e}")
-                results[plan_number] = ExecutionResult(
-                    plan_number=plan_number,
-                    worker_id="unknown",
-                    success=False,
-                    error_message=str(e)
-                )
+                    if result.success:
+                        logger.info(
+                            f"Plan {plan_number} completed successfully "
+                            f"({result.execution_time:.1f}s)"
+                        )
+                    else:
+                        logger.error(
+                            f"Plan {plan_number} failed: {result.error_message}"
+                        )
+
+                except Exception as e:
+                    logger.error(f"Plan {plan_number} raised exception: {e}")
+                    results[plan_number] = ExecutionResult(
+                        plan_number=plan_number,
+                        worker_id="unknown",
+                        success=False,
+                        error_message=str(e)
+                    )
+    finally:
+        # wait=False so a wedged worker thread cannot block teardown; healthy
+        # threads have already completed by the time we reach a clean exit.
+        executor.shutdown(wait=False)
 
     # Summary
     successful = sum(1 for r in results.values() if r.success)
