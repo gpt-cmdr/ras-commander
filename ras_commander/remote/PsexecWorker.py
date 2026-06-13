@@ -116,6 +116,7 @@ class PsexecWorker(RasWorker):
     cores_total: int = None
     cores_per_plan: int = 4
     max_parallel_plans: int = None
+    max_runtime_minutes: int = 600  # per-plan PsExec subprocess timeout (default 10h; heavy 2D models can take 4-6h)
 
     def __post_init__(self):
         """Validate PsExec worker configuration."""
@@ -468,7 +469,7 @@ def execute_psexec_plan(
             psexec_cmd,
             capture_output=True,
             text=True,
-            timeout=7200
+            timeout=worker.max_runtime_minutes * 60
         )
 
         # Step 6: Check for HDF file
