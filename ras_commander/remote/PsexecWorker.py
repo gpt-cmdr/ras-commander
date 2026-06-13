@@ -441,6 +441,20 @@ def execute_psexec_plan(
 
         psexec_cmd.extend(["-accepteula", "-h"])
 
+        # Unique PSEXESVC instance name per concurrent call. PsExec's default
+        # shared service name ("PSEXESVC") races when several calls hit the same
+        # host in parallel -- one call removes the service while another starts
+        # it, producing "Could not start PSEXESVC service ... marked for
+        # deletion" and a fast-fail with no result HDF. -r gives each call its
+        # own service instance, eliminating the race. A uniquely-named service
+        # also can't be left in a blocking half-deleted state by an abrupt kill,
+        # because the next call uses a different name.
+        _svc_raw = f"RasRemote_{plan_number}_{worker_temp_folder.name}"
+        service_name = "".join(
+            c if (c.isalnum() or c == "_") else "_" for c in _svc_raw
+        )[:100]
+        psexec_cmd.extend(["-r", service_name])
+
         if worker.system_account:
             psexec_cmd.append("-s")
         else:

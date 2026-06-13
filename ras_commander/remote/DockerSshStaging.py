@@ -142,6 +142,13 @@ class LinuxDockerSshStager:
             connect_kwargs["key_filename"] = key_file
         connect_kwargs["look_for_keys"] = True
         connect_kwargs["allow_agent"] = True
+        # Bound the connect handshake so an unreachable/slow Linux Docker host
+        # can never block a worker thread forever (the original deadlock that
+        # wedged the whole ensemble). paramiko's connect() is unbounded by
+        # default.
+        connect_kwargs["timeout"] = 30          # TCP connect
+        connect_kwargs["banner_timeout"] = 30   # SSH banner
+        connect_kwargs["auth_timeout"] = 30     # authentication
         client.connect(**connect_kwargs)
         return client
 
@@ -187,8 +194,15 @@ class LinuxDockerSshStager:
         else:
             client = self._paramiko_client()
             try:
-                stdin, stdout, stderr = client.exec_command(cmd)
-                rc = stdout.channel.recv_exit_status()
+                stdin, stdout, stderr = client.exec_command(cmd, timeout=120)
+                chan = stdout.channel
+                # Bound recv_exit_status: the bare call blocks forever if the
+                # channel never signals exit. status_event.wait() is timeout-able.
+                if not chan.status_event.wait(120):
+                    raise RuntimeError(
+                        f"remote 'mkdir -p' timed out after 120s on {self.target.host}"
+                    )
+                rc = chan.recv_exit_status()
                 if rc != 0:
                     err = stderr.read().decode("utf-8", "replace")
                     raise RuntimeError(f"mkdir -p failed ({rc}): {err}")
@@ -345,8 +359,13 @@ class LinuxDockerSshStager:
             else:
                 client = self._paramiko_client()
                 try:
-                    stdin, stdout, stderr = client.exec_command(cmd)
-                    stdout.channel.recv_exit_status()
+                    stdin, stdout, stderr = client.exec_command(cmd, timeout=120)
+                    chan = stdout.channel
+                    if not chan.status_event.wait(120):
+                        raise RuntimeError(
+                            f"remote cleanup timed out after 120s on {self.target.host}"
+                        )
+                    chan.recv_exit_status()
                 finally:
                     client.close()
         except Exception as e:
