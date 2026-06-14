@@ -40,6 +40,7 @@ This file is the canonical local instruction file for `examples/`.
 - `410_2d_hdf_data_extraction.ipynb`, `412_2d_detail_face_data_extraction.ipynb`, `413_profile_line_flow_extraction.ipynb`, and `416_2d_velocity_profile_line.ipynb` - mesh and results extraction
 - `910_usgs_gauge_catalog.ipynb` through `919_operational_forecast_cycling.ipynb` - USGS, AORC validation, and forecast workflows
 - `921_usgs_study_package_from_primitives.ipynb` through `923_stofs3d_coastal_boundary.ipynb` - USGS study, validation, and coastal boundary workflows
+- `924_mrms_netcdf_rain_on_grid.ipynb` - direct MRMS NetCDF rain-on-grid validation on a RasExamples project
 - `720_precipitation_methods_comprehensive.ipynb`, `721_precipitation_hyetograph_comparison.ipynb`, `725_atlas14_spatial_variance.ipynb`, and `726_abm_hyetograph_grid.ipynb` - precipitation methods
 - `915_realtime_forecast_workflow.ipynb` through `919_operational_forecast_cycling.ipynb` - operational forecast patterns
 - `920_terrain_creation.ipynb`, `925_xs_interpolation_surface.ipynb`, and `930_terrain_modification_analysis.ipynb` - terrain and geometry surface workflows

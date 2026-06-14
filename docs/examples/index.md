@@ -2,7 +2,7 @@
 
 These are the canonical, runnable examples for ras-commander. Each row links to the rendered documentation page and to the source `.ipynb` on GitHub. **Runtime** is the summed cell-execution wall time captured the last time the notebook was executed (`N/A` means the notebook was committed without execution outputs).
 
-*117 notebooks indexed - 64 with runtime data, 53 without.*
+*118 notebooks indexed - 64 with runtime data, 54 without.*
 
 ## 100s
 
@@ -152,6 +152,7 @@ These are the canonical, runnable examples for ras-commander. Each row links to 
 | [USGS Study Package From Primitives](../notebooks/921_usgs_study_package_from_primitives.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/921_usgs_study_package_from_primitives.ipynb) | N/A |
 | [Model Validation with USGS Gauge Data](../notebooks/922_model_validation_with_usgs.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/922_model_validation_with_usgs.ipynb) | N/A |
 | [STOFS-3D Coastal Boundary Integration](../notebooks/923_stofs3d_coastal_boundary.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/923_stofs3d_coastal_boundary.ipynb) | 1.3 min |
+| [MRMS NetCDF Rain-on-Grid Validation](../notebooks/924_mrms_netcdf_rain_on_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/924_mrms_netcdf_rain_on_grid.ipynb) | N/A |
 | [Cross-Section Interpolation Surface](../notebooks/925_xs_interpolation_surface.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/925_xs_interpolation_surface.ipynb) | 6 s |
 | [Terrain Modification Analysis](../notebooks/930_terrain_modification_analysis.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/930_terrain_modification_analysis.ipynb) | N/A |
 | [Using eBFE Models: Spring Creek 2D Analysis](../notebooks/950_ebfe_spring_creek.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/950_ebfe_spring_creek.ipynb) | 4 s |
