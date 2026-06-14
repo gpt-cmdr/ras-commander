@@ -135,7 +135,8 @@ class RasExamples:
     # Special projects that are not in the main zip file
     SPECIAL_PROJECTS = {
         'NewOrleansMetro': 'https://www.hec.usace.army.mil/confluence/rasdocs/hgt/files/latest/299502039/299502111/1/1747692522764/NewOrleansMetroPipesExample.zip',
-        'BeaverLake': 'https://www.hec.usace.army.mil/confluence/rasdocs/hgt/files/latest/299501780/299502090/1/1747692179014/BeaverLake-SWMM-Import-Solution.zip'
+        'BeaverLake': 'https://www.hec.usace.army.mil/confluence/rasdocs/hgt/files/latest/299501780/299502090/1/1747692179014/BeaverLake-SWMM-Import-Solution.zip',
+        'Klawitter': 'https://www.hec.usace.army.mil/confluence/download/attachments/276988362/Klawitter_2D_Tutorial.zip?version=1&modificationDate=1740180410184&api=v2',
     }
 
     _folder_df = None
@@ -484,8 +485,8 @@ class RasExamples:
         """
         List all projects or projects in a specific category.
         
-        Note: Special projects (NewOrleansMetro, BeaverLake) are also available but not listed
-        in categories as they are downloaded separately.
+        Note: Special projects are also available but not listed in categories as they
+        are downloaded separately.
         """
         if cls._folder_df is None:
             logger.warning("No projects available. Make sure the zip file is properly loaded.")
@@ -618,7 +619,7 @@ class RasExamples:
         Download and extract special projects that are not in the main zip file.
 
         Args:
-            project_name: Name of the special project ('NewOrleansMetro' or 'BeaverLake')
+            project_name: Name of a registered special project.
             output_path: Base output directory path. If None, uses cls.projects_dir
             suffix: Optional suffix to append to folder name using format "{project_name}_{suffix}".
 
