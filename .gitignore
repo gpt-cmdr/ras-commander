@@ -117,6 +117,11 @@ docs/cognitive-infrastructure/agents.md
 docs/cognitive-infrastructure/skills.md
 docs/cognitive-infrastructure/commands.md
 
+# Ignore the agent-native API surface (generated at build time by
+# .claude/scripts/generate_api_surface.py; served under /ras)
+docs/version.json
+docs/llms/api/
+
 # Ignore M3 model downloads (large files, downloaded via M3Model.extract_model())
 m3_models/
 examples/m3_models/
