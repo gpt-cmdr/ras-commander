@@ -2,7 +2,7 @@
 ras-commander: A Python library for automating HEC-RAS operations
 
 An open-source project of CLB Engineering Corporation (https://clbengineering.com/)
-Docs: https://rascommander.info
+Docs: https://rascommander.info/ras
 GitHub: https://github.com/gpt-cmdr/ras-commander
 """
 
@@ -17,7 +17,7 @@ except PackageNotFoundError:
     __version__ = "0.98.2"
 
 # Canonical machine-readable agent index (see docs() helper below)
-__llms_txt__ = "https://rascommander.info/llms.txt"
+__llms_txt__ = "https://rascommander.info/ras/llms.txt"
 
 # Set up logging
 setup_logging()
