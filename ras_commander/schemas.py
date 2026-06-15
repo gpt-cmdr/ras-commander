@@ -97,6 +97,9 @@ DATAFRAME_SCHEMAS = {
         "description": "Single-row frame of RASMapper layer/terrain/land-cover/infiltration paths and settings.",
         "accessor": "ras.rasmap_df  (built by RasMap.initialize_rasmap_df())",
         "source": "_land_classification_helper.empty_rasmap_dataframe() (shape) + RasMap.parse_rasmap() (.rasmap XML)",
+        # shape_fn: zero-arg callable returning this frame's empty shape; the docs build's schema
+        # validator (validate_api_schemas.py) calls it and fails the build if these columns drift.
+        "shape_fn": "ras_commander._land_classification_helper.empty_rasmap_dataframe",
         "extra_columns": False,
         "dynamic": False,
         "columns": [
