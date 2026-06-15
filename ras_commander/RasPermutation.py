@@ -901,10 +901,19 @@ class RasPermutation:
                 axis=1,
             )
 
-            runtime_hours = pd.to_numeric(
-                summary_df["runtime_complete_process_hours"],
-                errors="coerce",
-            )
+            # The remote execution path (compute_parallel_remote) returns a
+            # results_df without the local-compute 'runtime_complete_process_hours'
+            # column. Default to NaN runtimes when it is absent rather than raising
+            # KeyError -- this otherwise crashes batch summarization whenever a
+            # remote batch has no successful plans (e.g. a transient worker/network
+            # outage fails every plan), masking the real failure with a KeyError.
+            if "runtime_complete_process_hours" in summary_df.columns:
+                runtime_hours = pd.to_numeric(
+                    summary_df["runtime_complete_process_hours"],
+                    errors="coerce",
+                )
+            else:
+                runtime_hours = pd.Series(np.nan, index=summary_df.index)
             summary_df["runtime_seconds"] = runtime_hours * 3600.0
 
             summary_df["max_wse"] = summary_df["hdf_path"].apply(
