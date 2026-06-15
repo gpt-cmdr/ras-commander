@@ -101,6 +101,28 @@ This file is the canonical shared instruction contract for repository-local codi
 - Replace notebook-only shell snippets such as `!pip install` with terminal commands using `uv`.
 - Put notebook-derived scripts and outputs in writable working folders, not alongside committed notebook assets.
 
+## Documentation Site
+
+Docs publish to **https://rascommander.info/ras** on every push to `main` (self-hosted; build infra
+lives in `CLB-Engineering-Corporation/ras-commander-docs`). A broken `mkdocs.yml`, docstring, or
+generator fails the live build — treat the docs as production.
+
+- **Agent-native API surface.** The build introspects this library and publishes machine-readable
+  JSON for LLMs / `ras-commander-mcp` at `/ras/llms/api/` (signatures, enumerated from `__all__`) and
+  `/ras/version.json`. The DataFrame column contracts come from **`ras_commander/schemas.py`** — the
+  single source of truth. **If you add, rename, or remove a column on `plan_df` / `geom_df` /
+  `boundaries_df` / `rasmap_df` (or add a new public DataFrame), update `schemas.py` in the SAME
+  change** — there is no automated guard for column drift. Keep `__all__` accurate; the surface
+  enumerates it.
+- **Examples gallery metadata.** When adding or renaming an example notebook, run
+  `.claude/scripts/generate_notebooks_metadata.py` (seeds/refreshes `examples/notebooks.yml`, the
+  metadata source of truth) then `.claude/scripts/validate_notebooks_yml.py` (coverage + required
+  fields are build-fatal). Curate the new entry's `summary` / `tags` / `difficulty`.
+- **Authoring voice (docs & notebooks).** Mechanics-forward: lead with *how to drive the API*; defer
+  method selection, parameter appropriateness, and regulatory / standard-of-care questions to HEC's
+  manuals and the reader's regional/agency references. Examples demonstrate mechanics on real data —
+  they are not endorsed engineering workflows.
+
 ## Testing And Validation
 
 - Use `pytest` for targeted tests.
