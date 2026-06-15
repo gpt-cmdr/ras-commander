@@ -30,6 +30,10 @@ Met BC=Precipitation|Mode=Constant
 Met BC=Precipitation|Gridded Source=GDAL Raster File(s)
 Met BC=Precipitation|Gridded Interpolation=Bilinear
 Met BC=Precipitation|Gridded GDAL Filename=.\\Precipitation\\old.nc
+Met BC=Precipitation|Gridded GDAL Group=old_group
+Met BC=Precipitation|Gridded GDAL Datasetname=legacy_group
+Met BC=Precipitation|Gridded GDAL Folder=.\\Precipitation
+Met BC=Precipitation|Gridded GDAL Filter=*.nc
 Boundary Location=                ,                ,        ,        ,                ,BaldEagleCr     ,                ,                                ,
 """,
     )

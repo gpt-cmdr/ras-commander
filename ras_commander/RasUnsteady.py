@@ -109,6 +109,7 @@ Non-Newtonian Method Selection:
 import os
 import numbers
 import shutil
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from .RasPrj import ras
@@ -183,6 +184,26 @@ class RasUnsteady:
         "Consistency Factor=",
         "Profile Coefficient=",
         "Lava Param=",
+    )
+    _MET_PRECIP_MANAGED_PREFIXES: Tuple[str, ...] = (
+        "Precipitation Mode=",
+        "Met BC=Precipitation|Mode=",
+        "Met BC=Precipitation|Constant Value=",
+        "Met BC=Precipitation|Constant Units=",
+        "Met BC=Precipitation|Point Interpolation=",
+        "Met BC=Precipitation|Gridded Source=",
+        "Met BC=Precipitation|Gridded Interpolation=",
+        "Met BC=Precipitation|Gridded DSS Filename=",
+        "Met BC=Precipitation|Gridded DSS Pathname=",
+        "Met BC=Precipitation|Gridded GDAL Filename=",
+        "Met BC=Precipitation|Gridded GDAL Group=",
+        "Met BC=Precipitation|Gridded GDAL Datasetname=",
+        "Met BC=Precipitation|Gridded GDAL Folder=",
+        "Met BC=Precipitation|Gridded GDAL Filter=",
+    )
+    _MET_PRECIP_ANCHOR_PREFIXES: Tuple[str, ...] = (
+        _MET_PRECIP_MANAGED_PREFIXES
+        + ("Met BC=Precipitation|",)
     )
 
     @staticmethod
@@ -3226,6 +3247,372 @@ class RasUnsteady:
             pass
 
     @staticmethod
+    def _detect_line_ending(lines: List[str]) -> str:
+        """Return the dominant line ending used by a RAS text file."""
+        for line in lines:
+            if line.endswith("\r\n"):
+                return "\r\n"
+        return "\n"
+
+    @staticmethod
+    def _atomic_write_lines(file_path: Path, lines: List[str]) -> None:
+        """
+        Atomically replace a text file with the supplied lines.
+
+        The temporary file is created in the target directory so ``os.replace``
+        is an atomic same-volume replacement. Existing file permissions are
+        preserved where the platform allows it.
+        """
+        target_path = Path(file_path)
+        target_mode: Optional[int] = None
+        try:
+            target_mode = target_path.stat().st_mode & 0o777
+        except OSError:
+            target_mode = None
+
+        temp_path: Optional[Path] = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                errors="replace",
+                newline="",
+                dir=target_path.parent,
+                prefix=f".{target_path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temp_file:
+                temp_path = Path(temp_file.name)
+                temp_file.writelines(lines)
+                temp_file.flush()
+                os.fsync(temp_file.fileno())
+
+            if target_mode is not None:
+                try:
+                    os.chmod(temp_path, target_mode)
+                except OSError:
+                    logger.debug("Could not preserve mode for %s", target_path)
+
+            os.replace(temp_path, target_path)
+            temp_path = None
+        finally:
+            if temp_path is not None:
+                try:
+                    temp_path.unlink()
+                except FileNotFoundError:
+                    pass
+
+    @staticmethod
+    def _replace_met_precipitation_keys(
+        unsteady_path: Path,
+        desired_entries: List[Tuple[str, str]],
+    ) -> None:
+        """
+        Replace managed precipitation keys as a single block.
+
+        ``Met BC=Precipitation|Expanded View`` and any future unrecognized
+        precipitation keys are preserved. Known mode/source keys are removed
+        before inserting the requested state so transitions cannot leave stale
+        Constant, Point, DSS, GDAL Group, or legacy GDAL Datasetname values.
+        """
+        with open(
+            unsteady_path,
+            "r",
+            encoding="utf-8",
+            errors="replace",
+            newline="",
+        ) as file:
+            lines = file.readlines()
+
+        newline = RasUnsteady._detect_line_ending(lines)
+        desired_lines = [
+            f"{key}={value}{newline}" for key, value in desired_entries
+        ]
+
+        insert_index: Optional[int] = None
+        for i, line in enumerate(lines):
+            if line.startswith(RasUnsteady._MET_PRECIP_ANCHOR_PREFIXES):
+                insert_index = i
+                break
+        if insert_index is None:
+            insert_index = RasUnsteady._get_default_met_insert_index(lines)
+
+        filtered_lines: List[str] = []
+        removed_before_insert = 0
+        for i, line in enumerate(lines):
+            if line.startswith(RasUnsteady._MET_PRECIP_MANAGED_PREFIXES):
+                if i < insert_index:
+                    removed_before_insert += 1
+                continue
+            filtered_lines.append(line)
+
+        insert_index = max(0, insert_index - removed_before_insert)
+        if (
+            insert_index == len(filtered_lines)
+            and filtered_lines
+            and not filtered_lines[-1].endswith(("\n", "\r"))
+        ):
+            filtered_lines[-1] = f"{filtered_lines[-1]}{newline}"
+
+        updated_lines = (
+            filtered_lines[:insert_index]
+            + desired_lines
+            + filtered_lines[insert_index:]
+        )
+        RasUnsteady._atomic_write_lines(unsteady_path, updated_lines)
+
+    @staticmethod
+    def _normalize_met_precipitation_mode(mode: Optional[str]) -> str:
+        """Normalize public precipitation mode values to HEC-RAS text values."""
+        mode_text = "None" if mode is None else str(mode).strip()
+        valid_modes = {
+            "constant": "Constant",
+            "gridded": "Gridded",
+            "point": "Point",
+            "none": "None",
+        }
+        normalized = valid_modes.get(mode_text.lower())
+        if normalized is None:
+            raise ValueError(
+                "mode must be one of 'Constant', 'Gridded', 'Point', or 'None'"
+            )
+        return normalized
+
+    @staticmethod
+    def _normalize_met_gridded_source(source: str) -> str:
+        """Normalize gridded precipitation source names to HEC-RAS text values."""
+        source_text = str(source or "").strip()
+        valid_sources = {
+            "dss": "DSS",
+            "gdal": "GDAL Raster File(s)",
+            "gdal raster file(s)": "GDAL Raster File(s)",
+            "gdal raster files": "GDAL Raster File(s)",
+        }
+        normalized = valid_sources.get(source_text.lower())
+        if normalized is None:
+            raise ValueError("source must be 'DSS' or 'GDAL Raster File(s)'")
+        return normalized
+
+    @staticmethod
+    def _format_optional_met_filename(
+        filename: Optional[Union[str, Path]],
+        unsteady_path: Path,
+    ) -> str:
+        """Normalize optional meteorology filenames to RAS-style text values."""
+        if filename is None:
+            return ""
+
+        raw_filename = str(filename).strip()
+        if not raw_filename:
+            return ""
+
+        file_path = Path(raw_filename)
+        if file_path.is_absolute():
+            try:
+                relative_path = file_path.relative_to(unsteady_path.parent)
+                return f".\\{relative_path}".replace("/", "\\")
+            except ValueError:
+                return str(file_path)
+
+        normalized = raw_filename.replace("/", "\\")
+        if normalized.startswith((".\\", "..\\", "\\")):
+            return normalized
+        return f".\\{normalized}"
+
+    @staticmethod
+    @log_call
+    def set_met_precipitation_mode(
+        unsteady_file: Union[str, Path],
+        mode: Optional[str],
+        *,
+        source: Optional[str] = None,
+        constant_value: float = 1.0,
+        constant_units: str = "in/hr",
+        dss_filename: Optional[Union[str, Path]] = None,
+        dss_pathname: Optional[str] = None,
+        gdal_filename: Optional[Union[str, Path]] = None,
+        gdal_group: Optional[str] = None,
+        gdal_folder: Optional[Union[str, Path]] = None,
+        gdal_filter: Optional[str] = None,
+        interpolation: str = "Bilinear",
+        point_interpolation: str = "Thiessen Polygon",
+        ras_object: Optional[Any] = None,
+    ) -> None:
+        """
+        Atomically configure precipitation meteorology keys in a .u## file.
+
+        The method rewrites the managed ``Precipitation Mode`` and
+        ``Met BC=Precipitation|...`` state as a single block, removing stale
+        mode/source keys from prior Constant, Point, DSS, GDAL, or legacy GDAL
+        Datasetname states. Unrecognized precipitation keys such as
+        ``Expanded View`` are preserved.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Path to the unsteady flow file (.u##) or unsteady number.
+        mode : {"Constant", "Gridded", "Point", "None"}
+            Precipitation mode to write. ``None`` writes HEC-RAS mode ``None``.
+        source : {"DSS", "GDAL Raster File(s)"}, optional
+            Required for gridded mode unless it can be inferred from supplied
+            DSS or GDAL fields.
+        constant_value : float, default 1.0
+            Constant precipitation rate written for Constant mode.
+        constant_units : {"in/hr", "mm/hr"}, default "in/hr"
+            Constant precipitation units.
+        dss_filename, dss_pathname : optional
+            Gridded DSS source fields.
+        gdal_filename, gdal_group, gdal_folder, gdal_filter : optional
+            Gridded GDAL source fields. Missing values are written as blank
+            HEC-RAS keys so the GDAL state is complete from scratch.
+        interpolation : {"Nearest", "Bilinear"}, default "Bilinear"
+            Gridded interpolation method.
+        point_interpolation : str, default "Thiessen Polygon"
+            Point precipitation interpolation value.
+        ras_object : optional
+            Custom RAS object used to resolve an unsteady number.
+
+        Returns
+        -------
+        None
+            Modifies the .u## file in place via atomic replacement.
+        """
+        unsteady_path = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_file,
+            ras_object=ras_object,
+        )
+        mode_value = RasUnsteady._normalize_met_precipitation_mode(mode)
+
+        desired_entries: List[Tuple[str, str]] = [
+            ("Precipitation Mode", "Enable"),
+            ("Met BC=Precipitation|Mode", mode_value),
+        ]
+
+        if mode_value == "Constant":
+            if isinstance(constant_value, bool) or not isinstance(
+                constant_value, numbers.Real
+            ):
+                raise ValueError(
+                    f"constant_value must be a real number, got "
+                    f"{type(constant_value).__name__}"
+                )
+            constant_value_float = float(constant_value)
+            if not np.isfinite(constant_value_float):
+                raise ValueError(
+                    f"constant_value must be finite, got {constant_value!r}"
+                )
+            if constant_value_float < 0:
+                raise ValueError(
+                    f"constant_value must be >= 0, got {constant_value!r}"
+                )
+            if constant_units not in {"in/hr", "mm/hr"}:
+                raise ValueError("constant_units must be either 'in/hr' or 'mm/hr'")
+
+            desired_entries.extend([
+                ("Met BC=Precipitation|Constant Value", f"{constant_value_float:g}"),
+                ("Met BC=Precipitation|Constant Units", constant_units),
+            ])
+
+        elif mode_value == "Point":
+            desired_entries.append(
+                (
+                    "Met BC=Precipitation|Point Interpolation",
+                    str(point_interpolation or "").strip(),
+                )
+            )
+
+        elif mode_value == "Gridded":
+            source_value = source
+            if source_value is None or not str(source_value).strip():
+                if dss_filename is not None or dss_pathname is not None:
+                    source_value = "DSS"
+                elif any(
+                    value is not None
+                    for value in (
+                        gdal_filename,
+                        gdal_group,
+                        gdal_folder,
+                        gdal_filter,
+                    )
+                ):
+                    source_value = "GDAL Raster File(s)"
+                else:
+                    raise ValueError(
+                        "source is required when mode='Gridded' and no DSS/GDAL "
+                        "fields are supplied"
+                    )
+
+            source_value = RasUnsteady._normalize_met_gridded_source(source_value)
+            interpolation_value = RasUnsteady._normalize_gridded_interpolation(
+                interpolation
+            )
+            if not interpolation_value:
+                raise ValueError(
+                    "interpolation must be 'Nearest' or 'Bilinear' when "
+                    "mode='Gridded'"
+                )
+
+            desired_entries.extend([
+                ("Met BC=Precipitation|Gridded Source", source_value),
+                ("Met BC=Precipitation|Gridded Interpolation", interpolation_value),
+            ])
+
+            if source_value == "DSS":
+                dss_filename_str = ""
+                if dss_filename is not None and str(dss_filename).strip():
+                    dss_filename_str = RasUnsteady._format_met_dss_filename(
+                        dss_filename,
+                        unsteady_path,
+                    )
+                desired_entries.extend([
+                    ("Met BC=Precipitation|Gridded DSS Filename", dss_filename_str),
+                    (
+                        "Met BC=Precipitation|Gridded DSS Pathname",
+                        str(dss_pathname or "").strip(),
+                    ),
+                ])
+            else:
+                desired_entries.extend([
+                    (
+                        "Met BC=Precipitation|Gridded GDAL Filename",
+                        RasUnsteady._format_optional_met_filename(
+                            gdal_filename,
+                            unsteady_path,
+                        ),
+                    ),
+                    (
+                        "Met BC=Precipitation|Gridded GDAL Group",
+                        str(gdal_group or "").strip(),
+                    ),
+                    (
+                        "Met BC=Precipitation|Gridded GDAL Folder",
+                        RasUnsteady._format_optional_met_filename(
+                            gdal_folder,
+                            unsteady_path,
+                        ),
+                    ),
+                    (
+                        "Met BC=Precipitation|Gridded GDAL Filter",
+                        str(gdal_filter or "").strip(),
+                    ),
+                ])
+
+        RasUnsteady._replace_met_precipitation_keys(unsteady_path, desired_entries)
+
+        ras_obj = ras_object or ras
+        if ras_obj is not None and hasattr(ras_obj, "get_unsteady_entries"):
+            try:
+                ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            except Exception as exc:
+                logger.debug(f"unsteady_df refresh skipped: {exc}")
+
+        logger.info(
+            "Configured precipitation mode in %s: mode=%s",
+            unsteady_path.name,
+            mode_value,
+        )
+
+    @staticmethod
     @log_call
     def set_hydrograph_fixed_start_time(
         unsteady_number_or_path: Union[str, Path],
@@ -4548,31 +4935,15 @@ class RasUnsteady:
             unsteady_path, formatted_value, units,
         )
 
-        with open(unsteady_path, "r", encoding="utf-8", errors="ignore") as file:
-            lines = file.readlines()
-
-        new_keys = {
-            "Precipitation Mode": "Enable",
-            "Met BC=Precipitation|Mode": "Constant",
-            "Met BC=Precipitation|Constant Value": formatted_value,
-            "Met BC=Precipitation|Constant Units": units,
-        }
-
-        # Update existing keys in place; track those still needing insertion.
-        remaining = dict(new_keys)
-        for i, line in enumerate(lines):
-            for key in list(remaining):
-                if line.startswith(key + "="):
-                    lines[i] = f"{key}={remaining.pop(key)}\n"
-
-        # Insert any missing keys at a stable meteorology location.
-        if remaining:
-            insert_at = RasUnsteady._get_default_met_insert_index(lines)
-            block = [f"{k}={v}\n" for k, v in remaining.items()]
-            lines[insert_at:insert_at] = block
-
-        with open(unsteady_path, "w", encoding="utf-8") as file:
-            file.writelines(lines)
+        RasUnsteady._replace_met_precipitation_keys(
+            unsteady_path,
+            [
+                ("Precipitation Mode", "Enable"),
+                ("Met BC=Precipitation|Mode", "Constant"),
+                ("Met BC=Precipitation|Constant Value", formatted_value),
+                ("Met BC=Precipitation|Constant Units", units),
+            ],
+        )
 
         hdf_path = Path(str(unsteady_path) + ".hdf")
         if hdf_path.exists():
@@ -5040,67 +5411,27 @@ class RasUnsteady:
         )
         interpolation_value = RasUnsteady._normalize_gridded_interpolation(interpolation)
 
-        desired_lines = [
-            "Precipitation Mode=Enable\n",
-            "Met BC=Precipitation|Mode=Gridded\n",
-            "Met BC=Precipitation|Gridded Source=DSS\n",
+        desired_entries = [
+            ("Precipitation Mode", "Enable"),
+            ("Met BC=Precipitation|Mode", "Gridded"),
+            ("Met BC=Precipitation|Gridded Source", "DSS"),
         ]
         if interpolation_value:
-            desired_lines.append(
-                f"Met BC=Precipitation|Gridded Interpolation={interpolation_value}\n"
+            desired_entries.append(
+                (
+                    "Met BC=Precipitation|Gridded Interpolation",
+                    interpolation_value,
+                )
             )
-        desired_lines.extend([
-            f"Met BC=Precipitation|Gridded DSS Filename={dss_filename_str}\n",
-            f"Met BC=Precipitation|Gridded DSS Pathname={dss_pathname}\n",
+        desired_entries.extend([
+            ("Met BC=Precipitation|Gridded DSS Filename", dss_filename_str),
+            ("Met BC=Precipitation|Gridded DSS Pathname", dss_pathname),
         ])
 
-        remove_prefixes = (
-            "Precipitation Mode=",
-            "Met BC=Precipitation|Mode=",
-            "Met BC=Precipitation|Gridded Source=",
-            "Met BC=Precipitation|Gridded Interpolation=",
-            "Met BC=Precipitation|Gridded DSS Filename=",
-            "Met BC=Precipitation|Gridded DSS Pathname=",
-            "Met BC=Precipitation|Gridded GDAL Filename=",
-            "Met BC=Precipitation|Gridded GDAL Datasetname=",
-            "Met BC=Precipitation|Gridded GDAL Filter=",
-            "Met BC=Precipitation|Gridded GDAL Folder=",
+        RasUnsteady._replace_met_precipitation_keys(
+            unsteady_path,
+            desired_entries,
         )
-        anchor_prefixes = remove_prefixes + ("Met BC=Precipitation|",)
-
-        with open(unsteady_path, "r", encoding="utf-8", errors="ignore") as f:
-            lines = f.readlines()
-
-        insert_index = None
-        for i, line in enumerate(lines):
-            if line.startswith(anchor_prefixes):
-                insert_index = i
-                break
-        if insert_index is None:
-            insert_index = RasUnsteady._get_default_met_insert_index(lines)
-
-        filtered_lines = []
-        removed_before_insert = 0
-        for i, line in enumerate(lines):
-            if line.startswith(remove_prefixes):
-                if i < insert_index:
-                    removed_before_insert += 1
-                continue
-            filtered_lines.append(line)
-
-        insert_index = max(0, insert_index - removed_before_insert)
-        if insert_index == len(filtered_lines) and filtered_lines:
-            if not filtered_lines[-1].endswith(("\n", "\r")):
-                filtered_lines[-1] = f"{filtered_lines[-1]}\n"
-
-        updated_lines = (
-            filtered_lines[:insert_index]
-            + desired_lines
-            + filtered_lines[insert_index:]
-        )
-
-        with open(unsteady_path, "w", encoding="utf-8") as f:
-            f.writelines(updated_lines)
 
         hdf_path = RasUnsteady._update_gridded_dss_precipitation_hdf(
             unsteady_path=unsteady_path,
