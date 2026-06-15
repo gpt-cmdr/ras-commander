@@ -14,9 +14,23 @@ markdown tables (one row per example notebook). For each notebook it emits:
 
 It is meant to run during the docs build, AFTER
 ``.claude/scripts/prepare_notebooks_for_docs.py`` (which converts the
-notebooks to markdown). It only uses the Python standard library
-(json, re, pathlib, datetime) so it runs under a bare ``python3`` with no
-extra dependencies.
+notebooks to markdown). The table page uses only the Python standard library
+so it runs under a bare ``python3``.
+
+It ALSO emits the gallery data surface (docs overhaul Workstream 1, W1.2):
+
+* ``docs/examples/index.json`` -- structured gallery data grouped by series
+  (title, summary, tags, difficulty, runtime, data_project, thumbnail per
+  notebook), consumed by the filterable card gallery (W4.1) and by agents.
+* ``docs/assets/thumbs/<id>.png`` -- a thumbnail per notebook, copied from the
+  first figure of the rendered notebook when available.
+
+Curated metadata (title/summary/tags/difficulty/...) is read from
+``examples/notebooks.yml`` (the source of truth seeded by
+``generate_notebooks_metadata.py``) when present; the on-disk notebook list and
+the computed runtime remain authoritative. ``notebooks.yml`` parsing needs
+PyYAML (a docs-build dependency via mkdocs); if it is unavailable the JSON
+gracefully falls back to disk-derived titles.
 
 The notebook list is sourced directly from disk
 (``sorted(examples_dir.glob("*.ipynb"))``) -- NOT from the mkdocs.yml nav.
@@ -35,6 +49,9 @@ Usage:
     python .claude/scripts/generate_examples_index.py
 """
 
+import json
+import re
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -228,6 +245,115 @@ def build_index_markdown(examples_dir: Path) -> Tuple[str, int, int]:
 
 
 # ---------------------------------------------------------------------------
+# Gallery data (index.json) + thumbnails -- metadata from examples/notebooks.yml
+# ---------------------------------------------------------------------------
+
+SERIES_NAMES = {
+    100: "Initialization & Execution", 200: "Geometry & Calibration",
+    300: "Unsteady & DSS", 400: "HDF Results", 500: "Remote Execution",
+    600: "Floodplain Mapping", 700: "Sensitivity & Precipitation",
+    800: "Quality Assurance", 900: "Data Integration",
+    950: "eBFE Delivery Validation", 960: "Cloud-Native Export",
+}
+
+
+def _series_of(name: str) -> int:
+    """Series bucket, distinguishing the 950s/960s bands (notebooks.yml convention)."""
+    m = re.match(r"^(\d+)", name)
+    if not m:
+        return 10_000
+    n = int(m.group(1))
+    if 950 <= n < 960:
+        return 950
+    if 960 <= n < 1000:
+        return 960
+    return (n // 100) * 100
+
+
+def load_yml_meta(repo_root: Path) -> dict:
+    """{id: metadata} from examples/notebooks.yml, or {} if absent / PyYAML missing."""
+    path = repo_root / "examples" / "notebooks.yml"
+    if not path.exists():
+        return {}
+    try:
+        import yaml  # docs-build dependency via mkdocs; optional under bare python3
+    except ImportError:
+        print("  (PyYAML unavailable -- gallery JSON falls back to disk-derived titles)")
+        return {}
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return {n["id"]: n for n in data.get("notebooks", []) if "id" in n}
+
+
+def find_thumbnail(repo_root: Path, name: str) -> Optional[str]:
+    """Copy the first figure of the rendered notebook -> docs/assets/thumbs/<id>.png.
+
+    Best-effort: the figure files only exist after prepare_notebooks_for_docs.py runs,
+    so locally (no converted notebooks) this returns None and the card shows no image.
+    """
+    figdir = repo_root / "docs" / "notebooks" / f"{name}_files"
+    if not figdir.is_dir():
+        return None
+    pngs = sorted(figdir.glob("*.png"))
+    if not pngs:
+        return None
+    thumbs = repo_root / "docs" / "assets" / "thumbs"
+    thumbs.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.copyfile(pngs[0], thumbs / f"{name}.png")
+    except OSError:
+        return None
+    return f"assets/thumbs/{name}.png"
+
+
+def build_gallery(examples_dir: Path, repo_root: Path) -> Tuple[list, int]:
+    """Records grouped by series for index.json.
+
+    Notebook LIST + computed runtime come from disk (authoritative); curated
+    title/summary/tags/difficulty/data_project come from notebooks.yml when present.
+    """
+    meta_by_id = load_yml_meta(repo_root)
+    groups: dict = {}
+    total = 0
+    for nb_path in sorted(examples_dir.glob("*.ipynb")):
+        name = nb_path.stem
+        meta = meta_by_id.get(name, {})
+        if meta.get("excluded"):
+            continue
+        nb = load_notebook(nb_path)
+        seconds = compute_runtime_seconds(nb)
+        series = meta.get("series") or _series_of(name)
+        g = groups.setdefault(series, {
+            "series": series,
+            "series_name": meta.get("series_name") or SERIES_NAMES.get(series, f"{series}s"),
+            "notebooks": [],
+        })
+        g["notebooks"].append({
+            "id": name,
+            "title": meta.get("title") or derive_title(nb_path, nb),
+            "summary": meta.get("summary", ""),
+            "tags": meta.get("tags", []),
+            "difficulty": meta.get("difficulty"),
+            "est_runtime": meta.get("est_runtime") or (format_runtime(seconds) if seconds is not None else None),
+            "runtime_seconds": round(seconds, 1) if seconds is not None else None,
+            "data_project": meta.get("data_project"),
+            "thumbnail": find_thumbnail(repo_root, name),
+            "url": f"../notebooks/{name}.md",
+        })
+        total += 1
+    for g in groups.values():
+        g["notebooks"].sort(key=lambda n: n["id"])
+    return [groups[k] for k in sorted(groups)], total
+
+
+def write_index_json(repo_root: Path, groups: list, total: int) -> int:
+    payload = {"schema": "rascmdr.examples-gallery/1", "count": total, "series": groups}
+    out = repo_root / "docs" / "examples" / "index.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return sum(1 for g in groups for n in g["notebooks"] if n["thumbnail"])
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -261,6 +387,13 @@ def main() -> int:
     print(f"  Rows:            {total_rows}")
     print(f"  With runtime:    {with_runtime}")
     print(f"  Without runtime: {total_rows - with_runtime}")
+
+    # Gallery data surface (W1.2): index.json + thumbnails, metadata from notebooks.yml.
+    groups, gallery_total = build_gallery(examples_dir, repo_root)
+    thumbs = write_index_json(repo_root, groups, gallery_total)
+    print(f"Wrote {repo_root / 'docs' / 'examples' / 'index.json'}")
+    print(f"  Gallery notebooks: {gallery_total} in {len(groups)} series")
+    print(f"  Thumbnails:        {thumbs}")
     print()
     print("Done.")
     return 0
