@@ -354,8 +354,8 @@ notebooks:
   excluded: false
   code_cells: 15
   executed_cells: 12
-- id: 116_monte_carlo_uncertainty
-  filename: 116_monte_carlo_uncertainty.ipynb
+- id: 117_monte_carlo_uncertainty
+  filename: 117_monte_carlo_uncertainty.ipynb
   title: Monte Carlo Uncertainty Analysis (Hardened API)
   series: 100
   series_name: Initialization & Execution
@@ -390,7 +390,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 16
-  executed_cells: 0
+  executed_cells: 14
 - id: 120_automating_ras_with_win32com
   filename: 120_automating_ras_with_win32com.ipynb
   title: Win32COM Automation
@@ -920,7 +920,9 @@ notebooks:
   title: Land Classification Polygon Authoring
   series: 200
   series_name: Geometry & Calibration
-  summary: ''
+  summary: When editing ras-commander locally, run this notebook from the repository root with `PYTHONPATH`
+    set to that root before launching Jupyter or `nbconvert`. Restore this pip-mode import cell before
+    committing.
   tags: []
   difficulty: intermediate
   est_runtime: null
@@ -1152,19 +1154,28 @@ notebooks:
   - calibration
   difficulty: intermediate
   est_runtime: null
-  data_project: BaldEagleCrkMulti2D
+  data_project: null
   functions_used:
-  - HdfResultsQuery.query_points
+  - GeomLandCover.get_base_mannings_n
+  - HdfMesh.get_mesh_areas
+  - HdfMesh.get_mesh_cell_polygons
+  - HdfProject.get_project_crs
+  - HdfResultsPlan.get_runtime_data
+  - RasCalibrate.compute_objective
+  - RasCalibrate.evaluate_multi_event
+  - RasCalibrate.extract_modeled
   - RasCalibrate.grid_search
+  - RasCalibrate.make_mannings_apply_fn
   - RasCalibrate.optimize
-  - RasCmdr.compute_plan
-  - RasExamples.extract_project
+  - RasMap.list_landcover_layers
+  - RasMap.list_terrain_layers
+  - ras.geom_df
   - ras.plan_df
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 11
-  executed_cells: 10
+  code_cells: 23
+  executed_cells: 22
 - id: 221_calibration_1d_workflow
   filename: 221_calibration_1d_workflow.ipynb
   title: 1D Manning's N Calibration Workflow
@@ -1877,21 +1888,21 @@ notebooks:
   functions_used:
   - GeomBcLines.add_bc_lines
   - GeomMesh.compute_property_tables
+  - GeomMesh.generate
   - GeomMesh.generate_computation_points
+  - GeomMesh.set_breakline_spacing
   - GeomMesh.set_geometry_association
   - GeomStorage.set_2d_flow_area_perimeter
   - GeomStorage.set_2d_flow_area_settings
+  - GeomStorage.set_breaklines
   - RasCmdr.compute_plan
   - RasMap.add_terrain_layer
   - RasTerrain.create_terrain_from_rasters
-  - RasUnsteady.set_non_newtonian_concentration
-  - RasUnsteady.set_non_newtonian_method
-  - RasUnsteady.set_non_newtonian_shear
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 5
-  executed_cells: 1
+  code_cells: 7
+  executed_cells: 6
 - id: 320_1d_boundary_condition_visualization
   filename: 320_1d_boundary_condition_visualization.ipynb
   title: 1D Boundary Condition Visualization
@@ -2443,9 +2454,9 @@ notebooks:
   excluded: false
   code_cells: 12
   executed_cells: 12
-- id: 610_fluvial_pluvial_delineation
-  filename: 610_fluvial_pluvial_delineation.ipynb
-  title: Fluvial-Pluvial Delineation
+- id: 610_generate_fluvial_pluvial_delineations_max_wse_arrival_time
+  filename: 610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.ipynb
+  title: Generate Fluvial Pluvial Delineations using Max WSE Arrival Time
   series: 600
   series_name: Floodplain Mapping
   summary: ''
