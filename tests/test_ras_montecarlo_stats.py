@@ -259,6 +259,21 @@ def test_c2_override_allows_low_valid_fraction(tmp_path, patch_full_domain):
     assert out["status_accounting"]["valid_fraction"] == pytest.approx(0.4)
 
 
+def test_c2_finalization_race_rescue_incomplete(tmp_path, patch_full_domain):
+    # 18 completed + 2 incomplete. The recorded-status fraction is 18/20 = 0.90
+    # (< 0.95) and would trip the guard, but the two 'incomplete' samples have
+    # valid HDFs on disk (a run_ensemble finalization race), so they are
+    # rescued via on-disk extraction and statistics compute.
+    statuses = ["completed"] * 18 + ["incomplete"] * 2
+    ens = _make_ensemble(statuses, tmp_path=tmp_path)
+    out = RasMonteCarlo.exceedance_probabilities(ens, variable="wse")
+    assert out["n_samples_used"] == 20
+    sa = out["status_accounting"]
+    assert sorted(sa["rescued_from_finalization_race"]) == [19, 20]
+    assert sa["valid_fraction"] == pytest.approx(1.0)
+    # 'failed' is NOT rescued: the guard-raises test above keeps that contract.
+
+
 def test_c2_default_min_valid_fraction_value():
     assert _DEFAULT_MIN_VALID_FRACTION == 0.95
 

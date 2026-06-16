@@ -68,6 +68,12 @@ _VALID_STATUSES = {"completed"}
 # Excluded by default; admitted only when include_error_runs=True.
 _ERROR_STATUS = "completed_with_errors"
 
+# Status for a run whose result HDF lacked a complete Results/Unsteady group
+# when status was recorded. This is the status the finalization-race rescue in
+# _collect_ensemble_values re-checks against the on-disk HDF. Matches the
+# literal returned by RasPermutation._derive_status.
+_INCOMPLETE_STATUS = "incomplete"
+
 # Backward-compatible alias: the full set of statuses that can be admitted
 # when include_error_runs=True.
 _COMPLETED_STATUSES = _VALID_STATUSES | {_ERROR_STATUS}
@@ -1495,6 +1501,7 @@ class RasMonteCarlo:
         sample_weights: List[float] = []
         dropped_missing_hdf: List[int] = []
         dropped_extraction_error: List[int] = []
+        rescued_finalization_race: List[int] = []
 
         if points_of_interest is not None:
             point_metadata = RasMonteCarlo._coerce_points(points_of_interest)
@@ -1559,6 +1566,97 @@ class RasMonteCarlo:
                 )
                 dropped_extraction_error.append(sample_id)
 
+        # Finalization-race rescue. run_ensemble records each sample's status
+        # from an in-flight snapshot taken right after compute. A sample whose
+        # result HDF had not finished flushing Results/Unsteady at that instant
+        # (the worker copy-back / write race) is recorded as ``incomplete`` even
+        # though the HDF completes on disk moments later. By the time statistics
+        # are computed the data is present, so give those samples a second
+        # chance: attempt extraction directly from disk and admit any that now
+        # yield valid values.
+        #
+        # Only ``incomplete`` is rescued. ``failed`` (a genuine compute/IO
+        # failure) and ``completed_with_errors`` (finished with instability,
+        # gated by ``include_error_runs``) are intentionally NOT rescued -- so
+        # this cannot resurrect a genuinely-failed or error run, it only
+        # recovers a sample whose data is verifiably on disk. Extraction is the
+        # final arbiter: a still-incomplete HDF fails extraction and stays
+        # dropped.
+        if isinstance(results_df, pd.DataFrame) and {
+            "status",
+            "hdf_path",
+        } <= set(results_df.columns):
+            already_used = set(sample_ids)
+            rescue_df = results_df.copy()
+            if "sample_id" in rescue_df.columns:
+                rescue_df["sample_id"] = pd.to_numeric(
+                    rescue_df["sample_id"], errors="coerce"
+                )
+            else:
+                rescue_df["sample_id"] = np.arange(1, len(rescue_df) + 1)
+            rescue_status = (
+                rescue_df["status"].astype(str).str.strip().str.lower()
+            )
+            rescue_df = rescue_df[
+                (rescue_status == _INCOMPLETE_STATUS)
+                & rescue_df["hdf_path"].notna()
+                & rescue_df["sample_id"].notna()
+            ]
+            for _, row in rescue_df.iterrows():
+                sample_id = int(row["sample_id"])
+                if sample_id in already_used:
+                    continue
+                hdf_path = Path(str(row["hdf_path"]))
+                if not hdf_path.exists():
+                    continue
+                if normalized_weights is None:
+                    sample_weight = 1.0
+                elif sample_id not in normalized_weights:
+                    continue
+                else:
+                    sample_weight = normalized_weights[sample_id]
+                try:
+                    if point_metadata is not None:
+                        values = RasMonteCarlo._extract_point_values(
+                            hdf_path=hdf_path,
+                            points_df=point_metadata,
+                            variable=variable,
+                            ras_object=ras_object,
+                        )
+                    else:
+                        current_cell_metadata, values = (
+                            RasMonteCarlo._extract_full_domain_values(
+                                hdf_path=hdf_path,
+                                variable=variable,
+                                ras_object=ras_object,
+                            )
+                        )
+                        if cell_metadata is None:
+                            cell_metadata = current_cell_metadata
+                        else:
+                            RasMonteCarlo._validate_alignment(
+                                cell_metadata,
+                                current_cell_metadata,
+                                "mesh cell ordering",
+                            )
+                    value_arrays.append(np.asarray(values, dtype=float))
+                    sample_ids.append(sample_id)
+                    sample_weights.append(float(sample_weight))
+                    already_used.add(sample_id)
+                    rescued_finalization_race.append(sample_id)
+                    logger.info(
+                        "Rescued sample %s for %s: recorded status was %r but "
+                        "its HDF now holds valid results on disk (finalization "
+                        "race).",
+                        sample_id,
+                        variable,
+                        str(row.get("status", "")),
+                    )
+                except Exception:
+                    # Genuinely unusable (no valid Results/Unsteady) -- leave
+                    # it dropped; the guard below still accounts for it.
+                    pass
+
         if not value_arrays:
             raise ValueError("No completed ensemble samples could be aggregated")
 
@@ -1576,6 +1674,7 @@ class RasMonteCarlo:
             "valid_fraction": float(valid_fraction),
             "dropped_missing_hdf": dropped_missing_hdf,
             "dropped_extraction_error": dropped_extraction_error,
+            "rescued_from_finalization_race": rescued_finalization_race,
             "status_histogram": RasMonteCarlo.status_histogram(ensemble_result),
             "include_error_runs": bool(include_error_runs),
         }
