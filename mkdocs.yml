@@ -11,6 +11,7 @@ exclude_docs: |
   cognitive-infrastructure/agents.md
   cognitive-infrastructure/skills.md
   cognitive-infrastructure/commands.md
+  AGENTS.md
 
 theme:
   name: material
@@ -161,6 +162,7 @@ nav:
     - Flowline Refinement Regions: user-guide/flowline-refinement-regions.md
     - HEC-RAS Supplementary Guide Coverage: user-guide/hec-ras-supplementary-guides.md
     - eBFE Delivery Validation: user-guide/ebfe-delivery-validation.md
+    - Working with eBFE Models: ebfe_models.md
     - HDF Data Extraction: user-guide/hdf-data-extraction.md
     - Geometry Operations: user-guide/geometry-operations.md
     - Steady Flow Analysis: user-guide/steady-flow-analysis.md

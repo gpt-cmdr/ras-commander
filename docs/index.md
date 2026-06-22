@@ -77,7 +77,7 @@ success = RasCmdr.compute_plan("01")
 ## Getting Help
 
 - **[GitHub Issues](https://github.com/gpt-cmdr/ras-commander/issues)**: Report bugs and request features
-- **[Example Notebooks](examples/index.md)**: 30+ working examples covering all major features
+- **[Example Notebooks](examples/index.md)**: 100+ working examples covering all major features
 - **[API Reference](api/index.md)**: Complete function and class documentation
 - **[AI-Assisted Development](development/llm-development.md)**: Use [Claude Code](https://claude.ai/code) or [Codex CLI](https://github.com/openai/codex) with built-in `AGENTS.md` and `CLAUDE.md` context
 

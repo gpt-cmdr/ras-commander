@@ -17,7 +17,7 @@ Within two years, CLB Engineering built the **most robust and feature-complete H
 - **[ras-commander](https://github.com/gpt-cmdr/ras-commander)**: 50+ modules covering plan execution, HDF results extraction, geometry parsing, USGS integration, precipitation analysis, remote distributed execution, quality assurance, and more
 - **[hms-commander](https://github.com/gpt-cmdr/hms-commander)**: Companion library for HEC-HMS automation
 - **Comprehensive agentic infrastructure**: AI agents, skills, rules, and cognitive memory systems that enable engineers to work alongside AI assistants on complex modeling tasks
-- **50+ example notebooks**: Production-quality demonstrations covering every major HEC-RAS workflow
+- **100+ example notebooks**: Production-quality demonstrations covering every major HEC-RAS workflow
 
 This demonstrates the extraordinary value that licensed professional engineers can create when working alongside Large Language Models with clear principles and accountability.
 
