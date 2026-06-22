@@ -29,9 +29,11 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
   features:
-    - navigation.tabs
+    # navigation.tabs + a lone top-level "Home" left the homepage sidebar empty
+    # (the active "Home" tab has no children). Without tabs, the full section tree
+    # renders in the left sidebar on every page; groups stay collapsible (no
+    # navigation.expand) so the large Example Notebooks tree is scannable.
     - navigation.sections
-    - navigation.expand
     - navigation.top
     - search.suggest
     - search.highlight

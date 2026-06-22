@@ -35,91 +35,26 @@ Usage:
     python .claude/scripts/generate_examples_index.py
 """
 
-import json
-import re
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+# Shared title / numbering / section logic, also used by prepare_notebooks_for_docs.py
+# (which injects the left-nav) so the overview table and the sidebar never drift.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _docs_notebook_common import (  # noqa: E402
+    derive_title,
+    load_notebook,
+    numbered_title,
+    section_for,
+)
+
 GITHUB_BLOB_BASE = "https://github.com/gpt-cmdr/ras-commander/blob/main/examples"
 
 
 # ---------------------------------------------------------------------------
-# Title derivation
-# ---------------------------------------------------------------------------
-
-def _load_notebook(notebook_path: Path) -> Optional[dict]:
-    try:
-        with notebook_path.open(encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return None
-
-
-def _cell_source_lines(cell: dict) -> List[str]:
-    """Return a notebook cell's source as a list of text lines.
-
-    nbformat stores ``source`` either as a single string or a list of strings.
-    """
-    source = cell.get("source", "")
-    if isinstance(source, list):
-        text = "".join(source)
-    else:
-        text = source
-    return text.splitlines()
-
-
-def prettify_filename(name: str) -> str:
-    """Fallback title from a notebook basename (no extension).
-
-    Drops a leading numeric prefix (e.g. ``116`` or ``911a``), replaces
-    underscores with spaces, and Title-Cases the result. Deterministic.
-    """
-    stem = re.sub(r"^\d+[a-zA-Z]?_", "", name)
-    stem = stem.replace("_", " ").strip()
-    if not stem:
-        stem = name.replace("_", " ").strip()
-    return stem.title()
-
-
-def derive_title(notebook_path: Path, nb: Optional[dict]) -> str:
-    """Title = first markdown cell's first ``# `` H1, else prettified filename."""
-    name = notebook_path.stem
-    if nb is not None:
-        for cell in nb.get("cells", []):
-            if cell.get("cell_type") != "markdown":
-                continue
-            for line in _cell_source_lines(cell):
-                stripped = line.strip()
-                if stripped.startswith("# "):
-                    return stripped[1:].strip()
-            # First markdown cell had no H1; keep scanning later markdown cells
-            # in case the title lives further down (still deterministic).
-    return prettify_filename(name)
-
-
-# ---------------------------------------------------------------------------
-# Section grouping
-# ---------------------------------------------------------------------------
-
-def section_for(name: str) -> Tuple[int, str]:
-    """Return ``(sort_key, label)`` section bucket for a notebook basename.
-
-    The leading run of digits in the filename prefix (e.g. ``911a_...`` -> 911,
-    ``116_...`` -> 116) is bucketed by hundreds into ``100s``..``900s``. Names
-    without a numeric prefix fall into a trailing "Other" bucket.
-    """
-    m = re.match(r"^(\d+)", name)
-    if not m:
-        return (10_000, "Other")
-    n = int(m.group(1))
-    bucket = (n // 100) * 100
-    return (bucket, f"{bucket}s")
-
-
-# ---------------------------------------------------------------------------
-# Runtime calculation (stdlib json only)
+# Runtime calculation (stdlib only)
 # ---------------------------------------------------------------------------
 
 def _parse_ts(ts: str) -> Optional[datetime]:
@@ -233,8 +168,8 @@ def build_index_markdown(examples_dir: Path) -> Tuple[str, int, int]:
 
     for nb_path in notebooks:
         name = nb_path.stem
-        nb = _load_notebook(nb_path)
-        title = derive_title(nb_path, nb)
+        nb = load_notebook(nb_path)
+        title = numbered_title(name, derive_title(nb_path, nb))
         seconds = compute_runtime_seconds(nb)
         runtime = format_runtime(seconds)
         if seconds is not None:
