@@ -78,7 +78,7 @@ for plan, success in results.items():
 from ras_commander import HdfResultsMesh, HdfResultsXsec
 
 # Get path to HDF file
-hdf_path = ras.plan_df.loc[ras.plan_df['plan_number'] == '01', 'hdf_path'].iloc[0]
+hdf_path = ras.plan_df.loc[ras.plan_df['plan_number'] == '01', 'HDF_Results_Path'].iloc[0]
 
 # Extract maximum water surface elevation (2D)
 max_wse = HdfResultsMesh.get_mesh_max_ws(hdf_path)
@@ -147,4 +147,4 @@ RasCmdr.compute_plan("01", ras_object=project2)
 - **[Project Initialization](project-initialization.md)**: Detailed project setup options
 - **[Plan Execution](../user-guide/plan-execution.md)**: Advanced execution modes
 - **[HDF Data Extraction](../user-guide/hdf-data-extraction.md)**: Working with results
-- **[Example Notebooks](../examples/index.md)**: 30+ complete examples
+- **[Example Notebooks](../examples/index.md)**: 100+ complete examples

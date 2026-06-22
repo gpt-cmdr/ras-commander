@@ -87,18 +87,20 @@ print(f"Folder: {ras.project_folder}")
 print(f"HEC-RAS: {ras.ras_exe_path}")
 
 print("\n=== Plans ===")
-print(ras.plan_df[['plan_number', 'plan_title', 'geom_number', 'hdf_path']])
+print(ras.plan_df[['plan_number', 'Plan Title', 'geometry_number', 'HDF_Results_Path']])
 
 print("\n=== Geometry Files ===")
-print(ras.geom_df[['geom_number', 'file_path']])
+print(ras.geom_df[['geom_number', 'full_path']])
 
 print("\n=== Boundary Conditions ===")
-print(ras.boundaries_df[['Name', 'Type', 'Interval']])
+print(ras.boundaries_df[['river_reach_name', 'bc_type', 'Interval']])
 ```
 
 ## DataFrame Reference
 
-Detailed information about each DataFrame available after project initialization.
+Detailed information about each DataFrame available after project initialization. For the
+complete, canonical column schema (including every derived column), see the
+[DataFrame Reference](../reference/dataframe-reference.md).
 
 ### plan_df Columns
 

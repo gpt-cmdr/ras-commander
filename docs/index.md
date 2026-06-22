@@ -11,35 +11,38 @@
 
 **RAS Commander** is a Python library for automating HEC-RAS (Hydrologic Engineering Center's River Analysis System) operations. It provides a comprehensive API for interacting with HEC-RAS project files, executing simulations, and processing results through HDF data analysis. Developed by [CLB Engineering Corporation](https://clbengineering.com/) using the **[LLM Forward](https://clbengineering.com/llm-forward)** approach, ras-commander represents the most comprehensive open-source HEC-RAS automation solution available.
 
+!!! tip "New here? Start with [Installation](getting-started/installation.md) → [Quick Start](getting-started/quickstart.md)"
+    Then browse the [Example Notebooks](examples/index.md) for runnable, end-to-end workflows.
+
 ## Key Features
 
 <div class="grid cards" markdown>
 
-- :material-play-circle: **Plan Execution**
+- :material-play-circle: **[Plan Execution](user-guide/plan-execution.md)**
 
     Execute single plans, run multiple plans in parallel, or queue sequential computations with full control over cores and resources.
 
-- :material-file-document: **HDF Data Access**
+- :material-file-document: **[HDF Data Access](user-guide/hdf-data-extraction.md)**
 
     Extract and analyze 1D/2D results directly from HDF files - water surfaces, velocities, depths, and more.
 
-- :material-vector-polygon: **Geometry Operations**
+- :material-vector-polygon: **[Geometry Operations](user-guide/geometry-operations.md)**
 
     Parse and modify geometry files including cross-sections, storage areas, connections, and inline structures.
 
-- :material-network: **Infrastructure Analysis**
+- :material-network: **[Infrastructure Analysis](user-guide/dam-breach-analysis.md)**
 
     Work with pipe networks, pump stations, dam breaches, and hydraulic structures.
 
-- :material-clock-fast: **Legacy Support**
+- :material-clock-fast: **[Legacy Support](user-guide/legacy-com-interface.md)**
 
     COM interface support for HEC-RAS 3.x-6.x via the RasControl class.
 
-- :material-cloud-sync: **Remote Execution**
+- :material-cloud-sync: **[Remote Execution](user-guide/remote-execution.md)**
 
     Distribute computations across multiple machines using PsExec, Docker, or SSH workers.
 
-- :material-wrench: **Geometry Repair**
+- :material-wrench: **[Geometry Repair](api/fixit.md)**
 
     Automatically detect and fix common geometry issues like overlapping blocked obstructions with engineering-grade verification outputs.
 
@@ -76,8 +79,10 @@ success = RasCmdr.compute_plan("01")
 
 ## Getting Help
 
+- **[Installation](getting-started/installation.md)**: Set up your environment and install ras-commander
+- **[Quick Start](getting-started/quickstart.md)**: Initialize a project and run your first plan
 - **[GitHub Issues](https://github.com/gpt-cmdr/ras-commander/issues)**: Report bugs and request features
-- **[Example Notebooks](examples/index.md)**: 30+ working examples covering all major features
+- **[Example Notebooks](examples/index.md)**: 100+ working examples covering all major features
 - **[API Reference](api/index.md)**: Complete function and class documentation
 - **[AI-Assisted Development](development/llm-development.md)**: Use [Claude Code](https://claude.ai/code) or [Codex CLI](https://github.com/openai/codex) with built-in `AGENTS.md` and `CLAUDE.md` context
 

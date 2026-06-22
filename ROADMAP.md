@@ -70,7 +70,7 @@ already implemented.
 **Existing branch artifacts**:
 - `d40032c9` - initial `RasMonteCarlo`
 - `f052bb1d` - redesigned general-purpose uncertainty analysis
-- `3b11f22e` - notebook `116_monte_carlo_uncertainty.ipynb`
+- `3b11f22e` - notebook `117_monte_carlo_uncertainty.ipynb`
 
 **Open work**:
 - Rebase/replay onto current `main`

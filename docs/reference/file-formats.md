@@ -41,7 +41,7 @@ Reference for HEC-RAS file types and naming conventions.
 
 Files use two-digit numbering: `01` through `99`.
 
-```
+```text
 MyProject.prj          # Project file
 MyProject.p01          # Plan 01
 MyProject.p01.hdf      # Plan 01 results
@@ -54,7 +54,7 @@ MyProject.u01          # Unsteady flow 01
 
 Plan files (`.p##`) are ASCII text with key-value pairs:
 
-```
+```ini
 Plan Title=My Simulation Plan
 Short Identifier=Plan01
 Geom File=g01
@@ -70,7 +70,7 @@ Run SedTran=0
 
 Geometry files (`.g##`) use FORTRAN-style fixed-width formatting:
 
-```
+```text
 River Reach=Big Creek,Upper
 Type RM Length L Ch R = 1 ,1000   ,500    ,300    ,400
 XS GIS Cut Line=2
@@ -95,7 +95,7 @@ XS GIS Cut Line=2
 
 Unsteady flow files (`.u##`) contain boundary condition definitions:
 
-```
+```text
 Flow Title=100-Year Event
 Program Version=6.50
 Boundary Location=Big Creek,Upper,1000,         ,                ,                ,                ,
@@ -117,7 +117,7 @@ Flow Hydrograph= 10
 
 HEC-RAS 6.x+ stores results in HDF5 format:
 
-```
+```text
 /
 ├── Plan Data/
 │   ├── Plan Information/
