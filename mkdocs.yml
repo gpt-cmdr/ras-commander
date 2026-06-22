@@ -154,7 +154,7 @@ nav:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quickstart.md
       - Project Initialization: getting-started/project-initialization.md
-    - Overview: user-guide/overview.md
+    - Architecture Overview: user-guide/overview.md
     - Plan Execution: user-guide/plan-execution.md
     - Workflows & Patterns: user-guide/workflows-and-patterns.md
     - Boundary Conditions: user-guide/boundary-conditions.md

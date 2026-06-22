@@ -273,6 +273,11 @@ def build_index_markdown(examples_dir: Path) -> Tuple[str, int, int]:
         "GitHub. **Runtime** is the summed cell-execution wall time captured the "
         "last time the notebook was executed (`N/A` means the notebook was "
         "committed without execution outputs).\n\n"
+        "!!! tip \"New here? Start with the 100s.\"\n"
+        "    Run **100 → 101 → 110** for the core initialize → inspect → execute "
+        "loop, then branch into the series that matches your work: **200s** geometry "
+        "& calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data "
+        "integration & forecasting.\n\n"
     )
 
     summary = (
