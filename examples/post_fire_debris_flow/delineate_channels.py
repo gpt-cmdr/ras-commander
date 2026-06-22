@@ -73,8 +73,10 @@ def delineate(dem, domain_geom, out_json, *, stream_area_km2=0.04,
     with rasterio.open(dem) as ds:
         res = abs(ds.transform.a)
         crs = ds.crs
-    # cell area in km2 from the linear unit (ft if a feet CRS, else m)
-    unit_m = 0.3048 if (crs and crs.is_projected and "foot" in (crs.axis_info[0].unit_name or "").lower()) else 1.0
+    # cell area in km2 from the linear unit (ft if a feet CRS, else m).
+    # rasterio's CRS exposes the linear unit via .linear_units (not pyproj's .axis_info).
+    unit_name = (getattr(crs, "linear_units", "") or "").lower()
+    unit_m = 0.3048 if (crs and crs.is_projected and "foot" in unit_name) else 1.0
     cell_km2 = (res * unit_m / 1000.0) ** 2
     thresh = max(int(stream_area_km2 / max(cell_km2, 1e-12)), 1)
 

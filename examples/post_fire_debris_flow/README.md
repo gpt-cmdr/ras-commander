@@ -88,6 +88,30 @@ python delineate_channels.py --dem ether_hollow_proj/EtherHollow_terrain_ft.tif 
 # 2. build with breaklines (HEC-RAS, interactive): refine the mesh along the thalweg
 python ether_hollow_debris_flow.py --phase build --breaklines \
        --channel-width-ft 30 --channel-cell-ft 12 --root . --workdir ether_hollow_proj
+
+# 3. comparison figures (no HEC-RAS): cell outlines over terrain, uniform vs refined
+python mesh_compare_plot.py \
+       --uniform   ether_hollow_uniform/EtherHollow.g01.hdf \
+       --refined   ether_hollow_proj/EtherHollow.g01.hdf \
+       --terrain   ether_hollow_proj/EtherHollow_terrain_ft.tif \
+       --breakline data/ether_hollow/channel_breakline_ft.json
+```
+
+`mesh_compare_plot.py` writes **`mesh_uniform.png`** and **`mesh_refined.png`** — two
+separate figures, each drawing the actual mesh **cell polygons (no fill)** — or cell faces
+with `--faces` — over the feet terrain hillshade via `HdfMesh.get_mesh_cell_polygons`, with
+the channel centerline (red) overlaid in the same coordinate system. (This replaces the old
+single cell-centers scatter, which mixed two coordinate systems in one axes.) Cell counts in
+the titles are the true totals (`Cells Center Coordinate`), not the polygonized subset.
+
+Framing: `--zoom-buffer-ft` crops to the channel corridor (0 = full domain); `--reach-center
+CX CY --reach-half-ft 350` draws a tight square window where individual cells are visible —
+the clearest way to see the 12 ft channel band against the 33 ft base grid. The committed
+notebook figures use a ~700 ft reach window on the main thalweg:
+
+```bash
+python mesh_compare_plot.py --uniform ... --refined ... --terrain ... --breakline ... \
+       --reach-center 1485606 14579723 --reach-half-ft 350
 ```
 
 `delineate_channels.py` runs the TauDEM stream sequence (PitRemove → D8FlowDir → AreaD8 →
