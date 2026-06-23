@@ -83,7 +83,7 @@ resolves the cross-section and removes that artifact.
 # 1. delineate channel centerlines with TauDEM (run where TauDEM is installed; see below)
 python delineate_channels.py --dem ether_hollow_proj/EtherHollow_terrain_ft.tif \
        --domain prep/basin_perimeter_ft.json --out data/ether_hollow/channel_breakline_ft.json \
-       --stream-area-km2 0.04 --simplify-ft 10
+       --stream-area-km2 0.04 --simplify-ft 3
 
 # 2. build with breaklines (HEC-RAS, interactive): refine the mesh along the thalweg
 python ether_hollow_debris_flow.py --phase build --breaklines \
@@ -119,12 +119,21 @@ Threshold → StreamNet), clips the centerlines to the 2D domain, simplifies the
 (Douglas-Peucker), and writes `channel_breakline_ft.json`. The build phase then authors them
 via `GeomStorage.set_breaklines` with **near = far** cell spacing (a uniform fine corridor,
 no coarsening) and `GeomMesh.set_breakline_spacing(near_repeats, protection_radius=1)`, sizing
-`near_repeats` to span the channel width; `GeomMesh.generate` enforces the breaklines (the
-.NET `EnforceBreaklines` regen) and repairs bad faces via its auto-fix loop. Verify with
-`HdfBndry.get_breaklines(...)`.
+`near_repeats` (≥ 2 — at least two refined rows each side) to span the channel width;
+`GeomMesh.generate` enforces the breaklines (the .NET `EnforceBreaklines` regen) and repairs
+bad faces via its auto-fix loop. Verify with `HdfBndry.get_breaklines(...)`.
 
-Effect (Ether Hollow, τy = 700 Pa): max depth drops 19.1 → 15.9 ft (the resolved channel),
-peak velocity stable (~17.5 fps), mesh 10,647 → 11,994 cells.
+> **Build order matters.** `GeomMesh.generate`'s seeder reads breaklines from the compiled
+> HDF, not the `.g01` text, so the build compiles the breaklines into the HDF (a
+> `compute_plan(force_geompre=True)`) *before* `generate` — otherwise the seeder sees zero
+> breaklines and `near_repeats` is silently ignored (only Ras.exe enforcement adds a thin
+> 1-row band).
+
+Effect (Ether Hollow, τy = 700 Pa): the channel-aligned refinement drops the spurious max
+depth **19.1 → 13.4 ft** with peak velocity ~stable (~17–18.5 fps), mesh 10,647 → 14,535 cells.
+**Mesh and timestep refine together**: the 12 ft mesh needs a 0.5 s computation interval (the
+33 ft mesh is converged at 1 s) — at 1 s the refined mesh runs Courant ≈ 2 and inflates peak
+velocity to ~25 fps.
 
 **Extra prerequisite for delineation:** **TauDEM 5.x** binaries (`PitRemove`, `D8FlowDir`,
 `AreaD8`, `Threshold`, `StreamNet`) on PATH, and **MS-MPI** (`mpiexec`) for multi-process runs
