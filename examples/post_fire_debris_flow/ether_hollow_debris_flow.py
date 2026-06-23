@@ -214,9 +214,16 @@ def main() -> int:
     ap.add_argument("--channel-width-ft", type=float, default=30.0,
                     help="approximate channel width -> width of the refined corridor")
     ap.add_argument("--channel-cell-ft", type=float, default=12.0,
-                    help="breakline near=far spacing (uniform fine cells along the thalweg)")
-    ap.add_argument("--breakline-simplify-ft", type=float, default=10.0,
-                    help="Douglas-Peucker tolerance applied to the centerline before authoring")
+                    help="breakline near=far spacing (uniform fine cells along the thalweg). "
+                         "Keep near=far unless the base/breakline differential is large.")
+    ap.add_argument("--near-repeats", type=int, default=None,
+                    help="offset seed rows on EACH side of the breakline (band half-width "
+                         "in cells). Default = max(2, channel_width/(2*near)); >=2 gives a "
+                         "real refined corridor (1 row barely refines).")
+    ap.add_argument("--breakline-simplify-ft", type=float, default=3.0,
+                    help="Douglas-Peucker tolerance applied to the centerline before "
+                         "authoring. Keep well below the cell size so the breakline follows "
+                         "the thalweg (10 ft over-simplifies a 12 ft-cell channel).")
     ap.add_argument("--buffer-ft", type=float, default=300.0)
     ap.add_argument("--runout-m", type=float, default=1600.0)     # ~1 mile downstream
     ap.add_argument("--corridor-width-m", type=float, default=200.0)
@@ -564,7 +571,10 @@ def main() -> int:
             from shapely.geometry import LineString
             bl_defs = json.loads(bl_json.read_text(encoding="utf-8"))
             near = far = float(args.channel_cell_ft)
-            near_repeats = max(1, round(args.channel_width_ft / (2.0 * near)))
+            # >=2 offset rows each side -> a real refined band (1 row barely refines);
+            # size to the channel width but never below 2 (standard breakline practice).
+            near_repeats = (args.near_repeats if args.near_repeats
+                            else max(2, round(args.channel_width_ft / (2.0 * near))))
             GeomStorage.set_breaklines(geom_text, "DebrisFlowArea", [
                 {"name": d["name"][:32],
                  "coords": list(LineString(d["coords"]).simplify(
@@ -576,6 +586,12 @@ def main() -> int:
                                            all_breaklines=True)
             print(f"[build] breaklines: {len(bl_defs)} centerline(s), near=far={near} ft, "
                   f"near_repeats={near_repeats}, protection_radius=1")
+            # Compile the breaklines (just written to TEXT) INTO the HDF before seeding.
+            # GeomMesh.generate's .NET RegenerateMeshPoints reads breaklines from the HDF,
+            # not the text; without this it seeds "0 breaklines" and near_repeats is ignored
+            # (only Ras.exe enforcement adds a thin 1-row band). With the breaklines in the
+            # HDF it seeds the full near_repeats-wide refined corridor.
+            RasCmdr.compute_plan("01", force_geompre=True, num_cores=2)
             # breakline-aware mesh regeneration (.NET EnforceBreaklines + the 8-tier
             # auto-repair of bad faces); recompile_via_rasexe rebuilds the stale HDF.
             mres = GeomMesh.generate(str(geom_text), mesh_name="DebrisFlowArea",

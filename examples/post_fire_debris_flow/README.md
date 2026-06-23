@@ -83,11 +83,35 @@ resolves the cross-section and removes that artifact.
 # 1. delineate channel centerlines with TauDEM (run where TauDEM is installed; see below)
 python delineate_channels.py --dem ether_hollow_proj/EtherHollow_terrain_ft.tif \
        --domain prep/basin_perimeter_ft.json --out data/ether_hollow/channel_breakline_ft.json \
-       --stream-area-km2 0.04 --simplify-ft 10
+       --stream-area-km2 0.04 --simplify-ft 3
 
 # 2. build with breaklines (HEC-RAS, interactive): refine the mesh along the thalweg
 python ether_hollow_debris_flow.py --phase build --breaklines \
        --channel-width-ft 30 --channel-cell-ft 12 --root . --workdir ether_hollow_proj
+
+# 3. comparison figures (no HEC-RAS): cell outlines over terrain, uniform vs refined
+python mesh_compare_plot.py \
+       --uniform   ether_hollow_uniform/EtherHollow.g01.hdf \
+       --refined   ether_hollow_proj/EtherHollow.g01.hdf \
+       --terrain   ether_hollow_proj/EtherHollow_terrain_ft.tif \
+       --breakline data/ether_hollow/channel_breakline_ft.json
+```
+
+`mesh_compare_plot.py` writes **`mesh_uniform.png`** and **`mesh_refined.png`** — two
+separate figures, each drawing the actual mesh **cell polygons (no fill)** — or cell faces
+with `--faces` — over the feet terrain hillshade via `HdfMesh.get_mesh_cell_polygons`, with
+the channel centerline (red) overlaid in the same coordinate system. (This replaces the old
+single cell-centers scatter, which mixed two coordinate systems in one axes.) Cell counts in
+the titles are the true totals (`Cells Center Coordinate`), not the polygonized subset.
+
+Framing: `--zoom-buffer-ft` crops to the channel corridor (0 = full domain); `--reach-center
+CX CY --reach-half-ft 350` draws a tight square window where individual cells are visible —
+the clearest way to see the 12 ft channel band against the 33 ft base grid. The committed
+notebook figures use a ~700 ft reach window on the main thalweg:
+
+```bash
+python mesh_compare_plot.py --uniform ... --refined ... --terrain ... --breakline ... \
+       --reach-center 1485606 14579723 --reach-half-ft 350
 ```
 
 `delineate_channels.py` runs the TauDEM stream sequence (PitRemove → D8FlowDir → AreaD8 →
@@ -95,12 +119,21 @@ Threshold → StreamNet), clips the centerlines to the 2D domain, simplifies the
 (Douglas-Peucker), and writes `channel_breakline_ft.json`. The build phase then authors them
 via `GeomStorage.set_breaklines` with **near = far** cell spacing (a uniform fine corridor,
 no coarsening) and `GeomMesh.set_breakline_spacing(near_repeats, protection_radius=1)`, sizing
-`near_repeats` to span the channel width; `GeomMesh.generate` enforces the breaklines (the
-.NET `EnforceBreaklines` regen) and repairs bad faces via its auto-fix loop. Verify with
-`HdfBndry.get_breaklines(...)`.
+`near_repeats` (≥ 2 — at least two refined rows each side) to span the channel width;
+`GeomMesh.generate` enforces the breaklines (the .NET `EnforceBreaklines` regen) and repairs
+bad faces via its auto-fix loop. Verify with `HdfBndry.get_breaklines(...)`.
 
-Effect (Ether Hollow, τy = 700 Pa): max depth drops 19.1 → 15.9 ft (the resolved channel),
-peak velocity stable (~17.5 fps), mesh 10,647 → 11,994 cells.
+> **Build order matters.** `GeomMesh.generate`'s seeder reads breaklines from the compiled
+> HDF, not the `.g01` text, so the build compiles the breaklines into the HDF (a
+> `compute_plan(force_geompre=True)`) *before* `generate` — otherwise the seeder sees zero
+> breaklines and `near_repeats` is silently ignored (only Ras.exe enforcement adds a thin
+> 1-row band).
+
+Effect (Ether Hollow, τy = 700 Pa): the channel-aligned refinement drops the spurious max
+depth **19.1 → 13.4 ft** with peak velocity ~stable (~17–18.5 fps), mesh 10,647 → 14,535 cells.
+**Mesh and timestep refine together**: the 12 ft mesh needs a 0.5 s computation interval (the
+33 ft mesh is converged at 1 s) — at 1 s the refined mesh runs Courant ≈ 2 and inflates peak
+velocity to ~25 fps.
 
 **Extra prerequisite for delineation:** **TauDEM 5.x** binaries (`PitRemove`, `D8FlowDir`,
 `AreaD8`, `Threshold`, `StreamNet`) on PATH, and **MS-MPI** (`mpiexec`) for multi-process runs
