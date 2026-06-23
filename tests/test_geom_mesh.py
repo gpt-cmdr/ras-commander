@@ -726,6 +726,64 @@ class TestGeometryHdfAvailability:
         ) == hdf_path
         assert calls == [(breakline_geom_text, hdf_path, ras_object)]
 
+    def test_consistency_flags_text_breaklines_missing_from_hdf(self, tmp_path):
+        # Regression: set_breaklines writes breaklines to the .g01 TEXT, but
+        # RegenerateMeshPoints seeds from the HDF. If the consistency check ignores
+        # breakline geometry, the stale (pre-breakline) HDF is accepted and near_repeats
+        # is silently dropped. The text/HDF breakline-count mismatch must be flagged.
+        geom_text = tmp_path / "bl.g01"
+        geom_text.write_text(
+            "Geom Title=Test\n"
+            "Storage Area=MainArea\n"
+            "Storage Area Point Generation Data=,,50.000000,50.000000\n"
+            "Storage Area 2D Points= 0 \n"
+            "BreakLine Name=Channel\n"
+            "BreakLine CellSize Min=12.000000\n"
+            "BreakLine CellSize Max=12.000000\n"
+            "BreakLine Near Repeats=2\n",
+            encoding="utf-8",
+        )
+        hdf_path = geom_text.with_suffix(geom_text.suffix + ".hdf")
+        # compiled HDF still holds the pre-breakline (uniform) mesh: no breakline group
+        _write_mesh_hdf(
+            hdf_path,
+            [{"name": "MainArea", "spacing_dx": 50.0, "spacing_dy": 50.0, "cell_count": 0}],
+        )
+
+        issues = geom_mesh_module._mesh_hdf_consistency_issues(geom_text, hdf_path)
+        assert any("breakline" in issue.lower() for issue in issues), issues
+        with pytest.raises(RuntimeError, match="text defines 1 breakline"):
+            _ensure_hdf(geom_text)
+
+    def test_consistency_passes_when_breakline_counts_match(self, tmp_path):
+        geom_text = tmp_path / "bl_match.g01"
+        geom_text.write_text(
+            "Geom Title=Test\n"
+            "Storage Area=MainArea\n"
+            "Storage Area Point Generation Data=,,50.000000,50.000000\n"
+            "Storage Area 2D Points= 0 \n"
+            "BreakLine Name=Channel\n"
+            "BreakLine CellSize Min=12.000000\n",
+            encoding="utf-8",
+        )
+        hdf_path = geom_text.with_suffix(geom_text.suffix + ".hdf")
+        _write_mesh_hdf(
+            hdf_path,
+            [{"name": "MainArea", "spacing_dx": 50.0, "spacing_dy": 50.0, "cell_count": 0}],
+        )
+        # add a matching compiled breakline (1) to the HDF
+        with h5py.File(str(hdf_path), "r+") as hf:
+            bl = hf.create_group("Geometry/2D Flow Area Break Lines")
+            bl.create_dataset(
+                "Attributes",
+                data=np.array([(b"Channel",)], dtype=np.dtype([("Name", "S32")])),
+            )
+
+        assert geom_mesh_module._mesh_hdf_consistency_issues(geom_text, hdf_path) == []
+        assert geom_mesh_module._count_breaklines_in_text(geom_text) == 1
+        assert geom_mesh_module._count_breaklines_in_hdf(hdf_path) == 1
+        assert _ensure_hdf(geom_text) == hdf_path
+
 
 class TestGeometryAssociation:
     """Test geometry HDF association API."""

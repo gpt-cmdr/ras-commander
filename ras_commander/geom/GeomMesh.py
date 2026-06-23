@@ -1824,7 +1824,58 @@ def _mesh_hdf_consistency_issues(
                     f"but HDF Spacing {axis}={float(hdf_spacing):g}"
                 )
 
+    # Breakline geometry. HEC-RAS stores breaklines as a flat, global list (not
+    # per-area) in both the .g01 text and the compiled HDF. GeomMesh.generate's .NET
+    # RegenerateMeshPoints seeds the refined corridor from the *HDF* breaklines, so a
+    # text/HDF breakline mismatch -- e.g. set_breaklines just wrote breaklines to the
+    # text but the HDF still holds the pre-breakline mesh -- MUST mark the HDF stale.
+    # Otherwise the seeder sees zero breaklines and silently drops near_repeats
+    # refinement (only Ras.exe enforcement adds a thin 1-row band). The count is global,
+    # so this is reported once rather than per area.
+    text_breaklines = _count_breaklines_in_text(geom_text_path)
+    hdf_breaklines = _count_breaklines_in_hdf(hdf_path)
+    if text_breaklines != hdf_breaklines:
+        issues.append(
+            f"text defines {text_breaklines} breakline(s) "
+            f"but compiled HDF has {hdf_breaklines}"
+        )
+
     return issues
+
+
+def _count_breaklines_in_text(geom_text_path: Path) -> int:
+    """Count 2D-area breaklines defined in geometry text.
+
+    HEC-RAS stores breaklines as a flat list of ``BreakLine Name=`` blocks (not nested
+    under a specific 2D area), so this is a global count.
+    """
+    try:
+        text = Path(geom_text_path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return 0
+    return sum(1 for line in text.splitlines() if line.startswith("BreakLine Name="))
+
+
+def _count_breaklines_in_hdf(hdf_path: Path) -> int:
+    """Count breaklines compiled into the geometry HDF (0 if none).
+
+    Reads ``Geometry/2D Flow Area Break Lines`` (a global group); returns 0 when the
+    group is absent (an uncompiled-breakline / pre-breakline mesh).
+    """
+    import h5py
+
+    try:
+        with h5py.File(str(hdf_path), "r") as hf:
+            group = hf.get("Geometry/2D Flow Area Break Lines")
+            if group is None:
+                return 0
+            attrs = group.get("Attributes")
+            if attrs is not None:
+                return int(attrs.shape[0])
+            info = group.get("Polyline Info")
+            return int(info.shape[0]) if info is not None else 0
+    except (OSError, KeyError, ValueError):
+        return 0
 
 
 def _ensure_hdf(
