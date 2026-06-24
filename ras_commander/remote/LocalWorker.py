@@ -13,7 +13,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .RasWorker import RasWorker
+from .Utils import (
+    clear_worker_plan_hdf_artifacts,
+    copy_geometry_outputs_back,
+    copy_plan_hdf_back,
+)
 from ..LoggingConfig import get_logger
+from ..RasCurrency import RasCurrency
 from ..RasUtils import RasUtils
 
 logger = get_logger(__name__)
@@ -160,6 +166,7 @@ def execute_local_plan(
     Returns:
         bool: True if successful
     """
+    plan_number = RasUtils.normalize_ras_number(plan_number)
     logger.info(f"Starting local execution of plan {plan_number} (sub-worker #{sub_worker_id})")
 
     project_folder = Path(ras_obj.project_folder)
@@ -178,6 +185,10 @@ def execute_local_plan(
         logger.info(f"Copying project to {worker_temp_folder}")
         worker_project_path = worker_temp_folder / project_name
         shutil.copytree(project_folder, worker_project_path, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
+        hdf_file = worker_project_path / RasCurrency.get_plan_hdf_path(plan_number, ras_obj).name
+
+        if force_rerun:
+            clear_worker_plan_hdf_artifacts(worker_project_path, plan_number, ras_obj)
 
         # Step 3: Execute using RasCmdr.compute_plan()
         from ..RasCmdr import RasCmdr
@@ -209,18 +220,31 @@ def execute_local_plan(
             logger.error(f"RasCmdr.compute_plan() returned False for plan {plan_number}")
             return False
 
-        # Step 4: Copy results back (HDF file)
-        hdf_file = worker_project_path / f"{project_name}.p{plan_number}.hdf"
-
         if not hdf_file.exists():
             logger.error(f"HDF file not created: {hdf_file}")
             return False
 
+        if not RasCurrency.check_plan_hdf_complete(hdf_file):
+            logger.error(f"HDF file is incomplete: {hdf_file}")
+            return False
+
         logger.info(f"HDF file created successfully: {hdf_file}")
 
-        dest_hdf = project_folder / hdf_file.name
-        shutil.copy2(hdf_file, dest_hdf)
-        logger.info(f"Copied results to {dest_hdf}")
+        # Step 4: Copy results back (HDF file)
+        if copy_plan_hdf_back(worker_project_path, plan_number, ras_obj) is None:
+            return False
+
+        try:
+            copy_geometry_outputs_back(
+                worker_project_path=worker_project_path,
+                project_folder=project_folder,
+                project_name=project_name,
+                plan_number=plan_number,
+                ras_obj=ras_obj,
+            )
+        except FileNotFoundError as e:
+            logger.error(f"Geometry output copyback failed for plan {plan_number}: {e}")
+            return False
 
         # Also copy any other result files (.computeMsgs.txt, etc.)
         for result_file in worker_project_path.glob(f"{project_name}.p{plan_number}.*"):

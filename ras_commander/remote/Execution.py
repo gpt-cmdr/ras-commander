@@ -16,6 +16,8 @@ from pathlib import Path
 from .RasWorker import RasWorker
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
+from ..RasCurrency import RasCurrency
+from ..RasUtils import RasUtils
 
 logger = get_logger(__name__)
 
@@ -115,6 +117,7 @@ def compute_parallel_remote(
     # Normalize plan_numbers to list
     if isinstance(plan_numbers, str):
         plan_numbers = [plan_numbers]
+    plan_numbers = [RasUtils.normalize_ras_number(plan_number) for plan_number in plan_numbers]
 
     if not plan_numbers:
         logger.warning("No plans to execute")
@@ -239,6 +242,7 @@ def _execute_single_plan(
         ExecutionResult with execution outcome
     """
     start_time = time.time()
+    plan_number = RasUtils.normalize_ras_number(plan_number)
     result = ExecutionResult(
         plan_number=plan_number,
         worker_id=worker.worker_id,
@@ -263,8 +267,7 @@ def _execute_single_plan(
             result.success = success
 
             if success:
-                project_name = ras_object.project_name
-                hdf_file = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.hdf"
+                hdf_file = RasCurrency.get_plan_hdf_path(plan_number, ras_object)
                 if hdf_file.exists():
                     result.hdf_path = str(hdf_file)
 
@@ -284,8 +287,7 @@ def _execute_single_plan(
             result.success = success
 
             if success:
-                project_name = ras_object.project_name
-                hdf_file = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.hdf"
+                hdf_file = RasCurrency.get_plan_hdf_path(plan_number, ras_object)
                 if hdf_file.exists():
                     result.hdf_path = str(hdf_file)
 
@@ -310,7 +312,7 @@ def _execute_single_plan(
 
             if success:
                 project_name = ras_object.project_name
-                hdf_file = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.hdf"
+                hdf_file = RasCurrency.get_plan_hdf_path(plan_number, ras_object)
                 if hdf_file.exists():
                     result.hdf_path = str(hdf_file)
                 else:
