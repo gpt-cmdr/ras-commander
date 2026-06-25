@@ -1602,6 +1602,16 @@ Step 5: Configure (optional — auto-detection usually works)
                 logger.info(
                     f"Moving generated files from {output_dir} to {resolved_output_path}"
                 )
+                def _ext_path(path) -> str:
+                    # Windows extended-length path to bypass the 260-char MAX_PATH
+                    # limit. HEC-RAS stored-map filenames embed full terrain-layer
+                    # names, so destination paths routinely exceed MAX_PATH on
+                    # systems where LongPathsEnabled is not set.
+                    sp = os.path.abspath(str(path))
+                    if os.name == "nt" and not sp.startswith("\\\\?\\"):
+                        sp = "\\\\?\\" + sp
+                    return sp
+
                 moved_count = 0
                 # Move files that were created or modified by this call.
                 for item in output_dir.iterdir():
@@ -1613,9 +1623,10 @@ Step 5: Configure (optional — auto-detection usually works)
                     current_signature = (stat.st_mtime_ns, stat.st_size)
                     if previous_signature != current_signature:
                         dest = resolved_output_path / item.name
-                        if dest.exists():
-                            dest.unlink()
-                        shutil.move(str(item), str(dest))
+                        dest_ext = _ext_path(dest)
+                        if os.path.exists(dest_ext):
+                            os.remove(dest_ext)
+                        shutil.move(_ext_path(item), dest_ext)
                         moved_count += 1
                 logger.info(f"Moved {moved_count} generated file(s) to {resolved_output_path}")
 
