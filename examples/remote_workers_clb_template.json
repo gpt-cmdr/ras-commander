@@ -9,14 +9,14 @@
             "worker_folder": "C:\\RasRemote",
             "username": ".\\***REDACTED***",
             "password": "***REDACTED***",
-            "ras_exe_path": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\Ras.exe",
+            "ras_exe_path": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\7.0\\Ras.exe",
             "session_id": 2,
             "process_priority": "low",
             "queue_priority": 1,
             "cores_total": 6,
             "cores_per_plan": 2,
             "enabled": false,
-            "_note": "CLB02 physical host is 192.168.3.102; the RasRemote Windows VM currently resolves as CLB02/192.168.3.7."
+            "_note": "CLB02 physical Proxmox host is 192.168.3.102; the RasRemote Windows VM is WIN11-HECRAS/192.168.3.7."
         },
         {
             "name": "CLB04 (3 workers x 2 cores)",
@@ -26,14 +26,14 @@
             "worker_folder": "C:\\RasRemote",
             "username": ".\\***REDACTED***",
             "password": "***REDACTED***",
-            "ras_exe_path": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\Ras.exe",
+            "ras_exe_path": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\7.0\\Ras.exe",
             "session_id": 4,
             "process_priority": "low",
             "queue_priority": 1,
             "cores_total": 6,
             "cores_per_plan": 2,
             "enabled": false,
-            "_note": "Session 4 was the ajith user session observed on 2026-06-23."
+            "_note": "Verify the current logged-in desktop session with: query session /server:192.168.3.104."
         },
         {
             "name": "CLB06 (2 workers x 2 cores)",
@@ -43,31 +43,31 @@
             "worker_folder": "C:\\RasRemote",
             "username": ".\\***REDACTED***",
             "password": "***REDACTED***",
-            "ras_exe_path": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\Ras.exe",
+            "ras_exe_path": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\7.0\\Ras.exe",
             "session_id": 2,
             "process_priority": "low",
             "queue_priority": 1,
             "cores_total": 4,
             "cores_per_plan": 2,
             "enabled": false,
-            "_note": "Session 2 was the active mallory RDP session observed on 2026-06-23."
+            "_note": "Verify the current logged-in desktop session with: query session /server:192.168.3.106."
         },
         {
-            "name": "CLB10 (disabled until Windows RasRemote endpoint is available)",
+            "name": "CLB10 CLB-JACOB VM (2 workers x 2 cores)",
             "worker_type": "psexec",
-            "hostname": "192.168.3.110",
-            "share_path": "\\\\192.168.3.110\\RasRemote",
+            "hostname": "192.168.3.154",
+            "share_path": "\\\\192.168.3.154\\RasRemote",
             "worker_folder": "C:\\RasRemote",
             "username": ".\\***REDACTED***",
             "password": "***REDACTED***",
-            "ras_exe_path": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\6.6\\Ras.exe",
+            "ras_exe_path": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\7.0\\Ras.exe",
             "session_id": 2,
             "process_priority": "low",
             "queue_priority": 1,
-            "cores_total": 6,
+            "cores_total": 4,
             "cores_per_plan": 2,
             "enabled": false,
-            "_note": "192.168.3.110 responded to ping/SSH but did not expose SMB/RPC/RasRemote during the 2026-06-23 check."
+            "_note": "CLB10 physical Proxmox host is 192.168.3.110; the RasRemote endpoint is CLB-JACOB VMID 154 at 192.168.3.154. Enable only after credentials, session, SMB, PsExec, and HEC-RAS 7.0 are verified."
         }
     ],
     "_comments": {
@@ -75,6 +75,6 @@
         "queue_priority": "Lower values execute first; use 1 for the CLB RasRemote fleet",
         "cores_total_6": "6 cores / 2 per plan = 3 parallel plans per machine",
         "session_id": "Verify with: query session /server:HOSTNAME -- use the ID shown for the logged-in user session",
-        "clb10": "Enable only after a Windows runner exposes \\\\HOST\\RasRemote and PsExec/RPC access"
+        "clb10": "Use the CLB-JACOB Windows VM at 192.168.3.154, not the CLB10 Proxmox host at 192.168.3.110."
     }
 }
