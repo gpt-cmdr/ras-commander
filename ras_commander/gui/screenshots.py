@@ -9,8 +9,10 @@ Re-exports the RasScreenshot class unchanged.
 # The original RasScreenshot.py will become a shim that imports from here.
 # For now, during migration, we define the class here and the shim imports from us.
 
-import time
+import ctypes
 import re
+import time
+from ctypes import wintypes
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Tuple, Dict, Any
@@ -41,6 +43,7 @@ from ..Decorators import log_call
 logger = get_logger(__name__)
 
 DEFAULT_SCREENSHOT_FOLDER = Path(".claude/outputs/win32com-automation-expert/screenshots")
+DWMWA_EXTENDED_FRAME_BOUNDS = 9
 
 
 class RasScreenshot:
@@ -48,7 +51,8 @@ class RasScreenshot:
     Static class for capturing HEC-RAS window screenshots.
 
     Uses Win32 Device Context (DC) and BitBlt to capture window pixels
-    directly. Screenshots capture only the target window (not full screen).
+    directly. Screenshots capture only the target window frame, not extra
+    desktop pixels around it.
 
     All methods are static and use the @log_call decorator.
     """
@@ -63,12 +67,135 @@ class RasScreenshot:
         return True, "All dependencies available"
 
     @staticmethod
+    def _get_dwm_extended_frame_bounds(hwnd: int) -> Optional[Tuple[int, int, int, int]]:
+        """Return visible DWM frame bounds for a window, if Windows exposes them."""
+        try:
+            rect = wintypes.RECT()
+            result = ctypes.windll.dwmapi.DwmGetWindowAttribute(
+                int(hwnd),
+                DWMWA_EXTENDED_FRAME_BOUNDS,
+                ctypes.byref(rect),
+                ctypes.sizeof(rect),
+            )
+        except Exception as exc:
+            logger.debug(f"DWM frame bounds unavailable for HWND {hwnd}: {exc}")
+            return None
+
+        if result != 0:
+            logger.debug(f"DWM frame bounds failed for HWND {hwnd}: HRESULT {result}")
+            return None
+
+        return int(rect.left), int(rect.top), int(rect.right), int(rect.bottom)
+
+    @staticmethod
+    def _visible_frame_crop_box(
+        window_rect: Tuple[int, int, int, int],
+        visible_frame_rect: Optional[Tuple[int, int, int, int]],
+        image_size: Tuple[int, int],
+    ) -> Optional[Tuple[int, int, int, int]]:
+        """Translate screen-space visible frame bounds into an image crop box."""
+        if visible_frame_rect is None:
+            return None
+
+        left, top, right, bottom = window_rect
+        width, height = image_size
+        visible_left, visible_top, visible_right, visible_bottom = visible_frame_rect
+
+        if width <= 0 or height <= 0 or right <= left or bottom <= top:
+            return None
+
+        crop_left = max(0, min(width, visible_left - left))
+        crop_top = max(0, min(height, visible_top - top))
+        crop_right = max(0, min(width, visible_right - left))
+        crop_bottom = max(0, min(height, visible_bottom - top))
+
+        if crop_right <= crop_left or crop_bottom <= crop_top:
+            return None
+
+        crop_width = crop_right - crop_left
+        crop_height = crop_bottom - crop_top
+        if crop_width < width * 0.5 or crop_height < height * 0.5:
+            logger.debug(
+                "Ignoring implausible visible-frame crop "
+                f"{(crop_left, crop_top, crop_right, crop_bottom)} "
+                f"for image size {(width, height)}"
+            )
+            return None
+
+        crop_box = crop_left, crop_top, crop_right, crop_bottom
+        if crop_box == (0, 0, width, height):
+            return None
+
+        return crop_box
+
+    @staticmethod
+    def _bring_window_to_front(hwnd: int) -> bool:
+        """Best-effort foreground request before a visible-frame screen capture."""
+        try:
+            win32gui.BringWindowToTop(hwnd)
+            win32gui.SetForegroundWindow(hwnd)
+        except Exception as exc:
+            logger.debug(f"Could not bring HWND {hwnd} to foreground: {exc}")
+        time.sleep(0.1)
+        try:
+            return win32gui.GetForegroundWindow() == hwnd
+        except Exception as exc:
+            logger.debug(f"Could not verify foreground HWND {hwnd}: {exc}")
+            return False
+
+    @staticmethod
+    def _capture_screen_rect(rect: Tuple[int, int, int, int]):
+        """Capture a screen-space rectangle into a Pillow image."""
+        left, top, right, bottom = rect
+        width = right - left
+        height = bottom - top
+        if width <= 0 or height <= 0:
+            return None
+
+        screen_dc = None
+        mfc_dc = None
+        save_dc = None
+        bitmap = None
+        try:
+            screen_dc = win32gui.GetDC(0)
+            mfc_dc = win32ui.CreateDCFromHandle(screen_dc)
+            save_dc = mfc_dc.CreateCompatibleDC()
+
+            bitmap = win32ui.CreateBitmap()
+            bitmap.CreateCompatibleBitmap(mfc_dc, width, height)
+            save_dc.SelectObject(bitmap)
+
+            raster_op = win32con.SRCCOPY | getattr(win32con, "CAPTUREBLT", 0)
+            save_dc.BitBlt((0, 0), (width, height), mfc_dc, (left, top), raster_op)
+
+            bmpinfo = bitmap.GetInfo()
+            bmpstr = bitmap.GetBitmapBits(True)
+            return Image.frombuffer(
+                'RGB',
+                (bmpinfo['bmWidth'], bmpinfo['bmHeight']),
+                bmpstr, 'raw', 'BGRX', 0, 1
+            )
+        except Exception as exc:
+            logger.debug(f"Screen rectangle capture failed for {rect}: {exc}")
+            return None
+        finally:
+            if bitmap is not None:
+                win32gui.DeleteObject(bitmap.GetHandle())
+            if save_dc is not None:
+                save_dc.DeleteDC()
+            if mfc_dc is not None:
+                mfc_dc.DeleteDC()
+            if screen_dc is not None:
+                win32gui.ReleaseDC(0, screen_dc)
+
+    @staticmethod
     @log_call
     def capture_window(
         hwnd: int,
         output_path: Optional[Path] = None,
         include_timestamp: bool = True,
-        restore_if_minimized: bool = True
+        restore_if_minimized: bool = True,
+        crop_to_visible_frame: bool = True,
     ) -> Optional[Path]:
         """Capture a screenshot of a specific window by handle."""
         available, msg = RasScreenshot._check_dependencies()
@@ -97,29 +224,67 @@ class RasScreenshot:
                 logger.warning(f"Invalid window dimensions: {width}x{height}")
                 return None
 
-            hwnd_dc = win32gui.GetWindowDC(hwnd)
-            mfc_dc = win32ui.CreateDCFromHandle(hwnd_dc)
-            save_dc = mfc_dc.CreateCompatibleDC()
-
-            bitmap = win32ui.CreateBitmap()
-            bitmap.CreateCompatibleBitmap(mfc_dc, width, height)
-            save_dc.SelectObject(bitmap)
-
-            save_dc.BitBlt((0, 0), (width, height), mfc_dc, (0, 0), win32con.SRCCOPY)
-
-            bmpinfo = bitmap.GetInfo()
-            bmpstr = bitmap.GetBitmapBits(True)
-
-            image = Image.frombuffer(
-                'RGB',
-                (bmpinfo['bmWidth'], bmpinfo['bmHeight']),
-                bmpstr, 'raw', 'BGRX', 0, 1
+            visible_frame_rect = (
+                RasScreenshot._get_dwm_extended_frame_bounds(hwnd)
+                if crop_to_visible_frame
+                else None
             )
+            image = None
+            captured_visible_frame = False
+            if visible_frame_rect is not None:
+                if RasScreenshot._bring_window_to_front(hwnd):
+                    image = RasScreenshot._capture_screen_rect(visible_frame_rect)
+                    captured_visible_frame = image is not None
 
-            win32gui.DeleteObject(bitmap.GetHandle())
-            save_dc.DeleteDC()
-            mfc_dc.DeleteDC()
-            win32gui.ReleaseDC(hwnd, hwnd_dc)
+            if image is None:
+                hwnd_dc = None
+                mfc_dc = None
+                save_dc = None
+                bitmap = None
+                try:
+                    hwnd_dc = win32gui.GetWindowDC(hwnd)
+                    mfc_dc = win32ui.CreateDCFromHandle(hwnd_dc)
+                    save_dc = mfc_dc.CreateCompatibleDC()
+
+                    bitmap = win32ui.CreateBitmap()
+                    bitmap.CreateCompatibleBitmap(mfc_dc, width, height)
+                    save_dc.SelectObject(bitmap)
+
+                    save_dc.BitBlt((0, 0), (width, height), mfc_dc, (0, 0), win32con.SRCCOPY)
+
+                    bmpinfo = bitmap.GetInfo()
+                    bmpstr = bitmap.GetBitmapBits(True)
+
+                    image = Image.frombuffer(
+                        'RGB',
+                        (bmpinfo['bmWidth'], bmpinfo['bmHeight']),
+                        bmpstr, 'raw', 'BGRX', 0, 1
+                    )
+                finally:
+                    if bitmap is not None:
+                        win32gui.DeleteObject(bitmap.GetHandle())
+                    if save_dc is not None:
+                        save_dc.DeleteDC()
+                    if mfc_dc is not None:
+                        mfc_dc.DeleteDC()
+                    if hwnd_dc is not None:
+                        win32gui.ReleaseDC(hwnd, hwnd_dc)
+
+            if (
+                crop_to_visible_frame
+                and visible_frame_rect is not None
+                and not captured_visible_frame
+            ):
+                crop_box = RasScreenshot._visible_frame_crop_box(
+                    (left, top, right, bottom),
+                    visible_frame_rect,
+                    image.size,
+                )
+                if crop_box is not None:
+                    logger.debug(
+                        f"Cropping screenshot to visible frame: {crop_box}"
+                    )
+                    image = image.crop(crop_box)
 
             if output_path is None:
                 output_path = RasScreenshot._generate_screenshot_path(
