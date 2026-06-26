@@ -425,3 +425,57 @@ def test_flood_animation_accepts_stored_map_rasters(tmp_path):
     assert output.exists()
     assert output.stat().st_size > 0
     assert raster_stack.attrs["crs"] == "EPSG:2871"
+
+
+def test_load_raster_stack_reconciles_mixed_stored_map_grids(tmp_path):
+    rasterio = pytest.importorskip("rasterio")
+
+    from rasterio.transform import from_origin
+
+    first = tmp_path / "Depth (01JAN2024 00 00 00).terrain-a.tif"
+    with rasterio.open(
+        first,
+        "w",
+        driver="GTiff",
+        height=2,
+        width=2,
+        count=1,
+        dtype="float32",
+        crs="EPSG:2871",
+        transform=from_origin(0, 20, 10, 10),
+        nodata=-9999,
+    ) as dst:
+        dst.write(np.array([[1.0, 2.0], [3.0, -9999.0]], dtype="float32"), 1)
+
+    second = tmp_path / "Depth (01JAN2024 00 05 00).terrain-b.tif"
+    with rasterio.open(
+        second,
+        "w",
+        driver="GTiff",
+        height=1,
+        width=3,
+        count=1,
+        dtype="float32",
+        crs="EPSG:2871",
+        transform=from_origin(10, 30, 10, 10),
+        nodata=-9999,
+    ) as dst:
+        dst.write(np.array([[4.0, 5.0, 6.0]], dtype="float32"), 1)
+
+    raster_stack = PrecipMrms._load_raster_stack(
+        [first, second],
+        times=pd.date_range("2024-01-01", periods=2, freq="5min"),
+        name="depth",
+        units="ft",
+    )
+
+    assert raster_stack.shape == (2, 3, 4)
+    assert raster_stack.attrs["crs"] == "EPSG:2871"
+    np.testing.assert_allclose(raster_stack.coords["x"].values, [5.0, 15.0, 25.0, 35.0])
+    np.testing.assert_allclose(raster_stack.coords["y"].values, [25.0, 15.0, 5.0])
+
+    first_frame = raster_stack.isel(time=0).values
+    second_frame = raster_stack.isel(time=1).values
+    np.testing.assert_allclose(first_frame[1:, :2], [[1.0, 2.0], [3.0, np.nan]], equal_nan=True)
+    np.testing.assert_allclose(second_frame[0, 1:], [4.0, 5.0, 6.0])
+    assert np.isnan(second_frame[1:, :]).all()
