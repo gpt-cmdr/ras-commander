@@ -751,12 +751,21 @@ class PrecipMrms:
         dpi: int = 150,
         cmap: str = "Blues",
         title: str = "HEC-RAS Flood Inundation",
+        cell_size: Optional[float] = None,
+        resampling: str = "nearest",
     ) -> Path:
         """
         Generate a flood animation from stored-map depth rasters.
 
         This is the raster-video companion for
         ``RasProcess.store_maps_at_timesteps()`` outputs.
+
+        Stored-map result rasters are clipped per timestep to the wet extent, so
+        frames can differ in shape; they are reconciled onto a common grid before
+        animating. ``cell_size`` sets that grid's resolution (map units); when
+        ``None`` the resolution of the largest-coverage raster is used (so a small
+        fine inset such as 1-ft channel bathymetry does not force a huge grid).
+        ``resampling`` is the rasterio resampling method used for reconciliation.
         """
         flood = PrecipMrms._load_raster_stack(
             raster_files,
@@ -764,6 +773,8 @@ class PrecipMrms:
             max_frames=max_frames,
             name="flood_inundation",
             units=units,
+            cell_size=cell_size,
+            resampling=resampling,
         )
         return PrecipMrms._animate_grid_stack(
             data=flood,
@@ -807,6 +818,8 @@ class PrecipMrms:
         mesh_name: Optional[str] = None,
         flood_variable: str = "Depth",
         max_frames: Optional[int] = 24,
+        cell_size: Optional[float] = None,
+        resampling: str = "nearest",
     ) -> Path:
         """
         Generate a synchronized split-screen precipitation and flood animation.
@@ -860,6 +873,8 @@ class PrecipMrms:
                 max_frames=max_frames,
                 name="flood_inundation",
                 units="ft",
+                cell_size=cell_size,
+                resampling=resampling,
             )
         else:
             flood = PrecipMrms._coerce_grid_data(
@@ -1766,6 +1781,8 @@ class PrecipMrms:
         max_frames: Optional[int] = None,
         name: str = "raster",
         units: str = "",
+        cell_size: Optional[float] = None,
+        resampling: str = "nearest",
     ) -> Any:
         try:
             import rasterio
@@ -1783,26 +1800,102 @@ class PrecipMrms:
         if not raster_paths:
             raise ValueError("raster_files must contain at least one raster")
 
-        frames = []
-        x_coords = None
-        y_coords = None
-        crs = None
+        # Collect grid metadata in one pass. HEC-RAS stored-map result rasters
+        # are clipped per timestep to the wet/inundation extent, so consecutive
+        # frames for the same plan can differ in shape; reconcile them onto a
+        # common grid before stacking instead of assuming a single grid.
+        metas = []
         for raster_path in raster_paths:
             if not raster_path.exists():
                 raise FileNotFoundError(f"Raster file not found: {raster_path}")
             with rasterio.open(raster_path) as src:
+                metas.append(
+                    {
+                        "path": raster_path,
+                        "shape": (src.height, src.width),
+                        "transform": src.transform,
+                        "crs": src.crs,
+                        "bounds": src.bounds,
+                        "nodata": src.nodata,
+                        "res": (abs(src.transform.a), abs(src.transform.e)),
+                    }
+                )
+
+        crs = next((m["crs"].to_string() for m in metas if m["crs"] is not None), None)
+
+        def _read_frame(meta):
+            with rasterio.open(meta["path"]) as src:
                 data = src.read(1).astype(float)
-                if crs is None and src.crs is not None:
-                    crs = src.crs.to_string()
-                if src.nodata is not None:
-                    data[data == src.nodata] = np.nan
-                if x_coords is None or y_coords is None:
-                    rows, cols = data.shape
-                    xs = np.arange(cols) + 0.5
-                    ys = np.arange(rows) + 0.5
-                    x_coords = src.transform.c + xs * src.transform.a
-                    y_coords = src.transform.f + ys * src.transform.e
-                frames.append(data)
+            if meta["nodata"] is not None:
+                data[data == meta["nodata"]] = np.nan
+            return data
+
+        uniform = (
+            len({m["shape"] for m in metas}) == 1
+            and len({m["transform"] for m in metas}) == 1
+        )
+
+        uniform = uniform and cell_size is None
+
+        if uniform:
+            frames = [_read_frame(m) for m in metas]
+            ref_transform = metas[0]["transform"]
+            rows, cols = metas[0]["shape"]
+        else:
+            # Reconcile onto a common grid: the union of all extents at a chosen
+            # resolution, then resample each frame onto it.
+            from rasterio.transform import from_origin
+            from rasterio.warp import Resampling, reproject
+
+            if cell_size is not None:
+                xres = yres = float(cell_size)
+            else:
+                # Default grid resolution follows the raster with the largest
+                # effective coverage (bounds area); input order breaks ties
+                # (earlier wins). This prevents a small, very fine inset (e.g.
+                # 1-ft channel bathymetry) from forcing a huge full-extent grid.
+                def _coverage(meta):
+                    b = meta["bounds"]
+                    return (b.right - b.left) * (b.top - b.bottom)
+
+                base = max(metas, key=_coverage)
+                xres, yres = base["res"]
+
+            try:
+                resamp = Resampling[resampling]
+            except KeyError:
+                resamp = getattr(Resampling, str(resampling), Resampling.nearest)
+
+            left = min(m["bounds"].left for m in metas)
+            bottom = min(m["bounds"].bottom for m in metas)
+            right = max(m["bounds"].right for m in metas)
+            top = max(m["bounds"].top for m in metas)
+            cols = max(1, int(np.ceil((right - left) / xres)))
+            rows = max(1, int(np.ceil((top - bottom) / yres)))
+            ref_transform = from_origin(left, top, xres, yres)
+            target_crs = next((m["crs"] for m in metas if m["crs"] is not None), None)
+
+            frames = []
+            for m in metas:
+                dst = np.full((rows, cols), np.nan, dtype=float)
+                with rasterio.open(m["path"]) as src:
+                    reproject(
+                        source=src.read(1).astype(float),
+                        destination=dst,
+                        src_transform=src.transform,
+                        src_crs=src.crs or target_crs,
+                        dst_transform=ref_transform,
+                        dst_crs=target_crs,
+                        src_nodata=m["nodata"],
+                        dst_nodata=np.nan,
+                        resampling=resamp,
+                    )
+                frames.append(dst)
+
+        xs = np.arange(cols) + 0.5
+        ys = np.arange(rows) + 0.5
+        x_coords = ref_transform.c + xs * ref_transform.a
+        y_coords = ref_transform.f + ys * ref_transform.e
 
         values = np.stack(frames, axis=0)
 
