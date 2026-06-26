@@ -1800,6 +1800,17 @@ class PrecipMrms:
         if not raster_paths:
             raise ValueError("raster_files must contain at least one raster")
 
+        # Bound peak memory: subsample frames up front (before any raster is
+        # read/reconciled) so the stack never holds more than max_frames frames.
+        if times is not None:
+            times = list(times)
+        if max_frames is not None and len(raster_paths) > int(max_frames):
+            n_full = len(raster_paths)
+            sel = np.linspace(0, n_full - 1, int(max_frames), dtype=int)
+            raster_paths = [raster_paths[i] for i in sel]
+            if times is not None and len(times) == n_full:
+                times = [times[i] for i in sel]
+
         # Collect grid metadata in one pass. HEC-RAS stored-map result rasters
         # are clipped per timestep to the wet/inundation extent, so consecutive
         # frames for the same plan can differ in shape; reconcile them onto a
