@@ -169,18 +169,22 @@ def update_mkdocs_config(mkdocs_path: Path, examples_dir: Path) -> None:
     # This handles both simple and complex plugin configs
     lines = content.split('\n')
     new_lines = []
-    skip_until_next_plugin = False
     in_jupyter_plugin = False
+    disabled_jupyter_line = "  # DISABLED for pre-rendered notebooks: - mkdocs-jupyter:"
 
     for i, line in enumerate(lines):
         # Detect start of mkdocs-jupyter plugin config
         if 'mkdocs-jupyter' in line:
+            if line.strip().startswith('#') and 'DISABLED for pre-rendered notebooks' in line:
+                new_lines.append(disabled_jupyter_line)
+                in_jupyter_plugin = False
+                continue
             if ':' in line:  # Complex config like "  - mkdocs-jupyter:"
                 in_jupyter_plugin = True
-                new_lines.append(f"  # DISABLED for pre-rendered notebooks: {line.strip()}")
+                new_lines.append(disabled_jupyter_line)
                 continue
             else:  # Simple config like "  - mkdocs-jupyter"
-                new_lines.append(f"  # DISABLED for pre-rendered notebooks: {line.strip()}")
+                new_lines.append("  # DISABLED for pre-rendered notebooks: - mkdocs-jupyter")
                 continue
 
         # Skip indented lines that are part of jupyter plugin config

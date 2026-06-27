@@ -1745,19 +1745,29 @@ class RasCalibrate:
         num_cores: int = 2,
         force_geompre: bool = False,
         ras_object: Any = None,
+        *,
+        max_plans_per_batch: int = 99,
+        clone_geom: bool = False,
+        clear_geompre: bool = False,
+        timeout_sec: Optional[int] = None,
+        workers: Optional[List[Any]] = None,
     ) -> pd.DataFrame:
         """
         Run a calibration grid search on top of RasPermutation.
+
+        When ``workers`` is provided, generated calibration plans are
+        distributed with ``compute_parallel_remote()`` through
+        ``RasPermutation.execute_and_summarize()``. When ``workers`` is not
+        provided, execution uses local ``RasCmdr.compute_parallel()`` with
+        ``max_workers``.
+
+        Use ``clone_geom=True`` for geometry-mutating apply functions, such as
+        Manning's n or infiltration calibration. Use ``clear_geompre=True`` or
+        ``force_geompre=True`` when edited geometry inputs require HEC-RAS to
+        rebuild cached geometry/preprocessor artifacts.
         """
         metric_name = _normalize_metric(metric)
         points = _coerce_calibration_points(calibration_points)
-
-        if force_geompre:
-            logger.warning(
-                "grid_search(force_geompre=True) was requested, but "
-                "RasPermutation.execute_and_summarize() does not currently "
-                "expose force_geompre to RasCmdr.compute_parallel()."
-            )
 
         params_df = RasPermutation.define_parameters(parameters)
         plan_matrix = RasPermutation.generate_plans(
@@ -1765,6 +1775,8 @@ class RasCalibrate:
             params_df,
             apply_fn,
             suffix=suffix,
+            max_plans_per_batch=max_plans_per_batch,
+            clone_geom=clone_geom,
             ras_object=ras_object,
         )
         results_df = RasPermutation.execute_and_summarize(
@@ -1772,6 +1784,10 @@ class RasCalibrate:
             max_workers=max_workers,
             num_cores=num_cores,
             ras_object=ras_object,
+            timeout_sec=timeout_sec,
+            clear_geompre=clear_geompre,
+            force_geompre=force_geompre,
+            workers=workers,
         )
 
         augmented_rows: List[dict] = []
