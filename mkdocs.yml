@@ -98,6 +98,9 @@ plugins:
       enable_creation_date: true
       enable_git_follow: false
       type: date
+  - redirects:
+      redirect_maps:
+        notebooks/610_fluvial_pluvial_delineation.md: notebooks/610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.md
 
 markdown_extensions:
   - pymdownx.highlight:

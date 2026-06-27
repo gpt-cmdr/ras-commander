@@ -36,6 +36,43 @@ BUCKET_LABELS = {
     900: "Data Integration & Forecasting",
 }
 
+AORC_AND_PRECIP = {
+    "900_aorc_precipitation",
+    "901_aorc_precipitation_catalog",
+}
+
+GAUGE_AND_VALIDATION = {
+    "910_usgs_gauge_catalog",
+    "911_usgs_gauge_data_integration",
+    "911a_usgs_study_package_from_primitives",
+    "912_usgs_real_time_monitoring",
+    "913_bc_generation_from_live_gauge",
+    "914_historical_event_validation",
+    "918_model_validation_with_usgs",
+    "921_usgs_study_package_from_primitives",
+    "922_model_validation_with_usgs",
+}
+
+OPERATIONAL_FORECAST_SEQUENCE = {
+    "915_realtime_forecast_workflow",
+    "918_hms_ras_coupled_forecast",
+    "919_operational_forecast_cycling",
+}
+
+FORECAST_INPUTS = {
+    "916_hrrr_precipitation_forecast",
+    "917_mrms_precipitation_qpe",
+    "919_stofs3d_coastal_boundary",
+    "923_stofs3d_coastal_boundary",
+    "924_mrms_netcdf_rain_on_grid",
+}
+
+TERRAIN_AND_SURFACES = {
+    "920_terrain_creation",
+    "925_xs_interpolation_surface",
+    "930_terrain_modification_analysis",
+}
+
 
 def load_notebook(notebook_path: Path) -> Optional[dict]:
     """Parse a notebook JSON, or return ``None`` if it can't be read."""
@@ -105,6 +142,20 @@ def section_for(name: str) -> Tuple[int, str]:
     if not m:
         return (10_000, "Other")
     n = int(m.group(1))
+    if name in AORC_AND_PRECIP:
+        return (900, "900s - AORC & Gridded Precipitation")
+    if name in GAUGE_AND_VALIDATION:
+        return (910, "910s - Gauge Data & Validation")
+    if name in OPERATIONAL_FORECAST_SEQUENCE:
+        return (915, "915s - Operational Forecast Sequence")
+    if name in FORECAST_INPUTS:
+        return (916, "916s - Forecast Inputs")
+    if name in TERRAIN_AND_SURFACES:
+        return (920, "920s - Terrain & Surfaces")
+    if 950 <= n < 960:
+        return (950, "950s - eBFE Delivery")
+    if 960 <= n < 970:
+        return (960, "960s - Cloud-Native Export")
     bucket = (n // 100) * 100
     desc = BUCKET_LABELS.get(bucket)
     label = f"{bucket}s - {desc}" if desc else f"{bucket}s"

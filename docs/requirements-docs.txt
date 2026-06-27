@@ -13,6 +13,9 @@ mkdocstrings[python]>=0.24.0
 # Git revision dates
 mkdocs-git-revision-date-localized-plugin>=1.2.0
 
+# Preserve published notebook URLs when example filenames are improved
+mkdocs-redirects>=1.2.0
+
 # llms.txt / llms-full.txt + per-page markdown mirrors for LLM agents
 mkdocs-llmstxt>=0.2
 
