@@ -50,7 +50,7 @@ Live public paths:
 
 | Resource | Link |
 |----------|------|
-| GeoLibre review | [Open Muncie in GeoLibre](https://web.geolibre.app/?url=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fmuncie-muncie-rerun-7-0-20260628-193916-4120d261%2Fgeolibre%2Fproject.geolibre.json%3Fv%3D20260702T192022Z&layout=compact) |
+| GeoLibre review | [Open Muncie in GeoLibre](https://web.geolibre.app/?url=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fmuncie-muncie-rerun-7-0-20260628-193916-4120d261%2Fgeolibre%2Fproject.geolibre.json%3Fv%3D20260702T193406Z&layout=compact) |
 | Project catalog | [catalog.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/catalog.json) |
 | Project manifest | [project.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/project.json) |
 | GeoLibre manifest | [project.geolibre.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/geolibre/project.geolibre.json) |
