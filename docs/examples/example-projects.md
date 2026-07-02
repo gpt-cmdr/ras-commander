@@ -40,6 +40,9 @@ The generated Muncie bundle currently includes:
 - two terrain COGs at 5 ft native resolution: `Terrain` and
   `TerrainWithChannel`
 - result tables for plans `p03` and `p04`
+- GeoLibre layer groups matching the RAS Mapper review pattern: `Results`,
+  `Geometries`, and `Terrains`
+- terrain and result layers disabled by default for initial map load
 - Hilbert sorting and `join_index` metadata for geometry/result joins
 - no local path leaks in the published project manifest
 
@@ -47,7 +50,7 @@ Live public paths:
 
 | Resource | Link |
 |----------|------|
-| GeoLibre review | [Open Muncie in GeoLibre](https://viewer.geolibre.app/?url=https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/geolibre/project.geolibre.json&layout=compact) |
+| GeoLibre review | [Open Muncie in GeoLibre](https://viewer.geolibre.app/?url=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fmuncie-muncie-rerun-7-0-20260628-193916-4120d261%2Fgeolibre%2Fproject.geolibre.json%3Fv%3D20260702T153607Z&layout=compact) |
 | Project catalog | [catalog.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/catalog.json) |
 | Project manifest | [project.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/project.json) |
 | GeoLibre manifest | [project.geolibre.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/geolibre/project.geolibre.json) |
@@ -88,8 +91,11 @@ patterns for HEC-RAS projects.
   attributes.
 - PMTiles should be generated for large or commonly reviewed vector layers.
 - COGs should be used for terrain and raster result surfaces.
-- Large geometry and result layers should default to off in GeoLibre.
-- Project overview layers, terrain, and small geometry layers can default on.
+- Layers should be grouped for review as `Results`, `Geometries`, and
+  `Terrains`.
+- Terrain and result layers should default to off in GeoLibre.
+- Small geometry or overview layers can default on when they make the first map
+  load useful without creating a heavy browser request.
 - Result tables should use `join_index` metadata to avoid duplicating geometry.
 - Terrain should not be upsampled. If a source terrain is coarser than 10 ft,
   publish at the smallest native resolution instead of forcing a finer grid.
