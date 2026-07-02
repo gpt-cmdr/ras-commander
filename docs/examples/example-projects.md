@@ -45,17 +45,17 @@ The generated Muncie bundle currently includes:
 
 Live public paths:
 
-```text
-/data/rasexamples/hec-ras-7.0/catalog.json
-/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/project.json
-/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/geolibre/project.geolibre.json
-```
+| Resource | Link |
+|----------|------|
+| GeoLibre review | [Open Muncie in GeoLibre](https://viewer.geolibre.app/?url=https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/geolibre/project.geolibre.json&layout=compact) |
+| Project catalog | [catalog.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/catalog.json) |
+| Project manifest | [project.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/project.json) |
+| GeoLibre manifest | [project.geolibre.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/geolibre/project.geolibre.json) |
+| Terrain COG | [terrain.cog.tif](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/terrain/terrain.cog.tif) |
+| Terrain with channel COG | [terrainwithchannel.cog.tif](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/terrain/terrainwithchannel.cog.tif) |
 
-Live GeoLibre review URL:
-
-```text
-https://viewer.geolibre.app/?url=https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/geolibre/project.geolibre.json&layout=compact
-```
+The GeoLibre review link loads the hosted `project.geolibre.json` directly from
+the RAS Commander WebGIS artifact service.
 
 ## WebGIS Publishing Model
 
