@@ -2,8 +2,8 @@
 
 !!! warning "Under construction"
     This is the landing page for the GeoLibre-based Example Project Library.
-    The first pilot is Muncie. Links to live GeoLibre review files will be
-    enabled after the WebGIS artifact server is published and validated.
+    The first pilot, Muncie, is published through the RAS Commander WebGIS
+    artifact service. The broader project explorer is still being assembled.
 
 RAS Commander uses repeatable HEC-RAS project fixtures for examples, tests,
 documentation, and regression checks. The library combines several source
@@ -30,7 +30,7 @@ resolved.
 
 | Project | Source | CRS | WebGIS status |
 |---------|--------|-----|---------------|
-| Muncie | HEC tutorial/example project | `EPSG:2965` | Generated locally; WebGIS publication pending |
+| Muncie | HEC tutorial/example project | `EPSG:2965` | Published via WebGIS |
 
 The generated Muncie bundle currently includes:
 
@@ -43,7 +43,7 @@ The generated Muncie bundle currently includes:
 - Hilbert sorting and `join_index` metadata for geometry/result joins
 - no local path leaks in the published project manifest
 
-Expected public paths after WebGIS publication:
+Live public paths:
 
 ```text
 /data/rasexamples/hec-ras-7.0/catalog.json
@@ -51,7 +51,7 @@ Expected public paths after WebGIS publication:
 /data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/geolibre/project.geolibre.json
 ```
 
-Expected GeoLibre review URL after publication:
+Live GeoLibre review URL:
 
 ```text
 https://viewer.geolibre.app/?url=https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/geolibre/project.geolibre.json&layout=compact
@@ -76,8 +76,8 @@ The public artifact namespace is:
 ```
 
 That namespace is served by a dedicated RAS Commander WebGIS artifact service.
-The docs page can link to the same paths through `rascommander.info` once
-routing is in place.
+The docs page links to those paths through `rascommander.info`; the docs origin
+reverse-proxies `/data/*` to the isolated WebGIS service.
 
 ## Performance Policy
 
