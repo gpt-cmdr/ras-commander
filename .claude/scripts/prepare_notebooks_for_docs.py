@@ -106,7 +106,11 @@ def build_notebook_nav(examples_dir: Path) -> str:
 
     section_order.sort(key=lambda k: k[0])
 
-    lines = ["  - Example Notebooks:", "    - Overview: examples/index.md"]
+    lines = [
+        "  - Example Notebooks:",
+        "    - Overview: examples/index.md",
+        "    - Example Projects: examples/example-projects.md",
+    ]
     for key in section_order:
         lines.append(f"    - {_yaml_dq(key[1])}:")
         for name, label in sorted(grouped[key], key=lambda r: r[0]):

@@ -189,6 +189,7 @@ nav:
     - Cloud-Native Export (ras2cng): user-guide/cloud-native-export.md
   - Example Notebooks:
     - Overview: examples/index.md
+    - Example Projects: examples/example-projects.md
   - Parallel Compute:
     - Overview: parallel-compute/index.md
     - Local Parallel: parallel-compute/local-parallel.md
