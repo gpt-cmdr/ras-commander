@@ -5,8 +5,9 @@
   --ras-muted: #66748a;
   --ras-accent: #2563eb;
   --ras-bg: #eef2f3;
+  --ras-viewer-width: 1280px;
   margin: 0 auto 2rem;
-  max-width: 100%;
+  width: min(100%, var(--ras-viewer-width));
 }
 
 body:has(.ras-maplibre-viewer) .md-sidebar {
@@ -25,7 +26,7 @@ body:has(.ras-maplibre-viewer) .md-main__inner {
 
 body:has(.ras-maplibre-viewer) .md-content__inner {
   margin: 0;
-  padding: 0 1rem 2rem;
+  padding: 0 clamp(0.75rem, 4vw, 4rem) 2rem;
 }
 
 body:has(.ras-maplibre-viewer) .md-content__inner > h1:first-child {
@@ -43,8 +44,8 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
 
 .ras-map-shell {
   position: relative;
-  min-height: 720px;
-  height: min(82vh, 900px);
+  min-height: 540px;
+  height: clamp(540px, 68vh, 720px);
   border: 1px solid var(--ras-panel-border);
   border-radius: 6px;
   overflow: hidden;
@@ -266,8 +267,8 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
   }
 
   .ras-map-shell {
-    min-height: 520px;
-    height: 82vh;
+    min-height: 420px;
+    height: 64vh;
   }
 
   .ras-viewer-topbar {
