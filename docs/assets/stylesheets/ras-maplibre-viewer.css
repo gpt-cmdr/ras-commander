@@ -208,6 +208,35 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
   padding: 0.2rem 0.3rem 0.3rem;
 }
 
+.ras-layer-subgroup {
+  margin-top: 0.2rem;
+}
+
+.ras-layer-subgroup + .ras-layer-subgroup {
+  border-top: 1px solid #edf1f6;
+  padding-top: 0.25rem;
+}
+
+.ras-layer-subgroup__header {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.45rem;
+  margin: 0;
+  padding: 0.18rem 0.16rem;
+  color: #41516a;
+  font-size: 0.62rem;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.ras-layer-subgroup__children {
+  margin-left: 0.38rem;
+  padding-left: 0.4rem;
+  border-left: 2px solid #e7edf5;
+}
+
 .ras-layer-row {
   padding: 0.18rem 0.16rem;
   color: #243047;

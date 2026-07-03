@@ -135,6 +135,79 @@
     return tileset.id === "terrain" ? "ras-terrains" : "ras-raster-results";
   }
 
+  function slugify(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "unknown";
+  }
+
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function planFromText(value) {
+    const match = String(value || "").match(/(?:^|[^a-z0-9])(p\d+)(?=$|[^a-z0-9])/i);
+    return match ? match[1].toLowerCase() : "";
+  }
+
+  function resultPlanId(layer) {
+    const storedMap = layer.storedMap && typeof layer.storedMap === "object" ? layer.storedMap : {};
+    const explicitPlan = layer.plan || layer.planId || storedMap.plan || storedMap.planId;
+    if (explicitPlan) {
+      return String(explicitPlan).trim();
+    }
+    return planFromText([layer.id, layer.name, layer.kind].join(" "));
+  }
+
+  function resultPlanSort(planId) {
+    const match = String(planId || "").match(/^p(\d+)$/i);
+    return match ? Number(match[1]) : 9999;
+  }
+
+  function resultPlanName(planId) {
+    return /^p\d+$/i.test(String(planId || "")) ? `Plan ${planId}` : String(planId || "Other Results");
+  }
+
+  function resultSubgroup(layer) {
+    const groupId = String(layer.groupId || "");
+    if (groupId !== "ras-raster-results" && groupId !== "ras-results") {
+      return null;
+    }
+    const planId = resultPlanId(layer);
+    if (!planId) {
+      return { id: "result-plan-other", name: "Other Results", sort: 99999, planId: "" };
+    }
+    return {
+      id: `result-plan-${slugify(planId)}`,
+      name: resultPlanName(planId),
+      sort: resultPlanSort(planId),
+      planId,
+    };
+  }
+
+  function resultControlName(layer, planId) {
+    const name = String(layer.name || layer.id || "");
+    if (!planId) {
+      return name;
+    }
+    return name.replace(new RegExp(`^${escapeRegExp(planId)}[\\s:_-]+`, "i"), "") || name;
+  }
+
+  function layerTreeEntry(layer) {
+    const subgroup = resultSubgroup(layer);
+    if (!subgroup) {
+      return layer;
+    }
+    return Object.assign({}, layer, {
+      subGroupId: subgroup.id,
+      subGroupName: subgroup.name,
+      subGroupSort: subgroup.sort,
+      controlName: resultControlName(layer, subgroup.planId),
+    });
+  }
+
   function escapeHtml(value) {
     return String(value)
       .replace(/&/g, "&amp;")
@@ -557,16 +630,18 @@
     }
     const vectorLayers = manifest.tilesets
       .filter((tileset) => tileset.type === "vector")
-      .flatMap((tileset) => tileset.layers || []);
+      .flatMap((tileset) => tileset.layers || [])
+      .map(layerTreeEntry);
     const terrainLayers = manifest.tilesets
       .filter((tileset) => tileset.type === "raster")
-      .map((tileset) => ({
+      .map((tileset) => layerTreeEntry({
         id: tileset.id,
         name: tileset.name || (tileset.id === "terrain" ? "Terrain" : tileset.id),
         groupId: rasterLayerGroupId(tileset),
         visible: Boolean(tileset.visible),
         featureCount: null,
         bytes: tileset.bytes,
+        storedMap: tileset.storedMap,
       }));
     const allLayers = [...terrainLayers, ...vectorLayers];
     const layersByGroup = new Map();
@@ -623,6 +698,95 @@
       groupCheckbox.indeterminate = checked > 0 && checked < childChecks.length;
     }
 
+    function updateSubgroupCheckbox(groupId, subGroupId) {
+      const subgroupCheckbox = list.querySelector(
+        `[data-subgroup-checkbox][data-layer-group="${groupId}"][data-layer-subgroup="${subGroupId}"]`
+      );
+      if (!subgroupCheckbox) {
+        return;
+      }
+      const childChecks = Array.from(
+        list.querySelectorAll(`[data-layer-group="${groupId}"][data-layer-subgroup="${subGroupId}"][data-layer-id]`)
+      );
+      const checked = childChecks.filter((el) => el.checked).length;
+      subgroupCheckbox.checked = childChecks.length > 0 && checked === childChecks.length;
+      subgroupCheckbox.indeterminate = checked > 0 && checked < childChecks.length;
+    }
+
+    function appendLayerRow(parent, layer, groupId) {
+      const row = document.createElement("label");
+      row.className = "ras-layer-row";
+      const check = document.createElement("input");
+      check.type = "checkbox";
+      check.checked = Boolean(layer.visible);
+      check.dataset.layerId = layer.id;
+      check.dataset.layerGroup = groupId;
+      if (layer.subGroupId) {
+        check.dataset.layerSubgroup = layer.subGroupId;
+      }
+
+      const name = document.createElement("span");
+      name.className = "ras-layer-row__name";
+      name.textContent = layer.controlName || layer.name || layer.id;
+
+      const count = document.createElement("span");
+      count.className = "ras-layer-row__count";
+      if (Number.isFinite(layer.featureCount)) {
+        count.textContent = layer.featureCount.toLocaleString();
+      } else if (Number.isFinite(layer.bytes)) {
+        count.textContent = `${(layer.bytes / 1048576).toFixed(1)} MB`;
+      }
+
+      check.addEventListener("change", () => {
+        setManifestLayerVisible(map, registry, layer.id, check.checked);
+        if (layer.subGroupId) {
+          updateSubgroupCheckbox(groupId, layer.subGroupId);
+        }
+        updateGroupCheckbox(groupId);
+      });
+
+      row.append(check, name, count);
+      parent.append(row);
+    }
+
+    function appendLayerSubgroup(parent, groupId, subgroup) {
+      const section = document.createElement("div");
+      section.className = "ras-layer-subgroup";
+
+      const header = document.createElement("label");
+      header.className = "ras-layer-subgroup__header";
+      const subgroupCheck = document.createElement("input");
+      subgroupCheck.type = "checkbox";
+      subgroupCheck.dataset.subgroupCheckbox = "true";
+      subgroupCheck.dataset.layerGroup = groupId;
+      subgroupCheck.dataset.layerSubgroup = subgroup.id;
+      subgroupCheck.checked = subgroup.layers.every((layer) => layer.visible);
+      const name = document.createElement("span");
+      name.textContent = subgroup.name;
+      header.append(subgroupCheck, name);
+      section.append(header);
+
+      const children = document.createElement("div");
+      children.className = "ras-layer-subgroup__children";
+      for (const layer of subgroup.layers) {
+        appendLayerRow(children, layer, groupId);
+      }
+
+      subgroupCheck.addEventListener("change", () => {
+        const checked = subgroupCheck.checked;
+        for (const child of children.querySelectorAll("[data-layer-id]")) {
+          child.checked = checked;
+          setManifestLayerVisible(map, registry, child.dataset.layerId, checked);
+        }
+        subgroupCheck.indeterminate = false;
+        updateGroupCheckbox(groupId);
+      });
+
+      section.append(children);
+      parent.append(section);
+      updateSubgroupCheckbox(groupId, subgroup.id);
+    }
+
     for (const group of groups) {
       const groupLayers = layersByGroup.get(group.id) || [];
       if (!groupLayers.length) {
@@ -646,34 +810,28 @@
       const children = document.createElement("div");
       children.className = "ras-layer-group__children";
 
+      const subgroups = new Map();
       for (const layer of groupLayers) {
-        const row = document.createElement("label");
-        row.className = "ras-layer-row";
-        const check = document.createElement("input");
-        check.type = "checkbox";
-        check.checked = Boolean(layer.visible);
-        check.dataset.layerId = layer.id;
-        check.dataset.layerGroup = group.id;
-
-        const name = document.createElement("span");
-        name.className = "ras-layer-row__name";
-        name.textContent = layer.name || layer.id;
-
-        const count = document.createElement("span");
-        count.className = "ras-layer-row__count";
-        if (Number.isFinite(layer.featureCount)) {
-          count.textContent = layer.featureCount.toLocaleString();
-        } else if (Number.isFinite(layer.bytes)) {
-          count.textContent = `${(layer.bytes / 1048576).toFixed(1)} MB`;
+        if (!layer.subGroupId) {
+          appendLayerRow(children, layer, group.id);
+          continue;
         }
+        if (!subgroups.has(layer.subGroupId)) {
+          subgroups.set(layer.subGroupId, {
+            id: layer.subGroupId,
+            name: layer.subGroupName || layer.subGroupId,
+            sort: Number.isFinite(layer.subGroupSort) ? layer.subGroupSort : 9999,
+            layers: [],
+          });
+        }
+        subgroups.get(layer.subGroupId).layers.push(layer);
+      }
 
-        check.addEventListener("change", () => {
-          setManifestLayerVisible(map, registry, layer.id, check.checked);
-          updateGroupCheckbox(group.id);
-        });
-
-        row.append(check, name, count);
-        children.append(row);
+      const sortedSubgroups = Array.from(subgroups.values()).sort((a, b) => (
+        a.sort - b.sort || a.name.localeCompare(b.name)
+      ));
+      for (const subgroup of sortedSubgroups) {
+        appendLayerSubgroup(children, group.id, subgroup);
       }
 
       groupCheck.addEventListener("change", () => {
@@ -681,6 +839,10 @@
         for (const child of children.querySelectorAll("[data-layer-id]")) {
           child.checked = checked;
           setManifestLayerVisible(map, registry, child.dataset.layerId, checked);
+        }
+        for (const subgroupCheck of children.querySelectorAll("[data-subgroup-checkbox]")) {
+          subgroupCheck.checked = checked;
+          subgroupCheck.indeterminate = false;
         }
         groupCheck.indeterminate = false;
       });
