@@ -556,7 +556,7 @@
       buildLayerTree(root, map, manifest, registry);
       const sidePadding = root.clientWidth > 760 ? 60 : 28;
       map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], {
-        padding: { top: 110, right: sidePadding, bottom: 50, left: sidePadding },
+        padding: { top: 50, right: sidePadding, bottom: 50, left: sidePadding },
         maxZoom: 15,
         duration: 0,
       });

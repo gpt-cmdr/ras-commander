@@ -5,7 +5,8 @@
   --ras-muted: #66748a;
   --ras-accent: #2563eb;
   --ras-bg: #eef2f3;
-  margin: 0 0 2rem;
+  margin: 0 auto 2rem;
+  max-width: 100%;
 }
 
 body:has(.ras-maplibre-viewer) .md-sidebar {
@@ -55,26 +56,17 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
   inset: 0;
 }
 
-.ras-viewer-topbar,
-.ras-layer-menu {
-  position: absolute;
-  z-index: 2;
-  color: var(--ras-text);
-}
-
 .ras-viewer-topbar {
-  top: 12px;
-  left: 12px;
   display: flex;
-  right: 12px;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   border: 1px solid rgba(21, 31, 49, 0.18);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 12px 36px rgba(18, 28, 45, 0.16);
+  background: var(--ras-panel);
   padding: 0.65rem 0.8rem;
+  color: var(--ras-text);
+  margin-bottom: 0.65rem;
 }
 
 .ras-viewer-title {
@@ -132,13 +124,11 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
 }
 
 .ras-layer-menu {
-  top: 74px;
-  right: 64px;
-  width: min(330px, calc(100vw - 2rem));
   border: 1px solid rgba(21, 31, 49, 0.18);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 12px 36px rgba(18, 28, 45, 0.16);
+  background: var(--ras-panel);
+  color: var(--ras-text);
+  margin-top: 0.65rem;
 }
 
 .ras-layer-menu summary {
@@ -152,15 +142,14 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
 }
 
 .ras-layer-menu__body {
-  max-height: min(62vh, 560px);
-  overflow: hidden;
   border-top: 1px solid var(--ras-panel-border);
+  padding: 0.55rem;
 }
 
 .ras-layer-list {
-  max-height: min(54vh, 490px);
+  max-height: min(42vh, 420px);
   overflow-y: auto;
-  padding: 0.55rem;
+  padding: 0;
 }
 
 .ras-layer-group {
@@ -239,11 +228,6 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
   background: rgba(255, 255, 255, 0.72);
 }
 
-.ras-maplibre-viewer .maplibregl-ctrl-top-right {
-  top: 64px;
-  right: 10px;
-}
-
 .ras-map-popup {
   min-width: 180px;
 }
@@ -282,7 +266,7 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
   }
 
   .ras-map-shell {
-    min-height: 720px;
+    min-height: 520px;
     height: 82vh;
   }
 
@@ -302,14 +286,7 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
     margin-left: auto;
   }
 
-  .ras-layer-menu {
-    top: 108px;
-    right: 10px;
-    left: 10px;
-    width: auto;
-  }
-
-  .ras-maplibre-viewer .maplibregl-ctrl-top-right {
-    top: 154px;
+  .ras-layer-list {
+    max-height: none;
   }
 }
