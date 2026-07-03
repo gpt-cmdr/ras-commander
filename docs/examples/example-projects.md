@@ -1,9 +1,8 @@
 # Example Project Library
 
 !!! warning "Under construction"
-    This is the landing page for the GeoLibre-based Example Project Library.
-    The first pilot, Muncie, is published through the RAS Commander WebGIS
-    artifact service. The broader project explorer is still being assembled.
+    The Example Project Library is moving to a RAS Commander MapLibre viewer
+    backed by PMTiles and WebGIS-hosted artifacts. Muncie is the first pilot.
 
 RAS Commander uses repeatable HEC-RAS project fixtures for examples, tests,
 documentation, and regression checks. The library combines several source
@@ -22,27 +21,26 @@ different role: they expose real delivery structure, metadata, scale, path
 issues, and model packaging details.
 
 Only projects with a verified coordinate reference system are eligible for the
-GeoLibre explorer. Projects without a CRS can remain useful for notebook
-examples, but they are not published as map-review targets until their CRS is
-resolved.
+web map viewer. Projects without a CRS can remain useful for notebook examples,
+but they are not published as map-review targets until their CRS is resolved.
 
 ## Current Pilot
 
-| Project | Source | CRS | WebGIS status |
-|---------|--------|-----|---------------|
-| Muncie | HEC tutorial/example project | `EPSG:2965` | Published via WebGIS |
+| Project | Source | CRS | Viewer |
+|---------|--------|-----|--------|
+| Muncie | HEC tutorial/example project | `EPSG:2965` | [Open MapLibre viewer](example-project-viewer.md) |
 
 The generated Muncie bundle currently includes:
 
 - project id:
   `muncie-muncie-rerun-7-0-20260628-193916-4120d261`
 - three geometry archives: `g01`, `g02`, and `g04`
-- two terrain COGs at 5 ft native resolution: `Terrain` and
-  `TerrainWithChannel`
-- result tables for plans `p03` and `p04`
-- GeoLibre layer groups matching the RAS Mapper review pattern: `Results`,
-  `Geometries`, and `Terrains`
-- terrain and result layers disabled by default for initial map load
+- RAS-style geometry sublayers for model extents, 2D flow areas, mesh cells,
+  mesh faces, breaklines, centerlines, structures, and cross sections
+- terrain published as raster PMTiles with the RAS Commander terrain color ramp
+- individual result layers for plans `p03` and `p04`
+- default visibility with terrain and geometry `g04` enabled, other geometries
+  and result layers disabled
 - Hilbert sorting and `join_index` metadata for geometry/result joins
 - no local path leaks in the published project manifest
 
@@ -50,15 +48,13 @@ Live public paths:
 
 | Resource | Link |
 |----------|------|
-| GeoLibre review | [Open Muncie in GeoLibre](https://web.geolibre.app/?url=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fmuncie-muncie-rerun-7-0-20260628-193916-4120d261%2Fgeolibre%2Fproject.geolibre.json%3Fv%3D20260702T193406Z&layout=compact) |
+| MapLibre viewer | [Muncie Map Viewer](example-project-viewer.md) |
+| MapLibre manifest | [manifest.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260703Tmaplibre03) |
+| Geometry PMTiles | [geometry.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/geometry.pmtiles) |
+| Results PMTiles | [results.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/results.pmtiles) |
+| Terrain PMTiles | [terrain.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/terrain.pmtiles) |
 | Project catalog | [catalog.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/catalog.json) |
 | Project manifest | [project.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/project.json) |
-| GeoLibre manifest | [project.geolibre.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/geolibre/project.geolibre.json) |
-| Terrain COG | [terrain.cog.tif](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/terrain/terrain.cog.tif) |
-| Terrain with channel COG | [terrainwithchannel.cog.tif](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/terrain/terrainwithchannel.cog.tif) |
-
-The GeoLibre review link loads the hosted `project.geolibre.json` directly from
-the RAS Commander WebGIS artifact service.
 
 ## WebGIS Publishing Model
 
@@ -68,9 +64,9 @@ artifacts in the repository. The intended flow is:
 1. acquire or extract the source project through RAS Commander
 2. compute or inspect the project through the normal RAS Commander workflow
 3. export cloud-native artifacts with ras2cng
-4. post-process terrain, geometry, and results for web review
+4. post-process terrain, geometry, and results into MapLibre-ready PMTiles
 5. publish validated artifacts to the WebGIS data root
-6. link the docs page to the WebGIS catalog and GeoLibre project files
+6. link the docs page to the WebGIS catalog and MapLibre project manifest
 
 The public artifact namespace is:
 
@@ -89,14 +85,14 @@ patterns for HEC-RAS projects.
 
 - GeoParquet remains the analysis/archive format for geometry and result
   attributes.
-- PMTiles should be generated for large or commonly reviewed vector layers.
-- COGs should be used for terrain and raster result surfaces.
-- Layers should be grouped for review as `Results`, `Geometries`, and
-  `Terrains`.
-- Terrain and result layers should default to off in GeoLibre.
-- Small geometry or overview layers can default on when they make the first map
-  load useful without creating a heavy browser request.
-- Result tables should use `join_index` metadata to avoid duplicating geometry.
+- PMTiles is the browser delivery format for commonly reviewed vector layers.
+- Terrain should publish as PMTiles or COG derivatives with HTTP byte-range
+  support.
+- Terrain and only the first/default geometry should be enabled initially.
+- Large geometries, results, and optional terrain derivatives should default to
+  disabled unless they are required for the first review view.
+- Result tables should use `join_index` metadata to avoid duplicating geometry
+  in the archive layer.
 - Terrain should not be upsampled. If a source terrain is coarser than 10 ft,
   publish at the smallest native resolution instead of forcing a finer grid.
 
@@ -116,10 +112,10 @@ bundles are published and validated:
 Each project entry should be added only after:
 
 - the catalog entry has a valid CRS and WGS84 bounding box
-- `project.geolibre.json` uses hosted URLs, not local file paths
-- COG and PMTiles assets support HTTP range requests
+- the MapLibre manifest uses hosted URLs, not local file paths
+- PMTiles or COG assets support HTTP range requests
 - large layers have sensible default visibility
-- GeoLibre opens the project from the public URL
+- the viewer opens from the public docs URL
 
 ## Related Workflows
 
