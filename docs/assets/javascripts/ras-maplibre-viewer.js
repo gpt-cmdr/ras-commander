@@ -426,6 +426,24 @@
     return units ? `${formatted} ${units}` : formatted;
   }
 
+  function rasterSourceLabel(tileset) {
+    if (tileset.id === "terrain" || (tileset.storedMap && tileset.storedMap.mapType === "terrain")) {
+      return "Terrain COG";
+    }
+    if (tileset.storedMap && tileset.storedMap.source === "RasProcess.store_maps") {
+      return "RASMapper Stored Map raster";
+    }
+    return "Raster result COG";
+  }
+
+  function featureSourceKind(layer) {
+    return isVectorResultLayer(layer) ? "raw-result" : "geometry";
+  }
+
+  function featureSourceLabel(layer) {
+    return isVectorResultLayer(layer) ? "Raw HDF element result" : "Model geometry";
+  }
+
   function rasterQueryConfig(manifest, tileset) {
     return Object.assign({}, manifest.rasterQuery || {}, tileset.rasterQuery || {});
   }
@@ -500,79 +518,149 @@
     return { tileset, state: "value", value, units: rasterUnits(tileset), col, row };
   }
 
+  function stableFeatureProperties(properties) {
+    const normalized = {};
+    for (const [key, value] of Object.entries(properties || {}).sort(([a], [b]) => a.localeCompare(b))) {
+      normalized[key] = value;
+    }
+    return JSON.stringify(normalized);
+  }
+
   function collectIdentifyFeatures(map, point, mapLayerLookup) {
     const pad = 5;
+    const queryLayers = Array.from(mapLayerLookup.keys())
+      .filter((mapLayerId) => (
+        map.getLayer(mapLayerId) &&
+        map.getLayoutProperty(mapLayerId, "visibility") !== "none"
+      ));
+    if (!queryLayers.length) {
+      return [];
+    }
+
     const features = map.queryRenderedFeatures(
-      [[point.x - pad, point.y - pad], [point.x + pad, point.y + pad]]
+      [[point.x - pad, point.y - pad], [point.x + pad, point.y + pad]],
+      { layers: queryLayers }
     );
-    const seen = new Set();
-    const results = [];
+    const seenFeatures = new Set();
+    const byLayer = new Map();
     for (const feature of features) {
       const layer = mapLayerLookup.get(feature.layer && feature.layer.id);
       if (!layer) {
         continue;
       }
       const properties = feature.properties || {};
-      const key = `${layer.id}:${JSON.stringify(properties)}`;
-      if (seen.has(key)) {
+      const featureKey = `${layer.id}:${feature.id ?? stableFeatureProperties(properties)}`;
+      if (seenFeatures.has(featureKey)) {
         continue;
       }
-      seen.add(key);
-      results.push({ layer, properties });
-      if (results.length >= 8) {
-        break;
+      seenFeatures.add(featureKey);
+
+      const existing = byLayer.get(layer.id);
+      if (existing) {
+        existing.additionalCount += 1;
+        continue;
       }
+
+      byLayer.set(layer.id, {
+        layer,
+        properties,
+        sourceKind: featureSourceKind(layer),
+        sourceLabel: featureSourceLabel(layer),
+        additionalCount: 0,
+      });
     }
-    return results;
+    return Array.from(byLayer.values()).slice(0, 10);
+  }
+
+  function identifyFeatureHtml(item) {
+    const additional = item.additionalCount
+      ? `<p class="ras-identify-note">${item.additionalCount.toLocaleString()} additional nearby hit${item.additionalCount === 1 ? "" : "s"} omitted.</p>`
+      : "";
+    return [
+      '<section class="ras-identify-section">',
+      `<h4><span>${escapeHtml(item.layer.name || item.layer.id)}</span><span class="ras-identify-source">${escapeHtml(item.sourceLabel)}</span></h4>`,
+      `<dl>${propertyRowsHtml(item.properties, 10)}</dl>`,
+      additional,
+      "</section>",
+    ].join("");
+  }
+
+  function identifyFeatureGroupHtml(features, kind) {
+    const items = features.filter((item) => item.sourceKind === kind);
+    return items.map(identifyFeatureHtml).join("");
+  }
+
+  function rasterSampleValue(sample) {
+    if (sample.state === "value") {
+      return formatRasterValue(sample.value, sample.units);
+    }
+    if (sample.state === "nodata") {
+      return "NoData";
+    }
+    if (sample.state === "outside") {
+      return "Outside extent";
+    }
+    return sample.error || "Unavailable";
+  }
+
+  function rasterSampleListHtml(samples) {
+    if (!samples.length) {
+      return "";
+    }
+    return [
+      '<dl class="ras-identify-raster-list">',
+      ...samples.map((sample) => {
+        const name = sample.tileset.name || sample.tileset.id;
+        const value = rasterSampleValue(sample);
+        const source = rasterSourceLabel(sample.tileset);
+        return `<dt>${escapeHtml(name)}</dt><dd><span>${escapeHtml(value)}</span><span class="ras-identify-source">${escapeHtml(source)}</span></dd>`;
+      }),
+      "</dl>",
+    ].join("");
   }
 
   function identifyPopupHtml(lngLat, features, rasterSamples, options) {
     const pending = options && options.pending;
     const rasterTargets = options && options.rasterTargets || 0;
     const coords = `${lngLat.lng.toFixed(6)}, ${lngLat.lat.toFixed(6)}`;
-    const featureHtml = features.length
-      ? features.map((item) => [
-          '<section class="ras-identify-section">',
-          `<h4>${escapeHtml(item.layer.name || item.layer.id)}</h4>`,
-          `<dl>${propertyRowsHtml(item.properties, 10)}</dl>`,
-          "</section>",
-        ].join("")).join("")
-      : '<p class="ras-identify-empty">No visible vector features at this point.</p>';
+    const terrainSamples = (rasterSamples || [])
+      .filter((sample) => sample.tileset.id === "terrain" || sample.tileset.storedMap?.mapType === "terrain");
+    const resultRasterSamples = (rasterSamples || [])
+      .filter((sample) => !(sample.tileset.id === "terrain" || sample.tileset.storedMap?.mapType === "terrain"));
 
     let rasterHtml = "";
     if (pending) {
-      rasterHtml = `<p class="ras-identify-empty">Reading ${rasterTargets} raster value${rasterTargets === 1 ? "" : "s"}...</p>`;
-    } else if (!rasterSamples || !rasterSamples.length) {
-      rasterHtml = '<p class="ras-identify-empty">No visible queryable rasters at this point.</p>';
+      rasterHtml = `<h3>Rasterized Results</h3><p class="ras-identify-empty">Reading ${rasterTargets} COG value${rasterTargets === 1 ? "" : "s"}...</p>`;
     } else {
-      rasterHtml = [
-        '<dl class="ras-identify-raster-list">',
-        ...rasterSamples.map((sample) => {
-          const name = sample.tileset.name || sample.tileset.id;
-          let value = "";
-          if (sample.state === "value") {
-            value = formatRasterValue(sample.value, sample.units);
-          } else if (sample.state === "nodata") {
-            value = "NoData";
-          } else if (sample.state === "outside") {
-            value = "Outside extent";
-          } else {
-            value = sample.error || "Unavailable";
-          }
-          return `<dt>${escapeHtml(name)}</dt><dd>${escapeHtml(value)}</dd>`;
-        }),
-        "</dl>",
-      ].join("");
+      const rasterSections = [];
+      if (resultRasterSamples.length) {
+        rasterSections.push("<h3>Rasterized Results</h3>", rasterSampleListHtml(resultRasterSamples));
+      }
+      if (terrainSamples.length) {
+        rasterSections.push("<h3>Terrain Raster</h3>", rasterSampleListHtml(terrainSamples));
+      }
+      rasterHtml = rasterSections.length
+        ? rasterSections.join("")
+        : "";
     }
+
+    const rawResultHtml = identifyFeatureGroupHtml(features, "raw-result");
+    const geometryHtml = identifyFeatureGroupHtml(features, "geometry");
+    const sections = [rasterHtml];
+    if (rawResultHtml) {
+      sections.push("<h3>Raw HDF Results</h3>", rawResultHtml);
+    }
+    if (geometryHtml) {
+      sections.push("<h3>Geometry Metadata</h3>", geometryHtml);
+    }
+    const bodyHtml = sections.filter(Boolean).join("") ||
+      '<p class="ras-identify-empty">No visible queryable map data at this point.</p>';
 
     return [
       '<div class="ras-identify-popup">',
       '<div class="ras-identify-title">Identify</div>',
       `<div class="ras-identify-coords">${escapeHtml(coords)}</div>`,
-      '<h3>Raster Values</h3>',
-      rasterHtml,
-      '<h3>Vector Metadata</h3>',
-      featureHtml,
+      bodyHtml,
       "</div>",
     ].join("");
   }

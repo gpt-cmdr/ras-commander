@@ -6,7 +6,7 @@ hide:
 ---
 
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
-<link rel="stylesheet" href="../../assets/stylesheets/ras-maplibre-viewer.css?v=20260703Tplanresults01">
+<link rel="stylesheet" href="../../assets/stylesheets/ras-maplibre-viewer.css?v=20260703Tidentify03">
 
 <div class="ras-maplibre-viewer" data-ras-maplibre-viewer data-manifest="https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260703Tidentify02">
   <div class="ras-viewer-topbar">
@@ -39,7 +39,7 @@ hide:
 <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
 <script src="https://unpkg.com/proj4@2.11.0/dist/proj4.js"></script>
 <script src="https://unpkg.com/geotiff@2.1.3/dist-browser/geotiff.js"></script>
-<script src="../../assets/javascripts/ras-maplibre-viewer.js?v=20260703Tplanresults01"></script>
+<script src="../../assets/javascripts/ras-maplibre-viewer.js?v=20260703Tidentify03"></script>
 
 ## Raster Results
 
@@ -55,8 +55,8 @@ MapLibre display. Raster result layers are off by default and grouped by plan
 in the layer controls.
 
 Click the map to identify visible vector features and query visible COG-backed
-raster values at that point. Terrain elevation is on by default; Stored Map
-result values appear after turning on the corresponding raster result layer.
+raster values at that point. The popup separates rasterized Stored Map values
+from raw HDF element results.
 
 ## Vector Results
 

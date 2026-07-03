@@ -352,6 +352,10 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
 }
 
 .ras-identify-section h4 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.45rem;
   margin: 0 0 0.2rem;
   color: #243047;
   font-size: 0.7rem;
@@ -380,7 +384,27 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
 }
 
 .ras-identify-raster-list dd {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.45rem;
   font-weight: 700;
+}
+
+.ras-identify-source {
+  flex: 0 0 auto;
+  color: var(--ras-muted);
+  font-size: 0.58rem;
+  line-height: 1.15;
+  font-weight: 700;
+  text-align: right;
+}
+
+.ras-identify-note {
+  margin: 0.22rem 0 0;
+  color: var(--ras-muted);
+  font-size: 0.6rem;
+  line-height: 1.25;
 }
 
 @media (max-width: 760px) {
