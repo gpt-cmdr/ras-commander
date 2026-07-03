@@ -61,6 +61,15 @@
     return new URL(href, baseUrl).toString();
   }
 
+  function resolveTileHref(baseUrl, href, manifestUrl) {
+    const tileUrl = new URL(href, baseUrl);
+    const manifestVersion = new URL(manifestUrl).searchParams.get("v");
+    if (manifestVersion && !tileUrl.searchParams.has("v")) {
+      tileUrl.searchParams.set("v", manifestVersion);
+    }
+    return tileUrl.toString();
+  }
+
   function geometryTypes(layer) {
     const raw = layer.geometryTypes || [];
     const types = Array.isArray(raw) ? raw : [raw];
@@ -384,7 +393,7 @@
         const sourceId = `${tileset.id}-source`;
         map.addSource(sourceId, {
           type: "raster",
-          url: `pmtiles://${resolveHref(baseUrl, tileset.href)}`,
+          url: `pmtiles://${resolveTileHref(baseUrl, tileset.href, manifestUrl)}`,
           tileSize: tileset.tileSize || 256,
         });
         const layerId = `${tileset.id}-raster`;
@@ -402,7 +411,7 @@
         const sourceId = `${tileset.id}-source`;
         map.addSource(sourceId, {
           type: "vector",
-          url: `pmtiles://${resolveHref(baseUrl, tileset.href)}`,
+          url: `pmtiles://${resolveTileHref(baseUrl, tileset.href, manifestUrl)}`,
         });
         for (const layer of tileset.layers || []) {
           addVectorLayerSet(map, sourceId, layer, registry);
