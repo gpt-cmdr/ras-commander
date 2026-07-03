@@ -1,11 +1,12 @@
 # Example Project Library
 
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
-<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260703Textents03">
+<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260703Tneworleans01">
 
 !!! warning "Under construction"
     The Example Project Library is moving to a RAS Commander MapLibre viewer
-    backed by PMTiles and WebGIS-hosted artifacts. Muncie is the first pilot.
+    backed by PMTiles and WebGIS-hosted artifacts. Muncie and New Orleans Metro
+    are the first published pilots.
 
 RAS Commander uses repeatable HEC-RAS project fixtures for examples, tests,
 documentation, and regression checks. The library combines several source
@@ -34,7 +35,7 @@ Click a polygon to review source metadata and open that project's webmap.
 Projects stay out of this map until they have a valid CRS, a WGS84 model limit,
 and a published MapLibre webmap.
 
-<div class="ras-example-library" data-ras-example-library data-index="../../assets/data/ras-example-projects.json?v=20260703Textents02">
+<div class="ras-example-library" data-ras-example-library data-index="../../assets/data/ras-example-projects.json?v=20260703Tneworleans01">
   <div class="ras-library-map-shell">
     <div class="ras-library-map" data-library-map></div>
   </div>
@@ -46,14 +47,15 @@ and a published MapLibre webmap.
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260703Textents03"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260703Textents03"></script>
+<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260703Tneworleans01"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260703Tneworleans01"></script>
 
 ## Current MapLibre Projects
 
 | Project | Source | CRS | Viewer |
 |---------|--------|-----|--------|
 | Muncie | HEC tutorial/example project | `EPSG:2965` | [Open MapLibre viewer](example-project-viewer.md) |
+| New Orleans Metro | HEC tutorial/example project | `EPSG:3457` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fneworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a%2Fviewer%2Fmanifest.json%3Fv%3D20260703Tneworleans01) |
 
 The generated Muncie bundle currently includes:
 
@@ -87,6 +89,26 @@ Live public paths:
 | Terrain COG | [terrain.cog.tif](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/terrain/terrain.cog.tif) |
 | Project catalog | [catalog.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/catalog.json) |
 | Project manifest | [project.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/project.json) |
+
+The New Orleans Metro bundle currently includes:
+
+- project id:
+  `neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a`
+- one geometry archive: `g02`
+- terrain published as raster PMTiles
+- no result layers in the viewer yet; the available result parquet is marked
+  geometry-free and needs a join-to-geometry post-processing step before it can
+  be tiled or queried consistently
+
+Live public paths:
+
+| Resource | Link |
+|----------|------|
+| MapLibre viewer | [New Orleans Metro Map Viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fneworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a%2Fviewer%2Fmanifest.json%3Fv%3D20260703Tneworleans01) |
+| MapLibre manifest | [manifest.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/manifest.json?v=20260703Tneworleans01) |
+| Geometry PMTiles | [geometry.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/tiles/geometry.pmtiles) |
+| Terrain PMTiles | [terrain.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/tiles/terrain.pmtiles) |
+| Project manifest | [project.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/project.json) |
 
 ## WebGIS Publishing Model
 
@@ -141,11 +163,10 @@ for repeatable analysis and browser review.
 
 ## Next Candidates
 
-After Muncie, the next projects should be added one at a time as their WebGIS
-bundles are published and validated:
+After Muncie and New Orleans Metro, the next projects should be added one at a
+time as their WebGIS bundles are published and validated:
 
 - Bald Eagle Creek 1D and Bald Eagle Creek Multi-2D
-- New Orleans Metro
 - at least one eBFE/BLE delivery
 - at least two ScienceBase releases
 
