@@ -1,0 +1,56 @@
+{
+  "type": "FeatureCollection",
+  "name": "ras-commander-example-projects",
+  "generatedAt": "2026-07-03T00:00:00-04:00",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "muncie-muncie-rerun-7-0-20260628-193916-4120d261",
+      "properties": {
+        "title": "Muncie",
+        "sourceFamily": "HEC tutorial/example project",
+        "crs": "EPSG:2965",
+        "status": "MapLibre pilot",
+        "projectId": "muncie-muncie-rerun-7-0-20260628-193916-4120d261",
+        "webmap": "../example-project-viewer/",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260703Tidentify02",
+        "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/project.json",
+        "viewerType": "MapLibre",
+        "notes": "First MapLibre pilot with terrain, geometry, raw HDF vector results, and RASMapper Stored Map rasters."
+      },
+      "bbox": [
+        -85.39413392995574,
+        40.18967072465606,
+        -85.36012339789563,
+        40.205583441794495
+      ],
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -85.39413392995574,
+              40.18967072465606
+            ],
+            [
+              -85.36012339789563,
+              40.18967072465606
+            ],
+            [
+              -85.36012339789563,
+              40.205583441794495
+            ],
+            [
+              -85.39413392995574,
+              40.205583441794495
+            ],
+            [
+              -85.39413392995574,
+              40.18967072465606
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

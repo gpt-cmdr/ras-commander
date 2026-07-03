@@ -72,6 +72,28 @@
     return new URL(href, baseUrl).toString();
   }
 
+  function manifestUrlFor(root) {
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get("manifest");
+    if (requested) {
+      return new URL(requested, window.location.href).toString();
+    }
+    return root.dataset.manifest;
+  }
+
+  function setProjectChrome(root, manifest, manifestUrl) {
+    const title = manifest.title || root.dataset.projectTitle || "Example Project";
+    const heading = root.querySelector("[data-project-title]");
+    if (heading) {
+      heading.textContent = title;
+    }
+    const manifestLink = root.querySelector("[data-manifest-link]");
+    if (manifestLink) {
+      manifestLink.href = manifestUrl;
+    }
+    document.title = `${title} Map Viewer - RAS Commander Documentation`;
+  }
+
   function resolveTileHref(baseUrl, href, manifestUrl) {
     const tileUrl = new URL(href, baseUrl);
     const manifestVersion = new URL(manifestUrl).searchParams.get("v");
@@ -969,7 +991,7 @@
       return;
     }
 
-    const manifestUrl = root.dataset.manifest;
+    const manifestUrl = manifestUrlFor(root);
     const baseUrl = new URL(".", manifestUrl).toString();
     const manifest = await fetch(manifestUrl, { cache: "no-store" }).then((response) => {
       if (!response.ok) {
@@ -977,6 +999,7 @@
       }
       return response.json();
     });
+    setProjectChrome(root, manifest, manifestUrl);
 
     const protocol = new pmtiles.Protocol();
     if (!window.__rasCommanderPmtilesProtocol) {

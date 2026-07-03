@@ -1,0 +1,127 @@
+.ras-example-library {
+  --ras-library-panel: #ffffff;
+  --ras-library-border: #d7dee8;
+  --ras-library-text: #172033;
+  --ras-library-muted: #66748a;
+  --ras-library-accent: #2563eb;
+  margin: 1rem 0 1.5rem;
+}
+
+.ras-library-map-shell {
+  min-height: 420px;
+  height: min(62vh, 680px);
+  border: 1px solid var(--ras-library-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #eef2f3;
+}
+
+.ras-library-map {
+  width: 100%;
+  height: 100%;
+}
+
+.ras-library-map-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.45rem;
+  color: var(--ras-library-muted);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.ras-library-projects {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.65rem;
+  margin: 1rem 0 0;
+}
+
+.ras-library-project {
+  border: 1px solid var(--ras-library-border);
+  border-radius: 6px;
+  padding: 0.7rem;
+  background: var(--ras-library-panel);
+  color: var(--ras-library-text);
+}
+
+.ras-library-project h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.ras-library-project p {
+  margin: 0 0 0.45rem;
+  color: var(--ras-library-muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.ras-library-project a,
+.ras-library-popup a {
+  color: var(--ras-library-accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.ras-library-project a:hover,
+.ras-library-popup a:hover {
+  text-decoration: underline;
+}
+
+.ras-library-popup {
+  color: var(--ras-library-text);
+}
+
+.ras-library-popup h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+.ras-library-popup dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.2rem 0.55rem;
+  margin: 0 0 0.45rem;
+  font-size: 0.7rem;
+  line-height: 1.25;
+}
+
+.ras-library-popup dt {
+  color: var(--ras-library-muted);
+  font-weight: 700;
+}
+
+.ras-library-popup dd {
+  margin: 0;
+}
+
+.ras-library-popup p {
+  margin: 0 0 0.55rem;
+  color: var(--ras-library-muted);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.ras-library-popup__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  font-size: 0.72rem;
+}
+
+@media (max-width: 760px) {
+  .ras-library-map-shell {
+    min-height: 360px;
+    height: 58vh;
+  }
+
+  .ras-library-map-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

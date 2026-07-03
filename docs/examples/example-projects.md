@@ -1,5 +1,8 @@
 # Example Project Library
 
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
+<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260703Textents03">
+
 !!! warning "Under construction"
     The Example Project Library is moving to a RAS Commander MapLibre viewer
     backed by PMTiles and WebGIS-hosted artifacts. Muncie is the first pilot.
@@ -24,7 +27,29 @@ Only projects with a verified coordinate reference system are eligible for the
 web map viewer. Projects without a CRS can remain useful for notebook examples,
 but they are not published as map-review targets until their CRS is resolved.
 
-## Current Pilot
+## Project Explorer
+
+The explorer shows one model-limit polygon per promoted MapLibre project.
+Click a polygon to review source metadata and open that project's webmap.
+Projects stay out of this map until they have a valid CRS, a WGS84 model limit,
+and a published MapLibre webmap.
+
+<div class="ras-example-library" data-ras-example-library data-index="../../assets/data/ras-example-projects.json?v=20260703Textents02">
+  <div class="ras-library-map-shell">
+    <div class="ras-library-map" data-library-map></div>
+  </div>
+  <div class="ras-library-map-footer">
+    <span data-library-status>Published MapLibre project extents</span>
+    <span>Click a model extent to open its webmap.</span>
+  </div>
+  <div class="ras-library-projects" data-project-list></div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260703Textents03"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260703Textents03"></script>
+
+## Current MapLibre Projects
 
 | Project | Source | CRS | Viewer |
 |---------|--------|-----|--------|
@@ -124,9 +149,15 @@ bundles are published and validated:
 - at least one eBFE/BLE delivery
 - at least two ScienceBase releases
 
+Do not add the 1D steady BLE model collection to this landing page. That set
+should be handled as its own consolidated map once the grouping, symbology, and
+metadata pattern are clear.
+
 Each project entry should be added only after:
 
 - the catalog entry has a valid CRS and WGS84 bounding box
+- the project has a model-limit polygon in
+  `assets/javascripts/ras-example-projects-data.js`
 - the MapLibre manifest uses hosted URLs, not local file paths
 - PMTiles or COG assets support HTTP range requests
 - large layers have sensible default visibility

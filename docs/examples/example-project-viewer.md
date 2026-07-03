@@ -13,12 +13,13 @@ hide:
     <a class="ras-back-link" href="../example-projects/">&larr; Example Projects</a>
     <div class="ras-viewer-title">
       <p class="ras-kicker">RAS Commander Example Library</p>
-      <h2>Muncie</h2>
+      <h2 data-project-title>Muncie</h2>
     </div>
     <div class="ras-viewer-actions">
       <span class="ras-layer-status" data-status>Loading</span>
       <a
         class="ras-open-data"
+        data-manifest-link
         href="https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260703Tidentify02"
       >Manifest</a>
     </div>
@@ -39,7 +40,7 @@ hide:
 <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
 <script src="https://unpkg.com/proj4@2.11.0/dist/proj4.js"></script>
 <script src="https://unpkg.com/geotiff@2.1.3/dist-browser/geotiff.js"></script>
-<script src="../../assets/javascripts/ras-maplibre-viewer.js?v=20260703Tidentify03"></script>
+<script src="../../assets/javascripts/ras-maplibre-viewer.js?v=20260703Tidentify04"></script>
 
 ## Raster Results
 
