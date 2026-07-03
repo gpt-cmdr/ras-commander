@@ -38,7 +38,9 @@ The generated Muncie bundle currently includes:
 - RAS-style geometry sublayers for model extents, 2D flow areas, mesh cells,
   mesh faces, breaklines, centerlines, structures, and cross sections
 - terrain published as raster PMTiles with the RAS Commander terrain color ramp
-- individual result layers for plans `p03` and `p04`
+- vector result layers for plans `p03` and `p04`
+- raster result COGs from RasProcess Stored Maps are the intended visual result
+  layers, but they are not yet published for this Muncie pilot bundle
 - default visibility with terrain and geometry `g04` enabled, other geometries
   and result layers disabled
 - Hilbert sorting and `join_index` metadata for geometry/result joins
@@ -49,9 +51,9 @@ Live public paths:
 | Resource | Link |
 |----------|------|
 | MapLibre viewer | [Muncie Map Viewer](example-project-viewer.md) |
-| MapLibre manifest | [manifest.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260703Tmaplibre03) |
+| MapLibre manifest | [manifest.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260703Tterrainstretch01) |
 | Geometry PMTiles | [geometry.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/geometry.pmtiles) |
-| Results PMTiles | [results.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/results.pmtiles) |
+| Vector results PMTiles | [results.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/results.pmtiles) |
 | Terrain PMTiles | [terrain.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/terrain.pmtiles) |
 | Project catalog | [catalog.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/catalog.json) |
 | Project manifest | [project.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/project.json) |
@@ -64,7 +66,8 @@ artifacts in the repository. The intended flow is:
 1. acquire or extract the source project through RAS Commander
 2. compute or inspect the project through the normal RAS Commander workflow
 3. export cloud-native artifacts with ras2cng
-4. post-process terrain, geometry, and results into MapLibre-ready PMTiles
+4. post-process terrain, geometry, vector results, and Stored Map rasters into
+   MapLibre-ready PMTiles or COGs
 5. publish validated artifacts to the WebGIS data root
 6. link the docs page to the WebGIS catalog and MapLibre project manifest
 
@@ -83,9 +86,16 @@ reverse-proxies `/data/*` to the isolated WebGIS service.
 The library is also the place where RAS Commander documents practical web GIS
 patterns for HEC-RAS projects.
 
-- GeoParquet remains the analysis/archive format for geometry and result
-  attributes.
-- PMTiles is the browser delivery format for commonly reviewed vector layers.
+- GeoParquet remains the analysis/archive format for geometry and raw
+  element-level result attributes.
+- Vector PMTiles is the browser delivery format for commonly reviewed geometry
+  layers and queryable vector-result layers.
+- Raster results should come from RasProcess Stored Maps and publish as COG or
+  raster PMTiles derivatives with HTTP byte-range support. These are the visual
+  depth, water-surface, velocity, and similar map products.
+- Vector results should not be treated as the visual result map unless a
+  separate interpolation or surface-generation step has created a raster
+  product.
 - Terrain should publish as PMTiles or COG derivatives with HTTP byte-range
   support.
 - Terrain and only the first/default geometry should be enabled initially.

@@ -85,14 +85,134 @@
     } else if (name.includes("velocity")) {
       fallback = DEFAULT_STYLES.velocity;
     }
-    return Object.assign({}, fallback, raw);
+    const style = Object.assign({}, fallback, raw);
+    if (isVectorResultLayer(layer) && geometryTypes(layer).has("multipolygon")) {
+      style.fillOpacity = Number.isFinite(style.fillOpacity) ? Math.min(style.fillOpacity, 0.1) : 0.08;
+    } else if (isVectorResultLayer(layer) && geometryTypes(layer).has("polygon")) {
+      style.fillOpacity = Number.isFinite(style.fillOpacity) ? Math.min(style.fillOpacity, 0.1) : 0.08;
+    }
+    return style;
   }
 
   function layerVisibility(layer) {
     return layer.visible ? "visible" : "none";
   }
 
-  function addVectorLayerSet(map, sourceId, layer, registry) {
+  function isVectorResultLayer(layer) {
+    const groupId = String(layer.groupId || "");
+    const id = String(layer.id || "");
+    return groupId === "ras-results" || id.startsWith("ras-results-");
+  }
+
+  function displayGroupName(group) {
+    if (group.id === "ras-terrains") {
+      return "Terrain";
+    }
+    if (group.id === "ras-raster-results") {
+      return "Raster Results";
+    }
+    if (group.id === "ras-results") {
+      return "Vector Results";
+    }
+    return group.name || group.id;
+  }
+
+  function rasterLayerGroupId(tileset) {
+    if (tileset.groupId) {
+      return tileset.groupId;
+    }
+    return tileset.id === "terrain" ? "ras-terrains" : "ras-raster-results";
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function formatFieldValue(value) {
+    if (value === null || value === undefined || value === "") {
+      return "";
+    }
+    if (typeof value === "number") {
+      if (!Number.isFinite(value)) {
+        return "";
+      }
+      if (Math.abs(value) >= 1000) {
+        return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      }
+      return value.toLocaleString(undefined, { maximumFractionDigits: 3 });
+    }
+    if (typeof value === "boolean") {
+      return value ? "true" : "false";
+    }
+    return String(value);
+  }
+
+  function formatFieldName(name) {
+    return String(name || "")
+      .replace(/^ras_/i, "")
+      .replace(/_/g, " ");
+  }
+
+  function popupHtml(layer, properties) {
+    const skipFields = new Set([
+      "bbox",
+      "bounds",
+      "geometry",
+      "wkb_geometry",
+      "geom",
+      "hilbert",
+      "hilbert_index",
+      "hilbert_key",
+    ]);
+    const rows = Object.entries(properties || {})
+      .filter(([key, value]) => !skipFields.has(String(key).toLowerCase()) && formatFieldValue(value) !== "")
+      .slice(0, 16);
+
+    const body = rows.length
+      ? rows
+          .map(([key, value]) => (
+            `<dt>${escapeHtml(formatFieldName(key))}</dt><dd>${escapeHtml(formatFieldValue(value))}</dd>`
+          ))
+          .join("")
+      : "<dt>Feature</dt><dd>No attributes available</dd>";
+
+    return [
+      '<div class="ras-map-popup">',
+      `<div class="ras-map-popup__title">${escapeHtml(layer.name || layer.id)}</div>`,
+      `<dl>${body}</dl>`,
+      "</div>",
+    ].join("");
+  }
+
+  function bindFeatureHover(map, mapLayerId, layer, popup) {
+    if (!popup || (!isVectorResultLayer(layer) && layer.queryable !== true)) {
+      return;
+    }
+
+    map.on("mousemove", mapLayerId, (event) => {
+      const feature = event.features && event.features[0];
+      if (!feature) {
+        return;
+      }
+      map.getCanvas().style.cursor = "pointer";
+      popup
+        .setLngLat(event.lngLat)
+        .setHTML(popupHtml(layer, feature.properties || {}))
+        .addTo(map);
+    });
+
+    map.on("mouseleave", mapLayerId, () => {
+      map.getCanvas().style.cursor = "";
+      popup.remove();
+    });
+  }
+
+  function addVectorLayerSet(map, sourceId, layer, registry, popup) {
     const types = geometryTypes(layer);
     const paint = styleFor(layer);
     const minzoom = Number.isFinite(paint.minzoom) ? paint.minzoom : 0;
@@ -114,6 +234,7 @@
         },
       });
       ids.push(fillId);
+      bindFeatureHover(map, fillId, layer, popup);
 
       const outlineId = `${layer.id}-outline`;
       map.addLayer({
@@ -130,6 +251,7 @@
         },
       });
       ids.push(outlineId);
+      bindFeatureHover(map, outlineId, layer, popup);
     }
 
     if (types.has("linestring") || types.has("multilinestring")) {
@@ -148,6 +270,7 @@
         },
       });
       ids.push(lineId);
+      bindFeatureHover(map, lineId, layer, popup);
     }
 
     if (types.has("point") || types.has("multipoint")) {
@@ -166,6 +289,7 @@
         },
       });
       ids.push(pointId);
+      bindFeatureHover(map, pointId, layer, popup);
     }
 
     registry.set(layer.id, ids);
@@ -210,8 +334,8 @@
       .filter((tileset) => tileset.type === "raster")
       .map((tileset) => ({
         id: tileset.id,
-        name: "Terrain",
-        groupId: "ras-terrains",
+        name: tileset.name || (tileset.id === "terrain" ? "Terrain" : tileset.id),
+        groupId: rasterLayerGroupId(tileset),
         visible: Boolean(tileset.visible),
         featureCount: null,
         bytes: tileset.bytes,
@@ -227,8 +351,14 @@
     }
 
     const groups = manifest.groups && manifest.groups.length
-      ? manifest.groups
+      ? manifest.groups.slice()
       : Array.from(layersByGroup.keys()).map((id) => ({ id, name: id, visible: true }));
+    const knownGroups = new Set(groups.map((group) => group.id));
+    for (const groupId of layersByGroup.keys()) {
+      if (!knownGroups.has(groupId)) {
+        groups.push({ id: groupId, name: displayGroupName({ id: groupId }), visible: true });
+      }
+    }
 
     list.replaceChildren();
 
@@ -259,7 +389,7 @@
       groupCheck.dataset.groupCheckbox = group.id;
       groupCheck.checked = groupLayers.every((layer) => layer.visible);
       const groupName = document.createElement("span");
-      groupName.textContent = group.name;
+      groupName.textContent = displayGroupName(group);
       header.append(groupCheck, groupName);
       section.append(header);
 
@@ -385,11 +515,16 @@
     const registry = new Map();
 
     map.on("load", () => {
-      const terrainTilesets = (manifest.tilesets || []).filter((tileset) => tileset.type === "raster");
+      const rasterTilesets = (manifest.tilesets || []).filter((tileset) => tileset.type === "raster");
       const resultTilesets = (manifest.tilesets || []).filter((tileset) => tileset.type === "vector" && tileset.id === "results");
       const geometryTilesets = (manifest.tilesets || []).filter((tileset) => tileset.type === "vector" && tileset.id !== "results");
+      const hoverPopup = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        maxWidth: "360px",
+      });
 
-      for (const tileset of terrainTilesets) {
+      for (const tileset of rasterTilesets) {
         const sourceId = `${tileset.id}-source`;
         map.addSource(sourceId, {
           type: "raster",
@@ -414,14 +549,14 @@
           url: `pmtiles://${resolveTileHref(baseUrl, tileset.href, manifestUrl)}`,
         });
         for (const layer of tileset.layers || []) {
-          addVectorLayerSet(map, sourceId, layer, registry);
+          addVectorLayerSet(map, sourceId, layer, registry, hoverPopup);
         }
       }
 
       buildLayerTree(root, map, manifest, registry);
-      const leftPadding = root.clientWidth > 760 ? 370 : 42;
+      const sidePadding = root.clientWidth > 760 ? 60 : 28;
       map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], {
-        padding: { top: 42, right: 42, bottom: 42, left: leftPadding },
+        padding: { top: 110, right: sidePadding, bottom: 50, left: sidePadding },
         maxZoom: 15,
         duration: 0,
       });
