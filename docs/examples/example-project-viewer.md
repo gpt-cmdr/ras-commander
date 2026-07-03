@@ -6,7 +6,7 @@ hide:
 ---
 
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
-<link rel="stylesheet" href="../../assets/stylesheets/ras-maplibre-viewer.css?v=20260703Tlayout01">
+<link rel="stylesheet" href="../../assets/stylesheets/ras-maplibre-viewer.css?v=20260703Tcontrols01">
 
 <div class="ras-maplibre-viewer" data-ras-maplibre-viewer data-manifest="https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260703Tstoredmaps01">
   <div class="ras-viewer-topbar">
@@ -37,7 +37,7 @@ hide:
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
-<script src="../../assets/javascripts/ras-maplibre-viewer.js"></script>
+<script src="../../assets/javascripts/ras-maplibre-viewer.js?v=20260703Tcontrols01"></script>
 
 ## Raster Results
 

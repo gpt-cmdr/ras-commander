@@ -362,6 +362,28 @@
 
     list.replaceChildren();
 
+    const geometryColumn = document.createElement("div");
+    geometryColumn.className = "ras-layer-column";
+    geometryColumn.dataset.layerColumn = "geometry";
+    const geometryTitle = document.createElement("p");
+    geometryTitle.className = "ras-layer-column__title";
+    geometryTitle.textContent = "Geometry Data";
+    geometryColumn.append(geometryTitle);
+
+    const resultsColumn = document.createElement("div");
+    resultsColumn.className = "ras-layer-column";
+    resultsColumn.dataset.layerColumn = "results";
+    const resultsTitle = document.createElement("p");
+    resultsTitle.className = "ras-layer-column__title";
+    resultsTitle.textContent = "Results & Terrain";
+    resultsColumn.append(resultsTitle);
+
+    list.append(geometryColumn, resultsColumn);
+
+    function columnForGroup(groupId) {
+      return String(groupId || "").startsWith("ras-geometry-") ? geometryColumn : resultsColumn;
+    }
+
     function updateGroupCheckbox(groupId) {
       const groupCheckbox = list.querySelector(`[data-group-checkbox="${groupId}"]`);
       if (!groupCheckbox) {
@@ -436,7 +458,7 @@
       });
 
       section.append(children);
-      list.append(section);
+      columnForGroup(group.id).append(section);
       updateGroupCheckbox(group.id);
     }
 
