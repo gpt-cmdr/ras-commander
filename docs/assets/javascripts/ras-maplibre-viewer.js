@@ -375,9 +375,7 @@
     if (!query.sourceProj4) {
       throw new Error(`No projection definition for ${sourceCrs}.`);
     }
-    if (!window.proj4.defs(sourceCrs)) {
-      window.proj4.defs(sourceCrs, query.sourceProj4);
-    }
+    window.proj4.defs(sourceCrs, query.sourceProj4);
     return window.proj4("EPSG:4326", sourceCrs, [lngLat.lng, lngLat.lat]);
   }
 
