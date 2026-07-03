@@ -28,7 +28,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [117 - Monte Carlo Uncertainty Analysis (Hardened API)](../notebooks/117_monte_carlo_uncertainty.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/117_monte_carlo_uncertainty.ipynb) | 11.8 min |
 | [120 - Win32COM Automation](../notebooks/120_automating_ras_with_win32com.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/120_automating_ras_with_win32com.ipynb) | 13 s |
 | [121 - HECRASController Profiles](../notebooks/121_legacy_hecrascontroller_and_rascontrol.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/121_legacy_hecrascontroller_and_rascontrol.ipynb) | 12.7 min |
-| [122 - RASMapper Spatial Review](../notebooks/122_rasmapper_spatial_review.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/122_rasmapper_spatial_review.ipynb) | 55 s |
+| [122 - RASMapper Spatial Review](../notebooks/122_rasmapper_spatial_review.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/122_rasmapper_spatial_review.ipynb) | 1.1 min |
 | [123 - RASMapper Geometry Layer Updates](../notebooks/123_rasmapper_geometry_layer_updates.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/123_rasmapper_geometry_layer_updates.ipynb) | 9.8 min |
 | [124 - RASMapper Bank Lines](../notebooks/124_rasmapper_bank_lines.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/124_rasmapper_bank_lines.ipynb) | 44 s |
 | [150 - Using results_df for Plan Results Summary](../notebooks/150_results_dataframe.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/150_results_dataframe.ipynb) | 1.1 min |
@@ -57,7 +57,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [218 - Infiltration Base Override Authoring](../notebooks/218_infiltration_base_override_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/218_infiltration_base_override_authoring.ipynb) | 4 s |
 | [219 - 1D Bridge Cross-Section Plotting with Deck/Pier Overlay](../notebooks/219_1d_bridge_xs_plotting.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/219_1d_bridge_xs_plotting.ipynb) | 5 s |
 | [219 - Manning's n Region Polygon Authoring](../notebooks/219_mannings_region_polygon_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/219_mannings_region_polygon_authoring.ipynb) | 3 s |
-| [220 - Kalamazoo River Calibration Workflow](../notebooks/220_calibration_workflow.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/220_calibration_workflow.ipynb) | 15 s |
+| [220 - Kalamazoo River Calibration Workflow](../notebooks/220_calibration_workflow.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/220_calibration_workflow.ipynb) | 8 s |
 | [221 - 1D Manning's N Calibration Workflow](../notebooks/221_calibration_1d_workflow.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/221_calibration_1d_workflow.ipynb) | 36.6 min |
 | [222 - Steady Flow Calibration](../notebooks/222_steady_flow_calibration.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/222_steady_flow_calibration.ipynb) | 39 s |
 | [223 - Steady Floodway Encroachment](../notebooks/223_steady_floodway_encroachment.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/223_steady_floodway_encroachment.ipynb) | 17 s |

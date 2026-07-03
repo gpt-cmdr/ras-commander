@@ -110,6 +110,7 @@ def build_notebook_nav(examples_dir: Path) -> str:
         "  - Example Notebooks:",
         "    - Overview: examples/index.md",
         "    - Example Projects: examples/example-projects.md",
+        "    - Muncie Map Viewer: examples/example-project-viewer.md",
     ]
     for key in section_order:
         lines.append(f"    - {_yaml_dq(key[1])}:")

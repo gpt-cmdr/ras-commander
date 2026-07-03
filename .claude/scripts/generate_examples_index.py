@@ -209,7 +209,7 @@ def build_index_markdown(examples_dir: Path) -> Tuple[str, int, int]:
         "last time the notebook was executed (`N/A` means the notebook was "
         "committed without execution outputs).\n\n"
         "See [Example Projects](example-projects.md) for the CRS-valid source "
-        "catalog and GeoLibre review contract for ras2cng-exported model "
+        "catalog and MapLibre review contract for ras2cng-exported model "
         "bundles.\n\n"
         "!!! tip \"New here? Start with the 100s.\"\n"
         "    Run **100 → 101 → 110** for the core initialize → inspect → execute "
