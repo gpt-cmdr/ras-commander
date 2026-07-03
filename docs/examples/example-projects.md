@@ -37,10 +37,12 @@ The generated Muncie bundle currently includes:
 - three geometry archives: `g01`, `g02`, and `g04`
 - RAS-style geometry sublayers for model extents, 2D flow areas, mesh cells,
   mesh faces, breaklines, centerlines, structures, and cross sections
-- terrain published as raster PMTiles with the RAS Commander terrain color ramp
+- terrain published as raster PMTiles with the RAS Commander terrain color ramp,
+  plus a source COG for click-query elevation values
 - vector result layers for plans `p03` and `p04`
 - raster result COGs from RasProcess Stored Maps for plans `p03` and `p04`,
   plus colorized raster PMTiles display derivatives
+- click identify for visible vector metadata and visible COG-backed raster values
 - default visibility with terrain and geometry `g04` enabled, other geometries
   and result layers disabled
 - Hilbert sorting and `join_index` metadata for geometry/result joins
@@ -51,12 +53,13 @@ Live public paths:
 | Resource | Link |
 |----------|------|
 | MapLibre viewer | [Muncie Map Viewer](example-project-viewer.md) |
-| MapLibre manifest | [manifest.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260703Tstoredmaps01) |
+| MapLibre manifest | [manifest.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260703Tidentify01) |
 | Geometry PMTiles | [geometry.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/geometry.pmtiles) |
 | Vector results PMTiles | [results.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/results.pmtiles) |
 | Raster results PMTiles | [p04 depth](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/result-p04-depth-max.pmtiles), [p04 WSE](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/result-p04-wse-max.pmtiles), [p04 velocity](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/result-p04-velocity-max.pmtiles), [p03 depth](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/result-p03-depth-max.pmtiles), [p03 WSE](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/result-p03-wse-max.pmtiles), [p03 velocity](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/result-p03-velocity-max.pmtiles) |
 | Stored Map COGs | [p04 depth COG](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/stored-maps/p04/depth-max.cog.tif), [p04 WSE COG](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/stored-maps/p04/wse-max.cog.tif), [p04 velocity COG](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/stored-maps/p04/velocity-max.cog.tif), [p03 depth COG](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/stored-maps/p03/depth-max.cog.tif), [p03 WSE COG](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/stored-maps/p03/wse-max.cog.tif), [p03 velocity COG](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/stored-maps/p03/velocity-max.cog.tif) |
 | Terrain PMTiles | [terrain.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/terrain.pmtiles) |
+| Terrain COG | [terrain.cog.tif](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/terrain/terrain.cog.tif) |
 | Project catalog | [catalog.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/catalog.json) |
 | Project manifest | [project.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/project.json) |
 

@@ -18,6 +18,17 @@
     water_surface: { fill: "#2b8cbe", fillOpacity: 0.52, line: "#045a8d", lineWidth: 0.4 },
     velocity: { fill: "#7c3aed", fillOpacity: 0, line: "#7c3aed", lineWidth: 0.9 },
   };
+  const IDENTIFY_SKIP_FIELDS = new Set([
+    "bbox",
+    "bounds",
+    "geometry",
+    "wkb_geometry",
+    "geom",
+    "hilbert",
+    "hilbert_index",
+    "hilbert_key",
+  ]);
+  const rasterSourceCache = new Map();
 
   function status(root, message) {
     const el = root.querySelector("[data-status]");
@@ -158,61 +169,44 @@
       .replace(/_/g, " ");
   }
 
+  function displayPropertyRows(properties, limit) {
+    return Object.entries(properties || {})
+      .filter(([key, value]) => !IDENTIFY_SKIP_FIELDS.has(String(key).toLowerCase()) && formatFieldValue(value) !== "")
+      .slice(0, limit || 12);
+  }
+
+  function propertyRowsHtml(properties, limit) {
+    const rows = displayPropertyRows(properties, limit);
+    if (!rows.length) {
+      return "<dt>Feature</dt><dd>No attributes available</dd>";
+    }
+    return rows
+      .map(([key, value]) => (
+        `<dt>${escapeHtml(formatFieldName(key))}</dt><dd>${escapeHtml(formatFieldValue(value))}</dd>`
+      ))
+      .join("");
+  }
+
   function popupHtml(layer, properties) {
-    const skipFields = new Set([
-      "bbox",
-      "bounds",
-      "geometry",
-      "wkb_geometry",
-      "geom",
-      "hilbert",
-      "hilbert_index",
-      "hilbert_key",
-    ]);
-    const rows = Object.entries(properties || {})
-      .filter(([key, value]) => !skipFields.has(String(key).toLowerCase()) && formatFieldValue(value) !== "")
-      .slice(0, 16);
-
-    const body = rows.length
-      ? rows
-          .map(([key, value]) => (
-            `<dt>${escapeHtml(formatFieldName(key))}</dt><dd>${escapeHtml(formatFieldValue(value))}</dd>`
-          ))
-          .join("")
-      : "<dt>Feature</dt><dd>No attributes available</dd>";
-
     return [
       '<div class="ras-map-popup">',
       `<div class="ras-map-popup__title">${escapeHtml(layer.name || layer.id)}</div>`,
-      `<dl>${body}</dl>`,
+      `<dl>${propertyRowsHtml(properties, 16)}</dl>`,
       "</div>",
     ].join("");
   }
 
   function bindFeatureHover(map, mapLayerId, layer, popup) {
-    if (!popup || (!isVectorResultLayer(layer) && layer.queryable !== true)) {
-      return;
-    }
-
-    map.on("mousemove", mapLayerId, (event) => {
-      const feature = event.features && event.features[0];
-      if (!feature) {
-        return;
-      }
+    map.on("mousemove", mapLayerId, () => {
       map.getCanvas().style.cursor = "pointer";
-      popup
-        .setLngLat(event.lngLat)
-        .setHTML(popupHtml(layer, feature.properties || {}))
-        .addTo(map);
     });
 
     map.on("mouseleave", mapLayerId, () => {
       map.getCanvas().style.cursor = "";
-      popup.remove();
     });
   }
 
-  function addVectorLayerSet(map, sourceId, layer, registry, popup) {
+  function addVectorLayerSet(map, sourceId, layer, registry, popup, mapLayerLookup) {
     const types = geometryTypes(layer);
     const paint = styleFor(layer);
     const minzoom = Number.isFinite(paint.minzoom) ? paint.minzoom : 0;
@@ -234,6 +228,7 @@
         },
       });
       ids.push(fillId);
+      mapLayerLookup.set(fillId, layer);
       bindFeatureHover(map, fillId, layer, popup);
 
       const outlineId = `${layer.id}-outline`;
@@ -251,6 +246,7 @@
         },
       });
       ids.push(outlineId);
+      mapLayerLookup.set(outlineId, layer);
       bindFeatureHover(map, outlineId, layer, popup);
     }
 
@@ -270,6 +266,7 @@
         },
       });
       ids.push(lineId);
+      mapLayerLookup.set(lineId, layer);
       bindFeatureHover(map, lineId, layer, popup);
     }
 
@@ -289,10 +286,19 @@
         },
       });
       ids.push(pointId);
+      mapLayerLookup.set(pointId, layer);
       bindFeatureHover(map, pointId, layer, popup);
     }
 
     registry.set(layer.id, ids);
+  }
+
+  function isLayerVisible(map, registry, layerId) {
+    const mapLayerIds = registry.get(layerId) || [];
+    return mapLayerIds.some((mapLayerId) => (
+      map.getLayer(mapLayerId) &&
+      map.getLayoutProperty(mapLayerId, "visibility") !== "none"
+    ));
   }
 
   function setManifestLayerVisible(map, registry, layerId, visible) {
@@ -320,6 +326,230 @@
         map.setPaintProperty(mapLayerId, "line-opacity", opacity);
       }
     }
+  }
+
+  function rasterUnits(tileset) {
+    if (tileset.units) {
+      return tileset.units;
+    }
+    const id = String(tileset.id || "");
+    const mapType = String(tileset.storedMap && tileset.storedMap.mapType || "");
+    if (id === "terrain" || mapType === "terrain" || id.includes("wse") || id.includes("depth")) {
+      return "ft";
+    }
+    if (id.includes("velocity") || mapType === "velocity") {
+      return "ft/s";
+    }
+    return "";
+  }
+
+  function formatRasterValue(value, units) {
+    if (!Number.isFinite(value)) {
+      return "";
+    }
+    const formatted = Math.abs(value) >= 1000
+      ? value.toLocaleString(undefined, { maximumFractionDigits: 2 })
+      : value.toLocaleString(undefined, { maximumFractionDigits: 3 });
+    return units ? `${formatted} ${units}` : formatted;
+  }
+
+  function rasterQueryConfig(manifest, tileset) {
+    return Object.assign({}, manifest.rasterQuery || {}, tileset.rasterQuery || {});
+  }
+
+  function ensureRasterQueryLibraries() {
+    if (!window.GeoTIFF || typeof window.GeoTIFF.fromUrl !== "function") {
+      throw new Error("GeoTIFF reader did not load.");
+    }
+    if (!window.proj4) {
+      throw new Error("Projection library did not load.");
+    }
+  }
+
+  function projectLngLatForRaster(lngLat, manifest, tileset) {
+    const query = rasterQueryConfig(manifest, tileset);
+    const sourceCrs = query.sourceCrs || "EPSG:4326";
+    if (sourceCrs === "EPSG:4326") {
+      return [lngLat.lng, lngLat.lat];
+    }
+    if (!query.sourceProj4) {
+      throw new Error(`No projection definition for ${sourceCrs}.`);
+    }
+    if (!window.proj4.defs(sourceCrs)) {
+      window.proj4.defs(sourceCrs, query.sourceProj4);
+    }
+    return window.proj4("EPSG:4326", sourceCrs, [lngLat.lng, lngLat.lat]);
+  }
+
+  async function loadRasterSource(url) {
+    if (!rasterSourceCache.has(url)) {
+      rasterSourceCache.set(url, (async () => {
+        const tiff = await window.GeoTIFF.fromUrl(url);
+        const image = await tiff.getImage();
+        const noDataRaw = typeof image.getGDALNoData === "function" ? image.getGDALNoData() : null;
+        return {
+          image,
+          width: image.getWidth(),
+          height: image.getHeight(),
+          origin: image.getOrigin(),
+          resolution: image.getResolution(),
+          bbox: image.getBoundingBox(),
+          noData: noDataRaw === null || noDataRaw === undefined || noDataRaw === "" ? null : Number(noDataRaw),
+        };
+      })());
+    }
+    return rasterSourceCache.get(url);
+  }
+
+  async function sampleRasterAtClick(tileset, manifest, baseUrl, lngLat) {
+    ensureRasterQueryLibraries();
+    const url = resolveHref(baseUrl, tileset.sourceCog);
+    const source = await loadRasterSource(url);
+    const [x, y] = projectLngLatForRaster(lngLat, manifest, tileset);
+    const [minX, minY, maxX, maxY] = source.bbox;
+    if (x < minX || x > maxX || y < minY || y > maxY) {
+      return { tileset, state: "outside" };
+    }
+
+    const col = Math.floor((x - source.origin[0]) / source.resolution[0]);
+    const row = Math.floor((y - source.origin[1]) / source.resolution[1]);
+    if (col < 0 || row < 0 || col >= source.width || row >= source.height) {
+      return { tileset, state: "outside" };
+    }
+
+    const data = await source.image.readRasters({
+      window: [col, row, col + 1, row + 1],
+      samples: [0],
+      interleave: true,
+    });
+    const value = Number(data[0]);
+    if (!Number.isFinite(value) || (source.noData !== null && Math.abs(value - source.noData) < 1e-9)) {
+      return { tileset, state: "nodata", col, row };
+    }
+    return { tileset, state: "value", value, units: rasterUnits(tileset), col, row };
+  }
+
+  function collectIdentifyFeatures(map, point, mapLayerLookup) {
+    const pad = 5;
+    const features = map.queryRenderedFeatures(
+      [[point.x - pad, point.y - pad], [point.x + pad, point.y + pad]]
+    );
+    const seen = new Set();
+    const results = [];
+    for (const feature of features) {
+      const layer = mapLayerLookup.get(feature.layer && feature.layer.id);
+      if (!layer) {
+        continue;
+      }
+      const properties = feature.properties || {};
+      const key = `${layer.id}:${JSON.stringify(properties)}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      results.push({ layer, properties });
+      if (results.length >= 8) {
+        break;
+      }
+    }
+    return results;
+  }
+
+  function identifyPopupHtml(lngLat, features, rasterSamples, options) {
+    const pending = options && options.pending;
+    const rasterTargets = options && options.rasterTargets || 0;
+    const coords = `${lngLat.lng.toFixed(6)}, ${lngLat.lat.toFixed(6)}`;
+    const featureHtml = features.length
+      ? features.map((item) => [
+          '<section class="ras-identify-section">',
+          `<h4>${escapeHtml(item.layer.name || item.layer.id)}</h4>`,
+          `<dl>${propertyRowsHtml(item.properties, 10)}</dl>`,
+          "</section>",
+        ].join("")).join("")
+      : '<p class="ras-identify-empty">No visible vector features at this point.</p>';
+
+    let rasterHtml = "";
+    if (pending) {
+      rasterHtml = `<p class="ras-identify-empty">Reading ${rasterTargets} raster value${rasterTargets === 1 ? "" : "s"}...</p>`;
+    } else if (!rasterSamples || !rasterSamples.length) {
+      rasterHtml = '<p class="ras-identify-empty">No visible queryable rasters at this point.</p>';
+    } else {
+      rasterHtml = [
+        '<dl class="ras-identify-raster-list">',
+        ...rasterSamples.map((sample) => {
+          const name = sample.tileset.name || sample.tileset.id;
+          let value = "";
+          if (sample.state === "value") {
+            value = formatRasterValue(sample.value, sample.units);
+          } else if (sample.state === "nodata") {
+            value = "NoData";
+          } else if (sample.state === "outside") {
+            value = "Outside extent";
+          } else {
+            value = sample.error || "Unavailable";
+          }
+          return `<dt>${escapeHtml(name)}</dt><dd>${escapeHtml(value)}</dd>`;
+        }),
+        "</dl>",
+      ].join("");
+    }
+
+    return [
+      '<div class="ras-identify-popup">',
+      '<div class="ras-identify-title">Identify</div>',
+      `<div class="ras-identify-coords">${escapeHtml(coords)}</div>`,
+      '<h3>Raster Values</h3>',
+      rasterHtml,
+      '<h3>Vector Metadata</h3>',
+      featureHtml,
+      "</div>",
+    ].join("");
+  }
+
+  function visibleQueryableRasters(manifest, map, registry) {
+    return (manifest.tilesets || [])
+      .filter((tileset) => (
+        tileset.type === "raster" &&
+        tileset.sourceCog &&
+        tileset.queryable !== false &&
+        isLayerVisible(map, registry, tileset.id)
+      ));
+  }
+
+  function bindIdentifyClick(root, map, manifest, registry, mapLayerLookup, baseUrl) {
+    const identifyPopup = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: false,
+      maxWidth: "420px",
+    });
+    let identifySequence = 0;
+
+    map.on("click", (event) => {
+      const sequence = ++identifySequence;
+      const features = collectIdentifyFeatures(map, event.point, mapLayerLookup);
+      const rasterTargets = visibleQueryableRasters(manifest, map, registry);
+      identifyPopup
+        .setLngLat(event.lngLat)
+        .setHTML(identifyPopupHtml(event.lngLat, features, [], {
+          pending: rasterTargets.length > 0,
+          rasterTargets: rasterTargets.length,
+        }))
+        .addTo(map);
+
+      if (!rasterTargets.length) {
+        return;
+      }
+
+      Promise.all(rasterTargets.map((tileset) => (
+        sampleRasterAtClick(tileset, manifest, baseUrl, event.lngLat)
+          .catch((error) => ({ tileset, state: "error", error: error.message || "Unavailable" }))
+      ))).then((samples) => {
+        if (sequence !== identifySequence) {
+          return;
+        }
+        identifyPopup.setHTML(identifyPopupHtml(event.lngLat, features, samples, { pending: false }));
+      });
+    });
   }
 
   function buildLayerTree(root, map, manifest, registry) {
@@ -535,6 +765,7 @@
     map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
 
     const registry = new Map();
+    const mapLayerLookup = new Map();
 
     map.on("load", () => {
       const rasterTilesets = (manifest.tilesets || []).filter((tileset) => tileset.type === "raster");
@@ -571,11 +802,12 @@
           url: `pmtiles://${resolveTileHref(baseUrl, tileset.href, manifestUrl)}`,
         });
         for (const layer of tileset.layers || []) {
-          addVectorLayerSet(map, sourceId, layer, registry, hoverPopup);
+          addVectorLayerSet(map, sourceId, layer, registry, hoverPopup, mapLayerLookup);
         }
       }
 
       buildLayerTree(root, map, manifest, registry);
+      bindIdentifyClick(root, map, manifest, registry, mapLayerLookup, baseUrl);
       const sidePadding = root.clientWidth > 760 ? 60 : 28;
       map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], {
         padding: { top: 50, right: sidePadding, bottom: 50, left: sidePadding },
