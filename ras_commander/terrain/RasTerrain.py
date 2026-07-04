@@ -56,6 +56,7 @@ See Also:
 
 import logging
 import math
+import os
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -1577,6 +1578,166 @@ class RasTerrain:
         )
 
     @staticmethod
+    def _get_hecras_gdal_path_from_install(hecras_path: Path) -> Path:
+        """Return the bundled GDAL executable folder for a HEC-RAS install."""
+        gdal_paths = [
+            hecras_path / "GDAL" / "bin64",
+            hecras_path / "GDAL" / "bin",
+            hecras_path / "gdal" / "bin64",
+            hecras_path / "gdal" / "bin",
+        ]
+
+        for gdal_path in gdal_paths:
+            if (gdal_path / "gdal_translate.exe").exists():
+                return gdal_path
+
+        raise FileNotFoundError(
+            f"HEC-RAS GDAL tools not found in {hecras_path}. "
+            f"Expected GDAL\\bin64\\gdal_translate.exe to exist."
+        )
+
+    @staticmethod
+    def _is_conflicting_gdal_path(path_value: str, hecras_path: Path) -> bool:
+        """Identify PATH entries likely to inject non-HEC GDAL/PROJ DLLs."""
+        if not path_value:
+            return False
+
+        try:
+            candidate = Path(path_value).resolve()
+            hecras_resolved = hecras_path.resolve()
+            if candidate == hecras_resolved or hecras_resolved in candidate.parents:
+                return False
+        except (OSError, RuntimeError, ValueError):
+            pass
+
+        normalized = path_value.replace("/", "\\").lower()
+        conflict_tokens = (
+            "rasterio",
+            "rasterio.libs",
+            "pyproj",
+            "pyproj.libs",
+            "fiona",
+            "fiona.libs",
+            "pyogrio",
+            "pyogrio.libs",
+            "\\osgeo4w",
+            "\\qgis",
+            "\\gdal\\",
+            "program files\\gdal",
+        )
+        return any(token in normalized for token in conflict_tokens)
+
+    @staticmethod
+    def _build_hecras_terrain_env(hecras_path: Path) -> Dict[str, str]:
+        """
+        Build a subprocess environment isolated to HEC-RAS's bundled GDAL.
+
+        Python GIS packages and system GDAL installs commonly set GDAL/PROJ
+        variables or PATH entries that can be inherited by RasProcess.exe.
+        CreateTerrain is sensitive to that mismatch, so terrain creation gets
+        a child-only environment with HEC-RAS paths first and external GDAL/PROJ
+        configuration removed.
+        """
+        env = os.environ.copy()
+
+        for key in (
+            "GDAL_DATA",
+            "GDAL_DRIVER_PATH",
+            "GDAL_SKIP",
+            "PROJ_DATA",
+            "PROJ_LIB",
+            "PROJ_NETWORK",
+        ):
+            env.pop(key, None)
+
+        gdal_path = RasTerrain._get_hecras_gdal_path_from_install(hecras_path)
+        preferred_paths = [str(hecras_path), str(gdal_path)]
+
+        raw_path = env.get("PATH", "")
+        inherited_paths = [
+            path_entry
+            for path_entry in raw_path.split(os.pathsep)
+            if path_entry
+            and path_entry not in preferred_paths
+            and not RasTerrain._is_conflicting_gdal_path(path_entry, hecras_path)
+        ]
+        env["PATH"] = os.pathsep.join(preferred_paths + inherited_paths)
+
+        return env
+
+    @staticmethod
+    def _format_rasprocess_failure(
+        result: subprocess.CompletedProcess,
+        output_hdf: Path,
+    ) -> str:
+        """Create a concise diagnostic string for RasProcess failures."""
+        details = [
+            f"Terrain creation failed for {output_hdf}.",
+            f"Return code: {result.returncode}.",
+        ]
+        if result.stderr:
+            details.append(f"STDERR: {result.stderr.strip()}")
+        if result.stdout:
+            details.append(f"STDOUT: {result.stdout.strip()}")
+        return " ".join(details)
+
+    @staticmethod
+    def _validate_terrain_hdf(output_hdf: Path) -> Dict[str, Any]:
+        """
+        Validate that CreateTerrain produced a usable, non-stub terrain HDF.
+
+        A failed CreateTerrain run can leave a tiny HDF5 file with only an empty
+        /Terrain group. That file is syntactically valid HDF5 but unusable by
+        the geometry preprocessor, so existence alone is not enough.
+        """
+        try:
+            import h5py
+        except ImportError as exc:
+            raise RuntimeError(
+                "h5py is required to validate HEC-RAS terrain HDF output."
+            ) from exc
+
+        try:
+            with h5py.File(output_hdf, "r") as hdf:
+                if "Terrain" not in hdf:
+                    raise RuntimeError(
+                        f"Terrain HDF is missing the required /Terrain group: "
+                        f"{output_hdf}"
+                    )
+
+                groups: List[str] = []
+                datasets: List[str] = []
+
+                def collect(name, obj):
+                    if isinstance(obj, h5py.Dataset):
+                        datasets.append(name)
+                    elif isinstance(obj, h5py.Group):
+                        groups.append(name)
+
+                hdf["Terrain"].visititems(collect)
+
+        except OSError as exc:
+            raise RuntimeError(
+                f"Terrain creation produced an unreadable HDF file: {output_hdf}"
+            ) from exc
+
+        if not datasets:
+            file_size = output_hdf.stat().st_size
+            group_summary = ", ".join(groups[:10]) if groups else "<none>"
+            raise RuntimeError(
+                f"Terrain creation produced a stub HDF with no datasets under "
+                f"/Terrain: {output_hdf} ({file_size:,} bytes). "
+                f"Terrain groups found: {group_summary}. This usually indicates "
+                "RasProcess.exe failed during final terrain HDF assembly."
+            )
+
+        return {
+            "groups": len(groups),
+            "datasets": len(datasets),
+            "sample_datasets": datasets[:5],
+        }
+
+    @staticmethod
     @log_call
     def _generate_prj_from_raster(
         raster_path: Union[str, Path],
@@ -1721,10 +1882,13 @@ class RasTerrain:
               exist.
             - Verified working with HEC-RAS 6.6 (tested 2025-12-25).
         """
-        # Convert to Path objects
-        output_hdf = Path(output_hdf)
-        projection_prj = Path(projection_prj)
-        input_rasters = [Path(r) for r in input_rasters]
+        # Convert to Path objects. Resolve to ABSOLUTE paths: RasProcess.exe runs with
+        # cwd=hecras_path (so HEC's bundled GDAL/PROJ resolve correctly), which means any
+        # relative prj/out/input paths would be looked up under the HEC-RAS install dir and
+        # fail ("PRJ File ... does not exist"). Absolutizing here keeps cwd harmless.
+        output_hdf = Path(output_hdf).resolve()
+        projection_prj = Path(projection_prj).resolve()
+        input_rasters = [Path(r).resolve() for r in input_rasters]
 
         # Validate units
         if units not in ("Feet", "Meters"):
@@ -1760,32 +1924,32 @@ class RasTerrain:
             output_hdf.unlink()
             logger.info(f"Removed existing terrain HDF: {output_hdf}")
 
-        # Build command string with proper quoting
-        # Note: Must use shell=True due to spaces in "Program Files"
+        # Build command arguments. Passing a list handles spaces in paths
+        # without involving the shell.
         stitch_str = "true" if stitch else "false"
 
-        cmd_str = (
-            f'"{rasprocess}" CreateTerrain '
-            f'units={units} stitch={stitch_str} '
-            f'prj="{projection_prj}" '
-            f'out="{output_hdf}"'
-        )
-
-        # Add input files (all in double quotes)
-        for raster in input_rasters:
-            cmd_str += f' "{raster}"'
+        cmd = [
+            str(rasprocess),
+            "CreateTerrain",
+            f"units={units}",
+            f"stitch={stitch_str}",
+            f"prj={projection_prj}",
+            f"out={output_hdf}",
+        ] + [str(raster) for raster in input_rasters]
+        env = RasTerrain._build_hecras_terrain_env(hecras_path)
 
         logger.info(f"Executing terrain creation command...")
-        logger.debug(f"Command: {cmd_str}")
+        logger.debug(f"Command: {subprocess.list2cmdline(cmd)}")
 
         # Execute command
         try:
             result = subprocess.run(
-                cmd_str,
-                shell=True,
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=timeout_seconds,
+                cwd=str(hecras_path),
+                env=env,
             )
 
             logger.debug(f"Return code: {result.returncode}")
@@ -1804,24 +1968,26 @@ class RasTerrain:
         except Exception as e:
             raise RuntimeError(f"Failed to execute RasProcess.exe: {e}")
 
+        if result.returncode != 0:
+            raise RuntimeError(
+                RasTerrain._format_rasprocess_failure(result, output_hdf)
+            )
+
         # Verify output was created
         if not output_hdf.exists():
-            error_details = ""
-            if result.stderr:
-                error_details = f" STDERR: {result.stderr}"
-            if result.stdout:
-                error_details += f" STDOUT: {result.stdout}"
-
             raise RuntimeError(
                 f"Terrain creation failed - output HDF not created: {output_hdf}."
-                f" Return code: {result.returncode}.{error_details}"
+                f" {RasTerrain._format_rasprocess_failure(result, output_hdf)}"
             )
+
+        validation = RasTerrain._validate_terrain_hdf(output_hdf)
 
         # Log success
         file_size = output_hdf.stat().st_size
         logger.info(
             f"Terrain HDF created successfully: {output_hdf} "
-            f"({file_size:,} bytes, {file_size/1024/1024:.2f} MB)"
+            f"({file_size:,} bytes, {file_size/1024/1024:.2f} MB, "
+            f"{validation['datasets']} datasets)"
         )
 
         return output_hdf
