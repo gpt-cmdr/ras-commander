@@ -83,7 +83,7 @@ resolves the cross-section and removes that artifact.
 # 1. delineate channel centerlines with TauDEM (run where TauDEM is installed; see below)
 python delineate_channels.py --dem ether_hollow_proj/EtherHollow_terrain_ft.tif \
        --domain prep/basin_perimeter_ft.json --out data/ether_hollow/channel_breakline_ft.json \
-       --stream-area-km2 0.04 --simplify-ft 3
+       --stream-area-km2 0.04 --simplify-ft 3 --plot taudem_centerlines.png
 
 # 2. build with breaklines (HEC-RAS, interactive): refine the mesh along the thalweg
 python ether_hollow_debris_flow.py --phase build --breaklines \
@@ -115,8 +115,14 @@ python mesh_compare_plot.py --uniform ... --refined ... --terrain ... --breaklin
 ```
 
 `delineate_channels.py` runs the TauDEM stream sequence (PitRemove → D8FlowDir → AreaD8 →
-Threshold → StreamNet), clips the centerlines to the 2D domain, simplifies them
-(Douglas-Peucker), and writes `channel_breakline_ft.json`. The build phase then authors them
+Threshold → StreamNet), clips the network to the 2D domain, and extracts the **continuous
+main-stem** centerline as a single polyline before simplifying (Douglas-Peucker) and writing
+`channel_breakline_ft.json`. The main-stem step matters: `linemerge` alone splits the trunk at
+every confluence, so picking the longest merged pieces yields a *discontinuous* thalweg with
+gaps; instead the segments are assembled into a graph and the longest path (head→outlet) is
+taken as one unbroken centerline (`--max-lines` keeps additional disjoint tributaries). Pass
+`--plot taudem_centerlines.png` for a hillshade + domain + streams + thalweg diagnostic. The
+build phase then authors them
 via `GeomStorage.set_breaklines` with **near = far** cell spacing (a uniform fine corridor,
 no coarsening) and `GeomMesh.set_breakline_spacing(near_repeats, protection_radius=1)`, sizing
 `near_repeats` (≥ 2 — at least two refined rows each side) to span the channel width;
@@ -130,7 +136,8 @@ bad faces via its auto-fix loop. Verify with `HdfBndry.get_breaklines(...)`.
 > 1-row band).
 
 Effect (Ether Hollow, τy = 700 Pa): the channel-aligned refinement drops the spurious max
-depth **19.1 → 13.4 ft** with peak velocity ~stable (~17–18.5 fps), mesh 10,647 → 14,535 cells.
+depth 19.1 → 13.4 ft as the resolved continuous thalweg carries the flow; peak velocity rises
+modestly (17.3 → 20.0 fps), mesh 10,647 → 15,546 cells.
 **Mesh and timestep refine together**: the 12 ft mesh needs a 0.5 s computation interval (the
 33 ft mesh is converged at 1 s) — at 1 s the refined mesh runs Courant ≈ 2 and inflates peak
 velocity to ~25 fps.
