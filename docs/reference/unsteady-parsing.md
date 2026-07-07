@@ -99,9 +99,8 @@ Flow Hydrograph= 48
      130     120     115     110     105     100     100     100
 ```
 
-- Count after `=` indicates total number of values
-- Values are **paired**: (time, flow), (time, flow), ...
-- Times are in hours from simulation start
+- Count after `=` indicates the number of flow values
+- Timing comes from the preceding `Interval=` line
 - Fixed-width format: 8 characters per value, 10 values per line
 
 ### Stage Hydrograph
@@ -109,13 +108,12 @@ Flow Hydrograph= 48
 Downstream stage boundary:
 
 ```
-Stage Hydrograph= 24
-       0    10.5     0.5    10.8       1    11.2     1.5    11.8       2    12.5
-     2.5    13.2       3    13.8     3.5    14.2       4    14.0     4.5    13.5
-       5    13.0     5.5    12.5       6    12.0     6.5    11.5
+Stage Hydrograph= 12
+   10.50   10.80   11.20   11.80   12.50   13.20   13.80   14.20   14.00   13.50
+   13.00   12.50
 ```
 
-Paired values: (time, stage elevation)
+Values: stage elevations at the preceding `Interval=`.
 
 ### Gate Openings
 
@@ -134,10 +132,11 @@ Paired values: (time, gate opening fraction or height)
 Lateral inflow along a reach:
 
 ```
-Lateral Inflow Hydrograph= 20
-       0      50     0.5     100       1     200     1.5     350       2     500
-     2.5     450       3     400     3.5     300       4     200       5     100
+Lateral Inflow Hydrograph= 10
+      50     100     200     350     500     450     400     300     200     100
 ```
+
+Values: lateral inflow at the preceding `Interval=`.
 
 ### Uniform Lateral Inflow
 
@@ -145,10 +144,10 @@ Constant lateral inflow rate:
 
 ```
 Uniform Lateral Inflow= 2
-       0    0.05
+    0.05    0.05
 ```
 
-Values: (time, inflow rate per unit length)
+Values: uniform lateral inflow rate per unit length at the preceding `Interval=`.
 
 ### Precipitation Hydrograph
 
@@ -156,11 +155,12 @@ Rainfall for rain-on-grid (when not using gridded meteorology):
 
 ```
 Precipitation Hydrograph= 12
-       0       0     0.5     0.1       1     0.25     1.5     0.5       2     0.8
-     2.5       1       3     0.8     3.5     0.5       4     0.2     4.5       0
+    0.50    0.00    1.00    0.10    1.50    0.25    2.00    0.50    2.50    0.80
+    3.00    1.00    3.50    0.80    4.00    0.50    4.50    0.20    5.00    0.00
+    5.50    0.00    6.00    0.00
 ```
 
-Paired values: (time, precipitation rate in in/hr or mm/hr)
+Paired values: (time, incremental precipitation depth in inches or mm). The header count is the number of time-depth pairs, so `Precipitation Hydrograph= 12` is followed by 24 numeric fields.
 
 ### Rating Curve
 
@@ -340,13 +340,14 @@ if 'Flow Hydrograph' in tables:
 
 | Table Type | Count Meaning | Total Values |
 |------------|---------------|--------------|
-| `Flow Hydrograph=` | Number of pairs | count × 2 |
-| `Stage Hydrograph=` | Number of pairs | count × 2 |
-| `Gate Openings=` | Number of pairs | count × 2 |
-| `Rating Curve=` | Number of pairs | count × 2 |
-| `Precipitation Hydrograph=` | Number of pairs | count × 2 |
+| `Flow Hydrograph=` | Number of values | count |
+| `Stage Hydrograph=` | Number of values | count |
+| `Lateral Inflow Hydrograph=` | Number of values | count |
+| `Uniform Lateral Inflow=` | Number of values | count |
+| `Precipitation Hydrograph=` | Number of time-depth pairs | count × 2 |
 
-All hydrograph/curve types store **paired values** (time, value), so the actual number of numeric values is `count × 2`.
+Most interval-based hydrograph tables use the preceding `Interval=` line for timing and store values only.
+For `Precipitation Hydrograph=`, the count is the number of time steps/time-depth pairs, not the total number of numeric fields.
 
 ## Validation
 

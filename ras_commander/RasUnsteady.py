@@ -335,6 +335,19 @@ class RasUnsteady:
         return interval_hours
 
     @staticmethod
+    def _fixed_width_field_count(table_name: str, record_count: int) -> int:
+        """Return the number of numeric fields used by a HEC-RAS inline table."""
+        if table_name.strip().startswith("Precipitation Hydrograph"):
+            return record_count * 2
+        return record_count
+
+    @staticmethod
+    def _fixed_width_data_line_count(table_name: str, record_count: int) -> int:
+        """Return the number of 10-field fixed-width rows used by an inline table."""
+        field_count = RasUnsteady._fixed_width_field_count(table_name, record_count)
+        return (field_count + 9) // 10
+
+    @staticmethod
     @log_call
     def update_flow_title(unsteady_file: str, new_title: str, ras_object: Optional[Any] = None) -> None:
         """
@@ -3880,10 +3893,11 @@ class RasUnsteady:
                     current_table = line.split('=')
                     current_table_name = current_table[0].strip()
                     num_values = int(current_table[1])
+                    field_count = RasUnsteady._fixed_width_field_count(current_table_name, num_values)
                     table_values = []
                     
                     # Read the table values
-                    rows_needed = (num_values + 9) // 10  # Round up division
+                    rows_needed = RasUnsteady._fixed_width_data_line_count(current_table_name, num_values)
                     for _ in range(rows_needed):
                         i += 1
                         if i >= len(lines):
@@ -3902,6 +3916,7 @@ class RasUnsteady:
                                     parts = re.findall(r'-?\d+\.?\d*', value_str)
                                     table_values.extend([float(p) for p in parts])
                             j += 8
+                    table_values = table_values[:field_count]
                 
                 except (ValueError, IndexError) as e:
                     logger.error(f"Error processing table at line {i}: {e}")
@@ -4398,10 +4413,17 @@ class RasUnsteady:
         tables = []
         current_table = None
 
+        def finish_table(table_info, next_header_idx=None):
+            table_name, start_line, record_count = table_info
+            expected_end = start_line + RasUnsteady._fixed_width_data_line_count(table_name, record_count)
+            if next_header_idx is not None:
+                expected_end = min(expected_end, next_header_idx)
+            return (table_name, start_line, expected_end)
+
         for i, line in enumerate(lines):
             if any(table_type in line for table_type in table_types):
                 if current_table:
-                    tables.append((current_table[0], current_table[1], i-1))
+                    tables.append(finish_table(current_table, i))
                 table_name = line.strip().split('=')[0] + '='
                 try:
                     num_values = int(line.strip().split('=')[1])
@@ -4411,8 +4433,7 @@ class RasUnsteady:
                     continue
         
         if current_table:
-            tables.append((current_table[0], current_table[1], 
-                          current_table[1] + (current_table[2] + 9) // 10))
+            tables.append(finish_table(current_table))
         
         logger.debug(f"Identified {len(tables)} tables in the file")
         return tables
@@ -4673,9 +4694,9 @@ class RasUnsteady:
 
         **Fixed-Width Format**:
         - Values formatted as 8-character fixed-width fields (8.2f)
-        - 10 values per line
-        - Precipitation Hydrograph uses sequential depth values (not time-depth pairs)
-        - Count = number of depth values; timing from Interval= line
+        - 10 numeric values per line (5 time-depth pairs)
+        - Precipitation Hydrograph stores time-depth pairs
+        - Count = number of time steps; Interval= line is still updated for HEC-RAS metadata
 
         **Depth Conservation**:
         - Total depth is logged for verification
@@ -4744,14 +4765,17 @@ class RasUnsteady:
         # Calculate total depth for logging
         total_depth = hyetograph_df['cumulative_depth'].iloc[-1]
 
-        # Precipitation Hydrograph uses sequential depth values (NOT time-depth pairs).
-        # Timing is determined by the Interval= line. Count = number of depth values.
+        # Precipitation Hydrograph uses time-depth pairs. Count remains the number
+        # of time steps, not the number of numeric fields written below.
         num_values = len(precip_values)
+        paired_values = []
+        for hour, depth in zip(hours, precip_values):
+            paired_values.extend((hour, depth))
 
-        # Format into fixed-width lines (8 chars each, 10 values per line)
+        # Format into fixed-width lines (8 chars each, 10 numeric values per line)
         formatted_lines = []
-        for i in range(0, len(precip_values), 10):
-            row_values = precip_values[i:i+10]
+        for i in range(0, len(paired_values), 10):
+            row_values = paired_values[i:i+10]
             formatted_row = ''.join(f'{value:8.2f}' for value in row_values)
             formatted_lines.append(formatted_row + '\n')
 

@@ -355,8 +355,11 @@ class BoundaryGenerator:
                 # Parse number of values to determine table extent
                 try:
                     num_values = int(lines[i].split('=')[1].strip())
-                    # Calculate number of data lines (10 values per line)
-                    num_data_lines = (num_values + 9) // 10
+                    # Calculate number of data lines (10 numeric fields per line).
+                    # Precipitation headers count time steps, but each step stores
+                    # a time-depth pair.
+                    num_fields = num_values * 2 if table_type.startswith('Precipitation Hydrograph') else num_values
+                    num_data_lines = (num_fields + 9) // 10
                     # Table extent: header line + Interval line + data lines
                     # Find Interval= line before table header
                     interval_line = i - 1 if i > 0 and lines[i-1].startswith('Interval=') else i
