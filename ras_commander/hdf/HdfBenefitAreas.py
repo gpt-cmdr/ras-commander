@@ -202,10 +202,16 @@ class HdfBenefitAreas:
         proposed_points = HdfResultsMesh.get_mesh_max_ws(proposed_path)
 
         if existing_points is None or existing_points.empty:
-            raise ValueError(f"No max WSE data found in existing plan: {existing_path}")
+            raise ValueError(
+                f"No maximum water-surface summary data found in existing plan: {existing_path}. "
+                f"Compute the plan and ensure the 'Maximum Water Surface' summary output is available."
+            )
 
         if proposed_points is None or proposed_points.empty:
-            raise ValueError(f"No max WSE data found in proposed plan: {proposed_path}")
+            raise ValueError(
+                f"No maximum water-surface summary data found in proposed plan: {proposed_path}. "
+                f"Compute the plan and ensure the 'Maximum Water Surface' summary output is available."
+            )
 
         # Step 2: Match points between plans and compute differences
         logger.debug("Matching points between plans...")
@@ -214,7 +220,10 @@ class HdfBenefitAreas:
         )
 
         if matched_df.empty:
-            raise ValueError("No matching points found between the two plans")
+            raise ValueError(
+                "No matching 2D mesh cell-center points found between the existing and proposed plans. "
+                "Confirm both plans use the same 2D mesh geometry and coordinate system."
+            )
 
         # Step 3: Apply threshold and classify points
         logger.debug(f"Applying minimum delta threshold of {min_delta} feet...")
@@ -227,7 +236,11 @@ class HdfBenefitAreas:
         cells_gdf = HdfMesh.get_mesh_cell_polygons(existing_path)
 
         if cells_gdf is None or cells_gdf.empty:
-            raise ValueError(f"No mesh cells found in existing plan: {existing_path}")
+            raise ValueError(
+                f"No 2D mesh cell polygons found for the existing plan geometry: {existing_path}. "
+                f"This API requires 2D mesh geometry; run the geometry preprocessor to populate "
+                f"preprocessor-created mesh datasets if they are missing."
+            )
 
         # Step 5: Build contiguous polygons
         logger.debug("Building contiguous benefit areas...")
@@ -257,10 +270,15 @@ class HdfBenefitAreas:
             )
         )
 
-        logger.info("Analysis complete")
-        logger.info(f"  Benefit areas: {len(benefit_polygons) if not benefit_polygons.empty else 0}")
-        logger.info(f"  Rise areas: {len(rise_polygons) if not rise_polygons.empty else 0}")
-        logger.info(f"  Matched points: {len(matched_df)}")
+        logger.info(
+            "Benefit analysis complete: benefit_areas=%d rise_areas=%d "
+            "matched_points=%d significant_points=%d threshold_ft=%s",
+            len(benefit_polygons) if not benefit_polygons.empty else 0,
+            len(rise_polygons) if not rise_polygons.empty else 0,
+            len(matched_df),
+            len(benefit_points) + len(rise_points),
+            min_delta,
+        )
 
         return {
             'benefit_polygons': benefit_polygons,
@@ -355,7 +373,7 @@ class HdfBenefitAreas:
         except Exception as e:
             # If we can't resolve, try constructing expected path
             # This allows FileNotFoundError to be raised later with the expected path
-            logger.warning(f"Could not resolve {label} plan '{input_str}': {e}")
+            logger.debug(f"Could not resolve {label} plan '{input_str}': {e}")
             if hasattr(ras_object, 'folder') and ras_object.folder:
                 return Path(ras_object.folder) / f"unknown.p{plan_number}.hdf"
             else:
@@ -398,7 +416,7 @@ class HdfBenefitAreas:
         )
 
         if matched.empty:
-            logger.warning("No matching points found between plans")
+            logger.debug("No matching points found between plans")
             return gpd.GeoDataFrame()
 
         # Compute WSE difference (proposed - existing, negative = benefit)
@@ -447,7 +465,7 @@ class HdfBenefitAreas:
         significant = matched_df[abs(matched_df['wse_difference']) >= min_delta].copy()
 
         if significant.empty:
-            logger.warning(f"No points exceed minimum delta threshold of {min_delta} feet")
+            logger.debug(f"No points exceed minimum delta threshold of {min_delta} feet")
             empty_gdf = gpd.GeoDataFrame(columns=matched_df.columns, crs=matched_df.crs)
             return empty_gdf, empty_gdf
 
@@ -494,14 +512,28 @@ class HdfBenefitAreas:
 
         # Step 1: Associate points with cells using spatial join
         logger.debug(f"Associating {len(points_df)} points with mesh cells...")
+        cell_join_gdf = cells_gdf[['cell_id', 'mesh_name', 'geometry']].rename(
+            columns={
+                'cell_id': 'cell_id_cell',
+                'mesh_name': 'mesh_name_cell',
+            }
+        )
         points_with_cells = gpd.sjoin(
-            points_df, cells_gdf[['cell_id', 'mesh_name', 'geometry']],
+            points_df, cell_join_gdf,
             how='inner', predicate='within'
         )
 
+        if 'mesh_name' in points_with_cells.columns and 'mesh_name_cell' in points_with_cells.columns:
+            points_with_cells = points_with_cells[
+                points_with_cells['mesh_name'] == points_with_cells['mesh_name_cell']
+            ].copy()
+
         # Get unique cell IDs (with mesh_name for multi-mesh support)
-        target_cells = points_with_cells[['mesh_name', 'cell_id_right']].drop_duplicates()
-        target_cells.rename(columns={'cell_id_right': 'cell_id'}, inplace=True)
+        target_cells = (
+            points_with_cells[['mesh_name_cell', 'cell_id_cell']]
+            .drop_duplicates()
+            .rename(columns={'mesh_name_cell': 'mesh_name', 'cell_id_cell': 'cell_id'})
+        )
 
         if target_cells.empty:
             logger.warning(f"No cells associated with {area_type} points")
@@ -572,6 +604,7 @@ class HdfBenefitAreas:
         # Filter cells to target cells only
         target_cell_keys = set(zip(target_cells['mesh_name'], target_cells['cell_id']))
 
+        edge_extraction_failures = 0
         for _, cell_row in cells_gdf.iterrows():
             cell_key = (cell_row['mesh_name'], cell_row['cell_id'])
 
@@ -591,7 +624,8 @@ class HdfBenefitAreas:
                     edge = edge_key(coords[i], coords[i + 1])
                     edge_to_cells[edge].add(cell_key)
             except Exception as e:
-                logger.warning(f"Could not extract edges from cell {cell_key}: {e}")
+                edge_extraction_failures += 1
+                logger.debug(f"Could not extract edges from cell {cell_key}: {e}")
                 continue
 
         # Build adjacency from shared edges
@@ -609,6 +643,12 @@ class HdfBenefitAreas:
         adjacency_dict = {k: list(v) for k, v in adjacency.items()}
 
         logger.debug(f"Built adjacency for {len(adjacency_dict)} cells")
+        if edge_extraction_failures:
+            logger.warning(
+                "Skipped %d mesh cells while building polygon-edge adjacency; "
+                "enable DEBUG logging for cell-level details.",
+                edge_extraction_failures,
+            )
 
         return adjacency_dict
 
@@ -645,7 +685,10 @@ class HdfBenefitAreas:
                 topo = HdfMesh.get_mesh_sloped_topology(hdf_path, mesh_name)
 
                 if 'face_cells' not in topo:
-                    logger.warning(f"No face_cells found for mesh {mesh_name}, falling back to edge-based")
+                    logger.warning(
+                        f"No face_cells found for mesh {mesh_name}; "
+                        f"topology adjacency is unavailable for this mesh"
+                    )
                     continue
 
                 face_cells = topo['face_cells']
@@ -747,6 +790,7 @@ class HdfBenefitAreas:
 
         features = []
 
+        dissolve_failures = 0
         for group_idx, cell_group in enumerate(cell_groups):
             # Get geometries for this group
             group_geoms = []
@@ -764,7 +808,8 @@ class HdfBenefitAreas:
                 try:
                     merged_geom = unary_union(group_geoms)
                 except Exception as e:
-                    logger.warning(f"Could not dissolve group {group_idx + 1}: {e}")
+                    dissolve_failures += 1
+                    logger.debug(f"Could not dissolve group {group_idx + 1}: {e}")
                     continue
 
                 if merged_geom is None or not merged_geom.is_valid:
@@ -803,5 +848,12 @@ class HdfBenefitAreas:
                 'area_acres': [],
                 'geometry': []
             }, crs=cells_gdf.crs)
+
+        if dissolve_failures:
+            logger.warning(
+                "Skipped %d contiguous polygon groups that could not be dissolved; "
+                "enable DEBUG logging for group-level details.",
+                dissolve_failures,
+            )
 
         return result

@@ -410,7 +410,7 @@ class HdfMesh:
                             logger.warning(f"Error converting attribute '{name}': {str(e)}")
                     return pd.DataFrame.from_dict(result, orient='index', columns=['Value'])
                 else:
-                    logger.info("No 2D Flow Area attributes found or invalid dataset.")
+                    logger.debug("No 2D Flow Area attributes found or invalid dataset.")
                     return pd.DataFrame()  # Return an empty DataFrame
         except Exception as e:
             logger.error(f"Error reading 2D flow area attributes from {hdf_path}: {str(e)}")
@@ -455,6 +455,10 @@ class HdfMesh:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
+                    logger.error(
+                        f"No 2D mesh areas found in {hdf_path}; this API "
+                        "requires a geometry HDF with 2D Flow Areas."
+                    )
                     return {}
 
                 result = {}
@@ -464,7 +468,12 @@ class HdfMesh:
                     values_path = f"{base_path}/Faces Area Elevation Values"
 
                     if info_path not in hdf_file or values_path not in hdf_file:
-                        logger.warning(f"Face property tables not found for mesh '{mesh_name}'")
+                        logger.error(
+                            f"Face property tables not found for mesh '{mesh_name}'; "
+                            "run the geometry preprocessor to create "
+                            "'Faces Area Elevation Info' and "
+                            "'Faces Area Elevation Values' before using this API."
+                        )
                         result[mesh_name] = pd.DataFrame(columns=['Face ID', 'Elevation', 'Area', 'Wetted Perimeter', "Manning's n"])
                         continue
 
@@ -1045,6 +1054,10 @@ class HdfMesh:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
+                    logger.error(
+                        f"No 2D mesh areas found in {hdf_path}; this API "
+                        "requires a geometry HDF with 2D Flow Areas."
+                    )
                     return {}
 
                 result = {}
@@ -1054,7 +1067,12 @@ class HdfMesh:
                     values_path = f"{base_path}/Cells Volume Elevation Values"
 
                     if info_path not in hdf_file or values_path not in hdf_file:
-                        logger.warning(f"Cell property tables not found for mesh '{mesh_name}'")
+                        logger.error(
+                            f"Cell volume/elevation tables not found for mesh "
+                            f"'{mesh_name}'; run the geometry preprocessor to "
+                            "create 'Cells Volume Elevation Info' and "
+                            "'Cells Volume Elevation Values' before using this API."
+                        )
                         result[mesh_name] = pd.DataFrame(columns=['Cell ID', 'Elevation', 'Volume'])
                         continue
 
@@ -1390,7 +1408,7 @@ class HdfMesh:
 
         # Create result GeoDataFrame
         if not selected_indices:
-            logger.info("No faces found along profile line with given thresholds")
+            logger.debug("No faces found along profile line with given thresholds")
             result = faces.iloc[0:0].copy()  # Empty GeoDataFrame with same structure
             result['distance_along_profile'] = []
             result['angle_to_profile'] = []
@@ -1409,7 +1427,7 @@ class HdfMesh:
         if order_by_distance:
             result = result.sort_values('distance_along_profile').reset_index(drop=True)
 
-        logger.info(f"Found {len(result)} faces along profile line")
+        logger.debug(f"Found {len(result)} faces along profile line")
         return result
 
     @staticmethod
@@ -1542,7 +1560,10 @@ class HdfMesh:
                 # Get mesh area names
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
-                    logger.warning(f"No 2D mesh areas found in {hdf_path}")
+                    logger.error(
+                        f"No 2D mesh areas found in {hdf_path}; this API "
+                        "requires a geometry HDF with 2D Flow Areas."
+                    )
                     return {}
 
                 # Select mesh
@@ -1635,7 +1656,11 @@ class HdfMesh:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 table_path = "Geometry/Land Cover (Manning's n)/Calibration Table"
                 if table_path not in hdf_file:
-                    logger.warning(f"No Manning's n calibration table found in {hdf_path}")
+                    logger.error(
+                        f"No Manning's n calibration table found in {hdf_path}; "
+                        "create Manning's n calibration regions before using "
+                        "this API."
+                    )
                     return None
 
                 data = hdf_file[table_path][()]
@@ -2374,7 +2399,7 @@ class HdfMesh:
         else:
             raise ValueError(f"method must be 'midpoint' or 'any_vertex', got '{method}'")
 
-        logger.info(
+        logger.debug(
             f"Found {len(matching_ids)} faces in polygon "
             f"(mesh '{mesh_name}', method='{method}')"
         )

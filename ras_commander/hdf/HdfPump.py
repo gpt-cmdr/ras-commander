@@ -29,6 +29,35 @@ from ..LoggingConfig import get_logger
 
 logger = get_logger(__name__)
 
+
+_PUMP_RESULTS_ACTION = (
+    "Compute the plan with pump station output available, then retry."
+)
+
+
+def _format_available_items(items: List[str], max_items: int = 12) -> str:
+    if not items:
+        return "none"
+
+    shown = items[:max_items]
+    suffix = f", ... ({len(items) - max_items} more)" if len(items) > max_items else ""
+    return ", ".join(shown) + suffix
+
+
+def _available_group_names(hdf: h5py.File, group_path: str) -> List[str]:
+    if group_path not in hdf:
+        return []
+    return sorted(str(name) for name in hdf[group_path].keys())
+
+
+def _missing_hdf_object_message(context: str, hdf_path: str, action: str) -> str:
+    return f"{context} requires HDF object '{hdf_path}', but it was not found. {action}"
+
+
+def _empty_pump_stations_gdf() -> gpd.GeoDataFrame:
+    return gpd.GeoDataFrame({"station_id": []}, geometry=[], crs=None)
+
+
 class HdfPump:
     """
     A class for handling pump station related data from HEC-RAS HDF files.
@@ -56,47 +85,52 @@ class HdfPump:
             gpd.GeoDataFrame: GeoDataFrame containing pump station data with columns:
                 - geometry: Point geometry of pump station location
                 - station_id: Unique identifier for each pump station
-                - Additional attributes from the HDF file
+                - Additional attributes from the HDF file. Returns an empty
+                  GeoDataFrame when the HDF file contains no pump station group.
 
         Raises:
-            KeyError: If pump station datasets are not found in the HDF file.
-            Exception: If there are errors processing the pump station data.
+            KeyError: If the pump station group exists but required datasets are missing.
         """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf:
-                # Extract pump station data
-                attributes = hdf['/Geometry/Pump Stations/Attributes'][()]
-                points = hdf['/Geometry/Pump Stations/Points'][()]
+        with h5py.File(hdf_path, 'r') as hdf:
+            pump_stations_path = "/Geometry/Pump Stations"
+            if pump_stations_path not in hdf:
+                logger.debug("No pump station geometry group found in HDF file")
+                return _empty_pump_stations_gdf()
 
-                # Create geometries
-                geometries = [Point(x, y) for x, y in points]
+            group = hdf[pump_stations_path]
+            for dataset_name in ["Attributes", "Points"]:
+                if dataset_name not in group:
+                    raise KeyError(_missing_hdf_object_message(
+                        "Pump station geometry extraction",
+                        f"{pump_stations_path}/{dataset_name}",
+                        "Verify the HDF was written with pump station geometry data.",
+                    ))
 
-                # Create GeoDataFrame
-                gdf = gpd.GeoDataFrame(geometry=geometries)
-                gdf['station_id'] = range(len(gdf))
+            attributes = group['Attributes'][()]
+            points = group['Points'][()]
 
-                # Add attributes and decode byte strings
-                attr_df = pd.DataFrame(attributes)
-                string_columns = attr_df.select_dtypes([object]).columns
-                for col in string_columns:
-                    attr_df[col] = attr_df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
-                
-                for col in attr_df.columns:
-                    gdf[col] = attr_df[col]
+            # Create geometries
+            geometries = [Point(x, y) for x, y in points]
 
-                # Set CRS if available
-                crs = HdfBase.get_projection(hdf_path)
-                if crs:
-                    gdf.set_crs(crs, inplace=True)
+            # Create GeoDataFrame
+            gdf = gpd.GeoDataFrame(geometry=geometries)
+            gdf['station_id'] = range(len(gdf))
 
-                return gdf
+            # Add attributes and decode byte strings
+            attr_df = pd.DataFrame(attributes)
+            string_columns = attr_df.select_dtypes([object]).columns
+            for col in string_columns:
+                attr_df[col] = attr_df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
 
-        except KeyError as e:
-            logger.error(f"Required dataset not found in HDF file: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Error extracting pump station data: {e}")
-            raise
+            for col in attr_df.columns:
+                gdf[col] = attr_df[col]
+
+            # Set CRS if available
+            crs = HdfBase.get_projection(hdf_path)
+            if crs:
+                gdf.set_crs(crs, inplace=True)
+
+            return gdf
 
     @staticmethod
     @log_call
@@ -113,43 +147,57 @@ class HdfPump:
                 - efficiency_curve_start: Starting index of efficiency curve data
                 - efficiency_curve_count: Number of points in efficiency curve
                 - efficiency_curve: List of efficiency curve values
-                - Additional attributes from the HDF file
+                - Additional attributes from the HDF file. Returns an empty
+                  DataFrame when the HDF file contains no pump station group.
 
         Raises:
-            KeyError: If pump group datasets are not found in the HDF file.
-            Exception: If there are errors processing the pump group data.
+            KeyError: If the pump group exists but required datasets are missing.
         """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf:
-                # Extract pump group data
-                attributes = hdf['/Geometry/Pump Stations/Pump Groups/Attributes'][()]
-                efficiency_curves_info = hdf['/Geometry/Pump Stations/Pump Groups/Efficiency Curves Info'][()]
-                efficiency_curves_values = hdf['/Geometry/Pump Stations/Pump Groups/Efficiency Curves Values'][()]
+        with h5py.File(hdf_path, 'r') as hdf:
+            pump_groups_path = "/Geometry/Pump Stations/Pump Groups"
+            if pump_groups_path not in hdf:
+                logger.debug("No pump station pump-group geometry found in HDF file")
+                return pd.DataFrame()
 
-                # Create DataFrame and decode byte strings
-                df = pd.DataFrame(attributes)
-                string_columns = df.select_dtypes([object]).columns
-                for col in string_columns:
-                    df[col] = df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
+            group = hdf[pump_groups_path]
+            required_datasets = [
+                "Attributes",
+                "Efficiency Curves Info",
+                "Efficiency Curves Values",
+            ]
+            missing_datasets = [
+                f"{pump_groups_path}/{dataset_name}"
+                for dataset_name in required_datasets
+                if dataset_name not in group
+            ]
+            if missing_datasets:
+                raise KeyError(
+                    "Pump group extraction found an incomplete pump group geometry. "
+                    f"Missing: {_format_available_items(missing_datasets)}. "
+                    "Verify the HDF was written with pump group geometry data."
+                )
 
-                # Add efficiency curve data
-                df['efficiency_curve_start'] = efficiency_curves_info[:, 0]
-                df['efficiency_curve_count'] = efficiency_curves_info[:, 1]
+            attributes = group['Attributes'][()]
+            efficiency_curves_info = group['Efficiency Curves Info'][()]
+            efficiency_curves_values = group['Efficiency Curves Values'][()]
 
-                # Process efficiency curves
-                def get_efficiency_curve(start, count):
-                    return efficiency_curves_values[start:start+count].tolist()
+            # Create DataFrame and decode byte strings
+            df = pd.DataFrame(attributes)
+            string_columns = df.select_dtypes([object]).columns
+            for col in string_columns:
+                df[col] = df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
 
-                df['efficiency_curve'] = df.apply(lambda row: get_efficiency_curve(row['efficiency_curve_start'], row['efficiency_curve_count']), axis=1)
+            # Add efficiency curve data
+            df['efficiency_curve_start'] = efficiency_curves_info[:, 0]
+            df['efficiency_curve_count'] = efficiency_curves_info[:, 1]
 
-                return df
+            # Process efficiency curves
+            def get_efficiency_curve(start, count):
+                return efficiency_curves_values[start:start+count].tolist()
 
-        except KeyError as e:
-            logger.error(f"Required dataset not found in HDF file: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Error extracting pump group data: {e}")
-            raise
+            df['efficiency_curve'] = df.apply(lambda row: get_efficiency_curve(row['efficiency_curve_start'], row['efficiency_curve_count']), axis=1)
+
+            return df
 
     @staticmethod
     @log_call
@@ -172,65 +220,80 @@ class HdfPump:
         Raises:
             KeyError: If required datasets are not found in the HDF file.
             ValueError: If the specified pump station name is not found.
-            Exception: If there are errors processing the timeseries data.
         """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf:
-                # Check if the pump station exists
-                pumping_stations_path = "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/Unsteady Time Series/Pumping Stations"
-                if pump_station not in hdf[pumping_stations_path]:
-                    raise ValueError(f"Pump station '{pump_station}' not found in HDF file")
+        with h5py.File(hdf_path, 'r') as hdf:
+            pumping_stations_path = (
+                "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/"
+                "Unsteady Time Series/Pumping Stations"
+            )
+            if pumping_stations_path not in hdf:
+                raise KeyError(_missing_hdf_object_message(
+                    "Pump station timeseries extraction",
+                    pumping_stations_path,
+                    _PUMP_RESULTS_ACTION,
+                ))
 
-                # Extract timeseries data
-                data_path = f"{pumping_stations_path}/{pump_station}/Structure Variables"
-                data = hdf[data_path][()]
-
-                # Extract time information - try DSS-specific timestamps first
-                dss_time_path = "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/Unsteady Time Series/Time Date Stamp (ms)"
-
-                if dss_time_path in hdf:
-                    # Use DSS Hydrograph Output timestamps
-                    raw_datetimes = hdf[dss_time_path][:]
-                    time = [HdfUtils.parse_ras_datetime_ms(x.decode("utf-8")) for x in raw_datetimes]
-                else:
-                    # Fallback to Base Output timestamps
-                    time = HdfBase.get_unsteady_timestamps(hdf)
-
-                # Verify time dimension matches data, use index if mismatch
-                if len(time) != data.shape[0]:
-                    logger.warning(f"Timestamp count ({len(time)}) doesn't match data time dimension ({data.shape[0]}). Using numeric index.")
-                    time = list(range(data.shape[0]))
-
-                variable_units = hdf[data_path].attrs.get('Variable_Unit', None)
-                variable_names, unit_by_variable = HdfPump._pump_variable_columns(
-                    variable_units,
-                    data.shape[1],
+            available_stations = _available_group_names(hdf, pumping_stations_path)
+            if pump_station not in hdf[pumping_stations_path]:
+                raise ValueError(
+                    f"Pump station '{pump_station}' was not found in HDF group "
+                    f"'{pumping_stations_path}'. Available pump stations: "
+                    f"{_format_available_items(available_stations)}."
                 )
 
-                # Create DataArray
-                da = xr.DataArray(
-                    data=data,
-                    dims=['time', 'variable'],
-                    coords={'time': time, 'variable': variable_names},
-                    name=pump_station
+            data_path = f"{pumping_stations_path}/{pump_station}/Structure Variables"
+            if data_path not in hdf:
+                raise KeyError(_missing_hdf_object_message(
+                    f"Pump station timeseries extraction for '{pump_station}'",
+                    data_path,
+                    _PUMP_RESULTS_ACTION,
+                ))
+
+            data = hdf[data_path][()]
+
+            # Extract time information - try DSS-specific timestamps first
+            dss_time_path = "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/Unsteady Time Series/Time Date Stamp (ms)"
+
+            if dss_time_path in hdf:
+                # Use DSS Hydrograph Output timestamps
+                raw_datetimes = hdf[dss_time_path][:]
+                time = [HdfUtils.parse_ras_datetime_ms(x.decode("utf-8")) for x in raw_datetimes]
+            else:
+                # Fallback to Base Output timestamps
+                time = HdfBase.get_unsteady_timestamps(hdf)
+
+            # Verify time dimension matches data, use index if mismatch
+            if len(time) != data.shape[0]:
+                logger.warning(
+                    "Pump station timeseries timestamp mismatch for '%s' at '%s': "
+                    "timestamps=%d rows=%d; using numeric time index",
+                    pump_station,
+                    data_path,
+                    len(time),
+                    data.shape[0],
                 )
+                time = list(range(data.shape[0]))
 
-                # Add attributes and decode byte strings
-                da.attrs['units'] = variable_units
-                da.attrs['unit_by_variable'] = unit_by_variable
-                da.attrs['pump_station'] = pump_station
+            variable_units = hdf[data_path].attrs.get('Variable_Unit', None)
+            variable_names, unit_by_variable = HdfPump._pump_variable_columns(
+                variable_units,
+                data.shape[1],
+            )
 
-                return da
+            # Create DataArray
+            da = xr.DataArray(
+                data=data,
+                dims=['time', 'variable'],
+                coords={'time': time, 'variable': variable_names},
+                name=pump_station
+            )
 
-        except KeyError as e:
-            logger.error(f"Required dataset not found in HDF file: {e}")
-            raise
-        except ValueError as e:
-            logger.error(str(e))
-            raise
-        except Exception as e:
-            logger.error(f"Error extracting pump station timeseries data: {e}")
-            raise
+            # Add attributes and decode byte strings
+            da.attrs['units'] = variable_units
+            da.attrs['unit_by_variable'] = unit_by_variable
+            da.attrs['pump_station'] = pump_station
+
+            return da
 
     @staticmethod
     @log_call
@@ -247,34 +310,25 @@ class HdfPump:
                 operational statistics and performance metrics. Returns empty DataFrame
                 if no summary data is found.
 
-        Raises:
-            KeyError: If the summary dataset is not found in the HDF file.
-            Exception: If there are errors processing the summary data.
+        Notes:
+            Missing pump station summary output returns an empty DataFrame.
         """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf:
-                # Extract summary data
-                summary_path = "/Results/Unsteady/Summary/Pump Station"
-                if summary_path not in hdf:
-                    logger.warning("Pump Station summary data not found in HDF file")
-                    return pd.DataFrame()
+        with h5py.File(hdf_path, 'r') as hdf:
+            # Extract summary data
+            summary_path = "/Results/Unsteady/Summary/Pump Station"
+            if summary_path not in hdf:
+                logger.debug("Pump station summary data not found in HDF file")
+                return pd.DataFrame()
 
-                summary_data = hdf[summary_path][()]
-                
-                # Create DataFrame and decode byte strings
-                df = pd.DataFrame(summary_data)
-                string_columns = df.select_dtypes([object]).columns
-                for col in string_columns:
-                    df[col] = df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
+            summary_data = hdf[summary_path][()]
 
-                return df
+            # Create DataFrame and decode byte strings
+            df = pd.DataFrame(summary_data)
+            string_columns = df.select_dtypes([object]).columns
+            for col in string_columns:
+                df[col] = df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
 
-        except KeyError as e:
-            logger.error(f"Required dataset not found in HDF file: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Error extracting pump station summary data: {e}")
-            raise
+            return df
 
     @staticmethod
     @log_call
@@ -299,48 +353,57 @@ class HdfPump:
         Raises:
             KeyError: If required datasets are not found in the HDF file.
             ValueError: If the specified pump station name is not found.
-            Exception: If there are errors processing the operation data.
         """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf:
-                # Check if the pump station exists
-                pump_stations_path = "/Results/Unsteady/Output/Output Blocks/DSS Profile Output/Unsteady Time Series/Pumping Stations"
-                if pump_station not in hdf[pump_stations_path]:
-                    raise ValueError(f"Pump station '{pump_station}' not found in HDF file")
+        with h5py.File(hdf_path, 'r') as hdf:
+            pump_stations_path = (
+                "/Results/Unsteady/Output/Output Blocks/DSS Profile Output/"
+                "Unsteady Time Series/Pumping Stations"
+            )
+            if pump_stations_path not in hdf:
+                raise KeyError(_missing_hdf_object_message(
+                    "Pump station operation extraction",
+                    pump_stations_path,
+                    _PUMP_RESULTS_ACTION,
+                ))
 
-                # Extract pump operation data
-                data_path = f"{pump_stations_path}/{pump_station}/Structure Variables"
-                data = hdf[data_path][()]
-
-                # Extract time information - Updated to use new method name
-                time = HdfBase.get_unsteady_timestamps(hdf)
-
-                variable_units = hdf[data_path].attrs.get('Variable_Unit', None)
-                variable_names, unit_by_variable = HdfPump._pump_variable_columns(
-                    variable_units,
-                    data.shape[1],
+            available_stations = _available_group_names(hdf, pump_stations_path)
+            if pump_station not in hdf[pump_stations_path]:
+                raise ValueError(
+                    f"Pump station '{pump_station}' was not found in HDF group "
+                    f"'{pump_stations_path}'. Available pump stations: "
+                    f"{_format_available_items(available_stations)}."
                 )
 
-                # Create DataFrame and decode byte strings
-                df = pd.DataFrame(data, columns=variable_names)
-                string_columns = df.select_dtypes([object]).columns
-                for col in string_columns:
-                    df[col] = df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
-                    
-                df['Time'] = time
-                df.attrs['unit_by_variable'] = unit_by_variable
+            # Extract pump operation data
+            data_path = f"{pump_stations_path}/{pump_station}/Structure Variables"
+            if data_path not in hdf:
+                raise KeyError(_missing_hdf_object_message(
+                    f"Pump station operation extraction for '{pump_station}'",
+                    data_path,
+                    _PUMP_RESULTS_ACTION,
+                ))
 
-                return df
+            data = hdf[data_path][()]
 
-        except KeyError as e:
-            logger.error(f"Required dataset not found in HDF file: {e}")
-            raise
-        except ValueError as e:
-            logger.error(str(e))
-            raise
-        except Exception as e:
-            logger.error(f"Error extracting pump operation data: {e}")
-            raise
+            # Extract time information - Updated to use new method name
+            time = HdfBase.get_unsteady_timestamps(hdf)
+
+            variable_units = hdf[data_path].attrs.get('Variable_Unit', None)
+            variable_names, unit_by_variable = HdfPump._pump_variable_columns(
+                variable_units,
+                data.shape[1],
+            )
+
+            # Create DataFrame and decode byte strings
+            df = pd.DataFrame(data, columns=variable_names)
+            string_columns = df.select_dtypes([object]).columns
+            for col in string_columns:
+                df[col] = df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
+
+            df['Time'] = time
+            df.attrs['unit_by_variable'] = unit_by_variable
+
+            return df
 
     @staticmethod
     def _pump_variable_columns(variable_units: Any, column_count: int) -> tuple[List[str], Dict[str, str]]:

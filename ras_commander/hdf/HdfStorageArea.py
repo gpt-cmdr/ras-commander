@@ -40,7 +40,10 @@ class HdfStorageArea:
     """
 
     _STORAGE_AREA_PATH = "Geometry/Storage Areas"
+    _VOLUME_ELEVATION_INFO = "Volume Elevation Info"
+    _VOLUME_ELEVATION_VALUES = "Volume Elevation Values"
     _ACRE_SQFT = 43560.0
+    _ACRE_SQM = 4046.8564224
 
     @staticmethod
     def _decode_hdf_value(value: Any) -> Any:
@@ -135,6 +138,134 @@ class HdfStorageArea:
             }
 
     @staticmethod
+    def _compute_volume_below_elevation_from_terrain(
+        terrain_path: Path,
+        polygon: Any,
+        elevation: float,
+    ) -> float:
+        """Compute storage volume without public API logging around each sample."""
+        rasterio, rasterio_mask_fn = HdfStorageArea._require_rasterio()
+        terrain_path = Path(terrain_path)
+        if not terrain_path.exists():
+            raise FileNotFoundError(f"Terrain file not found: {terrain_path}")
+
+        with rasterio.open(terrain_path) as src:
+            terrain_data, _, cell_area = HdfStorageArea._masked_terrain_array(
+                src, polygon, rasterio_mask_fn,
+            )
+            depths = float(elevation) - terrain_data
+            valid_depths = depths[~np.isnan(depths) & (depths > 0)]
+            return float(np.sum(valid_depths * cell_area))
+
+    @staticmethod
+    def _log_missing_volume_elevation_curve(
+        hdf_path: Path,
+        sa_name: str,
+        reason: str,
+    ) -> None:
+        info_path = (
+            f"{HdfStorageArea._STORAGE_AREA_PATH}/"
+            f"{HdfStorageArea._VOLUME_ELEVATION_INFO}"
+        )
+        values_path = (
+            f"{HdfStorageArea._STORAGE_AREA_PATH}/"
+            f"{HdfStorageArea._VOLUME_ELEVATION_VALUES}"
+        )
+        logger.error(
+            "Volume-elevation curve data unavailable for storage area '%s' "
+            "in %s (%s). These datasets are created by the HEC-RAS geometry "
+            "preprocessor; run the geometry preprocessor first if you need "
+            "this curve. Required HDF datasets: '%s' and '%s'.",
+            sa_name,
+            hdf_path.name,
+            reason,
+            info_path,
+            values_path,
+        )
+        logger.debug(
+            "Volume-elevation curve request failed for storage area '%s' in %s",
+            sa_name,
+            hdf_path,
+        )
+
+    @staticmethod
+    def _get_storage_unit_conversion(hdf_path: Path) -> Dict[str, Any]:
+        """Return metadata for converting terrain-integrated volume to storage units."""
+        hdf_path = Path(hdf_path)
+        units_system_raw = None
+        si_units_raw = None
+
+        try:
+            with h5py.File(hdf_path, "r") as hdf_file:
+                units_system_raw = hdf_file.attrs.get("Units System")
+                geom_group = hdf_file.get("Geometry")
+                if geom_group is not None:
+                    si_units_raw = geom_group.attrs.get("SI Units")
+        except Exception as exc:
+            logger.debug(
+                "Unable to read storage unit metadata from %s: %s",
+                hdf_path,
+                exc,
+            )
+
+        units_system_text = str(
+            HdfStorageArea._decode_hdf_value(units_system_raw) or ""
+        ).strip()
+        si_units_text = str(
+            HdfStorageArea._decode_hdf_value(si_units_raw) or ""
+        ).strip().lower()
+        units_system_key = units_system_text.lower()
+
+        if si_units_text in {"false", "0", "no"}:
+            return {
+                "units_system": "US Customary",
+                "storage_units": "acre-ft",
+                "raw_storage_units": "cubic ft",
+                "storage_conversion_factor": 1.0 / HdfStorageArea._ACRE_SQFT,
+                "area_units": "sq ft",
+                "area_to_acres_factor": 1.0 / HdfStorageArea._ACRE_SQFT,
+            }
+
+        if si_units_text in {"true", "1", "yes"}:
+            return {
+                "units_system": "SI",
+                "storage_units": "m^3",
+                "raw_storage_units": "m^3",
+                "storage_conversion_factor": 1.0,
+                "area_units": "m^2",
+                "area_to_acres_factor": 1.0 / HdfStorageArea._ACRE_SQM,
+            }
+
+        if units_system_key in {"us customary", "customary", "english"}:
+            return {
+                "units_system": "US Customary",
+                "storage_units": "acre-ft",
+                "raw_storage_units": "cubic ft",
+                "storage_conversion_factor": 1.0 / HdfStorageArea._ACRE_SQFT,
+                "area_units": "sq ft",
+                "area_to_acres_factor": 1.0 / HdfStorageArea._ACRE_SQFT,
+            }
+
+        if units_system_key in {"si", "metric"}:
+            return {
+                "units_system": "SI",
+                "storage_units": "m^3",
+                "raw_storage_units": "m^3",
+                "storage_conversion_factor": 1.0,
+                "area_units": "m^2",
+                "area_to_acres_factor": 1.0 / HdfStorageArea._ACRE_SQM,
+            }
+
+        return {
+            "units_system": "unknown",
+            "storage_units": "cubic project units",
+            "raw_storage_units": "cubic project units",
+            "storage_conversion_factor": 1.0,
+            "area_units": "square project units",
+            "area_to_acres_factor": None,
+        }
+
+    @staticmethod
     def _get_perimeter_polygon(
         hdf_path: Path, sa_name: str, *, ras_object: Any = None,
     ) -> Any:
@@ -169,13 +300,27 @@ class HdfStorageArea:
         """
         with h5py.File(hdf_path, "r") as hdf_file:
             if HdfStorageArea._STORAGE_AREA_PATH not in hdf_file:
+                logger.debug(
+                    "Storage areas group '%s' not found in %s.",
+                    HdfStorageArea._STORAGE_AREA_PATH,
+                    hdf_path.name,
+                )
                 return []
             sa_group = hdf_file[HdfStorageArea._STORAGE_AREA_PATH]
             if "Attributes" not in sa_group:
+                logger.debug(
+                    "Storage area attributes not found in %s (%s).",
+                    hdf_path.name,
+                    HdfStorageArea._STORAGE_AREA_PATH,
+                )
                 return []
 
             attrs = sa_group["Attributes"][()]
             if not getattr(attrs.dtype, "names", None) or "Name" not in attrs.dtype.names:
+                logger.debug(
+                    "Storage area attributes in %s do not include a Name field.",
+                    hdf_path.name,
+                )
                 return []
 
             return [
@@ -201,15 +346,29 @@ class HdfStorageArea:
         """
         with h5py.File(hdf_path, "r") as hdf_file:
             if HdfStorageArea._STORAGE_AREA_PATH not in hdf_file:
+                logger.debug(
+                    "Storage areas group '%s' not found in %s.",
+                    HdfStorageArea._STORAGE_AREA_PATH,
+                    hdf_path.name,
+                )
                 return {}
 
             sa_group = hdf_file[HdfStorageArea._STORAGE_AREA_PATH]
             if "Attributes" not in sa_group:
+                logger.debug(
+                    "Storage area attributes not found in %s (%s).",
+                    hdf_path.name,
+                    HdfStorageArea._STORAGE_AREA_PATH,
+                )
                 return {}
 
             attrs = sa_group["Attributes"][()]
             names = attrs.dtype.names or ()
             if "Name" not in names:
+                logger.debug(
+                    "Storage area attributes in %s do not include a Name field.",
+                    hdf_path.name,
+                )
                 return {}
 
             for row in attrs:
@@ -252,6 +411,11 @@ class HdfStorageArea:
 
                 return properties
 
+        logger.debug(
+            "Storage area '%s' not found in %s.",
+            sa_name,
+            hdf_path.name,
+        )
         return {}
 
     @staticmethod
@@ -286,14 +450,28 @@ class HdfStorageArea:
         try:
             with h5py.File(hdf_path, "r") as hdf_file:
                 if HdfStorageArea._STORAGE_AREA_PATH not in hdf_file:
+                    logger.debug(
+                        "Storage areas group '%s' not found in %s.",
+                        HdfStorageArea._STORAGE_AREA_PATH,
+                        hdf_path.name,
+                    )
                     return empty
                 sa_group = hdf_file[HdfStorageArea._STORAGE_AREA_PATH]
 
                 if "Attributes" not in sa_group:
+                    logger.debug(
+                        "Storage area attributes not found in %s (%s).",
+                        hdf_path.name,
+                        HdfStorageArea._STORAGE_AREA_PATH,
+                    )
                     return empty
                 attrs = sa_group["Attributes"][()]
                 field_names = getattr(attrs.dtype, "names", None)
                 if not field_names or "Name" not in field_names:
+                    logger.debug(
+                        "Storage area attributes in %s do not include a Name field.",
+                        hdf_path.name,
+                    )
                     return empty
 
                 sa_index = None
@@ -303,17 +481,45 @@ class HdfStorageArea:
                         sa_index = idx
                         break
                 if sa_index is None:
+                    logger.debug(
+                        "Storage area '%s' not found in %s.",
+                        sa_name,
+                        hdf_path.name,
+                    )
                     return empty
 
-                if "Volume Elevation Info" not in sa_group or "Volume Elevation Values" not in sa_group:
+                if (
+                    HdfStorageArea._VOLUME_ELEVATION_INFO not in sa_group
+                    or HdfStorageArea._VOLUME_ELEVATION_VALUES not in sa_group
+                ):
+                    missing = [
+                        dataset
+                        for dataset in (
+                            HdfStorageArea._VOLUME_ELEVATION_INFO,
+                            HdfStorageArea._VOLUME_ELEVATION_VALUES,
+                        )
+                        if dataset not in sa_group
+                    ]
+                    HdfStorageArea._log_missing_volume_elevation_curve(
+                        hdf_path,
+                        sa_name,
+                        "missing " + ", ".join(missing),
+                    )
                     return empty
 
-                info = sa_group["Volume Elevation Info"][()]
+                info = sa_group[HdfStorageArea._VOLUME_ELEVATION_INFO][()]
                 start, count = int(info[sa_index, 0]), int(info[sa_index, 1])
                 if count == 0:
+                    HdfStorageArea._log_missing_volume_elevation_curve(
+                        hdf_path,
+                        sa_name,
+                        "zero points",
+                    )
                     return empty
 
-                values = sa_group["Volume Elevation Values"][start:start + count]
+                values = sa_group[HdfStorageArea._VOLUME_ELEVATION_VALUES][
+                    start:start + count
+                ]
                 df = pd.DataFrame(
                     {"elevation": values[:, 1].astype("float64"),
                      "volume": values[:, 0].astype("float64")},
@@ -325,7 +531,14 @@ class HdfStorageArea:
                 return df
 
         except Exception as e:
-            logger.error("Error reading volume-elevation curve for SA '%s': %s", sa_name, e)
+            logger.error(
+                "Error reading volume-elevation curve for SA '%s' from %s "
+                "(%s): %s",
+                sa_name,
+                hdf_path,
+                HdfStorageArea._STORAGE_AREA_PATH,
+                e,
+            )
             return empty
 
     @staticmethod
@@ -346,16 +559,19 @@ class HdfStorageArea:
         with h5py.File(hdf_path, "r") as hdf_file:
             geom_group = hdf_file.get("Geometry")
             if geom_group is None:
+                logger.debug("Geometry group not found in %s.", hdf_path.name)
                 return None
 
             terrain_raw = geom_group.attrs.get("Terrain Filename")
             if terrain_raw is None:
                 terrain_raw = hdf_file.attrs.get("Terrain Filename")
             if terrain_raw is None:
+                logger.debug("Terrain Filename attribute not found in %s.", hdf_path.name)
                 return None
 
         terrain_text = str(HdfStorageArea._decode_hdf_value(terrain_raw)).strip()
         if not terrain_text:
+            logger.debug("Terrain Filename attribute is empty in %s.", hdf_path.name)
             return None
 
         terrain_text = terrain_text.replace("\\", "/")
@@ -374,7 +590,11 @@ class HdfStorageArea:
             if candidate.exists():
                 return candidate
 
-        logger.warning("Terrain referenced by %s was not found: %s", hdf_path, terrain_path)
+        logger.debug(
+            "Terrain referenced by %s was not found. Checked candidate path(s): %s",
+            hdf_path.name,
+            ", ".join(str(candidate) for candidate in candidates),
+        )
         return None
 
     @staticmethod
@@ -390,18 +610,11 @@ class HdfStorageArea:
         The returned volume is in cubic project units, matching the horizontal
         and vertical units of the terrain raster.
         """
-        rasterio, rasterio_mask_fn = HdfStorageArea._require_rasterio()
-        terrain_path = Path(terrain_path)
-        if not terrain_path.exists():
-            raise FileNotFoundError(f"Terrain file not found: {terrain_path}")
-
-        with rasterio.open(terrain_path) as src:
-            terrain_data, _, cell_area = HdfStorageArea._masked_terrain_array(
-                src, polygon, rasterio_mask_fn,
-            )
-            depths = float(elevation) - terrain_data
-            valid_depths = depths[~np.isnan(depths) & (depths > 0)]
-            return float(np.sum(valid_depths * cell_area))
+        return HdfStorageArea._compute_volume_below_elevation_from_terrain(
+            terrain_path,
+            polygon,
+            elevation,
+        )
 
     @staticmethod
     @log_call
@@ -438,7 +651,9 @@ class HdfStorageArea:
         -------
         Tuple[pandas.DataFrame, dict]
             DataFrame columns are ``stage`` and ``storage``.  ``storage`` is in
-            cubic project units.  Metadata is also copied to ``df.attrs``.
+            acre-feet for US Customary projects, cubic meters for SI projects,
+            or cubic project units when the HDF unit system is unknown.
+            Metadata is also copied to ``df.attrs``.
         """
         if elevation_interval <= 0:
             raise ValueError("elevation_interval must be greater than zero")
@@ -463,7 +678,10 @@ class HdfStorageArea:
                 ras_object=ras_object,
             )
             if terrain_path is None:
-                raise ValueError(f"Terrain file not found from geometry HDF: {hdf_path}")
+                raise ValueError(
+                    "Terrain file referenced by "
+                    f"{hdf_path.name} for storage area '{sa_name}' was not found."
+                )
 
             if progress_callback:
                 progress_callback(20, 100, "Extracting terrain statistics")
@@ -490,20 +708,30 @@ class HdfStorageArea:
             if progress_callback:
                 progress_callback(30, 100, f"Computing {len(elevations)} volumes")
 
+            unit_info = HdfStorageArea._get_storage_unit_conversion(hdf_path)
+            storage_conversion_factor = float(unit_info["storage_conversion_factor"])
+
             rows = []
             total = len(elevations)
             for idx, elev in enumerate(elevations, start=1):
-                volume = HdfStorageArea.compute_volume_below_elevation(
+                raw_volume = HdfStorageArea._compute_volume_below_elevation_from_terrain(
                     terrain_path,
                     polygon,
                     float(elev),
                 )
-                rows.append({"stage": float(elev), "storage": float(volume)})
+                rows.append(
+                    {
+                        "stage": float(elev),
+                        "storage": float(raw_volume) * storage_conversion_factor,
+                    }
+                )
                 if progress_callback:
                     percent = 30 + int(70 * idx / max(total, 1))
                     progress_callback(percent, 100, f"Computed volume {idx}/{total}")
 
             df = pd.DataFrame(rows, columns=["stage", "storage"])
+            area_to_acres_factor = unit_info["area_to_acres_factor"]
+            storage_area = float(polygon.area)
             metadata: Dict[str, Any] = {
                 "storage_area_name": sa_name,
                 "terrain_path": str(terrain_path),
@@ -512,13 +740,19 @@ class HdfStorageArea:
                 "mean_terrain_elev": stats["mean_interior"],
                 "min_perimeter_elev": stats["min_perimeter"],
                 "max_perimeter_elev": stats["max_perimeter"],
-                "storage_area_acres": float(polygon.area) / HdfStorageArea._ACRE_SQFT,
+                "storage_area_area": storage_area,
+                "storage_area_area_units": unit_info["area_units"],
+                "storage_area_acres": (
+                    storage_area * float(area_to_acres_factor)
+                    if area_to_acres_factor is not None
+                    else None
+                ),
                 "num_elevation_points": int(len(elevations)),
                 "elevation_interval": float(elevation_interval),
                 "valid_cell_count": stats["valid_cell_count"],
                 "cell_area": stats["cell_area"],
-                "storage_units": "cubic project units",
             }
+            metadata.update(unit_info)
             df.attrs.update(metadata)
             df.attrs["storage_area"] = sa_name
 
@@ -530,11 +764,14 @@ class HdfStorageArea:
         except (FileNotFoundError, ValueError):
             raise
         except Exception as e:
-            logger.error(
+            logger.debug(
                 "Error computing stage-storage curve for SA '%s' in %s: %s",
-                sa_name, hdf_path, e,
+                sa_name, hdf_path, e, exc_info=True,
             )
-            raise IOError(f"Failed to compute stage-storage curve: {e}") from e
+            raise IOError(
+                f"Failed to compute stage-storage curve for storage area "
+                f"'{sa_name}' in {hdf_path.name}: {e}"
+            ) from e
 
     @staticmethod
     @log_call

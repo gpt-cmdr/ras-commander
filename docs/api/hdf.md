@@ -122,10 +122,12 @@ Storage area volume-elevation curve extraction from HDF.
 
 ### HdfStruc1D
 
-1D inline structure data extraction from HDF.
+1D structure result extraction from plan HDF results.
 
-- `get_inline_structure_data(hdf_path)` - Extract inline structure geometry and results
-- `get_structure_flow_timeseries(hdf_path, structure_name)` - Get flow time series through a structure
+- `get_structure_max_values(hdf_path, river, reach, rs)` - Extract maximum headwater, tailwater, and flow for a bridge, culvert, inline weir, or inline control structure. Raises an actionable `ValueError` when the plan HDF has no steady/unsteady results, required cross-section result datasets are absent, or the requested structure is not present in the results.
+- `list_1d_structures(hdf_path)` - List 1D structures identified from result markers. Returns an empty DataFrame quietly when no structures are present in an otherwise readable HDF.
+
+For steady plans, `get_structure_max_values()` can use the flanking cross sections when the structure is represented in HDF `Node Info` instead of `Cross Section Attributes`. The returned `hw_source`, `tw_source`, and `flow_source` fields identify the result locations used.
 
 ### HdfHydraulicTables
 

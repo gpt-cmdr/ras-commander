@@ -43,6 +43,12 @@ from .HdfUtils import HdfUtils
 logger = get_logger(__name__)
 
 
+def _path_name(path: Union[str, Path]) -> str:
+    """Return a concise path label for default log messages."""
+    path = Path(path)
+    return path.name or str(path)
+
+
 class HdfLandCover:
     """
     Final Manning's n computation from land cover, base values, and calibration regions.
@@ -95,7 +101,7 @@ class HdfLandCover:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 areas_path = "Geometry/2D Flow Areas"
                 if areas_path not in hdf_file:
-                    logger.warning(f"No 2D Flow Areas found in {hdf_path}")
+                    logger.debug(f"No 2D Flow Areas found in {hdf_path}")
                     return pd.DataFrame(columns=['mesh_name', 'cell_id', 'mannings_n'])
 
                 areas_group = hdf_file[areas_path]
@@ -164,7 +170,7 @@ class HdfLandCover:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 table_path = "Geometry/Land Cover (Manning's n)/Calibration Table"
                 if table_path not in hdf_file:
-                    logger.warning(f"No Manning's n calibration table in {hdf_path}")
+                    logger.debug(f"No Manning's n calibration table in {hdf_path}")
                     return None
 
                 data = hdf_file[table_path][()]
@@ -274,7 +280,7 @@ class HdfLandCover:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 lc_path = "Geometry/Land Cover (Manning's n)"
                 if lc_path not in hdf_file:
-                    logger.warning(f"No Land Cover (Manning's n) group in {hdf_path}")
+                    logger.debug(f"No Land Cover (Manning's n) group in {hdf_path}")
                     return gpd.GeoDataFrame()
 
                 lc_group = hdf_file[lc_path]
@@ -282,7 +288,7 @@ class HdfLandCover:
                 if ("Polygon Info" not in lc_group or
                     "Attributes" not in lc_group or
                     "Polygon Points" not in lc_group):
-                    logger.warning(f"Missing polygon datasets in {lc_path}")
+                    logger.debug(f"Missing polygon datasets in {lc_path}")
                     return gpd.GeoDataFrame()
 
                 attrs = lc_group["Attributes"][()]
@@ -293,12 +299,13 @@ class HdfLandCover:
                     area_names = np.vectorize(HdfUtils.convert_ras_string)(attrs["2D Area Name"])
 
                 geoms = []
+                missing_parts_regions = []
                 for pnt_start, pnt_cnt, part_start, part_cnt in lc_group["Polygon Info"][()]:
                     points = lc_group["Polygon Points"][()][pnt_start:pnt_start + pnt_cnt]
                     if part_cnt == 1:
                         geoms.append(Polygon(points))
                     elif "Polygon Parts" not in lc_group:
-                        logger.warning("Multi-part polygon but 'Polygon Parts' dataset missing")
+                        missing_parts_regions.append(len(geoms))
                         geoms.append(Polygon(points))
                     else:
                         parts = lc_group["Polygon Parts"][()][part_start:part_start + part_cnt]
@@ -308,6 +315,17 @@ class HdfLandCover:
                         else:
                             # First ring is exterior, rest are holes
                             geoms.append(Polygon(rings[0], rings[1:]))
+
+                if missing_parts_regions:
+                    logger.warning(
+                        "'Polygon Parts' dataset missing for "
+                        f"{len(missing_parts_regions)} multi-part Manning's n "
+                        "calibration polygon(s); using raw point order as polygon shells"
+                    )
+                    logger.debug(
+                        "Manning's n calibration polygon indices missing parts: "
+                        f"{missing_parts_regions}"
+                    )
 
                 data = {
                     "region_id": range(len(names)),
@@ -404,7 +422,11 @@ class HdfLandCover:
                         rmap_path = candidate
                         break
                 if rmap_path is None:
-                    logger.warning(f"No Raster Map found in {landcover_hdf_path}")
+                    logger.warning(
+                        "No Raster Map dataset found in land cover sidecar "
+                        f"{_path_name(landcover_hdf_path)}"
+                    )
+                    logger.debug(f"Land cover sidecar missing Raster Map: {landcover_hdf_path}")
                     return None
 
                 rmap_data = hdf_file[rmap_path][()]
@@ -418,7 +440,11 @@ class HdfLandCover:
                         vars_path = candidate
                         break
                 if vars_path is None:
-                    logger.warning(f"No Variables found in {landcover_hdf_path}")
+                    logger.warning(
+                        "No Variables dataset found in land cover sidecar "
+                        f"{_path_name(landcover_hdf_path)}"
+                    )
+                    logger.debug(f"Land cover sidecar missing Variables: {landcover_hdf_path}")
                     return None
 
                 vars_data = hdf_file[vars_path][()]
@@ -539,7 +565,7 @@ class HdfLandCover:
 
         backup_path = Path(str(hdf_path) + '.bak')
         shutil.copy2(hdf_path, backup_path)
-        logger.info(f"Created backup for land cover sidecar: {backup_path}")
+        logger.debug(f"Created backup for land cover sidecar: {backup_path}")
 
         sidecar_format = HdfLandCover._detect_sidecar_format(hdf_path)
         class_names: List[str] = []
@@ -742,9 +768,13 @@ class HdfLandCover:
 
         actually_changed = sum(1 for d in class_details if d['value_changed'])
         logger.info(
-            f"Completed land cover update for {hdf_path}: "
+            f"Updated land cover sidecar {hdf_path.name}: "
             f"format={sidecar_format}, changed={actually_changed}, "
             f"unchanged={len(class_names) - len(normalized_mapping)}"
+        )
+        logger.debug(
+            f"Completed land cover update for {hdf_path}: "
+            f"backup={backup_path}"
         )
 
         return {
@@ -912,7 +942,12 @@ class HdfLandCover:
                 if lc_path.exists():
                     return lc_path
                 else:
-                    logger.warning(f"Land cover file not found: {lc_path}")
+                    logger.warning(
+                        "Land cover sidecar "
+                        f"{_path_name(lc_path)} referenced by "
+                        f"{_path_name(hdf_path)} was not found"
+                    )
+                    logger.debug(f"Resolved land cover sidecar path does not exist: {lc_path}")
                     return None
 
         except Exception as e:
@@ -964,7 +999,11 @@ class HdfLandCover:
         if landcover_hdf_path is None:
             landcover_hdf_path = HdfLandCover.get_landcover_association(hdf_path)
             if landcover_hdf_path is None:
-                logger.error("Cannot resolve land cover HDF path")
+                logger.error(
+                    "No land cover sidecar association found in "
+                    f"{_path_name(hdf_path)}; assign one in RASMapper Manage "
+                    "Associations before computing final Manning's n raster"
+                )
                 return None
         landcover_hdf_path = Path(landcover_hdf_path)
 
@@ -978,10 +1017,17 @@ class HdfLandCover:
             if candidates:
                 lc_tif_path = candidates[0]
             else:
-                logger.error(f"Land cover TIF not found for {landcover_hdf_path}")
+                logger.error(
+                    "Land cover TIF not found for sidecar "
+                    f"{_path_name(landcover_hdf_path)}"
+                )
+                logger.debug(f"Expected land cover TIF next to: {landcover_hdf_path}")
                 return None
 
-        logger.info(f"Reading land cover TIF: {lc_tif_path.name} ({lc_tif_path.stat().st_size / 1024 / 1024:.0f} MB)")
+        logger.debug(
+            f"Reading land cover TIF: {lc_tif_path.name} "
+            f"({lc_tif_path.stat().st_size / 1024 / 1024:.0f} MB)"
+        )
 
         # Step 1: Read the raster map (pixel_id → class_name → base_n)
         raster_map = HdfLandCover.get_landcover_raster_map(landcover_hdf_path)
@@ -1146,6 +1192,7 @@ class HdfLandCover:
                     out = final_raster.copy()
                     out[out == 0] = -9999.0
                     dst.write(out, 1)
-                logger.info(f"Wrote final Manning's n raster to {output_tif_path}")
+                logger.info(f"Wrote final Manning's n raster: {output_tif_path.name}")
+                logger.debug(f"Wrote final Manning's n raster to {output_tif_path}")
 
         return final_raster

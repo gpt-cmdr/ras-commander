@@ -13,6 +13,10 @@ or in CI/CD with HEC-RAS installed.
 
 import pytest
 from pathlib import Path
+import logging
+
+import geopandas as gpd
+from shapely.geometry import Point, Polygon
 
 
 class TestHdfBenefitAreasImport:
@@ -121,6 +125,155 @@ class TestExpectedBehavior:
 
         for key in expected_keys:
             assert key in docstring, f"Expected key '{key}' not documented"
+
+
+class TestBenefitAreaLoggingAndPolygons:
+    """Focused regressions for benefit/rise analysis logging and polygon building."""
+
+    @staticmethod
+    def _sample_points(existing_values=(10.0, 10.0), proposed_values=(9.5, 10.3)):
+        return (
+            gpd.GeoDataFrame(
+                {
+                    "mesh_name": ["M1", "M1"],
+                    "cell_id": [0, 1],
+                    "maximum_water_surface": list(existing_values),
+                },
+                geometry=[Point(0.5, 0.5), Point(1.5, 0.5)],
+                crs="EPSG:2272",
+            ),
+            gpd.GeoDataFrame(
+                {
+                    "mesh_name": ["M1", "M1"],
+                    "cell_id": [0, 1],
+                    "maximum_water_surface": list(proposed_values),
+                },
+                geometry=[Point(0.5, 0.5), Point(1.5, 0.5)],
+                crs="EPSG:2272",
+            ),
+        )
+
+    @staticmethod
+    def _sample_cells():
+        return gpd.GeoDataFrame(
+            {
+                "mesh_name": ["M1", "M1"],
+                "cell_id": [0, 1],
+            },
+            geometry=[
+                Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+                Polygon([(1, 0), (2, 0), (2, 1), (1, 1)]),
+            ],
+            crs="EPSG:2272",
+        )
+
+    def test_spatial_join_handles_mesh_name_and_cell_id_columns(self):
+        """Benefit polygons should build when points and cells share standard columns."""
+        from ras_commander.hdf.HdfBenefitAreas import HdfBenefitAreas
+
+        existing_points, proposed_points = self._sample_points()
+        matched = HdfBenefitAreas._match_points_by_xy(existing_points, proposed_points, 6)
+        benefit_points, _ = HdfBenefitAreas._apply_threshold_and_classify(matched, 0.1)
+        cells = self._sample_cells()
+
+        benefit_polygons = HdfBenefitAreas._build_contiguous_polygons(
+            benefit_points,
+            cells,
+            "Benefit Area",
+            adjacency_method="polygon_edges",
+            dissolve=True,
+        )
+
+        assert not benefit_polygons.empty
+        assert benefit_polygons["cell_count"].sum() == 1
+        assert benefit_polygons["area_sqft"].sum() == pytest.approx(1.0)
+
+    def test_identify_benefit_areas_logs_one_concise_success_line(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        """Successful analysis should leave one compact INFO summary."""
+        from ras_commander.hdf import HdfBenefitAreas, HdfMesh, HdfResultsMesh
+
+        existing_hdf = tmp_path / "existing.p01.hdf"
+        proposed_hdf = tmp_path / "proposed.p02.hdf"
+        existing_hdf.touch()
+        proposed_hdf.touch()
+
+        existing_points, proposed_points = self._sample_points()
+        cells = self._sample_cells()
+
+        def fake_get_mesh_max_ws(hdf_path):
+            return existing_points if Path(hdf_path) == existing_hdf else proposed_points
+
+        monkeypatch.setattr(HdfResultsMesh, "get_mesh_max_ws", fake_get_mesh_max_ws)
+        monkeypatch.setattr(HdfMesh, "get_mesh_cell_polygons", lambda _hdf_path: cells)
+
+        caplog.set_level(logging.INFO, logger="ras_commander.hdf.HdfBenefitAreas")
+        results = HdfBenefitAreas.identify_benefit_areas(
+            existing_hdf,
+            proposed_hdf,
+            min_delta=0.1,
+        )
+
+        assert set(results) == {
+            "benefit_polygons",
+            "rise_polygons",
+            "existing_points",
+            "proposed_points",
+            "difference_points",
+        }
+        messages = [
+            record.getMessage()
+            for record in caplog.records
+            if record.name == "ras_commander.hdf.HdfBenefitAreas"
+        ]
+        success_messages = [
+            message for message in messages
+            if message.startswith("Benefit analysis complete:")
+        ]
+        assert len(success_messages) == 1
+        assert "benefit_areas=1" in success_messages[0]
+        assert "rise_areas=1" in success_messages[0]
+        assert "matched_points=2" in success_messages[0]
+        assert not any(message.strip().startswith("Benefit areas:") for message in messages)
+
+    def test_missing_max_wse_error_is_actionable(self, tmp_path, monkeypatch):
+        from ras_commander.hdf import HdfBenefitAreas, HdfResultsMesh
+
+        existing_hdf = tmp_path / "existing.p01.hdf"
+        proposed_hdf = tmp_path / "proposed.p02.hdf"
+        existing_hdf.touch()
+        proposed_hdf.touch()
+
+        monkeypatch.setattr(
+            HdfResultsMesh,
+            "get_mesh_max_ws",
+            lambda _hdf_path: gpd.GeoDataFrame(),
+        )
+
+        with pytest.raises(ValueError, match="Maximum Water Surface"):
+            HdfBenefitAreas.identify_benefit_areas(existing_hdf, proposed_hdf)
+
+    def test_missing_mesh_cells_error_mentions_geometry_preprocessor(
+        self, tmp_path, monkeypatch
+    ):
+        from ras_commander.hdf import HdfBenefitAreas, HdfMesh, HdfResultsMesh
+
+        existing_hdf = tmp_path / "existing.p01.hdf"
+        proposed_hdf = tmp_path / "proposed.p02.hdf"
+        existing_hdf.touch()
+        proposed_hdf.touch()
+
+        existing_points, proposed_points = self._sample_points()
+
+        def fake_get_mesh_max_ws(hdf_path):
+            return existing_points if Path(hdf_path) == existing_hdf else proposed_points
+
+        monkeypatch.setattr(HdfResultsMesh, "get_mesh_max_ws", fake_get_mesh_max_ws)
+        monkeypatch.setattr(HdfMesh, "get_mesh_cell_polygons", lambda _hdf_path: gpd.GeoDataFrame())
+
+        with pytest.raises(ValueError, match="geometry preprocessor"):
+            HdfBenefitAreas.identify_benefit_areas(existing_hdf, proposed_hdf)
 
 
 # Integration test - requires HEC-RAS execution

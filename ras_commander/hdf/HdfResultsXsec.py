@@ -59,6 +59,12 @@ class HdfResultsXsec:
         - HdfBase: Core HDF file operations
         - HdfUtils: Utility functions for HDF processing
     """
+    _BASE_TS_PATH = (
+        "Results/Unsteady/Output/Output Blocks/Base Output/"
+        "Unsteady Time Series"
+    )
+    _XSEC_OUTPUT_PATH = f"{_BASE_TS_PATH}/Cross Sections"
+    _TIME_STAMP_PATH = f"{_BASE_TS_PATH}/Time Date Stamp (ms)"
 
 
 # Tested functions from AWS webinar where the code was developed
@@ -88,18 +94,33 @@ class HdfResultsXsec:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 # Define base paths
-                base_output_path = "/Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Cross Sections/"
-                time_stamp_path = "/Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time Date Stamp (ms)"
+                base_output_path = HdfResultsXsec._XSEC_OUTPUT_PATH
+                time_stamp_path = HdfResultsXsec._TIME_STAMP_PATH
+                required_dataset_paths = [
+                    f"{base_output_path}/Cross Section Attributes",
+                    f"{base_output_path}/Cross Section Only",
+                    time_stamp_path,
+                    f"{base_output_path}/Water Surface",
+                    f"{base_output_path}/Velocity Total",
+                    f"{base_output_path}/Velocity Channel",
+                    f"{base_output_path}/Flow Lateral",
+                    f"{base_output_path}/Flow",
+                ]
+                HdfResultsXsec._validate_xsec_timeseries_paths(
+                    hdf_path,
+                    hdf_file,
+                    required_dataset_paths,
+                )
                 
                 # Extract Cross Section Attributes
-                attrs_dataset = hdf_file[f"{base_output_path}Cross Section Attributes"][:]
+                attrs_dataset = hdf_file[f"{base_output_path}/Cross Section Attributes"][:]
                 rivers = [attr['River'].decode('utf-8').strip() for attr in attrs_dataset]
                 reaches = [attr['Reach'].decode('utf-8').strip() for attr in attrs_dataset]
                 stations = [attr['Station'].decode('utf-8').strip() for attr in attrs_dataset]
                 names = [attr['Name'].decode('utf-8').strip() for attr in attrs_dataset]
                 
                 # Extract Cross Section Only (Unique Names)
-                cross_section_only_dataset = hdf_file[f"{base_output_path}Cross Section Only"][:]
+                cross_section_only_dataset = hdf_file[f"{base_output_path}/Cross Section Only"][:]
                 cross_section_names = [cs.decode('utf-8').strip() for cs in cross_section_only_dataset]
                 
                 # Extract Time Stamps and convert to datetime
@@ -110,11 +131,11 @@ class HdfResultsXsec:
                 times = pd.to_datetime(time_stamps, format='%d%b%Y %H:%M:%S:%f')
                 
                 # Extract Required Datasets
-                water_surface = hdf_file[f"{base_output_path}Water Surface"][:]
-                velocity_total = hdf_file[f"{base_output_path}Velocity Total"][:]
-                velocity_channel = hdf_file[f"{base_output_path}Velocity Channel"][:]
-                flow_lateral = hdf_file[f"{base_output_path}Flow Lateral"][:]
-                flow = hdf_file[f"{base_output_path}Flow"][:]
+                water_surface = hdf_file[f"{base_output_path}/Water Surface"][:]
+                velocity_total = hdf_file[f"{base_output_path}/Velocity Total"][:]
+                velocity_channel = hdf_file[f"{base_output_path}/Velocity Channel"][:]
+                flow_lateral = hdf_file[f"{base_output_path}/Flow Lateral"][:]
+                flow = hdf_file[f"{base_output_path}/Flow"][:]
                 
                 # Calculate maximum values along time axis
                 max_water_surface = np.max(water_surface, axis=0)
@@ -147,18 +168,94 @@ class HdfResultsXsec:
                     },
                     attrs={
                         'description': 'Cross-section results extracted from HEC-RAS HDF file',
-                        'source_file': str(hdf_path)
+                        'source_file': hdf_path.name
                     }
                 )
                 
                 return ds
 
         except KeyError as e:
-            logger.error(f"Required dataset not found in HDF file: {e}")
+            message = e.args[0] if e.args else str(e)
+            logger.error(
+                "%s",
+                message,
+            )
+            logger.debug(
+                "Full HDF path for failed cross-section results extraction: %s",
+                hdf_path,
+                exc_info=True,
+            )
             raise
         except Exception as e:
-            logger.error(f"Error extracting cross section results: {e}")
+            logger.error(
+                "Error extracting cross-section results from %s: %s",
+                hdf_path.name,
+                e,
+            )
+            logger.debug(
+                "Full HDF path for failed cross-section results extraction: %s",
+                hdf_path,
+                exc_info=True,
+            )
             raise
+
+    @staticmethod
+    def _validate_xsec_timeseries_paths(
+        hdf_path: Path,
+        hdf_file: h5py.File,
+        required_dataset_paths: Sequence[str],
+    ) -> None:
+        """Raise an actionable error if required 1D time-series data is absent."""
+        for dataset_path in required_dataset_paths:
+            if dataset_path not in hdf_file:
+                raise KeyError(
+                    HdfResultsXsec._missing_xsec_timeseries_message(
+                        hdf_path,
+                        hdf_file,
+                        dataset_path,
+                    )
+                )
+
+    @staticmethod
+    def _missing_xsec_timeseries_message(
+        hdf_path: Path,
+        hdf_file: h5py.File,
+        dataset_path: str,
+    ) -> str:
+        """Return condition-specific guidance for missing 1D result datasets."""
+        filename = hdf_path.name
+
+        if "Results" not in hdf_file:
+            return (
+                f"Cannot extract 1D cross-section time series from {filename}: "
+                "/Results is absent; this appears to be a minimal, geometry-only, "
+                "or uncomputed HDF."
+            )
+
+        if "Results/Steady" in hdf_file and "Results/Unsteady" not in hdf_file:
+            return (
+                f"Cannot extract 1D unsteady cross-section time series from {filename}: "
+                "file contains steady results, not unsteady time-series output. "
+                "Use HdfResultsPlan.get_steady_wse() for steady profiles."
+            )
+
+        if "Results/Unsteady" not in hdf_file:
+            return (
+                f"Cannot extract 1D unsteady cross-section time series from {filename}: "
+                "/Results/Unsteady is absent; the HDF does not contain unsteady "
+                "time-series output."
+            )
+
+        if HdfResultsXsec._XSEC_OUTPUT_PATH not in hdf_file:
+            return (
+                f"Cannot extract 1D cross-section time series from {filename}: "
+                "unsteady results exist but Cross Sections output is absent."
+            )
+
+        return (
+            f"Missing required 1D cross-section result dataset in {filename}: "
+            f"{dataset_path}"
+        )
 
 
 
@@ -291,15 +388,19 @@ class HdfResultsXsec:
         if reftype == "lines":
             output_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Reference Lines"
             abbrev = "refln"
+            ref_label = "line"
         elif reftype == "points":
             output_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Reference Points"
             abbrev = "refpt"
+            ref_label = "point"
         else:
             raise ValueError('reftype must be either "lines" or "points".')
 
+        filename = HdfResultsXsec._hdf_filename(hdf_file)
         should_close = not isinstance(hdf_file, h5py.File)
         if should_close:
             hdf_file = h5py.File(hdf_file, "r")
+            filename = HdfResultsXsec._hdf_filename(hdf_file)
 
         variable_filter = HdfResultsXsec._normalize_reference_variable_filter(variables)
 
@@ -307,11 +408,29 @@ class HdfResultsXsec:
             try:
                 reference_group = hdf_file[output_path]
             except KeyError:
-                logger.error(
-                    f"Could not find HDF group at path '{output_path}'. "
-                    f"The Plan HDF file may not contain reference {reftype[:-1]} output data."
+                logger.debug(
+                    "Reference %s time-series group not found in %s; returning empty Dataset.",
+                    ref_label,
+                    filename,
                 )
                 return xr.Dataset()
+
+            if "Name" not in reference_group:
+                message = (
+                    f"Reference {ref_label} time-series group in {filename} is missing "
+                    "required dataset 'Name'; cannot build feature coordinates."
+                )
+                logger.error("%s", message)
+                raise KeyError(message)
+
+            if HdfResultsXsec._TIME_STAMP_PATH not in hdf_file:
+                message = (
+                    f"Reference {ref_label} time-series group in {filename} exists but "
+                    "unsteady timestamps are missing; this appears to be incomplete "
+                    "or minimal results output."
+                )
+                logger.error("%s", message)
+                raise KeyError(message)
 
             reference_names = reference_group["Name"][:]
             names = []
@@ -353,10 +472,25 @@ class HdfResultsXsec:
                     attrs={"units": units, "hdf_path": f"{output_path}/{var}"},
                 )
                 das[var] = da
+            if not das:
+                logger.debug(
+                    "Reference %s group found in %s, but no numeric datasets matched "
+                    "expected shape %s; returning empty Dataset.",
+                    ref_label,
+                    filename,
+                    expected_shape,
+                )
             return xr.Dataset(das)
         finally:
             if should_close:
                 hdf_file.close()
+
+    @staticmethod
+    def _hdf_filename(hdf_file: Union[h5py.File, Path]) -> str:
+        """Return a display-safe filename for an HDF file object or path."""
+        if isinstance(hdf_file, h5py.File):
+            return Path(hdf_file.filename).name
+        return Path(hdf_file).name
 
     @staticmethod
     def _normalize_reference_variable_filter(

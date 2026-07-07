@@ -89,6 +89,39 @@ class HdfHydraulicTables:
     Property tables provide preprocessed hydraulic properties (area, conveyance,
     wetted perimeter, etc.) as functions of elevation for cross sections and structures.
     """
+    _PROPERTY_TABLES_PATH = '/Geometry/Cross Sections/Property Tables'
+    _REQUIRED_PROPERTY_TABLE_DATASETS = ('XSEC Info', 'XSEC Value')
+    _PREPROCESSOR_GUIDANCE = (
+        "HTAB property tables are created by the HEC-RAS geometry preprocessor; "
+        "run the geometry preprocessor first if you need these data."
+    )
+
+    @staticmethod
+    def _missing_property_table_items(hdf_file: h5py.File) -> list[str]:
+        """Return missing HDF items required for cross-section HTAB reads."""
+        prop_path = HdfHydraulicTables._PROPERTY_TABLES_PATH
+        if prop_path not in hdf_file:
+            return [prop_path]
+
+        prop_tables = hdf_file[prop_path]
+        return [
+            f"{prop_path}/{dataset_name}"
+            for dataset_name in HdfHydraulicTables._REQUIRED_PROPERTY_TABLE_DATASETS
+            if dataset_name not in prop_tables
+        ]
+
+    @staticmethod
+    def _missing_property_tables_message(
+        hdf_path: Path,
+        missing_items: list[str],
+        context: str,
+    ) -> str:
+        missing_text = ", ".join(missing_items)
+        return (
+            f"HTAB property tables not found in {hdf_path.name} for {context}. "
+            f"{HdfHydraulicTables._PREPROCESSOR_GUIDANCE} "
+            f"Missing HDF item(s): {missing_text}."
+        )
 
     @staticmethod
     def _get_xs_index(hdf_file: h5py.File, river: str, reach: str, rs: str) -> Optional[int]:
@@ -133,11 +166,11 @@ class HdfHydraulicTables:
                     logger.debug(f"Found XS at index {i}: {river}/{reach}/RS {rs}")
                     return i
 
-            logger.warning(f"Cross section not found: {river}/{reach}/RS {rs}")
+            logger.debug(f"Cross section not found: {river}/{reach}/RS {rs}")
             return None
 
         except Exception as e:
-            logger.error(f"Error finding XS index: {str(e)}")
+            logger.debug(f"Error finding XS index: {str(e)}")
             return None
 
     @staticmethod
@@ -157,22 +190,22 @@ class HdfHydraulicTables:
             - Returns DataFrame with elevation + 22 other properties
         """
         try:
-            prop_path = '/Geometry/Cross Sections/Property Tables'
+            prop_path = HdfHydraulicTables._PROPERTY_TABLES_PATH
             if prop_path not in hdf_file:
-                logger.error(f"Property Tables path not found: {prop_path}")
+                logger.debug(f"Property Tables path not found: {prop_path}")
                 return None
 
             prop_tables = hdf_file[prop_path]
 
             # Read index info
             if 'XSEC Info' not in prop_tables:
-                logger.error("XSEC Info not found in Property Tables")
+                logger.debug("XSEC Info not found in Property Tables")
                 return None
 
             xsec_info = prop_tables['XSEC Info'][:]
 
             if xs_index >= len(xsec_info):
-                logger.error(f"XS index {xs_index} out of range (max: {len(xsec_info)-1})")
+                logger.debug(f"XS index {xs_index} out of range (max: {len(xsec_info)-1})")
                 return None
 
             # Get start index and count for this XS
@@ -183,7 +216,7 @@ class HdfHydraulicTables:
 
             # Read property table values
             if 'XSEC Value' not in prop_tables:
-                logger.error("XSEC Value not found in Property Tables")
+                logger.debug("XSEC Value not found in Property Tables")
                 return None
 
             xsec_value = prop_tables['XSEC Value']
@@ -231,7 +264,7 @@ class HdfHydraulicTables:
             return df
 
         except Exception as e:
-            logger.error(f"Error extracting property table: {str(e)}")
+            logger.debug(f"Error extracting property table: {str(e)}", exc_info=True)
             return None
 
     @staticmethod
@@ -337,6 +370,16 @@ class HdfHydraulicTables:
                     )
 
                 # Extract property table
+                missing_items = HdfHydraulicTables._missing_property_table_items(hdf)
+                if missing_items:
+                    raise IOError(
+                        HdfHydraulicTables._missing_property_tables_message(
+                            hdf_path,
+                            missing_items,
+                            f"{river}/{reach}/RS {rs}",
+                        )
+                    )
+
                 df = HdfHydraulicTables._extract_property_table(hdf, xs_index)
 
                 if df is None:
@@ -354,7 +397,7 @@ class HdfHydraulicTables:
         except ValueError:
             raise
         except Exception as e:
-            logger.error(f"Error reading property table from HDF: {str(e)}")
+            logger.error(f"Error reading HTAB property table from {hdf_path.name}: {str(e)}")
             raise IOError(f"Failed to read property table: {str(e)}")
 
     @staticmethod
@@ -413,6 +456,7 @@ class HdfHydraulicTables:
 
         try:
             all_htabs = {}
+            failed_htabs = []
 
             with h5py.File(hdf_path, 'r') as hdf:
                 # Read attributes to get all river/reach/RS combinations
@@ -422,6 +466,17 @@ class HdfHydraulicTables:
                     return all_htabs
 
                 attrs = hdf[attrs_path][:]
+
+                missing_items = HdfHydraulicTables._missing_property_table_items(hdf)
+                if missing_items:
+                    logger.error(
+                        HdfHydraulicTables._missing_property_tables_message(
+                            hdf_path,
+                            missing_items,
+                            "all cross sections",
+                        )
+                    )
+                    return all_htabs
 
                 # Extract property table for each cross section
                 for i, attr in enumerate(attrs):
@@ -435,9 +490,19 @@ class HdfHydraulicTables:
                     if df is not None:
                         all_htabs[(river, reach, rs)] = df
                     else:
-                        logger.warning(f"Failed to extract HTAB for {river}/{reach}/RS {rs}")
+                        failed_htabs.append(f"{river}/{reach}/RS {rs}")
 
-            logger.info(f"Extracted {len(all_htabs)} property tables from {hdf_path.name}")
+            if failed_htabs:
+                preview = ", ".join(failed_htabs[:5])
+                more_text = f", ... plus {len(failed_htabs) - 5} more" if len(failed_htabs) > 5 else ""
+                logger.warning(
+                    f"Skipped {len(failed_htabs)}/{len(attrs)} HTAB property table(s) "
+                    f"from {hdf_path.name}; first failures: {preview}{more_text}"
+                )
+                logger.debug(f"Skipped HTAB cross sections from {hdf_path}: {failed_htabs}")
+
+            if all_htabs:
+                logger.info(f"Extracted {len(all_htabs)} HTAB property table(s) from {hdf_path.name}")
 
             return all_htabs
 

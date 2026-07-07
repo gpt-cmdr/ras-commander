@@ -191,6 +191,7 @@ def _resolve_geometry_hdf(
     plan_hdf_path = Path(plan_hdf_path)
     project_folder = plan_hdf_path.parent
     project_name = _project_name_from_plan_hdf(plan_hdf_path)
+    missing_geometry_error: Optional[FileNotFoundError] = None
 
     try:
         with h5py.File(plan_hdf_path, "r") as hdf_file:
@@ -212,9 +213,11 @@ def _resolve_geometry_hdf(
                 )
                 if geom_hdf_path.exists():
                     return geom_hdf_path
-                raise FileNotFoundError(
-                    f"Geometry HDF not found: {geom_hdf_path}"
+                missing_geometry_error = FileNotFoundError(
+                    "Geometry HDF referenced by plan metadata was not found: "
+                    f"{geom_hdf_path}"
                 )
+                break
     except Exception:
         pass
 
@@ -271,6 +274,10 @@ def _resolve_geometry_hdf(
                 geom_hdf_path = geom_base.parent / f"{geom_base.name}.hdf"
                 if geom_hdf_path.exists():
                     return geom_hdf_path
+                missing_geometry_error = FileNotFoundError(
+                    "Geometry HDF referenced by ras_object plan_df was not found: "
+                    f"{geom_hdf_path}"
+                )
 
             geom_number = _extract_geometry_number(row.get("Geom File"))
             if geom_number is None:
@@ -300,15 +307,23 @@ def _resolve_geometry_hdf(
                         geom_hdf_path = Path(str(geom_rows.iloc[0]["hdf_path"]))
                         if geom_hdf_path.exists():
                             return geom_hdf_path
+                        missing_geometry_error = FileNotFoundError(
+                            "Geometry HDF referenced by ras_object geom_df was not found: "
+                            f"{geom_hdf_path}"
+                        )
 
                 geom_hdf_path = (
                     project_folder / f"{project_name}.g{geom_number}.hdf"
                 )
                 if geom_hdf_path.exists():
                     return geom_hdf_path
-                raise FileNotFoundError(
-                    f"Geometry HDF not found: {geom_hdf_path}"
+                missing_geometry_error = FileNotFoundError(
+                    "Geometry HDF referenced by ras_object metadata was not found: "
+                    f"{geom_hdf_path}"
                 )
+
+    if missing_geometry_error is not None:
+        raise missing_geometry_error
 
     raise FileNotFoundError(
         "Could not resolve geometry HDF from plan HDF. "
@@ -534,12 +549,13 @@ def _collapse_steady_dataset(
 
     if values.ndim == 2:
         if values.shape[0] > 1:
-            logger.info(
-                "Steady 2D dataset for mesh '%s' variable '%s' contains "
-                "%s profiles; using the last profile.",
+            logger.warning(
+                "Steady 2D dataset for mesh '%s' variable '%s' contains %s profiles; "
+                "profile selection is not yet exposed, using last profile index %s.",
                 mesh_name,
                 variable_name,
                 values.shape[0],
+                values.shape[0] - 1,
             )
         return np.asarray(values[-1, :], dtype=float)
 
@@ -881,8 +897,9 @@ def _get_unsteady_variable_values(
             ) from direct_read_error
         try:
             logger.debug(
-                "'Velocity' dataset not found; computing from Velocity X "
-                "and Velocity Y."
+                "Requested velocity result '%s' not found directly; "
+                "using Velocity X/Velocity Y component fallback when available.",
+                variable_name,
             )
             vx = _read_unsteady_direct(
                 plan_hdf_path, cache, "Velocity X", time_index,
@@ -1350,7 +1367,10 @@ def _timeseries_dataframe(
     return result_df
 
 
-def _warn_on_large_distances(distances: np.ndarray) -> None:
+def _warn_on_large_distances(
+    distances: np.ndarray,
+    point_label: str = "query point",
+) -> None:
     """Warn when nearest-cell distances suggest a CRS mismatch."""
     distances = np.asarray(distances, dtype=float)
     large = distances > 1000.0
@@ -1359,10 +1379,14 @@ def _warn_on_large_distances(distances: np.ndarray) -> None:
 
     count = int(np.sum(large))
     max_distance = float(np.max(distances[large]))
+    point_label = point_label.strip() or "query point"
+    label = point_label if count == 1 else f"{point_label}s"
     logger.warning(
-        "Nearest-cell distance exceeds 1000 model units for %s query "
-        "point(s) (max distance %.2f). This often indicates a CRS mismatch.",
+        "Nearest-cell distance exceeds 1000 model units for %s %s "
+        "(max distance %.2f). Verify CRS/units or whether the query "
+        "geometry extends outside the 2D mesh.",
         count,
+        label,
         max_distance,
     )
 
@@ -1415,6 +1439,7 @@ def _query_points_core(
     time_index: Union[int, str],
     method: str,
     ras_object: Optional[Any] = None,
+    point_label: str = "query point",
 ) -> pd.DataFrame:
     """Shared implementation for single-point and batch point queries."""
     method = method.lower().strip()
@@ -1449,7 +1474,7 @@ def _query_points_core(
             dtype=float,
         )
 
-    _warn_on_large_distances(distances)
+    _warn_on_large_distances(distances, point_label=point_label)
 
     return pd.DataFrame(
         {
@@ -1729,13 +1754,15 @@ class HdfResultsQuery:
             n_points,
         )
 
-        points_df = HdfResultsQuery.query_points(
+        profile_points = pd.DataFrame({"x": xs, "y": ys})
+        points_df = _query_points_core(
             hdf_path,
-            np.column_stack((xs, ys)),
-            variable=variable,
-            time_index=time_index,
-            method="nearest",
+            profile_points,
+            variable,
+            time_index,
+            "nearest",
             ras_object=ras_object,
+            point_label="profile sample point",
         )
         points_df.insert(0, "station", stations)
         return points_df[
@@ -2486,7 +2513,10 @@ class HdfResultsQuery:
             seed_point,
             mesh_name=mesh_name,
         )
-        _warn_on_large_distances(np.array([seed_distance], dtype=float))
+        _warn_on_large_distances(
+            np.array([seed_distance], dtype=float),
+            point_label="transverse seed point",
+        )
 
         seed_mesh_name = str(cache["mesh_names"][seed_global_index])
         seed_cell_id = int(cache["cell_ids"][seed_global_index])
