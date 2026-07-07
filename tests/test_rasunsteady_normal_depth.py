@@ -75,7 +75,7 @@ def unsteady_with_existing_normal_depth(tmp_path):
         "Boundary Location=                ,                ,        ,        ,                ,area2           ,                ,                                ,                                \n"
         "Interval=1HOUR\n"
         "Precipitation Hydrograph= 1 \n"
-        "    0.10\n"
+        "    1.00    0.10\n"
     )
     return _write_unsteady(tmp_path / "project.u01", body)
 
@@ -226,7 +226,7 @@ class TestSetNormalDepthBoundaryUpdate:
         assert "Friction Slope=0.003,0" not in text
         # Unrelated second boundary still has its Precipitation Hydrograph data.
         assert "Precipitation Hydrograph= 1" in text
-        assert "    0.10" in text
+        assert "    1.00    0.10" in text
 
     def test_updates_existing_2d_friction_slope_without_flag(self, tmp_path):
         """2D BC line existing line has no flag → updated line stays no-flag."""

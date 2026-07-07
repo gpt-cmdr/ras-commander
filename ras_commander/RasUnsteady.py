@@ -127,6 +127,27 @@ class RasUnsteady:
     Class for all operations related to HEC-RAS unsteady flow files.
     """
     @staticmethod
+    def _path_name(pathlike: Union[str, Path]) -> str:
+        """Return a concise filename label for logging."""
+        path_str = str(pathlike).rstrip("\\/")
+        if not path_str:
+            return path_str
+        return path_str.replace("\\", "/").rsplit("/", 1)[-1]
+
+    @staticmethod
+    def _fixed_width_field_count(table_name: str, record_count: int) -> int:
+        """Return the number of numeric fields used by a HEC-RAS inline table."""
+        if table_name.strip().startswith("Precipitation Hydrograph"):
+            return record_count * 2
+        return record_count
+
+    @staticmethod
+    def _fixed_width_data_line_count(table_name: str, record_count: int) -> int:
+        """Return the number of 10-field fixed-width rows used by an inline table."""
+        field_count = RasUnsteady._fixed_width_field_count(table_name, record_count)
+        return (field_count + 9) // 10
+
+    @staticmethod
     @log_call
     def update_flow_title(unsteady_file: str, new_title: str, ras_object: Optional[Any] = None) -> None:
         """
@@ -178,7 +199,7 @@ class RasUnsteady:
                 old_title = line.strip().split('=')[1]
                 lines[i] = f"Flow Title={new_title}\n"
                 updated = True
-                logger.info(f"Updated Flow Title from '{old_title}' to '{new_title}'")
+                logger.debug(f"Updated Flow Title from '{old_title}' to '{new_title}'")
                 break
         
         if updated:
@@ -192,7 +213,8 @@ class RasUnsteady:
             except IOError as e:
                 logger.error(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
                 raise IOError(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
-            logger.info(f"Applied Flow Title modification to {unsteady_file}")
+            logger.info(f"Applied Flow Title modification to {RasUnsteady._path_name(unsteady_path)}")
+            logger.debug(f"Flow Title modification path: {unsteady_path}")
         else:
             logger.warning(f"Flow Title not found in {unsteady_file}")
     
@@ -463,9 +485,9 @@ class RasUnsteady:
         valid = len(unmatched) == 0 and len(flow_ics) > 0
         if not geom_stations:
             valid = True
-            logger.info("No geometry XS available for validation; skipping station check")
+            logger.debug("No geometry XS available for validation; skipping station check")
 
-        logger.info(
+        logger.debug(
             f"IC validation: {len(matched)} matched, {len(unmatched)} unmatched "
             f"out of {len(flow_ics)} flow ICs ({len(geom_stations)} XS in geometry)"
         )
@@ -600,7 +622,7 @@ class RasUnsteady:
             min_elev = props.get('min_elev') or props.get('Min Elev')
             if min_elev is not None:
                 result[sa_name] = float(min_elev)
-        logger.info(f"Read min elevations for {len(result)} storage areas from {geom_hdf_path.name}")
+        logger.debug(f"Read min elevations for {len(result)} storage areas from {geom_hdf_path.name}")
         return result
 
     @staticmethod
@@ -677,7 +699,7 @@ class RasUnsteady:
                             "value": float(flow[i]),
                             "area_name": None,
                         })
-                    logger.info(f"Read flow at {len(attrs)} cross sections from {source_plan_hdf.name}")
+                    logger.debug(f"Read flow at {len(attrs)} cross sections from {source_plan_hdf.name}")
 
             if include_storage:
                 sa_path = f"{base}/Storage Areas"
@@ -696,7 +718,7 @@ class RasUnsteady:
                                 "reach": None,
                                 "station": None,
                             })
-                    logger.info(f"Read WSE for {len(sa_attrs)} storage areas from {source_plan_hdf.name}")
+                    logger.debug(f"Read WSE for {len(sa_attrs)} storage areas from {source_plan_hdf.name}")
 
         if not entries:
             logger.warning("No IC entries extracted from output profile")
@@ -2447,7 +2469,7 @@ class RasUnsteady:
                 use_restart_index = len(retained_lines)
                 old_value = line.strip().split("=", 1)[1]
                 retained_lines.append(f"Use Restart={new_value}\n")
-                logger.info(f"Updated Use Restart from {old_value} to {new_value}")
+                logger.debug(f"Updated Use Restart from {old_value} to {new_value}")
             else:
                 retained_lines.append(line)
 
@@ -2455,11 +2477,13 @@ class RasUnsteady:
             insert_index = program_version_index + 1 if program_version_index is not None else 0
             retained_lines.insert(insert_index, f"Use Restart={new_value}\n")
             use_restart_index = insert_index
-            logger.info(f"Inserted Use Restart={new_value} in {unsteady_path.name}")
+            logger.debug(f"Inserted Use Restart={new_value} in {unsteady_path.name}")
 
         if use_restart:
             retained_lines.insert(use_restart_index + 1, f"Restart Filename={restart_filename}\n")
-            logger.info(f"Set Restart Filename: {restart_filename}")
+            logger.debug(f"Set Restart Filename: {restart_filename}")
+
+        restart_label = restart_filename if use_restart else None
 
         if retained_lines != original_lines:
             try:
@@ -2472,9 +2496,17 @@ class RasUnsteady:
             except IOError as e:
                 logger.error(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
                 raise IOError(f"Error writing to unsteady flow file: {unsteady_path}. {str(e)}")
-            logger.info(f"Applied restart settings modification to {unsteady_file}")
+            logger.info(
+                f"Updated restart settings in {unsteady_path.name}: "
+                f"use_restart={use_restart}, restart_filename={restart_label}"
+            )
+            logger.debug(f"Restart settings modification path: {unsteady_path}")
         else:
-            logger.info(f"Restart settings already current in {unsteady_file}")
+            logger.debug(
+                f"Restart settings already current in {unsteady_path.name}: "
+                f"use_restart={use_restart}, restart_filename={restart_label}"
+            )
+            logger.debug(f"Restart settings already current path: {unsteady_path}")
 
         if hasattr(ras_obj, "get_unsteady_entries"):
             ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
@@ -2645,7 +2677,7 @@ class RasUnsteady:
         else:
             method = "none"
 
-        logger.info(
+        logger.debug(
             f"IC method for {unsteady_path.name}: {method} "
             f"(Use Restart={raw_use_restart}, {ic_count} IC lines)"
         )
@@ -3306,10 +3338,11 @@ class RasUnsteady:
                     current_table = line.split('=')
                     current_table_name = current_table[0].strip()
                     num_values = int(current_table[1])
+                    field_count = RasUnsteady._fixed_width_field_count(current_table_name, num_values)
                     table_values = []
                     
                     # Read the table values
-                    rows_needed = (num_values + 9) // 10  # Round up division
+                    rows_needed = RasUnsteady._fixed_width_data_line_count(current_table_name, num_values)
                     for _ in range(rows_needed):
                         i += 1
                         if i >= len(lines):
@@ -3328,6 +3361,7 @@ class RasUnsteady:
                                     parts = re.findall(r'-?\d+\.?\d*', value_str)
                                     table_values.extend([float(p) for p in parts])
                             j += 8
+                    table_values = table_values[:field_count]
                 
                 except (ValueError, IndexError) as e:
                     logger.error(f"Error processing table at line {i}: {e}")
@@ -3363,7 +3397,8 @@ class RasUnsteady:
                     boundaries_df[col] = ''
             boundaries_df = boundaries_df.drop(columns=['Boundary Location'])
         
-        logger.info(f"Successfully extracted boundaries and tables from {unsteady_path}")
+        logger.debug(f"Successfully extracted boundaries and tables from {unsteady_path.name}")
+        logger.debug(f"Boundary/table extraction path: {unsteady_path}")
         return boundaries_df
 
     @staticmethod
@@ -3390,22 +3425,21 @@ class RasUnsteady:
             print("Detailed boundary conditions and tables:")
             RasUnsteady.print_boundaries_and_tables(boundaries_df)
         """
-        pd.set_option('display.max_columns', None)
-        pd.set_option('display.max_rows', None)
-        print("\nBoundaries and Tablesin boundaries_df:")
-        for idx, row in boundaries_df.iterrows():
-            print(f"\nBoundary {idx+1}:")
-            print(f"River Name: {row['River Name']}")
-            print(f"Reach Name: {row['Reach Name']}")
-            print(f"River Station: {row['River Station']}")
-            print(f"DSS File: {row['DSS File']}")
-            
-            if row['Tables']:
-                print("\nTables for this boundary:")
-                for table_name, table_df in row['Tables'].items():
-                    print(f"\n{table_name}:")
-                    print(table_df.to_string())
-            print("-" * 80)
+        with pd.option_context('display.max_columns', None, 'display.max_rows', None):
+            print("\nBoundaries and Tablesin boundaries_df:")
+            for idx, row in boundaries_df.iterrows():
+                print(f"\nBoundary {idx+1}:")
+                print(f"River Name: {row['River Name']}")
+                print(f"Reach Name: {row['Reach Name']}")
+                print(f"River Station: {row['River Station']}")
+                print(f"DSS File: {row['DSS File']}")
+
+                if row['Tables']:
+                    print("\nTables for this boundary:")
+                    for table_name, table_df in row['Tables'].items():
+                        print(f"\n{table_name}:")
+                        print(table_df.to_string())
+                print("-" * 80)
 
 
 
@@ -3453,10 +3487,17 @@ class RasUnsteady:
         tables = []
         current_table = None
 
+        def finish_table(table_info, next_header_idx=None):
+            table_name, start_line, record_count = table_info
+            expected_end = start_line + RasUnsteady._fixed_width_data_line_count(table_name, record_count)
+            if next_header_idx is not None:
+                expected_end = min(expected_end, next_header_idx)
+            return (table_name, start_line, expected_end)
+
         for i, line in enumerate(lines):
             if any(table_type in line for table_type in table_types):
                 if current_table:
-                    tables.append((current_table[0], current_table[1], i-1))
+                    tables.append(finish_table(current_table, i))
                 table_name = line.strip().split('=')[0] + '='
                 try:
                     num_values = int(line.strip().split('=')[1])
@@ -3466,8 +3507,7 @@ class RasUnsteady:
                     continue
         
         if current_table:
-            tables.append((current_table[0], current_table[1], 
-                          current_table[1] + (current_table[2] + 9) // 10))
+            tables.append(finish_table(current_table))
         
         logger.debug(f"Identified {len(tables)} tables in the file")
         return tables
@@ -3650,7 +3690,8 @@ class RasUnsteady:
         try:
             with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(lines)
-            logger.info(f"Successfully updated table '{table_name}' in {unsteady_path}")
+            logger.info(f"Successfully updated table '{table_name}' in {unsteady_path.name}")
+            logger.debug(f"Table update path: {unsteady_path}")
         except PermissionError:
             logger.error(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
             raise
@@ -3728,9 +3769,9 @@ class RasUnsteady:
 
         **Fixed-Width Format**:
         - Values formatted as 8-character fixed-width fields (8.2f)
-        - 10 values per line
-        - Precipitation Hydrograph uses sequential depth values (not time-depth pairs)
-        - Count = number of depth values; timing from Interval= line
+        - 10 numeric values per line (5 time-depth pairs)
+        - Precipitation Hydrograph stores time-depth pairs
+        - Count = number of time steps; Interval= line is still updated for HEC-RAS metadata
 
         **Depth Conservation**:
         - Total depth is logged for verification
@@ -3799,14 +3840,17 @@ class RasUnsteady:
         # Calculate total depth for logging
         total_depth = hyetograph_df['cumulative_depth'].iloc[-1]
 
-        # Precipitation Hydrograph uses sequential depth values (NOT time-depth pairs).
-        # Timing is determined by the Interval= line. Count = number of depth values.
+        # Precipitation Hydrograph uses time-depth pairs. Count remains the number
+        # of time steps, not the number of numeric fields written below.
         num_values = len(precip_values)
+        paired_values = []
+        for hour, depth in zip(hours, precip_values):
+            paired_values.extend((hour, depth))
 
-        # Format into fixed-width lines (8 chars each, 10 values per line)
+        # Format into fixed-width lines (8 chars each, 10 numeric values per line)
         formatted_lines = []
-        for i in range(0, len(precip_values), 10):
-            row_values = precip_values[i:i+10]
+        for i in range(0, len(paired_values), 10):
+            row_values = paired_values[i:i+10]
             formatted_row = ''.join(f'{value:8.2f}' for value in row_values)
             formatted_lines.append(formatted_row + '\n')
 
@@ -3953,7 +3997,7 @@ class RasUnsteady:
             logger.warning("xarray not available - cannot import precipitation into HDF")
             return
 
-        logger.info(f"Updating precipitation in HDF: {hdf_path}")
+        logger.debug(f"Updating precipitation in HDF: {hdf_path}")
 
         # Read the NetCDF file
         if not netcdf_path.exists():
@@ -3983,7 +4027,7 @@ class RasUnsteady:
             ds.close()
 
             n_times, n_rows, n_cols = precip_data.shape
-            logger.info(f"  NetCDF: {n_times} timesteps, {n_rows}x{n_cols} grid")
+            logger.debug(f"NetCDF precipitation grid: {n_times} timesteps, {n_rows}x{n_cols} grid")
 
         except Exception as e:
             logger.warning(f"Error reading NetCDF file: {e}")
@@ -4038,7 +4082,7 @@ class RasUnsteady:
 
                 # Create parent groups if they don't exist
                 if precip_grp_path not in f:
-                    logger.info(f"Creating precipitation group hierarchy in HDF")
+                    logger.debug("Creating precipitation group hierarchy in HDF")
                     if 'Event Conditions' not in f:
                         f.create_group('Event Conditions')
                     if met_path not in f:
@@ -4129,8 +4173,11 @@ class RasUnsteady:
                 for attr_name, attr_val in values_attrs.items():
                     values_vert_ds.attrs[attr_name] = attr_val
 
-                logger.info(f"  Imported {n_times} timesteps, {n_cells} cells (cumulative)")
-                logger.info(f"  Precip range: {precip_cumulative.min():.1f} - {precip_cumulative.max():.1f} mm")
+                logger.info(
+                    f"Imported gridded precipitation into {RasUnsteady._path_name(hdf_path)}: "
+                    f"{n_times} timesteps, {n_cells} cells, "
+                    f"range={precip_cumulative.min():.1f}-{precip_cumulative.max():.1f} mm"
+                )
 
         except Exception as e:
             logger.error(f"Error updating HDF file: {e}")
@@ -4516,9 +4563,11 @@ class RasUnsteady:
         else:
             netcdf_str = f".\\{netcdf_path}".replace("/", "\\")
 
-        logger.info(f"Configuring gridded precipitation in {unsteady_path}")
-        logger.info(f"  NetCDF file: {netcdf_str}")
-        logger.info(f"  Interpolation: {interpolation}")
+        netcdf_label = (
+            netcdf_str
+            if netcdf_str.startswith((".\\", "./"))
+            else RasUnsteady._path_name(netcdf_str)
+        )
 
         # Read the file
         with open(unsteady_path, 'r', encoding='utf-8', errors='replace') as f:
@@ -4580,7 +4629,13 @@ class RasUnsteady:
         with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as f:
             f.writelines(lines)
 
-        logger.info(f"Successfully configured gridded precipitation in {unsteady_path}")
+        logger.info(
+            f"Configured gridded precipitation in {unsteady_path.name}: "
+            f"source={netcdf_label}, interpolation={interpolation}"
+        )
+        logger.debug(
+            f"Gridded precipitation paths: unsteady={unsteady_path}, netcdf={netcdf_str}"
+        )
 
         # Import precipitation data into the HDF file
         hdf_path = Path(str(unsteady_path) + '.hdf')
@@ -5082,7 +5137,8 @@ class RasUnsteady:
         with open(unsteady_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
 
-        logger.info(f"Updated meteorological station '{station_name}' in {unsteady_path}")
+        logger.info(f"Updated meteorological station '{station_name}' in {unsteady_path.name}")
+        logger.debug(f"Meteorological station update path: {unsteady_path}")
 
     @staticmethod
     @log_call
@@ -5213,9 +5269,10 @@ class RasUnsteady:
             f.writelines(lines)
 
         logger.info(
-            f"Configured point ET for station '{station_name}' in {unsteady_path} "
+            f"Configured point ET for station '{station_name}' in {unsteady_path.name} "
             f"({len(values)} values, interval {interval_str}, units {units})"
         )
+        logger.debug(f"Point ET update path: {unsteady_path}")
 
     @staticmethod
     @log_call
@@ -5421,7 +5478,7 @@ class RasUnsteady:
             i += 1
 
         df = pd.DataFrame(boundaries)
-        logger.info(f"Found {len(df)} DSS-linked boundaries in {unsteady_path.name}")
+        logger.debug(f"Found {len(df)} DSS-linked boundaries in {unsteady_path.name}")
         return df
 
     @staticmethod
@@ -5619,7 +5676,7 @@ class RasUnsteady:
         if 'has_inline_table' in df.columns:
             df = df.drop(columns=['has_inline_table'])
 
-        logger.info(f"Found {len(df)} inline hydrograph boundaries in {unsteady_path.name}")
+        logger.debug(f"Found {len(df)} inline hydrograph boundaries in {unsteady_path.name}")
         return df
 
     @staticmethod
@@ -8015,7 +8072,7 @@ class RasUnsteady:
         subbasins = [s for s in subbasins if s]  # Remove empty strings
         subbasins.sort()
 
-        logger.info(f"Found {len(subbasins)} unique HMS subbasins in DSS paths")
+        logger.debug(f"Found {len(subbasins)} unique HMS subbasins in DSS paths")
         return subbasins
 
     @staticmethod
@@ -8467,11 +8524,11 @@ class RasUnsteady:
                 logger.warning(f"Error reading DSS boundaries from {unsteady_path.name}: {e}")
 
         if not all_boundaries:
-            logger.info("No DSS references found across any unsteady files")
+            logger.debug("No DSS references found across any unsteady files")
             return pd.DataFrame()
 
         result = pd.concat(all_boundaries, ignore_index=True)
-        logger.info(f"Found {len(result)} total DSS references across {len(all_boundaries)} unsteady files")
+        logger.debug(f"Found {len(result)} total DSS references across {len(all_boundaries)} unsteady files")
         return result
 
     @staticmethod
@@ -8617,11 +8674,11 @@ class RasUnsteady:
                     with open(unsteady_path, 'w', encoding='utf-8') as f:
                         f.write(content)
 
-                    logger.info(f"Applied {len(updates_for_file)} updates to {unsteady_path.name}")
+                    logger.debug(f"Applied {len(updates_for_file)} updates to {unsteady_path.name}")
 
                     # Validate by re-reading
                     boundaries_after = RasUnsteady.get_dss_boundaries(unsteady_path, ras_object=ras_obj)
-                    logger.info(
+                    logger.debug(
                         f"Validation: {unsteady_path.name} has "
                         f"{len(boundaries_after)} DSS boundaries after update"
                     )
@@ -8783,7 +8840,7 @@ class RasUnsteady:
             'stage': stages[:n],
             'discharge': discharges[:n],
         })
-        logger.info(
+        logger.debug(
             f"Read Rating Curve from {unsteady_path.name}: "
             f"{len(df)} pairs, stage range [{df['stage'].min():.1f}, {df['stage'].max():.1f}]"
         )
@@ -9547,7 +9604,7 @@ class RasUnsteady:
         df.attrs['matched_location'] = matched_loc.strip() if matched_loc else None
         df.attrs['value_count'] = len(df)
 
-        logger.info(
+        logger.debug(
             f"Read Lateral Inflow Hydrograph from {unsteady_path.name}: "
             f"{len(df)} values, peak={df['flow'].max():.1f}, "
             f"interval={interval}, slope={slope}"
@@ -9963,7 +10020,7 @@ class RasUnsteady:
         df.attrs['matched_location'] = matched_loc.strip() if matched_loc else None
         df.attrs['value_count'] = len(df)
 
-        logger.info(
+        logger.debug(
             f"Read Uniform Lateral Inflow Hydrograph from {unsteady_path.name}: "
             f"{len(df)} values, peak={df['flow'].max():.1f}, "
             f"interval={interval}, slope={slope}"
