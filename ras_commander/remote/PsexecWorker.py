@@ -15,12 +15,20 @@ import urllib.request
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 from .RasWorker import RasWorker
-from .Utils import convert_unc_to_local_path, authenticate_network_share
+from .Utils import (
+    authenticate_network_share,
+    clear_worker_plan_hdf_artifacts,
+    convert_unc_to_local_path,
+    copy_geometry_outputs_back,
+    copy_plan_hdf_back,
+)
 from ..LoggingConfig import get_logger
+from ..RasCurrency import RasCurrency
 from ..RasUtils import RasUtils
+from ..geom import GeomPreprocessor
 
 logger = get_logger(__name__)
 
@@ -211,7 +219,8 @@ def find_psexec() -> str:
     target_dir = Path.home() / "PSTools"
     try:
         psexec_path = download_psexec(target_dir)
-        logger.info(f"Downloaded PsExec to: {psexec_path}")
+        logger.info("Downloaded PsExec.exe from Microsoft Sysinternals")
+        logger.debug("Downloaded PsExec to: %s", psexec_path)
         return str(psexec_path)
     except Exception as e:
         logger.error(f"Failed to download PsExec: {e}")
@@ -288,7 +297,10 @@ def init_psexec_worker(**kwargs) -> PsexecWorker:
     Raises:
         FileNotFoundError: PsExec.exe not found locally
     """
-    logger.info(f"Initializing PsExec worker for {kwargs.get('hostname', 'unknown')}")
+    logger.info(
+        "Initializing PsExec worker for %s",
+        kwargs.get("hostname", "unknown"),
+    )
 
     kwargs['worker_type'] = 'psexec'
     worker = PsexecWorker(**kwargs)
@@ -300,25 +312,36 @@ def init_psexec_worker(**kwargs) -> PsexecWorker:
         if not Path(worker.psexec_path).exists():
             raise FileNotFoundError(f"PsExec.exe not found at {worker.psexec_path}")
 
-    logger.debug(f"Using PsExec at: {worker.psexec_path}")
+    logger.debug("Using PsExec at: %s", worker.psexec_path)
 
-    # Log configuration (obfuscate credentials)
-    logger.info(f"PsExec worker configured:")
-    logger.info(f"  Hostname: {worker.hostname}")
-    logger.info(f"  Share path: {worker.share_path}")
-    logger.info(f"  Worker folder: {worker.worker_folder}")
-    if worker.credentials:
-        logger.info(f"  User: {worker.credentials.get('username', '<unknown>')}")
-    else:
-        logger.info(f"  User: <Windows authentication>")
-    logger.info(f"  System account: {worker.system_account}")
-    logger.info(f"  Session ID: {worker.session_id if not worker.system_account else 'N/A'}")
-    logger.info(f"  Process Priority: {worker.process_priority}")
-    logger.info(f"  Queue Priority: {worker.queue_priority}")
-    logger.warning(
-        f"Validation deferred - share access and remote execution will be "
-        f"tested during actual plan execution"
+    auth_mode = (
+        "explicit credentials"
+        if worker.credentials
+        else "Windows authentication"
     )
+    logger.info(
+        "PsExec worker configured: host=%s, auth=%s, system_account=%s, "
+        "session=%s, priority=%s, queue=%s, slots=%s; validation deferred "
+        "to execution",
+        worker.hostname,
+        auth_mode,
+        worker.system_account,
+        worker.session_id if not worker.system_account else "N/A",
+        worker.process_priority,
+        worker.queue_priority,
+        worker.max_parallel_plans,
+    )
+    logger.debug(
+        "PsExec worker paths: share_path=%s, worker_folder=%s, psexec_path=%s",
+        worker.share_path,
+        worker.worker_folder,
+        worker.psexec_path,
+    )
+    if worker.credentials:
+        logger.debug(
+            "PsExec worker username: %s",
+            worker.credentials.get("username", "<unknown>"),
+        )
 
     return worker
 
@@ -363,26 +386,66 @@ def execute_psexec_plan(
     Returns:
         bool: True if successful
     """
-    logger.info(f"Starting PsExec execution of plan {plan_number} (sub-worker #{sub_worker_id})")
+    plan_number = RasUtils.normalize_ras_number(plan_number)
+    logger.debug(
+        "Starting PsExec execution of plan %s (sub-worker #%s)",
+        plan_number,
+        sub_worker_id,
+    )
 
     project_folder = Path(ras_obj.project_folder)
     project_name = ras_obj.project_name
 
     # Step 0a: Check if results are current (skip if so, unless force_rerun=True)
     if not force_rerun:
-        from ..RasCurrency import RasCurrency
         is_current, reason = RasCurrency.are_plan_results_current(plan_number, ras_obj)
         if is_current:
-            logger.info(f"Skipping remote execution of plan {plan_number}: {reason}")
+            logger.debug(
+                "Skipping remote execution of plan %s: %s",
+                plan_number,
+                reason,
+            )
             return True
         else:
             logger.debug(f"Plan {plan_number} needs execution: {reason}")
 
-    # Step 0b: Handle force_geompre (before copying to remote)
+    input_files = RasCurrency.get_plan_input_files(plan_number, ras_obj)
+    plan_path = input_files.get("plan") or project_folder / f"{project_name}.p{plan_number}"
+
+    # Step 0b: Handle geometry preprocessor clearing before copying to remote.
+    # This must run on the source project so the staged worker copy cannot
+    # inherit stale per-cell Manning's n or other cached geometry products.
     if force_geompre:
-        from ..RasCurrency import RasCurrency
-        RasCurrency.clear_geom_hdf(plan_number, ras_obj)
-        logger.info(f"Cleared geometry HDF for plan {plan_number} before remote execution")
+        try:
+            if not RasCurrency.clear_geom_hdf(plan_number, ras_obj):
+                logger.error(f"Could not clear geometry HDF for plan {plan_number}")
+                return False
+            GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
+            logger.debug(
+                "Force-cleared geometry preprocessor products for plan %s "
+                "before remote execution",
+                plan_number,
+            )
+        except Exception as e:
+            logger.error(
+                f"Error force-clearing geometry preprocessor products for "
+                f"plan {plan_number}: {e}"
+            )
+            return False
+    elif clear_geompre:
+        try:
+            GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
+            logger.debug(
+                "Cleared geometry preprocessor products for plan %s "
+                "before remote execution",
+                plan_number,
+            )
+        except Exception as e:
+            logger.error(
+                f"Error clearing geometry preprocessor products for "
+                f"plan {plan_number}: {e}"
+            )
+            return False
 
     # Step 1: Authenticate to network share
     if worker.credentials:
@@ -405,16 +468,23 @@ def execute_psexec_plan(
 
     try:
         # Step 2: Copy project to worker folder
-        logger.info(f"Copying project to {worker_temp_folder}")
+        logger.debug(
+            "Copying project for plan %s to worker folder: %s",
+            plan_number,
+            worker_temp_folder,
+        )
         shutil.copytree(project_folder, worker_temp_folder / project_name, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
 
         worker_project_path = worker_temp_folder / project_name
+        hdf_file = worker_project_path / RasCurrency.get_plan_hdf_path(plan_number, ras_obj).name
+        clear_worker_plan_hdf_artifacts(worker_project_path, plan_number, ras_obj)
+
         prj_file = list(worker_project_path.glob("*.prj"))[0]
         plan_file = worker_project_path / f"{project_name}.p{plan_number}"
 
         # Enable Write Detailed= 1 to ensure .computeMsgs.txt is written
         # This is critical for results_df fallback on pre-6.4 HEC-RAS versions
-        from ..BcoMonitor import BcoMonitor
+        from ..RasBco import BcoMonitor
         BcoMonitor.enable_detailed_logging(plan_file)
         logger.debug(f"Enabled Write Detailed= 1 for plan {plan_number}")
 
@@ -476,7 +546,7 @@ def execute_psexec_plan(
             cmd_display = ' '.join(psexec_cmd[:2]) + " -u <user> -p <password> -accepteula -h ..."
         else:
             cmd_display = ' '.join(psexec_cmd[:2]) + " -accepteula -h ..."
-        logger.info(f"Executing: {cmd_display}")
+        logger.debug("Executing PsExec command: %s", cmd_display)
 
         # Step 5: Execute PsExec command
         result = subprocess.run(
@@ -486,9 +556,13 @@ def execute_psexec_plan(
             timeout=worker.max_runtime_minutes * 60
         )
 
-        # Step 6: Check for HDF file
-        hdf_file = worker_project_path / f"{project_name}.p{plan_number}.hdf"
+        if result.returncode != 0:
+            logger.error(f"PsExec failed with return code {result.returncode}")
+            logger.error(f"PsExec stdout: {result.stdout}")
+            logger.error(f"PsExec stderr: {result.stderr}")
+            return False
 
+        # Step 6: Check for HDF file
         max_wait = 60
         wait_interval = 5
         elapsed = 0
@@ -508,19 +582,43 @@ def execute_psexec_plan(
             )
             return False
 
-        logger.info(f"HDF file created successfully: {hdf_file}")
+        if not RasCurrency.check_plan_hdf_complete(hdf_file):
+            logger.error(f"HDF file is incomplete: {hdf_file}")
+            return False
+
+        logger.debug(
+            "HDF file created successfully for plan %s: %s",
+            plan_number,
+            hdf_file,
+        )
 
         # Step 7: Copy results back
-        dest_hdf = project_folder / hdf_file.name
-        shutil.copy2(hdf_file, dest_hdf)
-        logger.info(f"Copied results to {dest_hdf}")
+        if copy_plan_hdf_back(worker_project_path, plan_number, ras_obj) is None:
+            return False
+
+        try:
+            copy_geometry_outputs_back(
+                worker_project_path=worker_project_path,
+                project_folder=project_folder,
+                project_name=project_name,
+                plan_number=plan_number,
+                ras_obj=ras_obj,
+            )
+        except FileNotFoundError as e:
+            logger.error(f"Geometry output copyback failed for plan {plan_number}: {e}")
+            return False
 
         # Step 8: Cleanup (if autoclean enabled)
         if autoclean:
             shutil.rmtree(worker_temp_folder, ignore_errors=True)
             logger.debug(f"Cleaned up worker folder: {worker_temp_folder}")
         else:
-            logger.info(f"Preserving worker folder for debugging: {worker_temp_folder}")
+            logger.info(
+                "Preserving PsExec worker folder for plan %s for debugging; "
+                "enable DEBUG logging for the path",
+                plan_number,
+            )
+            logger.debug("Preserved worker folder: %s", worker_temp_folder)
 
         return True
 
@@ -533,5 +631,10 @@ def execute_psexec_plan(
             except:
                 pass
         else:
-            logger.info(f"Preserving worker folder for debugging: {worker_temp_folder}")
+            logger.info(
+                "Preserving PsExec worker folder for plan %s for debugging; "
+                "enable DEBUG logging for the path",
+                plan_number,
+            )
+            logger.debug("Preserved worker folder: %s", worker_temp_folder)
         return False

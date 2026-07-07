@@ -1535,7 +1535,7 @@ class GeomBridge:
                     'Elevation': elevations,
                     'Source': 'bridge_block'
                 })
-                logger.info(
+                logger.debug(
                     f"Extracted {section} bridge opening XS ({len(df)} pts) "
                     f"for {river}/{reach}/RS {rs} from bridge block"
                 )
@@ -1551,7 +1551,7 @@ class GeomBridge:
                     'Elevation': elevations,
                     'Source': 'approach_xs'
                 })
-                logger.info(
+                logger.debug(
                     f"Extracted {section} bridge opening XS ({len(df)} pts) "
                     f"for {river}/{reach}/RS {rs} from adjacent approach XS"
                 )
@@ -2206,7 +2206,7 @@ class GeomBridge:
 
             if create_backup:
                 backup_path = GeomParser.create_backup(geom_file)
-                logger.info(f"Created backup: {backup_path}")
+                logger.debug(f"Created backup: {backup_path}")
 
             with open(geom_file, 'w', encoding='utf-8') as f:
                 f.writelines(lines)
@@ -2245,7 +2245,8 @@ class GeomBridge:
         except Exception as e:
             logger.error(f"Error writing bridge hydraulic methods: {str(e)}")
             if backup_path and backup_path.exists():
-                logger.info(f"Restoring from backup: {backup_path}")
+                logger.warning("Restoring bridge hydraulic methods from backup")
+                logger.debug(f"Backup path: {backup_path}")
                 import shutil
                 shutil.copy2(backup_path, geom_file)
             raise IOError(f"Failed to write bridge hydraulic methods: {str(e)}")
@@ -3307,7 +3308,7 @@ class GeomBridge:
         try:
             # Create backup
             backup_path = GeomParser.create_backup(geom_file)
-            logger.info(f"Created backup: {backup_path}")
+            logger.debug(f"Created backup: {backup_path}")
 
             # Read file
             with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
@@ -3387,7 +3388,8 @@ class GeomBridge:
             logger.error(f"Error writing HTAB parameters: {str(e)}")
             # Attempt to restore from backup if write failed
             if backup_path and backup_path.exists():
-                logger.info(f"Restoring from backup: {backup_path}")
+                logger.warning("Restoring HTAB parameters from backup")
+                logger.debug(f"Backup path: {backup_path}")
                 import shutil
                 shutil.copy2(backup_path, geom_file)
             raise IOError(f"Failed to write HTAB parameters: {str(e)}")
@@ -3605,7 +3607,7 @@ class GeomBridge:
             # Create backup if requested
             if create_backup:
                 backup_path = GeomParser.create_backup(geom_file)
-                logger.info(f"Created backup: {backup_path}")
+                logger.debug(f"Created backup: {backup_path}")
 
             # Read file once
             with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
@@ -3742,7 +3744,8 @@ class GeomBridge:
             logger.error(f"Error in set_all_structures_htab: {str(e)}")
             # Attempt to restore from backup if write failed
             if backup_path and backup_path.exists():
-                logger.info(f"Restoring from backup: {backup_path}")
+                logger.warning("Restoring structure HTAB parameters from backup")
+                logger.debug(f"Backup path: {backup_path}")
                 import shutil
                 shutil.copy2(backup_path, geom_file)
             raise IOError(f"Failed to modify structure HTAB parameters: {str(e)}")
@@ -4050,7 +4053,7 @@ class GeomBridge:
         backup_path = None
         if create_backup:
             backup_path = GeomParser.create_backup(geom_file)
-            logger.info(f"Created backup: {backup_path}")
+            logger.debug(f"Created backup: {backup_path}")
 
         # Read file and find all structures
         with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:

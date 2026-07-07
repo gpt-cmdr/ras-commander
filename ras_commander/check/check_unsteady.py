@@ -180,7 +180,8 @@ class CheckUnsteady:
                 results.messages.append(msg)
 
         except Exception as e:
-            logger.error(f"Failed to check mass balance: {e}")
+            logger.error("Failed to check mass balance")
+            logger.debug("Mass balance check failure for %s: %s", plan_hdf, e)
             msg = CheckMessage(
                 message_id="US_MB_ERR",
                 severity=Severity.ERROR,
@@ -327,7 +328,8 @@ class CheckUnsteady:
                 results.messages.append(msg)
 
         except Exception as e:
-            logger.warning(f"Could not check computation messages: {e}")
+            logger.warning("Could not check computation messages")
+            logger.debug("Computation-message check failure for %s: %s", plan_hdf, e)
 
         return results
 
@@ -385,7 +387,11 @@ class CheckUnsteady:
                     try:
                         xs_geom = HdfXsec.get_cross_sections(geom_hdf)
                     except Exception as e:
-                        logger.warning(f"Could not read XS geometry for bounds checking: {e}")
+                        logger.debug(
+                            "Could not read XS geometry for bounds checking from %s: %s",
+                            geom_hdf,
+                            e,
+                        )
                         xs_geom = None
 
                     # Extract maximum values from xarray Dataset
@@ -504,7 +510,13 @@ class CheckUnsteady:
                 results.messages.append(msg)
 
         except Exception as e:
-            logger.error(f"Failed to check peaks: {e}")
+            logger.error("Failed to check peaks")
+            logger.debug(
+                "Peak check failure for plan %s and geometry %s: %s",
+                plan_hdf,
+                geom_hdf,
+                e,
+            )
             msg = CheckMessage(
                 message_id="US_PK_ERR",
                 severity=Severity.ERROR,
@@ -714,7 +726,8 @@ class CheckUnsteady:
                 results.messages.append(msg)
 
         except Exception as e:
-            logger.error(f"Failed to check stability: {e}")
+            logger.error("Failed to check stability")
+            logger.debug("Stability check failure for %s: %s", plan_hdf, e)
             msg = CheckMessage(
                 message_id="US_ST_ERR",
                 severity=Severity.ERROR,
@@ -929,7 +942,8 @@ class CheckUnsteady:
                 results.messages.append(msg)
 
         except Exception as e:
-            logger.error(f"Failed to check mesh quality: {e}")
+            logger.error("Failed to check mesh quality")
+            logger.debug("Mesh quality check failure for %s: %s", plan_hdf, e)
             msg = CheckMessage(
                 message_id="US_2D_ERR",
                 severity=Severity.ERROR,

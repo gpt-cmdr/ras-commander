@@ -15,6 +15,7 @@ Covers:
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 
@@ -138,6 +139,38 @@ class TestAddBcLines:
         text = skeleton_geom.read_text(encoding="utf-8")
         assert "BC Line Name=Upstream" in text
         assert "BC Line Name=Tributary" in text
+
+    def test_info_summary_hides_insert_index_and_full_paths(self, skeleton_geom, caplog):
+        from ras_commander import GeomBcLines
+
+        with caplog.at_level(logging.DEBUG, logger="ras_commander.geom.GeomBcLines"):
+            GeomBcLines.add_bc_lines(
+                skeleton_geom,
+                lines=[{
+                    "name": "DSNormalDepth",
+                    "storage_area": "Perimeter 1",
+                    "coordinates": [(500, 100), (700, 100), (900, 100)],
+                }],
+            )
+
+        info_messages = [
+            record.getMessage()
+            for record in caplog.records
+            if record.levelno == logging.INFO
+            and record.name == "ras_commander.geom.GeomBcLines"
+        ]
+        debug_messages = [
+            record.getMessage()
+            for record in caplog.records
+            if record.levelno == logging.DEBUG
+            and record.name == "ras_commander.geom.GeomBcLines"
+        ]
+
+        assert info_messages == ["Added 1 BC line(s) to project.g01 (replaced=0)"]
+        assert all("line index" not in message for message in info_messages)
+        assert all(str(skeleton_geom) not in message for message in info_messages)
+        assert any("Created backup:" in message for message in debug_messages)
+        assert any("Inserted BC line block(s) at line index" in message for message in debug_messages)
 
 
 class TestAddBcLinesValidation:

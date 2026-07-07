@@ -70,6 +70,17 @@ logger = get_logger(__name__)
 from .RasPrj import ras
 
 
+def _log_failed_extraction_comp_msgs(comp_msgs_file: Path, comp_msgs: str) -> None:
+    """Log failed extraction compute messages without dumping full text at ERROR."""
+    logger.error(
+        "Computation messages found for failed extraction: %s (%s characters); "
+        "enable DEBUG logging for full contents",
+        comp_msgs_file.name,
+        len(comp_msgs),
+    )
+    logger.debug(f"Computation messages from {comp_msgs_file}:\n{comp_msgs}")
+
+
 # ============================================================================
 # SESSION TRACKING INFRASTRUCTURE
 # ============================================================================
@@ -211,7 +222,7 @@ def _find_our_ras_process(project_path: Path, before_snapshot: Dict[int, Any]) -
     if confidence < 50:
         logger.warning(f"Low confidence ({confidence}/100) for PID {best_pid}")
     else:
-        logger.info(f"Detected ras.exe PID {best_pid} (confidence: {confidence}/100)")
+        logger.debug(f"Detected ras.exe PID {best_pid} (confidence: {confidence}/100)")
 
     return best_pid, confidence
 
@@ -296,7 +307,7 @@ def _cleanup_session(session_id: str) -> None:
             try:
                 proc = psutil.Process(lock.ras_pid)
                 if proc.is_running() and proc.name().lower() == 'ras.exe':
-                    logger.info(f"Terminating tracked ras.exe PID {lock.ras_pid}")
+                    logger.debug(f"Terminating tracked ras.exe PID {lock.ras_pid}")
                     proc.terminate()
                     proc.wait(timeout=5)
             except (psutil.NoSuchProcess, psutil.TimeoutExpired, psutil.AccessDenied) as e:
@@ -406,7 +417,7 @@ while True:
             stderr=subprocess.DEVNULL
         )
 
-        logger.info(f"Spawned watchdog process PID {proc.pid} (monitoring PID {ras_pid})")
+        logger.debug(f"Spawned watchdog process PID {proc.pid} (monitoring PID {ras_pid})")
         return proc.pid
     except Exception as e:
         logger.error(f"Failed to spawn watchdog process: {e}")
@@ -718,11 +729,12 @@ class RasControl:
         try:
             # Open HEC-RAS COM interface
             com_string = RasControl.VERSION_MAP[normalized_version]
-            logger.info(f"Opening HEC-RAS: {com_string} (version: {version})")
+            logger.debug(f"Opening HEC-RAS: {com_string} (version: {version})")
             com_rc = win32com.client.Dispatch(com_string)
 
             # Open project
-            logger.info(f"Opening project: {project_path}")
+            logger.debug(f"Opening project: {project_path.name}")
+            logger.debug(f"Opening project path: {project_path}")
             com_rc.Project_Open(str(project_path))
 
             # Detect ras.exe PID after COM launch
@@ -748,9 +760,9 @@ class RasControl:
             lock_path = _create_session_lock(session_id, lock_data)
 
             # Perform operation
-            logger.info("Executing operation...")
+            logger.debug("Executing operation...")
             result = operation_func(com_rc)
-            logger.info("Operation completed successfully")
+            logger.debug("Operation completed successfully")
 
             return result
 
@@ -760,12 +772,12 @@ class RasControl:
 
         finally:
             # ALWAYS close
-            logger.info("Closing HEC-RAS...")
+            logger.debug("Closing HEC-RAS...")
 
             if com_rc is not None:
                 try:
                     com_rc.QuitRas()
-                    logger.info("HEC-RAS closed via QuitRas()")
+                    logger.debug("HEC-RAS closed via QuitRas()")
                 except Exception as e:
                     logger.warning(f"QuitRas() failed: {e}")
 
@@ -855,7 +867,7 @@ class RasControl:
 
             # Set current plan if we have plan_name (using plan number)
             if info.plan_name:
-                logger.info(f"Setting current plan to: {info.plan_name}")
+                logger.debug(f"Setting current plan to: {info.plan_name}")
                 com_rc.Plan_SetCurrent(info.plan_name)
 
             # Check if results are current (unless force_recompute=True)
@@ -920,7 +932,11 @@ class RasControl:
 
                         # Log progress every 30 seconds
                         if poll_count % 30 == 0:
-                            logger.info(f"Still computing... ({poll_count} seconds elapsed.  Simulation will timeout after {max_runtime} seconds.  Set max_runtime to override.)")
+                            logger.info(
+                                "Still computing... %s seconds elapsed; timeout=%s seconds",
+                                poll_count,
+                                max_runtime,
+                            )
 
                     except Exception as e:
                         logger.error(f"Error checking completion status: {e}")
@@ -1121,7 +1137,7 @@ class RasControl:
         def _extract_operation(com_rc):
             # Set current plan if we have plan_name (using plan number)
             if info.plan_name:
-                logger.info(f"Setting current plan to: {info.plan_name}")
+                logger.debug(f"Setting current plan to: {info.plan_name}")
                 com_rc.Plan_SetCurrent(info.plan_name)
 
             results = []
@@ -1139,7 +1155,7 @@ class RasControl:
                 )
 
             profiles = [{'name': name, 'code': i+1} for i, name in enumerate(profile_names)]
-            logger.info(f"Found {len(profiles)} profiles")
+            logger.debug(f"Found {len(profiles)} profiles")
 
             # Get rivers
             _, river_names = com_rc.Output_GetRivers(0, None)
@@ -1147,7 +1163,7 @@ class RasControl:
             if river_names is None:
                 raise RuntimeError("No river geometry found in model.")
 
-            logger.info(f"Found {len(river_names)} rivers")
+            logger.debug(f"Found {len(river_names)} rivers")
 
             # Extract data
             for riv_code, riv_name in enumerate(river_names, start=1):
@@ -1230,14 +1246,14 @@ class RasControl:
                                             if comp_msgs_file.exists():
                                                 with open(comp_msgs_file, 'r', encoding='utf-8', errors='ignore') as f:
                                                     comp_msgs = f.read()
-                                                logger.error(f"\n{'='*80}\nCOMPUTATION MESSAGES:\n{'='*80}\n{comp_msgs}\n{'='*80}")
+                                                _log_failed_extraction_comp_msgs(comp_msgs_file, comp_msgs)
                                             else:
                                                 logger.error(f"Computation messages file not found: {comp_msgs_file}")
                                         except Exception as msg_error:
                                             logger.error(f"Could not read computation messages: {msg_error}")
 
                                         error_logged = True
-                                        logger.info("Suppressing further extraction warnings...")
+                                        logger.debug("Suppressing further extraction warnings")
 
             if error_logged and len(results) == 0:
                 raise RuntimeError(
@@ -1245,7 +1261,7 @@ class RasControl:
                     "Check the computation messages above for details."
                 )
 
-            logger.info(f"Extracted {len(results)} result rows")
+            logger.debug(f"Extracted {len(results)} result rows")
             return pd.DataFrame(results)
 
         return RasControl._com_open_close(info.project_path, info.version, _extract_operation)
@@ -1399,7 +1415,7 @@ class RasControl:
         def _extract_operation(com_rc):
             # Set current plan if we have plan_name (using plan number)
             if info.plan_name:
-                logger.info(f"Setting current plan to: {info.plan_name}")
+                logger.debug(f"Setting current plan to: {info.plan_name}")
                 com_rc.Plan_SetCurrent(info.plan_name)
 
             results = []
@@ -1420,7 +1436,7 @@ class RasControl:
             if max_times:
                 times = times[:max_times]
 
-            logger.info(f"Extracting {len(times)} time steps")
+            logger.debug(f"Extracting {len(times)} time steps")
 
             # Get rivers
             _, river_names = com_rc.Output_GetRivers(0, None)
@@ -1428,7 +1444,7 @@ class RasControl:
             if river_names is None:
                 raise RuntimeError("No river geometry found in model.")
 
-            logger.info(f"Found {len(river_names)} rivers")
+            logger.debug(f"Found {len(river_names)} rivers")
 
             # Extract data
             for riv_code, riv_name in enumerate(river_names, start=1):
@@ -1513,14 +1529,14 @@ class RasControl:
                                             if comp_msgs_file.exists():
                                                 with open(comp_msgs_file, 'r', encoding='utf-8', errors='ignore') as f:
                                                     comp_msgs = f.read()
-                                                logger.error(f"\n{'='*80}\nCOMPUTATION MESSAGES:\n{'='*80}\n{comp_msgs}\n{'='*80}")
+                                                _log_failed_extraction_comp_msgs(comp_msgs_file, comp_msgs)
                                             else:
                                                 logger.error(f"Computation messages file not found: {comp_msgs_file}")
                                         except Exception as msg_error:
                                             logger.error(f"Could not read computation messages: {msg_error}")
 
                                         error_logged = True
-                                        logger.info("Suppressing further extraction warnings...")
+                                        logger.debug("Suppressing further extraction warnings")
 
             if error_logged and len(results) == 0:
                 raise RuntimeError(
@@ -1528,7 +1544,7 @@ class RasControl:
                     "Check the computation messages above for details."
                 )
 
-            logger.info(f"Extracted {len(results)} result rows")
+            logger.debug(f"Extracted {len(results)} result rows")
             return pd.DataFrame(results)
 
         return RasControl._com_open_close(info.project_path, info.version, _extract_operation)
@@ -1555,7 +1571,7 @@ class RasControl:
         def _get_times(com_rc):
             # Set current plan if we have plan_name (using plan number)
             if info.plan_name:
-                logger.info(f"Setting current plan to: {info.plan_name}")
+                logger.debug(f"Setting current plan to: {info.plan_name}")
                 com_rc.Plan_SetCurrent(info.plan_name)
 
             _, time_strings = com_rc.Output_GetProfiles(0, None)
@@ -1566,7 +1582,7 @@ class RasControl:
                 )
 
             times = list(time_strings)
-            logger.info(f"Found {len(times)} output times")
+            logger.debug(f"Found {len(times)} output times")
             return times
 
         return RasControl._com_open_close(info.project_path, info.version, _get_times)
@@ -1595,7 +1611,7 @@ class RasControl:
                 filename, _ = com_rc.Plan_GetFilename(name)
                 plans.append({'name': name, 'filename': filename})
 
-            logger.info(f"Found {len(plans)} plans")
+            logger.debug(f"Found {len(plans)} plans")
             return plans
 
         return RasControl._com_open_close(info.project_path, info.version, _get_plans)
@@ -1688,32 +1704,36 @@ class RasControl:
 
         # If .txt file found, read and return
         if comp_msgs_file is not None:
-            logger.info(f"Reading computation messages from: {comp_msgs_file}")
+            logger.debug(f"Reading computation messages for plan {info.plan_number} from comp_msgs file")
+            logger.debug(f"Computation messages file path: {comp_msgs_file}")
 
             try:
                 with open(comp_msgs_file, 'r', encoding='utf-8', errors='ignore') as f:
                     contents = f.read()
 
-                logger.info(f"Read {len(contents)} characters from comp_msgs file")
+                logger.debug(f"Read {len(contents)} characters from comp_msgs file")
                 return contents
             except Exception as e:
-                logger.error(f"Error reading .txt file: {e}, attempting HDF fallback")
+                logger.warning("Could not read text computation messages; attempting HDF fallback")
+                logger.debug("Text computation message read failed: %s", e)
 
         # Try .bco## file (HEC-RAS 5.x detailed compute output)
         bco_file = info.project_path.parent / f"{project_base}.bco{info.plan_number}"
         if bco_file.exists():
-            logger.info(f"Reading computation messages from .bco file: {bco_file}")
+            logger.debug(f"Reading computation messages for plan {info.plan_number} from .bco file")
+            logger.debug(f"BCO computation messages file path: {bco_file}")
             try:
                 with open(bco_file, 'r', encoding='utf-8', errors='ignore') as f:
                     contents = f.read()
                 if contents.strip():
-                    logger.info(f"Read {len(contents)} characters from .bco file")
+                    logger.debug(f"Read {len(contents)} characters from .bco file")
                     return contents
             except Exception as e:
-                logger.error(f"Error reading .bco file: {e}, attempting HDF fallback")
+                logger.warning("Could not read .bco computation messages; attempting HDF fallback")
+                logger.debug(".bco computation message read failed: %s", e)
 
         # If no .txt or .bco file found, try HDF fallback
-        logger.warning(
+        logger.debug(
             f"Computation messages file not found (tried .comp_msgs.txt, .computeMsgs.txt, and .bco{info.plan_number}), "
             f"falling back to HDF extraction"
         )
@@ -1727,7 +1747,7 @@ class RasControl:
             if hdf_file.exists():
                 hdf_contents = HdfResultsPlan.get_compute_messages(hdf_file)
                 if hdf_contents:
-                    logger.info(f"Successfully retrieved {len(hdf_contents)} characters from HDF")
+                    logger.debug(f"Successfully retrieved {len(hdf_contents)} characters from HDF")
                     return hdf_contents
         except Exception as e:
             logger.debug(f"HDF fallback failed: {e}")
@@ -1799,7 +1819,7 @@ class RasControl:
                 continue
 
         if not rows:
-            logger.info("No ras.exe processes found")
+            logger.debug("No ras.exe processes found")
             return pd.DataFrame(columns=['pid', 'tracked', 'project', 'age_sec', 'status'])
 
         return pd.DataFrame(rows)

@@ -104,7 +104,7 @@ class Win32Primitives:
         """
         menu_bar = win32gui.GetMenu(hwnd)
         if not menu_bar:
-            logger.warning("No menu bar found")
+            logger.debug("No menu bar found")
             return {}
 
         menu_count = win32gui.GetMenuItemCount(menu_bar)
@@ -141,10 +141,10 @@ class Win32Primitives:
         """
         try:
             win32api.PostMessage(hwnd, Win32Constants.WM_COMMAND, menu_id, 0)
-            logger.info(f"Clicked menu item ID: {menu_id}")
+            logger.debug(f"Clicked menu item ID: {menu_id}")
             return True
         except Exception as e:
-            logger.error(f"Failed to click menu item {menu_id}: {e}")
+            logger.debug("Failed to click menu item %s: %s", menu_id, e)
             return False
 
     @staticmethod
@@ -228,10 +228,10 @@ class Win32Primitives:
         """
         try:
             win32api.SendMessage(button_hwnd, win32con.BM_CLICK, 0, 0)
-            logger.info(f"Clicked button: {win32gui.GetWindowText(button_hwnd)}")
+            logger.debug(f"Clicked button: {win32gui.GetWindowText(button_hwnd)}")
             return True
         except Exception as e:
-            logger.error(f"Failed to click button: {e}")
+            logger.debug("Button click failure for HWND %s: %s", button_hwnd, e)
             return False
 
     @staticmethod
@@ -294,14 +294,14 @@ class Win32Primitives:
 
                     if item_text.lower() in item.lower():
                         win32api.SendMessage(combo_hwnd, Win32Constants.CB_SETCURSEL, i, 0)
-                        logger.info(f"Selected combo box item {i}: '{item}'")
+                        logger.debug(f"Selected combo box item {i}: '{item}'")
                         return True
 
-            logger.warning(f"Could not find item containing '{item_text}' in combo box")
+            logger.debug(f"Could not find item containing '{item_text}' in combo box")
             return False
 
         except Exception as e:
-            logger.error(f"Failed to select combo box item: {e}")
+            logger.debug("Combo box selection failure for HWND %s: %s", combo_hwnd, e)
             return False
 
     @staticmethod
@@ -318,10 +318,10 @@ class Win32Primitives:
         """
         try:
             win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
-            logger.info(f"Closed window: {win32gui.GetWindowText(hwnd)}")
+            logger.debug(f"Closed window: {win32gui.GetWindowText(hwnd)}")
             return True
         except Exception as e:
-            logger.error(f"Failed to close window: {e}")
+            logger.debug("Window close failure for HWND %s: %s", hwnd, e)
             return False
 
     @staticmethod
@@ -351,7 +351,7 @@ class Win32Primitives:
             logger.debug(f"Window not found, waiting {check_interval} seconds...")
             time.sleep(check_interval)
 
-        logger.warning(f"Window not found after {timeout} seconds")
+        logger.debug(f"Window not found after {timeout} seconds")
         return None
 
     @staticmethod
@@ -409,10 +409,10 @@ class Win32Primitives:
                 win32api.keybd_event(vk, 0, Win32Constants.KEYEVENTF_KEYUP, 0)
                 time.sleep(0.05)
 
-            logger.info(f"Sent keyboard shortcut: {[hex(k) for k in key_codes]}")
+            logger.debug(f"Sent keyboard shortcut: {[hex(k) for k in key_codes]}")
             return True
         except Exception as e:
-            logger.warning(f"Keyboard shortcut failed: {e}")
+            logger.debug("Keyboard shortcut failed for HWND %s: %s", hwnd, e)
             return False
 
     @staticmethod

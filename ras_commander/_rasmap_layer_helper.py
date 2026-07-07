@@ -228,7 +228,8 @@ def add_reference_map_layer(
     _apply_symbology(layer_elem, symbology)
 
     _write_rasmap_tree(tree, project_paths.rasmap_path)
-    logger.info("Added reference map layer '%s' to %s", name, project_paths.rasmap_path)
+    logger.info("Added reference map layer '%s' in .rasmap", name)
+    logger.debug("Updated RASMapper file: %s", project_paths.rasmap_path)
     return project_paths.rasmap_path
 
 
@@ -268,7 +269,8 @@ def add_basemap_layer(
     ET.SubElement(layer_elem, "ResampleMethod").text = "near"
 
     _write_rasmap_tree(tree, project_paths.rasmap_path)
-    logger.info("Added basemap layer '%s' to %s", canonical_name, project_paths.rasmap_path)
+    logger.info("Added basemap layer '%s' in .rasmap", canonical_name)
+    logger.debug("Updated RASMapper file: %s", project_paths.rasmap_path)
     return project_paths.rasmap_path
 
 

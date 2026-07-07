@@ -1,10 +1,20 @@
 from importlib import import_module
+import logging
 from pathlib import Path
 import subprocess
 
 
 ras_process_module = import_module("ras_commander.RasProcess")
 RasProcess = ras_process_module.RasProcess
+LOGGER_NAME = "ras_commander.RasProcess"
+
+
+def _messages(caplog, level):
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == LOGGER_NAME and record.levelno == level
+    ]
 
 
 class _DummyRas:
@@ -17,7 +27,7 @@ class _DummyRas:
         return None
 
 
-def test_store_maps_moves_overwritten_outputs_to_custom_path(monkeypatch, tmp_path):
+def test_store_maps_moves_overwritten_outputs_to_custom_path(monkeypatch, tmp_path, caplog):
     project_folder = tmp_path
     project_name = "Demo"
     output_dir = project_folder / "PlanShort"
@@ -86,17 +96,18 @@ def test_store_maps_moves_overwritten_outputs_to_custom_path(monkeypatch, tmp_pa
         fake_run_store_all_maps_helper,
     )
 
-    results = RasProcess.store_maps(
-        plan_number="01",
-        output_path=custom_output_dir,
-        profile="Max",
-        wse=True,
-        depth=True,
-        velocity=False,
-        clear_existing=True,
-        fix_georef=False,
-        ras_object=ras_obj,
-    )
+    with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
+        results = RasProcess.store_maps(
+            plan_number="01",
+            output_path=custom_output_dir,
+            profile="Max",
+            wse=True,
+            depth=True,
+            velocity=False,
+            clear_existing=True,
+            fix_georef=False,
+            ras_object=ras_obj,
+        )
 
     assert results["wse"] == [custom_output_dir / "WSE (Max).tif"]
     assert results["depth"] == [custom_output_dir / "Depth (Max).tif"]
@@ -108,6 +119,11 @@ def test_store_maps_moves_overwritten_outputs_to_custom_path(monkeypatch, tmp_pa
     ) == "depth-map"
     assert not (output_dir / "WSE (Max).tif").exists()
     assert not (output_dir / "Depth (Max).tif").exists()
+    info_messages = _messages(caplog, logging.INFO)
+    assert info_messages == [
+        "StoreAllMaps complete: plan=01; mode=horizontal; map_types=2; files=2"
+    ]
+    assert not any(str(tmp_path) in message for message in info_messages)
 
 
 def test_store_maps_leaves_unchanged_files_in_default_folder(monkeypatch, tmp_path):
@@ -197,7 +213,7 @@ def test_store_maps_leaves_unchanged_files_in_default_folder(monkeypatch, tmp_pa
     assert not (custom_output_dir / "manual_benchmark.tif").exists()
 
 
-def test_store_maps_at_timesteps_routes_each_timestamp(monkeypatch, tmp_path):
+def test_store_maps_at_timesteps_routes_each_timestamp(monkeypatch, tmp_path, caplog):
     ras_obj = _DummyRas(project_folder=tmp_path)
     available = [
         "04FEB2024 00:00:00",
@@ -218,20 +234,72 @@ def test_store_maps_at_timesteps_routes_each_timestamp(monkeypatch, tmp_path):
 
     monkeypatch.setattr(RasProcess, "store_maps", staticmethod(fake_store_maps))
 
-    results = RasProcess.store_maps_at_timesteps(
-        plan_number="02",
-        output_path=tmp_path / "depth_frames",
-        timesteps=[0, "2024-02-04 02:00"],
-        depth=True,
-        velocity=False,
-        fix_georef=False,
-        ras_object=ras_obj,
-    )
+    with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
+        results = RasProcess.store_maps_at_timesteps(
+            plan_number="02",
+            output_path=tmp_path / "depth_frames",
+            timesteps=[0, "2024-02-04 02:00"],
+            depth=True,
+            velocity=False,
+            fix_georef=False,
+            ras_object=ras_obj,
+        )
 
     assert list(results) == ["04FEB2024 00:00:00", "04FEB2024 02:00:00"]
     assert [call["profile"] for call in calls] == list(results)
     assert all(call["plan_number"] == "02" for call in calls)
     assert all(call["depth"] is True and call["velocity"] is False for call in calls)
+    assert all(call["_log_summary"] is False for call in calls)
+    info_messages = _messages(caplog, logging.INFO)
+    assert info_messages == [
+        "StoreAllMaps timesteps complete: plan=02; timesteps=2; map_types=1; files=2"
+    ]
+    assert not any(str(tmp_path) in message for message in info_messages)
+
+
+def test_add_stored_map_rasmap_setup_logs_debug_not_info(tmp_path, caplog):
+    rasmap_path = tmp_path / "Demo.rasmap"
+    rasmap_path.write_text(
+        """<?xml version="1.0" encoding="utf-8"?>
+<RASMapper>
+  <Geometries />
+</RASMapper>
+""",
+        encoding="utf-8",
+    )
+
+    with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
+        assert RasProcess._add_stored_map_to_rasmap(
+            rasmap_path=rasmap_path,
+            plan_hdf_filename="Demo.p01.hdf",
+            map_type="depth",
+            profile_name="Max",
+            output_folder="PlanShort",
+        )
+
+    assert _messages(caplog, logging.INFO) == []
+
+    caplog.clear()
+    rasmap_path.write_text(
+        """<?xml version="1.0" encoding="utf-8"?>
+<RASMapper>
+  <Geometries />
+</RASMapper>
+""",
+        encoding="utf-8",
+    )
+    with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
+        assert RasProcess._add_stored_map_to_rasmap(
+            rasmap_path=rasmap_path,
+            plan_hdf_filename="Demo.p01.hdf",
+            map_type="depth",
+            profile_name="Max",
+            output_folder="PlanShort",
+        )
+
+    debug_messages = _messages(caplog, logging.DEBUG)
+    assert any("Created Results element in rasmap" in message for message in debug_messages)
+    assert any("Created plan layer 'PlanShort' in rasmap" in message for message in debug_messages)
 
 
 def test_fix_georeferencing_rewrites_compressed_tiff(tmp_path):

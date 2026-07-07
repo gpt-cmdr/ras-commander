@@ -1,4 +1,6 @@
+import importlib
 import json
+import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -8,6 +10,10 @@ import pandas as pd
 import pytest
 
 from ras_commander import RasMap
+
+
+RASMAP_LOGGER = "ras_commander.RasMap"
+RASMAP_LAYER_HELPER_LOGGER = "ras_commander._rasmap_layer_helper"
 
 
 def _make_project(tmp_path: Path, name: str = "MapLayerProject") -> Path:
@@ -221,6 +227,18 @@ def _make_geometry_project(tmp_path: Path) -> Path:
     return project_dir
 
 
+def _rasmap_records(caplog):
+    return [record for record in caplog.records if record.name == RASMAP_LOGGER]
+
+
+def _map_layer_helper_records(caplog):
+    return [
+        record
+        for record in caplog.records
+        if record.name == RASMAP_LAYER_HELPER_LOGGER
+    ]
+
+
 def test_list_map_layers_splits_basemaps_and_reference_layers(tmp_path):
     project_dir = _make_project(tmp_path)
 
@@ -237,6 +255,41 @@ def test_list_map_layers_splits_basemaps_and_reference_layers(tmp_path):
     parsed = RasMap.parse_rasmap(project_dir / "MapLayerProject.rasmap")
     assert parsed.at[0, "reference_map_layer_names"] == ["Reference Points"]
     assert parsed.at[0, "basemap_layer_names"] == ["USGS Topo"]
+
+
+def test_read_only_rasmap_discovery_is_quiet_at_info(tmp_path, caplog):
+    project_dir = _make_geometry_project(tmp_path)
+    rasmap_path = project_dir / "GeometryLayerProject.rasmap"
+
+    class DummyProject:
+        project_folder = project_dir
+        project_name = "GeometryLayerProject"
+
+        def check_initialized(self):
+            return None
+
+    caplog.set_level(logging.INFO, logger=RASMAP_LOGGER)
+
+    assert RasMap.get_terrain_names(rasmap_path) == ["Terrain", "TerrainWithChannel"]
+    assert len(RasMap.list_map_layers(project_dir)) == 3
+    assert len(RasMap.list_geometries(ras_object=DummyProject())) == 1
+    assert len(RasMap.list_results_plans(ras_object=DummyProject())) == 2
+    assert RasMap.list_results_map_layers(ras_object=DummyProject()) == []
+
+    assert _rasmap_records(caplog) == []
+
+
+def test_read_only_rasmap_discovery_keeps_details_at_debug(tmp_path, caplog):
+    project_dir = _make_geometry_project(tmp_path)
+    rasmap_path = project_dir / "GeometryLayerProject.rasmap"
+
+    caplog.set_level(logging.DEBUG, logger=RASMAP_LOGGER)
+
+    assert RasMap.get_terrain_names(rasmap_path) == ["Terrain", "TerrainWithChannel"]
+
+    messages = [record.getMessage() for record in _rasmap_records(caplog)]
+    assert any("Found 2 terrain layer(s)" in message for message in messages)
+    assert any("TerrainWithChannel" in message for message in messages)
 
 
 def test_add_basemap_layer_uses_standard_rasmapper_template(tmp_path):
@@ -310,6 +363,49 @@ def test_add_reference_map_layer_validates_geojson_wgs84(tmp_path):
             explicit_bad_geojson,
             layer_name="Explicit Bad GeoJSON",
         )
+
+
+def test_add_map_layers_log_concise_info_and_debug_path(tmp_path, caplog):
+    project_dir = _make_project(tmp_path)
+    rasmap_path = project_dir / "MapLayerProject.rasmap"
+    good_geojson = _write_geojson(
+        project_dir / "GIS" / "good.geojson",
+        [
+            [-82.1, 40.1],
+            [-82.0, 40.1],
+            [-82.0, 40.2],
+            [-82.1, 40.2],
+            [-82.1, 40.1],
+        ],
+    )
+
+    caplog.set_level(logging.DEBUG, logger=RASMAP_LAYER_HELPER_LOGGER)
+
+    reference_result = RasMap.add_reference_map_layer(
+        project_dir,
+        good_geojson,
+        layer_name="Good GeoJSON",
+    )
+    basemap_result = RasMap.add_basemap_layer(project_dir, "Google Hybrid")
+
+    info_text = "\n".join(
+        record.getMessage()
+        for record in _map_layer_helper_records(caplog)
+        if record.levelno == logging.INFO
+    )
+    debug_text = "\n".join(
+        record.getMessage()
+        for record in _map_layer_helper_records(caplog)
+        if record.levelno == logging.DEBUG
+    )
+
+    assert reference_result == rasmap_path
+    assert basemap_result == rasmap_path
+    assert "Added reference map layer 'Good GeoJSON' in .rasmap" in info_text
+    assert "Added basemap layer 'Google Hybrid' in .rasmap" in info_text
+    assert str(project_dir) not in info_text
+    assert str(rasmap_path) not in info_text
+    assert f"Updated RASMapper file: {rasmap_path}" in debug_text
 
 
 def test_legacy_add_map_layer_returns_bool_and_warns(tmp_path, monkeypatch):
@@ -776,7 +872,7 @@ def test_create_spatial_review_package_can_select_result_and_map_layers(tmp_path
     assert visible_maps["name"].tolist() == ["Land Cover"]
 
 
-def test_ensure_results_plan_layer_creates_and_updates_rasresults(tmp_path):
+def test_ensure_results_plan_layer_creates_and_updates_rasresults(tmp_path, caplog):
     project_dir = _make_project(tmp_path)
     plan_path = project_dir / "MapLayerProject.p03"
     plan_path.write_text(
@@ -784,6 +880,7 @@ def test_ensure_results_plan_layer_creates_and_updates_rasresults(tmp_path):
         encoding="utf-8",
     )
     (project_dir / "MapLayerProject.p03.hdf").write_bytes(b"")
+    caplog.set_level(logging.INFO, logger=RASMAP_LOGGER)
 
     record = RasMap.ensure_results_plan_layer(
         plan_path,
@@ -807,6 +904,11 @@ def test_ensure_results_plan_layer_creates_and_updates_rasresults(tmp_path):
     assert layers[0].get("Filename") == r".\MapLayerProject.p03.hdf"
     assert layers[0].get("Checked") == "False"
     assert layers[0].get("Expanded") == "False"
+
+    messages = [record.getMessage() for record in _rasmap_records(caplog)]
+    assert "Ensured RASResults layer 'Encroached Result'" in messages
+    assert "Ensured RASResults layer 'Encroached'" in messages
+    assert all(str(project_dir) not in message for message in messages)
 
 
 def test_add_wse_comparison_layers_uses_project_rasmap_for_terrains(tmp_path):
@@ -835,3 +937,264 @@ def test_add_wse_comparison_layers_uses_project_rasmap_for_terrains(tmp_path):
     assert layers[0]["name"] == "CompareWSE_A_B"
     assert layers[0]["parent_plan"] == "Plan B"
     assert layers[0]["terrains"] == ["Terrain", "TerrainWithChannel"]
+
+
+def test_initialize_rasmap_df_logs_missing_file_once_at_info(tmp_path, caplog):
+    class DummyProject:
+        project_folder = tmp_path
+        project_name = "NoRasmap"
+
+        def check_initialized(self):
+            return None
+
+    caplog.set_level(logging.INFO, logger=RASMAP_LOGGER)
+
+    df = RasMap.initialize_rasmap_df(ras_object=DummyProject())
+
+    assert len(df) == 1
+    records = _rasmap_records(caplog)
+    warnings = [record.getMessage() for record in records if record.levelno == logging.WARNING]
+    assert warnings == [f"RASMapper file not found: {tmp_path / 'NoRasmap.rasmap'}"]
+    assert all("Creating empty rasmap_df" not in record.getMessage() for record in records)
+
+
+def test_screenshot_model_success_logs_name_at_info_and_full_path_at_debug(
+    tmp_path,
+    monkeypatch,
+    caplog,
+):
+    project_dir = tmp_path / "ScreenshotProject"
+    project_dir.mkdir()
+    prj_path = project_dir / "ScreenshotProject.prj"
+    prj_path.write_text("Proj Title=Screenshot Project\n", encoding="utf-8")
+    output_path = project_dir / "review" / "model_capture.png"
+
+    from ras_commander import _rasmap_control_helper as rasmap_control
+
+    class DummyProcess:
+        pid = 12345
+
+    def fake_capture_rasmapper_snapshot(*, output_path, **_kwargs):
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"png")
+        return output_path
+
+    monkeypatch.setattr(
+        rasmap_control,
+        "open_rasmapper",
+        lambda *_args, **_kwargs: DummyProcess(),
+    )
+    monkeypatch.setattr(
+        rasmap_control,
+        "capture_rasmapper_snapshot",
+        fake_capture_rasmapper_snapshot,
+    )
+    monkeypatch.setattr(
+        rasmap_control,
+        "close_rasmapper",
+        lambda **_kwargs: 1,
+    )
+    caplog.set_level(logging.DEBUG, logger=RASMAP_LOGGER)
+
+    result = RasMap.screenshot_model(
+        prj_path,
+        output_path=output_path,
+        configure_layers=False,
+    )
+
+    assert result == output_path
+    info_messages = [
+        record.getMessage()
+        for record in _rasmap_records(caplog)
+        if record.levelno == logging.INFO
+    ]
+    debug_messages = [
+        record.getMessage()
+        for record in _rasmap_records(caplog)
+        if record.levelno == logging.DEBUG
+    ]
+    assert info_messages == ["Screenshot saved: model_capture.png"]
+    assert all(str(project_dir) not in message for message in info_messages)
+    assert any(str(output_path) in message for message in debug_messages)
+
+
+def test_store_all_maps_uses_aggregate_info_and_debug_details(
+    tmp_path,
+    monkeypatch,
+    caplog,
+):
+    project_dir = tmp_path / "StoreProject"
+    project_dir.mkdir()
+    (project_dir / "StoreProject.rasmap").write_text("<RASMapper />", encoding="utf-8")
+    (project_dir / "StoreProject.p01.hdf").write_bytes(b"")
+    (project_dir / "StoreProject.p02.hdf").write_bytes(b"")
+    hecras_dir = tmp_path / "HEC-RAS" / "6.6"
+    hecras_dir.mkdir(parents=True)
+
+    class DummyProject:
+        project_folder = project_dir
+        project_name = "StoreProject"
+        ras_version = "6.6"
+        ras_exe_path = hecras_dir / "Ras.exe"
+        plan_df = pd.DataFrame(
+            [
+                {"plan_number": "01", "Short Identifier": "PlanOne"},
+                {"plan_number": "02", "Short Identifier": "PlanTwo"},
+            ]
+        )
+
+        def check_initialized(self):
+            return None
+
+    class DummyProcess:
+        def __init__(self, returncode, stdout, stderr):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    def fake_run_store_all_maps_helper(*, result_hdf_path, **_kwargs):
+        if Path(result_hdf_path).name.endswith("p02.hdf"):
+            return DummyProcess(2, "verbose stdout", "verbose stderr")
+        return DummyProcess(0, "success stdout", "")
+
+    rasmap_module = importlib.import_module("ras_commander.RasMap")
+    monkeypatch.setattr(
+        rasmap_module,
+        "run_store_all_maps_helper",
+        fake_run_store_all_maps_helper,
+    )
+    caplog.set_level(logging.DEBUG, logger=RASMAP_LOGGER)
+
+    result = RasMap.store_all_maps(
+        ["01", "02"],
+        render_mode="horizontal",
+        ras_object=DummyProject(),
+    )
+
+    assert result["success"] is False
+    records = _rasmap_records(caplog)
+    info_messages = [
+        record.getMessage()
+        for record in records
+        if record.levelno == logging.INFO
+    ]
+    error_messages = [
+        record.getMessage()
+        for record in records
+        if record.levelno == logging.ERROR
+    ]
+    debug_messages = [
+        record.getMessage()
+        for record in records
+        if record.levelno == logging.DEBUG
+    ]
+
+    assert info_messages == [
+        "Stored map generation complete: 1/2 plans succeeded (mode=horizontal)"
+    ]
+    assert error_messages == ["Plan 02: StoreAllMaps failed (exit code 2)"]
+    assert any("Generating stored maps for plan 01" in message for message in debug_messages)
+    assert any("Plan 01: StoreAllMaps completed successfully" in message for message in debug_messages)
+    assert any("verbose stderr" in message for message in debug_messages)
+    assert all("verbose stderr" not in message for message in error_messages)
+
+
+def test_get_results_raster_multiple_matches_raises_without_error_log(
+    tmp_path,
+    monkeypatch,
+    caplog,
+):
+    mapping_folder = tmp_path / "Plan01"
+    mapping_folder.mkdir()
+    (mapping_folder / "WSE (Max).vrt").write_text("", encoding="utf-8")
+    (mapping_folder / "WSE (Min).vrt").write_text("", encoding="utf-8")
+
+    class DummyProject:
+        def check_initialized(self):
+            return None
+
+    monkeypatch.setattr(
+        RasMap,
+        "get_results_folder",
+        staticmethod(lambda *_args, **_kwargs: mapping_folder),
+    )
+    caplog.set_level(logging.DEBUG, logger=RASMAP_LOGGER)
+
+    with pytest.raises(ValueError, match="Multiple .vrt files"):
+        RasMap.get_results_raster("01", "WSE", ras_object=DummyProject())
+
+    records = _rasmap_records(caplog)
+    assert all(record.levelno < logging.ERROR for record in records)
+    assert any(
+        "Multiple .vrt files match 'WSE'" in record.getMessage()
+        for record in records
+        if record.levelno == logging.DEBUG
+    )
+
+
+def test_add_terrain_layer_logs_one_visible_summary_per_mutation(tmp_path, caplog):
+    project_dir = _make_project(tmp_path)
+    terrain_hdf = project_dir / "Terrain" / "Terrain.hdf"
+    terrain_hdf.parent.mkdir()
+    terrain_hdf.write_bytes(b"")
+    rasmap_path = project_dir / "MapLayerProject.rasmap"
+
+    caplog.set_level(logging.INFO, logger=RASMAP_LOGGER)
+
+    RasMap.add_terrain_layer(
+        terrain_hdf,
+        rasmap_path,
+        layer_name="ReviewTerrain",
+    )
+
+    messages = [record.getMessage() for record in _rasmap_records(caplog)]
+    assert messages == ["Added terrain layer 'ReviewTerrain' in .rasmap"]
+
+    caplog.clear()
+    RasMap.add_terrain_layer(
+        terrain_hdf,
+        rasmap_path,
+        layer_name="ReviewTerrain",
+    )
+
+    messages = [record.getMessage() for record in _rasmap_records(caplog)]
+    assert messages == ["Replaced terrain layer 'ReviewTerrain' in .rasmap"]
+
+
+def test_calculated_layer_script_file_logs_are_debug_only(tmp_path, caplog):
+    project_dir = _make_geometry_project(tmp_path)
+
+    class DummyProject:
+        project_folder = project_dir
+        project_name = "GeometryLayerProject"
+
+        def check_initialized(self):
+            return None
+
+    caplog.set_level(logging.INFO, logger=RASMAP_LOGGER)
+
+    added = RasMap.add_calculated_layer(
+        layer_name="ReviewCalc",
+        host_plan_name="Plan A",
+        script_content="' review calculation\n",
+        raster_maps=[{"result": "Plan A"}],
+        terrain_names=["Terrain"],
+        ras_object=DummyProject(),
+    )
+
+    assert added is True
+    messages = [record.getMessage() for record in _rasmap_records(caplog)]
+    assert messages == ["Added calculated layer 'ReviewCalc' to plan 'Plan A'"]
+
+    caplog.clear()
+    removed = RasMap.remove_calculated_layer(
+        "ReviewCalc",
+        host_plan_name="Plan A",
+        delete_script=True,
+        ras_object=DummyProject(),
+    )
+
+    assert removed is True
+    messages = [record.getMessage() for record in _rasmap_records(caplog)]
+    assert messages == ["Removed calculated layer 'ReviewCalc' from 'Plan A'"]

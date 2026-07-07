@@ -229,7 +229,13 @@ class RasProcess:
             ras_install_dir=ras_dir,
         )
         RasProcess._wine_config = config
-        logger.info(f"Wine configured: prefix={wine_prefix}, ras_dir={ras_dir}")
+        ras_dir_state = "configured" if ras_dir is not None else "not configured"
+        logger.info(
+            "Wine configured for RasProcess: executable=%s, ras_dir=%s",
+            wine_executable,
+            ras_dir_state,
+        )
+        logger.debug("Wine configuration paths: prefix=%s, ras_dir=%s", wine_prefix, ras_dir)
         return config
 
     @staticmethod
@@ -619,7 +625,7 @@ Step 5: Configure (optional — auto-detection usually works)
     ... )
 """
         print(instructions)
-        logger.info("Wine setup instructions printed. Follow steps to configure environment.")
+        logger.debug("Wine setup instructions printed. Follow steps to configure environment.")
 
     # ------------------------------------------------------------------ #
     #  Original Methods (with Wine support integrated)
@@ -1030,7 +1036,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 crs = CRS.from_wkt(wkt)
             elif terrain_crs is not None:
                 crs = terrain_crs
-                logger.info(
+                logger.debug(
                     "Using terrain CRS for georeferencing fix on %s because "
                     "no projection file was found.",
                     tif_path,
@@ -1058,7 +1064,7 @@ Step 5: Configure (optional — auto-detection usually works)
 
             tmp_path.replace(tif_path)
 
-            logger.info(f"Fixed georeferencing: {tif_path}")
+            logger.debug("Fixed georeferencing: %s", tif_path)
             return True
 
         except Exception as e:
@@ -1181,7 +1187,7 @@ Step 5: Configure (optional — auto-detection usually works)
                     parent.insert(geom_index + 1, results_elem)
                 else:
                     root.append(results_elem)
-                logger.info("Created Results element in rasmap")
+                logger.debug("Created Results element in rasmap")
 
             # Find the specific plan layer - match by filename basename
             plan_layer = None
@@ -1198,7 +1204,11 @@ Step 5: Configure (optional — auto-detection usually works)
                 plan_layer.set("Name", output_folder)
                 plan_layer.set("Type", "RASResults")
                 plan_layer.set("Filename", f".\\{plan_hdf_filename}")
-                logger.info(f"Created plan layer '{output_folder}' in rasmap for {plan_hdf_filename}")
+                logger.debug(
+                    "Created plan layer '%s' in rasmap for %s",
+                    output_folder,
+                    plan_hdf_filename,
+                )
 
             # Determine display name and output filename
             type_info = None
@@ -1320,7 +1330,8 @@ Step 5: Configure (optional — auto-detection usually works)
         fix_georef: bool = True,
         ras_object=None,
         ras_version: str = None,
-        timeout: int = 600
+        timeout: int = 600,
+        _log_summary: bool = True,
     ) -> Dict[str, List[Path]]:
         """
         Generate stored maps for a plan using RasProcess.exe StoreAllMaps.
@@ -1573,7 +1584,7 @@ Step 5: Configure (optional — auto-detection usually works)
 
             helper_mode = normalize_store_map_render_mode(current_mode)
 
-            logger.info(f"Running StoreAllMaps for plan {plan_num} (mode={helper_mode})...")
+            logger.debug("Running StoreAllMaps for plan %s (mode=%s)", plan_num, helper_mode)
 
             result = run_store_all_maps_helper(
                 hecras_dir=hecras_dir,
@@ -1586,21 +1597,27 @@ Step 5: Configure (optional — auto-detection usually works)
 
             logger.debug(f"StoreAllMaps stdout: {result.stdout}")
             if result.stderr:
-                logger.warning(f"StoreAllMaps stderr: {result.stderr}")
+                stderr_lines = result.stderr.splitlines()
+                stderr_preview = stderr_lines[0] if stderr_lines else result.stderr[:200]
+                logger.warning("StoreAllMaps reported stderr: %s", stderr_preview)
+                logger.debug("StoreAllMaps full stderr: %s", result.stderr)
             if result.returncode != 0:
                 logger.error(f"StoreAllMaps failed (exit code {result.returncode})")
-                logger.error(f"stderr: {result.stderr}")
+                if result.stderr:
+                    logger.debug("StoreAllMaps failure stderr: %s", result.stderr)
 
             for line in result.stdout.splitlines():
                 if "Maps generated" in line:
-                    logger.info(line.strip())
+                    logger.debug(line.strip())
 
             search_dir = output_dir
 
             # If output_path was requested, move files from default dir to output_path
             if resolved_output_path is not None:
-                logger.info(
-                    f"Moving generated files from {output_dir} to {resolved_output_path}"
+                logger.debug(
+                    "Moving generated files from %s to %s",
+                    output_dir,
+                    resolved_output_path,
                 )
                 moved_count = 0
                 # Move files that were created or modified by this call.
@@ -1617,7 +1634,11 @@ Step 5: Configure (optional — auto-detection usually works)
                             dest.unlink()
                         shutil.move(str(item), str(dest))
                         moved_count += 1
-                logger.info(f"Moved {moved_count} generated file(s) to {resolved_output_path}")
+                logger.debug(
+                    "Moved %d generated file(s) to %s",
+                    moved_count,
+                    resolved_output_path,
+                )
 
                 search_dir = resolved_output_path
 
@@ -1641,7 +1662,7 @@ Step 5: Configure (optional — auto-detection usually works)
 
                 if tif_files:
                     generated_files[map_key] = tif_files
-                    logger.info(f"Generated {len(tif_files)} {map_key} TIF(s)")
+                    logger.debug("Generated %d %s TIF(s)", len(tif_files), map_key)
                 else:
                     logger.debug(f"No TIF files found for {map_key} with pattern: {pattern}")
 
@@ -1655,7 +1676,10 @@ Step 5: Configure (optional — auto-detection usually works)
                     shp_files = list(search_dir.glob(shp_pattern_alt))
                 if shp_files:
                     generated_files['inundation_boundary'] = shp_files
-                    logger.info(f"Generated {len(shp_files)} inundation boundary shapefile(s)")
+                    logger.debug(
+                        "Generated %d inundation boundary shapefile(s)",
+                        len(shp_files),
+                    )
                 else:
                     logger.debug(f"No inundation boundary shapefiles found with pattern: {shp_pattern}")
 
@@ -1664,7 +1688,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 proj_info = RasProcess._get_projection_info(rasmap_path)
                 if proj_info.terrain_path:
                     if proj_info.prj_path is None:
-                        logger.info(
+                        logger.debug(
                             "Projection file referenced by %s was not found; "
                             "using terrain CRS for georef fix instead.",
                             rasmap_path.name,
@@ -1680,6 +1704,15 @@ Step 5: Configure (optional — auto-detection usually works)
                     logger.warning("Could not find terrain for georef fix")
                 RasProcess._drop_unreadable_tifs(generated_files)
 
+            generated_file_count = sum(len(paths) for paths in generated_files.values())
+            if _log_summary:
+                logger.info(
+                    "StoreAllMaps complete: plan=%s; mode=%s; map_types=%d; files=%d",
+                    plan_num,
+                    helper_mode,
+                    len(generated_files),
+                    generated_file_count,
+                )
             return generated_files
 
         finally:
@@ -1764,7 +1797,34 @@ Step 5: Configure (optional — auto-detection usually works)
                 ras_object=ras_obj,
                 ras_version=ras_version,
                 timeout=timeout,
+                _log_summary=False,
             )
+            timestep_file_count = sum(len(paths) for paths in results[timestamp].values())
+            logger.debug(
+                "StoreAllMaps timestep complete: plan=%s; timestep=%s; files=%d",
+                plan_number,
+                timestamp,
+                timestep_file_count,
+            )
+
+        map_types = {
+            map_type
+            for timestep_results in results.values()
+            for map_type, paths in timestep_results.items()
+            if paths
+        }
+        total_files = sum(
+            len(paths)
+            for timestep_results in results.values()
+            for paths in timestep_results.values()
+        )
+        logger.info(
+            "StoreAllMaps timesteps complete: plan=%s; timesteps=%d; map_types=%d; files=%d",
+            RasUtils.normalize_ras_number(plan_number),
+            len(selected),
+            len(map_types),
+            total_files,
+        )
         return results
 
     @staticmethod
@@ -2000,7 +2060,10 @@ Step 5: Configure (optional — auto-detection usually works)
 
             logger.debug(f"Command output: {result.stdout}")
             if result.stderr:
-                logger.warning(f"Command errors: {result.stderr}")
+                stderr_lines = result.stderr.splitlines()
+                stderr_preview = stderr_lines[0] if stderr_lines else result.stderr[:200]
+                logger.warning("Command reported stderr: %s", stderr_preview)
+                logger.debug("Command full stderr: %s", result.stderr)
 
             return result
 

@@ -125,7 +125,7 @@ def init_ras_worker(
             share_path=r"\\\\WORKSTATION-01\\RasRemote"
         )
     """
-    logger.info(f"Initializing {worker_type} worker")
+    logger.debug(f"Initializing {worker_type} worker")
 
     # Validate worker_type
     valid_types = ["psexec", "local", "ssh", "winrm", "docker", "slurm", "aws_ec2", "azure_fr"]
@@ -150,6 +150,7 @@ def init_ras_worker(
                 kwargs["ras_exe_path"] = get_ras_exe()
                 logger.debug(f"Using ras_exe_path from get_ras_exe(): {kwargs['ras_exe_path']}")
             except Exception:
+                logger.debug("Ras.exe autodetection failed", exc_info=True)
                 logger.warning("Could not determine ras_exe_path - will need to be set before execution")
 
     # Auto-generate worker_id if not provided
@@ -294,11 +295,20 @@ def load_workers_from_json(
         try:
             worker = init_ras_worker(worker_type, ras_object=ras_object, **kwargs)
             workers.append(worker)
-            logger.info(f"Loaded worker: {worker.worker_id} ({worker_type})")
+            logger.debug(f"Loaded worker: {worker.worker_id} ({worker_type})")
         except NotImplementedError as e:
             logger.warning(f"Skipping unimplemented worker type '{worker_type}': {e}")
         except Exception as e:
-            logger.error(f"Failed to initialize worker '{worker_config.get('name', 'unnamed')}': {e}")
+            worker_name = worker_config.get('name', 'unnamed')
+            logger.error(
+                f"Failed to initialize worker '{worker_name}' "
+                f"({worker_type}): {e}"
+            )
+            logger.debug(
+                f"Worker initialization traceback for '{worker_name}' ({worker_type})",
+                exc_info=True,
+            )
 
-    logger.info(f"Loaded {len(workers)} workers from {json_path}")
+    logger.info(f"Loaded {len(workers)} workers from {json_path.name}")
+    logger.debug(f"Loaded worker configuration from: {json_path.resolve()}")
     return workers

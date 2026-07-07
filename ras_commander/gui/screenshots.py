@@ -205,7 +205,8 @@ class RasScreenshot:
 
         try:
             if not win32gui.IsWindow(hwnd):
-                logger.warning(f"Invalid window handle: {hwnd}")
+                logger.warning("Invalid window handle")
+                logger.debug("Invalid window handle: %s", hwnd)
                 return None
 
             if restore_if_minimized and win32gui.IsIconic(hwnd):
@@ -221,7 +222,8 @@ class RasScreenshot:
             height = bottom - top
 
             if width <= 0 or height <= 0:
-                logger.warning(f"Invalid window dimensions: {width}x{height}")
+                logger.warning("Invalid window dimensions")
+                logger.debug("Invalid window dimensions for HWND %s: %sx%s", hwnd, width, height)
                 return None
 
             visible_frame_rect = (
@@ -295,12 +297,14 @@ class RasScreenshot:
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
             image.save(str(output_path), 'PNG')
-            logger.info(f"Screenshot saved: {output_path}")
+            logger.info("Screenshot saved: %s", output_path.name)
+            logger.debug("Screenshot saved path: %s", output_path)
 
             return output_path
 
         except Exception as e:
-            logger.error(f"Screenshot capture failed for HWND {hwnd}: {e}")
+            logger.error("Screenshot capture failed")
+            logger.debug("Screenshot capture failure for HWND %s: %s", hwnd, e)
             return None
 
     @staticmethod
@@ -351,7 +355,8 @@ class RasScreenshot:
         if hwnd:
             return RasScreenshot.capture_window(hwnd, output_path)
         else:
-            logger.warning(f"No main HEC-RAS window found for PID {pid}")
+            logger.warning("No main HEC-RAS window found")
+            logger.debug("No main HEC-RAS window found for PID %s", pid)
             return None
 
     @staticmethod
@@ -394,7 +399,8 @@ class RasScreenshot:
             if path:
                 screenshots.append(path)
 
-        logger.info(f"Captured {len(screenshots)} screenshots for PID {pid}")
+        logger.info(f"Captured {len(screenshots)} screenshots")
+        logger.debug("Captured screenshots for PID %s: %s", pid, screenshots)
         return screenshots
 
     @staticmethod
@@ -453,7 +459,8 @@ class RasScreenshot:
 
         success = Win32Primitives.click_menu_item(hwnd, menu_id)
         if not success:
-            logger.warning(f"Failed to click menu ID {menu_id}")
+            logger.warning("Failed to click menu item")
+            logger.debug("Failed to click menu ID %s", menu_id)
             return False, before_screenshot, None
 
         time.sleep(delay_after_click)
@@ -516,5 +523,6 @@ class RasScreenshot:
         win32gui.EnumChildWindows(hwnd, enum_callback, controls)
         result["controls"] = controls
 
-        logger.info(f"Documented dialog '{result['window_title']}' with {len(controls)} controls")
+        logger.info(f"Documented dialog with {len(controls)} controls")
+        logger.debug("Documented dialog title: %s", result["window_title"])
         return result

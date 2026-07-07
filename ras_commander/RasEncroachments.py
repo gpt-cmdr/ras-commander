@@ -78,7 +78,12 @@ class RasEncroachments:
         ]
         hdf_path = _plan_gis_hdf_path(plan_path)
         _write_feature_table(hdf_path, _REGIONS_GROUP, normalized, "regions")
-        logger.info("Wrote %s 2D encroachment region(s) to %s", len(normalized), hdf_path)
+        logger.info(
+            "Wrote %s 2D encroachment region(s) to %s",
+            len(normalized),
+            hdf_path.name,
+        )
+        logger.debug("2D encroachment regions GIS HDF path: %s", hdf_path)
         return RasEncroachments.list_2d_encroachment_regions(plan_path)
 
     @staticmethod
@@ -127,7 +132,12 @@ class RasEncroachments:
         ]
         hdf_path = _plan_gis_hdf_path(plan_path)
         _write_feature_table(hdf_path, _ZONES_GROUP, normalized, "zones")
-        logger.info("Wrote %s 2D encroachment zone(s) to %s", len(normalized), hdf_path)
+        logger.info(
+            "Wrote %s 2D encroachment zone(s) to %s",
+            len(normalized),
+            hdf_path.name,
+        )
+        logger.debug("2D encroachment zones GIS HDF path: %s", hdf_path)
         return RasEncroachments.list_2d_encroachment_zones(plan_path)
 
     @staticmethod
@@ -191,7 +201,8 @@ class RasEncroachments:
             if additional_fill is not None:
                 group.attrs["Additional Fill"] = np.float32(additional_fill)
 
-        logger.info("Updated 2D encroachment plan settings in %s", hdf_path)
+        logger.info("Updated 2D encroachment plan settings in %s", hdf_path.name)
+        logger.debug("2D encroachment settings GIS HDF path: %s", hdf_path)
         return RasEncroachments.get_2d_encroachment_plan_settings(plan_path)
 
     @staticmethod
@@ -383,8 +394,29 @@ def _resolve_plan_path(
     ras_obj.check_initialized()
     plan_path = RasPlan.get_plan_path(plan_number_or_path, ras_object=ras_obj)
     if plan_path is None or not Path(plan_path).exists():
-        raise FileNotFoundError(f"Plan file not found for plan: {plan_number_or_path}")
+        available_plans = _available_plan_numbers(ras_obj)
+        project_name = getattr(ras_obj, "project_name", "unknown project")
+        project_folder = getattr(ras_obj, "project_folder", "unknown folder")
+        raise FileNotFoundError(
+            f"Plan file not found for plan {plan_number_or_path!r} in "
+            f"{project_name} ({project_folder}); available plan numbers: {available_plans}"
+        )
     return RasUtils.safe_resolve(Path(plan_path))
+
+
+def _available_plan_numbers(ras_object) -> str:
+    try:
+        plan_df = getattr(ras_object, "plan_df", None)
+        if plan_df is None or "plan_number" not in plan_df.columns:
+            return "none"
+        plan_numbers = [
+            RasUtils.normalize_ras_number(value)
+            for value in plan_df["plan_number"].dropna().astype(str).tolist()
+        ]
+        return ", ".join(plan_numbers) if plan_numbers else "none"
+    except Exception as exc:
+        logger.debug("Could not list available plan numbers: %s", exc)
+        return "unknown"
 
 
 def _plan_number_from_path(plan_path: Path) -> str:
@@ -714,7 +746,13 @@ def _base_plan_filename_attr(
 ) -> str:
     try:
         base_plan_path = _resolve_plan_path(base_plan, ras_object=ras_object)
-    except Exception:
+    except Exception as exc:
+        logger.debug(
+            "Could not resolve base plan %r relative to %s; storing raw value: %s",
+            base_plan,
+            plan_path,
+            exc,
+        )
         return str(base_plan)
     return _lch.to_rasmap_relative_path(plan_path.parent, base_plan_path)
 

@@ -81,11 +81,14 @@ def _link_or_copy_gdal_tree(source_dir: Path, dest_dir: Path) -> None:
             return
         except OSError as exc:
             logger.warning(
-                "Could not symlink GDAL runtime from %s to %s; copying instead. "
-                "Error: %s",
+                "Could not symlink GDAL runtime; copying instead."
+            )
+            logger.debug(
+                "Could not symlink GDAL runtime from %s to %s: %s",
                 source_dir,
                 dest_dir,
                 exc,
+                exc_info=True,
             )
     elif platform.system() == "Windows":
         try:
@@ -98,11 +101,14 @@ def _link_or_copy_gdal_tree(source_dir: Path, dest_dir: Path) -> None:
             return
         except (OSError, subprocess.CalledProcessError) as exc:
             logger.warning(
-                "Could not create GDAL junction from %s to %s; copying instead. "
-                "Error: %s",
+                "Could not create GDAL junction; copying instead."
+            )
+            logger.debug(
+                "Could not create GDAL junction from %s to %s: %s",
                 source_dir,
                 dest_dir,
                 exc,
+                exc_info=True,
             )
 
     shutil.copytree(source_dir, dest_dir, dirs_exist_ok=True)
@@ -211,7 +217,7 @@ def stage_helper_executable(
         staged_path = stage_root / staged_name
         if not staged_path.exists():
             shutil.copy2(helper_path, staged_path)
-            logger.info(f"Staged RasStoreMapHelper.exe to {staged_path}")
+            logger.debug(f"Staged RasStoreMapHelper.exe to {staged_path}")
         return staged_path
 
     hecras_dir = Path(hecras_dir)
@@ -221,7 +227,7 @@ def stage_helper_executable(
     staged_path = bundle_dir / _HELPER_EXE_NAME
     if not staged_path.exists():
         shutil.copy2(helper_path, staged_path)
-        logger.info(f"Staged RasStoreMapHelper.exe to {staged_path}")
+        logger.debug(f"Staged RasStoreMapHelper.exe to {staged_path}")
 
     gdal_source = hecras_dir / "GDAL"
     if gdal_source.is_dir():
@@ -351,7 +357,7 @@ def run_store_all_maps_helper(
                 stage_dir=stage_dir_override,
                 hecras_dir=hecras_dir,
             )
-            logger.info(
+            logger.debug(
                 "Using staged RasStoreMapHelper runtime at %s because the "
                 "packaged helper has no sibling GDAL directory.",
                 helper_to_run,
@@ -377,11 +383,15 @@ def run_store_all_maps_helper(
                 raise
 
             logger.warning(
+                "Direct RasStoreMapHelper execution failed; retrying from staged path."
+            )
+            logger.debug(
                 "Direct RasStoreMapHelper execution failed from %s; retrying "
-                "from staged path %s. Error: %s",
+                "from staged path %s: %s",
                 helper_to_run,
                 staged_helper,
                 exc,
+                exc_info=True,
             )
             return _run_store_all_maps_once(
                 helper_path=staged_helper,

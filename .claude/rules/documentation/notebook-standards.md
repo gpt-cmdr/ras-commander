@@ -110,7 +110,7 @@ using ras-commander.
     python .claude/scripts/prepare_notebooks_for_docs.py
 
 # prepare_notebooks_for_docs.py:
-# - converts examples/*.ipynb -> docs/notebooks/*.md with nbconvert
+# - converts publishable examples/*.ipynb -> docs/notebooks/*.md with nbconvert
 # - rewrites mkdocs nav from .ipynb to .md at build time
 # - disables mkdocs-jupyter during the docs build
 ```
@@ -274,6 +274,14 @@ plt.title('Hydrograph at Cross Section 12345')
 plt.grid(True)
 plt.show()
 ```
+
+### Logging Output
+
+Default notebook and example output should be concise and useful to readers:
+- Summarize successful HEC-RAS execution and version resolution without printing full `Ras.exe` paths.
+- Keep full executable paths, discovery sources, and candidate lists in DEBUG logs or explicit API return values.
+- On errors, include enough diagnostic detail to troubleshoot path problems, including discovered versions and relevant paths.
+- Do not edit saved notebook output just to hide real logging behavior. If output is too noisy, fix the library logging level or example code path.
 
 ### Error Handling
 

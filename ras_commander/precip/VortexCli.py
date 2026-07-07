@@ -148,7 +148,7 @@ class VortexCli:
         if vortex_path is not None:
             vortex_path = Path(vortex_path)
             if VortexCli._has_vortex_runtime(vortex_path):
-                logger.info(f"Found HEC-Vortex at: {vortex_path}")
+                logger.debug(f"Found HEC-Vortex at: {vortex_path}")
                 return vortex_path
             raise FileNotFoundError(
                 f"HEC-Vortex not found at specified path: {vortex_path}. "
@@ -167,14 +167,14 @@ class VortexCli:
                 )
                 for subdir in subdirs:
                     if VortexCli._has_vortex_runtime(subdir):
-                        logger.info(f"Found HEC-Vortex {subdir.name} at: {subdir}")
+                        logger.debug(f"Found HEC-Vortex {subdir.name} at: {subdir}")
                         return subdir
             except PermissionError:
                 continue
 
             # Check if the base path itself is a Vortex distribution
             if VortexCli._has_vortex_runtime(base_path):
-                logger.info(f"Found HEC-Vortex at: {base_path}")
+                logger.debug(f"Found HEC-Vortex at: {base_path}")
                 return base_path
 
         # Check PATH environment variable
@@ -182,7 +182,7 @@ class VortexCli:
         vortex_on_path = shutil.which("vortex")
         if vortex_on_path:
             vortex_dir = Path(vortex_on_path).parent.parent
-            logger.info(f"Found HEC-Vortex on PATH at: {vortex_dir}")
+            logger.debug(f"Found HEC-Vortex on PATH at: {vortex_dir}")
             return vortex_dir
 
         raise FileNotFoundError(

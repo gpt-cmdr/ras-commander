@@ -209,13 +209,14 @@ class PrecipAorc:
         if west < conus_west or east > conus_east or south < conus_south or north > conus_north:
             logger.warning(f"Bounds {bounds} may extend outside CONUS coverage {PrecipAorc.CONUS_BOUNDS}")
 
-        logger.info(f"Downloading AORC data:")
-        logger.info(f"  Bounds: W={west:.4f}, S={south:.4f}, E={east:.4f}, N={north:.4f}")
-        logger.info(f"  Time range: {start_dt} to {end_dt}")
-        logger.info(f"  Variable: {variable}")
+        logger.info(
+            f"Downloading AORC {variable}: {start_dt} to {end_dt}, "
+            f"bounds W={west:.4f}, S={south:.4f}, E={east:.4f}, N={north:.4f}"
+        )
+        logger.debug(f"AORC output path: {output_path}")
 
         # Connect to S3 (anonymous access)
-        logger.info("Connecting to AWS S3...")
+        logger.debug("Connecting to AWS S3...")
         s3 = s3fs.S3FileSystem(anon=True)
 
         # Build Zarr store paths for each year in range
@@ -224,7 +225,7 @@ class PrecipAorc:
 
         for year in years:
             store_path = f"s3://{PrecipAorc.BUCKET}/{year}.zarr"
-            logger.info(f"  Loading year {year} from {store_path}")
+            logger.debug(f"Loading AORC year {year} from {store_path}")
 
             try:
                 store = s3fs.S3Map(root=store_path, s3=s3)
@@ -276,7 +277,7 @@ class PrecipAorc:
                     # Load data from S3 now (force lazy evaluation)
                     ds_subset = ds_subset.load()
                     datasets.append(ds_subset)
-                    logger.info(f"    Loaded {ds_subset.sizes}")
+                    logger.debug(f"Loaded AORC year {year} subset: {ds_subset.sizes}")
                 else:
                     logger.warning(f"    No data found for year {year}")
 
@@ -288,7 +289,7 @@ class PrecipAorc:
             raise ValueError("No data found for the specified bounds and time range")
 
         # Combine all years
-        logger.info("Combining datasets...")
+        logger.debug("Combining AORC datasets")
         if len(datasets) == 1:
             combined = datasets[0]
         else:
@@ -316,7 +317,7 @@ class PrecipAorc:
                     "Install with: pip install rioxarray"
                 )
 
-            logger.info(f"Reprojecting to {target_crs} at {resolution}m resolution...")
+            logger.debug(f"Reprojecting AORC grid to {target_crs} at {resolution}m resolution")
 
             # Set source CRS and spatial dimensions
             combined = combined.rio.write_crs('EPSG:4326')
@@ -325,17 +326,23 @@ class PrecipAorc:
             # Reproject to target CRS
             combined = combined.rio.reproject(target_crs, resolution=resolution)
 
-            logger.info(f"Reprojected grid shape: {combined.shape}")
+            logger.debug(f"Reprojected AORC grid shape: {combined.shape}")
 
         # Create output directory if needed
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write to NetCDF
-        logger.info(f"Writing to NetCDF: {output_path}")
+        logger.debug(f"Writing AORC NetCDF: {output_path}")
         combined.to_netcdf(output_path)
 
         file_size_mb = output_path.stat().st_size / (1024 * 1024)
-        logger.info(f"Download complete: {output_path} ({file_size_mb:.1f} MB)")
+        time_steps = getattr(combined, 'sizes', {}).get('time', 'unknown')
+        grid_shape = getattr(combined, 'shape', 'unknown')
+        logger.debug(f"AORC output grid shape: {grid_shape}")
+        logger.info(
+            f"AORC download complete: {output_path.name} "
+            f"({file_size_mb:.1f} MB, {time_steps} timesteps)"
+        )
 
         return output_path
 
@@ -543,19 +550,21 @@ class PrecipAorc:
         import pandas as pd
         import numpy as np
 
-        logger.info(f"Generating storm catalog for {year}")
-        logger.info(f"  Bounds: W={bounds[0]:.4f}, S={bounds[1]:.4f}, E={bounds[2]:.4f}, N={bounds[3]:.4f}")
-        logger.info(f"  Parameters: inter_event={inter_event_hours}h, min_depth={min_depth_inches}in, buffer={buffer_hours}h")
+        logger.info(
+            f"Generating AORC storm catalog for {year}: "
+            f"bounds W={bounds[0]:.4f}, S={bounds[1]:.4f}, E={bounds[2]:.4f}, N={bounds[3]:.4f}; "
+            f"inter_event={inter_event_hours}h, min_depth={min_depth_inches}in, buffer={buffer_hours}h"
+        )
 
         west, south, east, north = bounds
 
         # Connect to S3
-        logger.info("Connecting to AWS S3...")
+        logger.debug("Connecting to AWS S3...")
         s3 = s3fs.S3FileSystem(anon=True)
 
         # Load year's data
         store_path = f"s3://{PrecipAorc.BUCKET}/{year}.zarr"
-        logger.info(f"Loading {store_path}...")
+        logger.debug(f"Loading AORC store: {store_path}")
 
         try:
             store = s3fs.S3Map(root=store_path, s3=s3)
@@ -583,12 +592,12 @@ class PrecipAorc:
                     **{lon_dim: slice(west, east)}
                 )
 
-            logger.info(f"Loading spatial subset...")
+            logger.debug("Loading AORC spatial subset")
             # Compute spatial mean for each timestep (lazy then load)
             precip_mean = ds_subset.mean(dim=[lat_dim, lon_dim])
             precip_mean = precip_mean.load()
 
-            logger.info(f"Loaded {len(precip_mean)} hourly timesteps")
+            logger.debug(f"Loaded {len(precip_mean)} hourly AORC timesteps")
 
         except Exception as e:
             logger.error(f"Error loading AORC data: {e}")
@@ -640,7 +649,7 @@ class PrecipAorc:
             if last_wet_idx is not None and last_wet_idx >= event_start:
                 events.append((event_start, last_wet_idx))
 
-        logger.info(f"Identified {len(events)} raw events")
+        logger.debug(f"Identified {len(events)} raw AORC storm events")
 
         # Analyze each event
         storm_records = []
@@ -693,7 +702,7 @@ class PrecipAorc:
         if percentile_threshold is not None:
             threshold_value = np.percentile(df['total_depth_in'], percentile_threshold)
             df = df[df['total_depth_in'] >= threshold_value]
-            logger.info(f"Filtered to {len(df)} storms above {percentile_threshold}th percentile ({threshold_value:.2f} in)")
+            logger.debug(f"Filtered to {len(df)} storms above {percentile_threshold}th percentile ({threshold_value:.2f} in)")
 
         # Rank by total depth (1 = largest)
         df['rank'] = df['total_depth_in'].rank(ascending=False, method='min').astype(int)
@@ -707,10 +716,19 @@ class PrecipAorc:
                  'total_depth_in', 'peak_intensity_in_hr', 'duration_hours',
                  'wet_hours', 'rank']]
 
-        logger.info(f"Storm catalog complete: {len(df)} storms")
         if len(df) > 0:
-            logger.info(f"  Total depth range: {df['total_depth_in'].min():.2f} - {df['total_depth_in'].max():.2f} inches")
-            logger.info(f"  Largest storm: {df[df['rank']==1]['start_time'].iloc[0]} ({df['total_depth_in'].max():.2f} in)")
+            largest_storm = df.loc[df['rank'].idxmin()]
+            largest_start = pd.Timestamp(largest_storm['start_time']).strftime('%Y-%m-%d %H:%M')
+            percentile_text = (
+                f"; percentile filter={percentile_threshold:g}"
+                if percentile_threshold is not None else ""
+            )
+            logger.info(
+                f"Storm catalog complete: {len(df)} storms; "
+                f"depth {df['total_depth_in'].min():.2f}-{df['total_depth_in'].max():.2f} in; "
+                f"largest {largest_start} ({df['total_depth_in'].max():.2f} in)"
+                f"{percentile_text}"
+            )
 
         return df
 
@@ -826,15 +844,16 @@ class PrecipAorc:
             raise ValueError(f"Template plan '{template_plan}' has no unsteady flow file")
         template_unsteady = unsteady_match.group(1)
 
-        logger.info(f"Creating storm plans from template plan {template_plan} (unsteady {template_unsteady})")
-        logger.info(f"  Precipitation folder: {precip_path}")
-
         # Limit storms if requested
         storms_to_process = storm_catalog
         if max_storms is not None:
             storms_to_process = storm_catalog.head(max_storms)
 
-        logger.info(f"  Processing {len(storms_to_process)} storms")
+        logger.info(
+            f"Creating storm plans from template plan {template_plan} "
+            f"(unsteady {template_unsteady}); processing {len(storms_to_process)} storms"
+        )
+        logger.debug(f"Precipitation folder: {precip_path}")
 
         # Results tracking
         results = []
@@ -862,13 +881,13 @@ class PrecipAorc:
             }
 
             try:
-                logger.info(f"Storm {storm_id}: {start_date.strftime('%Y-%m-%d')} ({storm['total_depth_in']:.2f} in)")
+                logger.debug(f"Processing storm {storm_id}: {start_date.strftime('%Y-%m-%d')} ({storm['total_depth_in']:.2f} in)")
 
                 # 1. Download AORC data
                 if download_data:
                     full_precip_path = ras_obj.project_folder / precip_file
                     if not full_precip_path.exists():
-                        logger.info(f"  Downloading AORC data...")
+                        logger.debug(f"Downloading AORC data for storm {storm_id} to {full_precip_path}")
                         PrecipAorc.download(
                             bounds=bounds,
                             start_time=sim_start,
@@ -876,10 +895,12 @@ class PrecipAorc:
                             output_path=full_precip_path
                         )
                     else:
-                        logger.info(f"  Precipitation file exists, skipping download")
+                        logger.debug(f"Precipitation file exists, skipping download: {full_precip_path}")
+                else:
+                    logger.debug(f"Download disabled for storm {storm_id}; using {precip_file}")
 
                 # 2. Clone unsteady file
-                logger.info(f"  Cloning unsteady file...")
+                logger.debug(f"Cloning unsteady file for storm {storm_id}")
                 new_unsteady = RasPlan.clone_unsteady(
                     template_unsteady,
                     new_title=unsteady_title,
@@ -888,7 +909,7 @@ class PrecipAorc:
                 result['unsteady_number'] = new_unsteady
 
                 # 3. Configure gridded precipitation
-                logger.info(f"  Configuring gridded precipitation...")
+                logger.debug(f"Configuring gridded precipitation for storm {storm_id}: {precip_file}")
                 RasUnsteady.set_gridded_precipitation(
                     unsteady_file=new_unsteady,
                     netcdf_path=precip_file,
@@ -896,7 +917,7 @@ class PrecipAorc:
                 )
 
                 # 4. Clone plan file
-                logger.info(f"  Cloning plan file...")
+                logger.debug(f"Cloning plan file for storm {storm_id}")
                 new_plan = RasPlan.clone_plan(
                     template_plan,
                     new_plan_shortid=short_id,
@@ -929,10 +950,15 @@ class PrecipAorc:
                     )
                     with open(plan_path, 'w', encoding='utf-8', errors='replace') as f:
                         f.write(plan_content)
-                    logger.info(f"  Enabled HDF time series output")
+                    logger.debug(f"Enabled HDF time series output for plan {new_plan}")
 
                 result['status'] = 'success'
-                logger.info(f"  Created plan {new_plan} with unsteady {new_unsteady}")
+                timeseries_text = "with HDF time series" if enable_timeseries else "without HDF time series"
+                logger.info(
+                    f"Created storm {storm_id}: {start_date.strftime('%Y-%m-%d')} "
+                    f"({storm['total_depth_in']:.2f} in) -> plan {new_plan}, "
+                    f"unsteady {new_unsteady}, {timeseries_text}"
+                )
 
             except Exception as e:
                 result['status'] = f'error: {str(e)}'

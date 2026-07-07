@@ -188,7 +188,7 @@ class RasPreprocess:
 
         # Build command: RAS.exe -c project.prj plan.p##
         cmd = f'"{ras_exe}" -c "{prj_file}" "{plan_file}"'
-        logger.info("Starting HEC-RAS preprocessing with early termination...")
+        logger.info("Starting HEC-RAS preprocessing for plan %s", plan_num)
         logger.debug(f"Command: {cmd}")
 
         # Launch HEC-RAS
@@ -213,16 +213,20 @@ class RasPreprocess:
 
         # Terminate process tree
         if process.poll() is None:
-            logger.info("Preprocessing signal detected — terminating HEC-RAS...")
+            logger.debug("Preprocessing signal detected; terminating HEC-RAS")
             RasPreprocess._terminate_process_tree(process)
         elif signal_detected:
-            logger.info("Preprocessing complete (process already exited)")
+            logger.debug("Preprocessing complete; HEC-RAS process already exited")
         else:
             logger.warning(f"Process exited with code {process.returncode} before signal detected")
 
         # If process completed fully and .hdf exists but no .tmp.hdf, copy it
         if not tmp_hdf.exists() and hdf_file.exists() and hdf_file.stat().st_size > 0:
-            logger.warning(f"Full simulation completed. Copying {hdf_file.name} → {tmp_hdf.name}")
+            logger.warning(
+                "Full simulation completed before early termination; copying %s to %s",
+                hdf_file.name,
+                tmp_hdf.name,
+            )
             shutil.copy2(hdf_file, tmp_hdf)
 
         # Verify all three prerequisite files exist and are non-empty
@@ -248,10 +252,19 @@ class RasPreprocess:
 
         elapsed = time.time() - start_time
         logger.info(
-            f"Preprocessing complete in {elapsed:.1f}s: "
-            f"tmp.hdf={tmp_hdf.stat().st_size / 1024 / 1024:.1f}MB, "
-            f"b={b_file.stat().st_size / 1024:.0f}KB, "
-            f"x={x_file.stat().st_size / 1024:.0f}KB"
+            "Preprocessing complete for plan %s in %.1fs: tmp.hdf=%.1fMB, b=%.0fKB, x=%.0fKB",
+            plan_num,
+            elapsed,
+            tmp_hdf.stat().st_size / 1024 / 1024,
+            b_file.stat().st_size / 1024,
+            x_file.stat().st_size / 1024,
+        )
+        logger.debug(
+            "Generated preprocessing files for plan %s: tmp_hdf=%s, b_file=%s, x_file=%s",
+            plan_num,
+            tmp_hdf,
+            b_file,
+            x_file,
         )
 
         return PreprocessResult(
@@ -332,7 +345,7 @@ class RasPreprocess:
                 logger.debug(f"Missing or empty: {f.name}")
                 return False
 
-        logger.info(f"All preprocessing files verified for plan {plan_num}")
+        logger.debug("All preprocessing files verified for plan %s", plan_num)
         return True
 
     @staticmethod
@@ -385,7 +398,7 @@ class RasPreprocess:
 
             parent.kill()
             process.wait(timeout=10)
-            logger.info("HEC-RAS process tree terminated")
+            logger.debug("HEC-RAS process tree terminated")
         except Exception as e:
             logger.warning(f"psutil termination failed ({e}), falling back to process.kill()")
             try:

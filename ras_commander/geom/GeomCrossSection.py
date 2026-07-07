@@ -2749,7 +2749,7 @@ class GeomCrossSection:
             # Create backup
             if create_backup:
                 backup_path = GeomParser.create_backup(geom_file)
-                logger.info(f"Created backup: {backup_path}")
+                logger.debug(f"Created backup: {backup_path}")
 
             with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
@@ -3948,7 +3948,7 @@ class GeomCrossSection:
 
         try:
             backup_path = GeomParser.create_backup(geom_file)
-            logger.info(f"Created backup: {backup_path}")
+            logger.debug(f"Created backup: {backup_path}")
 
             with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
@@ -4100,7 +4100,7 @@ class GeomCrossSection:
 
         try:
             backup_path = GeomParser.create_backup(geom_file)
-            logger.info(f"Created backup: {backup_path}")
+            logger.debug(f"Created backup: {backup_path}")
 
             with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
@@ -4478,7 +4478,7 @@ class GeomCrossSection:
                 logger.warning(f"Could not extract station-elevation data: {e}")
                 # Continue without invert/top - they'll remain None
 
-            logger.info(
+            logger.debug(
                 f"Extracted HTAB params for {river}/{reach}/RS {rs}: "
                 f"has_htab_lines={params['has_htab_lines']}, "
                 f"starting_el={params['starting_el']}, "
@@ -4661,7 +4661,7 @@ class GeomCrossSection:
         try:
             # Create backup
             backup_path = GeomParser.create_backup(geom_file)
-            logger.info(f"Created backup: {backup_path}")
+            logger.debug(f"Created backup: {backup_path}")
 
             with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
@@ -4976,7 +4976,7 @@ class GeomCrossSection:
                     'top': top
                 })
 
-            logger.info(f"Indexed {len(xs_info)} cross sections with location data")
+            logger.debug(f"Indexed {len(xs_info)} cross sections with location data")
 
             # Step 4: Process all XS and modify lines in place
             modified_count = 0
@@ -5320,7 +5320,7 @@ class GeomCrossSection:
                     key = (river, reach, station)
                     max_wse_lookup[key] = max_wse
 
-            logger.info(f"Extracted max WSE for {len(max_wse_lookup) // 2} cross sections from HDF")
+            logger.debug(f"Extracted max WSE for {len(max_wse_lookup) // 2} cross sections from HDF")
 
         except Exception as e:
             logger.error(f"Failed to extract cross section results from HDF: {e}")
@@ -5342,7 +5342,7 @@ class GeomCrossSection:
         backup_path = None
         if create_backup:
             backup_path = GeomParser.create_backup(geom_file)
-            logger.info(f"Created backup: {backup_path}")
+            logger.debug(f"Created backup: {backup_path}")
 
         # Step 5: Calculate optimal parameters for each XS and collect modifications
         modifications = []
@@ -5518,7 +5518,7 @@ class GeomCrossSection:
                 skipped_count += 1
                 continue
 
-        logger.info(
+        logger.debug(
             f"Calculated optimal HTAB for {len(modifications)} cross sections, "
             f"skipped {skipped_count}"
         )
@@ -5529,7 +5529,7 @@ class GeomCrossSection:
                 with open(geom_file, 'w', encoding='utf-8') as f:
                     f.writelines(modified_lines)
 
-                logger.info(f"Wrote {len(modifications)} HTAB modifications to {geom_file.name}")
+                logger.debug(f"Wrote {len(modifications)} HTAB modifications to {geom_file.name}")
 
             except Exception as e:
                 logger.error(f"Error writing modifications: {e}")

@@ -53,6 +53,7 @@ _RAS_PROCESS_NAMES = frozenset({
 })
 
 _DISMISS_LABELS = ["OK", "&OK", "Yes", "&Yes", "Close", "&Close"]
+_WIN32_UNAVAILABLE_WARNED = False
 
 
 class DismissedDialog:
@@ -100,9 +101,12 @@ class DialogWatchdog:
         self._process_names = process_names or _RAS_PROCESS_NAMES
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
+        self._started = False
         self._dismissed: List[DismissedDialog] = []
         self._lock = threading.Lock()
         self._seen_hwnds: Set[int] = set()
+        self._psutil_unavailable_logged = False
+        self._psutil_failure_logged = False
 
     # -- context manager ---------------------------------------------------
 
@@ -117,31 +121,49 @@ class DialogWatchdog:
     # -- public API --------------------------------------------------------
 
     def start(self) -> None:
+        global _WIN32_UNAVAILABLE_WARNED
+
         if not _WIN32:
-            logger.warning(
-                "DialogWatchdog requires pywin32 (win32gui) — "
-                "dialogs will NOT be auto-dismissed"
-            )
+            if not _WIN32_UNAVAILABLE_WARNED:
+                logger.warning(
+                    "DialogWatchdog requires pywin32 (win32gui); dialogs will NOT "
+                    "be auto-dismissed. Install pywin32 on Windows or pass "
+                    "dialog_watchdog=False to disable this watchdog."
+                )
+                _WIN32_UNAVAILABLE_WARNED = True
+            else:
+                logger.debug("DialogWatchdog unavailable because pywin32 is not installed")
             return
+
+        if self._started and self._thread and self._thread.is_alive():
+            logger.debug("DialogWatchdog start requested while already running")
+            return
+
         self._stop.clear()
         self._thread = threading.Thread(
             target=self._poll_loop, daemon=True, name="DialogWatchdog"
         )
         self._thread.start()
-        logger.info(
+        self._started = True
+        logger.debug(
             "DialogWatchdog started — polling every %.1fs for RAS dialog windows",
             self._poll_interval,
         )
 
     def stop(self) -> None:
+        if not self._started:
+            logger.debug("DialogWatchdog stop requested while watchdog is not running")
+            return
+
         self._stop.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5)
+        self._started = False
         n = len(self._dismissed)
         if n:
             logger.info("DialogWatchdog stopped — dismissed %d dialog(s)", n)
         else:
-            logger.info("DialogWatchdog stopped — no dialogs encountered")
+            logger.debug("DialogWatchdog stopped — no dialogs encountered")
 
     def add_pid(self, pid: int) -> None:
         with self._lock:
@@ -174,17 +196,27 @@ class DialogWatchdog:
         pids: Set[int] = set()
         with self._lock:
             pids.update(self._pids)
-        if _PSUTIL:
-            try:
-                for proc in psutil.process_iter(["pid", "name"]):
-                    try:
-                        name = proc.info["name"]
-                        if name and name.lower() in self._process_names:
-                            pids.add(proc.info["pid"])
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
-            except Exception:
-                pass
+        if not _PSUTIL:
+            if not self._psutil_unavailable_logged:
+                logger.debug(
+                    "DialogWatchdog process discovery is limited because psutil "
+                    "is not installed"
+                )
+                self._psutil_unavailable_logged = True
+            return pids
+
+        try:
+            for proc in psutil.process_iter(["pid", "name"]):
+                try:
+                    name = proc.info["name"]
+                    if name and name.lower() in self._process_names:
+                        pids.add(proc.info["pid"])
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+        except Exception as exc:
+            if not self._psutil_failure_logged:
+                logger.debug("DialogWatchdog process discovery failed: %s", exc)
+                self._psutil_failure_logged = True
         return pids
 
     def _poll_loop(self) -> None:
@@ -295,7 +327,7 @@ class DialogWatchdog:
                 win32gui.SendMessage(btn_hwnd, 0x00F5, 0, 0)
                 record = DismissedDialog(pid, pname, title, body, btn_text)
             else:
-                logger.info(
+                logger.warning(
                     "DialogWatchdog: closing dialog (no button found) — "
                     "process=%s PID=%d title=%r body=%r → sending WM_CLOSE",
                     pname, pid, title, body,

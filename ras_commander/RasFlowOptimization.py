@@ -289,10 +289,15 @@ class RasFlowOptimization:
                     plan_lines=updated_lines,
                 )
             else:
+                detail = "not found" if unsteady_path else "could not be resolved"
                 logger.warning(
-                    "Unsteady flow file could not be resolved; skipped observed "
-                    "target time-series update"
+                    "Skipped observed target time-series update for %s (%s): "
+                    "unsteady flow file %s",
+                    plan_path.name,
+                    reference,
+                    detail,
                 )
+                logger.debug("Observed target unsteady path candidate: %s", unsteady_path)
 
         RasFlowOptimization._refresh_plan_dataframe(ras_obj)
         logger.info("Updated flow optimization settings in %s", plan_path.name)
@@ -421,7 +426,7 @@ class RasFlowOptimization:
         )
         if not unsteady_path or not unsteady_path.exists():
             raise FileNotFoundError(
-                f"Unsteady flow file could not be resolved from {plan_path}"
+                RasFlowOptimization._format_missing_unsteady_error(plan_path, unsteady_path)
             )
 
         lines = RasFlowOptimization._read_text_lines(unsteady_path)
@@ -450,7 +455,7 @@ class RasFlowOptimization:
                 index += 1
 
         df = pd.DataFrame(rows)
-        logger.info("Found %s flow hydrograph boundary rows", len(df))
+        logger.debug("Found %s flow hydrograph boundary rows", len(df))
         return df
 
     @staticmethod
@@ -643,7 +648,13 @@ class RasFlowOptimization:
         ras_obj.check_initialized()
         plan_path = RasPlan.get_plan_path(plan_number_or_path, ras_obj)
         if plan_path is None or not Path(plan_path).exists():
-            raise FileNotFoundError(f"Plan file not found: {plan_number_or_path}")
+            raise FileNotFoundError(
+                RasFlowOptimization._format_missing_plan_error(
+                    plan_number_or_path,
+                    plan_path,
+                    ras_obj,
+                )
+            )
         return Path(plan_path)
 
     @staticmethod
@@ -703,11 +714,7 @@ class RasFlowOptimization:
         plan_path: Path,
         ras_object=None,
     ) -> Optional[Path]:
-        flow_file = None
-        for line in RasFlowOptimization._read_text_lines(plan_path):
-            if line.startswith("Flow File="):
-                flow_file = line.split("=", 1)[1].strip()
-                break
+        flow_file = RasFlowOptimization._flow_file_reference_from_plan(plan_path)
         if not flow_file or not flow_file.lower().startswith("u"):
             return None
 
@@ -728,6 +735,95 @@ class RasFlowOptimization:
         if not match:
             return None
         return plan_path.parent / f"{match.group('base')}.u{unsteady_number}"
+
+    @staticmethod
+    def _flow_file_reference_from_plan(plan_path: Path) -> Optional[str]:
+        for line in RasFlowOptimization._read_text_lines(plan_path):
+            if line.startswith("Flow File="):
+                return line.split("=", 1)[1].strip()
+        return None
+
+    @staticmethod
+    def _format_missing_unsteady_error(plan_path: Path, unsteady_path: Optional[Path]) -> str:
+        flow_file = RasFlowOptimization._flow_file_reference_from_plan(plan_path)
+        if flow_file is None:
+            return (
+                f"Unsteady flow file could not be resolved from plan: {plan_path}. "
+                "No Flow File=u## record was found."
+            )
+        if not flow_file.lower().startswith("u"):
+            return (
+                f"Unsteady flow file could not be resolved from plan: {plan_path}. "
+                f"Plan references non-unsteady Flow File={flow_file}."
+            )
+        if unsteady_path is None:
+            return (
+                f"Unsteady flow file could not be resolved from plan: {plan_path}. "
+                f"Plan references Flow File={flow_file}, but no candidate path could be constructed."
+            )
+        return (
+            f"Unsteady flow file could not be resolved from plan: {plan_path}. "
+            f"Plan references Flow File={flow_file}, but expected file was not found: {unsteady_path}"
+        )
+
+    @staticmethod
+    def _format_missing_plan_error(
+        plan_number_or_path: Any,
+        resolved_path: Optional[Path],
+        ras_obj,
+    ) -> str:
+        message = [f"Plan file not found: {plan_number_or_path}"]
+        context = RasFlowOptimization._ras_project_context(ras_obj)
+        if context:
+            message.append(context)
+        candidate = resolved_path or RasFlowOptimization._plan_candidate_path(
+            plan_number_or_path,
+            ras_obj,
+        )
+        if candidate is not None:
+            message.append(f"Expected path: {candidate}")
+        available = RasFlowOptimization._available_plan_numbers(ras_obj)
+        if available:
+            message.append(f"Available plans: {available}")
+        return ". ".join(message)
+
+    @staticmethod
+    def _ras_project_context(ras_obj) -> str:
+        project_name = getattr(ras_obj, "project_name", None)
+        project_folder = getattr(ras_obj, "project_folder", None)
+        if project_name and project_folder:
+            return f"Project: {project_name} in {project_folder}"
+        if project_name:
+            return f"Project: {project_name}"
+        if project_folder:
+            return f"Project folder: {project_folder}"
+        return ""
+
+    @staticmethod
+    def _plan_candidate_path(plan_number_or_path: Any, ras_obj) -> Optional[Path]:
+        project_name = getattr(ras_obj, "project_name", None)
+        project_folder = getattr(ras_obj, "project_folder", None)
+        if not project_name or not project_folder:
+            return None
+        try:
+            plan_number = RasUtils.normalize_ras_number(plan_number_or_path)
+        except Exception:
+            return None
+        return Path(project_folder) / f"{project_name}.p{plan_number}"
+
+    @staticmethod
+    def _available_plan_numbers(ras_obj) -> str:
+        df = getattr(ras_obj, "plan_df", None)
+        if (df is None or getattr(df, "empty", True)) and hasattr(ras_obj, "get_plan_entries"):
+            try:
+                df = ras_obj.get_plan_entries()
+            except Exception:
+                logger.debug("Could not refresh plan_df while formatting missing plan error", exc_info=True)
+                df = None
+        if df is None or getattr(df, "empty", True) or "plan_number" not in df.columns:
+            return ""
+        values = [str(value) for value in df["plan_number"].dropna().tolist()]
+        return ", ".join(values)
 
     @staticmethod
     def _read_text_lines(path: Path) -> List[str]:
@@ -1036,7 +1132,7 @@ class RasFlowOptimization:
             lines[insert_idx:insert_idx] = block
 
         RasFlowOptimization._write_text_lines(unsteady_path, lines)
-        logger.info("Updated observed %s target in %s", series_type, unsteady_path.name)
+        logger.debug("Updated observed %s target in %s", series_type, unsteady_path.name)
 
     @staticmethod
     def _find_observed_timeseries_block(

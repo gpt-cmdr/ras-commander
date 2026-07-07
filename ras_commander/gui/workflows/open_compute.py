@@ -68,9 +68,11 @@ class OpenAndComputeWorkflow:
         logger.info(f"Setting current plan to {plan_number} in project file...")
         try:
             ras_obj.set_current_plan(plan_number)
-            logger.info(f"Current plan set to {plan_number} in {ras_obj.prj_file}")
+            logger.info(f"Current plan set to {plan_number}")
+            logger.debug("Project file updated for current plan: %s", ras_obj.prj_file)
         except Exception as e:
-            logger.error(f"Failed to set current plan: {e}")
+            logger.error("Failed to set current plan")
+            logger.debug("Set-current-plan failure for plan %s: %s", plan_number, e)
             return False
 
         # Step 2: Launch HEC-RAS and wait for main window
@@ -84,17 +86,17 @@ class OpenAndComputeWorkflow:
         time.sleep(1)  # Let window fully load
 
         # Step 3: Click "Run > Unsteady Flow Analysis" (menu ID 47)
-        logger.info("Clicking 'Run > Unsteady Flow Analysis' menu...")
+        logger.debug("Clicking 'Run > Unsteady Flow Analysis' menu...")
         time.sleep(0.5)
 
         if not Win32Primitives.click_menu_item(hec_ras_hwnd, 47):
-            logger.warning("Failed to click menu item, but continuing...")
+            logger.debug("Failed to click menu item, but continuing")
 
         time.sleep(2)
 
         # Step 4: Find and click Compute button (if auto_click_compute)
         if auto_click_compute:
-            logger.info("Looking for Unsteady Flow Analysis dialog...")
+            logger.debug("Looking for Unsteady Flow Analysis dialog...")
 
             # Snapshot windows before menu click already happened (wait for dialog to appear)
             # Try multiple title patterns — HEC-RAS versions use different dialog titles
@@ -113,20 +115,20 @@ class OpenAndComputeWorkflow:
                     return Win32Primitives.find_dialog_by_title(p)
                 dialog_hwnd = Win32Primitives.wait_for_window(find_dialog, timeout=5)
                 if dialog_hwnd:
-                    logger.info(f"Found dialog matching '{pattern}'")
+                    logger.debug(f"Found dialog matching '{pattern}'")
                     break
 
             # Strategy 2: If title search failed, find any NEW window belonging to the
             # HEC-RAS process that wasn't the main window (likely a dialog/popup)
             if not dialog_hwnd:
-                logger.info("Title-based search failed, searching for new windows by PID...")
+                logger.debug("Title-based search failed, searching for new windows by PID...")
                 hecras_pid = hecras_process.pid
                 time.sleep(2)  # Give dialog time to appear
 
                 all_windows = Win32Primitives.get_windows_by_pid(hecras_pid)
                 for hwnd, title in all_windows:
                     if hwnd != hec_ras_hwnd and title:
-                        logger.info(f"Found new window: '{title}' (hwnd={hwnd})")
+                        logger.debug(f"Found new window: '{title}' (hwnd={hwnd})")
                         dialog_hwnd = hwnd
                         break
 
@@ -136,13 +138,13 @@ class OpenAndComputeWorkflow:
                     all_windows = Win32Primitives.get_windows_by_pid(hecras_pid)
                     for hwnd, title in all_windows:
                         if hwnd != hec_ras_hwnd and title:
-                            logger.info(f"Found new window (delayed): '{title}' (hwnd={hwnd})")
+                            logger.debug(f"Found new window (delayed): '{title}' (hwnd={hwnd})")
                             dialog_hwnd = hwnd
                             break
 
             if dialog_hwnd:
-                logger.info(f"Found dialog window: '{win32gui.GetWindowText(dialog_hwnd)}'")
-                logger.info("Looking for Compute button...")
+                logger.debug(f"Found dialog window: '{win32gui.GetWindowText(dialog_hwnd)}'")
+                logger.debug("Looking for Compute button...")
 
                 try:
                     win32gui.SetForegroundWindow(dialog_hwnd)
@@ -154,34 +156,34 @@ class OpenAndComputeWorkflow:
                 for button_text in ["Compute", "&Compute", "C&ompute", "OK", "&OK"]:
                     compute_button = Win32Primitives.find_button_by_text(dialog_hwnd, button_text)
                     if compute_button:
-                        logger.info(f"Found button with text '{button_text}'")
+                        logger.debug(f"Found button with text '{button_text}'")
                         break
 
                 if compute_button:
-                    logger.info("Clicking Compute button...")
+                    logger.debug("Clicking Compute button...")
                     Win32Primitives.click_button(compute_button)
                     time.sleep(0.5)
                 else:
-                    logger.warning("Could not find Compute button - trying keyboard shortcut...")
+                    logger.debug("Could not find Compute button; trying keyboard shortcut...")
                     try:
                         win32api.keybd_event(Win32Constants.VK_RETURN, 0, 0, 0)
                         time.sleep(0.05)
                         win32api.keybd_event(Win32Constants.VK_RETURN, 0, Win32Constants.KEYEVENTF_KEYUP, 0)
-                        logger.info("Sent Enter key via win32api")
+                        logger.debug("Sent Enter key via win32api")
                         time.sleep(0.5)
                     except Exception as e1:
-                        logger.warning(f"win32api keyboard approach failed: {e1}")
+                        logger.debug("win32api keyboard approach failed: %s", e1)
                         try:
                             shell = win32com.client.Dispatch("WScript.Shell")
                             time.sleep(0.5)
                             shell.SendKeys("{ENTER}")
-                            logger.info("Sent Enter key via WScript.Shell")
+                            logger.debug("Sent Enter key via WScript.Shell")
                         except Exception as e2:
-                            logger.warning(f"WScript.Shell approach failed: {e2}")
-                            logger.info("User must manually click Compute button")
+                            logger.warning("User must manually click Compute button")
+                            logger.debug("WScript.Shell approach failed: %s", e2)
             else:
                 logger.warning("Could not find Unsteady Flow Analysis dialog by any method")
-                logger.info("User must manually click 'Run > Unsteady Flow Analysis' and Compute")
+                logger.warning("User must manually click 'Run > Unsteady Flow Analysis' and Compute")
 
         # Step 5: Poll HDF for "Complete Process", then auto-close HEC-RAS
         #
@@ -221,19 +223,19 @@ class OpenAndComputeWorkflow:
                 time.sleep(poll_interval)
 
             if completion_detected and hecras_process.poll() is None:
-                logger.info("Closing HEC-RAS...")
+                logger.debug("Closing HEC-RAS...")
                 hecras_process.terminate()
                 try:
                     hecras_process.wait(timeout=15)
                 except _subprocess.TimeoutExpired:
                     hecras_process.kill()
-                logger.info("HEC-RAS closed automatically after computation")
+                logger.debug("HEC-RAS closed automatically after computation")
             elif not completion_detected:
                 logger.warning("Polling timed out — waiting for user to close HEC-RAS")
                 hecras_process.wait()
                 logger.info("HEC-RAS has been closed by user")
         else:
             logger.info("Returning without waiting for HEC-RAS to close")
-            logger.info(f"HEC-RAS process ID: {hecras_process.pid}")
+            logger.debug(f"HEC-RAS process ID: {hecras_process.pid}")
 
         return True

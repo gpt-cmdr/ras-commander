@@ -1,6 +1,7 @@
 """Unit tests for GeomMesh headless mesh generation and BC repair."""
 
 from importlib import import_module
+import logging
 import os
 import platform
 import shutil
@@ -985,6 +986,49 @@ class TestGenerate:
         assert "BreakLine CellSize Min=50.000000" in text
         assert "BreakLine CellSize Max=200.000000" in text
         assert "Storage Area 2D Points= 2 " in text
+
+    def test_generate_internal_progress_logs_debug_not_info(
+        self, monkeypatch, breakline_geom_text, caplog
+    ):
+        _mock_generate_success(
+            monkeypatch,
+            breakline_geom_text,
+            has_breaklines=True,
+        )
+
+        with caplog.at_level(logging.DEBUG, logger="ras_commander.geom.GeomMesh"):
+            result = GeomMesh.generate(breakline_geom_text)
+
+        assert result.ok
+        records = [
+            record
+            for record in caplog.records
+            if record.name == "ras_commander.geom.GeomMesh"
+        ]
+        info_messages = [
+            record.getMessage() for record in records if record.levelno == logging.INFO
+        ]
+        debug_messages = [
+            record.getMessage() for record in records if record.levelno == logging.DEBUG
+        ]
+
+        assert any("[MainArea] Mesh complete:" in message for message in info_messages)
+        noisy_details = (
+            "Auto-detected cell size",
+            "PointGenerator.GeneratePoints",
+            "Text seeds patched",
+        )
+        assert not any(
+            detail in message
+            for message in info_messages
+            for detail in noisy_details
+        )
+        assert any(
+            "Auto-detected cell size" in message for message in debug_messages
+        )
+        assert any(
+            "PointGenerator.GeneratePoints" in message for message in debug_messages
+        )
 
     def test_accepts_breakline_spacing_override(self, monkeypatch, breakline_geom_text):
         captured = _mock_generate_success(

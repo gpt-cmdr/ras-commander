@@ -288,7 +288,7 @@ class GeomBcLines:
         # Backup
         backup_path = Path(str(geom_path) + ".bak")
         shutil.copy2(geom_path, backup_path)
-        logger.info(f"Created backup: {backup_path.name}")
+        logger.debug(f"Created backup: {backup_path}")
 
         with open(geom_path, "r", encoding="utf-8", errors="ignore", newline="") as f:
             file_lines = f.readlines()
@@ -377,11 +377,15 @@ class GeomBcLines:
 
         inserted = [name for name, _, _ in prepared if name not in replaced]
         logger.info(
-            "Added %d BC line(s) to %s (replaced=%d, insert_idx=%d)",
+            "Added %d BC line(s) to %s (replaced=%d)",
             len(prepared),
             geom_path.name,
             len(replaced),
+        )
+        logger.debug(
+            "Inserted BC line block(s) at line index %d in %s",
             insert_idx,
+            geom_path,
         )
         return {
             "geom_file": str(geom_path),

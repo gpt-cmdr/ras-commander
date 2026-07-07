@@ -366,7 +366,8 @@ class RasCheckReport:
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
 
-        logger.info(f"Generated HTML report: {output_path}")
+        logger.info("Generated HTML report: %s", output_path.name)
+        logger.debug("Generated HTML report path: %s", output_path)
         return output_path
 
     def _build_html(self) -> str:
@@ -627,7 +628,8 @@ class RasCheckReport:
         output_path = Path(output_path)
         df = self.to_dataframe()
         df.to_csv(output_path, index=False)
-        logger.info(f"Exported messages to CSV: {output_path}")
+        logger.info("Exported messages to CSV: %s", output_path.name)
+        logger.debug("Exported messages CSV path: %s", output_path)
         return output_path
 
     def get_summary(self) -> Dict[str, Any]:

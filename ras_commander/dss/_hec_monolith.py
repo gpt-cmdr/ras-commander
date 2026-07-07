@@ -12,10 +12,13 @@ import sys
 import platform
 import hashlib
 import zipfile
+import logging
 from pathlib import Path
 from typing import List, Dict, Optional
 import requests
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 
 class HecMonolithDownloader:
@@ -50,13 +53,19 @@ class HecMonolithDownloader:
                    "version": "7-IU-8-macOS-x86_64", "extension": "zip"},
     }
 
-    def __init__(self, cache_dir: Optional[Path] = None):
+    def __init__(
+        self,
+        cache_dir: Optional[Path] = None,
+        show_progress: Optional[bool] = None,
+    ):
         """
         Initialize downloader.
 
         Args:
             cache_dir: Directory to cache downloads.
                       Defaults to ~/.ras-commander/dss/
+            show_progress: Whether to show tqdm progress bars. If None,
+                progress is shown only for interactive stderr sessions.
         """
         if cache_dir is None:
             cache_dir = Path.home() / ".ras-commander" / "dss"
@@ -64,10 +73,19 @@ class HecMonolithDownloader:
         self.cache_dir = Path(cache_dir)
         self.jar_dir = self.cache_dir / "jar"
         self.lib_dir = self.cache_dir / "lib"
+        self.show_progress = show_progress
 
         # Create directories
         self.jar_dir.mkdir(parents=True, exist_ok=True)
         self.lib_dir.mkdir(parents=True, exist_ok=True)
+
+    def _should_show_progress(self) -> bool:
+        """Return True when progress bars should be displayed."""
+        if self.show_progress is not None:
+            return self.show_progress
+
+        isatty = getattr(sys.stderr, "isatty", None)
+        return bool(isatty and isatty())
 
     def is_installed(self) -> bool:
         """Check if HEC Monolith is already installed."""
@@ -129,10 +147,10 @@ class HecMonolithDownloader:
             Path to downloaded file
         """
         if dest.exists():
-            print(f"  Using cached: {dest.name}")
+            logger.debug(f"Using cached HEC Monolith file: {dest.name}")
             return dest
 
-        print(f"  Downloading: {description or dest.name}")
+        logger.debug(f"Downloading HEC Monolith file: {description or dest.name}")
 
         response = requests.get(url, stream=True)
         response.raise_for_status()
@@ -140,7 +158,14 @@ class HecMonolithDownloader:
         total_size = int(response.headers.get('content-length', 0))
 
         with open(dest, 'wb') as f:
-            with tqdm(total=total_size, unit='B', unit_scale=True, unit_divisor=1024) as pbar:
+            with tqdm(
+                total=total_size,
+                unit='B',
+                unit_scale=True,
+                unit_divisor=1024,
+                leave=False,
+                disable=not self._should_show_progress(),
+            ) as pbar:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
                     pbar.update(len(chunk))
@@ -172,7 +197,7 @@ class HecMonolithDownloader:
 
     def download_jars(self):
         """Download all required JAR files."""
-        print("\nDownloading HEC Monolith JAR files...")
+        logger.debug("Downloading HEC Monolith JAR files")
 
         for artifact in self.COMMON_JARS:
             source = artifact.get("source", "nexus")
@@ -189,7 +214,7 @@ class HecMonolithDownloader:
         if platform_name not in self.NATIVE_LIBS:
             raise RuntimeError(f"Unsupported platform: {platform_name}")
 
-        print(f"\nDownloading native library for {platform_name}...")
+        logger.debug(f"Downloading HEC Monolith native library for {platform_name}")
 
         artifact = self.NATIVE_LIBS[platform_name]
         url = self.get_download_url(artifact)
@@ -200,14 +225,14 @@ class HecMonolithDownloader:
         self.download_file(url, dest, f"Native library ({platform_name})")
 
         # Extract ZIP
-        print(f"  Extracting native library...")
+        logger.debug("Extracting HEC Monolith native library")
         with zipfile.ZipFile(dest, 'r') as zip_ref:
             zip_ref.extractall(self.lib_dir)
 
         # Remove ZIP file
         dest.unlink()
 
-        print(f"  [OK] Native library installed")
+        logger.debug("HEC Monolith native library installed")
 
     def install(self, force: bool = False):
         """
@@ -217,16 +242,13 @@ class HecMonolithDownloader:
             force: Force re-download even if already installed
         """
         if self.is_installed() and not force:
-            print("HEC Monolith already installed")
+            logger.debug("HEC Monolith already installed")
             return
 
         if force:
-            print("Forcing re-download of HEC Monolith...")
+            logger.debug("Forcing re-download of HEC Monolith")
 
-        print("="*80)
-        print("Installing HEC Monolith Libraries")
-        print("="*80)
-        print(f"Install location: {self.cache_dir}")
+        logger.debug(f"Installing HEC Monolith libraries in: {self.cache_dir}")
 
         # Download JARs
         self.download_jars()
@@ -234,9 +256,7 @@ class HecMonolithDownloader:
         # Download native library
         self.download_native_library()
 
-        print("\n" + "="*80)
-        print("[SUCCESS] HEC Monolith installation complete!")
-        print("="*80)
+        logger.debug("HEC Monolith installation complete")
 
     def get_classpath(self) -> List[str]:
         """

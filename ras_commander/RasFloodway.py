@@ -180,6 +180,7 @@ class RasFloodway:
         encroach_param: Optional[Sequence[Any]] = None,
         profile_count: Optional[int] = None,
         ras_object=None,
+        _log_summary: bool = True,
     ) -> pd.DataFrame:
         """
         Write Method 1-5 encroachment records into a HEC-RAS plan file.
@@ -215,6 +216,21 @@ class RasFloodway:
             lines = lines[:start] + block + lines[end:]
 
         RasFloodway._write_lines(plan_path, lines)
+        record_count = len(normalised)
+        nodes = {(record["river"], record["reach"], record["node"]) for record in normalised}
+        methods = ", ".join(str(method) for method in sorted({record["method"] for record in normalised}))
+        if _log_summary:
+            logger.info(
+                "Updated floodway encroachments in %s: %s %s across %s %s, %s, methods %s",
+                plan_path.name,
+                record_count,
+                "record" if record_count == 1 else "records",
+                len(nodes),
+                "node" if len(nodes) == 1 else "nodes",
+                RasFloodway._format_profile_summary(record["profile_number"] for record in normalised),
+                methods,
+            )
+        logger.debug("Full floodway plan path: %s", plan_path)
         RasFloodway._refresh_ras_object(ras_object)
         return RasFloodway.parse_encroachments(plan_path)
 
@@ -297,6 +313,7 @@ class RasFloodway:
             encroach_param=encroach_param,
             profile_count=flow_info["new_profile_count"],
             ras_object=ras_object,
+            _log_summary=False,
         )
 
         trial_metadata = RasFloodway._format_trial_metadata(
@@ -307,6 +324,17 @@ class RasFloodway:
             metadata=metadata,
         )
         RasFloodway._write_plan_description_after_encroachments(plan_path, trial_metadata)
+        logger.info(
+            "Created Method %s floodway trial profiles in %s using %s: %s profiles, %s targets, %s locations",
+            method,
+            plan_path.name,
+            flow_path.name,
+            len(target_profile_numbers),
+            len(targets),
+            len(locations),
+        )
+        logger.debug("Full floodway trial plan path: %s", plan_path)
+        logger.debug("Full floodway trial flow path: %s", flow_path)
 
         return {
             "plan_path": plan_path,
@@ -432,7 +460,9 @@ class RasFloodway:
         ras_obj = ras_object or ras
         plan_path = RasPlan.get_plan_path(plan_number_or_path, ras_obj)
         if plan_path is None or not Path(plan_path).exists():
-            raise FileNotFoundError(f"Plan file not found: {plan_number_or_path}")
+            raise FileNotFoundError(
+                RasFloodway._format_missing_plan_error(plan_number_or_path, plan_path, ras_obj)
+            )
         return Path(plan_path)
 
     @staticmethod
@@ -449,18 +479,27 @@ class RasFloodway:
             ras_obj = ras_object or ras
             flow_path = RasPlan.get_flow_path(flow_number_or_path, ras_obj)
             if flow_path is None or not Path(flow_path).exists():
-                raise FileNotFoundError(f"Steady flow file not found: {flow_number_or_path}")
+                raise FileNotFoundError(
+                    RasFloodway._format_missing_flow_error(flow_number_or_path, flow_path, ras_obj)
+                )
             return Path(flow_path)
 
+        flow_ref = None
+        candidate = None
         for line in RasFloodway._read_lines(plan_path):
-            if line.strip().startswith("Flow File=f"):
+            if line.strip().startswith("Flow File="):
                 flow_ref = line.split("=", 1)[1].strip()
+                if not flow_ref.lower().startswith("f"):
+                    break
                 project_name = RasFloodway._project_name_from_plan_path(plan_path)
                 candidate = plan_path.parent / f"{project_name}.{flow_ref}"
                 if candidate.exists():
                     return candidate
+                break
 
-        raise FileNotFoundError(f"Could not resolve steady flow file from plan: {plan_path}")
+        raise FileNotFoundError(
+            RasFloodway._format_missing_plan_flow_error(plan_path, flow_ref, candidate)
+        )
 
     @staticmethod
     def _project_name_from_plan_path(plan_path: Path) -> str:
@@ -468,6 +507,84 @@ class RasFloodway:
         if match:
             return match.group("project")
         return plan_path.stem
+
+    @staticmethod
+    def _format_missing_plan_error(plan_number_or_path: Any, resolved_path: Optional[Path], ras_obj) -> str:
+        message = [f"Plan file not found: {plan_number_or_path}"]
+        context = RasFloodway._ras_project_context(ras_obj)
+        if context:
+            message.append(context)
+        if resolved_path is not None:
+            message.append(f"Resolved path: {Path(resolved_path)}")
+        available = RasFloodway._available_component_numbers(ras_obj, "plan_df", "get_plan_entries", "plan_number")
+        if available:
+            message.append(f"Available plans: {available}")
+        return ". ".join(message)
+
+    @staticmethod
+    def _format_missing_flow_error(flow_number_or_path: Any, resolved_path: Optional[Path], ras_obj) -> str:
+        message = [f"Steady flow file not found: {flow_number_or_path}"]
+        context = RasFloodway._ras_project_context(ras_obj)
+        if context:
+            message.append(context)
+        if resolved_path is not None:
+            message.append(f"Resolved path: {Path(resolved_path)}")
+        available = RasFloodway._available_component_numbers(ras_obj, "flow_df", "get_flow_entries", "flow_number")
+        if available:
+            message.append(f"Available steady flows: {available}")
+        return ". ".join(message)
+
+    @staticmethod
+    def _format_missing_plan_flow_error(plan_path: Path, flow_ref: Optional[str], candidate: Optional[Path]) -> str:
+        if flow_ref is None:
+            return f"Could not resolve steady flow file from plan: {plan_path}. No Flow File=f## record was found."
+        if not flow_ref.lower().startswith("f"):
+            return (
+                f"Could not resolve steady flow file from plan: {plan_path}. "
+                f"Plan references non-steady Flow File={flow_ref}."
+            )
+        return (
+            f"Could not resolve steady flow file from plan: {plan_path}. "
+            f"Plan references Flow File={flow_ref}, but expected file was not found: {candidate}"
+        )
+
+    @staticmethod
+    def _ras_project_context(ras_obj) -> str:
+        project_name = getattr(ras_obj, "project_name", None)
+        project_folder = getattr(ras_obj, "project_folder", None)
+        if project_name and project_folder:
+            return f"Project: {project_name} in {project_folder}"
+        if project_name:
+            return f"Project: {project_name}"
+        if project_folder:
+            return f"Project folder: {project_folder}"
+        return ""
+
+    @staticmethod
+    def _available_component_numbers(ras_obj, df_attr: str, getter: str, number_column: str) -> str:
+        df = getattr(ras_obj, df_attr, None)
+        if (df is None or getattr(df, "empty", True)) and hasattr(ras_obj, getter):
+            try:
+                df = getattr(ras_obj, getter)()
+            except Exception:
+                logger.debug("Could not refresh %s while formatting missing file error", df_attr, exc_info=True)
+                df = None
+        if df is None or getattr(df, "empty", True) or number_column not in df.columns:
+            return ""
+        values = [str(value) for value in df[number_column].dropna().tolist()]
+        return ", ".join(values)
+
+    @staticmethod
+    def _format_profile_summary(profile_numbers) -> str:
+        values = sorted({int(profile) for profile in profile_numbers})
+        if not values:
+            return "profiles none"
+        if len(values) == 1:
+            return f"profile {values[0]}"
+        expected = list(range(values[0], values[-1] + 1))
+        if values == expected:
+            return f"profiles {values[0]}-{values[-1]}"
+        return "profiles " + ", ".join(str(value) for value in values)
 
     @staticmethod
     def _read_lines(path: Path) -> List[str]:
@@ -1160,4 +1277,9 @@ class RasFloodway:
                 try:
                     setattr(ras_obj, attr, getattr(ras_obj, getter)())
                 except Exception:
+                    logger.warning(
+                        "Could not refresh ras_object.%s using %s; in-memory project tables may be stale",
+                        attr,
+                        getter,
+                    )
                     logger.debug("Could not refresh %s on ras_object", attr, exc_info=True)
