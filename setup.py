@@ -104,9 +104,19 @@ setup(
         # USGS gauge data integration
         'usgs': ['dataretrieval>=1.0'],
         # Precipitation enhancements
+        'precip': ['zarr>=2.14.0', 's3fs>=2023.0.0', 'netCDF4>=1.6.0'],
         'precip-huc12': ['pygeohydro>=0.19.0'],  # HUC12 watershed boundaries for Atlas14Variance
-        # Notebook dependencies (raster visualization, coordinate systems)
-        'notebooks': ['rasterio', 'pyproj', 'aiohttp', 'dataretrieval>=1.0'],
+        # Notebook dependencies (raster visualization, coordinate systems, precipitation examples)
+        'notebooks': [
+            'rasterio',
+            'pyproj',
+            'aiohttp',
+            'dataretrieval>=1.0',
+            'zarr>=2.14.0',
+            's3fs>=2023.0.0',
+            'netCDF4>=1.6.0',
+            'pygeohydro>=0.19.0',
+        ],
         # RasMapperLib pythonnet interop: headless mesh generation and
         # polyline profile queries for velocity, WSE, flow, time-series,
         # pipe-network, and plan-difference renderers (Windows HEC-RAS install required)
@@ -124,6 +134,9 @@ setup(
             'Pillow>=9.0',
             'comtypes>=1.4.0; sys_platform == "win32"',
             'dataretrieval>=1.0',
+            'zarr>=2.14.0',
+            's3fs>=2023.0.0',
+            'netCDF4>=1.6.0',
             'pygeohydro>=0.19.0',
             'rasterio',
             'pyproj',
