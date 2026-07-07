@@ -34,6 +34,7 @@ Example Usage:
 from pathlib import Path
 from typing import Tuple, Optional, Union, List, TYPE_CHECKING
 import logging
+import h5py
 
 from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
@@ -57,6 +58,37 @@ class HdfProject:
 
     All methods are static and designed to work with HEC-RAS geometry HDF files.
     """
+
+    @staticmethod
+    def _has_hdf_paths(
+        hdf_path: Path,
+        paths: Tuple[str, ...],
+        label: str,
+    ) -> bool:
+        """Return True when all required HDF paths exist for an optional probe."""
+        try:
+            with h5py.File(hdf_path, "r") as hdf_file:
+                missing = [path for path in paths if path not in hdf_file]
+        except Exception as e:
+            logger.debug(
+                "Could not inspect %s paths in %s: %s",
+                label,
+                hdf_path,
+                e,
+                exc_info=True,
+            )
+            return False
+
+        if missing:
+            logger.debug(
+                "%s not available in %s; missing HDF path(s): %s",
+                label,
+                hdf_path.name,
+                ", ".join(missing),
+            )
+            return False
+
+        return True
 
     @staticmethod
     @log_call
@@ -133,25 +165,56 @@ class HdfProject:
 
         # Get 1D cross sections and river centerlines
         if include_1d:
-            try:
-                cross_sections = HdfXsec.get_cross_sections(hdf_path)
-                if not cross_sections.empty:
-                    geometries.extend(cross_sections.geometry.tolist())
-                    if crs is None:
-                        crs = cross_sections.crs
-                    logger.debug(f"Found {len(cross_sections)} cross sections")
-            except Exception as e:
-                logger.debug(f"No cross sections found or error: {e}")
+            cross_section_paths = (
+                "/Geometry/Cross Sections/Polyline Info",
+                "/Geometry/Cross Sections/Polyline Parts",
+                "/Geometry/Cross Sections/Polyline Points",
+                "/Geometry/Cross Sections/Station Elevation Info",
+                "/Geometry/Cross Sections/Station Elevation Values",
+                "/Geometry/Cross Sections/Attributes",
+                "/Geometry/Cross Sections/Manning's n Info",
+                "/Geometry/Cross Sections/Manning's n Values",
+            )
+            if HdfProject._has_hdf_paths(
+                hdf_path,
+                cross_section_paths,
+                "Cross-section geometry",
+            ):
+                try:
+                    cross_sections = HdfXsec.get_cross_sections(hdf_path)
+                    if not cross_sections.empty:
+                        geometries.extend(cross_sections.geometry.tolist())
+                        if crs is None:
+                            crs = cross_sections.crs
+                        logger.debug(f"Found {len(cross_sections)} cross sections")
+                except Exception as e:
+                    logger.debug(
+                        "Could not extract cross sections from %s: %s",
+                        hdf_path,
+                        e,
+                        exc_info=True,
+                    )
 
-            try:
-                centerlines = HdfXsec.get_river_centerlines(hdf_path)
-                if not centerlines.empty:
-                    geometries.extend(centerlines.geometry.tolist())
-                    if crs is None:
-                        crs = centerlines.crs
-                    logger.debug(f"Found {len(centerlines)} river centerlines")
-            except Exception as e:
-                logger.debug(f"No river centerlines found or error: {e}")
+            river_centerline_paths = ("Geometry/River Centerlines",)
+            if HdfProject._has_hdf_paths(
+                hdf_path,
+                river_centerline_paths,
+                "River centerline geometry",
+            ):
+                try:
+                    centerlines = HdfXsec.get_river_centerlines(hdf_path)
+                    if not centerlines.empty:
+                        geometries.extend(centerlines.geometry.tolist())
+                        if crs is None:
+                            crs = centerlines.crs
+                        logger.debug(f"Found {len(centerlines)} river centerlines")
+                except Exception as e:
+                    logger.debug(
+                        "Could not extract river centerlines from %s: %s",
+                        hdf_path,
+                        e,
+                        exc_info=True,
+                    )
 
         # Get CRS from HDF if still None
         if crs is None:
@@ -160,7 +223,19 @@ class HdfProject:
 
         # Handle empty geometries
         if not geometries:
-            logger.warning("No geometries found in HDF file")
+            logger.warning(
+                "No project geometries found in %s; returning empty extent "
+                "and zero project-coordinate bounds.",
+                hdf_path.name,
+            )
+            logger.debug(
+                "No project geometries found in %s "
+                "(include_1d=%s, include_2d=%s, include_storage=%s).",
+                hdf_path,
+                include_1d,
+                include_2d,
+                include_storage,
+            )
             empty_gdf = GeoDataFrame(geometry=[], crs=crs)
             return empty_gdf, (0.0, 0.0, 0.0, 0.0)
 
@@ -269,7 +344,10 @@ class HdfProject:
         )
 
         if extent_gdf.empty:
-            logger.warning("Empty extent, returning zeros")
+            logger.debug(
+                "Empty project extent for %s; returning zero bounds.",
+                hdf_path.name,
+            )
             return (0.0, 0.0, 0.0, 0.0)
 
         # Transform to WGS84
@@ -279,10 +357,23 @@ class HdfProject:
                 logger.debug(f"No CRS in HDF file, using provided project_crs: {project_crs}")
                 extent_gdf = extent_gdf.set_crs(project_crs)
             else:
-                logger.warning("No CRS defined and no project_crs provided. Cannot transform to WGS84.")
                 bounds = extent_gdf.total_bounds
                 west, south, east, north = bounds
-                logger.warning(f"Original bounds (no CRS): W={west:.6f}, S={south:.6f}, E={east:.6f}, N={north:.6f}")
+                logger.warning(
+                    "Project CRS unavailable for %s; returning untransformed "
+                    "project-coordinate bounds. Pass project_crs=... to return "
+                    "WGS84 bounds.",
+                    hdf_path.name,
+                )
+                logger.debug(
+                    "Original project-coordinate bounds for %s: W=%.6f, "
+                    "S=%.6f, E=%.6f, N=%.6f",
+                    hdf_path,
+                    west,
+                    south,
+                    east,
+                    north,
+                )
                 return (west, south, east, north)
         
         try:
@@ -298,22 +389,49 @@ class HdfProject:
             # Validate the transformation actually worked (WGS84 bounds check)
             if not (-180 <= west <= 180 and -180 <= east <= 180 and 
                     -90 <= south <= 90 and -90 <= north <= 90):
-                logger.error(f"CRS transformation failed - coordinates not in valid WGS84 range. "
-                           f"Got: W={west:.6f}, S={south:.6f}, E={east:.6f}, N={north:.6f}. "
-                           f"Source CRS: {source_crs.name}")
-                # Return original bounds with warning
                 original_bounds = extent_gdf.total_bounds
-                logger.warning(f"Returning original projected coordinates: {original_bounds}")
+                logger.error(
+                    "CRS transformation failed for %s; returning original "
+                    "project-coordinate bounds, not WGS84. Enable DEBUG for "
+                    "CRS and bounds.",
+                    hdf_path.name,
+                )
+                logger.debug(
+                    "Invalid WGS84 bounds for %s from source CRS %s: "
+                    "W=%.6f, S=%.6f, E=%.6f, N=%.6f; original bounds=%s",
+                    hdf_path,
+                    source_crs.name,
+                    west,
+                    south,
+                    east,
+                    north,
+                    original_bounds,
+                )
                 return tuple(original_bounds)
             
             logger.debug(f"WGS84 bounds: W={west:.6f}, S={south:.6f}, E={east:.6f}, N={north:.6f}")
             return (west, south, east, north)
             
         except Exception as e:
-            logger.error(f"Failed to transform CRS to WGS84: {e}")
             bounds = extent_gdf.total_bounds
             west, south, east, north = bounds
-            logger.warning(f"Returning original projected coordinates: W={west:.6f}, S={south:.6f}, E={east:.6f}, N={north:.6f}")
+            logger.error(
+                "CRS transformation failed for %s; returning original "
+                "project-coordinate bounds, not WGS84. Enable DEBUG for CRS "
+                "and bounds.",
+                hdf_path.name,
+            )
+            logger.debug(
+                "CRS transformation exception for %s: %s; original "
+                "project-coordinate bounds W=%.6f, S=%.6f, E=%.6f, N=%.6f",
+                hdf_path,
+                e,
+                west,
+                south,
+                east,
+                north,
+                exc_info=True,
+            )
             return (west, south, east, north)
 
     @staticmethod
@@ -386,6 +504,7 @@ class HdfProject:
             extent_gdf = extent_gdf.to_crs("EPSG:4326")
 
         extent_gdf.to_file(output_path, driver="GeoJSON")
-        logger.info(f"Exported project extent to: {output_path}")
+        logger.info("Exported project extent to %s", output_path.name)
+        logger.debug("Exported project extent full path: %s", output_path)
 
         return output_path

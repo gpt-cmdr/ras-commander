@@ -5,8 +5,9 @@ Provides methods for comparing results across multiple plan HDF files,
 including identification of critical storm duration at reference locations.
 """
 
+from numbers import Number
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import logging
 
 import pandas as pd
@@ -45,6 +46,7 @@ class HdfResultsAnalysis:
         threshold_pct: float = 5.0,
         plan_labels: Optional[Dict[str, str]] = None,
         reftype: str = 'lines',
+        variable: str = 'Water Surface',
         ras_object: Optional[Any] = None
     ) -> pd.DataFrame:
         """
@@ -70,6 +72,8 @@ class HdfResultsAnalysis:
             Used for column naming in output. If None, plan numbers are used.
         reftype : str, default 'lines'
             Reference type for HDF extraction ('lines' or 'points')
+        variable : str, default 'Water Surface'
+            Native HDF reference output variable to compare across plans.
         ras_object : optional
             Custom RAS object to use instead of the global one
 
@@ -95,46 +99,87 @@ class HdfResultsAnalysis:
         >>> critical = result[result['exceeds_threshold']]
         >>> print(f"{len(critical)} locations exceed {5.0}% threshold")
         """
-        from ras_commander.hdf.HdfResultsPlan import HdfResultsPlan
+        from ras_commander.hdf.HdfResultsXsec import HdfResultsXsec
         from ras_commander import ras as global_ras
 
         _ras = ras_object if ras_object is not None else global_ras
         _ras.check_initialized()
+
+        reftype = reftype.lower().strip()
+        if reftype not in {"lines", "points"}:
+            raise ValueError("reftype must be either 'lines' or 'points'")
+
+        if not isinstance(variable, str) or not variable.strip():
+            raise ValueError("variable must be a non-empty HDF dataset name")
+        variable = variable.strip()
 
         if plan_labels is None:
             plan_labels = {pn: pn for pn in plan_numbers}
 
         # Extract peaks from each plan
         plan_peaks = {}
-        for plan_num in plan_numbers:
-            label = plan_labels.get(plan_num, plan_num)
-            plan_hdf = _ras.project_folder / f"{_ras.project_name}.p{plan_num}.hdf"
+        for raw_plan_num in plan_numbers:
+            plan_num = HdfResultsAnalysis._normalize_plan_number(raw_plan_num)
+            label = plan_labels.get(plan_num, plan_labels.get(raw_plan_num, raw_plan_num))
+            plan_hdf, path_source = HdfResultsAnalysis._resolve_plan_hdf_path(_ras, plan_num)
 
             if not plan_hdf.exists():
-                logger.warning(f"Plan HDF not found: {plan_hdf}")
+                logger.warning(
+                    f"Skipping plan {plan_num} ({label}): plan HDF not found at "
+                    f"{plan_hdf} (resolved from {path_source})"
+                )
                 continue
 
             try:
-                ts_df = HdfResultsPlan.get_reference_timeseries(plan_hdf, reftype=reftype)
-                if ts_df.empty:
-                    logger.warning(f"No reference timeseries in plan {plan_num}")
+                if reftype == 'lines':
+                    ds = HdfResultsXsec.get_ref_lines_timeseries(
+                        plan_hdf,
+                        variables=variable,
+                    )
+                else:
+                    ds = HdfResultsXsec.get_ref_points_timeseries(
+                        plan_hdf,
+                        variables=variable,
+                    )
+
+                if variable not in ds.data_vars:
+                    available = ", ".join(sorted(ds.data_vars)) or "none"
+                    logger.warning(
+                        f"Skipping plan {plan_num} ({label}): variable '{variable}' "
+                        f"not found in {reftype} reference timeseries at {plan_hdf} "
+                        f"(resolved from {path_source}); available variables: {available}"
+                    )
                     continue
 
                 # Extract peak for each reference location
-                peaks = {}
-                for col in ts_df.columns:
-                    if col == 'Time':
-                        continue
-                    peaks[col] = float(ts_df[col].max())
+                peaks = HdfResultsAnalysis._extract_reference_peaks(
+                    ds,
+                    reftype=reftype,
+                    variable=variable,
+                )
+                if not peaks:
+                    logger.warning(
+                        f"Skipping plan {plan_num} ({label}): no named {reftype} "
+                        f"reference features found for variable '{variable}' in {plan_hdf} "
+                        f"(resolved from {path_source})"
+                    )
+                    continue
 
                 plan_peaks[label] = peaks
                 logger.debug(f"Plan {plan_num} ({label}): extracted peaks for {len(peaks)} locations")
 
             except Exception as e:
-                logger.error(f"Error processing plan {plan_num}: {e}")
+                logger.error(
+                    f"Skipping plan {plan_num} ({label}): failed to extract {reftype} "
+                    f"reference timeseries variable '{variable}' from {plan_hdf} "
+                    f"(resolved from {path_source}): {type(e).__name__}: {e}"
+                )
 
         if not plan_peaks:
-            logger.warning("No plan data could be extracted")
+            logger.warning(
+                f"No reference timeseries data extracted from {len(plan_numbers)} plan(s) "
+                f"for reftype={reftype}, variable='{variable}'; returning empty DataFrame"
+            )
             return pd.DataFrame()
 
         # Collect all locations across plans
@@ -190,7 +235,134 @@ class HdfResultsAnalysis:
         result = pd.DataFrame(rows)
         n_exceed = result['exceeds_threshold'].sum() if not result.empty else 0
         logger.info(
-            f"Critical duration analysis: {len(result)} locations, "
+            f"Critical duration analysis (reftype={reftype}, variable='{variable}'): "
+            f"{len(result)} locations, "
             f"{n_exceed} exceeding {threshold_pct}% threshold"
         )
         return result
+
+    @staticmethod
+    def _normalize_plan_number(plan_number: Any) -> str:
+        """Normalize plan identifiers to the zero-padded p## number."""
+        try:
+            missing = pd.isna(plan_number)
+            if isinstance(missing, (bool, np.bool_)) and missing:
+                return ""
+        except (TypeError, ValueError):
+            pass
+
+        if isinstance(plan_number, Number) and not isinstance(plan_number, bool):
+            number = float(plan_number)
+            if np.isfinite(number) and number.is_integer():
+                return f"{int(number):02d}"
+
+        text = str(plan_number).strip()
+        if text.lower().startswith('p'):
+            text = text[1:]
+        if text.isdigit():
+            return text.zfill(2)
+        try:
+            number = float(text)
+            if number.is_integer():
+                return f"{int(number):02d}"
+        except ValueError:
+            pass
+        return text
+
+    @staticmethod
+    def _has_path_value(value: Any) -> bool:
+        """Return True when a plan_df path-like cell is populated."""
+        if value is None:
+            return False
+
+        try:
+            missing = pd.isna(value)
+            if isinstance(missing, (bool, np.bool_)) and missing:
+                return False
+        except (TypeError, ValueError):
+            pass
+
+        text = str(value).strip()
+        return bool(text) and text.lower() not in {'nan', 'nat', 'none'}
+
+    @staticmethod
+    def _resolve_plan_hdf_path(_ras: Any, plan_num: str) -> Tuple[Path, str]:
+        """Resolve a plan results HDF path, preferring plan_df metadata."""
+        fallback = Path(_ras.project_folder) / f"{_ras.project_name}.p{plan_num}.hdf"
+        plan_df = getattr(_ras, 'plan_df', None)
+
+        if plan_df is None or plan_df.empty:
+            return fallback, "fallback project path (plan_df unavailable)"
+
+        if 'plan_number' not in plan_df.columns:
+            return fallback, "fallback project path (plan_df has no plan_number column)"
+
+        normalized_numbers = plan_df['plan_number'].map(
+            HdfResultsAnalysis._normalize_plan_number
+        )
+        matching = plan_df[normalized_numbers == plan_num]
+        if matching.empty:
+            return (
+                fallback,
+                f"fallback project path (no plan_df row matched plan_number {plan_num})",
+            )
+
+        row = matching.iloc[0]
+        if (
+            'HDF_Results_Path' in row.index
+            and HdfResultsAnalysis._has_path_value(row['HDF_Results_Path'])
+        ):
+            return Path(str(row['HDF_Results_Path'])), "plan_df HDF_Results_Path"
+
+        if (
+            'full_path' in row.index
+            and HdfResultsAnalysis._has_path_value(row['full_path'])
+        ):
+            return Path(f"{row['full_path']}.hdf"), "plan_df full_path + .hdf"
+
+        return (
+            fallback,
+            "fallback project path (matched plan_df row has no populated "
+            "HDF_Results_Path or full_path)",
+        )
+
+    @staticmethod
+    def _extract_reference_peaks(
+        ds: Any,
+        reftype: str,
+        variable: str,
+    ) -> Dict[str, float]:
+        """Extract per-feature peak values from a native reference output dataset."""
+        coord_name = 'refln_name' if reftype == 'lines' else 'refpt_name'
+        feature_dim = 'refln_id' if reftype == 'lines' else 'refpt_id'
+        data = ds[variable]
+
+        if 'time' not in data.dims:
+            raise ValueError(
+                f"Variable '{variable}' has dimensions {data.dims}; expected a time dimension"
+            )
+        if feature_dim not in data.dims:
+            raise ValueError(
+                f"Variable '{variable}' has dimensions {data.dims}; expected {feature_dim}"
+            )
+        if coord_name not in data.coords:
+            raise ValueError(
+                f"Variable '{variable}' is missing coordinate {coord_name}"
+            )
+
+        peak_data = data.max(dim='time', skipna=True)
+        extra_dims = [dim for dim in peak_data.dims if dim != feature_dim]
+        if extra_dims:
+            raise ValueError(
+                f"Variable '{variable}' has unsupported dimensions after time max: "
+                f"{peak_data.dims}"
+            )
+
+        names = peak_data.coords[coord_name].values
+        values = peak_data.transpose(feature_dim).values
+        peaks = {}
+        for name, value in zip(names, values):
+            location = str(name).strip()
+            if location:
+                peaks[location] = float(value)
+        return peaks

@@ -181,7 +181,7 @@ class HdfResultsBreach:
                     return pd.DataFrame()
 
         except Exception as e:
-            logger.error(f"Error extracting structure variables: {e}")
+            logger.error(f"Error extracting structure variables from {hdf_path}: {e}")
             raise
 
     @staticmethod
@@ -316,7 +316,7 @@ class HdfResultsBreach:
                     return pd.DataFrame()
 
         except Exception as e:
-            logger.error(f"Error extracting breaching variables: {e}")
+            logger.error(f"Error extracting breaching variables from {hdf_path}: {e}")
             raise
 
     @staticmethod
@@ -407,7 +407,7 @@ class HdfResultsBreach:
                 return pd.DataFrame()
 
             if breach_df.empty:
-                logger.warning("No breach data available, returning structure data only")
+                logger.debug("No breach data available, returning structure data only")
                 return struct_df
 
             # Determine merge columns
@@ -438,11 +438,11 @@ class HdfResultsBreach:
 
             combined_df = combined_df[col_order]
 
-            logger.info(f"Created combined breach timeseries with {len(combined_df)} rows")
+            logger.debug(f"Created combined breach timeseries with {len(combined_df)} rows")
             return combined_df
 
         except Exception as e:
-            logger.error(f"Error creating combined breach timeseries: {e}")
+            logger.error(f"Error creating combined breach timeseries from {hdf_path}: {e}")
             raise
 
     @staticmethod
@@ -568,9 +568,9 @@ class HdfResultsBreach:
                 summary_list.append(summary)
 
             result_df = pd.DataFrame(summary_list)
-            logger.info(f"Generated breach summary for {len(structures)} structure(s)")
+            logger.debug(f"Generated breach summary for {len(structures)} structure(s)")
             return result_df
 
         except Exception as e:
-            logger.error(f"Error generating breach summary: {e}")
+            logger.error(f"Error generating breach summary from {hdf_path}: {e}")
             raise

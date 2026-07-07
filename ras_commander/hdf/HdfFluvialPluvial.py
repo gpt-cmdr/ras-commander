@@ -17,10 +17,11 @@ import pandas as pd
 import geopandas as gpd
 from collections import defaultdict
 from shapely.geometry import LineString, MultiLineString
+import sys
 from tqdm import tqdm
 from .HdfMesh import HdfMesh
 from .HdfUtils import HdfUtils
-from ..Decorators import standardize_input
+from ..Decorators import standardize_input, log_call
 from .HdfResultsMesh import HdfResultsMesh
 from ..LoggingConfig import get_logger
 from pathlib import Path
@@ -66,6 +67,7 @@ class HdfFluvialPluvial:
     """
 
     @staticmethod
+    @log_call
     @standardize_input(file_type='plan_hdf')
     def calculate_fluvial_pluvial_boundary(
         hdf_path: Path, 
@@ -120,14 +122,22 @@ class HdfFluvialPluvial:
                 crs=cell_polygons_gdf.crs
             )
 
-            logger.info("Boundary line calculation completed successfully.")
+            filter_text = f", min_line_length={min_line_length}" if min_line_length is not None else ""
+            logger.info(
+                f"Fluvial/pluvial boundary: {len(boundary_gdf)} line(s), delta_t={delta_t} hr{filter_text}."
+            )
             return boundary_gdf
 
         except Exception as e:
-            logger.error(f"Error calculating fluvial-pluvial boundary lines: {str(e)}")
+            logger.error(
+                f"Error calculating fluvial-pluvial boundary lines for {hdf_path} "
+                f"(delta_t={delta_t} hr, min_line_length={min_line_length}): {str(e)}",
+                exc_info=True,
+            )
             return gpd.GeoDataFrame()
 
     @staticmethod
+    @log_call
     @standardize_input(file_type='plan_hdf')
     def generate_fluvial_pluvial_polygons(
         hdf_path: Path, 
@@ -194,7 +204,14 @@ class HdfFluvialPluvial:
             pluvial_frontier = set(classifications[classifications == 'pluvial'].index)
             
             iteration = 0
-            with tqdm(desc="Region Growing", unit="iter") as pbar:
+            show_progress = getattr(sys.stderr, "isatty", lambda: False)()
+            with tqdm(
+                desc="Region Growing",
+                unit="iter",
+                leave=False,
+                mininterval=1.0,
+                disable=not show_progress,
+            ) as pbar:
                 while fluvial_frontier or pluvial_frontier:
                     iteration += 1
                     
@@ -239,7 +256,7 @@ class HdfFluvialPluvial:
                         "Ambiguous": len(ambiguous_cells)
                     })
             
-            logger.info(f"Region growing completed in {iteration} iterations.")
+            logger.debug(f"Region growing completed in {iteration} iterations.")
             
             # --- 4. Finalization and Dissolving ---
             # Classify any remaining unclassified (likely isolated) cells as ambiguous
@@ -257,7 +274,10 @@ class HdfFluvialPluvial:
                 # Calculate area in acres (1 acre = 4046.8564224 m^2)
                 # If CRS is not projected, warn and skip area filtering
                 if not final_regions_gdf.crs or not final_regions_gdf.crs.is_projected:
-                    logger.warning("CRS is not projected. Area-based filtering skipped.")
+                    logger.warning(
+                        f"CRS is not projected ({final_regions_gdf.crs}); "
+                        f"skipped area filter min_polygon_area_acres={min_polygon_area_acres}."
+                    )
                 else:
                     # Explode to individual polygons for area filtering
                     exploded = final_regions_gdf.explode(index_parts=False, ignore_index=True)
@@ -280,11 +300,27 @@ class HdfFluvialPluvial:
                     final_regions_gdf = exploded.dissolve(by='classification', aggfunc='first').reset_index()
                     logger.debug("Redissolved polygons after reclassification of small areas.")
 
-            logger.info("Polygon generation completed successfully.")
+            component_counts = (
+                final_regions_gdf.explode(index_parts=False)
+                .groupby("classification", sort=True)
+                .size()
+                .to_dict()
+            )
+            class_summary = ", ".join(f"{label}: {count}" for label, count in component_counts.items())
+            logger.info(
+                f"Fluvial/pluvial polygons: {len(final_regions_gdf)} dissolved class(es), "
+                f"delta_t={delta_t} hr, tolerance={temporal_tolerance_hours} hr, "
+                f"iterations={iteration}, components={class_summary}."
+            )
             return final_regions_gdf
             
         except Exception as e:
-            logger.error(f"Error generating fluvial-pluvial polygons: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error generating fluvial-pluvial polygons for {hdf_path} "
+                f"(delta_t={delta_t} hr, tolerance={temporal_tolerance_hours} hr, "
+                f"min_polygon_area_acres={min_polygon_area_acres}): {str(e)}",
+                exc_info=True,
+            )
             return gpd.GeoDataFrame()
         
         

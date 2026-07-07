@@ -7,9 +7,11 @@ Tests verify:
 3. Returns expected output (None/empty) for projects without infiltration regions
 """
 
-import pytest
-from pathlib import Path
 import inspect
+from pathlib import Path
+
+import h5py
+import pytest
 
 
 class TestImport:
@@ -112,6 +114,31 @@ class TestExpectedBehavior:
 
         result = HdfInfiltration.get_infiltration_calibration_regions(geom_hdfs[0])
         assert result is None or result == {}
+
+    def test_missing_optional_infiltration_metadata_does_not_warn(
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ):
+        """Optional infiltration metadata should be quiet at default log levels."""
+        from ras_commander import HdfInfiltration
+
+        hdf_path = tmp_path / "empty.g01.hdf"
+        with h5py.File(hdf_path, "w"):
+            pass
+
+        with caplog.at_level("WARNING", logger="ras_commander.hdf.HdfInfiltration"):
+            names = HdfInfiltration.get_infiltration_region_names(hdf_path)
+            regions = HdfInfiltration.get_infiltration_calibration_regions(hdf_path)
+
+        assert names is None
+        assert regions is None
+        warning_messages = [
+            record.getMessage()
+            for record in caplog.records
+            if record.name == "ras_commander.hdf.HdfInfiltration"
+        ]
+        assert warning_messages == []
 
     def test_region_polygons_returns_empty_gdf_without_infiltration(self):
         """Test that get_infiltration_region_polygons returns empty GeoDataFrame for project without infiltration."""

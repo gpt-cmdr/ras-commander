@@ -108,6 +108,8 @@ class HdfPlan:
     Note: This code is partially derived from the rashdf library (https://github.com/fema-ffrd/rashdf)
     under MIT license.
     """
+    _PLAN_PARAMETERS_PATH = "Plan Data/Plan Parameters"
+    _PLAN_INFORMATION_PATH = "Plan Data/Plan Information"
 
     @staticmethod
     @log_call
@@ -235,9 +237,12 @@ class HdfPlan:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                plan_params_path = "Plan Data/Plan Parameters"
+                plan_params_path = HdfPlan._PLAN_PARAMETERS_PATH
                 if plan_params_path not in hdf_file:
-                    logger.warning(f"Plan Parameters not found in {hdf_path} - may be a steady flow or minimal HDF file")
+                    logger.debug(
+                        "Plan Parameters not found in %s; returning empty parameter table.",
+                        hdf_path.name,
+                    )
                     return pd.DataFrame(columns=['Plan', 'Parameter', 'Value'])
                 
                 # Extract parameters
@@ -273,7 +278,11 @@ class HdfPlan:
                     plan_num = plan_match.group(1)
                 else:
                     plan_num = "00"  # Default if no match found
-                    logger.warning(f"Could not extract plan number from filename: {filename}")
+                    logger.warning(
+                        "Could not extract plan number from filename %s; "
+                        "using fallback Plan value '00'.",
+                        filename,
+                    )
                 
                 df['Plan'] = plan_num
                 
@@ -321,6 +330,80 @@ class HdfPlan:
         return value
 
     @staticmethod
+    def _parse_major_version(version: Any) -> Optional[int]:
+        """
+        Parse the leading major HEC-RAS version number from an HDF attribute.
+        """
+        if version is None:
+            return None
+        match = re.search(r"\d+", str(version))
+        if not match:
+            return None
+        try:
+            return int(match.group(0))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _get_plan_hdf_program_version(hdf_file: h5py.File) -> Optional[str]:
+        """
+        Return Program Version from the plan information group when present.
+        """
+        info_path = HdfPlan._PLAN_INFORMATION_PATH
+        if info_path not in hdf_file:
+            return None
+        program_version = hdf_file[info_path].attrs.get("Program Version")
+        if program_version is None:
+            return None
+        return str(HdfPlan._decode_hdf_attr_value(program_version))
+
+    @staticmethod
+    def _find_legacy_output_file_for_plan(hdf_path: Path) -> Optional[Path]:
+        """
+        Return a sibling legacy HEC-RAS .O## output file for this plan HDF if present.
+        """
+        match = re.search(r"\.p(?P<plan_number>\d{2})\.hdf$", hdf_path.name, re.IGNORECASE)
+        if not match:
+            return None
+
+        project_name = hdf_path.name[:match.start()]
+        plan_number = match.group("plan_number")
+        for suffix in (f".O{plan_number}", f".o{plan_number}"):
+            candidate = hdf_path.with_name(f"{project_name}{suffix}")
+            if candidate.exists():
+                return candidate
+        return None
+
+    @staticmethod
+    def _missing_plan_parameters_message(hdf_path: Path, hdf_file: h5py.File) -> str:
+        """
+        Build concise guidance for HDF calls that require Plan Parameters.
+        """
+        message_parts = [
+            "HdfPlan.get_2d_flow_options() requires a HEC-RAS 5.x+ computed "
+            "plan HDF containing 'Plan Data/Plan Parameters'.",
+            f"{hdf_path.name} does not contain that group.",
+        ]
+
+        program_version = HdfPlan._get_plan_hdf_program_version(hdf_file)
+        major_version = HdfPlan._parse_major_version(program_version)
+        if program_version and major_version is not None and major_version < 5:
+            message_parts.append(
+                f"Program Version {program_version} indicates HEC-RAS 4.x or earlier."
+            )
+
+        legacy_output = HdfPlan._find_legacy_output_file_for_plan(hdf_path)
+        if legacy_output is not None:
+            message_parts.append(f"Found legacy output file {legacy_output.name}.")
+
+        message_parts.append(
+            "HEC-RAS 4.x and earlier did not produce plan HDF output; those "
+            "results are stored in legacy .O## files and should be accessed "
+            "with RasControl."
+        )
+        return " ".join(message_parts)
+
+    @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_2d_flow_options(
@@ -361,9 +444,9 @@ class HdfPlan:
 
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                params_path = "Plan Data/Plan Parameters"
+                params_path = HdfPlan._PLAN_PARAMETERS_PATH
                 if params_path not in hdf_file:
-                    raise ValueError(f"Plan Parameters not found in {hdf_path}")
+                    raise ValueError(HdfPlan._missing_plan_parameters_message(hdf_path, hdf_file))
 
                 params_group = hdf_file[params_path]
                 attrs = {
@@ -406,7 +489,7 @@ class HdfPlan:
                         raise ValueError(f"2D flow area '{mesh_name}' not found in {hdf_path.name}")
 
                 plan_info = {}
-                info_path = "Plan Data/Plan Information"
+                info_path = HdfPlan._PLAN_INFORMATION_PATH
                 if info_path in hdf_file:
                     plan_info = {
                         key: HdfPlan._decode_hdf_attr_value(value)
@@ -451,7 +534,10 @@ class HdfPlan:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 precip_path = "Event Conditions/Meteorology/Precipitation"
                 if precip_path not in hdf_file:
-                    logger.error(f"Precipitation data not found in {hdf_path}")
+                    logger.debug(
+                        "Precipitation data not found in %s; returning empty precipitation attributes.",
+                        hdf_path.name,
+                    )
                     return {}
                 
                 attrs = {}
@@ -507,7 +593,7 @@ class HdfPlan:
                     logger.debug(f"Geometry attribute: {key} = {value}")
 
                 logger.debug(f"Successfully extracted {len(attrs)} root level geometry attributes")
-                return pd.DataFrame.from_dict(attrs, orient='index', columns=['Value'])
+                return pd.DataFrame({"Value": pd.Series(attrs, dtype=object)})
 
         except (OSError, RuntimeError) as e:
             logger.error(f"Failed to read HDF file {hdf_path}: {str(e)}")
@@ -548,7 +634,7 @@ class HdfPlan:
                 result = {}
 
                 # Try to get starting WSE method from Plan Parameters
-                plan_params_path = "Plan Data/Plan Parameters"
+                plan_params_path = HdfPlan._PLAN_PARAMETERS_PATH
                 if plan_params_path in hdf_file:
                     plan_params = hdf_file[plan_params_path]
 
@@ -599,7 +685,7 @@ class HdfPlan:
 
                 # If method not found in Plan Parameters, try Plan Information
                 if 'method' not in result:
-                    plan_info_path = "Plan Data/Plan Information"
+                    plan_info_path = HdfPlan._PLAN_INFORMATION_PATH
                     if plan_info_path in hdf_file:
                         plan_info = hdf_file[plan_info_path]
                         for attr_name in ['Flow Regime', 'Simulation Type']:
@@ -611,7 +697,10 @@ class HdfPlan:
 
                 # If still no method found, return indication
                 if 'method' not in result:
-                    logger.warning(f"Starting WSE method not found in {hdf_path}")
+                    logger.debug(
+                        "Starting WSE method not found in %s; returning method='Unknown'.",
+                        hdf_path.name,
+                    )
                     result['method'] = 'Unknown'
                     result['note'] = 'Boundary condition method not found in HDF file'
 

@@ -119,7 +119,7 @@ class HdfUtils:
                 ]
             return HdfUtils.parse_ras_window_datetime(s)
         elif re.match(rf"^{ras_duration_format_re}$", s):
-            return HdfUtils.parse_ras_duration(s)
+            return HdfUtils.parse_duration(s)
         return s
 
 
@@ -329,25 +329,6 @@ class HdfUtils:
 
 
 
-# Datetime Parsing Methods:
-
-    @staticmethod
-    @log_call
-    def parse_ras_datetime_ms(datetime_str: str) -> datetime:
-        """
-        Public method to parse a datetime string with milliseconds from a RAS file.
-
-        Args:
-            datetime_str (str): The datetime string to parse.
-
-        Returns:
-            datetime: The parsed datetime object.
-        """
-        milliseconds = int(datetime_str[-3:])
-        microseconds = milliseconds * 1000
-        parsed_dt = HdfUtils.parse_ras_datetime(datetime_str[:-4]).replace(microsecond=microseconds)
-        return parsed_dt
-    
 # Rename to convert_timesteps_to_datetimes and make public
     @staticmethod
     def convert_timesteps_to_datetimes(timesteps: np.ndarray, start_time: datetime, time_unit: str = "days", round_to: str = "100ms") -> pd.DatetimeIndex:
@@ -411,8 +392,13 @@ class HdfUtils:
             time window.
         """
         split = window.split(" to ")
-        begin = HdfUtils._parse_ras_datetime(split[0])
-        end = HdfUtils._parse_ras_datetime(split[1])
+        if len(split) != 2 or not all(part.strip() for part in split):
+            raise ValueError(
+                "RAS run time window must use the format "
+                "'DDMMMYYYY HH:MM:SS to DDMMMYYYY HH:MM:SS'."
+            )
+        begin = HdfUtils.parse_ras_datetime(split[0].strip())
+        end = HdfUtils.parse_ras_datetime(split[1].strip())
         return begin, end
 
     
@@ -511,5 +497,4 @@ class HdfUtils:
         microseconds = milliseconds * 1000
         parsed_dt = HdfUtils.parse_ras_datetime(datetime_str[:-4]).replace(microsecond=microseconds)
         return parsed_dt
-    
     

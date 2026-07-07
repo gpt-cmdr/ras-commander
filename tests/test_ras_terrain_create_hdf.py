@@ -6,6 +6,7 @@ import pytest
 
 ras_terrain_module = import_module("ras_commander.terrain.RasTerrain")
 RasTerrain = ras_terrain_module.RasTerrain
+h5py = pytest.importorskip("h5py")
 
 
 def test_create_terrain_hdf_passes_custom_timeout(monkeypatch, tmp_path):
@@ -17,21 +18,27 @@ def test_create_terrain_hdf_passes_custom_timeout(monkeypatch, tmp_path):
 
     rasprocess = tmp_path / "RasProcess.exe"
     rasprocess.write_text("", encoding="utf-8")
+    gdal_bin = tmp_path / "GDAL" / "bin64"
+    gdal_bin.mkdir(parents=True)
+    (gdal_bin / "gdal_translate.exe").write_text("", encoding="utf-8")
 
     calls = []
 
-    def fake_run(cmd_str, shell, capture_output, text, timeout):
+    def fake_run(cmd, capture_output, text, timeout, cwd, env):
         calls.append(
             {
-                "cmd_str": cmd_str,
-                "shell": shell,
+                "cmd": cmd,
                 "capture_output": capture_output,
                 "text": text,
                 "timeout": timeout,
+                "cwd": cwd,
+                "env_path": env["PATH"],
             }
         )
-        output_hdf.write_text("hdf", encoding="utf-8")
-        return subprocess.CompletedProcess(cmd_str, 0, stdout="", stderr="")
+        with h5py.File(output_hdf, "w") as hdf:
+            terrain = hdf.create_group("Terrain")
+            terrain.create_dataset("Elevation", data=[1.0])
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(
         RasTerrain,
@@ -49,21 +56,20 @@ def test_create_terrain_hdf_passes_custom_timeout(monkeypatch, tmp_path):
     )
 
     assert result == output_hdf
-    assert calls == [
-        {
-            "cmd_str": (
-                f'"{rasprocess}" CreateTerrain '
-                f'units=Feet stitch=true '
-                f'prj="{projection_prj}" '
-                f'out="{output_hdf}" '
-                f'"{input_raster}"'
-            ),
-            "shell": True,
-            "capture_output": True,
-            "text": True,
-            "timeout": 7200,
-        }
+    assert calls[0]["cmd"] == [
+        str(rasprocess),
+        "CreateTerrain",
+        "units=Feet",
+        "stitch=true",
+        f"prj={projection_prj}",
+        f"out={output_hdf}",
+        str(input_raster),
     ]
+    assert calls[0]["capture_output"] is True
+    assert calls[0]["text"] is True
+    assert calls[0]["timeout"] == 7200
+    assert calls[0]["cwd"] == str(tmp_path)
+    assert str(gdal_bin) in calls[0]["env_path"]
 
 
 def test_create_terrain_hdf_rejects_non_positive_timeout(tmp_path):
