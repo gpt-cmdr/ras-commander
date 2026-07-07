@@ -16,9 +16,6 @@ mkdocs-git-revision-date-localized-plugin>=1.2.0
 # Preserve published notebook URLs when example filenames are improved
 mkdocs-redirects>=1.2.0
 
-# llms.txt / llms-full.txt + per-page markdown mirrors for LLM agents
-mkdocs-llmstxt>=0.2
-
 # For cognitive infrastructure doc generation
 PyYAML>=6.0
 
@@ -41,9 +38,3 @@ shapely
 rasterstats
 rtree
 psutil>=5.6.6
-
-# Interactive Leaflet maps embedded in example-notebook outputs. folium emits a
-# self-contained <iframe srcdoc> that survives nbconvert -> MkDocs (ipyleaflet
-# widgets do NOT survive the static build); branca provides the colormap legend.
-folium>=0.15
-branca>=0.7

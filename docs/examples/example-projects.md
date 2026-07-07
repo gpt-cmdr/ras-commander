@@ -1,12 +1,9 @@
 # Example Project Library
 
-<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
-<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260703Tneworleans01">
-
 !!! warning "Under construction"
-    The Example Project Library is moving to a RAS Commander MapLibre viewer
-    backed by PMTiles and WebGIS-hosted artifacts. Muncie and New Orleans Metro
-    are the first published pilots.
+    This is the landing page for the GeoLibre-based Example Project Library.
+    The first pilot is Muncie. Links to live GeoLibre review files will be
+    enabled after the WebGIS artifact server is published and validated.
 
 RAS Commander uses repeatable HEC-RAS project fixtures for examples, tests,
 documentation, and regression checks. The library combines several source
@@ -25,90 +22,40 @@ different role: they expose real delivery structure, metadata, scale, path
 issues, and model packaging details.
 
 Only projects with a verified coordinate reference system are eligible for the
-web map viewer. Projects without a CRS can remain useful for notebook examples,
-but they are not published as map-review targets until their CRS is resolved.
+GeoLibre explorer. Projects without a CRS can remain useful for notebook
+examples, but they are not published as map-review targets until their CRS is
+resolved.
 
-## Project Explorer
+## Current Pilot
 
-The explorer shows one model-limit polygon per promoted MapLibre project.
-Click a polygon to review source metadata and open that project's webmap.
-Projects stay out of this map until they have a valid CRS, a WGS84 model limit,
-and a published MapLibre webmap.
-
-<div class="ras-example-library" data-ras-example-library data-index="../../assets/data/ras-example-projects.json?v=20260703Tneworleans01">
-  <div class="ras-library-map-shell">
-    <div class="ras-library-map" data-library-map></div>
-  </div>
-  <div class="ras-library-map-footer">
-    <span data-library-status>Published MapLibre project extents</span>
-    <span>Click a model extent to open its webmap.</span>
-  </div>
-  <div class="ras-library-projects" data-project-list></div>
-</div>
-
-<script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260703Tneworleans01"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260703Tneworleans01"></script>
-
-## Current MapLibre Projects
-
-| Project | Source | CRS | Viewer |
-|---------|--------|-----|--------|
-| Muncie | HEC tutorial/example project | `EPSG:2965` | [Open MapLibre viewer](example-project-viewer.md) |
-| New Orleans Metro | HEC tutorial/example project | `EPSG:3457` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fneworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a%2Fviewer%2Fmanifest.json%3Fv%3D20260703Tneworleans01) |
+| Project | Source | CRS | WebGIS status |
+|---------|--------|-----|---------------|
+| Muncie | HEC tutorial/example project | `EPSG:2965` | Generated locally; WebGIS publication pending |
 
 The generated Muncie bundle currently includes:
 
 - project id:
   `muncie-muncie-rerun-7-0-20260628-193916-4120d261`
 - three geometry archives: `g01`, `g02`, and `g04`
-- RAS-style geometry sublayers for model extents, 2D flow areas, mesh cells,
-  mesh faces, breaklines, centerlines, structures, and cross sections
-- terrain published as raster PMTiles with the RAS Commander terrain color ramp,
-  plus a source COG for click-query elevation values
-- vector result layers for plans `p03` and `p04`
-- raster result COGs from RasProcess Stored Maps for plans `p03` and `p04`,
-  plus colorized raster PMTiles display derivatives
-- click identify for visible vector metadata and visible COG-backed raster values
-- default visibility with terrain and geometry `g04` enabled, other geometries
-  and result layers disabled
+- two terrain COGs at 5 ft native resolution: `Terrain` and
+  `TerrainWithChannel`
+- result tables for plans `p03` and `p04`
 - Hilbert sorting and `join_index` metadata for geometry/result joins
 - no local path leaks in the published project manifest
 
-Live public paths:
+Expected public paths after WebGIS publication:
 
-| Resource | Link |
-|----------|------|
-| MapLibre viewer | [Muncie Map Viewer](example-project-viewer.md) |
-| MapLibre manifest | [manifest.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260703Tidentify02) |
-| Geometry PMTiles | [geometry.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/geometry.pmtiles) |
-| Vector results PMTiles | [results.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/results.pmtiles) |
-| Raster results PMTiles | [p04 depth](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/result-p04-depth-max.pmtiles), [p04 WSE](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/result-p04-wse-max.pmtiles), [p04 velocity](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/result-p04-velocity-max.pmtiles), [p03 depth](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/result-p03-depth-max.pmtiles), [p03 WSE](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/result-p03-wse-max.pmtiles), [p03 velocity](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/result-p03-velocity-max.pmtiles) |
-| Stored Map COGs | [p04 depth COG](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/stored-maps/p04/depth-max.cog.tif), [p04 WSE COG](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/stored-maps/p04/wse-max.cog.tif), [p04 velocity COG](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/stored-maps/p04/velocity-max.cog.tif), [p03 depth COG](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/stored-maps/p03/depth-max.cog.tif), [p03 WSE COG](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/stored-maps/p03/wse-max.cog.tif), [p03 velocity COG](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/stored-maps/p03/velocity-max.cog.tif) |
-| Terrain PMTiles | [terrain.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/tiles/terrain.pmtiles) |
-| Terrain COG | [terrain.cog.tif](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/archive/terrain/terrain.cog.tif) |
-| Project catalog | [catalog.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/catalog.json) |
-| Project manifest | [project.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/project.json) |
+```text
+/data/rasexamples/hec-ras-7.0/catalog.json
+/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/project.json
+/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/geolibre/project.geolibre.json
+```
 
-The New Orleans Metro bundle currently includes:
+Expected GeoLibre review URL after publication:
 
-- project id:
-  `neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a`
-- one geometry archive: `g02`
-- terrain published as raster PMTiles
-- no result layers in the viewer yet; the available result parquet is marked
-  geometry-free and needs a join-to-geometry post-processing step before it can
-  be tiled or queried consistently
-
-Live public paths:
-
-| Resource | Link |
-|----------|------|
-| MapLibre viewer | [New Orleans Metro Map Viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fneworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a%2Fviewer%2Fmanifest.json%3Fv%3D20260703Tneworleans01) |
-| MapLibre manifest | [manifest.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/manifest.json?v=20260703Tneworleans01) |
-| Geometry PMTiles | [geometry.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/tiles/geometry.pmtiles) |
-| Terrain PMTiles | [terrain.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/tiles/terrain.pmtiles) |
-| Project manifest | [project.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/project.json) |
+```text
+https://viewer.geolibre.app/?url=https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/geolibre/project.geolibre.json&layout=compact
+```
 
 ## WebGIS Publishing Model
 
@@ -118,10 +65,9 @@ artifacts in the repository. The intended flow is:
 1. acquire or extract the source project through RAS Commander
 2. compute or inspect the project through the normal RAS Commander workflow
 3. export cloud-native artifacts with ras2cng
-4. post-process terrain, geometry, vector results, and Stored Map rasters into
-   MapLibre-ready PMTiles or COGs
+4. post-process terrain, geometry, and results for web review
 5. publish validated artifacts to the WebGIS data root
-6. link the docs page to the WebGIS catalog and MapLibre project manifest
+6. link the docs page to the WebGIS catalog and GeoLibre project files
 
 The public artifact namespace is:
 
@@ -130,31 +76,21 @@ The public artifact namespace is:
 ```
 
 That namespace is served by a dedicated RAS Commander WebGIS artifact service.
-The docs page links to those paths through `rascommander.info`; the docs origin
-reverse-proxies `/data/*` to the isolated WebGIS service.
+The docs page can link to the same paths through `rascommander.info` once
+routing is in place.
 
 ## Performance Policy
 
 The library is also the place where RAS Commander documents practical web GIS
 patterns for HEC-RAS projects.
 
-- GeoParquet remains the analysis/archive format for geometry and raw
-  element-level result attributes.
-- Vector PMTiles is the browser delivery format for commonly reviewed geometry
-  layers and queryable vector-result layers.
-- Raster results should come from RasProcess Stored Maps and publish as COG or
-  raster PMTiles derivatives with HTTP byte-range support. These are the visual
-  depth, water-surface, velocity, and similar map products.
-- Vector results should not be treated as the visual result map unless a
-  separate interpolation or surface-generation step has created a raster
-  product.
-- Terrain should publish as PMTiles or COG derivatives with HTTP byte-range
-  support.
-- Terrain and only the first/default geometry should be enabled initially.
-- Large geometries, results, and optional terrain derivatives should default to
-  disabled unless they are required for the first review view.
-- Result tables should use `join_index` metadata to avoid duplicating geometry
-  in the archive layer.
+- GeoParquet remains the analysis/archive format for geometry and result
+  attributes.
+- PMTiles should be generated for large or commonly reviewed vector layers.
+- COGs should be used for terrain and raster result surfaces.
+- Large geometry and result layers should default to off in GeoLibre.
+- Project overview layers, terrain, and small geometry layers can default on.
+- Result tables should use `join_index` metadata to avoid duplicating geometry.
 - Terrain should not be upsampled. If a source terrain is coarser than 10 ft,
   publish at the smallest native resolution instead of forcing a finer grid.
 
@@ -163,26 +99,21 @@ for repeatable analysis and browser review.
 
 ## Next Candidates
 
-After Muncie and New Orleans Metro, the next projects should be added one at a
-time as their WebGIS bundles are published and validated:
+After Muncie, the next projects should be added one at a time as their WebGIS
+bundles are published and validated:
 
 - Bald Eagle Creek 1D and Bald Eagle Creek Multi-2D
+- New Orleans Metro
 - at least one eBFE/BLE delivery
 - at least two ScienceBase releases
-
-Do not add the 1D steady BLE model collection to this landing page. That set
-should be handled as its own consolidated map once the grouping, symbology, and
-metadata pattern are clear.
 
 Each project entry should be added only after:
 
 - the catalog entry has a valid CRS and WGS84 bounding box
-- the project has a model-limit polygon in
-  `assets/javascripts/ras-example-projects-data.js`
-- the MapLibre manifest uses hosted URLs, not local file paths
-- PMTiles or COG assets support HTTP range requests
+- `project.geolibre.json` uses hosted URLs, not local file paths
+- COG and PMTiles assets support HTTP range requests
 - large layers have sensible default visibility
-- the viewer opens from the public docs URL
+- GeoLibre opens the project from the public URL
 
 ## Related Workflows
 

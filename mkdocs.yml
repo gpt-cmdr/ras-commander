@@ -1,7 +1,7 @@
 site_name: RAS Commander Documentation
 site_description: Python library for automating HEC-RAS operations
 site_author: William Katzenmeyer, P.E., C.F.M.
-site_url: https://rascommander.info/
+site_url: https://gpt-cmdr.github.io/ras-commander/
 
 repo_name: gpt-cmdr/ras-commander
 repo_url: https://github.com/gpt-cmdr/ras-commander
@@ -11,7 +11,6 @@ exclude_docs: |
   cognitive-infrastructure/agents.md
   cognitive-infrastructure/skills.md
   cognitive-infrastructure/commands.md
-  AGENTS.md
 
 theme:
   name: material
@@ -30,11 +29,9 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
   features:
-    # navigation.tabs + a lone top-level "Home" left the homepage sidebar empty
-    # (the active "Home" tab has no children). Without tabs, the full section tree
-    # renders in the left sidebar on every page; groups stay collapsible (no
-    # navigation.expand) so the large Example Notebooks tree is scannable.
+    - navigation.tabs
     - navigation.sections
+    - navigation.expand
     - navigation.top
     - search.suggest
     - search.highlight
@@ -47,31 +44,6 @@ theme:
 
 plugins:
   - search
-  - llmstxt:
-      full_output: llms-full.txt
-      sections:
-        LLM Agent Guide:
-          - development/llm-agents.md
-        Getting Started:
-          - getting-started/installation.md
-          - getting-started/quickstart.md
-          - getting-started/project-initialization.md
-        Reference:
-          - reference/dataframe-reference.md
-          - reference/quick-reference.md
-          - reference/file-formats.md
-        User Guide:
-          - user-guide/overview.md
-          - user-guide/plan-execution.md
-          - user-guide/workflows-and-patterns.md
-          - user-guide/hdf-data-extraction.md
-          - user-guide/geometry-operations.md
-          - user-guide/boundary-conditions.md
-        API Reference:
-          - api/index.md
-          - api/core.md
-          - api/hdf.md
-          - api/geometry.md
   - mkdocstrings:
       default_handler: python
       handlers:
@@ -159,15 +131,13 @@ nav:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quickstart.md
       - Project Initialization: getting-started/project-initialization.md
-    - Architecture Overview: user-guide/overview.md
+    - Overview: user-guide/overview.md
     - Plan Execution: user-guide/plan-execution.md
     - Workflows & Patterns: user-guide/workflows-and-patterns.md
     - Boundary Conditions: user-guide/boundary-conditions.md
     - Spatial Data & RASMapper: user-guide/spatial-data.md
-    - Flowline Refinement Regions: user-guide/flowline-refinement-regions.md
     - HEC-RAS Supplementary Guide Coverage: user-guide/hec-ras-supplementary-guides.md
     - eBFE Delivery Validation: user-guide/ebfe-delivery-validation.md
-    - Working with eBFE Models: ebfe_models.md
     - HDF Data Extraction: user-guide/hdf-data-extraction.md
     - Geometry Operations: user-guide/geometry-operations.md
     - Steady Flow Analysis: user-guide/steady-flow-analysis.md
@@ -190,7 +160,138 @@ nav:
   - Example Notebooks:
     - Overview: examples/index.md
     - Example Projects: examples/example-projects.md
-    - Muncie Map Viewer: examples/example-project-viewer.md
+    - 100s - Initialization & Execution:
+      - Using RasExamples: notebooks/100_using_ras_examples.md
+      - Project Initialization: notebooks/101_project_initialization.md
+      - Multiple Project Operations: notebooks/102_multiple_project_operations.md
+      - Plan & Geometry Operations: notebooks/103_plan_and_geometry_operations.md
+      - Plan Parameter Operations: notebooks/104_plan_parameter_operations.md
+      - Single Plan Execution: notebooks/110_single_plan_execution.md
+      - Executing Plan Sets: notebooks/111_executing_plan_sets.md
+      - Sequential Plan Execution: notebooks/112_sequential_plan_execution.md
+      - Parallel Execution: notebooks/113_parallel_execution.md
+      - Parameter Permutation: notebooks/114_parameter_permutation.md
+      - Real-Time Monitoring: notebooks/115_real_time_execution_monitoring.md
+      - HDF Output Options Benchmark: notebooks/116_hdf_output_options_benchmark.md
+      - Monte Carlo Uncertainty: notebooks/116_monte_carlo_uncertainty.md
+      - Win32COM Automation: notebooks/120_automating_ras_with_win32com.md
+      - Legacy HECRASController: notebooks/121_legacy_hecrascontroller_and_rascontrol.md
+      - RASMapper Spatial Review: notebooks/122_rasmapper_spatial_review.md
+      - RASMapper Geometry Updates: notebooks/123_rasmapper_geometry_layer_updates.md
+      - RASMapper Bank Lines: notebooks/124_rasmapper_bank_lines.md
+      - Results DataFrame: notebooks/150_results_dataframe.md
+    - 200s - Geometry & Calibration:
+      - 1D Plaintext Geometry: notebooks/201_1d_plaintext_geometry.md
+      - 2D Plaintext Geometry: notebooks/202_2d_plaintext_geometry.md
+      - HTAB Parameter Optimization: notebooks/203_htab_parameter_optimization.md
+      - Extract XS XYZ from Geometry: notebooks/205_extract_xs_xyz_from_geometry.md
+      - Structures & Metadata: notebooks/206_structures_and_metadata.md
+      - Reference Lines & Points: notebooks/207_reference_lines_and_points.md
+      - Bridge Method Comparison: notebooks/208_bridge_method_comparison.md
+      - Culvert Authoring: notebooks/209_culvert_authoring.md
+      - XS Interpolation Settings: notebooks/210_xs_interpolation_settings.md
+      - Final Manning's & Infiltration: notebooks/211_final_mannings_and_infiltration.md
+      - Fixit Blocked Obstructions: notebooks/211_fixit_blocked_obstructions.md
+      - Land Cover Manning's n Write: notebooks/212_landcover_mannings_n_write.md
+      - Land Classification Polygon: notebooks/213_land_classification_polygon_authoring.md
+      - Connection Authoring: notebooks/214_connection_authoring.md
+      - SA/2D Bridge Connection: notebooks/215_sa2d_bridge_connection_authoring.md
+      - 1D Bridge Authoring: notebooks/216_1d_bridge_authoring.md
+      - 1D Levee Authoring: notebooks/217_1d_levee_authoring.md
+      - Infiltration Base Override: notebooks/218_infiltration_base_override_authoring.md
+      - 1D Bridge XS Plotting: notebooks/219_1d_bridge_xs_plotting.md
+      - Calibration Workflow: notebooks/220_calibration_workflow.md
+      - 1D Calibration Workflow: notebooks/221_calibration_1d_workflow.md
+      - Steady Flow Calibration: notebooks/222_steady_flow_calibration.md
+      - Steady Floodway Encroachment: notebooks/223_steady_floodway_encroachment.md
+      - Steady Flow Authoring: notebooks/224_steady_flow_authoring.md
+      - Mesh Sensitivity Analysis: notebooks/230_mesh_sensitivity_analysis.md
+      - Pipe Network Mesh Generation: notebooks/231_pipe_network_mesh_generation.md
+      - 2D Sediment Mesh Sensitivity: notebooks/232_weise_2d_sediment_mesh_sensitivity.md
+    - 300s - Unsteady & DSS:
+      - Unsteady Flow Operations: notebooks/300_unsteady_flow_operations.md
+      - Flow Hydrograph Optimization: notebooks/301_flow_hydrograph_optimization.md
+      - DSS Boundary Extraction: notebooks/310_dss_boundary_extraction.md
+      - 2D Floodway Encroachment: notebooks/311_2d_floodway_encroachment.md
+      - Boundary DF QMULT DSS Paths: notebooks/312_boundary_df_qmult_dss_paths.md
+      - HMS to RAS Matching: notebooks/313_hms_to_ras_boundary_matching.md
+      - Reference Line Generation: notebooks/314_reference_line_generation.md
+      - 2D Computation Options: notebooks/315_2d_computation_options.md
+      - Validating DSS Paths: notebooks/315_validating_dss_paths.md
+      - Terrain Modifications: notebooks/316_terrain_modifications.md
+      - Restart File Settings: notebooks/317_restart_file_settings.md
+      - 1D Boundary Visualization: notebooks/320_1d_boundary_condition_visualization.md
+    - 400s - HDF Results:
+      - 1D HDF Data Extraction: notebooks/400_1d_hdf_data_extraction.md
+      - Steady Flow Analysis: notebooks/401_steady_flow_analysis.md
+      - 2D HDF Data Extraction: notebooks/410_2d_hdf_data_extraction.md
+      - 2D HDF Pipes & Pumps: notebooks/411_2d_hdf_pipes_and_pumps.md
+      - 2D Detail Face Data: notebooks/412_2d_detail_face_data_extraction.md
+      - Profile Line Flow Extraction: notebooks/413_profile_line_flow_extraction.md
+      - Depth-Varying Manning's n: notebooks/414_depth_varying_mannings_n.md
+      - 2D Spatial Result Queries: notebooks/415_2d_spatial_result_queries.md
+      - 2D Velocity Profile Line: notebooks/416_2d_velocity_profile_line.md
+      - Breach Results Extraction: notebooks/420_breach_results_extraction.md
+      - 1D Channel Capacity Analysis: notebooks/430_1d_channel_capacity_analysis.md
+    - 500s - Remote Execution:
+      - Remote Execution PsExec: notebooks/500_remote_execution_psexec.md
+      - Linux Execution: notebooks/510_linux_execution.md
+      - ModPuls Routing Extraction: notebooks/560_modpuls_routing_extraction.md
+    - 600s - Floodplain Mapping:
+      - Floodplain Mapping GUI: notebooks/600_floodplain_mapping_gui.md
+      - Headless Stored Map Generation: notebooks/601_headless_stored_map_generation_rasmapper.md
+      - 610 - Generate Fluvial Pluvial Delineations using Max WSE Arrival Time: notebooks/610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.md
+      - Validating Map Layers: notebooks/611_validating_map_layers.md
+    - 700s - Sensitivity & Precipitation:
+      - Core Sensitivity: notebooks/700_core_sensitivity.md
+      - Benchmarking Versions 6.1-6.6: notebooks/701_benchmarking_versions_6.1_to_6.6.md
+      - Manning's Sensitivity Bulk: notebooks/710_mannings_sensitivity_bulk_analysis.md
+      - Manning's Sensitivity Multi-Interval: notebooks/711_mannings_sensitivity_multi_interval.md
+      - Precipitation Methods: notebooks/720_precipitation_methods_comprehensive.md
+      - Hyetograph Comparison: notebooks/721_Precipitation_Hyetograph_Comparison.md
+      - Gridded Precipitation Atlas14: notebooks/722_gridded_precipitation_atlas14.md
+      - Storm Generator ABM Validation: notebooks/723_storm_generator_abm_validation.md
+      - Atlas14 Spatial Variance: notebooks/725_atlas14_spatial_variance.md
+      - ABM Hyetograph Grid: notebooks/726_abm_hyetograph_grid.md
+    - 800s - Quality Assurance:
+      - Quality Assurance RasCheck: notebooks/800_quality_assurance_rascheck.md
+      - Advanced Structure Validation: notebooks/801_advanced_structure_validation.md
+    - 900s - Data Integration & Forecasting:
+      - AORC Precipitation: notebooks/900_aorc_precipitation.md
+      - AORC Precipitation Catalog: notebooks/901_aorc_precipitation_catalog.md
+      - Gauge Data & Validation:
+        - 910 - USGS Gauge Catalog: notebooks/910_usgs_gauge_catalog.md
+        - 911 - USGS Gauge Data Integration: notebooks/911_usgs_gauge_data_integration.md
+        - 911a - USGS Study Package: notebooks/911a_usgs_study_package_from_primitives.md
+        - 912 - USGS Real-Time Monitoring: notebooks/912_usgs_real_time_monitoring.md
+        - 913 - Boundary Conditions from Live Gauges: notebooks/913_bc_generation_from_live_gauge.md
+        - 914 - Historical Event Validation: notebooks/914_historical_event_validation.md
+        - 918 - Model Validation with USGS: notebooks/918_model_validation_with_usgs.md
+      - Operational Forecast Sequence:
+        - 915 - Forecast Workflow Overview: notebooks/915_realtime_forecast_workflow.md
+        - 918 - HMS-RAS Coupled Forecast Execution: notebooks/918_hms_ras_coupled_forecast.md
+        - 919 - Operational Forecast Cycling: notebooks/919_operational_forecast_cycling.md
+      - Forecast Inputs:
+        - 916 - HRRR Forecast Precipitation: notebooks/916_hrrr_precipitation_forecast.md
+        - 917 - MRMS Observed Precipitation QPE: notebooks/917_mrms_precipitation_qpe.md
+        - 919 - STOFS-3D Coastal Stage Boundary: notebooks/919_stofs3d_coastal_boundary.md
+      - Terrain & Surfaces:
+        - 920 - Terrain Creation: notebooks/920_terrain_creation.md
+        - 925 - XS Interpolation Surface: notebooks/925_xs_interpolation_surface.md
+        - 930 - Terrain Modification Analysis: notebooks/930_terrain_modification_analysis.md
+    - 950s - eBFE Delivery:
+      - eBFE Spring Creek: notebooks/950_ebfe_spring_creek.md
+      - eBFE North Galveston Bay: notebooks/951_ebfe_north_galveston_bay.md
+      - eBFE Upper Guadalupe Cascade: notebooks/952_ebfe_upper_guadalupe_cascade.md
+      - eBFE Rio Hondo Steady: notebooks/953_ebfe_rio_hondo_steady_collection.md
+      - eBFE Lake Maurepas: notebooks/954_ebfe_lake_maurepas_validation.md
+      - eBFE Tickfaw: notebooks/955_ebfe_tickfaw_validation.md
+      - eBFE Spring River: notebooks/957_ebfe_spring_river_validation.md
+      - Model Sources Showcase: notebooks/958_model_sources_showcase.md
+    - 960s - Cloud-Native Export:
+      - Cloud-Native Geometry Export: notebooks/960_cloud_native_geometry_export.md
+      - Cloud-Native Results Export: notebooks/961_cloud_native_results_export.md
+      - Cloud-Native COG Results: notebooks/962_cloud_native_cog_results_export.md
   - Parallel Compute:
     - Overview: parallel-compute/index.md
     - Local Parallel: parallel-compute/local-parallel.md
@@ -211,8 +312,6 @@ nav:
     - Overview: reference/file-formats.md
     - PRJ File Parsing: reference/prj-parsing.md
     - Geometry Parsing: reference/geometry-parsing.md
-    - Bridge Geometry Automation Research: reference/bridge-geometry-automation-research.md
-    - Culvert Taxonomy: reference/culvert-taxonomy.md
     - Unsteady File Parsing: reference/unsteady-parsing.md
     - Steady File Parsing: reference/steady-parsing.md
     - HDF Structure: reference/hdf-structure.md
@@ -222,7 +321,6 @@ nav:
     - Overview: cognitive-infrastructure/index.md
   - LLM Forward Development:
     - Overview: development/llm-development.md
-    - LLM Agent Guide: development/llm-agents.md
     - Agent Infrastructure: development/agent-infrastructure.md
     - Multi-Harness Agent Contract: development/multi-harness-agent-contract.md
     - Contributing: development/contributing.md
