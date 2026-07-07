@@ -122,6 +122,12 @@ docs/cognitive-infrastructure/commands.md
 docs/version.json
 docs/llms/api/
 
+# Ignore generated example-gallery data + thumbnails (built from examples/notebooks.yml
+# by .claude/scripts/generate_examples_index.py). docs/examples/index.md is a committed
+# snapshot (kept current); index.json + thumbnails are build artifacts.
+docs/examples/index.json
+docs/assets/thumbs/
+
 # Ignore M3 model downloads (large files, downloaded via M3Model.extract_model())
 m3_models/
 examples/m3_models/
