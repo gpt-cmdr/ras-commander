@@ -87,11 +87,11 @@ notebooks:
   est_runtime: null
   data_project: Balde Eagle Creek
   functions_used:
+  - GeomPreprocessor.clear_geompre_files
   - HdfResultsPlan.get_runtime_data
   - HdfResultsPlan.get_volume_accounting
   - RasCmdr.compute_plan
   - RasExamples.extract_project
-  - RasGeo.clear_geompre_files
   - RasPlan.clone_geom
   - RasPlan.clone_plan
   - RasPlan.clone_unsteady
@@ -574,15 +574,15 @@ notebooks:
   est_runtime: null
   data_project: null
   functions_used:
+  - GeomCrossSection.get_cross_sections
+  - GeomCrossSection.get_station_elevation
+  - GeomCrossSection.set_station_elevation
   - GeomLateral.get_lateral_structures
   - GeomLateral.get_weir_profile
   - HdfHydraulicTables.get_all_xs_htabs
   - HdfHydraulicTables.get_xs_htab
   - RasCmdr.compute_plan
   - RasExamples.extract_project
-  - RasGeometry.get_cross_sections
-  - RasGeometry.get_station_elevation
-  - RasGeometry.set_station_elevation
   - ras.geom_df
   - ras.plan_df
   - ras.results_df
@@ -609,15 +609,15 @@ notebooks:
   - GeomLandCover.get_base_mannings_n
   - GeomLandCover.get_region_mannings_n
   - GeomLandCover.set_base_mannings_n
+  - GeomLateral.get_connection_gates
+  - GeomLateral.get_connection_profile
+  - GeomLateral.get_connections
+  - GeomStorage.get_elevation_volume
   - GeomStorage.get_storage_area_polygons
+  - GeomStorage.get_storage_areas
   - HdfStruc.get_storage_area_polygons
   - RasCmdr.compute_plan
   - RasExamples.extract_project
-  - RasGeometry.get_connection_gates
-  - RasGeometry.get_connection_weir_profile
-  - RasGeometry.get_connections
-  - RasGeometry.get_storage_areas
-  - RasGeometry.get_storage_elevation_volume
   hec_refs: []
   learning_paths: []
   excluded: false
@@ -635,6 +635,7 @@ notebooks:
   est_runtime: null
   data_project: null
   functions_used:
+  - GeomCrossSection.get_cross_sections
   - GeomCrossSection.get_xs_htab_params
   - GeomHtab.get_optimization_report
   - GeomHtab.optimize_all_htab_from_results
@@ -642,13 +643,12 @@ notebooks:
   - GeomHtabUtils.calculate_optimal_xs_htab
   - GeomHtabUtils.get_structure_htab_defaults
   - GeomHtabUtils.get_xs_htab_defaults
+  - GeomPreprocessor.clear_geompre_files
   - HdfResultsPlan.get_compute_messages
   - HdfResultsXsec.get_xsec_timeseries
   - RasCmdr.compute_plan
   - RasExamples.extract_project
   - RasFixit.fix_htab_starting_elevations
-  - RasGeo.clear_geompre_files
-  - RasGeometry.get_cross_sections
   - RasPlan.clone_geom
   - RasPlan.clone_plan
   - RasPlan.get_plan_path
@@ -1790,6 +1790,7 @@ notebooks:
   est_runtime: null
   data_project: BaldEagleCrkMulti2D
   functions_used:
+  - HdfBenefitAreas.identify_benefit_areas
   - HdfMesh.get_mesh_areas
   - HdfMesh.get_mesh_cell_points
   - HdfResultsMesh.get_mesh_max_ws
@@ -1948,7 +1949,7 @@ notebooks:
   - hdf
   difficulty: intermediate
   est_runtime: null
-  data_project: null
+  data_project: BaldEagleCrkMulti2D
   functions_used:
   - HdfBase.get_projection
   - HdfBndry.get_reference_lines
@@ -1963,6 +1964,10 @@ notebooks:
   - HdfResultsPlan.get_unsteady_summary
   - HdfResultsPlan.get_volume_accounting
   - HdfResultsXsec.get_xsec_timeseries
+  - HdfStorageArea.compute_stage_storage_curve
+  - HdfStorageArea.get_storage_area_names
+  - HdfStorageArea.get_storage_area_properties
+  - HdfStorageArea.get_volume_elevation_curve
   - HdfStruc.get_geom_structures_attrs
   - HdfStruc.get_structures
   - HdfXsec.get_cross_sections
@@ -1981,8 +1986,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 68
-  executed_cells: 60
+  code_cells: 70
+  executed_cells: 52
 - id: 401_steady_flow_analysis
   filename: 401_steady_flow_analysis.ipynb
   title: Steady Flow Analysis
@@ -2430,14 +2435,15 @@ notebooks:
   excluded: false
   code_cells: 7
   executed_cells: 7
-- id: 601_floodplain_mapping_rasprocess
-  filename: 601_floodplain_mapping_rasprocess.ipynb
-  title: Floodplain Mapping via RasProcess CLI
+- id: 601_headless_stored_map_generation_rasmapper
+  filename: 601_headless_stored_map_generation_rasmapper.ipynb
+  title: Headless Stored Map Generation Using RasMapper
   series: 600
   series_name: Floodplain Mapping
-  summary: 'This notebook demonstrates floodplain mapping using **RasProcess.exe** to generate: - Maximum
-    Water Surface Elevation (WSE) rasters - Maximum Depth rasters - Inundation boundary polygons'
-  tags: []
+  summary: This notebook demonstrates headless stored map generation using **RasMapper** through RasProcess.store_maps()
+    to create maximum WSE rasters, maximum depth rasters, and inundation boundary polygons.
+  tags:
+  - rasmapper
   difficulty: intermediate
   est_runtime: null
   data_project: null
@@ -2536,9 +2542,9 @@ notebooks:
   est_runtime: null
   data_project: null
   functions_used:
+  - GeomPreprocessor.clear_geompre_files
   - RasCmdr.compute_plan
   - RasExamples.extract_project
-  - RasGeo.clear_geompre_files
   - RasPlan.get_plan_path
   - RasPlan.set_num_cores
   - RasUnsteady.update_flow_multiplier_by_station
@@ -2563,9 +2569,9 @@ notebooks:
   est_runtime: null
   data_project: null
   functions_used:
+  - GeomPreprocessor.clear_geompre_files
   - RasCmdr.compute_plan
   - RasExamples.extract_project
-  - RasGeo.clear_geompre_files
   - RasPlan.get_plan_path
   - RasPlan.get_results_path
   - RasPlan.set_num_cores
@@ -2589,15 +2595,15 @@ notebooks:
   est_runtime: null
   data_project: null
   functions_used:
+  - GeomLandCover.get_base_mannings_n
+  - GeomLandCover.get_region_mannings_n
+  - GeomLandCover.set_base_mannings_n
+  - GeomLandCover.set_region_mannings_n
   - HdfMesh.get_mesh_cell_points
   - HdfResultsMesh.get_mesh_cells_timeseries
   - RasCmdr.compute_parallel
   - RasCmdr.compute_plan
   - RasExamples.extract_project
-  - RasGeo.get_mannings_baseoverrides
-  - RasGeo.get_mannings_regionoverrides
-  - RasGeo.set_mannings_baseoverrides
-  - RasGeo.set_mannings_regionoverrides
   - RasPlan.clone_geom
   - RasPlan.clone_plan
   - RasPlan.set_geom
@@ -2608,7 +2614,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 13
-  executed_cells: 0
+  executed_cells: 12
 - id: 711_mannings_sensitivity_multi_interval
   filename: 711_mannings_sensitivity_multi_interval.ipynb
   title: One-at-a-Time (OAT) Manning's n Sensitivity Analysis
@@ -2784,7 +2790,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 13
-  executed_cells: 0
+  executed_cells: 13
 - id: 800_quality_assurance_rascheck
   filename: 800_quality_assurance_rascheck.ipynb
   title: Quality Assurance with RasCheck
