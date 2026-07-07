@@ -134,31 +134,34 @@ class HdfStruc1D:
             'found': False
         }
 
-        try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                # Determine if unsteady or steady results
-                is_unsteady = "Results/Unsteady" in hdf_file
-                is_steady = "Results/Steady" in hdf_file
+        with h5py.File(hdf_path, 'r') as hdf_file:
+            # Determine if unsteady or steady results
+            is_unsteady = "Results/Unsteady" in hdf_file
+            is_steady = "Results/Steady" in hdf_file
 
-                if is_unsteady:
-                    result = HdfStruc1D._extract_unsteady_structure_max(
-                        hdf_file, river, reach, rs, result
-                    )
-                elif is_steady:
-                    result = HdfStruc1D._extract_steady_structure_max(
-                        hdf_file, river, reach, rs, result
-                    )
-                else:
-                    logger.warning(f"No steady or unsteady results found in {hdf_path}")
-                    return result
+            if is_unsteady:
+                result = HdfStruc1D._extract_unsteady_structure_max(
+                    hdf_file, river, reach, rs, result
+                )
+            elif is_steady:
+                result = HdfStruc1D._extract_steady_structure_max(
+                    hdf_file, river, reach, rs, result
+                )
+            else:
+                raise ValueError(
+                    f"No steady or unsteady results were found in {Path(hdf_path).name}. "
+                    "Compute a steady or unsteady plan and pass the plan HDF with results."
+                )
 
-                return result
+        if not result.get('found'):
+            raise ValueError(
+                f"No 1D structure results were found for {river}/{reach}/RS {rs} "
+                f"in {Path(hdf_path).name}. Checked cross-section output and direct "
+                "structure output; confirm the plan has been computed and this "
+                "structure is included in the results."
+            )
 
-        except FileNotFoundError:
-            raise
-        except Exception as e:
-            logger.error(f"Error extracting structure max values: {str(e)}")
-            return result
+        return result
 
     @staticmethod
     def _extract_unsteady_structure_max(
@@ -172,14 +175,19 @@ class HdfStruc1D:
         base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Cross Sections"
 
         if base_path not in hdf_file:
-            logger.warning("No cross section results found in unsteady output")
-            return result
+            raise ValueError(
+                "Unsteady 1D structure extraction requires cross-section results at "
+                f"'{base_path}'. Confirm the plan has been computed with 1D structure "
+                "results available."
+            )
 
         # Get cross section attributes to find structure location
         attrs_path = f"{base_path}/Cross Section Attributes"
         if attrs_path not in hdf_file:
-            logger.warning("No cross section attributes found")
-            return result
+            raise ValueError(
+                "Unsteady 1D structure extraction requires cross-section attributes at "
+                f"'{attrs_path}'. Confirm the plan HDF includes 1D cross-section output."
+            )
 
         attrs_data = hdf_file[attrs_path][()]
 
@@ -307,16 +315,24 @@ class HdfStruc1D:
         base_path = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Cross Sections"
 
         if base_path not in hdf_file:
-            logger.warning("No cross section results found in steady output")
-            return result
+            raise ValueError(
+                "Steady 1D structure extraction requires cross-section results at "
+                f"'{base_path}'. Confirm the plan has been computed with steady "
+                "profile results available."
+            )
 
         # Get cross section attributes
         attrs_path = f"{base_path}/Attributes"
         if attrs_path not in hdf_file:
             attrs_path = "Results/Steady/Output/Geometry Info/Cross Section Attributes"
             if attrs_path not in hdf_file:
-                logger.warning("No cross section attributes found")
-                return result
+                raise ValueError(
+                    "Steady 1D structure extraction requires cross-section attributes at "
+                    "'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/"
+                    "Cross Sections/Attributes' or 'Results/Steady/Output/Geometry Info/"
+                    "Cross Section Attributes'. Confirm the plan HDF includes steady "
+                    "geometry output."
+                )
 
         attrs_data = hdf_file[attrs_path][()]
 
@@ -400,7 +416,7 @@ class HdfStruc1D:
                             result['tw_source'] = result['hw_source']
 
                         if hw_idx is not None:
-                            logger.info(
+                            logger.debug(
                                 f"Steady structure {rs}: using flanking XS "
                                 f"US={upstream['station'] if upstream else 'N/A'}, "
                                 f"DS={downstream['station'] if downstream else 'N/A'}"
@@ -547,60 +563,56 @@ class HdfStruc1D:
         """
         structures = []
 
-        try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                # Check unsteady results
-                unsteady_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Cross Sections/Cross Section Attributes"
-                if unsteady_path in hdf_file:
-                    attrs_data = hdf_file[unsteady_path][()]
+        with h5py.File(hdf_path, 'r') as hdf_file:
+            # Check unsteady results
+            unsteady_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Cross Sections/Cross Section Attributes"
+            if unsteady_path in hdf_file:
+                attrs_data = hdf_file[unsteady_path][()]
 
-                    for attr in attrs_data:
-                        name = attr['Name'].decode('utf-8').strip() if 'Name' in attr.dtype.names and isinstance(attr['Name'], bytes) else ""
+                for attr in attrs_data:
+                    name = attr['Name'].decode('utf-8').strip() if 'Name' in attr.dtype.names and isinstance(attr['Name'], bytes) else ""
 
-                        # Identify structure markers
-                        is_structure = 'BR U' in name or 'BR D' in name or 'IC' in name or 'Culv' in name.lower()
+                    # Identify structure markers
+                    is_structure = 'BR U' in name or 'BR D' in name or 'IC' in name or 'Culv' in name.lower()
 
-                        if is_structure:
-                            river = attr['River'].decode('utf-8').strip() if isinstance(attr['River'], bytes) else str(attr['River']).strip()
-                            reach = attr['Reach'].decode('utf-8').strip() if isinstance(attr['Reach'], bytes) else str(attr['Reach']).strip()
-                            station = attr['Station'].decode('utf-8').strip() if isinstance(attr['Station'], bytes) else str(attr['Station']).strip()
+                    if is_structure:
+                        river = attr['River'].decode('utf-8').strip() if isinstance(attr['River'], bytes) else str(attr['River']).strip()
+                        reach = attr['Reach'].decode('utf-8').strip() if isinstance(attr['Reach'], bytes) else str(attr['Reach']).strip()
+                        station = attr['Station'].decode('utf-8').strip() if isinstance(attr['Station'], bytes) else str(attr['Station']).strip()
 
-                            struct_type = "Unknown"
-                            if 'BR' in name:
-                                struct_type = "Bridge"
-                            elif 'IC' in name:
-                                struct_type = "Inline"
-                            elif 'Culv' in name.lower():
-                                struct_type = "Culvert"
-
-                            structures.append({
-                                'River': river,
-                                'Reach': reach,
-                                'RS': station,
-                                'Name': name,
-                                'Type': struct_type
-                            })
-
-                # Check Structures group if exists
-                struct_attrs_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Structures/Structure Attributes"
-                if struct_attrs_path in hdf_file:
-                    struct_attrs = hdf_file[struct_attrs_path][()]
-                    for attr in struct_attrs:
-                        river = attr['River'].decode('utf-8').strip() if 'River' in attr.dtype.names and isinstance(attr['River'], bytes) else ""
-                        reach = attr['Reach'].decode('utf-8').strip() if 'Reach' in attr.dtype.names and isinstance(attr['Reach'], bytes) else ""
-                        rs = attr['RS'].decode('utf-8').strip() if 'RS' in attr.dtype.names and isinstance(attr['RS'], bytes) else ""
-                        name = attr['Name'].decode('utf-8').strip() if 'Name' in attr.dtype.names and isinstance(attr['Name'], bytes) else ""
+                        struct_type = "Unknown"
+                        if 'BR' in name:
+                            struct_type = "Bridge"
+                        elif 'IC' in name:
+                            struct_type = "Inline"
+                        elif 'Culv' in name.lower():
+                            struct_type = "Culvert"
 
                         structures.append({
                             'River': river,
                             'Reach': reach,
-                            'RS': rs,
+                            'RS': station,
                             'Name': name,
-                            'Type': 'Structure'
+                            'Type': struct_type
                         })
 
-        except Exception as e:
-            logger.error(f"Error listing 1D structures: {str(e)}")
+            # Check Structures group if exists
+            struct_attrs_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Structures/Structure Attributes"
+            if struct_attrs_path in hdf_file:
+                struct_attrs = hdf_file[struct_attrs_path][()]
+                for attr in struct_attrs:
+                    river = attr['River'].decode('utf-8').strip() if 'River' in attr.dtype.names and isinstance(attr['River'], bytes) else ""
+                    reach = attr['Reach'].decode('utf-8').strip() if 'Reach' in attr.dtype.names and isinstance(attr['Reach'], bytes) else ""
+                    rs = attr['RS'].decode('utf-8').strip() if 'RS' in attr.dtype.names and isinstance(attr['RS'], bytes) else ""
+                    name = attr['Name'].decode('utf-8').strip() if 'Name' in attr.dtype.names and isinstance(attr['Name'], bytes) else ""
+
+                    structures.append({
+                        'River': river,
+                        'Reach': reach,
+                        'RS': rs,
+                        'Name': name,
+                        'Type': 'Structure'
+                    })
 
         df = pd.DataFrame(structures)
         if not df.empty:

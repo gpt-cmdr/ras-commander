@@ -81,7 +81,14 @@ def test_compute_stage_storage_curve_returns_dataframe_and_metadata(
     assert curve["storage"].is_monotonic_increasing
     assert metadata["storage_area_name"] == "190"
     assert curve.attrs["storage_area"] == "190"
-    assert metadata["storage_units"] == "cubic project units"
+    assert metadata["units_system"] == "US Customary"
+    assert metadata["storage_units"] == "acre-ft"
+    assert metadata["raw_storage_units"] == "cubic ft"
+    assert metadata["storage_conversion_factor"] == pytest.approx(1.0 / 43560.0)
+    assert metadata["storage_area_area_units"] == "sq ft"
+    assert metadata["storage_area_acres"] == pytest.approx(
+        metadata["storage_area_area"] / 43560.0
+    )
 
 
 def test_get_volume_elevation_curve_matches_raw_hdf(storage_geom_hdf: Path):
@@ -114,6 +121,16 @@ def test_computed_volume_matches_hdf_storage_curve_with_unit_conversion(
     computed_acre_ft = computed_cubic_ft / 43560.0
 
     assert computed_acre_ft == pytest.approx(hdf_volume_acre_ft, rel=0.05)
+
+    curve, metadata = HdfStorageArea.compute_stage_storage_curve(
+        storage_geom_hdf,
+        "190",
+        elevation_interval=5.0,
+        min_elevation=hdf_elevation,
+        max_elevation=hdf_elevation,
+    )
+    assert metadata["storage_units"] == "acre-ft"
+    assert curve["storage"].iloc[0] == pytest.approx(hdf_volume_acre_ft, rel=0.05)
 
 
 def test_storage_area_for_structure_matches_structure_attributes(

@@ -1172,7 +1172,7 @@ class HdfResultsMesh:
             return xr.Dataset()
         
         try:
-            return xr.merge(datasets)
+            return xr.merge(datasets, join="outer")
         except Exception as e:
             logger.error(f"Failed to merge datasets: {str(e)}")
             return xr.Dataset()
@@ -1457,7 +1457,7 @@ class HdfResultsMesh:
             if crs:
                 result.set_crs(crs, inplace=True)
 
-            logger.info(f"Extracted max depth for {len(result)} cells")
+            logger.debug(f"Extracted max depth for {len(result)} cells")
             return result
 
         except Exception as e:
@@ -1553,7 +1553,8 @@ class HdfResultsMesh:
             dst.build_overviews([2, 4, 8, 16], rasterio.enums.Resampling.average)
             dst.update_tags(ns="rio_overview", resampling="average")
 
-        logger.info(f"Wrote max depth raster ({rows}x{cols} px, {resolution_m}m): {output_path}")
+        logger.info("Wrote max depth raster (%sx%s px, %sm): %s", rows, cols, resolution_m, output_path.name)
+        logger.debug("Max depth raster path: %s", output_path)
         return output_path
 
     @staticmethod
@@ -1834,12 +1835,8 @@ class HdfResultsMesh:
 
                 output_paths[str(original_value)] = raster_path
 
-        logger.info(
-            "Wrote %s depth raster(s) for mesh '%s' to %s",
-            len(output_paths),
-            mesh_name,
-            output_dir,
-        )
+        logger.info("Wrote %s depth raster(s) for mesh '%s'", len(output_paths), mesh_name)
+        logger.debug("Depth raster output directory: %s", output_dir)
         return output_paths
 
     @staticmethod
@@ -1972,7 +1969,8 @@ class HdfResultsMesh:
             elif isinstance(mesh_names, str):
                 mesh_names = [mesh_names]
 
-            if var:
+            explicit_var = var is not None
+            if explicit_var:
                 variables = [var]
             else:
                 variables = TIME_SERIES_OUTPUT_VARS["cell"] + TIME_SERIES_OUTPUT_VARS["face"]
@@ -1980,9 +1978,22 @@ class HdfResultsMesh:
             datasets = {}
             for mesh_name in mesh_names:
                 data_vars = {}
+                missing_optional_variables = []
                 for variable in variables:
                     try:
                         path = HdfResultsMesh._get_mesh_timeseries_output_path(mesh_name, variable)
+                        if path not in hdf_path:
+                            if explicit_var:
+                                logger.error(
+                                    "Requested mesh time-series variable '%s' was not found for mesh '%s' at HDF path '%s'",
+                                    variable,
+                                    mesh_name,
+                                    path,
+                                )
+                            else:
+                                missing_optional_variables.append(variable)
+                            continue
+
                         dataset = hdf_path[path]
                         values = dataset[:]
                         units = HdfResultsMesh._decode_hdf_attr(
@@ -2019,9 +2030,27 @@ class HdfResultsMesh:
                             attrs={'units': units}
                         )
                     except KeyError:
-                        logger.warning(f"Variable '{variable}' not found in the HDF file for mesh '{mesh_name}'. Skipping.")
+                        if explicit_var:
+                            logger.error(
+                                "Requested mesh time-series variable '%s' was not found for mesh '%s'",
+                                variable,
+                                mesh_name,
+                            )
+                        else:
+                            missing_optional_variables.append(variable)
                     except Exception as e:
                         logger.error(f"Error processing variable '{variable}' for mesh '{mesh_name}': {str(e)}")
+
+                if missing_optional_variables:
+                    logger.debug(
+                        "Mesh '%s' time-series probe found %s variable(s) and skipped %s unavailable variable(s). "
+                        "Available: %s. Missing: %s",
+                        mesh_name,
+                        len(data_vars),
+                        len(missing_optional_variables),
+                        ", ".join(data_vars.keys()) if data_vars else "none",
+                        ", ".join(missing_optional_variables),
+                    )
 
                 if data_vars:
                     datasets[mesh_name] = xr.Dataset(
@@ -2029,7 +2058,14 @@ class HdfResultsMesh:
                         attrs={'mesh_name': mesh_name, 'start_time': start_time}
                     )
                 else:
-                    logger.warning(f"No valid data variables found for mesh '{mesh_name}'")
+                    if explicit_var:
+                        logger.error(
+                            "No valid data variables found for mesh '%s' for requested variable '%s'",
+                            mesh_name,
+                            var,
+                        )
+                    else:
+                        logger.warning(f"No valid data variables found for mesh '{mesh_name}'")
 
             return datasets
         except Exception as e:
@@ -2300,7 +2336,7 @@ class HdfResultsMesh:
             
             gdf.attrs.update(combined_attrs)
             
-            logger.info(f"Processed {len(gdf)} rows of summary output data")
+            logger.debug(f"Processed {len(gdf)} rows of summary output data")
             return gdf
         
         except Exception as e:

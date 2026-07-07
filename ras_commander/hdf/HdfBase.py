@@ -55,6 +55,7 @@ from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
 
 logger = get_logger(__name__)
+_missing_projection_warning_paths: set[str] = set()
 
 class HdfBase:
     """
@@ -123,22 +124,50 @@ class HdfBase:
         Raises:
             ValueError: If there's an error reading the HDF file or accessing the required data.
         """
+        flow_area_2d_path = "Geometry/2D Flow Areas"
+        attributes_path = f"{flow_area_2d_path}/Attributes"
+        cell_info_path = f"{flow_area_2d_path}/Cell Info"
+
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                flow_area_2d_path = "Geometry/2D Flow Areas"
                 if flow_area_2d_path not in hdf_file:
                     return []
-                
-                attributes = hdf_file[f"{flow_area_2d_path}/Attributes"][()]
+
+                missing = [
+                    dataset_path
+                    for dataset_path in (attributes_path, cell_info_path)
+                    if dataset_path not in hdf_file
+                ]
+                if missing:
+                    raise ValueError(
+                        "2D flow area name/count extraction requires dataset(s) "
+                        f"{missing} in {Path(hdf_path).name}."
+                    )
+
+                attributes = hdf_file[attributes_path][()]
+                if "Name" not in attributes.dtype.names:
+                    raise ValueError(
+                        f"2D flow area attributes at '{attributes_path}' in "
+                        f"{Path(hdf_path).name} do not include a 'Name' field."
+                    )
                 names = [HdfUtils.convert_ras_string(name) for name in attributes["Name"]]
-                
-                cell_info = hdf_file[f"{flow_area_2d_path}/Cell Info"][()]
+
+                cell_info = hdf_file[cell_info_path][()]
                 cell_counts = [info[1] for info in cell_info]
-                
+                if len(names) != len(cell_counts):
+                    raise ValueError(
+                        f"2D flow area names/counts mismatch in {Path(hdf_path).name}: "
+                        f"names={len(names)} cell_info_rows={len(cell_counts)}."
+                    )
+
                 return list(zip(names, cell_counts))
+        except ValueError:
+            raise
         except Exception as e:
-            logger.error(f"Error reading 2D flow area names and counts from {hdf_path}: {str(e)}")
-            raise ValueError(f"Failed to get 2D flow area names and counts: {str(e)}")
+            raise ValueError(
+                f"Failed to read 2D flow area names/counts from "
+                f"{Path(hdf_path).name}: {e}"
+            ) from e
 
 
     @staticmethod
@@ -284,7 +313,11 @@ class HdfBase:
                             if projection:
                                 return projection
         except Exception as e:
-            logger.error(f"Error reading RASMapper projection file: {str(e)}")
+            logger.debug(
+                "Error reading RASMapper projection file while checking %s: %s",
+                hdf_path,
+                str(e),
+            )
 
         if proj_file:
             error_msg = (
@@ -308,7 +341,24 @@ class HdfBase:
             "4. Save the RASMapper project"
         )
 
-        logger.critical(error_msg)
+        logger.debug(error_msg)
+
+        try:
+            warning_key = str(hdf_path.resolve())
+        except OSError:
+            warning_key = str(hdf_path.absolute())
+
+        if (
+            warning_key not in _missing_projection_warning_paths
+            and logger.isEnabledFor(logging.WARNING)
+        ):
+            logger.warning(
+                "Projection not found for %s; returned geospatial outputs will "
+                "not have a CRS. Enable DEBUG for checked paths and RASMapper "
+                "projection setup guidance.",
+                hdf_path.name,
+            )
+            _missing_projection_warning_paths.add(warning_key)
         return None
 
     @staticmethod
@@ -326,13 +376,16 @@ class HdfBase:
         """
         try:
             if attr_path not in hdf_file:
-                logger.warning(f"Path {attr_path} not found in HDF file")
+                logger.debug("Attribute path '%s' not found in HDF file", attr_path)
                 return {}
-            
+
             return HdfUtils.convert_hdf5_attrs_to_dict(hdf_file[attr_path].attrs)
         except Exception as e:
-            logger.error(f"Error getting attributes from {attr_path}: {str(e)}")
-            return {}
+            file_label = Path(getattr(hdf_file, "filename", "HDF file")).name
+            raise ValueError(
+                f"Failed to read HDF attributes at '{attr_path}' in "
+                f"{file_label}: {e}"
+            ) from e
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
@@ -367,19 +420,31 @@ class HdfBase:
             else:
                 print(f"{spacer}Unknown object: {name}")
 
+        if group_path is None:
+            group_path = "/"
+
         try:
             with h5py.File(file_path, 'r') as hdf_file:
-                if group_path in hdf_file:
-                    print("")
-                    print(f"Exploring group: {group_path}\n")
-                    group = hdf_file[group_path]
+                if group_path not in hdf_file:
+                    raise KeyError(
+                        f"Group path '{group_path}' not found in "
+                        f"{Path(file_path).name}."
+                    )
+
+                print("")
+                print(f"Exploring group: {group_path}\n")
+                group = hdf_file[group_path]
+                if isinstance(group, h5py.Group):
                     for key in group:
                         print("")
                         recurse(f"{group_path}/{key}", group[key], indent=1)
                 else:
-                    print(f"Group path '{group_path}' not found in the HDF5 file.")
-        except Exception as e:
-            print(f"Error exploring HDF5 file: {e}")
+                    print("")
+                    recurse(group_path, group, indent=1)
+        except OSError as e:
+            raise OSError(
+                f"Could not open HDF file {Path(file_path).name}: {e}"
+            ) from e
 
     @staticmethod
     @log_call
@@ -406,11 +471,34 @@ class HdfBase:
             - Parts information for multi-part lines
             - Point coordinates
         """
+        polyline_info_path = f"{path}/{info_name}"
+        polyline_parts_path = f"{path}/{parts_name}"
+        polyline_points_path = f"{path}/{points_name}"
+
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                polyline_info_path = f"{path}/{info_name}"
-                polyline_parts_path = f"{path}/{parts_name}"
-                polyline_points_path = f"{path}/{points_name}"
+                if path not in hdf_file:
+                    logger.debug(
+                        "Polyline group '%s' not found in %s.",
+                        path,
+                        Path(hdf_path).name,
+                    )
+                    return []
+
+                missing = [
+                    dataset_path
+                    for dataset_path in (
+                        polyline_info_path,
+                        polyline_parts_path,
+                        polyline_points_path,
+                    )
+                    if dataset_path not in hdf_file
+                ]
+                if missing:
+                    raise ValueError(
+                        "Polyline extraction requires dataset(s) "
+                        f"{missing} under '{path}' in {Path(hdf_path).name}."
+                    )
 
                 polyline_info = hdf_file[polyline_info_path][()]
                 polyline_parts = hdf_file[polyline_parts_path][()]
@@ -432,9 +520,13 @@ class HdfBase:
                             )
                         )
                 return geoms
+        except ValueError:
+            raise
         except Exception as e:
-            logger.error(f"Error getting polylines: {str(e)}")
-            return []
+            raise ValueError(
+                f"Failed to extract polylines from '{path}' in "
+                f"{Path(hdf_path).name}: {e}"
+            ) from e
 
     @staticmethod
     def print_attrs(name: str, obj: Union[h5py.Dataset, h5py.Group]) -> None:

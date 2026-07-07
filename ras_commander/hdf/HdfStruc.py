@@ -47,6 +47,42 @@ class HdfStruc:
     - All methods use @log_call for operation logging
     - Returns GeoDataFrames with both geometric and attribute data
     """
+
+    SA_2D_CONN_RESULTS_PATH = (
+        "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/"
+        "SA 2D Area Conn"
+    )
+
+    @staticmethod
+    def _decode_bytes_columns(df: pd.DataFrame) -> pd.DataFrame:
+        """Decode HDF byte-string columns in place and return the DataFrame."""
+        for col in df.columns:
+            if df[col].dtype.kind in {'S', 'a'}:
+                df[col] = df[col].str.decode('utf-8', errors='ignore')
+            elif df[col].dtype == object:
+                df[col] = df[col].apply(
+                    lambda x: x.decode('utf-8', errors='ignore')
+                    if isinstance(x, (bytes, np.bytes_))
+                    else x
+                )
+        return df
+
+    @staticmethod
+    def _list_sa2d_connections_from_hdf(
+        hdf_file: h5py.File,
+        hdf_path: Path,
+    ) -> List[str]:
+        base_path = HdfStruc.SA_2D_CONN_RESULTS_PATH
+        if base_path not in hdf_file:
+            logger.debug(f"No SA 2D Area Conn data found in {hdf_path.name}")
+            return []
+
+        structures = list(hdf_file[base_path].keys())
+        logger.debug(
+            f"Found {len(structures)} SA/2D connection structures in "
+            f"{hdf_path.name}: {structures}"
+        )
+        return structures
     
     @staticmethod
     @log_call
@@ -83,18 +119,25 @@ class HdfStruc:
         try:
             with h5py.File(hdf_path, 'r') as hdf:
                 if "Geometry/Structures" not in hdf:
-                    logger.error(f"No Structures Found in the HDF, Empty Geodataframe Returned: {hdf_path}")
+                    logger.debug(
+                        f"No Geometry/Structures group in {hdf_path.name}; "
+                        "returning empty GeoDataFrame."
+                    )
                     return GeoDataFrame()
                 
                 # Check if required datasets exist
                 required_datasets = [
+                    "Geometry/Structures/Attributes",
                     "Geometry/Structures/Centerline Info",
                     "Geometry/Structures/Centerline Points"
                 ]
                 
                 for dataset in required_datasets:
                     if dataset not in hdf:
-                        logger.error(f"No Structures Found in the HDF, Empty Geodataframe Returned: {hdf_path}")
+                        logger.warning(
+                            f"Required structure dataset missing in {hdf_path.name}: "
+                            f"{dataset}; returning empty GeoDataFrame."
+                        )
                         return GeoDataFrame()
 
                 def get_dataset_df(path: str) -> pd.DataFrame:
@@ -119,18 +162,16 @@ class HdfStruc:
                     Automatically decodes byte strings to UTF-8 with error handling.
                     """
                     if path not in hdf:
-                        logger.warning(f"Dataset not found: {path}")
+                        logger.debug(
+                            f"Optional structure dataset not found in {hdf_path.name}: {path}"
+                        )
                         return pd.DataFrame()
                     
                     data = hdf[path][()]
                     
                     if data.dtype.names:
                         df = pd.DataFrame(data)
-                        # Decode byte strings to UTF-8
-                        for col in df.columns:
-                            if df[col].dtype.kind in {'S', 'a'}:  # Byte strings
-                                df[col] = df[col].str.decode('utf-8', errors='ignore')
-                        return df
+                        return HdfStruc._decode_bytes_columns(df)
                     else:
                         # If no named fields, assign generic column names
                         return pd.DataFrame(data, columns=[f'Value_{i}' for i in range(data.shape[1])])
@@ -138,9 +179,15 @@ class HdfStruc:
                 # Extract relevant datasets
                 group_attrs = HdfBase.get_attrs(hdf, "Geometry/Structures")
                 struct_attrs = get_dataset_df("Geometry/Structures/Attributes")
-                bridge_coef = get_dataset_df("Geometry/Structures/Bridge Coefficient Attributes")
-                table_info = get_dataset_df("Geometry/Structures/Table Info")
-                profile_data = get_dataset_df("Geometry/Structures/Profile Data")
+                bridge_coef_path = "Geometry/Structures/Bridge Coefficient Attributes"
+                table_info_path = "Geometry/Structures/Table Info"
+                profile_data_path = "Geometry/Structures/Profile Data"
+                bridge_coef_present = bridge_coef_path in hdf
+                table_info_present = table_info_path in hdf
+                profile_data_present = profile_data_path in hdf
+                bridge_coef = get_dataset_df(bridge_coef_path)
+                table_info = get_dataset_df(table_info_path)
+                profile_data = get_dataset_df(profile_data_path)
 
                 # Assign 'Structure ID' based on index (starting from 1)
                 struct_attrs.reset_index(drop=True, inplace=True)
@@ -158,6 +205,7 @@ class HdfStruc:
                 
                 # Create LineString geometries for each structure
                 geoms = []
+                invalid_indices = []
                 for i in range(len(centerline_info)):
                     start_idx = centerline_info[i][0]  # Point Starting Index
                     point_count = centerline_info[i][1]  # Point Count
@@ -165,7 +213,11 @@ class HdfStruc:
                     if len(points) >= 2:
                         geoms.append(LineString(points))
                     else:
-                        logger.warning(f"Insufficient points for LineString in structure index {i}.")
+                        invalid_indices.append(i)
+                        logger.debug(
+                            f"Structure index {i} in {hdf_path.name} has "
+                            f"{len(points)} centerline point(s); LineString requires at least 2."
+                        )
                         geoms.append(None)
 
                 # Create base GeoDataFrame with Structures Attributes and geometries
@@ -180,7 +232,13 @@ class HdfStruc:
                 struct_gdf = struct_gdf.dropna(subset=['geometry']).reset_index(drop=True)
                 final_count = len(struct_gdf)
                 if final_count < initial_count:
-                    logger.warning(f"Dropped {initial_count - final_count} structures due to invalid geometries.")
+                    preview = invalid_indices[:5]
+                    suffix = "..." if len(invalid_indices) > 5 else ""
+                    logger.warning(
+                        f"Dropped {initial_count - final_count} structure(s) from "
+                        f"{hdf_path.name} due to invalid centerline geometry "
+                        f"(indices: {preview}{suffix})."
+                    )
 
                 # Merge Bridge Coefficient Attributes on 'Structure ID'
                 if not bridge_coef.empty and 'Structure ID' in bridge_coef.columns:
@@ -192,17 +250,33 @@ class HdfStruc:
                     )
                     logger.debug("Merged Bridge Coefficient Attributes successfully.")
                 else:
-                    logger.warning("Bridge Coefficient Attributes missing or 'Structure ID' not present.")
+                    if bridge_coef_present:
+                        logger.warning(
+                            f"Bridge Coefficient Attributes in {hdf_path.name} "
+                            "could not be merged because 'Structure ID' is missing."
+                        )
+                    else:
+                        logger.debug(
+                            f"Bridge Coefficient Attributes dataset absent in {hdf_path.name}; "
+                            "continuing without bridge coefficient attributes."
+                        )
 
                 # Merge Table Info based on the DataFrame index (one-to-one correspondence)
                 if not table_info.empty:
                     if len(table_info) != len(struct_gdf):
-                        logger.warning("Table Info count does not match Structures count. Skipping merge.")
+                        logger.warning(
+                            f"Table Info row count ({len(table_info)}) does not match "
+                            f"structure count ({len(struct_gdf)}) in {hdf_path.name}; "
+                            "skipping Table Info merge."
+                        )
                     else:
                         struct_gdf = pd.concat([struct_gdf, table_info.reset_index(drop=True)], axis=1)
                         logger.debug("Merged Table Info successfully.")
                 else:
-                    logger.warning("Table Info dataset is empty or missing.")
+                    if table_info_present:
+                        logger.debug(f"Table Info dataset is empty in {hdf_path.name}.")
+                    else:
+                        logger.debug(f"Table Info dataset is absent in {hdf_path.name}.")
 
                 # Process Profile Data based on Table Info
                 if not profile_data.empty and not table_info.empty:
@@ -222,9 +296,25 @@ class HdfStruc:
                         )
                         logger.debug("Processed Profile Data successfully.")
                     else:
-                        logger.warning("Required columns for Profile Data not found in Table Info.")
+                        logger.warning(
+                            f"Profile Data in {hdf_path.name} could not be processed; "
+                            "expected Table Info columns 'Centerline Profile (Index)' "
+                            "and 'Centerline Profile (Count)'."
+                        )
                 else:
-                    logger.warning("Profile Data dataset is empty or Table Info is missing.")
+                    missing = []
+                    if not profile_data_present:
+                        missing.append("Profile Data")
+                    elif profile_data.empty:
+                        missing.append("non-empty Profile Data")
+                    if not table_info_present:
+                        missing.append("Table Info")
+                    elif table_info.empty:
+                        missing.append("non-empty Table Info")
+                    logger.debug(
+                        f"Skipping Profile Data processing for {hdf_path.name}; "
+                        f"missing {', '.join(missing)}."
+                    )
 
                 # Convert datetime columns to string if requested
                 if datetime_to_str:
@@ -234,11 +324,7 @@ class HdfStruc:
                         logger.debug(f"Converted datetime column '{col}' to string.")
 
                 # Ensure all byte strings are decoded (if any remain)
-                for col in struct_gdf.columns:
-                    if struct_gdf[col].dtype == object:
-                        struct_gdf[col] = struct_gdf[col].apply(
-                            lambda x: x.decode('utf-8', errors='ignore') if isinstance(x, bytes) else x
-                        )
+                struct_gdf = HdfStruc._decode_bytes_columns(struct_gdf)
 
                 # Final GeoDataFrame
                 logger.debug("Successfully extracted structures GeoDataFrame.")
@@ -295,7 +381,7 @@ class HdfStruc:
                 return pd.DataFrame(attrs_dict, index=[0])
 
         except Exception as e:
-            logger.error(f"Error reading geometry structures attributes: {str(e)}")
+            logger.error(f"Error reading geometry structures attributes from {hdf_path}: {str(e)}")
             return pd.DataFrame()
 
     @staticmethod
@@ -344,17 +430,19 @@ class HdfStruc:
 
                 struct_attrs = hdf_file["Geometry/Structures/Attributes"][()]
                 struct_df = pd.DataFrame(struct_attrs)
-
-                # Decode byte strings in structure attributes
-                for col in struct_df.columns:
-                    if struct_df[col].dtype.kind in {'S', 'a'}:  # Byte strings
-                        struct_df[col] = struct_df[col].str.decode('utf-8', errors='ignore')
+                struct_df = HdfStruc._decode_bytes_columns(struct_df)
 
                 # Filter for culverts only (assuming Type field exists)
                 if 'Type' in struct_df.columns:
-                    culvert_df = struct_df[struct_df['Type'].str.contains('Culvert', case=False, na=False)].copy()
+                    type_series = struct_df['Type'].astype(str)
+                    culvert_df = struct_df[
+                        type_series.str.contains('Culvert', case=False, na=False)
+                    ].copy()
                 else:
-                    logger.warning("No 'Type' column in structure attributes, returning all structures")
+                    logger.warning(
+                        f"No 'Type' column in structure attributes for {hdf_path.name}; "
+                        f"returning all {len(struct_df)} structure row(s)."
+                    )
                     culvert_df = struct_df.copy()
 
                 if culvert_df.empty:
@@ -370,21 +458,25 @@ class HdfStruc:
                 if culvert_data_path in hdf_file:
                     culvert_data = hdf_file[culvert_data_path][()]
                     culvert_data_df = pd.DataFrame(culvert_data)
-
-                    # Decode byte strings in culvert data
-                    for col in culvert_data_df.columns:
-                        if culvert_data_df[col].dtype.kind in {'S', 'a'}:
-                            culvert_data_df[col] = culvert_data_df[col].str.decode('utf-8', errors='ignore')
+                    culvert_data_df = HdfStruc._decode_bytes_columns(culvert_data_df)
 
                     # Merge culvert-specific data with structure attributes
                     # Note: We assume culvert data is in same order as culvert structures
                     if len(culvert_data_df) == len(culvert_df):
                         result_df = pd.concat([culvert_df, culvert_data_df], axis=1)
                     else:
-                        logger.warning(f"Culvert data count ({len(culvert_data_df)}) doesn't match culvert structure count ({len(culvert_df)})")
+                        logger.warning(
+                            f"Culvert Data row count ({len(culvert_data_df)}) does not match "
+                            f"culvert structure count ({len(culvert_df)}) in {hdf_path.name}; "
+                            "returning structure attributes only."
+                        )
                         result_df = culvert_df
                 else:
-                    logger.warning(f"No 'Culvert Data' dataset found in {hdf_path}")
+                    logger.warning(
+                        f"Culvert structures found in {hdf_path.name}, but "
+                        "Geometry/Structures/Culvert Data is absent; returning "
+                        "structure attributes only."
+                    )
                     result_df = culvert_df
 
                 # Standardize column names to match API specification
@@ -406,11 +498,7 @@ class HdfStruc:
                         result_df[col] = result_df[col].dt.isoformat()
 
                 # Ensure all byte strings are decoded (if any remain)
-                for col in result_df.columns:
-                    if result_df[col].dtype == object:
-                        result_df[col] = result_df[col].apply(
-                            lambda x: x.decode('utf-8', errors='ignore') if isinstance(x, bytes) else x
-                        )
+                result_df = HdfStruc._decode_bytes_columns(result_df)
 
                 logger.debug(f"Successfully extracted hydraulic data for {len(result_df)} culverts")
                 return result_df
@@ -456,16 +544,7 @@ class HdfStruc:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/SA 2D Area Conn"
-
-                if base_path not in hdf_file:
-                    logger.warning(f"No SA 2D Area Conn data found in {hdf_path.name}")
-                    return []
-
-                # List all groups (structure names) under SA 2D Area Conn
-                structures = list(hdf_file[base_path].keys())
-                logger.debug(f"Found {len(structures)} SA/2D connection structures: {structures}")
-                return structures
+                return HdfStruc._list_sa2d_connections_from_hdf(hdf_file, hdf_path)
 
         except Exception as e:
             logger.error(f"Error listing SA/2D connection structures: {e}")
@@ -509,12 +588,12 @@ class HdfStruc:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                structures = HdfStruc.list_sa2d_connections(hdf_path, ras_object=ras_object)
+                structures = HdfStruc._list_sa2d_connections_from_hdf(hdf_file, hdf_path)
 
                 if not structures:
                     return pd.DataFrame()
 
-                base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/SA 2D Area Conn"
+                base_path = HdfStruc.SA_2D_CONN_RESULTS_PATH
 
                 info_list = []
                 for struct_name in structures:

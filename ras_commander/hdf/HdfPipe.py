@@ -34,9 +34,41 @@ from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
 from .HdfResultsMesh import HdfResultsMesh
-import logging  
 
 logger = get_logger(__name__)
+
+
+_PIPE_GEOMETRY_PREPROCESSOR_ACTION = (
+    "Run the HEC-RAS geometry preprocessor, then retry if pipe geometry data is expected."
+)
+_PIPE_RESULTS_ACTION = (
+    "Compute the plan with pipe-network output enabled, or request an available pipe-network variable."
+)
+
+
+def _missing_hdf_object_message(context: str, hdf_path: str, action: str) -> str:
+    return f"{context} requires HDF object '{hdf_path}', but it was not found. {action}"
+
+
+def _format_available_items(items: List[str], max_items: int = 12) -> str:
+    if not items:
+        return "none"
+
+    shown = items[:max_items]
+    suffix = f", ... ({len(items) - max_items} more)" if len(items) > max_items else ""
+    return ", ".join(shown) + suffix
+
+
+def _list_hdf_datasets(group: h5py.Group) -> List[str]:
+    datasets = []
+
+    def collect_dataset(name, obj):
+        if isinstance(obj, h5py.Dataset):
+            datasets.append(name)
+
+    group.visititems(collect_dataset)
+    return sorted(datasets)
+
 
 class HdfPipe:
     """
@@ -69,9 +101,24 @@ class HdfPipe:
             - Terrain_Profiles: List of (station, elevation) tuples
         """
         with h5py.File(hdf_path, 'r') as f:
+            if '/Geometry/Pipe Conduits' not in f:
+                raise KeyError(_missing_hdf_object_message(
+                    "Pipe conduit extraction",
+                    "/Geometry/Pipe Conduits",
+                    _PIPE_GEOMETRY_PREPROCESSOR_ACTION,
+                ))
+
             group = f['/Geometry/Pipe Conduits/']
             
             # --- Read and Process Attributes ---
+            for dataset_name in ["Attributes", "Polyline Info", "Polyline Points"]:
+                if dataset_name not in group:
+                    raise KeyError(_missing_hdf_object_message(
+                        "Pipe conduit extraction",
+                        f"/Geometry/Pipe Conduits/{dataset_name}",
+                        _PIPE_GEOMETRY_PREPROCESSOR_ACTION,
+                    ))
+
             attributes = group['Attributes'][:]
             attr_df = pd.DataFrame(attributes)
             
@@ -138,24 +185,33 @@ class HdfPipe:
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame containing pipe node attributes and
-                Point geometries.  Returns an empty GeoDataFrame if the
-                ``Geometry/Pipe Nodes`` group does not exist.
+                Point geometries.
 
         Raises:
-            KeyError: If the group exists but required datasets are missing.
+            KeyError: If the required pipe node geometry datasets are missing.
 
         Example:
             >>> nodes_gdf = HdfPipe.get_pipe_nodes("path/to/plan.hdf")
         """
         with h5py.File(hdf_path, 'r') as f:
-            # --- Gracefully handle missing group ---
             if '/Geometry/Pipe Nodes' not in f:
-                logger.warning("Geometry/Pipe Nodes group not found in HDF file")
-                return gpd.GeoDataFrame()
+                raise KeyError(_missing_hdf_object_message(
+                    "Pipe node extraction",
+                    "/Geometry/Pipe Nodes",
+                    _PIPE_GEOMETRY_PREPROCESSOR_ACTION,
+                ))
 
             group = f['/Geometry/Pipe Nodes/']
 
             # --- Read and Process Attributes ---
+            for dataset_name in ["Attributes", "Points"]:
+                if dataset_name not in group:
+                    raise KeyError(_missing_hdf_object_message(
+                        "Pipe node extraction",
+                        f"/Geometry/Pipe Nodes/{dataset_name}",
+                        _PIPE_GEOMETRY_PREPROCESSOR_ACTION,
+                    ))
+
             attributes = group['Attributes'][:]
             attr_df = pd.DataFrame(attributes)
 
@@ -228,7 +284,7 @@ class HdfPipe:
                 frames.append(df)
 
         if not frames:
-            logger.warning("No inlet attribute data found in HDF file")
+            logger.debug("No inlet attribute data found in HDF file")
             return pd.DataFrame()
 
         return pd.concat(frames, ignore_index=True)
@@ -253,9 +309,23 @@ class HdfPipe:
             - Associated attributes
         """
         with h5py.File(hdf_path, 'r') as f:
+            if '/Geometry/Pipe Networks' not in f:
+                raise KeyError(_missing_hdf_object_message(
+                    "Pipe network extraction",
+                    "/Geometry/Pipe Networks",
+                    _PIPE_GEOMETRY_PREPROCESSOR_ACTION,
+                ))
+
             pipe_networks_group = f['/Geometry/Pipe Networks/']
-            
+
             # --- Determine Pipe Network to Use ---
+            if "Attributes" not in pipe_networks_group:
+                raise KeyError(_missing_hdf_object_message(
+                    "Pipe network extraction",
+                    "/Geometry/Pipe Networks/Attributes",
+                    _PIPE_GEOMETRY_PREPROCESSOR_ACTION,
+                ))
+
             attributes = pipe_networks_group['Attributes'][:]
             attr_df = pd.DataFrame(attributes)
             
@@ -271,11 +341,54 @@ class HdfPipe:
             
             # Get the name of the selected pipe network
             selected_network_name = attr_df.at[network_idx, 'Name']
-            logging.info(f"Selected Pipe Network: {selected_network_name}")
+            logger.debug("Selected pipe network: %s", selected_network_name)
             
             # Access the selected pipe network group
-            network_group_path = f"/Geometry/Pipe Networks/{selected_network_name}/"
+            network_group_path = f"/Geometry/Pipe Networks/{selected_network_name}"
+            if network_group_path not in f:
+                raise KeyError(_missing_hdf_object_message(
+                    "Pipe network extraction",
+                    network_group_path,
+                    _PIPE_GEOMETRY_PREPROCESSOR_ACTION,
+                ))
+
             network_group = f[network_group_path]
+
+            required_network_datasets = [
+                "Cell Polygons Info",
+                "Cell Polygons Parts",
+                "Cell Polygons Points",
+                "Face Polylines Info",
+                "Face Polylines Parts",
+                "Face Polylines Points",
+                "Node Connectivity Info",
+                "Node Connectivity Values",
+                "Node Indices",
+                "Node Surface Connectivity",
+                "Cell Property Table",
+                "Cells DS Face Indices Info",
+                "Cells DS Face Indices Values",
+                "Cells Face Indices Info",
+                "Cells Face Indices Values",
+                "Cells Minimum Elevations",
+                "Cells Node and Conduit IDs",
+                "Cells US Face Indices Info",
+                "Cells US Face Indices Values",
+                "Conduit Indices",
+                "Face Property Table",
+                "Faces Conduit ID and Stations",
+            ]
+            missing_network_datasets = [
+                f"{network_group_path}/{dataset_name}"
+                for dataset_name in required_network_datasets
+                if dataset_name not in network_group
+            ]
+            if missing_network_datasets:
+                raise KeyError(
+                    "Pipe network extraction found an incomplete pipe network geometry group. "
+                    f"Missing: {_format_available_items(missing_network_datasets)}. "
+                    f"{_PIPE_GEOMETRY_PREPROCESSOR_ACTION}"
+                )
             
             # --- Helper Functions ---
             def decode_bytes(df: pd.DataFrame) -> pd.DataFrame:
@@ -578,33 +691,32 @@ class HdfPipe:
             KeyError: If the required datasets are not found in the HDF file.
             IndexError: If the specified conduit_id is out of range.
         """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf:
-                # Get conduit info
-                terrain_profiles_info = hdf['/Geometry/Pipe Conduits/Terrain Profiles Info'][()]
-                
-                if conduit_id >= len(terrain_profiles_info):
-                    raise IndexError(f"conduit_id {conduit_id} is out of range")
+        profile_info_path = "/Geometry/Pipe Conduits/Terrain Profiles Info"
+        profile_values_path = "/Geometry/Pipe Conduits/Terrain Profiles Values"
 
-                start, count = terrain_profiles_info[conduit_id]
+        with h5py.File(hdf_path, 'r') as hdf:
+            missing_paths = [
+                path for path in [profile_info_path, profile_values_path] if path not in hdf
+            ]
+            if missing_paths:
+                raise KeyError(
+                    "Pipe conduit terrain profile data is absent from the HDF file. "
+                    f"Missing: {_format_available_items(missing_paths)}. "
+                    f"{_PIPE_GEOMETRY_PREPROCESSOR_ACTION}"
+                )
 
-                # Extract profile data
-                profile_values = hdf['/Geometry/Pipe Conduits/Terrain Profiles Values'][start:start+count]
+            terrain_profiles_info = hdf[profile_info_path][()]
 
-                # Create DataFrame
-                df = pd.DataFrame(profile_values, columns=['Station', 'Elevation'])
+            if conduit_id < 0 or conduit_id >= len(terrain_profiles_info):
+                raise IndexError(
+                    f"conduit_id {conduit_id} is out of range for "
+                    f"{len(terrain_profiles_info)} pipe terrain profiles."
+                )
 
-                return df
+            start, count = terrain_profiles_info[conduit_id]
+            profile_values = hdf[profile_values_path][start:start+count]
 
-        except KeyError as e:
-            logger.error(f"Required dataset not found in HDF file: {e}")
-            raise
-        except IndexError as e:
-            logger.error(f"Invalid conduit_id: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Error extracting pipe profile data: {e}")
-            raise
+            return pd.DataFrame(profile_values, columns=['Station', 'Elevation'])
         
         
    
@@ -635,30 +747,25 @@ class HdfPipe:
         Raises:
             KeyError: If the required datasets are not found in the HDF file.
         """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf:
-                # Extract summary data
-                summary_path = "/Results/Unsteady/Summary/Pipe Network"
-                if summary_path not in hdf:
-                    logger.warning("Pipe Network summary data not found in HDF file")
-                    return pd.DataFrame()
+        with h5py.File(hdf_path, 'r') as hdf:
+            summary_path = "/Results/Unsteady/Summary/Pipe Network"
+            if summary_path not in hdf:
+                raise KeyError(_missing_hdf_object_message(
+                    "Pipe network summary extraction",
+                    summary_path,
+                    "Compute an unsteady plan with pipe-network summary output available, then retry.",
+                ))
 
-                summary_data = hdf[summary_path][()]
-                
-                # Create DataFrame
-                df = pd.DataFrame(summary_data)
+            summary_data = hdf[summary_path][()]
+            df = pd.DataFrame(summary_data)
 
-                # Convert column names
-                df.columns = [col.decode('utf-8') for col in df.columns]
+            # Convert column names
+            df.columns = [
+                col.decode('utf-8') if isinstance(col, bytes) else str(col)
+                for col in df.columns
+            ]
 
-                return df
-
-        except KeyError as e:
-            logger.error(f"Required dataset not found in HDF file: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Error extracting pipe network summary data: {e}")
-            raise
+            return df
 
 
 
@@ -684,18 +791,19 @@ class HdfPipe:
             - Drop Inlet Flow
             - Water Surface
         """
-        try:
-            node_variables = ["Nodes/Depth", "Nodes/Drop Inlet Flow", "Nodes/Water Surface"]
-            node_data = {}
+        node_variables = ["Nodes/Depth", "Nodes/Drop Inlet Flow", "Nodes/Water Surface"]
+        node_data = {}
 
-            for variable in node_variables:
-                data = HdfPipe.get_pipe_network_timeseries(plan_hdf_path, variable=variable)
+        for variable in node_variables:
+            data = HdfPipe.get_pipe_network_timeseries(plan_hdf_path, variable=variable)
+            try:
                 node_data[variable] = data.sel(location=node_id)
-            
-            return node_data
-        except Exception as e:
-            logger.error(f"Error extracting time series data for node {node_id}: {str(e)}")
-            raise
+            except KeyError as exc:
+                raise KeyError(
+                    f"Pipe node id {node_id} was not found in timeseries variable '{variable}'."
+                ) from exc
+
+        return node_data
 
     @staticmethod
     @log_call
@@ -717,19 +825,20 @@ class HdfPipe:
             - Pipe Flow (US/DS)
             - Velocity (US/DS)
         """
-        try:
-            conduit_variables = ["Pipes/Pipe Flow DS", "Pipes/Pipe Flow US", 
-                                "Pipes/Vel DS", "Pipes/Vel US"]
-            conduit_data = {}
+        conduit_variables = ["Pipes/Pipe Flow DS", "Pipes/Pipe Flow US",
+                            "Pipes/Vel DS", "Pipes/Vel US"]
+        conduit_data = {}
 
-            for variable in conduit_variables:
-                data = HdfPipe.get_pipe_network_timeseries(plan_hdf_path, variable=variable)
+        for variable in conduit_variables:
+            data = HdfPipe.get_pipe_network_timeseries(plan_hdf_path, variable=variable)
+            try:
                 conduit_data[variable] = data.sel(location=conduit_id)
-            
-            return conduit_data
-        except Exception as e:
-            logger.error(f"Error extracting time series data for conduit {conduit_id}: {str(e)}")
-            raise
+            except KeyError as exc:
+                raise KeyError(
+                    f"Pipe conduit id {conduit_id} was not found in timeseries variable '{variable}'."
+                ) from exc
+
+        return conduit_data
 
 
     @staticmethod
@@ -760,48 +869,72 @@ class HdfPipe:
         if variable not in valid_variables:
             raise ValueError(f"Invalid variable. Must be one of: {', '.join(valid_variables)}")
 
-        try:
-            with h5py.File(hdf_path, 'r') as hdf:
-                # Extract timeseries data
-                data_path = f"/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/Unsteady Time Series/Pipe Networks/Davis/{variable}"
-                data = hdf[data_path][()]
+        with h5py.File(hdf_path, 'r') as hdf:
+            network_name = "Davis"
+            pipe_networks_path = (
+                "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/"
+                "Unsteady Time Series/Pipe Networks"
+            )
+            network_path = f"{pipe_networks_path}/{network_name}"
+            data_path = f"{network_path}/{variable}"
 
-                # Extract time information - try DSS-specific timestamps first
-                dss_time_path = "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/Unsteady Time Series/Time Date Stamp (ms)"
-
-                if dss_time_path in hdf:
-                    # Use DSS Hydrograph Output timestamps
-                    raw_datetimes = hdf[dss_time_path][:]
-                    time = [HdfUtils.parse_ras_datetime_ms(x.decode("utf-8")) for x in raw_datetimes]
+            if data_path not in hdf:
+                if network_path in hdf:
+                    available = _list_hdf_datasets(hdf[network_path])
+                    available_detail = (
+                        f" Available variables for pipe network '{network_name}': "
+                        f"{_format_available_items(available)}."
+                    )
+                elif pipe_networks_path in hdf:
+                    available_networks = sorted(hdf[pipe_networks_path].keys())
+                    available_detail = (
+                        f" Available pipe networks: {_format_available_items(available_networks)}."
+                    )
                 else:
-                    # Fallback to Base Output timestamps
-                    time = HdfBase.get_unsteady_timestamps(hdf)
+                    available_detail = " No pipe-network timeseries group was found in the HDF file."
 
-                # Verify time dimension matches data, use index if mismatch
-                if len(time) != data.shape[0]:
-                    logger.warning(f"Timestamp count ({len(time)}) doesn't match data time dimension ({data.shape[0]}). Using numeric index.")
-                    time = list(range(data.shape[0]))
-
-                # Create DataArray
-                da = xr.DataArray(
-                    data=data,
-                    dims=['time', 'location'],
-                    coords={'time': time, 'location': range(data.shape[1])},
-                    name=variable
+                raise KeyError(
+                    f"Pipe network timeseries variable '{variable}' was not found "
+                    f"under pipe network '{network_name}'.{available_detail} "
+                    f"{_PIPE_RESULTS_ACTION}"
                 )
 
-                # Add attributes
-                da.attrs['units'] = hdf[data_path].attrs.get('Units', b'').decode('utf-8')
-                da.attrs['variable'] = variable
+            data = hdf[data_path][()]
 
-                return da
+            # Extract time information - try DSS-specific timestamps first
+            dss_time_path = "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/Unsteady Time Series/Time Date Stamp (ms)"
 
-        except KeyError as e:
-            logger.error(f"Required dataset not found in HDF file: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Error extracting pipe network timeseries data: {e}")
-            raise
+            if dss_time_path in hdf:
+                # Use DSS Hydrograph Output timestamps
+                raw_datetimes = hdf[dss_time_path][:]
+                time = [HdfUtils.parse_ras_datetime_ms(x.decode("utf-8")) for x in raw_datetimes]
+            else:
+                # Fallback to Base Output timestamps
+                time = HdfBase.get_unsteady_timestamps(hdf)
+
+            # Verify time dimension matches data, use index if mismatch
+            if len(time) != data.shape[0]:
+                logger.warning(
+                    "Pipe timeseries timestamp mismatch: timestamps=%d rows=%d; using numeric time index",
+                    len(time),
+                    data.shape[0],
+                )
+                time = list(range(data.shape[0]))
+
+            # Create DataArray
+            da = xr.DataArray(
+                data=data,
+                dims=['time', 'location'],
+                coords={'time': time, 'location': range(data.shape[1])},
+                name=variable
+            )
+
+            # Add attributes
+            units = hdf[data_path].attrs.get('Units', b'')
+            da.attrs['units'] = units.decode('utf-8') if isinstance(units, bytes) else str(units)
+            da.attrs['variable'] = variable
+
+            return da
 
 
 

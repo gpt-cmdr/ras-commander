@@ -1,3 +1,6 @@
+import logging
+import warnings
+
 import numpy as np
 import h5py
 
@@ -5,6 +8,7 @@ from ras_commander.hdf.HdfResultsMesh import HdfResultsMesh
 
 
 MESH_NAME = "Test Mesh"
+LOGGER_NAME = "ras_commander.hdf.HdfResultsMesh"
 BASE_TS_PATH = (
     "Results/Unsteady/Output/Output Blocks/Base Output/"
     "Unsteady Time Series"
@@ -196,6 +200,41 @@ def test_get_mesh_faces_timeseries_can_preserve_full_time_axis(tmp_path):
     )
 
 
+def test_get_mesh_faces_timeseries_merges_mixed_time_axes_without_future_warning(
+    tmp_path,
+):
+    hdf_path = tmp_path / "synthetic.p01.hdf"
+    _create_synthetic_face_results_hdf(hdf_path)
+
+    with h5py.File(hdf_path, "a") as hdf:
+        del hdf[f"{BASE_TS_PATH}/2D Flow Areas/{MESH_NAME}/Face Area"]
+        dataset = hdf.create_dataset(
+            f"{BASE_TS_PATH}/2D Flow Areas/{MESH_NAME}/Face Area",
+            data=np.array([[0.0, 0.0], [10.0, 20.0], [0.0, 0.0]]),
+        )
+        dataset.attrs["Units"] = np.bytes_("ft2")
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = HdfResultsMesh.get_mesh_faces_timeseries(
+            hdf_path,
+            MESH_NAME,
+            truncate=True,
+        )
+
+    assert not [
+        warning
+        for warning in caught
+        if issubclass(warning.category, FutureWarning)
+        and "default value for join" in str(warning.message)
+    ]
+    assert result.sizes["time"] == 3
+    np.testing.assert_allclose(
+        result["face_area"].values[:, 0],
+        np.array([np.nan, 10.0, np.nan]),
+    )
+
+
 def test_get_mesh_cells_timeseries_treats_new_outputs_as_face_indexed(tmp_path):
     hdf_path = tmp_path / "synthetic.p01.hdf"
     _create_synthetic_face_results_hdf(hdf_path)
@@ -208,6 +247,78 @@ def test_get_mesh_cells_timeseries_treats_new_outputs_as_face_indexed(tmp_path):
 
     assert MESH_NAME in result
     assert result[MESH_NAME]["Face Manning's n"].dims == ("time", "face_id")
+
+
+def test_get_mesh_cells_timeseries_aggregate_missing_outputs_are_debug_only(
+    tmp_path,
+    caplog,
+):
+    hdf_path = tmp_path / "synthetic.p01.hdf"
+    _create_synthetic_face_results_hdf(hdf_path)
+
+    with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
+        result = HdfResultsMesh.get_mesh_cells_timeseries(
+            hdf_path,
+            mesh_names=MESH_NAME,
+        )
+
+    assert MESH_NAME in result
+    assert "Face Area" in result[MESH_NAME].data_vars
+    assert "Face Manning's n" in result[MESH_NAME].data_vars
+
+    hdf_result_records = [
+        record for record in caplog.records if record.name == LOGGER_NAME
+    ]
+    warning_messages = [
+        record.getMessage()
+        for record in hdf_result_records
+        if record.levelno >= logging.WARNING
+    ]
+    assert not any("not found in the HDF file" in msg for msg in warning_messages)
+
+    debug_messages = [
+        record.getMessage()
+        for record in hdf_result_records
+        if record.levelno == logging.DEBUG
+    ]
+    summary_messages = [
+        msg for msg in debug_messages
+        if "time-series probe found" in msg
+    ]
+    assert len(summary_messages) == 1
+    assert "skipped" in summary_messages[0]
+    assert "Depth" in summary_messages[0]
+    assert "Face Area" in summary_messages[0]
+
+
+def test_get_mesh_cells_timeseries_explicit_missing_output_logs_error(
+    tmp_path,
+    caplog,
+):
+    hdf_path = tmp_path / "synthetic.p01.hdf"
+    _create_synthetic_face_results_hdf(hdf_path)
+
+    with caplog.at_level(logging.ERROR, logger=LOGGER_NAME):
+        result = HdfResultsMesh.get_mesh_cells_timeseries(
+            hdf_path,
+            mesh_names=MESH_NAME,
+            var="Depth",
+        )
+
+    assert result == {}
+    error_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == LOGGER_NAME and record.levelno >= logging.ERROR
+    ]
+    assert any(
+        "Requested mesh time-series variable 'Depth' was not found" in msg
+        for msg in error_messages
+    )
+    assert any(
+        "No valid data variables found" in msg
+        for msg in error_messages
+    )
 
 
 def test_get_mesh_cells_timeseries_truncate_uses_time_axis(tmp_path):

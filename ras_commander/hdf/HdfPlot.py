@@ -10,8 +10,8 @@ Lazy Loading:
 """
 
 import pandas as pd
-from typing import Optional, Union, Tuple, TYPE_CHECKING
-from ..Decorators import log_call, standardize_input
+from typing import Tuple, TYPE_CHECKING
+from ..Decorators import log_call
 from .HdfUtils import HdfUtils
 
 # Type hints only - not imported at runtime
@@ -37,7 +37,7 @@ class HdfPlot:
         projection: str,
         title: str = '2D Flow Area Mesh Cells',
         figsize: Tuple[int, int] = (12, 8)
-    ) -> Optional['gpd.GeoDataFrame']:
+    ) -> 'gpd.GeoDataFrame':
         """
         Plots the mesh cells from the provided DataFrame and returns the GeoDataFrame.
 
@@ -48,27 +48,25 @@ class HdfPlot:
             figsize (Tuple[int, int], optional): Figure size. Defaults to (12, 8).
 
         Returns:
-            Optional[gpd.GeoDataFrame]: GeoDataFrame containing the mesh cells, or None if no cells found.
+            gpd.GeoDataFrame: GeoDataFrame containing the mesh cells.
+
+        Raises:
+            ValueError: If the input DataFrame is empty.
         """
         # Lazy imports for heavy dependencies
         import matplotlib.pyplot as plt
         import geopandas as gpd
 
         if cell_polygons_df.empty:
-            print("No Cell Polygons found.")
-            return None
+            raise ValueError(
+                "Cannot plot mesh cells because the input DataFrame is empty. "
+                "Provide cell polygon data before calling plot_mesh_cells()."
+            )
 
         # Convert any datetime columns to strings using HdfUtils
         cell_polygons_df = HdfUtils.convert_df_datetimes_to_str(cell_polygons_df)
 
         cell_polygons_gdf = gpd.GeoDataFrame(cell_polygons_df, crs=projection)
-
-        print("Cell Polygons CRS:", cell_polygons_gdf.crs)
-        try:
-            display(cell_polygons_gdf.head())
-        except NameError:
-            # display() not available outside Jupyter
-            print(cell_polygons_gdf.head())
 
         fig, ax = plt.subplots(figsize=figsize)
         cell_polygons_gdf.plot(ax=ax, edgecolor='blue', facecolor='none')
@@ -102,6 +100,13 @@ class HdfPlot:
         """
         # Lazy import for heavy dependency
         import matplotlib.pyplot as plt
+
+        missing_columns = [col for col in (x_col, y_col) if col not in df.columns]
+        if missing_columns:
+            raise ValueError(
+                f"Cannot plot time series; missing column(s): {missing_columns}. "
+                f"Available columns: {list(df.columns)}"
+            )
 
         # Convert any datetime columns to strings
         df = HdfUtils.convert_df_datetimes_to_str(df)

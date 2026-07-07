@@ -233,7 +233,11 @@ class HdfResultsPlan:
                     simulation_duration = end_time - start_time
                     simulation_hours = simulation_duration.total_seconds() / 3600
                 except ValueError as e:
-                    logger.error(f"Error parsing simulation times: {e}")
+                    logger.debug(
+                        "Runtime metadata unavailable for %s: could not parse simulation times (%s)",
+                        Path(hdf_file.filename).name,
+                        e,
+                    )
                     return None
 
                 logger.debug(f"Plan Name: {plan_name}")
@@ -325,7 +329,7 @@ class HdfResultsPlan:
                 ref_path = f"{base_path}/Reference {reftype.capitalize()}"
                 
                 if ref_path not in hdf_file:
-                    logger.warning(f"Reference {reftype} data not found in HDF file")
+                    logger.debug(f"Reference {reftype} data not found in HDF file")
                     return pd.DataFrame()
 
                 ref_group = hdf_file[ref_path]
@@ -368,7 +372,7 @@ class HdfResultsPlan:
                 ref_path = f"{base_path}/Reference {reftype.capitalize()}"
                 
                 if ref_path not in hdf_file:
-                    logger.warning(f"Reference {reftype} summary data not found in HDF file")
+                    logger.debug(f"Reference {reftype} summary data not found in HDF file")
                     return pd.DataFrame()
 
                 ref_group = hdf_file[ref_path]
@@ -416,7 +420,7 @@ class HdfResultsPlan:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return "Results/Steady" in hdf_file
         except Exception as e:
-            logger.error(f"Error checking if plan is steady: {str(e)}")
+            logger.debug(f"Error checking if plan is steady: {str(e)}")
             return False
 
     @staticmethod
@@ -757,7 +761,7 @@ class HdfResultsPlan:
 
                 # Check if path exists in HDF
                 if compute_msgs_path not in hdf_file:
-                    logger.warning(
+                    logger.debug(
                         f"Compute Messages not found in HDF at '{compute_msgs_path}', "
                         f"falling back to .txt file extraction"
                     )
@@ -771,7 +775,7 @@ class HdfResultsPlan:
                         # e.g., "C:/path/BaldEagle.p10.hdf" -> use path for RasControl
                         txt_contents = RasControl.get_comp_msgs(hdf_path)
                         if txt_contents:
-                            logger.info(f"Successfully retrieved {len(txt_contents)} characters from .txt file")
+                            logger.debug(f"Successfully retrieved {len(txt_contents)} characters from .txt file")
                             return txt_contents
                     except Exception as e:
                         logger.debug(f".txt file fallback failed: {e}")
@@ -810,7 +814,7 @@ class HdfResultsPlan:
                 from ..RasControl import RasControl
                 txt_contents = RasControl.get_comp_msgs(hdf_path)
                 if txt_contents:
-                    logger.warning(
+                    logger.debug(
                         f"HDF file not found, successfully retrieved computation messages from .txt file"
                     )
                     return txt_contents
@@ -828,7 +832,7 @@ class HdfResultsPlan:
                 from ..RasControl import RasControl
                 txt_contents = RasControl.get_comp_msgs(hdf_path)
                 if txt_contents:
-                    logger.warning(
+                    logger.debug(
                         f"HDF extraction failed, successfully retrieved computation messages from .txt file"
                     )
                     return txt_contents
@@ -1165,7 +1169,7 @@ class HdfResultsPlan:
 
             with h5py.File(hdf_path, 'r') as hdf_file:
                 if "Results/Steady" not in hdf_file:
-                    logger.warning("No steady state results in this file")
+                    logger.debug("No steady state results in this file")
                     return result
 
                 base_path = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles"

@@ -73,6 +73,39 @@ class HdfInfiltration:
     SQM_TO_ACRE = 0.000247105
     SQM_TO_SQMILE = 3.861e-7
 
+    @staticmethod
+    def _format_log_samples(items: List[str], max_items: int = 5) -> str:
+        """Return a compact sample list for aggregate log messages."""
+        sample = ", ".join(str(item) for item in items[:max_items])
+        if len(items) > max_items:
+            sample = f"{sample}, ... plus {len(items) - max_items} more"
+        return sample
+
+    @staticmethod
+    def _log_raster_mesh_diagnostics(
+        raster_label: str,
+        total_meshes: int,
+        no_stats_meshes: List[str],
+        nodata_only_meshes: List[str],
+        mesh_errors: List[str],
+    ) -> None:
+        """Emit concise raster-stat diagnostic summaries after mesh loops."""
+        if no_stats_meshes:
+            logger.warning(
+                f"No {raster_label} raster stats for {len(no_stats_meshes)}/{total_meshes} "
+                f"2D flow area(s); first: {HdfInfiltration._format_log_samples(no_stats_meshes)}"
+            )
+        if nodata_only_meshes:
+            logger.warning(
+                f"Only NoData {raster_label} pixels for {len(nodata_only_meshes)}/{total_meshes} "
+                f"2D flow area(s); first: {HdfInfiltration._format_log_samples(nodata_only_meshes)}"
+            )
+        if mesh_errors:
+            logger.warning(
+                f"Failed {raster_label} raster statistics for {len(mesh_errors)}/{total_meshes} "
+                f"2D flow area(s); first: {HdfInfiltration._format_log_samples(mesh_errors)}"
+            )
+
     # Valid infiltration variables for preprocessed cell-level data
     INFILTRATION_VARIABLES = [
         'Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate',
@@ -298,7 +331,7 @@ class HdfInfiltration:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 table_path = '/Geometry/Infiltration/Base Overrides'
                 if table_path not in hdf_file:
-                    logger.warning(f"No infiltration data found in {hdf_path}")
+                    logger.debug(f"No infiltration data found in {hdf_path}")
                     return None
 
                 # Get column info
@@ -353,7 +386,7 @@ class HdfInfiltration:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 attrs_path = "Geometry/Infiltration/Attributes"
                 if attrs_path not in hdf_file:
-                    logger.warning(f"No infiltration attributes found in {hdf_path}")
+                    logger.debug(f"No infiltration attributes found in {hdf_path}")
                     return None
 
                 data = hdf_file[attrs_path][()]
@@ -395,7 +428,7 @@ class HdfInfiltration:
                 attrs_path = "Geometry/Infiltration/Attributes"
 
                 if variables_path not in hdf_file or attrs_path not in hdf_file:
-                    logger.warning(f"No infiltration variables or attributes found in {hdf_path}")
+                    logger.debug(f"No infiltration variables or attributes found in {hdf_path}")
                     return None
 
                 # Read region names
@@ -715,7 +748,7 @@ class HdfInfiltration:
             'Minimum Infiltration Rate': np.full(n_overrides, -9999.0),
         })
 
-        logger.info(
+        logger.debug(
             f"Created Infiltration group in {hdf_path}: "
             f"{n_regions} region(s), {n_overrides} override rows "
             f"({len(lc_class_names)} land cover classes x {len(soil_groups)} soil groups)"
@@ -861,7 +894,7 @@ class HdfInfiltration:
                 else:
                     result_df[col] = structured_array[col]
 
-            logger.info(f"Successfully wrote {len(result_df)} infiltration base override rows to {hdf_path}")
+            logger.debug(f"Successfully wrote {len(result_df)} infiltration base override rows to {hdf_path}")
             return result_df
 
         except ValueError:
@@ -1189,6 +1222,10 @@ class HdfInfiltration:
             
             # List to store all results
             all_results = []
+            total_meshes = len(mesh_areas)
+            no_stats_meshes = []
+            nodata_only_meshes = []
+            mesh_errors = []
             
             # Calculate zonal statistics for each 2D flow area
             for _, mesh_row in mesh_areas.iterrows():
@@ -1207,7 +1244,8 @@ class HdfInfiltration:
                     
                     # Skip if no stats
                     if not stats:
-                        logger.warning(f"No soil data found for 2D flow area: {mesh_name}")
+                        no_stats_meshes.append(mesh_name)
+                        logger.debug(f"No soil data found for 2D flow area: {mesh_name}")
                         continue
 
                     area_by_value, total_area_sqm = (
@@ -1218,7 +1256,8 @@ class HdfInfiltration:
                         )
                     )
                     if not area_by_value:
-                        logger.warning(
+                        nodata_only_meshes.append(mesh_name)
+                        logger.debug(
                             f"No non-NoData soil pixels found for 2D flow area: "
                             f"{mesh_name}"
                         )
@@ -1243,8 +1282,20 @@ class HdfInfiltration:
                             'area_sqmiles': area_sqm * HdfInfiltration.SQM_TO_SQMILE
                         })
                 except Exception as e:
-                    logger.error(f"Error calculating statistics for mesh {mesh_name}: {str(e)}")
+                    mesh_errors.append(mesh_name)
+                    logger.debug(
+                        f"Error calculating soil statistics for mesh {mesh_name}: {str(e)}",
+                        exc_info=True,
+                    )
                     continue
+
+            HdfInfiltration._log_raster_mesh_diagnostics(
+                "soil",
+                total_meshes,
+                no_stats_meshes,
+                nodata_only_meshes,
+                mesh_errors,
+            )
         
         # Create DataFrame with results
         results_df = pd.DataFrame(all_results)
@@ -1400,6 +1451,9 @@ class HdfInfiltration:
         
         # List to store all results
         all_results = []
+        total_meshes = len(mesh_areas)
+        no_stats_meshes = []
+        mesh_errors = []
         
         # Read the raster data
         try:
@@ -1431,7 +1485,8 @@ class HdfInfiltration:
                         
                         # Skip if no stats
                         if not landcover_stats or not soil_stats:
-                            logger.warning(f"No land cover or soil data found for 2D flow area: {mesh_name}")
+                            no_stats_meshes.append(mesh_name)
+                            logger.debug(f"No land cover or soil data found for 2D flow area: {mesh_name}")
                             continue
                         
                         # Calculate total area
@@ -1452,7 +1507,7 @@ class HdfInfiltration:
                         for lc_id, lc_pct in landcover_pct.items():
                             lc_name = landcover_map.get(int(lc_id), f"Unknown-{lc_id}")
                             
-                            for soil_id, soil_pct in soil_pct.items():
+                            for soil_id, soil_fraction in soil_pct.items():
                                 try:
                                     soil_name = soil_map.get(int(soil_id), f"Unknown-{soil_id}")
                                 except (ValueError, TypeError):
@@ -1460,7 +1515,7 @@ class HdfInfiltration:
                                 
                                 # Calculate combined percentage (approximate)
                                 # This is a simplification; actual overlap would require pixel-by-pixel analysis
-                                combined_pct = lc_pct * soil_pct * 100
+                                combined_pct = lc_pct * soil_fraction * 100
                                 combined_area_sqm = mesh_area_sqm * (combined_pct / 100)
                                 
                                 # Create combined name
@@ -1493,8 +1548,19 @@ class HdfInfiltration:
                                     'min_infiltration_rate': min_infiltration_rate
                                 })
                     except Exception as e:
-                        logger.error(f"Error calculating statistics for mesh {mesh_name}: {str(e)}")
+                        mesh_errors.append(mesh_name)
+                        logger.debug(
+                            f"Error calculating land cover/soil statistics for mesh {mesh_name}: {str(e)}",
+                            exc_info=True,
+                        )
                         continue
+                HdfInfiltration._log_raster_mesh_diagnostics(
+                    "land cover/soil",
+                    total_meshes,
+                    no_stats_meshes,
+                    [],
+                    mesh_errors,
+                )
         except Exception as e:
             logger.error(f"Error opening raster files: {str(e)}")
             return pd.DataFrame()
@@ -1653,6 +1719,9 @@ class HdfInfiltration:
         
         # List to store all results
         all_results = []
+        total_meshes = len(mesh_areas)
+        no_stats_meshes = []
+        mesh_errors = []
         
         # Read the raster data
         try:
@@ -1684,7 +1753,8 @@ class HdfInfiltration:
                         
                         # Skip if no stats
                         if not landcover_stats or not soil_stats:
-                            logger.warning(f"No land cover or soil data found for 2D flow area: {mesh_name}")
+                            no_stats_meshes.append(mesh_name)
+                            logger.debug(f"No land cover or soil data found for 2D flow area: {mesh_name}")
                             continue
                         
                         # Calculate total area
@@ -1705,7 +1775,7 @@ class HdfInfiltration:
                         for lc_id, lc_pct in landcover_pct.items():
                             lc_name = landcover_map.get(int(lc_id), f"Unknown-{lc_id}")
                             
-                            for soil_id, soil_pct in soil_pct.items():
+                            for soil_id, soil_fraction in soil_pct.items():
                                 try:
                                     soil_name = soil_map.get(int(soil_id), f"Unknown-{soil_id}")
                                 except (ValueError, TypeError):
@@ -1713,7 +1783,7 @@ class HdfInfiltration:
                                 
                                 # Calculate combined percentage (approximate)
                                 # This is a simplification; actual overlap would require pixel-by-pixel analysis
-                                combined_pct = lc_pct * soil_pct * 100
+                                combined_pct = lc_pct * soil_fraction * 100
                                 combined_area_sqm = mesh_area_sqm * (combined_pct / 100)
                                 
                                 # Create combined name
@@ -1746,8 +1816,19 @@ class HdfInfiltration:
                                     'min_infiltration_rate': min_infiltration_rate
                                 })
                     except Exception as e:
-                        logger.error(f"Error calculating statistics for mesh {mesh_name}: {str(e)}")
+                        mesh_errors.append(mesh_name)
+                        logger.debug(
+                            f"Error calculating land cover/soil statistics for mesh {mesh_name}: {str(e)}",
+                            exc_info=True,
+                        )
                         continue
+                HdfInfiltration._log_raster_mesh_diagnostics(
+                    "land cover/soil",
+                    total_meshes,
+                    no_stats_meshes,
+                    [],
+                    mesh_errors,
+                )
         except Exception as e:
             logger.error(f"Error opening raster files: {str(e)}")
             return pd.DataFrame()
@@ -2116,6 +2197,11 @@ class HdfInfiltration:
         
         # List to store all results
         all_results = []
+        total_meshes = len(mesh_areas)
+        no_stats_meshes = []
+        nodata_only_meshes = []
+        mesh_errors = []
+        value_errors = []
         
         # Read the raster data and info
         try:
@@ -2139,7 +2225,8 @@ class HdfInfiltration:
                         
                         # Skip if no stats
                         if not stats:
-                            logger.warning(f"No land cover data found for 2D flow area: {mesh_name}")
+                            no_stats_meshes.append(mesh_name)
+                            logger.debug(f"No land cover data found for 2D flow area: {mesh_name}")
                             continue
 
                         area_by_value, total_area_sqm = (
@@ -2150,7 +2237,8 @@ class HdfInfiltration:
                             )
                         )
                         if not area_by_value:
-                            logger.warning(
+                            nodata_only_meshes.append(mesh_name)
+                            logger.debug(
                                 f"No non-NoData land cover pixels found for 2D "
                                 f"flow area: {mesh_name}"
                             )
@@ -2180,11 +2268,32 @@ class HdfInfiltration:
                                     'percent_impervious': percent_impervious
                                 })
                             except Exception as e:
-                                logger.warning(f"Error processing raster value {raster_val}: {e}")
+                                value_errors.append(f"{mesh_name}/{raster_val}")
+                                logger.debug(
+                                    f"Error processing land cover raster value {raster_val} "
+                                    f"for mesh {mesh_name}: {e}",
+                                    exc_info=True,
+                                )
                                 continue
                     except Exception as e:
-                        logger.error(f"Error calculating statistics for mesh {mesh_name}: {str(e)}")
+                        mesh_errors.append(mesh_name)
+                        logger.debug(
+                            f"Error calculating land cover statistics for mesh {mesh_name}: {str(e)}",
+                            exc_info=True,
+                        )
                         continue
+                HdfInfiltration._log_raster_mesh_diagnostics(
+                    "land cover",
+                    total_meshes,
+                    no_stats_meshes,
+                    nodata_only_meshes,
+                    mesh_errors,
+                )
+                if value_errors:
+                    logger.warning(
+                        f"Skipped {len(value_errors)} land cover raster value(s) during "
+                        f"stats processing; first: {HdfInfiltration._format_log_samples(value_errors)}"
+                    )
         except ValueError:
             raise
         except Exception as e:

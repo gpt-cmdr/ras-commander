@@ -71,10 +71,15 @@ class HdfBndry:
         gpd.GeoDataFrame
             A GeoDataFrame containing the boundary condition lines and their attributes.
         """
+        bc_lines_path = "Geometry/Boundary Condition Lines"
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                bc_lines_path = "Geometry/Boundary Condition Lines"
                 if bc_lines_path not in hdf_file:
+                    logger.debug(
+                        "Boundary condition lines group '%s' not found in %s.",
+                        bc_lines_path,
+                        hdf_path.name,
+                    )
                     return gpd.GeoDataFrame()
                 
                 # Get geometries
@@ -104,7 +109,12 @@ class HdfBndry:
                 return gdf
 
         except Exception as e:
-            logger.error(f"Error reading boundary condition lines: {str(e)}")
+            logger.error(
+                "Error reading boundary condition lines from %s (%s): %s",
+                hdf_path,
+                bc_lines_path,
+                str(e),
+            )
             return gpd.GeoDataFrame()
 
     @staticmethod
@@ -129,11 +139,15 @@ class HdfBndry:
         - Single-point breaklines are logged and skipped.
         - These invalid breaklines should be removed in RASMapper to prevent potential issues.
         """
+        breaklines_path = "Geometry/2D Flow Area Break Lines"
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                breaklines_path = "Geometry/2D Flow Area Break Lines"
                 if breaklines_path not in hdf_file:
-                    logger.warning(f"Breaklines path '{breaklines_path}' not found in HDF file.")
+                    logger.debug(
+                        "Breaklines group '%s' not found in %s.",
+                        breaklines_path,
+                        hdf_path.name,
+                    )
                     return gpd.GeoDataFrame()
 
                 bl_line_data = hdf_file[breaklines_path]
@@ -211,7 +225,15 @@ class HdfBndry:
 
                 # Create GeoDataFrame with valid breaklines
                 if not valid_ids:
-                    logger.warning("No valid breaklines found in the HDF file.")
+                    logger.warning(
+                        "No valid breaklines found in %s; skipped %d invalid "
+                        "breaklines (zero_length=%d, single_point=%d, other=%d).",
+                        hdf_path.name,
+                        total_invalid,
+                        zero_length_count,
+                        single_point_count,
+                        other_error_count,
+                    )
                     return gpd.GeoDataFrame()
 
                 return gpd.GeoDataFrame(
@@ -225,7 +247,12 @@ class HdfBndry:
                 )
 
         except Exception as e:
-            logger.error(f"Error reading breaklines: {str(e)}")
+            logger.error(
+                "Error reading breaklines from %s (%s): %s",
+                hdf_path,
+                breaklines_path,
+                str(e),
+            )
             return gpd.GeoDataFrame()
 
     @staticmethod
@@ -244,10 +271,15 @@ class HdfBndry:
         gpd.GeoDataFrame
             A GeoDataFrame containing the refinement regions.
         """
+        refinement_regions_path = "/Geometry/2D Flow Area Refinement Regions"
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                refinement_regions_path = "/Geometry/2D Flow Area Refinement Regions"
                 if refinement_regions_path not in hdf_file:
+                    logger.debug(
+                        "Refinement regions group '%s' not found in %s.",
+                        refinement_regions_path,
+                        hdf_path.name,
+                    )
                     return gpd.GeoDataFrame()
                 rr_data = hdf_file[refinement_regions_path]
                 rr_ids = range(rr_data["Attributes"][()].shape[0])
@@ -273,7 +305,12 @@ class HdfBndry:
                     crs=HdfBase.get_projection(hdf_file),
                 )
         except Exception as e:
-            logger.error(f"Error reading refinement regions: {str(e)}")
+            logger.error(
+                "Error reading refinement regions from %s (%s): %s",
+                hdf_path,
+                refinement_regions_path,
+                str(e),
+            )
             return gpd.GeoDataFrame()
 
     @staticmethod
@@ -295,11 +332,16 @@ class HdfBndry:
             A GeoDataFrame containing the reference lines. If mesh_name is provided,
             returns only lines for that mesh.
         """
+        reference_lines_path = "Geometry/Reference Lines"
+        attributes_path = f"{reference_lines_path}/Attributes"
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                reference_lines_path = "Geometry/Reference Lines"
-                attributes_path = f"{reference_lines_path}/Attributes"
                 if attributes_path not in hdf_file:
+                    logger.debug(
+                        "Reference lines attributes group '%s' not found in %s.",
+                        attributes_path,
+                        hdf_path.name,
+                    )
                     return gpd.GeoDataFrame()
                 
                 attributes = hdf_file[attributes_path][()]
@@ -311,6 +353,12 @@ class HdfBndry:
                 try:
                     types = v_conv_str(attributes["Type"])
                 except ValueError:
+                    logger.debug(
+                        "Reference line Type field not found in %s (%s); "
+                        "using blank Type values.",
+                        hdf_path.name,
+                        attributes_path,
+                    )
                     types = np.array([""] * attributes.shape[0])
                 
                 geoms = HdfBase.get_polylines_from_parts(hdf_path, reference_lines_path)
@@ -334,7 +382,12 @@ class HdfBndry:
                 return gdf
                 
         except Exception as e:
-            logger.error(f"Error reading reference lines: {str(e)}")
+            logger.error(
+                "Error reading reference lines from %s (%s): %s",
+                hdf_path,
+                reference_lines_path,
+                str(e),
+            )
             return gpd.GeoDataFrame()
 
     @staticmethod
@@ -356,11 +409,16 @@ class HdfBndry:
             A GeoDataFrame containing the reference points. If mesh_name is provided,
             returns only points for that mesh.
         """
+        reference_points_path = "Geometry/Reference Points"
+        attributes_path = f"{reference_points_path}/Attributes"
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
-                reference_points_path = "Geometry/Reference Points"
-                attributes_path = f"{reference_points_path}/Attributes"
                 if attributes_path not in hdf_file:
+                    logger.debug(
+                        "Reference points attributes group '%s' not found in %s.",
+                        attributes_path,
+                        hdf_path.name,
+                    )
                     return gpd.GeoDataFrame()
                 
                 ref_points_group = hdf_file[reference_points_path]
@@ -390,7 +448,12 @@ class HdfBndry:
                 return gdf
                 
         except Exception as e:
-            logger.error(f"Error reading reference points: {str(e)}")
+            logger.error(
+                "Error reading reference points from %s (%s): %s",
+                hdf_path,
+                reference_points_path,
+                str(e),
+            )
             return gpd.GeoDataFrame()
 
     

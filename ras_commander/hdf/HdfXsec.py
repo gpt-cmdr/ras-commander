@@ -63,6 +63,61 @@ class HdfXsec:
         Requires HEC-RAS geometry HDF files with standard structure and naming conventions.
         All methods use proper error handling and logging.
     """
+    CROSS_SECTION_GROUP = "Geometry/Cross Sections"
+    CROSS_SECTION_REQUIRED_DATASETS = (
+        f"{CROSS_SECTION_GROUP}/Polyline Info",
+        f"{CROSS_SECTION_GROUP}/Polyline Parts",
+        f"{CROSS_SECTION_GROUP}/Polyline Points",
+        f"{CROSS_SECTION_GROUP}/Station Elevation Info",
+        f"{CROSS_SECTION_GROUP}/Station Elevation Values",
+        f"{CROSS_SECTION_GROUP}/Attributes",
+        f"{CROSS_SECTION_GROUP}/Manning's n Info",
+        f"{CROSS_SECTION_GROUP}/Manning's n Values",
+    )
+    CROSS_SECTION_CORE_GEOMETRY_DATASETS = (
+        f"{CROSS_SECTION_GROUP}/Polyline Info",
+        f"{CROSS_SECTION_GROUP}/Polyline Parts",
+        f"{CROSS_SECTION_GROUP}/Polyline Points",
+    )
+
+    @staticmethod
+    def _filename(hdf_path) -> str:
+        return Path(hdf_path).name
+
+    @staticmethod
+    def _convert_hdf_value(value):
+        if isinstance(value, (bytes, np.bytes_)):
+            converted = HdfUtils.convert_ras_string(value)
+            return converted.strip() if isinstance(converted, str) else converted
+        if isinstance(value, np.str_):
+            converted = HdfUtils.convert_ras_string(str(value))
+            return converted.strip() if isinstance(converted, str) else converted
+        if isinstance(value, np.generic):
+            return value.item()
+        return value
+
+    @staticmethod
+    def _datetime_value_to_str(value):
+        if pd.isna(value):
+            return None
+        try:
+            return pd.Timestamp(value).isoformat()
+        except (TypeError, ValueError):
+            return value
+
+    @staticmethod
+    def _structured_array_to_dict(attrs) -> dict:
+        if not getattr(attrs.dtype, "names", None):
+            return {}
+        return {
+            name: [HdfXsec._convert_hdf_value(value) for value in attrs[name]]
+            for name in attrs.dtype.names
+        }
+
+    @staticmethod
+    def _alternating_bank_sides(count: int) -> List[str]:
+        return ["Left" if idx % 2 == 0 else "Right" for idx in range(count)]
+
     @staticmethod
     @log_call
     def get_cross_sections(hdf_path: str, datetime_to_str: bool = True, ras_object=None) -> gpd.GeoDataFrame:
@@ -124,6 +179,36 @@ class HdfXsec:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf:
+                if HdfXsec.CROSS_SECTION_GROUP not in hdf:
+                    logger.debug(
+                        "No Geometry/Cross Sections group in %s; returning empty GeoDataFrame.",
+                        HdfXsec._filename(hdf_path),
+                    )
+                    return gpd.GeoDataFrame()
+
+                missing_datasets = [
+                    dataset
+                    for dataset in HdfXsec.CROSS_SECTION_REQUIRED_DATASETS
+                    if dataset not in hdf
+                ]
+                if missing_datasets:
+                    if all(
+                        dataset in missing_datasets
+                        for dataset in HdfXsec.CROSS_SECTION_CORE_GEOMETRY_DATASETS
+                    ):
+                        logger.debug(
+                            "No cross-section geometry datasets found in %s; missing %s; returning empty GeoDataFrame.",
+                            HdfXsec._filename(hdf_path),
+                            ", ".join(missing_datasets),
+                        )
+                    else:
+                        logger.warning(
+                            "Cross-section geometry in %s is missing required dataset(s): %s; returning empty GeoDataFrame.",
+                            HdfXsec._filename(hdf_path),
+                            ", ".join(missing_datasets),
+                        )
+                    return gpd.GeoDataFrame()
+
                 # Extract required datasets
                 poly_info = hdf['/Geometry/Cross Sections/Polyline Info'][:]
                 poly_parts = hdf['/Geometry/Cross Sections/Polyline Parts'][:]
@@ -332,14 +417,14 @@ class HdfXsec:
                         proj = hdf['/Geometry'].attrs['Projection']
                         if isinstance(proj, bytes):
                             proj = proj.decode('utf-8')
-                        gdf.set_crs(proj, allow_override=True)
+                        gdf = gdf.set_crs(proj, allow_override=True)
                     
                     return gdf
                 
                 return gpd.GeoDataFrame()
                 
         except Exception as e:
-            logger.error(f"Error processing cross-section data: {str(e)}")
+            logger.error(f"Error processing cross-section data from {hdf_path}: {str(e)}")
             return gpd.GeoDataFrame()
 
     @staticmethod
@@ -380,7 +465,10 @@ class HdfXsec:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 if "Geometry/River Centerlines" not in hdf_file:
-                    logger.warning("No river centerlines found in geometry file")
+                    logger.debug(
+                        "No Geometry/River Centerlines group in %s; returning empty GeoDataFrame.",
+                        HdfXsec._filename(hdf_path),
+                    )
                     return GeoDataFrame()
 
                 centerline_data = hdf_file["Geometry/River Centerlines"]
@@ -389,16 +477,7 @@ class HdfXsec:
                 attrs = centerline_data["Attributes"][()]
                 
                 # Create initial dictionary for DataFrame
-                centerline_dict = {}
-                
-                # Process each attribute field
-                for name in attrs.dtype.names:
-                    values = attrs[name]
-                    if values.dtype.kind == 'S':
-                        # Convert byte strings to regular strings
-                        centerline_dict[name] = [val.decode('utf-8').strip() for val in values]
-                    else:
-                        centerline_dict[name] = values.tolist()  # Convert numpy array to list
+                centerline_dict = HdfXsec._structured_array_to_dict(attrs)
 
                 # Get polylines using utility function
                 geoms = HdfBase.get_polylines_from_parts(
@@ -439,7 +518,7 @@ class HdfXsec:
                 return centerline_gdf
 
         except Exception as e:
-            logger.error(f"Error reading river centerlines: {str(e)}")
+            logger.error(f"Error reading river centerlines from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
 
@@ -473,7 +552,7 @@ class HdfXsec:
         at 100 evenly spaced points along each centerline.
         """
         if centerlines_gdf.empty:
-            logger.warning("Empty centerlines GeoDataFrame provided")
+            logger.debug("Empty centerlines GeoDataFrame provided; returning unchanged.")
             return centerlines_gdf
 
         try:
@@ -578,15 +657,16 @@ class HdfXsec:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 if "Geometry/River Centerlines" not in hdf_file:
+                    logger.debug(
+                        "No Geometry/River Centerlines group in %s; returning empty GeoDataFrame.",
+                        HdfXsec._filename(hdf_path),
+                    )
                     return GeoDataFrame()
 
                 river_data = hdf_file["Geometry/River Centerlines"]
-                v_conv_val = np.vectorize(HdfUtils.convert_ras_string)
                 river_attrs = river_data["Attributes"][()]
-                river_dict = {"river_id": range(river_attrs.shape[0])}
-                river_dict.update(
-                    {name: v_conv_val(river_attrs[name]) for name in river_attrs.dtype.names}
-                )
+                river_dict = {"river_id": list(range(river_attrs.shape[0]))}
+                river_dict.update(HdfXsec._structured_array_to_dict(river_attrs))
                 
                 # Get polylines for river reaches
                 geoms = HdfBase.get_polylines_from_parts(
@@ -598,13 +678,13 @@ class HdfXsec:
                     geometry=geoms,
                     crs=HdfBase.get_projection(hdf_path),
                 )
-                if datetime_to_str:
+                if datetime_to_str and "Last Edited" in river_gdf.columns:
                     river_gdf["Last Edited"] = river_gdf["Last Edited"].apply(
-                        lambda x: pd.Timestamp.isoformat(x)
+                        HdfXsec._datetime_value_to_str
                     )
                 return river_gdf
         except Exception as e:
-            logger.error(f"Error reading river reaches: {str(e)}")
+            logger.error(f"Error reading river reaches from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
 
@@ -638,29 +718,13 @@ class HdfXsec:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 if "Geometry/River Edge Lines" not in hdf_file:
-                    logger.warning("No river edge lines found in geometry file")
+                    logger.debug(
+                        "No Geometry/River Edge Lines group in %s; returning empty GeoDataFrame.",
+                        HdfXsec._filename(hdf_path),
+                    )
                     return GeoDataFrame()
 
                 edge_data = hdf_file["Geometry/River Edge Lines"]
-                
-                # Get attributes if they exist
-                if "Attributes" in edge_data:
-                    attrs = edge_data["Attributes"][()]
-                    v_conv_val = np.vectorize(HdfUtils.convert_ras_string)
-                    
-                    # Create dictionary of attributes
-                    edge_dict = {"edge_id": range(attrs.shape[0])}
-                    edge_dict.update(
-                        {name: v_conv_val(attrs[name]) for name in attrs.dtype.names}
-                    )
-                    
-                    # Add bank side indicator
-                    if edge_dict["edge_id"].size % 2 == 0:  # Ensure even number of edges
-                        edge_dict["bank_side"] = ["Left", "Right"] * (edge_dict["edge_id"].size // 2)
-                else:
-                    edge_dict = {"edge_id": [], "bank_side": []}
-
-                # Get polyline geometries
                 geoms = HdfBase.get_polylines_from_parts(
                     hdf_path, 
                     "Geometry/River Edge Lines",
@@ -668,6 +732,17 @@ class HdfXsec:
                     parts_name="Polyline Parts",
                     points_name="Polyline Points"
                 )
+
+                # Get attributes if they exist
+                if "Attributes" in edge_data:
+                    attrs = edge_data["Attributes"][()]
+
+                    # Create dictionary of attributes
+                    edge_dict = {"edge_id": list(range(attrs.shape[0]))}
+                    edge_dict.update(HdfXsec._structured_array_to_dict(attrs))
+                else:
+                    edge_dict = {"edge_id": list(range(len(geoms)))}
+                edge_dict["bank_side"] = HdfXsec._alternating_bank_sides(len(geoms))
 
                 # Create GeoDataFrame
                 edge_gdf = GeoDataFrame(
@@ -679,7 +754,7 @@ class HdfXsec:
                 # Convert datetime objects to strings if requested
                 if datetime_to_str and 'Last Edited' in edge_gdf.columns:
                     edge_gdf["Last Edited"] = edge_gdf["Last Edited"].apply(
-                        lambda x: pd.Timestamp.isoformat(x) if pd.notnull(x) else None
+                        HdfXsec._datetime_value_to_str
                     )
 
                 # Add length calculation in project units
@@ -689,7 +764,7 @@ class HdfXsec:
                 return edge_gdf
 
         except Exception as e:
-            logger.error(f"Error reading river edge lines: {str(e)}")
+            logger.error(f"Error reading river edge lines from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
     @staticmethod
@@ -721,7 +796,10 @@ class HdfXsec:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 if "Geometry/River Bank Lines" not in hdf_file:
-                    logger.warning("No river bank lines found in geometry file")
+                    logger.debug(
+                        "No Geometry/River Bank Lines group in %s; returning empty GeoDataFrame.",
+                        HdfXsec._filename(hdf_path),
+                    )
                     return GeoDataFrame()
 
                 # Get polyline geometries using existing helper method
@@ -735,8 +813,8 @@ class HdfXsec:
 
                 # Create basic attributes
                 bank_dict = {
-                    "bank_id": range(len(geoms)),
-                    "bank_side": ["Left", "Right"] * (len(geoms) // 2)  # Assuming pairs of left/right banks
+                    "bank_id": list(range(len(geoms))),
+                    "bank_side": HdfXsec._alternating_bank_sides(len(geoms)),
                 }
 
                 # Create GeoDataFrame
@@ -753,6 +831,6 @@ class HdfXsec:
                 return bank_gdf
 
         except Exception as e:
-            logger.error(f"Error reading river bank lines: {str(e)}")
+            logger.error(f"Error reading river bank lines from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
