@@ -10,7 +10,7 @@ Usage:
     python .claude/scripts/prepare_notebooks_for_docs.py
 
 What it does:
-1. Converts all examples/*.ipynb to docs/notebooks/*.md using nbconvert
+1. Converts publishable examples/*.ipynb to docs/notebooks/*.md using nbconvert
 2. Updates mkdocs.yml to reference .md files instead of .ipynb
 3. Disables mkdocs-jupyter plugin (no longer needed)
 
@@ -19,17 +19,38 @@ This is run during ReadTheDocs pre_build step.
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 
+EXCLUDED_NOTEBOOKS = set()
+
+
 def convert_notebooks(examples_dir: Path, output_dir: Path) -> int:
-    """Convert all notebooks to markdown using batch processing."""
+    """Convert publishable notebooks to markdown using batch processing."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    notebooks = list(examples_dir.glob("*.ipynb"))
+    for excluded in EXCLUDED_NOTEBOOKS:
+        stem = Path(excluded).stem
+        md_path = output_dir / f"{stem}.md"
+        assets_dir = output_dir / f"{stem}_files"
+        if md_path.exists():
+            md_path.unlink()
+            print(f"Removed excluded notebook page: {md_path.name}")
+        if assets_dir.exists():
+            shutil.rmtree(assets_dir)
+            print(f"Removed excluded notebook assets: {assets_dir.name}")
+
+    notebooks = sorted(
+        nb for nb in examples_dir.glob("*.ipynb")
+        if nb.name not in EXCLUDED_NOTEBOOKS
+    )
     print(f"Converting {len(notebooks)} notebooks to markdown...")
+    if EXCLUDED_NOTEBOOKS:
+        skipped = ", ".join(sorted(EXCLUDED_NOTEBOOKS))
+        print(f"Skipping excluded notebooks: {skipped}")
 
     # Use batch mode - much faster than one-by-one
     # nbconvert can process multiple files in one call
@@ -79,18 +100,22 @@ def update_mkdocs_config(mkdocs_path: Path) -> None:
     # This handles both simple and complex plugin configs
     lines = content.split('\n')
     new_lines = []
-    skip_until_next_plugin = False
     in_jupyter_plugin = False
+    disabled_jupyter_line = "  # DISABLED for pre-rendered notebooks: - mkdocs-jupyter:"
 
     for i, line in enumerate(lines):
         # Detect start of mkdocs-jupyter plugin config
         if 'mkdocs-jupyter' in line:
+            if line.strip().startswith('#') and 'DISABLED for pre-rendered notebooks' in line:
+                new_lines.append(disabled_jupyter_line)
+                in_jupyter_plugin = False
+                continue
             if ':' in line:  # Complex config like "  - mkdocs-jupyter:"
                 in_jupyter_plugin = True
-                new_lines.append(f"  # DISABLED for pre-rendered notebooks: {line.strip()}")
+                new_lines.append(disabled_jupyter_line)
                 continue
             else:  # Simple config like "  - mkdocs-jupyter"
-                new_lines.append(f"  # DISABLED for pre-rendered notebooks: {line.strip()}")
+                new_lines.append("  # DISABLED for pre-rendered notebooks: - mkdocs-jupyter")
                 continue
 
         # Skip indented lines that are part of jupyter plugin config

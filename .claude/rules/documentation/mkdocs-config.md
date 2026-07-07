@@ -34,10 +34,15 @@ Deploy ras-commander documentation to TWO platforms:
 **File**: `.claude/scripts/prepare_notebooks_for_docs.py`
 
 **What it does**:
-1. Converts all `examples/*.ipynb` → `docs/notebooks/*.md` using `nbconvert`
+1. Converts publishable `examples/*.ipynb` → `docs/notebooks/*.md` using `nbconvert`
 2. Updates `mkdocs.yml` at build time:
    - Changes `.ipynb` references to `.md` in navigation
    - Comments out `mkdocs-jupyter` plugin (not needed for .md files)
+
+**Output fidelity requirement**:
+- Preserve committed notebook outputs as-is during conversion.
+- Do not sanitize, redact, shorten, or rewrite logs during docs generation.
+- If published output is too verbose, adjust notebook/example logging behavior before committing the notebook instead of adding build-time output filtering.
 
 **Script is run during build, not committed changes**:
 - `mkdocs.yml` remains unchanged in git (references `.ipynb`)

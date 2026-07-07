@@ -1,9 +1,12 @@
 # Example Notebooks
 
-The repository ships **109 canonical notebooks** under `examples/`. Each notebook
-is a self-contained, executable workflow using `RasExamples` for reproducible data.
+The repository ships canonical notebooks under `examples/`. Each notebook
+is a self-contained, executable workflow using reproducible data.
 Notebooks are pre-converted to Markdown at documentation build time; stored outputs
 are what appear on these pages, so execute locally before committing.
+
+See [Example Projects](example-projects.md) for the CRS-valid source catalog
+and GeoLibre review contract for ras2cng-exported model bundles.
 
 ## Running Examples Locally
 
@@ -100,8 +103,8 @@ jupyter notebook examples/
 ### 600s — Floodplain Mapping
 
 `600_floodplain_mapping_gui.ipynb`,
-`601_floodplain_mapping_rasprocess.ipynb`,
-`610_fluvial_pluvial_delineation.ipynb`,
+`601_headless_stored_map_generation_rasmapper.ipynb`,
+`610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.ipynb`,
 `611_validating_map_layers.ipynb`
 
 ### 700s — Sensitivity & Precipitation
@@ -121,22 +124,30 @@ jupyter notebook examples/
 `800_quality_assurance_rascheck.ipynb`,
 `801_advanced_structure_validation.ipynb`
 
-### 900s — Data Integration
+### 900s — Data Integration & Forecasting
 
 `900_aorc_precipitation.ipynb`, `901_aorc_precipitation_catalog.ipynb`,
+
+Gauge data and validation:
 `910_usgs_gauge_catalog.ipynb`,
 `911_usgs_gauge_data_integration.ipynb`,
 `911a_usgs_study_package_from_primitives.ipynb`,
 `912_usgs_real_time_monitoring.ipynb`,
 `913_bc_generation_from_live_gauge.ipynb`,
 `914_historical_event_validation.ipynb`,
+`918_model_validation_with_usgs.ipynb`
+
+Operational forecast sequence:
 `915_realtime_forecast_workflow.ipynb`,
+`918_hms_ras_coupled_forecast.ipynb`,
+`919_operational_forecast_cycling.ipynb`
+
+Forecast input drill-downs:
 `916_hrrr_precipitation_forecast.ipynb`,
 `917_mrms_precipitation_qpe.ipynb`,
-`918_hms_ras_coupled_forecast.ipynb`,
-`918_model_validation_with_usgs.ipynb`,
-`919_operational_forecast_cycling.ipynb`,
-`919_stofs3d_coastal_boundary.ipynb`,
+`919_stofs3d_coastal_boundary.ipynb`
+
+Terrain and surface workflows:
 `920_terrain_creation.ipynb`,
 `925_xs_interpolation_surface.ipynb`,
 `930_terrain_modification_analysis.ipynb`

@@ -60,6 +60,9 @@ This file is the canonical local instruction file for `examples/`.
 
 - Do not commit extracted example datasets, heavy outputs, or ad hoc images.
 - Small reference assets under `examples/data/` are read-only. Use root-level working folders for generated data.
+- When notebook work writes to mapped network drives such as `H:` / `\\192.168.3.20\CLB-Engineering`, watch for Windows Offline Files / Client Side Caching (CSC). If CSC is enabled, notebook outputs can appear to write successfully while later reads return stale or phantom local cache entries. Symptoms include output folders that disappear after reboot, CSVs/plots that do not match the latest run, and reruns that keep reading old sensitivity or post-processing artifacts.
+- If this happens, do not treat it as a HEC-RAS lock until the Windows client state is checked. Create a small probe file through the mapped drive, refresh the folder, remap the drive if needed, and check `Get-Service CscService,CSC` plus `Win32_OfflineFilesCache`; the expected fixed state is stopped/disabled and `Active=False`, `Enabled=False`.
+- Remediation used for the 711 Sabinal notebook run: disable Windows Offline Files/CSC on the workstation, reboot the workstation, verify the mapped drive writes and refreshes normally from Windows, then rerun or copy final artifacts. For long notebook reruns, prefer a local scratch copy when the network drive shows caching or locking symptoms.
 
 ## Where To Go Next
 

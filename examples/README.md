@@ -313,7 +313,7 @@ This notebook demonstrates the **RasControl** class for working with legacy HEC-
 
 **Key contents:**
 - Introduction to RasControl wrapper for HECRASController
-- Using ras-commander style API with plan numbers instead of file paths
+- Using plan-number API calls instead of file paths
 - Running steady state plans and extracting profile results
 - Running unsteady plans and extracting time series results
 - Understanding output times and the "Max WS" special timestep

@@ -51,7 +51,9 @@ already implemented.
 
 **Open work**:
 - Rebase or replay `feat/ras-calibrate` onto current `main`
-- Re-run notebooks `220` and `221`
+- Re-run and review the rewritten notebook `220`, now based on the USGS
+  ScienceBase Kalamazoo River model with WSE/velocity calibration data
+- Re-run notebooks `221`
 - Resolve the `RasCalibrate` redesign vs revert split cleanly
 - Confirm `depth_datum` behavior and `force_geompre` propagation
 - Freeze the intended merge scope in `INTEGRATION.md`
