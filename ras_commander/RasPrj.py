@@ -1004,8 +1004,10 @@ class RasPrj:
                 )
         else:
             logger.warning(
-                f"Could not resolve project CRS for {self.project_folder}"
+                "Could not resolve project CRS for %s",
+                self.project_folder.name,
             )
+            logger.debug("Could not resolve project CRS for %s", self.project_folder)
 
         return self.project_crs
 
@@ -1680,9 +1682,18 @@ class RasPrj:
                 values_count = int(hydrograph_line.split('=')[1].strip())
                 bc_info['hydrograph_num_values'] = values_count
                 if values_count > 0:
-                    values = ' '.join(lines[hydrograph_index + 1:]).split()[:values_count]
+                    numeric_field_count = values_count
+                    if bc_info['hydrograph_type'] == 'Precipitation Hydrograph':
+                        numeric_field_count = values_count * 2
+                    data_lines = []
+                    for data_line in lines[hydrograph_index + 1:]:
+                        if '=' in data_line or data_line.startswith('Boundary Location='):
+                            break
+                        if data_line.strip():
+                            data_lines.append(data_line)
+                    values = ' '.join(data_lines).split()[:numeric_field_count]
                     bc_info['hydrograph_values'] = values
-                    parsed_lines.update(range(hydrograph_index, hydrograph_index + (values_count // 5) + 2))
+                    parsed_lines.update(range(hydrograph_index, hydrograph_index + len(data_lines) + 1))
         
         # Collect unparsed lines
         unparsed_lines = '\n'.join(line for i, line in enumerate(lines) if i not in parsed_lines and line.strip())
@@ -1993,6 +2004,22 @@ ras = RasPrj()
 
 # START OF FUNCTION DEFINITIONS
 
+def _is_explicit_ras_exe_path(value: Any) -> bool:
+    """Return True when the caller supplied a Ras.exe path instead of a version."""
+    try:
+        return Path(str(value)).suffix.lower() == ".exe"
+    except (TypeError, ValueError):
+        return False
+
+
+def _ras_version_label(ras_version: Any, ras_exe_path: Any) -> str:
+    """Build a concise version label without exposing the full executable path."""
+    if ras_exe_path and ras_exe_path != "Ras.exe":
+        parent_name = Path(str(ras_exe_path)).parent.name
+        if parent_name:
+            return parent_name
+    return str(ras_version) if ras_version is not None else "unknown"
+
 @log_call
 def init_ras_project(
     ras_project_folder,
@@ -2124,6 +2151,9 @@ def init_ras_project(
         ras_object = RasPrj()
     
     ras_exe_path = None
+    detected_version = None
+    detected_version_source = None
+    explicit_ras_exe_path = _is_explicit_ras_exe_path(ras_version)
     
     # Use version specified by user if provided
     if ras_version is not None:
@@ -2135,7 +2165,6 @@ def init_ras_project(
             )
     else:
         # No version specified, try to detect from plan files
-        detected_version = None
         logger.debug("No HEC-RAS version specified. Detecting from plan files.")
 
         # Look for .pXX files in project folder
@@ -2172,8 +2201,9 @@ def init_ras_project(
                     
                     if test_exe_path != "Ras.exe":
                         detected_version = version
+                        detected_version_source = plan_file.name
                         ras_exe_path = test_exe_path
-                        logger.info(f"Detected HEC-RAS version {version} from {plan_file.name}")
+                        logger.debug(f"Detected HEC-RAS version {version} from {plan_file.name}")
                         break
                     else:
                         logger.debug(f"Version {version} not found in default installation path")
@@ -2221,8 +2251,21 @@ def init_ras_project(
         f"Docs: https://rascommander.info | "
         f"GitHub: https://github.com/gpt-cmdr/ras-commander"
     )
-    logger.info(f"Project initialized: {ras_object.project_name} | Folder: {ras_object.project_folder}")
-    logger.info(f"Using HEC-RAS executable: {ras_exe_path}")
+    logger.info("Project initialized: %s", ras_object.project_name)
+    logger.debug(f"Project initialized folder: {ras_object.project_folder}")
+    if explicit_ras_exe_path and ras_exe_path != "Ras.exe":
+        logger.info("Using HEC-RAS executable from explicit path")
+    elif detected_version:
+        logger.info(
+            "Using HEC-RAS version %s (autodetected from %s)",
+            detected_version,
+            detected_version_source,
+        )
+    elif ras_exe_path == "Ras.exe":
+        logger.info("Using HEC-RAS executable: Ras.exe (not resolved)")
+    else:
+        logger.info("Using HEC-RAS version %s", _ras_version_label(ras_version, ras_exe_path))
+    logger.debug(f"Using HEC-RAS executable path: {ras_exe_path}")
 
     if not hide_intro:
         _obj = "ras" if ras_object is ras else "ras_object"
@@ -2309,6 +2352,9 @@ def get_ras_exe(ras_version=None):
             logger.debug(f"No HEC-RAS version specified and global 'ras' object not initialized or missing ras_exe_path.")
             logger.warning(f"HEC-RAS is not installed or version not specified. Running HEC-RAS will fail unless a valid installed version is specified.")
             return default_path
+
+    discovered_versions = "not checked"
+    candidate_paths = []
     
     # ACTUAL folder names in C:/Program Files (x86)/HEC/HEC-RAS/
     # This list matches the exact folder names on disk (verified 2026-04-19)
@@ -2383,9 +2429,10 @@ def get_ras_exe(ras_version=None):
     try:
         from .RasUtils import RasUtils
         discovered = RasUtils.discover_ras_versions()
+        discovered_versions = ", ".join(sorted(discovered)) if discovered else "none"
         if version_str in discovered:
             exe_path = discovered[version_str]
-            logger.info(f"HEC-RAS {version_str} found via version discovery: {exe_path}")
+            logger.debug(f"HEC-RAS {version_str} found via version discovery: {exe_path}")
             return str(exe_path)
         # Also check if the original user input (before alias resolution) matches
         if str(ras_version) != version_str and str(ras_version) in discovered:
@@ -2398,11 +2445,15 @@ def get_ras_exe(ras_version=None):
     # FALLBACK: Hardcoded path construction (original logic, kept for robustness)
     if version_str in ras_version_folders:
         default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{version_str}/Ras.exe")
+        candidate_paths.append(default_path)
         if default_path.is_file():
             logger.debug(f"HEC-RAS executable found at default path: {default_path}")
             return str(default_path)
         else:
-            error_msg = f"HEC-RAS Version {version_str} folder exists but Ras.exe not found at expected path. Running HEC-RAS will fail."
+            error_msg = (
+                f"HEC-RAS Version {version_str} folder exists but Ras.exe not found at expected path: "
+                f"{default_path}. Discovered versions: {discovered_versions}. Running HEC-RAS will fail."
+            )
             logger.error(error_msg)
             return "Ras.exe"
 
@@ -2411,6 +2462,7 @@ def get_ras_exe(ras_version=None):
         for known_folder in ras_version_folders:
             if version_str in known_folder or known_folder.replace('.', '') == version_str:
                 default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{known_folder}/Ras.exe")
+                candidate_paths.append(default_path)
                 if default_path.is_file():
                     logger.debug(f"HEC-RAS executable found via fuzzy match: {default_path}")
                     return str(default_path)
@@ -2418,13 +2470,19 @@ def get_ras_exe(ras_version=None):
         # Try direct path construction for newer versions
         if '.' in version_str:
             default_path = Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{version_str}/Ras.exe")
+            candidate_paths.append(default_path)
             if default_path.is_file():
                 logger.debug(f"HEC-RAS executable found at path: {default_path}")
                 return str(default_path)
     except Exception as e:
         logger.error(f"Error parsing version or finding path: {e}")
 
-    error_msg = f"HEC-RAS Version {ras_version} is not recognized or installed. Running HEC-RAS will fail unless a valid installed version is specified."
+    candidates = ", ".join(str(path) for path in candidate_paths) if candidate_paths else "none"
+    error_msg = (
+        f"HEC-RAS Version {ras_version} is not recognized or installed. "
+        f"Discovered versions: {discovered_versions}. Candidate paths checked: {candidates}. "
+        "Running HEC-RAS will fail unless a valid installed version is specified."
+    )
     logger.error(error_msg)
     return "Ras.exe"
 

@@ -8,7 +8,7 @@
 
 - Bump hms-commander dependency to >=0.3.1 (probability_column support)
 - Add ABM textbook validation notebook (723) with hms-commander integration
-- Fix precipitation hydrograph sequential depth values in RasUnsteady
+- Fix precipitation hydrograph time-depth pair formatting in RasUnsteady
 - Fix Plan 07 uniform precipitation and mode conflict in 722 notebook
 
 ### v0.96.0

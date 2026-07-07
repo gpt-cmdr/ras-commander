@@ -63,10 +63,8 @@ Program Version=6.60
 Use Restart= 0
 Boundary Location=                ,                ,        ,        ,                ,TestArea        ,                ,                                ,
 Interval=1HOUR
-Precipitation Hydrograph= 21
-      .1      .1      .1     .25     .25     .25     .25       0       0       0
-       0       0       0       0       0       0       0       0       0       0
-       0
+Precipitation Hydrograph= 3
+    1.00    0.10    2.00    0.10    3.00    0.10
 DSS Path=
 Use DSS=False
 """
@@ -255,7 +253,7 @@ Program Version=6.60
 Boundary Location=                ,                ,        ,        ,                ,Area1           ,                ,                                ,
 Interval=1HOUR
 Precipitation Hydrograph= 3
-      .1      .2      .3
+    1.00    0.10    2.00    0.20    3.00    0.30
 DSS Path=
 Use DSS=False
 """
@@ -299,7 +297,7 @@ Program Version=6.60
 Boundary Location=                ,                ,        ,        ,                ,Watershed       ,                ,                                ,
 Interval=1HOUR
 Precipitation Hydrograph= 5
-     0.1     0.2     0.3     0.2     0.1
+    1.00    0.10    2.00    0.20    3.00    0.30    4.00    0.20    5.00    0.10
 DSS Path=
 Use DSS=False
 """
@@ -376,6 +374,123 @@ Use DSS=False
 
         assert abs(total_depth_from_file - target_depth) < 0.01, \
             f"Expected total depth {target_depth}, got {total_depth_from_file}"
+
+
+class TestPrecipitationHydrographConsistency:
+    """Regression coverage for precipitation's paired inline table format."""
+
+    class _InitializedRas:
+        def check_initialized(self):
+            return None
+
+    def test_extract_tables_reads_all_paired_precipitation_fields(self, tmp_path):
+        from ras_commander import RasUnsteady
+
+        unsteady_file = tmp_path / "paired.u01"
+        unsteady_file.write_text(
+            """Flow Title=Paired Precip
+Boundary Location=                ,                ,        ,        ,                ,Area1           ,                ,                                ,
+Interval=1HOUR
+Precipitation Hydrograph= 6
+    1.00    0.10    2.00    0.20    3.00    0.30    4.00    0.40    5.00    0.50
+    6.00    0.60
+DSS Path=
+Use DSS=False
+""",
+            encoding="utf-8",
+        )
+
+        tables = RasUnsteady.extract_tables(
+            unsteady_file,
+            ras_object=self._InitializedRas(),
+        )
+
+        precip_values = tables["Precipitation Hydrograph="]["Value"].tolist()
+        assert precip_values == [
+            1.0, 0.1, 2.0, 0.2, 3.0, 0.3,
+            4.0, 0.4, 5.0, 0.5, 6.0, 0.6,
+        ]
+
+    def test_extract_boundary_and_tables_reads_all_paired_precipitation_fields(self, tmp_path):
+        from ras_commander import RasUnsteady
+
+        unsteady_file = tmp_path / "boundary_tables.u01"
+        unsteady_file.write_text(
+            """Flow Title=Boundary Paired Precip
+Boundary Location=                ,                ,        ,        ,                ,Area1           ,                ,                                ,
+Interval=1HOUR
+Precipitation Hydrograph= 6
+    1.00    0.10    2.00    0.20    3.00    0.30    4.00    0.40    5.00    0.50
+    6.00    0.60
+DSS Path=
+Use DSS=False
+""",
+            encoding="utf-8",
+        )
+
+        boundaries = RasUnsteady.extract_boundary_and_tables(
+            unsteady_file,
+            ras_object=self._InitializedRas(),
+        )
+
+        table = boundaries.iloc[0]["Tables"]["Precipitation Hydrograph"]
+        assert table["Value"].tolist() == [
+            1.0, 0.1, 2.0, 0.2, 3.0, 0.3,
+            4.0, 0.4, 5.0, 0.5, 6.0, 0.6,
+        ]
+
+    def test_rasprj_boundary_parser_keeps_paired_precipitation_fields(self):
+        from ras_commander.RasPrj import RasPrj
+
+        block = """Boundary Location=                ,                ,        ,        ,                ,Area1           ,                ,                                ,
+Interval=1HOUR
+Precipitation Hydrograph= 3
+    1.00    0.10    2.00    0.20    3.00    0.30
+DSS Path=
+Use DSS=False
+"""
+
+        prj = RasPrj()
+        bc_info, unparsed_lines = prj._parse_boundary_condition(block, "01", 1)
+
+        assert bc_info["hydrograph_num_values"] == 3
+        assert bc_info["hydrograph_values"] == [
+            "1.00", "0.10", "2.00", "0.20", "3.00", "0.30",
+        ]
+        assert unparsed_lines == ""
+
+    def test_usgs_boundary_update_replaces_full_paired_precipitation_block(self, tmp_path):
+        from ras_commander.usgs.boundary_generation import BoundaryGenerator
+
+        unsteady_file = tmp_path / "replace_precip.u01"
+        unsteady_file.write_text(
+            """Flow Title=Replace Paired Precip
+Boundary Location=                ,                ,        ,        ,                ,Area1           ,                ,                                ,
+Interval=1HOUR
+Precipitation Hydrograph= 6
+    1.00    0.10    2.00    0.20    3.00    0.30    4.00    0.40    5.00    0.50
+    6.00    0.60
+DSS Path=
+Use DSS=False
+""",
+            encoding="utf-8",
+        )
+
+        BoundaryGenerator.update_boundary_hydrograph(
+            unsteady_file=unsteady_file,
+            boundary_location="Area1",
+            hydrograph_table=(
+                "Interval=1HOUR\n"
+                "Precipitation Hydrograph= 1\n"
+                "    1.00    0.05"
+            ),
+            table_type="Precipitation Hydrograph=",
+        )
+
+        content = unsteady_file.read_text(encoding="utf-8")
+        assert "    1.00    0.05" in content
+        assert "    6.00    0.60" not in content
+        assert content.count("Precipitation Hydrograph=") == 1
 
 
 class TestRealProjectIntegration:
