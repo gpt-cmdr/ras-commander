@@ -101,7 +101,8 @@ def detect_flow_type(plan_hdf: Path) -> FlowType:
             else:
                 return FlowType.GEOMETRY_ONLY
     except Exception as e:
-        logger.warning(f"Could not detect flow type from {plan_hdf}: {e}")
+        logger.warning("Could not detect flow type; assuming geometry-only checks")
+        logger.debug("Flow type detection failed for %s: %s", plan_hdf, e)
         return FlowType.GEOMETRY_ONLY
 
 

@@ -104,9 +104,12 @@ class RasModPuls:
 
         n = math.ceil(travel_time_hours / dt_hours * safety_factor)
         n = max(min_subreaches, min(max_subreaches, n))
-        logger.info(
-            f"Subreach count: n={n} "
-            f"(travel_time={travel_time_hours}h, dt={dt_hours}h, factor={safety_factor})"
+        logger.debug(
+            "Subreach count: n=%s (travel_time=%sh, dt=%sh, factor=%s)",
+            n,
+            travel_time_hours,
+            dt_hours,
+            safety_factor,
         )
         return n
 
@@ -191,10 +194,20 @@ class RasModPuls:
                 "Provide either 'flows' or all of 'min_flow', 'max_flow', 'n_steps'"
             )
 
-        logger.info(
-            f"Writing stepped hydrograph: {len(flow_list)} steps, "
-            f"flows={[round(f, 1) for f in flow_list]}, "
-            f"step_duration={step_duration_hours}h"
+        logger.debug(
+            "Preparing stepped hydrograph: steps=%s, flows=%s, step_duration=%sh, "
+            "warmup_flow=%s, warmup_duration=%sh, target=%s, bc_type=%s, "
+            "river=%s, reach=%s, station=%s",
+            len(flow_list),
+            [round(f, 1) for f in flow_list],
+            step_duration_hours,
+            warmup_flow,
+            warmup_duration_hours,
+            unsteady_file,
+            bc_type,
+            river,
+            reach,
+            station,
         )
 
         # ---- Build hydrograph DataFrame --------------------------------------
@@ -238,8 +251,9 @@ class RasModPuls:
         )
 
         logger.info(
-            f"Stepped hydrograph written: {len(flow_list)} steps, "
-            f"total duration = {current_hour:.1f} hours"
+            "Stepped hydrograph written: %s steps over %.1f hours",
+            len(flow_list),
+            current_hour,
         )
         return flow_list
 
@@ -319,7 +333,7 @@ class RasModPuls:
         if not hdf_path.exists():
             raise FileNotFoundError(f"Plan HDF not found: {hdf_path}")
 
-        logger.info(f"Extracting S-Q table from {hdf_path.name}")
+        logger.debug("Extracting S-Q table from %s", hdf_path)
 
         # ---- Get downstream profile line faces ------------------------------
         geom_hdf = RasModPuls._get_geom_hdf_path(hdf_path, plan_number, ras_object)
@@ -366,7 +380,7 @@ class RasModPuls:
             )
 
         face_ids = profile_faces['face_id'].tolist()
-        logger.info(f"Found {len(face_ids)} faces along downstream profile line")
+        logger.debug("Found %s faces along downstream profile line", len(face_ids))
 
         # ---- Open HDF and extract time series --------------------------------
         with h5py.File(hdf_path, 'r') as hdf:
@@ -440,7 +454,7 @@ class RasModPuls:
                 "Verify step_duration_hours matches the written hydrograph."
             )
 
-        logger.info(f"Detected {len(plateau_indices)} plateau timesteps")
+        logger.debug("Detected %s plateau timesteps", len(plateau_indices))
 
         # ---- Extract Q and S at each plateau ---------------------------------
         rows = []
@@ -463,9 +477,15 @@ class RasModPuls:
         sq_df = RasModPuls._clean_sq_table(sq_df, n_rows=n_rows)
 
         logger.info(
-            f"S-Q extraction complete: {len(sq_df)} rows, "
-            f"Q range: {sq_df['outflow_cfs'].min():.0f} - {sq_df['outflow_cfs'].max():.0f} cfs, "
-            f"S range: {sq_df['storage_acft'].min():.1f} - {sq_df['storage_acft'].max():.1f} ac-ft"
+            "S-Q extraction complete: %s rows, %s plateau timesteps, %s faces, "
+            "Q range: %.0f - %.0f cfs, S range: %.1f - %.1f ac-ft",
+            len(sq_df),
+            len(plateau_indices),
+            len(face_ids),
+            sq_df['outflow_cfs'].min(),
+            sq_df['outflow_cfs'].max(),
+            sq_df['storage_acft'].min(),
+            sq_df['storage_acft'].max(),
         )
         return sq_df
 
@@ -542,11 +562,13 @@ class RasModPuls:
 
         written = 0
         ref_line_data = []
+        creation_warning_logged = False
 
         for bc_name in bc_line_names:
             bc_rows = bc_lines_gdf[bc_lines_gdf[name_col] == bc_name]
             if len(bc_rows) == 0:
                 logger.warning(f"BC line '{bc_name}' not found in geometry HDF")
+                creation_warning_logged = True
                 continue
 
             bc_geom = bc_rows.iloc[0].geometry
@@ -561,22 +583,31 @@ class RasModPuls:
 
             if profile_faces is None or len(profile_faces) == 0:
                 logger.warning(f"No faces found along BC line '{bc_name}'")
+                creation_warning_logged = True
                 continue
 
             # Combine faces to linestring
             ref_linestring = HdfMesh.combine_faces_to_linestring(profile_faces)
             if ref_linestring is None:
                 logger.warning(f"Could not combine faces for BC line '{bc_name}'")
+                creation_warning_logged = True
                 continue
 
             ref_line_data.append({
                 'name': bc_name,
                 'geometry': ref_linestring,
             })
-            logger.info(f"Built reference line for BC '{bc_name}': {len(profile_faces)} faces")
+            logger.debug(
+                "Built reference line for BC '%s': %s faces",
+                bc_name,
+                len(profile_faces),
+            )
 
         if not ref_line_data:
-            logger.warning("No reference lines created")
+            if not creation_warning_logged:
+                logger.warning("No reference lines created")
+            else:
+                logger.debug("No reference lines created")
             return 0
 
         # Write to geometry HDF
@@ -812,8 +843,8 @@ class RasModPuls:
                     written += 1
                     logger.debug(f"Wrote reference line '{name}' with {len(coords)} points")
 
-        except Exception as e:
-            logger.error(f"Failed to write reference lines to HDF: {e}")
+        except Exception:
+            logger.debug("Failed to write reference lines to HDF", exc_info=True)
             raise
 
         return written

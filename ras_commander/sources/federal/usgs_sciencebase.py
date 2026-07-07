@@ -219,14 +219,25 @@ class UsgsScienceBase:
         return list(UsgsScienceBase._MODEL_REGISTRY.keys())
 
     @staticmethod
-    def _download_file(url: str, dest: Path, desc: str = "") -> Path:
-        """Download a file with progress bar."""
+    def _progress(*args, show_progress: bool = False, **kwargs):
+        """Return a tqdm wrapper that is quiet unless explicitly requested."""
+        kwargs.setdefault("disable", not show_progress)
+        return tqdm(*args, **kwargs)
+
+    @staticmethod
+    def _download_file(
+        url: str,
+        dest: Path,
+        desc: str = "",
+        show_progress: bool = False,
+    ) -> Path:
+        """Download a file, optionally displaying a progress bar."""
         resp = requests.get(url, stream=True)
         resp.raise_for_status()
         total = int(resp.headers.get("content-length", 0))
-        with open(dest, "wb") as f, tqdm(
+        with open(dest, "wb") as f, UsgsScienceBase._progress(
             total=total, unit="B", unit_scale=True, desc=desc or dest.name,
-            mininterval=2.0,
+            mininterval=2.0, show_progress=show_progress,
         ) as pbar:
             for chunk in resp.iter_content(chunk_size=8192):
                 f.write(chunk)
@@ -245,6 +256,7 @@ class UsgsScienceBase:
         output_dir: Path,
         required_only: bool = False,
         extract: bool = True,
+        show_progress: bool = False,
     ) -> Path:
         """
         Download a USGS ScienceBase model to output_dir.
@@ -254,6 +266,7 @@ class UsgsScienceBase:
             output_dir: Parent directory for the model folder
             required_only: If True, skip optional files (rasters, field data, DEM)
             extract: If True, extract ZIP files after download
+            show_progress: If True, show download progress bars.
 
         Returns:
             Path to the model directory
@@ -277,7 +290,9 @@ class UsgsScienceBase:
 
             url = UsgsScienceBase._get_file_url(sb_id, filename)
             logger.debug(f"Downloading {filename} ({file_info['size_mb']} MB)...")
-            UsgsScienceBase._download_file(url, dest, desc=filename)
+            UsgsScienceBase._download_file(
+                url, dest, desc=filename, show_progress=show_progress,
+            )
 
         if extract:
             for filename in info["files"]:
@@ -564,6 +579,7 @@ class UsgsScienceBase:
         cache_dir: Optional[Path] = None,
         request_delay: float = _SB_REQUEST_DELAY,
         seen_ids: Optional[Set[str]] = None,
+        show_progress: bool = False,
     ) -> Dict[str, dict]:
         """Search ScienceBase with paginated keyword queries."""
         if queries is None:
@@ -572,7 +588,9 @@ class UsgsScienceBase:
             seen_ids = set()
         results: Dict[str, dict] = {}
 
-        for query in tqdm(queries, desc="Keyword search", unit="query"):
+        for query in UsgsScienceBase._progress(
+            queries, desc="Keyword search", unit="query", show_progress=show_progress,
+        ):
             cache_key = f"search_{UsgsScienceBase._cache_key_hash(query)}"
             cached = UsgsScienceBase._load_cache(cache_dir, cache_key) if cache_dir else None
             if cached is not None:
@@ -644,6 +662,7 @@ class UsgsScienceBase:
         cache_dir: Optional[Path] = None,
         request_delay: float = _SB_REQUEST_DELAY,
         seen_ids: Optional[Set[str]] = None,
+        show_progress: bool = False,
     ) -> Dict[str, dict]:
         """Cross-reference FIM sites with ScienceBase to find model archives."""
         if seen_ids is None:
@@ -666,7 +685,10 @@ class UsgsScienceBase:
             st = site.get("state", "unknown")
             by_state.setdefault(st, []).append(site)
 
-        for state, state_sites in tqdm(by_state.items(), desc="FIM cross-ref", unit="state"):
+        for state, state_sites in UsgsScienceBase._progress(
+            by_state.items(), desc="FIM cross-ref", unit="state",
+            show_progress=show_progress,
+        ):
             cache_key = f"fim_state_{UsgsScienceBase._cache_key_hash(state)}"
             cached = UsgsScienceBase._load_cache(cache_dir, cache_key) if cache_dir else None
             if cached is not None:
@@ -743,6 +765,7 @@ class UsgsScienceBase:
             cache_dir=cache_dir,
             request_delay=request_delay,
             seen_ids=seen_ids,
+            show_progress=False,
         )
 
     # ------------------------------------------------------------------
@@ -791,6 +814,7 @@ class UsgsScienceBase:
         cache_dir: Optional[Path] = None,
         request_delay: float = _SB_REQUEST_DELAY,
         seen_ids: Optional[Set[str]] = None,
+        show_progress: bool = False,
     ) -> Dict[str, dict]:
         """For items with children, traverse child items for model files."""
         if seen_ids is None:
@@ -804,8 +828,10 @@ class UsgsScienceBase:
         if not parents_with_children:
             return results
 
-        for sb_id, parent in tqdm(parents_with_children.items(),
-                                   desc="Child traversal", unit="parent"):
+        for sb_id, parent in UsgsScienceBase._progress(
+            parents_with_children.items(), desc="Child traversal", unit="parent",
+            show_progress=show_progress,
+        ):
             cache_key = f"children_{sb_id[:12]}"
             cached = UsgsScienceBase._load_cache(cache_dir, cache_key) if cache_dir else None
             if cached is not None:
@@ -892,6 +918,7 @@ class UsgsScienceBase:
         request_delay: float = _SB_REQUEST_DELAY,
         export_json: Optional[Path] = None,
         verbose: bool = False,
+        show_progress: bool = False,
     ) -> Dict[str, dict]:
         """Systematically discover HEC-RAS/HMS models on USGS ScienceBase.
 
@@ -909,7 +936,8 @@ class UsgsScienceBase:
             max_results_per_query: Max items per search query.
             request_delay: Seconds between API requests.
             export_json: Path to write final results as JSON.
-            verbose: If True, print summary statistics.
+            verbose: If True, log summary statistics at INFO.
+            show_progress: If True, show discovery progress bars.
 
         Returns:
             Dict keyed by sciencebase_id, each value a candidate model dict.
@@ -920,7 +948,10 @@ class UsgsScienceBase:
         all_candidates: Dict[str, dict] = {}
         errors: List[str] = []
 
-        strategy_bar = tqdm(active, desc="Discovery strategies", unit="strategy")
+        strategy_bar = UsgsScienceBase._progress(
+            active, desc="Discovery strategies", unit="strategy",
+            show_progress=show_progress,
+        )
 
         for strategy in strategy_bar:
             strategy_bar.set_postfix(current=strategy, found=len(all_candidates))
@@ -931,19 +962,23 @@ class UsgsScienceBase:
                         cache_dir=cache_dir,
                         request_delay=request_delay,
                         seen_ids=seen_ids,
+                        show_progress=show_progress,
                     )
                 elif strategy == "fim":
                     found = UsgsScienceBase._discover_fim_sites(
                         cache_dir=cache_dir,
                         request_delay=request_delay,
                         seen_ids=seen_ids,
+                        show_progress=show_progress,
                     )
                 elif strategy == "alternate":
-                    found = UsgsScienceBase._discover_alternate_keywords(
+                    found = UsgsScienceBase._discover_keyword_search(
+                        queries=UsgsScienceBase._ALTERNATE_KEYWORD_QUERIES,
                         max_results_per_query=max_results_per_query,
                         cache_dir=cache_dir,
                         request_delay=request_delay,
                         seen_ids=seen_ids,
+                        show_progress=show_progress,
                     )
                 elif strategy == "children":
                     found = UsgsScienceBase._discover_children(
@@ -951,6 +986,7 @@ class UsgsScienceBase:
                         cache_dir=cache_dir,
                         request_delay=request_delay,
                         seen_ids=seen_ids,
+                        show_progress=show_progress,
                     )
                 else:
                     logger.warning("Unknown strategy: %s", strategy)
@@ -977,11 +1013,12 @@ class UsgsScienceBase:
             for c in all_candidates.values():
                 by_type[c["model_type_guess"]] = by_type.get(c["model_type_guess"], 0) + 1
                 by_conf[c["confidence"]] = by_conf.get(c["confidence"], 0) + 1
-            print(f"\nDiscovered {len(all_candidates)} candidate models")
-            print(f"  By type: {by_type}")
-            print(f"  By confidence: {by_conf}")
+            logger.info(
+                "Discovered %d candidate ScienceBase models by type=%s, confidence=%s",
+                len(all_candidates), by_type, by_conf,
+            )
             if errors:
-                print(f"  Errors: {len(errors)}")
+                logger.info("ScienceBase discovery completed with %d error(s)", len(errors))
 
         if export_json:
             export_json.parent.mkdir(parents=True, exist_ok=True)

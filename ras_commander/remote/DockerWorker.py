@@ -278,21 +278,21 @@ def init_docker_worker(**kwargs) -> DockerWorker:
 
         if worker.use_ssh_client:
             # For system SSH client, recommend ~/.ssh/config instead
-            logger.info(f"SSH key path specified: {worker.ssh_key_path}")
-            logger.info("Note: When use_ssh_client=True, configure the key in ~/.ssh/config:")
-            logger.info(f"  Host {worker.docker_host.split('@')[-1] if '@' in worker.docker_host else 'your-host'}")
-            logger.info(f"    IdentityFile {expanded_key_path}")
+            logger.debug(f"SSH key path specified: {worker.ssh_key_path}")
+            logger.debug("When use_ssh_client=True, configure the key in ~/.ssh/config:")
+            logger.debug(f"  Host {worker.docker_host.split('@')[-1] if '@' in worker.docker_host else 'your-host'}")
+            logger.debug(f"    IdentityFile {expanded_key_path}")
         else:
             # For paramiko, set SSH_AUTH_SOCK or use paramiko's key loading
             # The Docker SDK will look in standard locations and SSH agent
-            logger.info(f"SSH key path: {expanded_key_path}")
+            logger.debug(f"SSH key path: {expanded_key_path}")
             if not os.path.exists(expanded_key_path):
                 logger.warning(f"SSH key file not found: {expanded_key_path}")
             else:
                 # Set environment variable for paramiko to find the key
                 # This is a workaround since Docker SDK doesn't expose key_filename param
                 os.environ.setdefault('DOCKER_SSH_KEY_FILE', expanded_key_path)
-                logger.info("SSH key will be loaded via paramiko")
+                logger.debug("SSH key will be loaded via paramiko")
 
     # Verify Docker daemon connectivity
     try:
@@ -300,13 +300,14 @@ def init_docker_worker(**kwargs) -> DockerWorker:
             client_kwargs = {"base_url": worker.docker_host}
             if worker.use_ssh_client:
                 client_kwargs["use_ssh_client"] = True
-                logger.info("Using system ssh client for Docker connection")
+                logger.debug("Using system ssh client for Docker connection")
             client = docker.DockerClient(**client_kwargs)
         else:
             client = docker.from_env()
 
         client.ping()
-        logger.info(f"Docker daemon connected: {worker.docker_host or 'local'}")
+        logger.info("Docker daemon connected")
+        logger.debug(f"Docker daemon host: {worker.docker_host or 'local'}")
 
         # Check if image exists
         try:
@@ -346,16 +347,22 @@ def init_docker_worker(**kwargs) -> DockerWorker:
         logger.error(f"Cannot connect to Docker daemon: {e}")
         raise
 
-    logger.info(f"DockerWorker initialized:")
-    logger.info(f"  Image: {worker.docker_image}")
-    logger.info(f"  Host: {worker.docker_host or 'local'}")
-    logger.info(f"  Preprocess on host: {worker.preprocess_on_host}")
-    logger.info(f"  Max parallel plans: {worker.max_parallel_plans}")
-    logger.info(f"  Timeout: {worker.max_runtime_minutes} minutes")
+    host_scope = "remote" if worker._is_remote else "local"
+    logger.info(
+        "Docker worker configured: "
+        f"image={worker.docker_image}, host={host_scope}, "
+        f"preprocess_on_host={worker.preprocess_on_host}, "
+        f"slots={worker.max_parallel_plans}, "
+        f"timeout={worker.max_runtime_minutes} min"
+    )
+    logger.debug(f"Docker worker host: {worker.docker_host or 'local'}")
+    logger.debug(f"Docker container input path: {worker.container_input_path}")
+    logger.debug(f"Docker container output path: {worker.container_output_path}")
+    logger.debug(f"Docker container script path: {worker.container_script_path}")
     if is_ssh_host:
-        logger.info(f"  SSH client: {'system' if worker.use_ssh_client else 'paramiko'}")
+        logger.debug(f"Docker SSH client: {'system' if worker.use_ssh_client else 'paramiko'}")
         if worker.ssh_key_path:
-            logger.info(f"  SSH key: {worker.ssh_key_path}")
+            logger.debug(f"Docker SSH key path: {worker.ssh_key_path}")
 
     return worker
 
@@ -419,10 +426,11 @@ def execute_docker_plan(
         local_preprocess_base = Path(tempfile.gettempdir())  # Local temp for preprocessing
         remote_staging_base = Path(worker.share_path)  # UNC path for remote file access
         docker_staging_base = Path(worker.remote_staging_path)  # Path on Docker host for mounts
-        logger.info(f"Remote Docker host: {worker.docker_host}")
-        logger.info(f"  Local preprocessing: {local_preprocess_base}")
-        logger.info(f"  Remote share (UNC): {worker.share_path}")
-        logger.info(f"  Docker mounts: {worker.remote_staging_path}")
+        logger.info(f"Remote Docker staging configured for plan {plan_number}")
+        logger.debug(f"Remote Docker host: {worker.docker_host}")
+        logger.debug(f"Local preprocessing staging base: {local_preprocess_base}")
+        logger.debug(f"Remote share staging base: {worker.share_path}")
+        logger.debug(f"Docker mount staging base: {worker.remote_staging_path}")
     else:
         # Local Docker: same path for both
         local_preprocess_base = Path(worker.staging_directory)
@@ -496,17 +504,22 @@ def execute_docker_plan(
                     shutil.copy2(item, remote_input_staging / item.name)
                 elif item.is_dir():
                     shutil.copytree(item, remote_input_staging / item.name, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
-            logger.info(f"Files copied to: {remote_staging_folder}")
+            logger.info("Preprocessed files copied to remote Docker staging")
+            logger.debug(f"Remote Docker staging folder: {remote_staging_folder}")
 
         # Extract geometry number
         from ..RasPreprocess import RasPreprocess
-        plan_files = list(input_staging.glob(f"*.p{plan_number}"))
+        plan_pattern = f"*.p{plan_number}"
+        plan_files = list(input_staging.glob(plan_pattern))
         if plan_files:
             geometry_number = RasPreprocess._extract_geometry_number(plan_files[0])
         else:
             geometry_number = None
         if not geometry_number:
-            logger.error(f"Could not extract geometry number for plan {plan_number}")
+            logger.error(
+                f"Could not extract geometry number for plan {plan_number}; "
+                f"searched pattern '{plan_pattern}' in {input_staging}"
+            )
             return False
 
         logger.info(f"Plan {plan_number} uses geometry {geometry_number}")
@@ -583,7 +596,17 @@ def execute_docker_plan(
 
             logs = container.logs(stdout=True, stderr=True).decode('utf-8', errors='replace')
             if exit_code != 0:
-                logger.error(f"Container logs:\n{logs}")
+                log_lines = logs.splitlines()
+                if log_lines:
+                    tail_lines = log_lines[-40:]
+                    logger.error(
+                        f"Container failed with exit code {exit_code}; "
+                        f"last {len(tail_lines)} of {len(log_lines)} log line(s):\n"
+                        + "\n".join(tail_lines)
+                    )
+                else:
+                    logger.error(f"Container failed with exit code {exit_code}; no container logs captured")
+                logger.debug(f"Full container logs:\n{logs}")
             else:
                 logger.debug(f"Container logs:\n{logs}")
 
@@ -602,7 +625,7 @@ def execute_docker_plan(
             client.close()
 
         if exit_code != 0:
-            logger.error(f"Simulation failed with exit code {exit_code}")
+            logger.debug(f"Simulation failed with exit code {exit_code}")
             return False
 
         # Copy results back
@@ -621,7 +644,11 @@ def execute_docker_plan(
         result_files = list(set(result_files))
 
         if not result_files:
-            logger.error(f"No HDF results found")
+            logger.error(
+                f"No HDF results found for plan {plan_number}; "
+                f"searched patterns {result_patterns} in output_staging={output_staging} "
+                f"and input_staging={input_staging}"
+            )
             return False
 
         for result_file in result_files:
@@ -648,8 +675,12 @@ def execute_docker_plan(
         if autoclean and local_staging_folder.exists():
             try:
                 shutil.rmtree(local_staging_folder, ignore_errors=True)
-                logger.debug(f"Cleaned up staging")
+                logger.debug(f"Cleaned up staging: {local_staging_folder}")
             except:
                 pass
         elif not autoclean:
-            logger.info(f"Preserving staging: {local_staging_folder}")
+            logger.info(
+                f"Preserving Docker staging for plan {plan_number} for debugging; "
+                "enable DEBUG logging for the path"
+            )
+            logger.debug(f"Preserved Docker staging folder: {local_staging_folder}")

@@ -833,6 +833,7 @@ def _evaluate_points(
 ) -> Tuple[List[dict], float]:
     point_results: List[dict] = []
     objectives: List[float] = []
+    failed_points: List[str] = []
 
     for point in calibration_points:
         result = {
@@ -863,14 +864,25 @@ def _evaluate_points(
                 objectives.append(float(objective))
         except Exception as exc:
             result["error"] = str(exc)
-            logger.warning(
-                "Calibration point '%s' failed for %s: %s",
+            failed_points.append(point.name)
+            logger.debug(
+                "Calibration point '%s' failed while scoring %s: %s",
                 point.name,
                 plan_hdf,
                 exc,
+                exc_info=True,
             )
 
         point_results.append(result)
+
+    if failed_points:
+        logger.warning(
+            "Calibration scoring failed for %d of %d point(s) in %s; "
+            "see point_results errors or enable DEBUG logging for details.",
+            len(failed_points),
+            len(calibration_points),
+            Path(plan_hdf).name,
+        )
 
     overall_objective = _aggregate_objectives(objectives, metric)
     return point_results, overall_objective
@@ -1709,19 +1721,29 @@ class RasCalibrate:
         num_cores: int = 2,
         force_geompre: bool = False,
         ras_object: Any = None,
+        *,
+        max_plans_per_batch: int = 99,
+        clone_geom: bool = False,
+        clear_geompre: bool = False,
+        timeout_sec: Optional[int] = None,
+        workers: Optional[List[Any]] = None,
     ) -> pd.DataFrame:
         """
         Run a calibration grid search on top of RasPermutation.
+
+        When ``workers`` is provided, generated calibration plans are
+        distributed with ``compute_parallel_remote()`` through
+        ``RasPermutation.execute_and_summarize()``. When ``workers`` is not
+        provided, execution uses local ``RasCmdr.compute_parallel()`` with
+        ``max_workers``.
+
+        Use ``clone_geom=True`` for geometry-mutating apply functions, such as
+        Manning's n or infiltration calibration. Use ``clear_geompre=True`` or
+        ``force_geompre=True`` when edited geometry inputs require HEC-RAS to
+        rebuild cached geometry/preprocessor artifacts.
         """
         metric_name = _normalize_metric(metric)
         points = _coerce_calibration_points(calibration_points)
-
-        if force_geompre:
-            logger.warning(
-                "grid_search(force_geompre=True) was requested, but "
-                "RasPermutation.execute_and_summarize() does not currently "
-                "expose force_geompre to RasCmdr.compute_parallel()."
-            )
 
         params_df = RasPermutation.define_parameters(parameters)
         plan_matrix = RasPermutation.generate_plans(
@@ -1729,6 +1751,8 @@ class RasCalibrate:
             params_df,
             apply_fn,
             suffix=suffix,
+            max_plans_per_batch=max_plans_per_batch,
+            clone_geom=clone_geom,
             ras_object=ras_object,
         )
         results_df = RasPermutation.execute_and_summarize(
@@ -1736,6 +1760,10 @@ class RasCalibrate:
             max_workers=max_workers,
             num_cores=num_cores,
             ras_object=ras_object,
+            timeout_sec=timeout_sec,
+            clear_geompre=clear_geompre,
+            force_geompre=force_geompre,
+            workers=workers,
         )
 
         augmented_rows: List[dict] = []
@@ -2020,10 +2048,13 @@ class RasCalibrate:
         )
 
         if method_name == "Nelder-Mead":
-            logger.warning(
+            logger.debug(
                 "SciPy's Nelder-Mead bound handling varies by version; "
                 "midpoint initialization stays inside the requested bounds, "
-                "but strict bound enforcement depends on SciPy."
+                "but strict bound enforcement depends on SciPy. Use "
+                "method='l-bfgs-b' or method='slsqp' when strict bound "
+                "handling is required, and inspect iteration_history for "
+                "evaluated candidate values."
             )
 
         iteration_history: List[dict] = []
@@ -2059,9 +2090,15 @@ class RasCalibrate:
                 optimization_value = penalty
                 success = False
                 logger.warning(
+                    "Optimization iteration failed; penalty applied. "
+                    "Enable DEBUG logging for parameter values and "
+                    "exception details."
+                )
+                logger.debug(
                     "Optimization iteration failed for parameters %s: %s",
                     parameter_values,
                     exc,
+                    exc_info=True,
                 )
 
             history_row = {

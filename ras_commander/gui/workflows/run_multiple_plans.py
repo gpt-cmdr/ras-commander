@@ -60,7 +60,7 @@ class RunMultiplePlansWorkflow:
         """
         if plan_numbers:
             logger.info(f"Requested plans: {', '.join(plan_numbers)}")
-            logger.info("Note: Currently checking all plans. Specific plan selection not yet implemented.")
+            logger.debug("Specific plan selection not implemented; checking all plans")
 
         # Step 1: Launch HEC-RAS and wait for main window
         hecras_process, hec_ras_hwnd = HecRasElements.launch_and_wait(
@@ -71,16 +71,16 @@ class RunMultiplePlansWorkflow:
             return False
 
         # Step 2: Click "Run > Run Multiple Plans" (menu ID 52)
-        logger.info("Clicking 'Run > Run Multiple Plans' menu...")
+        logger.debug("Clicking 'Run > Run Multiple Plans' menu...")
         time.sleep(1)
 
         if not Win32Primitives.click_menu_item(hec_ras_hwnd, 52):
-            logger.warning("Failed to click menu item, but continuing...")
+            logger.debug("Failed to click menu item, but continuing")
 
         time.sleep(2)
 
         # Step 3: Find the Run Multiple Plans dialog
-        logger.info("Looking for Run Multiple Plans dialog...")
+        logger.debug("Looking for Run Multiple Plans dialog...")
 
         def find_multiple_plans_dialog():
             for title_pattern in ["Run Multiple Plans", "Multiple Plans", "Compute Multiple"]:
@@ -92,16 +92,16 @@ class RunMultiplePlansWorkflow:
         dialog_hwnd = Win32Primitives.wait_for_window(find_multiple_plans_dialog, timeout=15)
 
         if dialog_hwnd:
-            logger.info(f"Found dialog: {win32gui.GetWindowText(dialog_hwnd)}")
+            logger.debug(f"Found dialog: {win32gui.GetWindowText(dialog_hwnd)}")
 
             # Step 4: Try to check all plans
             if check_all:
-                logger.info("Attempting to check all plans...")
+                logger.debug("Attempting to check all plans...")
                 check_all_button = None
                 for button_text in ["Check All", "Select All", "All"]:
                     check_all_button = Win32Primitives.find_button_by_text(dialog_hwnd, button_text)
                     if check_all_button:
-                        logger.info(f"Found '{button_text}' button")
+                        logger.debug(f"Found '{button_text}' button")
                         Win32Primitives.click_button(check_all_button)
                         time.sleep(0.5)
                         break
@@ -110,30 +110,30 @@ class RunMultiplePlansWorkflow:
                     logger.warning("Could not find 'Check All' button - plans may need manual selection")
 
             # Step 5: Click Compute button
-            logger.info("Looking for Compute button...")
+            logger.debug("Looking for Compute button...")
             time.sleep(1)
 
             compute_button = None
             for button_text in ["Compute", "Run", "Run All Checked Plans", "Start"]:
                 compute_button = Win32Primitives.find_button_by_text(dialog_hwnd, button_text)
                 if compute_button:
-                    logger.info(f"Found '{button_text}' button")
+                    logger.debug(f"Found '{button_text}' button")
                     Win32Primitives.click_button(compute_button)
                     break
 
             if not compute_button:
-                logger.warning("Could not find Compute button - trying keyboard fallback...")
+                logger.debug("Could not find Compute button; trying keyboard fallback")
                 try:
                     shell = win32com.client.Dispatch("WScript.Shell")
                     time.sleep(0.5)
                     shell.SendKeys("{ENTER}")
-                    logger.info("Sent Enter key to dialog")
+                    logger.debug("Sent Enter key to dialog")
                 except Exception as e:
-                    logger.warning(f"Keyboard fallback failed: {e}")
-                    logger.info("User must manually click Compute button")
+                    logger.warning("User must manually click Compute button")
+                    logger.debug("Run Multiple Plans keyboard fallback failed: %s", e)
         else:
             logger.warning("Could not find Run Multiple Plans dialog")
-            logger.info("User must manually navigate to 'Run > Run Multiple Plans' and click Compute")
+            logger.warning("User must manually navigate to 'Run > Run Multiple Plans' and click Compute")
 
         # Step 6: Wait for user to close HEC-RAS (or return immediately)
         if wait_for_user:
@@ -147,10 +147,11 @@ class RunMultiplePlansWorkflow:
                 hecras_process.wait()
                 logger.info("HEC-RAS has been closed")
             except Exception as e:
-                logger.error(f"Error waiting for HEC-RAS to close: {e}")
+                logger.error("Error waiting for HEC-RAS to close")
+                logger.debug("HEC-RAS wait failure: %s", e)
                 return False
         else:
             logger.info("Returning without waiting for HEC-RAS to close")
-            logger.info(f"HEC-RAS process ID: {hecras_process.pid}")
+            logger.debug(f"HEC-RAS process ID: {hecras_process.pid}")
 
         return True

@@ -177,7 +177,11 @@ class GeomMetadata:
                 counts.update(mesh_info)
 
         except Exception as e:
-            logger.warning(f"HDF extraction failed for {hdf_path}: {e}")
+            logger.warning(
+                "HDF geometry metadata extraction failed for %s",
+                hdf_path.name,
+            )
+            logger.debug("HDF metadata extraction failure for %s: %s", hdf_path, e)
 
         return counts
 
@@ -411,7 +415,11 @@ class GeomMetadata:
                 logger.debug(f"2D mesh text error: {e}")
 
         except Exception as e:
-            logger.warning(f"Text extraction failed for {geom_path}: {e}")
+            logger.warning(
+                "Text geometry metadata extraction failed for %s",
+                geom_path.name,
+            )
+            logger.debug("Text metadata extraction failure for %s: %s", geom_path, e)
 
         return counts
 

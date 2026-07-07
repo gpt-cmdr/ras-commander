@@ -109,7 +109,7 @@ def init_local_worker(**kwargs) -> LocalWorker:
     Returns:
         LocalWorker: Configured worker ready for execution
     """
-    logger.info("Initializing local worker")
+    logger.debug("Initializing local worker")
 
     kwargs['worker_type'] = 'local'
     worker = LocalWorker(**kwargs)
@@ -118,15 +118,16 @@ def init_local_worker(**kwargs) -> LocalWorker:
     worker_folder_path = Path(worker.worker_folder)
     worker_folder_path.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"Local worker configured:")
-    logger.info(f"  Worker folder: {worker.worker_folder}")
-    logger.info(f"  RAS Exe: {worker.ras_exe_path}")
-    logger.info(f"  Process Priority: {worker.process_priority}")
-    logger.info(f"  Queue Priority: {worker.queue_priority}")
     if worker.max_parallel_plans > 1:
-        logger.info(f"  Parallel Capacity: {worker.max_parallel_plans} plans simultaneously")
+        capacity = f"slots={worker.max_parallel_plans}"
     else:
-        logger.info(f"  Execution Mode: Sequential")
+        capacity = "mode=sequential"
+    logger.info(
+        "Local worker configured: "
+        f"priority={worker.process_priority}, queue={worker.queue_priority}, {capacity}"
+    )
+    logger.debug(f"Local worker folder: {worker.worker_folder}")
+    logger.debug(f"Local worker Ras.exe path: {worker.ras_exe_path}")
 
     return worker
 
@@ -167,7 +168,7 @@ def execute_local_plan(
         bool: True if successful
     """
     plan_number = RasUtils.normalize_ras_number(plan_number)
-    logger.info(f"Starting local execution of plan {plan_number} (sub-worker #{sub_worker_id})")
+    logger.debug(f"Starting local execution of plan {plan_number} (sub-worker #{sub_worker_id})")
 
     project_folder = Path(ras_obj.project_folder)
     project_name = ras_obj.project_name
@@ -182,7 +183,7 @@ def execute_local_plan(
 
     try:
         # Step 2: Copy project to worker folder
-        logger.info(f"Copying project to {worker_temp_folder}")
+        logger.debug(f"Copying project for plan {plan_number} to local worker folder: {worker_temp_folder}")
         worker_project_path = worker_temp_folder / project_name
         shutil.copytree(project_folder, worker_project_path, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
         hdf_file = worker_project_path / RasCurrency.get_plan_hdf_path(plan_number, ras_obj).name
@@ -195,7 +196,7 @@ def execute_local_plan(
         from ..RasPrj import RasPrj, init_ras_project
 
         # Initialize project in worker folder
-        logger.info(f"Initializing project in worker folder")
+        logger.debug("Initializing project in local worker folder")
         temp_ras = RasPrj()
         prj_files = list(worker_project_path.glob("*.prj"))
         if not prj_files:
@@ -206,7 +207,7 @@ def execute_local_plan(
         ras_version = getattr(ras_obj, 'ras_version', '7.0')
         init_ras_project(str(worker_project_path), ras_version, ras_object=temp_ras)
 
-        logger.info(f"Executing plan {plan_number} with RasCmdr.compute_plan()")
+        logger.debug(f"Executing plan {plan_number} with RasCmdr.compute_plan()")
         success = RasCmdr.compute_plan(
             plan_number=plan_number,
             ras_object=temp_ras,
@@ -217,7 +218,10 @@ def execute_local_plan(
         )
 
         if not success:
-            logger.error(f"RasCmdr.compute_plan() returned False for plan {plan_number}")
+            logger.error(
+                "RasCmdr.compute_plan() returned False for plan "
+                f"{plan_number} in local worker project: {worker_project_path}"
+            )
             return False
 
         if not hdf_file.exists():
@@ -228,7 +232,7 @@ def execute_local_plan(
             logger.error(f"HDF file is incomplete: {hdf_file}")
             return False
 
-        logger.info(f"HDF file created successfully: {hdf_file}")
+        logger.debug(f"HDF file created successfully for plan {plan_number}: {hdf_file}")
 
         # Step 4: Copy results back (HDF file)
         if copy_plan_hdf_back(worker_project_path, plan_number, ras_obj) is None:
@@ -243,7 +247,10 @@ def execute_local_plan(
                 ras_obj=ras_obj,
             )
         except FileNotFoundError as e:
-            logger.error(f"Geometry output copyback failed for plan {plan_number}: {e}")
+            logger.error(
+                f"Geometry output copyback failed for plan {plan_number}: {e}. "
+                f"worker_project={worker_project_path}; destination_project={project_folder}"
+            )
             return False
 
         # Also copy any other result files (.computeMsgs.txt, etc.)
@@ -259,12 +266,19 @@ def execute_local_plan(
             shutil.rmtree(worker_temp_folder, ignore_errors=True)
             logger.debug(f"Cleaned up worker folder: {worker_temp_folder}")
         else:
-            logger.info(f"Preserving worker folder for debugging: {worker_temp_folder}")
+            logger.info(
+                f"Preserving local worker folder for plan {plan_number} for debugging; "
+                "enable DEBUG logging for the path"
+            )
+            logger.debug(f"Preserved worker folder: {worker_temp_folder}")
 
         return True
 
     except Exception as e:
-        logger.error(f"Error in local execution: {e}")
+        logger.error(
+            f"Error in local execution for plan {plan_number}: {e}. "
+            f"worker_folder={worker_temp_folder}; source_project={project_folder}"
+        )
         import traceback
         logger.debug(traceback.format_exc())
 
@@ -275,5 +289,9 @@ def execute_local_plan(
             except:
                 pass
         else:
-            logger.info(f"Preserving worker folder for debugging: {worker_temp_folder}")
+            logger.info(
+                f"Preserving local worker folder for plan {plan_number} for debugging; "
+                "enable DEBUG logging for the path"
+            )
+            logger.debug(f"Preserved worker folder: {worker_temp_folder}")
         return False

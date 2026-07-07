@@ -216,6 +216,39 @@ class RasCmdr:
         return [artifact_paths[name] for name in sorted(artifact_paths)]
 
     @staticmethod
+    def _log_execution_results(execution_results: Dict[str, bool]) -> None:
+        """
+        Log a concise execution summary with per-plan detail at DEBUG.
+        """
+        if not execution_results:
+            logger.info("Execution results: no plans executed")
+            return
+
+        successful_plans = [
+            str(plan_num)
+            for plan_num, success in execution_results.items()
+            if success
+        ]
+        failed_plans = [
+            str(plan_num)
+            for plan_num, success in execution_results.items()
+            if not success
+        ]
+        total_plans = len(execution_results)
+
+        logger.info(
+            "Execution results: %s/%s plan(s) successful",
+            len(successful_plans),
+            total_plans,
+        )
+        for plan_num in successful_plans:
+            logger.debug("Plan %s: Successful", plan_num)
+        if failed_plans:
+            logger.warning("Failed plan(s): %s", ", ".join(failed_plans))
+            for plan_num in failed_plans:
+                logger.debug("Plan %s: Failed", plan_num)
+
+    @staticmethod
     def _copy_worker_artifact(source_path: Path, dest_path: Path) -> bool:
         """
         Copy a worker artifact unless the destination is already newer.
@@ -476,7 +509,7 @@ class RasCmdr:
         try:
             ras_obj = ras_object if ras_object is not None else ras
             _ras_obj = ras_obj
-            logger.info(f"Using ras_object with project folder: {ras_obj.project_folder}")
+            logger.debug(f"Using ras_object with project folder: {ras_obj.project_folder}")
             ras_obj.check_initialized()
 
             if dest_folder is not None:
@@ -485,7 +518,8 @@ class RasCmdr:
                 if dest_folder.exists():
                     if overwrite_dest:
                         shutil.rmtree(dest_folder)
-                        logger.info(f"Destination folder '{dest_folder}' exists. Overwriting as per overwrite_dest=True.")
+                        logger.info("Destination folder exists; overwriting as requested: %s", dest_folder.name)
+                        logger.debug(f"Overwriting destination folder: {dest_folder}")
                     elif any(dest_folder.iterdir()):
                         error_msg = f"Destination folder '{dest_folder}' exists and is not empty. Use overwrite_dest=True to overwrite."
                         logger.error(error_msg)
@@ -493,7 +527,8 @@ class RasCmdr:
 
                 dest_folder.mkdir(parents=True, exist_ok=True)
                 shutil.copytree(ras_obj.project_folder, dest_folder, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
-                logger.info(f"Copied project folder to destination: {dest_folder}")
+                logger.info("Copied project folder to destination: %s", dest_folder.name)
+                logger.debug(f"Copied project folder to destination path: {dest_folder}")
 
                 compute_ras = RasPrj()
                 compute_ras.initialize(dest_folder, ras_obj.ras_exe_path)
@@ -623,8 +658,8 @@ class RasCmdr:
 
             # Prepare the command for HEC-RAS execution
             cmd = f'"{compute_ras.ras_exe_path}" -c "{compute_prj_path}" "{compute_plan_path}"'
-            logger.info("Running HEC-RAS from the Command Line:")
-            logger.info(f"Running command: {cmd}")
+            logger.info("Running Ras.exe with -c command line flag for plan %s", plan_number)
+            logger.debug(f"Running command: {cmd}")
 
             # Callback: execution start
             if stream_callback and hasattr(stream_callback, 'on_exec_start'):
@@ -703,8 +738,10 @@ class RasCmdr:
 
                 end_time = time.time()
                 run_time = end_time - start_time
-                logger.info(f"HEC-RAS execution completed for plan: {plan_number}")
-                logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+                logger.info(
+                    f"HEC-RAS execution completed for plan {plan_number} "
+                    f"in {run_time:.2f} seconds"
+                )
 
                 # Callback: execution complete
                 if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
@@ -935,14 +972,16 @@ class RasCmdr:
                 if dest_folder_path.exists():
                     if overwrite_dest:
                         shutil.rmtree(dest_folder_path)
-                        logger.info(f"Destination folder '{dest_folder_path}' exists. Overwriting as per overwrite_dest=True.")
+                        logger.info("Destination folder exists; overwriting as requested: %s", dest_folder_path.name)
+                        logger.debug(f"Overwriting destination folder: {dest_folder_path}")
                     elif any(dest_folder_path.iterdir()):
                         error_msg = f"Destination folder '{dest_folder_path}' exists and is not empty. Use overwrite_dest=True to overwrite."
                         logger.error(error_msg)
                         raise ValueError(error_msg)
                 dest_folder_path.mkdir(parents=True, exist_ok=True)
                 shutil.copytree(project_folder, dest_folder_path, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
-                logger.info(f"Copied project folder to destination: {dest_folder_path}")
+                logger.info("Copied project folder to destination: %s", dest_folder_path.name)
+                logger.debug(f"Copied project folder to destination path: {dest_folder_path}")
                 project_folder = dest_folder_path
 
             # Store filtered plan numbers separately to ensure only these are executed
@@ -998,9 +1037,9 @@ class RasCmdr:
                 worker_folder = project_folder.parent / f"{project_folder.name} [Worker {worker_id}]"
                 if worker_folder.exists():
                     shutil.rmtree(worker_folder)
-                    logger.info(f"Removed existing worker folder: {worker_folder}")
+                    logger.debug(f"Removed existing worker folder: {worker_folder}")
                 shutil.copytree(project_folder, worker_folder, ignore=RasUtils.ignore_windows_reserved)
-                logger.info(f"Created worker folder: {worker_folder}")
+                logger.debug(f"Created worker folder {worker_id}: {worker_folder}")
 
                 try:
                     worker_ras = RasPrj()
@@ -1013,6 +1052,7 @@ class RasCmdr:
                 except Exception as e:
                     logger.critical(f"Failed to initialize RAS project for worker {worker_id}: {str(e)}")
                     worker_ras_objects[worker_id] = None
+            logger.info(f"Prepared {max_workers} worker folder(s) for parallel execution")
 
             # Explicitly use the filtered plan numbers for assignments
             worker_cycle = cycle(range(1, max_workers + 1))
@@ -1044,7 +1084,10 @@ class RasCmdr:
                         compute_result = future.result()
                         # Extract bool from ComputeResult for execution_results dict
                         execution_results[plan_num] = bool(compute_result)
-                        logger.info(f"Plan {plan_num} executed in worker {worker_id}: {'Successful' if compute_result else 'Failed'}")
+                        if compute_result:
+                            logger.debug(f"Plan {plan_num} executed in worker {worker_id}: Successful")
+                        else:
+                            logger.warning(f"Plan {plan_num} executed in worker {worker_id}: Failed")
                     except Exception as e:
                         execution_results[plan_num] = False
                         logger.error(f"Plan {plan_num} failed in worker {worker_id}: {str(e)}")
@@ -1054,10 +1097,18 @@ class RasCmdr:
             if dest_folder is not None:
                 final_dest_folder = dest_folder_path
                 final_dest_folder.mkdir(parents=True, exist_ok=True)
-                logger.info(f"Consolidating results to destination folder: {final_dest_folder}")
+                logger.info(
+                    "Consolidating worker artifacts to destination folder: %s",
+                    final_dest_folder.name,
+                )
+                logger.debug(f"Consolidating worker artifacts to destination path: {final_dest_folder}")
             else:
                 final_dest_folder = project_folder
-                logger.info(f"Consolidating results back to original project folder: {final_dest_folder}")
+                logger.info(
+                    "Consolidating worker artifacts back to original project folder: %s",
+                    final_dest_folder.name,
+                )
+                logger.debug(f"Consolidating worker artifacts back to original project path: {final_dest_folder}")
 
             consolidated_artifact_count = 0
             for worker_id, worker_ras in worker_ras_objects.items():
@@ -1116,22 +1167,21 @@ class RasCmdr:
             logger.info(
                 "Consolidated %s worker artifact(s) to %s",
                 consolidated_artifact_count,
-                final_dest_folder
+                final_dest_folder.name
             )
+            logger.debug(f"Consolidated worker artifacts to destination path: {final_dest_folder}")
 
             # When dest_folder is used, re-initialize ras_obj from dest_folder
             # This ensures results_df reflects results in the destination folder
             if dest_folder is not None:
                 try:
                     ras_obj.initialize(final_dest_folder, ras_obj.ras_exe_path)
-                    logger.info(f"Re-initialized ras_object from destination folder: {final_dest_folder}")
+                    logger.info("Re-initialized ras_object from destination folder: %s", final_dest_folder.name)
+                    logger.debug(f"Re-initialized ras_object from destination path: {final_dest_folder}")
                 except Exception as e:
                     logger.critical(f"Failed to re-initialize ras_object from destination folder: {str(e)}")
 
-            logger.info("\nExecution Results:")
-            for plan_num, success in execution_results.items():
-                status = 'Successful' if success else 'Failed'
-                logger.info(f"Plan {plan_num}: {status}")
+            RasCmdr._log_execution_results(execution_results)
 
             ras_obj = ras_object or ras
             ras_obj.plan_df = ras_obj.get_plan_entries()
@@ -1291,12 +1341,14 @@ class RasCmdr:
                 return ComputeParallelResult()
 
             compute_folder = project_folder.parent / f"{project_folder.name} {dest_folder_suffix}"
-            logger.info(f"Creating the test folder: {compute_folder}...")
+            logger.info("Creating test folder: %s", compute_folder.name)
+            logger.debug(f"Creating test folder path: {compute_folder}")
 
             if compute_folder.exists():
                 if overwrite_dest:
                     shutil.rmtree(compute_folder)
-                    logger.info(f"Compute folder '{compute_folder}' exists. Overwriting as per overwrite_dest=True.")
+                    logger.info("Compute folder exists; overwriting as requested: %s", compute_folder.name)
+                    logger.debug(f"Overwriting compute folder: {compute_folder}")
                 elif any(compute_folder.iterdir()):
                     error_msg = (
                         f"Compute folder '{compute_folder}' exists and is not empty. "
@@ -1307,7 +1359,8 @@ class RasCmdr:
 
             try:
                 shutil.copytree(project_folder, compute_folder, ignore=RasUtils.ignore_windows_reserved)
-                logger.info(f"Copied project folder to compute folder: {compute_folder}")
+                logger.info("Copied project folder to compute folder: %s", compute_folder.name)
+                logger.debug(f"Copied project folder to compute folder path: {compute_folder}")
             except Exception as e:
                 logger.critical(f"Error occurred while copying project folder: {str(e)}")
                 return ComputeParallelResult()
@@ -1316,7 +1369,8 @@ class RasCmdr:
                 compute_ras = RasPrj()
                 compute_ras.initialize(compute_folder, ras_obj.ras_exe_path)
                 compute_prj_path = compute_ras.prj_file
-                logger.info(f"Initialized RAS project in compute folder: {compute_prj_path}")
+                logger.info("Initialized RAS project in compute folder: %s", compute_folder.name)
+                logger.debug(f"Initialized RAS project file in compute folder: {compute_prj_path}")
             except Exception as e:
                 logger.critical(f"Error initializing RAS project in compute folder: {str(e)}")
                 return ComputeParallelResult()
@@ -1325,10 +1379,10 @@ class RasCmdr:
                 logger.error("Project file not found.")
                 return ComputeParallelResult()
 
-            logger.info("Getting plan entries...")
+            logger.debug("Getting plan entries...")
             try:
                 ras_compute_plan_entries = compute_ras.plan_df
-                logger.info("Retrieved plan entries successfully.")
+                logger.debug("Retrieved plan entries successfully.")
             except Exception as e:
                 logger.critical(f"Error retrieving plan entries: {str(e)}")
                 return ComputeParallelResult()
@@ -1357,7 +1411,7 @@ class RasCmdr:
                     # Extract bool from ComputeResult for execution_results dict
                     execution_results[current_plan_number] = bool(compute_result)
                     if compute_result:
-                        logger.info(f"Successfully computed plan {current_plan_number}")
+                        logger.debug(f"Successfully computed plan {current_plan_number}")
                     else:
                         logger.error(f"Failed to compute plan {current_plan_number}")
                 except Exception as e:
@@ -1366,13 +1420,14 @@ class RasCmdr:
                 finally:
                     end_time = time.time()
                     run_time = end_time - start_time
-                    logger.info(f"Total run time for plan {current_plan_number}: {run_time:.2f} seconds")
+                    logger.debug(f"Total run time for plan {current_plan_number}: {run_time:.2f} seconds")
 
             logger.info("All selected plans have been executed.")
 
             # Consolidate HDF results back to original project folder
             # This eliminates the [Test] folder anti-pattern - results go to original project
-            logger.info(f"Consolidating HDF results from {compute_folder} back to original project folder...")
+            logger.info("Consolidating HDF results from test folder back to original project folder")
+            logger.debug(f"Consolidating HDF results from {compute_folder} back to {project_folder}")
             hdf_files_copied = 0
             for hdf_file in compute_folder.glob("*.hdf"):
                 dest_path = project_folder / hdf_file.name
@@ -1390,16 +1445,14 @@ class RasCmdr:
             # Clean up test folder
             try:
                 shutil.rmtree(compute_folder)
-                logger.info(f"Removed test folder: {compute_folder}")
+                logger.info("Removed test folder: %s", compute_folder.name)
+                logger.debug(f"Removed test folder path: {compute_folder}")
             except Exception as e:
                 logger.warning(f"Failed to remove test folder {compute_folder}: {str(e)}")
 
             logger.info("compute_test_mode completed.")
 
-            logger.info("\nExecution Results:")
-            for plan_num, success in execution_results.items():
-                status = 'Successful' if success else 'Failed'
-                logger.info(f"Plan {plan_num}: {status}")
+            RasCmdr._log_execution_results(execution_results)
 
             # Refresh DataFrames from original folder - HDF files are now there
             ras_obj.plan_df = ras_obj.get_plan_entries()
@@ -1607,7 +1660,8 @@ class RasCmdr:
             logger.warning(f"No libs/ directory found near {ras_exe_dir}")
             ld_path_parts.append(str(ras_exe_dir))
         ld_path = ":".join(ld_path_parts)
-        logger.info(f"LD_LIBRARY_PATH: {ld_path}")
+        logger.info("Configured Linux library path for RasUnsteady")
+        logger.debug(f"LD_LIBRARY_PATH: {ld_path}")
 
         # dos2unix text files
         if dos2unix:

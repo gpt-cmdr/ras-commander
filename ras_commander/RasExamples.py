@@ -56,6 +56,24 @@ from ras_commander.LoggingConfig import log_call
 logger = get_logger(__name__)
 
 
+def _format_log_path(path: Union[str, Path]) -> str:
+    """Return a compact path for INFO logs; keep absolute paths for DEBUG."""
+    path = Path(path)
+    try:
+        return str(path.resolve().relative_to(Path.cwd().resolve()))
+    except (OSError, RuntimeError, ValueError):
+        return path.name
+
+
+def _should_show_progress() -> bool:
+    """Show progress bars only for interactive DEBUG sessions."""
+    if not logger.isEnabledFor(logging.DEBUG):
+        return False
+
+    isatty = getattr(sys.stderr, "isatty", None)
+    return bool(isatty and isatty())
+
+
 def _get_user_data_dir() -> Path:
     """
     Get platform-appropriate user data directory for ras-commander.
@@ -189,6 +207,7 @@ class RasExamples:
         self._save_to_csv()
 
     @classmethod
+    @log_call(logger)
     def extract_project(cls, project_names: Union[str, List[str]], output_path: Union[str, Path] = None, suffix: Optional[str] = None) -> Union[Path, List[Path]]:
         """Extract one or more specific HEC-RAS projects from the zip file.
 
@@ -246,7 +265,11 @@ class RasExamples:
                     extracted_paths.append(special_path)
                     continue
                 except Exception as e:
-                    logger.error(f"Failed to extract special project '{project_name}': {e}")
+                    logger.debug(
+                        "Special project '%s' extraction failed after detailed error logging: %s",
+                        project_name,
+                        e,
+                    )
                     continue
 
             # Regular project extraction logic
@@ -293,10 +316,20 @@ class RasExamples:
                                 with zip_ref.open(file) as source, open(extract_path, "wb") as target:
                                     shutil.copyfileobj(source, target)
 
-                logger.info(f"Successfully extracted project '{project_name}' to {final_folder_path}")
+                logger.info(
+                    "Successfully extracted project '%s' to %s",
+                    project_name,
+                    _format_log_path(final_folder_path),
+                )
+                logger.debug("Full extracted project path: %s", final_folder_path)
                 extracted_paths.append(final_folder_path)
             except Exception as e:
-                logger.error(f"An error occurred while extracting project '{project_name}': {str(e)}")
+                logger.error(
+                    "An error occurred while extracting project '%s' to %s: %s",
+                    project_name,
+                    final_folder_path,
+                    e,
+                )
 
         # Return single path if only one project was extracted, otherwise return list
         if not extracted_paths:
@@ -336,9 +369,10 @@ class RasExamples:
                         logger.debug(f"Found zip file: {cls._zip_file_path}")
                     return
 
-        logger.warning("No existing example projects zip file found.")
+        logger.debug("No existing example projects zip file found.")
 
     @classmethod
+    @log_call(logger)
     def get_example_projects(cls, version_number='7.0'):
         """
         Download and extract HEC-RAS example projects for a specified version.
@@ -377,17 +411,28 @@ class RasExamples:
         cls._zip_file_path = cls._user_data_dir / f"Example_Projects_{version_number.replace('.', '_')}.zip"
 
         if not cls._zip_file_path.exists():
-            logger.info(f"Downloading HEC-RAS Example Projects from {zip_url}.")
-            logger.info(f"Saving to: {cls._zip_file_path}")
-            logger.info("The file is over 400 MB, so it may take a few minutes to download....")
+            logger.info(
+                "Downloading HEC-RAS example projects for version %s (over 400 MB; may take a few minutes).",
+                version_number,
+            )
+            logger.debug("Example projects download URL: %s", zip_url)
+            logger.debug("Saving example projects zip to: %s", cls._zip_file_path)
             try:
                 response = requests.get(zip_url, stream=True)
                 response.raise_for_status()
                 with open(cls._zip_file_path, 'wb') as file:
                     shutil.copyfileobj(response.raw, file)
-                logger.info(f"Downloaded to {cls._zip_file_path}")
+                logger.info("Downloaded HEC-RAS example projects for version %s", version_number)
+                logger.debug("Downloaded example projects zip to: %s", cls._zip_file_path)
             except requests.exceptions.RequestException as e:
-                logger.error(f"Failed to download the zip file: {e}")
+                logger.error(
+                    "Failed to download HEC-RAS example projects version %s "
+                    "from %s to %s: %s",
+                    version_number,
+                    zip_url,
+                    cls._zip_file_path,
+                    e,
+                )
                 raise
         else:
             logger.debug("HEC-RAS Example Projects zip file already exists. Skipping download.")
@@ -448,7 +493,11 @@ class RasExamples:
             logger.error(f"The file {cls._zip_file_path} is not a valid zip file.")
             cls._folder_df = pd.DataFrame(columns=['Category', 'Project'])
         except Exception as e:
-            logger.error(f"An error occurred while extracting the folder structure: {str(e)}")
+            logger.error(
+                "An error occurred while extracting the folder structure from %s: %s",
+                cls._zip_file_path,
+                e,
+            )
             cls._folder_df = pd.DataFrame(columns=['Category', 'Project'])
 
     @classmethod
@@ -461,11 +510,12 @@ class RasExamples:
                 cls._folder_df.to_csv(cls.csv_file_path, index=False)
                 logger.debug(f"Saved project data to {cls.csv_file_path}")
             except Exception as e:
-                logger.error(f"Failed to save project data to CSV: {e}")
+                logger.error("Failed to save project data to CSV %s: %s", cls.csv_file_path, e)
         else:
             logger.warning("No folder data to save to CSV.")
 
     @classmethod
+    @log_call(logger)
     def list_categories(cls):
         """
         List all categories of example projects.
@@ -478,6 +528,7 @@ class RasExamples:
         return categories.tolist()
 
     @classmethod
+    @log_call(logger)
     def list_projects(cls, category=None):
         """
         List all projects or projects in a specific category.
@@ -500,6 +551,7 @@ class RasExamples:
         return projects.tolist()
 
     @classmethod
+    @log_call(logger)
     def is_project_extracted(cls, project_name):
         """
         Check if a specific project is already extracted.
@@ -510,6 +562,7 @@ class RasExamples:
         return is_extracted
 
     @classmethod
+    @log_call(logger)
     def clean_projects_directory(cls):
         """Remove all extracted projects from the example_projects directory."""
         logger.debug(f"Cleaning projects directory: {cls.projects_dir}")
@@ -518,9 +571,9 @@ class RasExamples:
                 shutil.rmtree(cls.projects_dir)
                 logger.debug("All projects have been removed.")
             except Exception as e:
-                logger.error(f"Failed to remove projects directory: {e}")
+                logger.error("Failed to remove projects directory %s: %s", cls.projects_dir, e)
         else:
-            logger.warning("Projects directory does not exist.")
+            logger.debug("Projects directory does not exist.")
         cls.projects_dir.mkdir(parents=True, exist_ok=True)
         logger.debug("Projects directory cleaned and recreated.")
 
@@ -584,11 +637,14 @@ class RasExamples:
                     unit='iB',
                     unit_scale=True,
                     unit_divisor=1024,
+                    leave=False,
+                    disable=not _should_show_progress(),
                 ) as progress_bar:
                     for chunk in r.iter_content(chunk_size=8192):
                         size = f.write(chunk)
                         progress_bar.update(size)
-            logger.info(f"Successfully downloaded {url} to {local_filename}")
+            logger.debug("Successfully downloaded %s", local_filename.name)
+            logger.debug("Downloaded %s to %s", url, local_filename)
             return local_filename
         except requests.exceptions.RequestException as e:
             logger.error(f"Request failed for {url}: {e}")
@@ -648,7 +704,12 @@ class RasExamples:
                 shutil.rmtree(project_path)
                 logger.debug(f"Existing folder '{folder_name}' has been deleted.")
             except Exception as e:
-                logger.error(f"Failed to delete existing folder '{folder_name}': {e}")
+                logger.error(
+                    "Failed to delete existing special project folder '%s' at %s: %s",
+                    folder_name,
+                    project_path,
+                    e,
+                )
                 raise
 
         # Create the project directory
@@ -658,8 +719,8 @@ class RasExamples:
         url = cls.SPECIAL_PROJECTS[project_name]
         zip_file_path = base_path / f"{folder_name}_temp.zip"
         
-        logger.info(f"Downloading special project from: {url}")
-        logger.info("This may take a few moments...")
+        logger.info("Downloading special project '%s'...", project_name)
+        logger.debug("Special project download URL: %s", url)
         
         try:
             response = requests.get(url, stream=True, timeout=300)
@@ -677,6 +738,8 @@ class RasExamples:
                         unit='iB',
                         unit_scale=True,
                         unit_divisor=1024,
+                        leave=False,
+                        disable=not _should_show_progress(),
                     ) as progress_bar:
                         for chunk in response.iter_content(chunk_size=8192):
                             size = file.write(chunk)
@@ -686,10 +749,16 @@ class RasExamples:
                     for chunk in response.iter_content(chunk_size=8192):
                         file.write(chunk)
             
-            logger.info(f"Downloaded special project zip file to {zip_file_path}")
+            logger.debug("Downloaded special project zip file to %s", zip_file_path)
             
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to download special project '{project_name}': {e}")
+            logger.error(
+                "Failed to download special project '%s' from %s to %s: %s",
+                project_name,
+                url,
+                zip_file_path,
+                e,
+            )
             if zip_file_path.exists():
                 zip_file_path.unlink()
             raise
@@ -699,10 +768,21 @@ class RasExamples:
             with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
                 # Extract directly to the project directory (no internal folder structure)
                 zip_ref.extractall(project_path)
-            logger.info(f"Successfully extracted special project '{project_name}' to {project_path}")
+            logger.info(
+                "Successfully extracted special project '%s' to %s",
+                project_name,
+                _format_log_path(project_path),
+            )
+            logger.debug("Full extracted special project path: %s", project_path)
             
         except Exception as e:
-            logger.error(f"Failed to extract special project '{project_name}': {e}")
+            logger.error(
+                "Failed to extract special project '%s' from %s to %s: %s",
+                project_name,
+                zip_file_path,
+                project_path,
+                e,
+            )
             if project_path.exists():
                 shutil.rmtree(project_path)
             raise

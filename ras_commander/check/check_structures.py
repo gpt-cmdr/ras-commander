@@ -63,7 +63,8 @@ class CheckStructures:
         try:
             struct_gdf = HdfStruc.get_structures(geom_hdf)
         except Exception as e:
-            logger.warning(f"Could not read structures: {e}")
+            logger.warning("Could not read structures; structure checks will be skipped")
+            logger.debug("Structure read failure for %s: %s", geom_hdf, e)
             struct_gdf = None
 
         if struct_gdf is None or struct_gdf.empty:
@@ -1102,7 +1103,8 @@ class CheckStructures:
                                     messages.append(msg)
 
         except Exception as e:
-            logger.warning(f"Could not check inline weir flow types: {e}")
+            logger.warning("Could not check inline weir flow types")
+            logger.debug("Inline weir flow-type check failure: %s", e)
 
         return messages
 
@@ -1304,7 +1306,8 @@ class CheckStructures:
                     })
 
         except Exception as e:
-            logger.warning(f"Could not read bridge attributes for flow type check: {e}")
+            logger.warning("Could not read bridge attributes for flow type check")
+            logger.debug("Bridge attribute read failure for flow type check: %s", e)
             return messages
 
         if not bridges:
@@ -1652,7 +1655,8 @@ class CheckStructures:
                             messages.append(msg)
 
         except Exception as e:
-            logger.warning(f"Could not check bridge flow types from results: {e}")
+            logger.warning("Could not check bridge flow types from results")
+            logger.debug("Bridge result flow-type check failure: %s", e)
 
         return messages
 
@@ -1759,7 +1763,8 @@ class CheckStructures:
                         messages.append(msg)
 
         except Exception as e:
-            logger.warning(f"Could not check structure distances: {e}")
+            logger.warning("Could not check structure distances")
+            logger.debug("Structure distance check failure: %s", e)
 
         return messages
 
@@ -1845,7 +1850,8 @@ class CheckStructures:
                             messages.append(msg)
 
         except Exception as e:
-            logger.warning(f"Could not check Section 3 ineffective flow: {e}")
+            logger.warning("Could not check Section 3 ineffective flow")
+            logger.debug("Section 3 ineffective-flow check failure: %s", e)
 
         return messages
 
@@ -1912,7 +1918,8 @@ class CheckStructures:
                         messages.append(msg)
 
         except Exception as e:
-            logger.warning(f"Could not check permanent ineffective flow: {e}")
+            logger.warning("Could not check permanent ineffective flow")
+            logger.debug("Permanent ineffective-flow check failure: %s", e)
 
         return messages
 
@@ -2032,7 +2039,8 @@ class CheckStructures:
                             messages.append(msg)
 
         except Exception as e:
-            logger.warning(f"Could not check structure geometry alignment: {e}")
+            logger.warning("Could not check structure geometry alignment")
+            logger.debug("Structure geometry alignment check failure: %s", e)
 
         return messages
 
@@ -2692,6 +2700,7 @@ class CheckStructures:
                             messages.append(msg)
 
         except Exception as e:
-            logger.warning(f"Could not check structure ground data: {e}")
+            logger.warning("Could not check structure ground data")
+            logger.debug("Structure ground-data check failure: %s", e)
 
         return messages

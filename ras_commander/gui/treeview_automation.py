@@ -16,6 +16,10 @@ import struct
 import time
 from typing import List, Tuple, Optional
 
+from ..LoggingConfig import get_logger
+
+logger = get_logger(__name__)
+
 # ---------------------------------------------------------------------------
 # Win32 function setup  (ctypes only -- no pywin32)
 # ---------------------------------------------------------------------------
@@ -558,7 +562,7 @@ def find_tree_item_by_path(
         if not found:
             VirtualFreeEx(hProcess, remote_mem, 0, MEM_RELEASE)
             CloseHandle(hProcess)
-            print(f"[!] Could not find '{target_name}' at depth {depth}")
+            logger.debug("Could not find '%s' at depth %s", target_name, depth)
             return 0
 
         # Expand this node if we need to go deeper
@@ -591,7 +595,7 @@ def _focus_treeview(treeview_hwnd: int) -> bool:
     our_tid = GetCurrentThreadId()
 
     if target_tid == 0:
-        print("[!] GetWindowThreadProcessId failed")
+        logger.debug("GetWindowThreadProcessId failed")
         return False
 
     # Bring the top-level parent to foreground first
@@ -605,7 +609,7 @@ def _focus_treeview(treeview_hwnd: int) -> bool:
     if our_tid != target_tid:
         attached = bool(AttachThreadInput(our_tid, target_tid, True))
         if not attached:
-            print(f"[!] AttachThreadInput failed (error {GetLastError()})")
+            logger.debug("AttachThreadInput failed (error %s)", GetLastError())
 
     try:
         SetFocus(treeview_hwnd)
@@ -635,7 +639,7 @@ def _keyboard_context_menu(treeview_hwnd: int) -> bool:
 
     menu_hwnd = _find_popup_menu()
     if menu_hwnd:
-        print(f"[+] Context menu via VK_APPS: hwnd={menu_hwnd:#x}")
+        logger.debug("Context menu via VK_APPS: hwnd=%#x", menu_hwnd)
         return True
 
     # Method 2: Shift+F10 (equivalent to VK_APPS on all keyboards)
@@ -650,7 +654,7 @@ def _keyboard_context_menu(treeview_hwnd: int) -> bool:
 
     menu_hwnd = _find_popup_menu()
     if menu_hwnd:
-        print(f"[+] Context menu via Shift+F10: hwnd={menu_hwnd:#x}")
+        logger.debug("Context menu via Shift+F10: hwnd=%#x", menu_hwnd)
         return True
 
     # Method 3: Post WM_CONTEXTMENU directly with lParam=-1 (keyboard flag)
@@ -660,7 +664,7 @@ def _keyboard_context_menu(treeview_hwnd: int) -> bool:
 
     menu_hwnd = _find_popup_menu()
     if menu_hwnd:
-        print(f"[+] Context menu via WM_CONTEXTMENU: hwnd={menu_hwnd:#x}")
+        logger.debug("Context menu via WM_CONTEXTMENU: hwnd=%#x", menu_hwnd)
         return True
 
     return False
@@ -700,9 +704,9 @@ def _postmessage_right_click(treeview_hwnd: int, hItem: int) -> bool:
 
     if cx <= 0 or cy <= 0:
         cx, cy = 80, 20
-        print(f"[!] Using fallback click position ({cx}, {cy})")
+        logger.debug("Using fallback click position (%s, %s)", cx, cy)
     else:
-        print(f"[*] PostMessage right-click at ({cx}, {cy})")
+        logger.debug("PostMessage right-click at (%s, %s)", cx, cy)
 
     parent = _find_top_level_parent(treeview_hwnd)
     if parent:
@@ -717,14 +721,14 @@ def _postmessage_right_click(treeview_hwnd: int, hItem: int) -> bool:
 
     menu_hwnd = _find_popup_menu()
     if menu_hwnd:
-        print(f"[+] Context menu via PostMessage: hwnd={menu_hwnd:#x}")
+        logger.debug("Context menu via PostMessage: hwnd=%#x", menu_hwnd)
         return True
 
     for _ in range(5):
         time.sleep(0.2)
         menu_hwnd = _find_popup_menu()
         if menu_hwnd:
-            print(f"[+] Context menu via PostMessage: hwnd={menu_hwnd:#x}")
+            logger.debug("Context menu via PostMessage: hwnd=%#x", menu_hwnd)
             return True
 
     return False
@@ -776,10 +780,10 @@ def _physical_mouse_right_click(treeview_hwnd: int, hItem: int) -> bool:
     cy = (pt1.y + pt2.y) // 2
 
     if cx <= 0 or cy <= 0:
-        print("[!] Could not get valid screen coordinates for item")
+        logger.debug("Could not get valid screen coordinates for item")
         return False
 
-    print(f"[*] Physical mouse click at screen ({cx}, {cy})")
+    logger.debug("Physical mouse click at screen (%s, %s)", cx, cy)
 
     # Bring window to foreground
     parent = _find_top_level_parent(treeview_hwnd)
@@ -803,7 +807,7 @@ def _physical_mouse_right_click(treeview_hwnd: int, hItem: int) -> bool:
 
     menu_hwnd = _find_popup_menu()
     if menu_hwnd:
-        print(f"[+] Context menu via physical mouse: hwnd={menu_hwnd:#x}")
+        logger.debug("Context menu via physical mouse: hwnd=%#x", menu_hwnd)
         return True
 
     # Retry with longer wait
@@ -811,7 +815,7 @@ def _physical_mouse_right_click(treeview_hwnd: int, hItem: int) -> bool:
         time.sleep(0.5)
         menu_hwnd = _find_popup_menu()
         if menu_hwnd:
-            print(f"[+] Context menu via physical mouse: hwnd={menu_hwnd:#x}")
+            logger.debug("Context menu via physical mouse: hwnd=%#x", menu_hwnd)
             return True
 
     return False
@@ -835,23 +839,23 @@ def right_click_tree_item(treeview_hwnd: int, hItem: int) -> bool:
     time.sleep(0.2)
 
     # 2. PRIMARY: Physical mouse click (works with .NET WinForms)
-    print("[*] Trying physical mouse right-click...")
+    logger.debug("Trying physical mouse right-click")
     if _physical_mouse_right_click(treeview_hwnd, hItem):
         return True
 
     # 3. FALLBACK 1: Keyboard context menu
-    print("[*] Physical mouse failed, trying keyboard (VK_APPS / Shift+F10)...")
+    logger.debug("Physical mouse failed, trying keyboard (VK_APPS / Shift+F10)")
     _focus_treeview(treeview_hwnd)
     time.sleep(0.1)
     if _keyboard_context_menu(treeview_hwnd):
         return True
 
     # 4. FALLBACK 2: PostMessage right-click
-    print("[*] Keyboard failed, trying PostMessage right-click...")
+    logger.debug("Keyboard failed, trying PostMessage right-click")
     if _postmessage_right_click(treeview_hwnd, hItem):
         return True
 
-    print("[!] All right-click methods failed")
+    logger.debug("All right-click methods failed")
     return False
 
 
@@ -922,17 +926,17 @@ def click_context_menu_item(menu_text: str, timeout: float = 2.0) -> bool:
         time.sleep(0.1)
 
     if not popup_hwnd:
-        print("[!] No popup menu found")
+        logger.debug("No popup menu found")
         return False
 
     # Get the HMENU
     hmenu = _get_menu_handle_from_popup(popup_hwnd)
     if not hmenu:
-        print("[!] Could not get HMENU from popup window")
+        logger.debug("Could not get HMENU from popup window")
         return False
 
     count = GetMenuItemCount(hmenu)
-    print(f"[*] Context menu has {count} items (hmenu={hmenu:#x})")
+    logger.debug("Context menu has %s items (hmenu=%#x)", count, hmenu)
 
     target_lower = menu_text.lower()
     buf = ctypes.create_unicode_buffer(256)
@@ -946,22 +950,22 @@ def click_context_menu_item(menu_text: str, timeout: float = 2.0) -> bool:
         if result > 0:
             item_text = buf.value
             item_id = GetMenuItemID(hmenu, i)
-            print(f"    [{i}] '{item_text}'  (id={item_id})")
+            logger.debug("Menu item [%s] '%s' (id=%s)", i, item_text, item_id)
 
             if target_lower in item_text.lower():
                 found_id = item_id
                 found_pos = i
                 found_text = item_text
         else:
-            print(f"    [{i}] <separator or empty>")
+            logger.debug("Menu item [%s] <separator or empty>", i)
 
     if found_id is None:
-        print(f"[!] Menu item '{menu_text}' not found")
+        logger.debug("Menu item '%s' not found", menu_text)
         # Dismiss the menu
         SendMessageW(popup_hwnd, WM_LBUTTONDOWN, 0, 0)
         return False
 
-    print(f"[+] Clicking menu item '{found_text}' (id={found_id}, pos={found_pos})")
+    logger.debug("Clicking menu item '%s' (id=%s, pos=%s)", found_text, found_id, found_pos)
 
     # Find the owner window of the menu to send WM_COMMAND
     # The owner is typically the TreeView's top-level parent or the TreeView itself.
@@ -982,7 +986,7 @@ def click_context_menu_item(menu_text: str, timeout: float = 2.0) -> bool:
         # Fallback: try sending to popup window
         owner = popup_hwnd
 
-    print(f"[*] Menu owner window: {owner:#x} ('{get_window_text(owner)}')")
+    logger.debug("Menu owner window: %#x ('%s')", owner, get_window_text(owner))
 
     if found_id and found_id != 0xFFFFFFFF:
         # Send WM_COMMAND with the menu item ID
@@ -991,7 +995,7 @@ def click_context_menu_item(menu_text: str, timeout: float = 2.0) -> bool:
         # The item might be a submenu -- found_id == -1 means popup item
         # For submenus, we would need to navigate into them.
         # For now, try positional click approach.
-        print(f"[!] Menu item has no direct ID (may be a submenu). Trying positional click.")
+        logger.debug("Menu item has no direct ID; trying positional click")
         _click_menu_item_by_position(popup_hwnd, found_pos)
 
     time.sleep(0.2)
@@ -1015,7 +1019,7 @@ def _click_menu_item_by_position(popup_hwnd: int, position: int):
     rect = wintypes.RECT()
     ok = GetMenuItemRect(popup_hwnd, hmenu, position, ctypes.byref(rect))
     if not ok:
-        print(f"[!] GetMenuItemRect failed for position {position}")
+        logger.debug("GetMenuItemRect failed for position %s", position)
         return
 
     # rect is in screen coordinates -- convert to client coords of popup
@@ -1092,10 +1096,10 @@ def click_context_menu_item_uia(menu_text: str, timeout: float = 2.0) -> bool:
                         continue
 
         if not item:
-            print(f"[!] Menu item '{menu_text}' not found via UIA")
+            logger.debug("Menu item '%s' not found via UIA", menu_text)
             return False
 
-        print(f"[+] Found menu item: '{item.CurrentName}'")
+        logger.debug("Found menu item via UIA: '%s'", item.CurrentName)
 
         # Get bounding rectangle and click physically
         rect = item.CurrentBoundingRectangle
@@ -1112,10 +1116,10 @@ def click_context_menu_item_uia(menu_text: str, timeout: float = 2.0) -> bool:
         return True
 
     except ImportError:
-        print("[!] comtypes not installed -- UIA menu click unavailable")
+        logger.debug("comtypes not installed; UIA menu click unavailable")
         return False
     except Exception as e:
-        print(f"[!] UIA menu click failed: {e}")
+        logger.debug("UIA menu click failed: %s", e)
         return False
 
 
@@ -1193,14 +1197,14 @@ def click_context_menu_path_uia(menu_path: List[str], timeout: float = 5.0) -> b
                 except Exception:
                     pass
                 if visible_names:
-                    print(
-                        "[!] Visible UIA menu items: "
-                        + " | ".join(visible_names[:30])
+                    logger.debug(
+                        "Visible UIA menu items: %s",
+                        " | ".join(visible_names[:30]),
                     )
-                print(f"[!] Menu path item '{menu_text}' not found via UIA")
+                logger.debug("Menu path item '%s' not found via UIA", menu_text)
                 return False
 
-            print(f"[+] Found menu path item: '{item.CurrentName}'")
+            logger.debug("Found menu path item via UIA: '%s'", item.CurrentName)
 
             invoked = False
             try:
@@ -1226,10 +1230,10 @@ def click_context_menu_path_uia(menu_path: List[str], timeout: float = 5.0) -> b
         return True
 
     except ImportError:
-        print("[!] comtypes not installed -- UIA menu path click unavailable")
+        logger.debug("comtypes not installed; UIA menu path click unavailable")
         return False
     except Exception as e:
-        print(f"[!] UIA menu path click failed: {e}")
+        logger.debug("UIA menu path click failed: %s", e)
         return False
 
 
@@ -1287,23 +1291,23 @@ def find_and_right_click(
     # Find RAS Mapper
     mapper_hwnd = find_ras_mapper_window()
     if not mapper_hwnd:
-        print("[!] Could not find RAS Mapper window")
+        logger.debug("Could not find RAS Mapper window")
         return False
-    print(f"[+] RAS Mapper window: {mapper_hwnd:#x}")
+    logger.debug("RAS Mapper window: %#x", mapper_hwnd)
 
     # Find TreeView
     tv_hwnd = find_treeview_in_window(mapper_hwnd)
     if not tv_hwnd:
-        print("[!] Could not find TreeView in RAS Mapper")
+        logger.debug("Could not find TreeView in RAS Mapper")
         return False
-    print(f"[+] TreeView hwnd: {tv_hwnd:#x}  class='{get_class_name(tv_hwnd)}'")
+    logger.debug("TreeView hwnd: %#x class='%s'", tv_hwnd, get_class_name(tv_hwnd))
 
     # Find the target node
     hItem = find_tree_item(tv_hwnd, target_node)
     if not hItem:
-        print(f"[!] Tree item '{target_node}' not found")
+        logger.debug("Tree item '%s' not found", target_node)
         return False
-    print(f"[+] Found '{target_node}' at hItem={hItem:#x}")
+    logger.debug("Found '%s' at hItem=%#x", target_node, hItem)
 
     # Right-click it
     ok = right_click_tree_item(tv_hwnd, hItem)

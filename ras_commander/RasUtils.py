@@ -886,7 +886,8 @@ class RasUtils:
 
             with open(file_path, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(updated_lines)
-            logger.info(f"Successfully updated file: {file_path}")
+            logger.info("Successfully updated file: %s", Path(file_path).name)
+            logger.debug(f"Successfully updated file path: {file_path}")
         except Exception as e:
             logger.exception(f"Failed to update file {file_path}")
             raise
@@ -937,7 +938,8 @@ class RasUtils:
             raise FileNotFoundError(f"Template file '{template_path}' does not exist.")
 
         shutil.copy(template_path, new_path)
-        logger.info(f"File cloned from {template_path} to {new_path}")
+        logger.info("File cloned: %s -> %s", Path(template_path).name, Path(new_path).name)
+        logger.debug(f"File cloned from {template_path} to {new_path}")
 
         if update_function:
             RasUtils.update_file(new_path, update_function, *args)
@@ -2008,7 +2010,7 @@ class RasUtils:
                 logger.debug(f"Skipping duplicate HEC-RAS {version} from {source}")
                 return
             discovered[version] = exe_path
-            logger.info(f"Discovered HEC-RAS {version} at {exe_path} via {source}")
+            logger.debug(f"Discovered HEC-RAS {version} at {exe_path} via {source}")
 
         def _scan_root(root_dir: Path, source_label: str) -> None:
             """Scan a directory containing versioned HEC-RAS subfolders."""
@@ -2114,5 +2116,10 @@ class RasUtils:
                 _scan_root(drive_c / "Program Files" / "HEC" / "HEC-RAS", f"wine {prefix}")
                 _scan_root(drive_c / "HEC-RAS", f"wine {prefix}")
 
-        logger.info(f"Discovered {len(discovered)} installed HEC-RAS version(s)")
+        versions = ", ".join(sorted(discovered)) if discovered else "none"
+        logger.debug(
+            "HEC-RAS discovery found %s installed version(s): %s",
+            len(discovered),
+            versions,
+        )
         return discovered

@@ -67,6 +67,11 @@ from .Decorators import log_call
 logger = get_logger(__name__)
 
 
+def _warn_deprecated(message: str) -> None:
+    """Warn at the user callsite, skipping this helper and log_call."""
+    warnings.warn(message, DeprecationWarning, stacklevel=4)
+
+
 class RasGeometry:
     """
     Operations for parsing and modifying HEC-RAS geometry files.
@@ -92,11 +97,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomCrossSection.get_cross_sections() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.get_cross_sections() is deprecated. "
-            "Use GeomCrossSection.get_cross_sections() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomCrossSection.get_cross_sections() instead."
         )
         from .geom import GeomCrossSection
         return GeomCrossSection.get_cross_sections(geom_file, river, reach)
@@ -112,11 +115,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomCrossSection.get_station_elevation() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.get_station_elevation() is deprecated. "
-            "Use GeomCrossSection.get_station_elevation() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomCrossSection.get_station_elevation() instead."
         )
         from .geom import GeomCrossSection
         return GeomCrossSection.get_station_elevation(geom_file, river, reach, rs)
@@ -136,11 +137,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomCrossSection.set_station_elevation() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.set_station_elevation() is deprecated. "
-            "Use GeomCrossSection.set_station_elevation() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomCrossSection.set_station_elevation() instead."
         )
         from .geom import GeomCrossSection
         return GeomCrossSection.set_station_elevation(
@@ -165,11 +164,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomCrossSection.get_bank_stations() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.get_bank_stations() is deprecated. "
-            "Use GeomCrossSection.get_bank_stations() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomCrossSection.get_bank_stations() instead."
         )
         from .geom import GeomCrossSection
         return GeomCrossSection.get_bank_stations(geom_file, river, reach, rs)
@@ -188,11 +185,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomCrossSection.set_bank_stations() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.set_bank_stations() is deprecated. "
-            "Use GeomCrossSection.set_bank_stations() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomCrossSection.set_bank_stations() instead."
         )
         from .geom import GeomCrossSection
         return GeomCrossSection.set_bank_stations(
@@ -216,11 +211,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomCrossSection.get_expansion_contraction() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.get_expansion_contraction() is deprecated. "
-            "Use GeomCrossSection.get_expansion_contraction() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomCrossSection.get_expansion_contraction() instead."
         )
         from .geom import GeomCrossSection
         return GeomCrossSection.get_expansion_contraction(geom_file, river, reach, rs)
@@ -239,11 +232,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomCrossSection.set_expansion_contraction() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.set_expansion_contraction() is deprecated. "
-            "Use GeomCrossSection.set_expansion_contraction() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomCrossSection.set_expansion_contraction() instead."
         )
         from .geom import GeomCrossSection
         return GeomCrossSection.set_expansion_contraction(
@@ -269,11 +260,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomCrossSection.interpolate_station_elevation() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.interpolate_station_elevation() is deprecated. "
-            "Use GeomCrossSection.interpolate_station_elevation() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomCrossSection.interpolate_station_elevation() instead."
         )
         from .geom import GeomCrossSection
         return GeomCrossSection.interpolate_station_elevation(
@@ -302,11 +291,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomCrossSection.interpolate_cross_section() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.interpolate_cross_section() is deprecated. "
-            "Use GeomCrossSection.interpolate_cross_section() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomCrossSection.interpolate_cross_section() instead."
         )
         from .geom import GeomCrossSection
         return GeomCrossSection.interpolate_cross_section(
@@ -333,11 +320,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomCrossSection.get_mannings_n() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.get_mannings_n() is deprecated. "
-            "Use GeomCrossSection.get_mannings_n() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomCrossSection.get_mannings_n() instead."
         )
         from .geom import GeomCrossSection
         return GeomCrossSection.get_mannings_n(geom_file, river, reach, rs)
@@ -355,12 +340,10 @@ class RasGeometry:
         Note: The new method returns a DataFrame with more information.
         This wrapper converts it to List[str] for backward compatibility.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.get_storage_areas() is deprecated. "
             "Use GeomStorage.get_storage_areas() instead. "
-            "Note: New method returns DataFrame, not List[str].",
-            DeprecationWarning,
-            stacklevel=2
+            "Note: New method returns DataFrame, not List[str]."
         )
         from .geom import GeomStorage
         df = GeomStorage.get_storage_areas(geom_file, exclude_2d)
@@ -378,11 +361,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomStorage.get_elevation_volume() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.get_storage_elevation_volume() is deprecated. "
-            "Use GeomStorage.get_elevation_volume() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomStorage.get_elevation_volume() instead."
         )
         from .geom import GeomStorage
         return GeomStorage.get_elevation_volume(geom_file, area_name)
@@ -399,11 +380,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomLateral.get_lateral_structures() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.get_lateral_structures() is deprecated. "
-            "Use GeomLateral.get_lateral_structures() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomLateral.get_lateral_structures() instead."
         )
         from .geom import GeomLateral
         return GeomLateral.get_lateral_structures(geom_file, river)
@@ -420,11 +399,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomLateral.get_weir_profile() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.get_lateral_weir_profile() is deprecated. "
-            "Use GeomLateral.get_weir_profile() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomLateral.get_weir_profile() instead."
         )
         from .geom import GeomLateral
         return GeomLateral.get_weir_profile(geom_file, river, reach, rs, position)
@@ -439,11 +416,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomLateral.get_connections() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.get_connections() is deprecated. "
-            "Use GeomLateral.get_connections() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomLateral.get_connections() instead."
         )
         from .geom import GeomLateral
         return GeomLateral.get_connections(geom_file)
@@ -457,11 +432,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomLateral.get_connection_profile() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.get_connection_weir_profile() is deprecated. "
-            "Use GeomLateral.get_connection_profile() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomLateral.get_connection_profile() instead."
         )
         from .geom import GeomLateral
         return GeomLateral.get_connection_profile(geom_file, connection_name)
@@ -477,11 +450,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomLateral.set_connection_profile() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.set_connection_weir_profile() is deprecated. "
-            "Use GeomLateral.set_connection_profile() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomLateral.set_connection_profile() instead."
         )
         from .geom import GeomLateral
         return GeomLateral.set_connection_profile(
@@ -497,11 +468,9 @@ class RasGeometry:
 
         DEPRECATED: Use GeomLateral.get_connection_gates() instead.
         """
-        warnings.warn(
+        _warn_deprecated(
             "RasGeometry.get_connection_gates() is deprecated. "
-            "Use GeomLateral.get_connection_gates() instead.",
-            DeprecationWarning,
-            stacklevel=2
+            "Use GeomLateral.get_connection_gates() instead."
         )
         from .geom import GeomLateral
         return GeomLateral.get_connection_gates(geom_file, connection_name)

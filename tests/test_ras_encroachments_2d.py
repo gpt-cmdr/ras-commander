@@ -1,11 +1,27 @@
 import math
+import importlib
+import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import h5py
 import numpy as np
+import pytest
 
 from ras_commander import RasEncroachments, RasMap, RasPrj, init_ras_project
+
+encroachments_module = importlib.import_module("ras_commander.RasEncroachments")
+
+
+LOGGER_NAME = "ras_commander.RasEncroachments"
+
+
+def _messages(caplog, level):
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == LOGGER_NAME and record.levelno == level
+    ]
 
 
 def _make_2d_project(tmp_path: Path) -> Path:
@@ -69,10 +85,12 @@ def _make_2d_project(tmp_path: Path) -> Path:
     return project_dir
 
 
-def test_2d_encroachment_regions_zones_and_settings_round_trip(tmp_path):
+def test_2d_encroachment_regions_zones_and_settings_round_trip(tmp_path, caplog):
     project_dir = _make_2d_project(tmp_path)
     base_plan = project_dir / "Floodway2D.p01"
     encroach_plan = project_dir / "Floodway2D.p02"
+
+    caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
 
     settings = RasEncroachments.set_2d_encroachment_plan_settings(
         encroach_plan,
@@ -112,6 +130,17 @@ def test_2d_encroachment_regions_zones_and_settings_round_trip(tmp_path):
 
     gis_hdf = project_dir / "Floodway2D.p02.GIS.hdf"
     assert gis_hdf.exists()
+
+    info_text = "\n".join(_messages(caplog, logging.INFO))
+    debug_text = "\n".join(_messages(caplog, logging.DEBUG))
+    assert str(gis_hdf) not in info_text
+    assert "Updated 2D encroachment plan settings in Floodway2D.p02.GIS.hdf" in info_text
+    assert "Wrote 2 2D encroachment region(s) to Floodway2D.p02.GIS.hdf" in info_text
+    assert "Wrote 1 2D encroachment zone(s) to Floodway2D.p02.GIS.hdf" in info_text
+    assert f"2D encroachment settings GIS HDF path: {gis_hdf}" in debug_text
+    assert f"2D encroachment regions GIS HDF path: {gis_hdf}" in debug_text
+    assert f"2D encroachment zones GIS HDF path: {gis_hdf}" in debug_text
+
     assert settings["base_plan_filename"] == r".\Floodway2D.p01"
     assert settings["maximum_target_rise"] == 1.0
     assert np.isclose(settings["fill_slope"], 0.001)
@@ -205,3 +234,75 @@ def test_2d_floodway_workflow_updates_rasmap_layers_and_result_map(tmp_path):
     assert result_maps[0]["parent_plan"] == "Encroach"
     assert result_maps[0]["map_parameters"]["MapType"] == "depth and velocity"
     assert result_maps[0]["map_parameters"]["Terrain"] == "USGSTerrain"
+
+
+def test_setup_2d_floodway_info_logs_are_concise(tmp_path, caplog):
+    project_dir = _make_2d_project(tmp_path)
+    project = RasPrj()
+    init_ras_project(project_dir, "6.6", ras_object=project, load_results_summary=False)
+
+    caplog.set_level(logging.INFO, logger=LOGGER_NAME)
+
+    result = RasEncroachments.setup_2d_floodway_encroachment_plan(
+        "02",
+        base_plan="01",
+        target_rise=0.75,
+        regions=[
+            {
+                "name": "Fill Region",
+                "polygon": [(0, 0), (10, 0), (10, 10), (0, 10)],
+            }
+        ],
+        zones=[
+            {
+                "name": "Zone 1",
+                "polygon": [(2, 2), (8, 2), (8, 8), (2, 8)],
+            }
+        ],
+        add_rasmap_layers=False,
+        ras_object=project,
+    )
+
+    gis_hdf = project_dir / "Floodway2D.p02.GIS.hdf"
+    info_text = "\n".join(_messages(caplog, logging.INFO))
+
+    assert result["gis_hdf_path"] == gis_hdf
+    assert str(gis_hdf) not in info_text
+    assert "Updated 2D encroachment plan settings in Floodway2D.p02.GIS.hdf" in info_text
+    assert "Wrote 1 2D encroachment region(s) to Floodway2D.p02.GIS.hdf" in info_text
+    assert "Wrote 1 2D encroachment zone(s) to Floodway2D.p02.GIS.hdf" in info_text
+
+
+def test_base_plan_filename_fallback_is_debug_only(tmp_path, caplog):
+    project_dir = _make_2d_project(tmp_path)
+    encroach_plan = project_dir / "Floodway2D.p02"
+    missing_base = project_dir / "Floodway2D.p99"
+
+    caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
+
+    result = encroachments_module._base_plan_filename_attr(
+        missing_base,
+        plan_path=encroach_plan,
+    )
+
+    assert result == str(missing_base)
+    assert _messages(caplog, logging.INFO) == []
+    assert _messages(caplog, logging.WARNING) == []
+    debug_text = "\n".join(_messages(caplog, logging.DEBUG))
+    assert "Could not resolve base plan" in debug_text
+    assert str(missing_base) in debug_text
+
+
+def test_missing_plan_error_lists_project_context_and_available_plans(tmp_path):
+    project_dir = _make_2d_project(tmp_path)
+    project = RasPrj()
+    init_ras_project(project_dir, "6.6", ras_object=project, load_results_summary=False)
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        RasEncroachments.list_2d_encroachment_regions("99", ras_object=project)
+
+    message = str(exc_info.value)
+    assert "Plan file not found for plan '99'" in message
+    assert "Floodway2D" in message
+    assert str(project_dir) in message
+    assert "available plan numbers: 01, 02" in message

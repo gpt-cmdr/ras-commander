@@ -424,7 +424,13 @@ class RasMap:
             
             # Create DataFrame
             df = pd.DataFrame(data)
-            logger.info(f"Successfully parsed RASMapper file: {rasmap_path}")
+            logger.debug(
+                "Parsed RASMapper file: %s (terrains=%d, reference_layers=%d, basemaps=%d)",
+                rasmap_path.name,
+                len(data.get('terrain_hdf_path', [[]])[0] or []),
+                len(data.get('reference_map_layer_names', [[]])[0] or []),
+                len(data.get('basemap_layer_names', [[]])[0] or []),
+            )
             return df
             
         except Exception as e:
@@ -992,7 +998,7 @@ class RasMap:
         
         rasmap_path = RasMap.get_rasmap_path(ras_obj)
         if rasmap_path is None:
-            logger.warning("No .rasmap file found for this project. Creating empty rasmap_df.")
+            logger.debug("No .rasmap file found for this project. Creating empty rasmap_df.")
             return _lch.empty_rasmap_dataframe()
         
         return RasMap.parse_rasmap(rasmap_path, ras_obj)
@@ -1025,11 +1031,16 @@ class RasMap:
 
         terrains_element = root.find('Terrains')
         if terrains_element is None:
-            logger.warning("The RASMAP file does not contain a 'Terrains' section.")
+            logger.debug("No Terrains section found in %s", rasmap_path.name)
             return []
 
         terrain_names = [layer.get('Name') for layer in terrains_element.findall('Layer') if layer.get('Name')]
-        logger.info(f"Extracted terrain names: {terrain_names}")
+        logger.debug(
+            "Found %d terrain layer(s) in %s: %s",
+            len(terrain_names),
+            rasmap_path.name,
+            terrain_names,
+        )
         return terrain_names
 
     @staticmethod
@@ -1088,7 +1099,7 @@ class RasMap:
                 orient="records",
             )
 
-        logger.info(f"Found {len(layers)} map layers in .rasmap")
+        logger.debug("Found %d map layer(s) in .rasmap", len(layers))
         return layers
 
     @staticmethod
@@ -1399,7 +1410,8 @@ class RasMap:
             if layer.get("Name") == layer_name:
                 map_layers.remove(layer)
                 tree.write(rasmap_path, encoding='utf-8', xml_declaration=True)
-                logger.info(f"Removed map layer '{layer_name}' from {rasmap_path}")
+                logger.info("Removed map layer '%s'", layer_name)
+                logger.debug("Updated RASMapper file: %s", rasmap_path)
                 return True
 
         logger.warning(f"Layer '{layer_name}' not found in .rasmap")
@@ -1460,7 +1472,7 @@ class RasMap:
                 "checked": layer.get("Checked", "").lower() == "true"
             })
 
-        logger.info(f"Found {len(geometries)} geometries in .rasmap")
+        logger.debug("Found %d geometries in .rasmap", len(geometries))
         return geometries
 
     @staticmethod
@@ -2315,7 +2327,8 @@ class RasMap:
                 rasmap_backup.unlink()
 
         if screenshot_result and screenshot_result.exists():
-            logger.info(f"Screenshot saved to {screenshot_result}")
+            logger.info("Screenshot saved: %s", screenshot_result.name)
+            logger.debug("Screenshot path: %s", screenshot_result)
         else:
             logger.warning("Screenshot capture returned no file")
 
@@ -2377,7 +2390,8 @@ class RasMap:
                 })
 
         successful = sum(1 for r in results if r["success"])
-        logger.info(f"Gallery: {successful}/{len(models)} screenshots captured in {out}")
+        logger.info("Screenshot gallery complete: %s/%s captured", successful, len(models))
+        logger.debug("Screenshot gallery output directory: %s", out)
         return results
 
     @staticmethod
@@ -2571,7 +2585,7 @@ class RasMap:
             )
 
             if not needs_upgrade:
-                logger.info(f".rasmap file is already compatible (version {version})")
+                logger.debug(".rasmap file is already compatible (version %s)", version)
                 return {
                     'status': 'ready',
                     'message': f'Already compatible (version {version})',
@@ -2619,7 +2633,8 @@ class RasMap:
             ras_exe = ras_obj.ras_exe_path
             prj_path = str(ras_obj.prj_file)
 
-            logger.info(f"Opening HEC-RAS: {ras_exe} {prj_path}")
+            logger.debug("Opening HEC-RAS for .rasmap upgrade")
+            logger.debug("HEC-RAS upgrade command: %s %s", ras_exe, prj_path)
 
             if sys.platform == "win32":
                 process = subprocess.Popen(f'"{ras_exe}" "{prj_path}"')
@@ -2646,7 +2661,7 @@ class RasMap:
                     'version': version
                 }
 
-            logger.info(f"Found HEC-RAS window: {hecras_hwnd}")
+            logger.debug("Found HEC-RAS window handle: %s", hecras_hwnd)
 
             # Helper function to find RASMapper window
             def find_rasmapper_window():
@@ -2690,7 +2705,7 @@ class RasMap:
                 return False
 
             # Step 1: Open RASMapper via menu
-            logger.info("Opening RASMapper via menu...")
+            logger.debug("Opening RASMapper via menu")
             win32gui.SetForegroundWindow(hecras_hwnd)
             time.sleep(0.5)
 
@@ -2720,7 +2735,7 @@ class RasMap:
 
                                     # Check if RASMapper opened
                                     if find_rasmapper_window():
-                                        logger.info("RASMapper opened successfully via menu")
+                                        logger.debug("RASMapper opened successfully via menu")
                                         rasmapper_found = True
                                         break
                             except:
@@ -2730,7 +2745,7 @@ class RasMap:
 
                 # Fallback: Try keyboard shortcut
                 if not rasmapper_found:
-                    logger.info("Menu enumeration failed, trying keyboard shortcut...")
+                    logger.debug("Menu enumeration failed, trying keyboard shortcut")
                     import win32api
                     win32api.keybd_event(0x12, 0, 0, 0)  # Alt down
                     time.sleep(0.1)
@@ -2742,7 +2757,7 @@ class RasMap:
                     time.sleep(0.1)
 
             # Step 2: Wait for RASMapper window to appear (60-90 second timeout)
-            logger.info("Waiting for RASMapper to open (up to 90 seconds)...")
+            logger.debug("Waiting for RASMapper to open (up to 90 seconds)")
             rasmapper_windows = wait_for_window(find_rasmapper_window, timeout=90, check_interval=2)
 
             if not rasmapper_windows:
@@ -2753,20 +2768,21 @@ class RasMap:
                     'version': version
                 }
 
-            logger.info(f"RASMapper is open: {rasmapper_windows[0][1]}")
+            logger.debug("RASMapper opened")
+            logger.debug("RASMapper window title: %s", rasmapper_windows[0][1])
 
             # Step 3: Wait 2 additional seconds for .rasmap file write
-            logger.info("Allowing time for .rasmap update...")
+            logger.debug("Allowing time for .rasmap update")
             time.sleep(2)
 
             # Step 4: Close RASMapper cleanly (with retry)
-            logger.info("Attempting to close RASMapper...")
+            logger.debug("Attempting to close RASMapper")
             close_attempts = 0
             max_attempts = 10
 
             while close_attempts < max_attempts:
                 if close_rasmapper():
-                    logger.info("Sent close message to RASMapper")
+                    logger.debug("Sent close message to RASMapper")
                     break
                 logger.debug(f"Retry {close_attempts+1}/{max_attempts} to close RASMapper...")
                 time.sleep(2)
@@ -2776,26 +2792,26 @@ class RasMap:
                 logger.warning("Could not send close message to RASMapper")
 
             # Step 5: Wait until RASMapper is fully closed
-            logger.info("Waiting for RASMapper to fully close...")
+            logger.debug("Waiting for RASMapper to fully close")
             close_wait_start = time.time()
             close_timeout = 30
 
             while time.time() - close_wait_start < close_timeout:
                 if not find_rasmapper_window():
-                    logger.info("RASMapper closed successfully")
+                    logger.debug("RASMapper closed successfully")
                     break
                 logger.debug("Waiting for RASMapper to fully close...")
                 time.sleep(2)
 
             # Step 6: Close HEC-RAS
-            logger.info("Closing HEC-RAS...")
+            logger.debug("Closing HEC-RAS")
             win32gui.PostMessage(hecras_hwnd, win32con.WM_CLOSE, 0, 0)
             time.sleep(1)
 
             # Wait for HEC-RAS to close
             try:
                 process.wait(timeout=10)
-                logger.info("HEC-RAS closed")
+                logger.debug("HEC-RAS closed")
             except:
                 logger.warning("HEC-RAS did not close cleanly, may still be running")
 
@@ -2882,7 +2898,7 @@ class RasMap:
             )
 
         # Ensure .rasmap compatibility (upgrade 5.0.7 to 6.x if needed)
-        logger.info("Checking .rasmap compatibility...")
+        logger.debug("Checking .rasmap compatibility")
         compat_result = RasMap.ensure_rasmap_compatible(ras_object=ras_obj, auto_upgrade=True)
 
         if compat_result['status'] == 'manual_needed':
@@ -2897,9 +2913,9 @@ class RasMap:
             )
             return False
         elif compat_result['status'] == 'upgraded':
-            logger.info(f".rasmap successfully upgraded: {compat_result['message']}")
+            logger.debug(".rasmap successfully upgraded: %s", compat_result['message'])
         else:  # 'ready'
-            logger.info(f".rasmap compatibility check passed: {compat_result['message']}")
+            logger.debug(".rasmap compatibility check passed: %s", compat_result['message'])
 
         if layers is None:
             layers = ['WSEL', 'Velocity', 'Depth']
@@ -2968,10 +2984,10 @@ class RasMap:
         try:
             # --- 1. Backup and Modify Plan Files ---
             for plan_num, plan_path, plan_backup_path in zip(plan_number_list, plan_paths, plan_backup_paths):
-                logger.info(f"Backing up plan file {plan_path} to {plan_backup_path}")
+                logger.debug("Backing up plan file %s to %s", plan_path, plan_backup_path)
                 shutil.copy2(plan_path, plan_backup_path)
                 
-                logger.info(f"Updating plan run flags for floodplain mapping for plan {plan_num}...")
+                logger.debug("Updating plan run flags for floodplain mapping for plan %s", plan_num)
                 RasPlan.update_run_flags(
                     plan_num,
                     geometry_preprocessor=True,
@@ -2982,7 +2998,7 @@ class RasMap:
                 )
 
             # --- 2. Backup and Modify RASMAP File ---
-            logger.info(f"Backing up rasmap file {rasmap_path} to {rasmap_backup_path}")
+            logger.debug("Backing up rasmap file %s to %s", rasmap_path, rasmap_backup_path)
             shutil.copy2(rasmap_path, rasmap_backup_path)
 
             tree = ET.parse(rasmap_path)
@@ -3021,7 +3037,11 @@ class RasMap:
                         Expanded="True",
                         Filename=plan_hdf_filename
                     )
-                    logger.info(f"Created new RASResults layer '{layer_name}' for plan {plan_num} (none existed in .rasmap)")
+                    logger.debug(
+                        "Created new RASResults layer '%s' for plan %s (none existed in .rasmap)",
+                        layer_name,
+                        plan_num,
+                    )
                 
                 # Map user-provided layer names to HEC-RAS variable names and map types
                 # Note: "WSE" is the correct HEC-RAS convention (not "WSEL")
@@ -3044,7 +3064,11 @@ class RasMap:
 
                         map_elem = _create_map_element(output_name, map_type, results_folder)
                         results_layer.append(map_elem)
-                        logger.info(f"Added '{output_name}' stored map to results layer for plan {plan_num}.")
+                        logger.debug(
+                            "Added '%s' stored map to results layer for plan %s",
+                            output_name,
+                            plan_num,
+                        )
 
             if specify_terrain:
                 terrains_elem = root.find('Terrains')
@@ -3052,7 +3076,7 @@ class RasMap:
                     for layer in list(terrains_elem):
                         if layer.get('Name') != specify_terrain:
                             terrains_elem.remove(layer)
-                    logger.info(f"Filtered terrains, keeping only '{specify_terrain}'.")
+                    logger.debug("Filtered terrains, keeping only '%s'", specify_terrain)
 
             tree.write(rasmap_path, encoding='utf-8', xml_declaration=True)
             
@@ -3095,13 +3119,13 @@ class RasMap:
                     else:
                         hecras_process = subprocess.Popen([ras_exe, prj_path])
 
-                    logger.info(f"HEC-RAS opened with Process ID: {hecras_process.pid}")
+                    logger.debug("HEC-RAS opened with Process ID: %s", hecras_process.pid)
                     logger.info(f"Please run plan(s) {', '.join(plan_number_list)} using the 'Compute Multiple' window in HEC-RAS to generate floodplain mapping results.")
 
                     # Wait for HEC-RAS to close
-                    logger.info("Waiting for HEC-RAS to close...")
+                    logger.debug("Waiting for HEC-RAS to close")
                     hecras_process.wait()
-                    logger.info("HEC-RAS has closed")
+                    logger.debug("HEC-RAS has closed")
 
                     success = True
 
@@ -3124,10 +3148,10 @@ class RasMap:
             # --- 4. Restore Files ---
             for plan_path, plan_backup_path in zip(plan_paths, plan_backup_paths):
                 if plan_backup_path.exists():
-                    logger.info(f"Restoring original plan file from {plan_backup_path}")
+                    logger.debug("Restoring original plan file from %s", plan_backup_path)
                     shutil.move(plan_backup_path, plan_path)
             if rasmap_backup_path.exists():
-                logger.info(f"Restoring original rasmap file from {rasmap_backup_path}")
+                logger.debug("Restoring original rasmap file from %s", rasmap_backup_path)
                 shutil.move(rasmap_backup_path, rasmap_path)
 
     # ── Cross-version validation registry ──────────────────────────────────
@@ -3234,7 +3258,7 @@ class RasMap:
                 results["success"] = False
                 continue
 
-            logger.info(f"Generating stored maps for plan {plan_num} (mode={helper_mode})...")
+            logger.debug("Generating stored maps for plan %s (mode=%s)", plan_num, helper_mode)
 
             try:
                 proc = run_store_all_maps_helper(
@@ -3247,8 +3271,8 @@ class RasMap:
                 )
 
                 if proc.returncode == 0:
-                    logger.info(f"Plan {plan_num}: StoreAllMaps completed successfully")
-                    logger.debug(f"stdout: {proc.stdout}")
+                    logger.debug("Plan %s: StoreAllMaps completed successfully", plan_num)
+                    logger.debug("Plan %s StoreAllMaps stdout: %s", plan_num, proc.stdout)
 
                     # Collect output files
                     plan_info = ras_obj.plan_df[ras_obj.plan_df['plan_number'] == plan_num]
@@ -3271,9 +3295,9 @@ class RasMap:
                         "stdout": proc.stdout,
                     }
                 else:
-                    logger.error(f"Plan {plan_num}: StoreAllMaps failed (exit code {proc.returncode})")
-                    logger.error(f"stderr: {proc.stderr}")
-                    logger.error(f"stdout: {proc.stdout}")
+                    logger.error("Plan %s: StoreAllMaps failed (exit code %s)", plan_num, proc.returncode)
+                    logger.debug("Plan %s StoreAllMaps stderr: %s", plan_num, proc.stderr)
+                    logger.debug("Plan %s StoreAllMaps stdout: %s", plan_num, proc.stdout)
                     results["plans"][plan_num] = {
                         "success": False,
                         "error": proc.stderr or proc.stdout,
@@ -3286,6 +3310,13 @@ class RasMap:
                 results["plans"][plan_num] = {"success": False, "error": "Timeout"}
                 results["success"] = False
 
+        successful_plans = sum(1 for result in results["plans"].values() if result.get("success"))
+        logger.info(
+            "Stored map generation complete: %s/%s plans succeeded (mode=%s)",
+            successful_plans,
+            len(plan_number_list),
+            helper_mode,
+        )
         return results
 
     @staticmethod
@@ -3363,13 +3394,13 @@ class RasMap:
         # Try exact match with Short ID
         exact_match = project_folder / short_id
         if exact_match.exists() and exact_match.is_dir():
-            logger.info(f"Found output folder (exact match): {exact_match}")
+            logger.debug("Found output folder by exact match: %s", exact_match)
             return exact_match
 
         # Try normalized name
         normalized_match = project_folder / normalized
         if normalized_match.exists() and normalized_match.is_dir():
-            logger.info(f"Found output folder (normalized): {normalized_match}")
+            logger.debug("Found output folder by normalized match: %s", normalized_match)
             return normalized_match
 
         # Try partial match (contains)
@@ -3379,11 +3410,11 @@ class RasMap:
             folder_name = item.name
             # Check if short_id is contained in folder name or vice versa
             if short_id in folder_name or folder_name in short_id:
-                logger.info(f"Found output folder (partial match): {item}")
+                logger.debug("Found output folder by partial match: %s", item)
                 return item
             # Check normalized version
             if normalized in folder_name or folder_name in normalized:
-                logger.info(f"Found output folder (normalized partial match): {item}")
+                logger.debug("Found output folder by normalized partial match: %s", item)
                 return item
 
         # No folder found
@@ -3459,13 +3490,14 @@ class RasMap:
                 "Try making variable_name more specific or check for typos."
             )
         elif len(matching_files) == 1:
-            logger.info(f"Found matching VRT file: {matching_files[0]}")
+            logger.debug("Found matching VRT file: %s", matching_files[0])
             return matching_files[0]
         else:
-            # Multiple matches - print list and raise error
-            logger.error(f"Multiple .vrt files match '{variable_name}':")
-            for i, f in enumerate(matching_files, 1):
-                logger.error(f"  {i}. {f.name}")
+            logger.debug(
+                "Multiple .vrt files match '%s': %s",
+                variable_name,
+                [f.name for f in matching_files],
+            )
 
             raise ValueError(
                 f"Multiple .vrt files ({len(matching_files)}) match variable name '{variable_name}'. "
@@ -3638,7 +3670,7 @@ class RasMap:
 
             # Write the modified XML back
             tree.write(rasmap_path, encoding='utf-8', xml_declaration=True)
-            logger.info(f"Updated RASMapper configuration: {rasmap_path}")
+            logger.debug("Updated RASMapper configuration: %s", rasmap_path)
 
             return True
 
@@ -3923,9 +3955,9 @@ class RasMap:
             depth_path = str(result.get('depth', '')).lower()
             wse_path = str(result.get('wse', '')).lower()
             if 'max' in depth_path or 'max' in wse_path:
-                logger.info(f"Detected unsteady flow model in {results_folder.name}")
+                logger.debug("Detected unsteady flow model in %s", results_folder.name)
             else:
-                logger.info(f"Detected steady flow model in {results_folder.name}")
+                logger.debug("Detected steady flow model in %s", results_folder.name)
 
         return result
 
@@ -4124,7 +4156,7 @@ class RasMap:
                 if child.tag in ["Results", "Geometries", "EventConditions"]:
                     insert_index = i + 1
             root.insert(insert_index, terrains)
-            logger.info("Created new Terrains section in .rasmap file")
+            logger.debug("Created new Terrains section in .rasmap file")
 
         # Check for existing layer with same name and remove it
         existing_layer = None
@@ -4135,7 +4167,7 @@ class RasMap:
 
         if existing_layer is not None:
             terrains.remove(existing_layer)
-            logger.info(f"Replaced existing terrain layer: {layer_name}")
+            logger.debug("Replaced existing terrain layer: %s", layer_name)
 
         # Create terrain layer element
         layer = ET.SubElement(terrains, "Layer")
@@ -4172,15 +4204,16 @@ class RasMap:
                 root.insert(insert_idx, proj_elem)
 
             proj_elem.set("Filename", prj_rel_path_str)
-            logger.info(f"Updated projection reference: {prj_rel_path_str}")
+            logger.debug("Updated RASMapper projection reference")
+            logger.debug("RASMapper projection reference: %s", prj_rel_path_str)
 
         # Write updated rasmap file
         # Use a custom write to preserve XML formatting
         tree.write(rasmap_path, encoding='utf-8', xml_declaration=False)
 
-        logger.info(
-            f"Added terrain layer '{layer_name}' to .rasmap file: {rel_path_str}"
-        )
+        action = "Replaced" if existing_layer is not None else "Added"
+        logger.info("%s terrain layer '%s' in .rasmap", action, layer_name)
+        logger.debug("Terrain layer '%s' filename: %s", layer_name, rel_path_str)
 
     # ── Calculated Layers ───────────────────────────────────────────────
 
@@ -4227,7 +4260,7 @@ class RasMap:
 
         results = root.find("Results")
         if results is None:
-            logger.warning("No Results section found in .rasmap")
+            logger.debug("No Results section found in .rasmap")
             return []
 
         plans = []
@@ -4239,7 +4272,7 @@ class RasMap:
                     "checked": layer.get("Checked", "True").lower() == "true",
                 })
 
-        logger.info(f"Found {len(plans)} results plan(s) in .rasmap")
+        logger.debug("Found %d results plan(s) in .rasmap", len(plans))
         return plans
 
     @staticmethod
@@ -4317,7 +4350,8 @@ class RasMap:
             "expanded": expanded,
             "rasmap_path": rasmap_path,
         }
-        logger.info("Ensured RASResults layer '%s' in %s", layer_name, rasmap_path)
+        logger.info("Ensured RASResults layer '%s'", layer_name)
+        logger.debug("Updated RASMapper file: %s", rasmap_path)
         return record
 
     @staticmethod
@@ -4408,7 +4442,8 @@ class RasMap:
             child.set("Filename", rel_plan)
 
         tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
-        logger.info("Ensured 2D encroachment plan layers in %s", rasmap_path)
+        logger.info("Ensured 2D encroachment plan layers")
+        logger.debug("Updated RASMapper file: %s", rasmap_path)
         return rasmap_path
 
     @staticmethod
@@ -4460,7 +4495,7 @@ class RasMap:
                     }
                 )
 
-        logger.info(f"Found {len(layers)} result map layer(s) in .rasmap")
+        logger.debug("Found %d result map layer(s) in .rasmap", len(layers))
         return layers
 
     @staticmethod
@@ -4625,7 +4660,7 @@ class RasMap:
                     "terrains": terrains,
                 })
 
-        logger.info(f"Found {len(calc_layers)} calculated layer(s) in .rasmap")
+        logger.debug("Found %d calculated layer(s) in .rasmap", len(calc_layers))
         return calc_layers
 
     @staticmethod
@@ -4739,7 +4774,7 @@ class RasMap:
         # Write .rasscript file
         script_path = calc_dir / f"{layer_name}.rasscript"
         script_path.write_text(script_content, encoding='utf-8')
-        logger.info(f"Written script: {script_path.name}")
+        logger.debug("Written script: %s", script_path.name)
 
         # Build relative path with .\ prefix and backslashes
         rel_path_str = f".\\Calculated Layers\\{layer_name}.rasscript"
@@ -4860,7 +4895,8 @@ class RasMap:
                         script_rel = script_filename.replace("\\", "/").lstrip("./")
                         script_path = ras_obj.project_folder / script_rel
                         script_path.unlink(missing_ok=True)
-                        logger.info(f"Deleted script file: {script_path}")
+                        logger.debug("Deleted script file: %s", script_path.name)
+                        logger.debug("Deleted script path: %s", script_path)
 
                     return True
 
@@ -4998,7 +5034,7 @@ class RasMap:
 
             if success:
                 created.append(layer_name)
-                logger.info(f"Created WSE comparison layer: {layer_name}")
+                logger.debug("Created WSE comparison layer: %s", layer_name)
             else:
                 logger.warning(f"Failed to create layer: {layer_name}")
 

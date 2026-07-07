@@ -92,7 +92,10 @@ def compute_parallel_remote(
         # Check results
         for plan_num, result in results.items():
             if result.success:
-                print(f"Plan {plan_num}: {result.hdf_path}")
+                print(
+                    f"Plan {plan_num} succeeded "
+                    f"({result.execution_time:.1f}s)"
+                )
             else:
                 print(f"Plan {plan_num} failed: {result.error_message}")
 
@@ -126,8 +129,6 @@ def compute_parallel_remote(
     if not workers:
         raise ValueError("No workers provided. Initialize workers with init_ras_worker().")
 
-    logger.info(f"Starting distributed execution of {len(plan_numbers)} plans across {len(workers)} workers")
-
     # Sort workers by queue_priority (lower first)
     sorted_workers = sorted(workers, key=lambda w: getattr(w, 'queue_priority', 0))
 
@@ -139,12 +140,20 @@ def compute_parallel_remote(
             worker_slots.append((worker, sub_id))
 
     total_slots = len(worker_slots)
-    logger.info(f"Total worker slots available: {total_slots}")
+    logger.debug("Total worker slots available: %s", total_slots)
 
     # Calculate max concurrent executions
     if max_concurrent is None:
         max_concurrent = total_slots
     max_concurrent = min(max_concurrent, total_slots, len(plan_numbers))
+    logger.info(
+        "Starting distributed execution of %s plan(s) across %s worker(s) "
+        "(%s slot(s), max_concurrent=%s)",
+        len(plan_numbers),
+        len(workers),
+        total_slots,
+        max_concurrent,
+    )
 
     # Results dictionary
     results: Dict[str, ExecutionResult] = {}
@@ -157,7 +166,7 @@ def compute_parallel_remote(
             # Round-robin assignment to worker slots
             worker, sub_worker_id = worker_slots[idx % total_slots]
 
-            logger.info(
+            logger.debug(
                 f"Submitting plan {plan_number} to worker {worker.worker_id} "
                 f"(sub-worker #{sub_worker_id})"
             )
@@ -184,17 +193,25 @@ def compute_parallel_remote(
                 results[plan_number] = result
 
                 if result.success:
-                    logger.info(
+                    logger.debug(
                         f"Plan {plan_number} completed successfully "
                         f"({result.execution_time:.1f}s)"
                     )
                 else:
                     logger.error(
-                        f"Plan {plan_number} failed: {result.error_message}"
+                        "Plan %s failed on worker %s after %.1fs: %s",
+                        plan_number,
+                        result.worker_id,
+                        result.execution_time,
+                        result.error_message,
                     )
 
             except Exception as e:
-                logger.error(f"Plan {plan_number} raised exception: {e}")
+                logger.exception(
+                    "Plan %s raised exception during remote orchestration: %s",
+                    plan_number,
+                    e,
+                )
                 results[plan_number] = ExecutionResult(
                     plan_number=plan_number,
                     worker_id="unknown",

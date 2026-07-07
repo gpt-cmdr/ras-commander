@@ -215,7 +215,8 @@ def ensure_python_gdal_junction(
             continue
 
         if result.returncode == 0:
-            logger.info("Created GDAL junction: %s -> %s", gdal_junction, paths.gdal_root)
+            logger.info("Created GDAL junction for HEC-RAS GDAL bridge")
+            logger.debug("Created GDAL junction: %s -> %s", gdal_junction, paths.gdal_root)
             ok = python_gdal_bridge_is_usable(target_python_dir) and ok
             continue
 

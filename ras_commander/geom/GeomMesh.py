@@ -326,7 +326,7 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
         for i in range(mp.PointMCount()):
             seeds_pm.Add(mp.PointM(i))
 
-        logger.info(
+        logger.debug(
             f"Seeds via .NET RegenerateMeshPoints: {seeds_pm.Count} "
             f"({bl_count} breaklines incl {len(struct_bl_fids)} struct, "
             f"{perim_count} perimeters)"
@@ -863,6 +863,7 @@ def _set_breakline_spacing_impl(
     breakline_name: Optional[str] = None,
     breakline_fid: Optional[int] = None,
     all_breaklines: bool = False,
+    _log_summary: bool = True,
 ) -> Path:
     """Edit BreakLine spacing properties in .g## text file.
 
@@ -941,7 +942,8 @@ def _set_breakline_spacing_impl(
         f"FID {breakline_fid}" if breakline_fid is not None
         else breakline_name or "ALL"
     )
-    logger.info(
+    log_fn = logger.info if _log_summary else logger.debug
+    log_fn(
         f"Breakline spacing [{target}]: near={near}, far={far} "
         f"→ {geom_text_path.name}"
     )
@@ -1109,7 +1111,7 @@ def _sync_breakline_spacing_text_to_hdf(
                     changed = True
             if changed:
                 hf[bl_key][:] = data
-                logger.info(
+                logger.debug(
                     f"Synced {len(bl_spacings)} breakline spacings "
                     f"from text → HDF"
                 )
@@ -1180,7 +1182,7 @@ def _sync_cell_size_to_hdf(
                     changed = True
             if changed:
                 hf[attrs_key][:] = data
-                logger.info(f"Synced cell size {cell_size} → HDF Spacing dx/dy")
+                logger.debug(f"Synced cell size {cell_size} → HDF Spacing dx/dy")
     except Exception as exc:
         logger.warning(f"Could not sync cell size to HDF: {exc}")
 
@@ -1253,7 +1255,7 @@ def _patch_text_perimeter(
         return
 
     geom_text_path.write_text("".join(modified), encoding="utf-8")
-    logger.info(f"Patched perimeter → {n} vertices in {geom_text_path.name}")
+    logger.debug(f"Patched perimeter → {n} vertices in {geom_text_path.name}")
 
 
 def _reseed_after_perimeter_fix(
@@ -1413,7 +1415,7 @@ def _patch_text_seeds(
         )
 
     geom_text_path.write_text("".join(modified), encoding="utf-8")
-    logger.info(f"Text seeds patched → {n} points in {geom_text_path.name}")
+    logger.debug(f"Text seeds patched → {n} points in {geom_text_path.name}")
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -2647,7 +2649,7 @@ class GeomMesh:
             # ── Step 1a: Auto-detect cell size from HDF if not provided ──
             if not cell_size_provided:
                 cell_size = _read_cell_size_from_hdf(hdf_path, mesh_name)
-                logger.info(
+                logger.debug(
                     f"Auto-detected cell size {cell_size} from HDF Spacing dx"
                 )
 
@@ -2664,6 +2666,7 @@ class GeomMesh:
                     near_repeats=near_repeats,
                     protection_radius=protection_radius,
                     all_breaklines=True,
+                    _log_summary=False,
                 )
 
             # ── Step 1b: Sync text → HDF ────────────────────────────────
@@ -2700,7 +2703,7 @@ class GeomMesh:
             if perim is None or perim.Count == 0:
                 result.error_message = "MeshPerimeters.Polygon returned None/empty"
                 return result
-            logger.info(
+            logger.debug(
                 f"[{mesh_name}] {perim.Count}-point perimeter from .NET"
             )
 
@@ -2714,7 +2717,7 @@ class GeomMesh:
             try:
                 seeds_pm = _generate_seeds_via_net(str(hdf_path), ns, fid=fid)
                 net_seeds_ok = True
-                logger.info(
+                logger.debug(
                     f"[{mesh_name}] {seeds_pm.Count} seeds via "
                     f".NET RegenerateMeshPoints"
                 )
@@ -2725,7 +2728,7 @@ class GeomMesh:
 
             if not net_seeds_ok:
                 seeds_pm = _generate_seeds_safe(perim, cell_size, ns)
-                logger.info(
+                logger.debug(
                     f"[{mesh_name}] {seeds_pm.Count} seeds via "
                     f"PointGenerator.GeneratePoints"
                 )
@@ -2747,7 +2750,7 @@ class GeomMesh:
             if post_n < pre_n:
                 fix_msg = f"Tier0:short_seg_removal(-{pre_n - post_n})"
                 result.fixes_applied.append(fix_msg)
-                logger.info(f"[{mesh_name}] Fix applied: {fix_msg}")
+                logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
                 current_seeds_pm = _reseed_after_perimeter_fix(
                     text_path, hdf_path, current_perim,
                     cell_size, fid, mesh_name, ns, hecras_dir,
@@ -2888,7 +2891,7 @@ class GeomMesh:
                                 f"(-{n_removed}pts)"
                             )
                             result.fixes_applied.append(fix_msg)
-                            logger.info(f"[{mesh_name}] Fix applied: {fix_msg}")
+                            logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
                             continue
 
                     n_removed = 0
@@ -2906,7 +2909,7 @@ class GeomMesh:
                                 f"(-{n_removed}pts,tol={tolerance:g})"
                             )
                             result.fixes_applied.append(fix_msg)
-                            logger.info(f"[{mesh_name}] Fix applied: {fix_msg}")
+                            logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
                             break
                     if n_removed > 0:
                         continue
@@ -2935,7 +2938,7 @@ class GeomMesh:
                         midpoint_attempts += 1
                         fix_msg = f"MaxFaces:midpoints(+{n_added}pts)"
                         result.fixes_applied.append(fix_msg)
-                        logger.info(f"[{mesh_name}] Fix applied: {fix_msg}")
+                        logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
                         continue
 
                 # Perimeter errors → remove bad vertices
@@ -2947,7 +2950,7 @@ class GeomMesh:
                         )
                         fix_msg = f"Perim:remove(-{len(bad_indices)}pts)"
                         result.fixes_applied.append(fix_msg)
-                        logger.info(f"[{mesh_name}] Fix applied: {fix_msg}")
+                        logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
                         current_seeds_pm = _reseed_after_perimeter_fix(
                             text_path, hdf_path, current_perim,
                             cell_size, fid, mesh_name, ns, hecras_dir,
@@ -2960,7 +2963,7 @@ class GeomMesh:
                     ratio_idx += 1
                     fix_msg = f"Ratio:{old_r:.2f}->{ratios[ratio_idx]:.2f}"
                     result.fixes_applied.append(fix_msg)
-                    logger.info(f"[{mesh_name}] Fix applied: {fix_msg}")
+                    logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
                     continue
 
                 # ── Douglas-Peucker (last resort) ────────────────────────
@@ -2976,14 +2979,14 @@ class GeomMesh:
                         )
                         fix_msg = f"DP:local({len(error_pts)}zones)"
                         result.fixes_applied.append(fix_msg)
-                        logger.info(f"[{mesh_name}] Fix applied: {fix_msg}")
+                        logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
                     else:
                         current_perim = _douglas_peucker_polygon(
                             current_perim, tol, ns
                         )
                         fix_msg = f"DP:global(tol={tol:.1f})"
                         result.fixes_applied.append(fix_msg)
-                        logger.info(f"[{mesh_name}] Fix applied: {fix_msg}")
+                        logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
                     current_seeds_pm = _reseed_after_perimeter_fix(
                         text_path, hdf_path, current_perim,
                         cell_size, fid, mesh_name, ns, hecras_dir,

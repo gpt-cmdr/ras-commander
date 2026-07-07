@@ -497,7 +497,7 @@ class RasPermutation:
             rows.append(row)
 
         result = pd.DataFrame(rows, columns=["absolute_perm_id", *param_names])
-        logger.info("Defined %s total permutation(s)", len(result))
+        logger.debug("Defined %s total permutation(s)", len(result))
         return result
 
     @staticmethod
@@ -601,6 +601,7 @@ class RasPermutation:
                 getattr(source_ras, "ras_exe_path", None),
                 ras_object=batch_ras,
                 load_results_summary=False,
+                hide_intro=True,
             )
 
             template_plan_path = RasPermutation._get_plan_path(
@@ -757,6 +758,7 @@ class RasPermutation:
         ras_object: Any = None,
         timeout_sec: Optional[int] = None,
         clear_geompre: bool = False,
+        force_geompre: bool = False,
         workers: Optional[List[Any]] = None,
     ) -> pd.DataFrame:
         """
@@ -769,6 +771,7 @@ class RasPermutation:
             ras_object: Optional project object for multi-project workflows.
             timeout_sec: Optional per-plan timeout in seconds.
             clear_geompre: Clear .c## preprocessor files before execution.
+            force_geompre: Force full geometry preprocessing before execution.
             workers: Optional list of remote worker objects from
                 init_ras_worker(). When provided, plans are distributed
                 across the remote fleet via compute_parallel_remote()
@@ -809,6 +812,8 @@ class RasPermutation:
                 batch_folder,
                 ras_exe_path,
                 ras_object=batch_ras,
+                load_results_summary=False,
+                hide_intro=True,
             )
 
             plan_numbers = batch_log_df["plan_number"].tolist()
@@ -822,6 +827,7 @@ class RasPermutation:
                     ras_object=batch_ras,
                     num_cores=num_cores,
                     clear_geompre=clear_geompre,
+                    force_geompre=force_geompre,
                 )
 
                 execution_success_map = {
@@ -841,6 +847,7 @@ class RasPermutation:
                     ras_object=batch_ras,
                     timeout_sec=timeout_sec,
                     clear_geompre=clear_geompre,
+                    force_geompre=force_geompre,
                 )
 
                 execution_success_map = compute_result.execution_results
@@ -942,6 +949,27 @@ class RasPermutation:
         )
 
         RasPermutation._write_csv(merged_df, master_log_path)
+        status_counts = (
+            merged_df["status"].fillna("unknown").value_counts().to_dict()
+            if "status" in merged_df.columns
+            else {}
+        )
+        status_summary = (
+            ", ".join(
+                f"{status}={count}"
+                for status, count in sorted(status_counts.items())
+            )
+            or "no status data"
+        )
+        logger.info(
+            "Executed and summarized %s permutation(s): %s",
+            len(merged_df),
+            status_summary,
+        )
+        logger.debug(
+            "Updated permutation master log: %s",
+            master_log_path,
+        )
         return merged_df
 
     @staticmethod

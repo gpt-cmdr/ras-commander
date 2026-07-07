@@ -347,7 +347,11 @@ class RasPlan:
             for i, line in enumerate(lines):
                 if line.startswith("Geom File="):
                     lines[i] = f"Geom File=g{new_geom}\n"
-                    logger.info(f"Updated Geom File in plan file to g{new_geom} for plan {plan_number}")
+                    logger.debug(
+                        "Updated Geom File in plan file %s to g%s",
+                        plan_file_path.name,
+                        new_geom,
+                    )
                     break
                 
             with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
@@ -363,7 +367,7 @@ class RasPlan:
         geom_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{new_geom}"
         ras_obj.plan_df.loc[mask, 'Geom Path'] = str(geom_path)
 
-        logger.info(f"Geometry for plan {plan_number} set to {new_geom}")
+        logger.info("Set geometry for plan p%s to g%s", plan_number, new_geom)
         logger.debug("Updated plan DataFrame:")
         logger.debug(ras_obj.plan_df)
 
@@ -843,7 +847,7 @@ class RasPlan:
                 ras_object=ras_object,
             )
             if result is not None:
-                _logger.info(f"Found geometry path: {result}")
+                _logger.debug("Found geometry path: %s", result)
             else:
                 _logger.warning(f"No geometry file found with number: {geom_number}")
             return result
@@ -1228,7 +1232,7 @@ class RasPlan:
         supported_plan_keys = {
             'Description', 'Computation Interval', 'DSS File', 'Flow File', 'Friction Slope Method',
             'Geom File', 'Mapping Interval', 'Plan File', 'Plan Title', 'Program Version',
-            'Run HTab', 'Run Post Process', 'Run Sediment', 'Run UNET', 'Run WQNET',
+            'Run HTab', 'Run Post Process', 'Run Sediment', 'Run UNet', 'Run UNET', 'Run WQNET',
             'Short Identifier', 'Simulation Date', 'UNET D1 Cores', 'UNET D2 Cores', 'PS Cores',
             'UNET Use Existing IB Tables', 'UNET 1D Methodology', 'UNET D2 Solver Type', 
             'UNET D2 Name', 'Run RASMapper', 'Run HTab', 'Run UNET',
@@ -1238,7 +1242,11 @@ class RasPlan:
 
         if key not in supported_plan_keys:
             logger = logging.getLogger(__name__)
-            logger.warning(f"Unknown key: {key}. Valid keys are: {', '.join(supported_plan_keys)}\n Add more keys and explanations in get_plan_value() as needed.")
+            logger.warning("Unknown plan key requested: %s", key)
+            logger.debug(
+                "Supported plan keys for get_plan_value(): %s",
+                ", ".join(sorted(supported_plan_keys)),
+            )
 
         plan_file_path = Path(plan_number_or_path)
         if not plan_file_path.is_file():
@@ -1371,9 +1379,11 @@ class RasPlan:
 
             logger = get_logger(__name__)
             logger.info(
-                f"Successfully updated run flags in plan file: {plan_file_path} "
-                f"(flags modified: {updated_lines})"
+                "Updated run flags in plan file: %s (flags modified: %d)",
+                plan_file_path.name,
+                updated_lines,
             )
+            logger.debug("Updated run flags in plan file path: %s", plan_file_path)
 
         except IOError as e:
             logger = get_logger(__name__)
@@ -1453,7 +1463,8 @@ class RasPlan:
                 file.writelines(lines)
 
             logger = logging.getLogger(__name__)
-            logger.info(f"Successfully updated intervals in plan file: {plan_file_path}")
+            logger.info("Updated intervals in plan file: %s", Path(plan_file_path).name)
+            logger.debug("Updated intervals in plan file path: %s", plan_file_path)
 
         except IOError as e:
             logger = logging.getLogger(__name__)
@@ -1511,11 +1522,12 @@ class RasPlan:
                 description_lines.append(line.strip())
 
         if not description_found:
-            logger.warning(f"No description found in plan file: {plan_file_path}")
+            logger.debug("No description found in plan file: %s", plan_file_path.name)
+            logger.debug("Plan file path without description: %s", plan_file_path)
             return ""
 
         description = '\n'.join(description_lines)
-        logger.info(f"Read description from plan file: {plan_file_path}")
+        logger.debug("Read description from plan file: %s", plan_file_path)
         return description
 
 
@@ -1552,6 +1564,7 @@ class RasPlan:
         ...     'Confidence Level: upper')
         True
         """
+        logger = get_logger(__name__)
         try:
             # Get the RAS object
             if ras_object is None:
@@ -1679,20 +1692,22 @@ class RasPlan:
                     desc_pos = content.find('Begin DESCRIPTION')
                     comp_pos = content.find('Computation Interval=')
                     if desc_pos > comp_pos:
-                        print(f"Warning: Description block may be in wrong position in plan {plan_number}")
+                        logger.warning(
+                            "Description block may be in wrong position in plan %s",
+                            plan_number,
+                        )
             
             return True
             
         except FileNotFoundError:
-            print(f"Error: Plan file not found for plan {plan_number}")
+            logger.error("Plan file not found for plan %s", plan_number)
             return False
         except IOError as e:
-            print(f"Error: IO error updating plan {plan_number}: {e}")
+            logger.error("IO error updating plan %s: %s", plan_number, e)
             return False
         except Exception as e:
-            print(f"Error: Unexpected error updating plan {plan_number}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error("Unexpected error updating plan %s: %s", plan_number, e)
+            logger.debug("Unexpected error updating plan description", exc_info=True)
             return False
 
     @staticmethod
@@ -1855,7 +1870,8 @@ class RasPlan:
             with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(lines)
 
-            logger.info(f"Updated simulation date in plan file: {plan_file_path}")
+            logger.info("Updated simulation date in plan file: %s", plan_file_path.name)
+            logger.debug("Updated simulation date in plan file path: %s", plan_file_path)
 
         except OSError as e:
             logger.error(f"Error updating simulation date in plan file {plan_file_path}: {e}")
@@ -1898,7 +1914,7 @@ class RasPlan:
             logger.warning(f"Short Identifier not found in plan: {plan_number_or_path}")
             return ""
         
-        logger.info(f"Retrieved Short Identifier: {shortid}")
+        logger.debug("Retrieved Short Identifier: %s", shortid)
         return shortid
 
     @staticmethod
@@ -1925,7 +1941,11 @@ class RasPlan:
 
         # Ensure new_shortid is not too long (HEC-RAS limits short identifiers to 24 characters)
         if len(new_shortid) > 24:
-            logger.warning(f"Short Identifier too long (24 char max). Truncating: {new_shortid}")
+            logger.warning(
+                "Short Identifier exceeds 24 characters (received %d); truncating",
+                len(new_shortid),
+            )
+            logger.debug("Original Short Identifier before truncation: %s", new_shortid)
             new_shortid = new_shortid[:24]
 
         # Get the plan file path
@@ -1965,7 +1985,8 @@ class RasPlan:
             with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(lines)
 
-            logger.info(f"Updated Short Identifier in plan file to: {new_shortid}")
+            logger.info("Updated Short Identifier in plan file to: %s", new_shortid)
+            logger.debug("Updated Short Identifier in plan file path: %s", plan_file_path)
 
         except IOError as e:
             logger.error(f"Error updating Short Identifier in plan file {plan_file_path}: {e}")
@@ -2007,7 +2028,7 @@ class RasPlan:
             logger.warning(f"Plan Title not found in plan: {plan_number_or_path}")
             return ""
         
-        logger.info(f"Retrieved Plan Title: {title}")
+        logger.debug("Retrieved Plan Title: %s", title)
         return title
 
     @staticmethod
@@ -2061,7 +2082,8 @@ class RasPlan:
             with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(lines)
 
-            logger.info(f"Updated Plan Title in plan file to: {new_title}")
+            logger.info("Updated Plan Title in plan file to: %s", new_title)
+            logger.debug("Updated Plan Title in plan file path: %s", plan_file_path)
 
         except IOError as e:
             logger.error(f"Error updating Plan Title in plan file {plan_file_path}: {e}")
@@ -2615,7 +2637,7 @@ class RasPlan:
             time_step_residence_courant=time_step_residence_courant,
         )
         if not updates:
-            logger.info("No 2D flow options requested")
+            logger.debug("No 2D flow options requested")
             return True
 
         plan_file_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
@@ -2690,7 +2712,7 @@ class RasPlan:
                         section["last_index"] = max(section.get("last_index") or insert_index, insert_index)
 
         if lines == original_lines:
-            logger.info(f"2D flow options already current in plan file: {plan_file_path.name}")
+            logger.debug("2D flow options already current in plan file: %s", plan_file_path.name)
             return True
 
         with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
@@ -3141,8 +3163,9 @@ class RasPlan:
             lines = retained_lines
 
             if lines == original_lines:
-                logger.info(
-                    f"Restart output settings already current in plan file: {plan_file_path.name}"
+                logger.debug(
+                    "Restart output settings already current in plan file: %s",
+                    plan_file_path.name,
                 )
                 return True
 
@@ -3286,7 +3309,7 @@ class RasPlan:
             if value is not None
         }
         if not requested:
-            logger.info("No HDF write parameters requested")
+            logger.debug("No HDF write parameters requested")
             return True
 
         plan_file_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
@@ -3323,7 +3346,7 @@ class RasPlan:
                 lines[insert_index:insert_index] = new_lines
 
             if lines == original_lines:
-                logger.info(f"HDF write parameters already current in plan file: {plan_file_path.name}")
+                logger.debug("HDF write parameters already current in plan file: %s", plan_file_path.name)
                 return True
 
             with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
@@ -3564,7 +3587,7 @@ class RasPlan:
             target_line = f"HDF Additional Output Variable={variable}"
             for line in lines:
                 if line.strip() == target_line:
-                    logger.info(f"HDF output variable '{variable}' already exists in plan")
+                    logger.debug("HDF output variable %r already exists in plan", variable)
                     return True
 
             # Find the best location to insert (near other HDF settings)
@@ -3642,7 +3665,7 @@ class RasPlan:
                         var_name = line.split("=", 1)[1].strip()
                         variables.append(var_name)
 
-            logger.info(f"Found {len(variables)} HDF output variables in plan")
+            logger.debug("Found %d HDF output variables in plan", len(variables))
             return variables
 
         except IOError as e:
@@ -3685,6 +3708,13 @@ class RasPlan:
                 logger.debug(f"Plan {plan_num}: {flow_type} (from plan_df)")
                 return flow_type
 
+            if 'unsteady_number' not in plan_row.columns:
+                logger.debug(
+                    "Plan %s flow type unknown; plan_df missing unsteady_number column",
+                    plan_num,
+                )
+                return 'Unknown'
+
             # Fallback: determine from unsteady_number
             import pandas as pd
             unsteady_num = plan_row.iloc[0]['unsteady_number']
@@ -3692,8 +3722,8 @@ class RasPlan:
             logger.debug(f"Plan {plan_num}: {flow_type} (from unsteady_number)")
             return flow_type
 
-        except Exception as e:
-            logger.warning(f"Could not determine flow type for plan {plan_number}: {e}")
+        except Exception:
+            logger.debug("Could not determine flow type for plan %s", plan_number, exc_info=True)
             return 'Unknown'
 
     @staticmethod
@@ -3758,14 +3788,18 @@ class RasPlan:
                     new_lines.append(line)
 
             if not removed:
-                logger.info(f"HDF output variable '{variable}' not found in plan")
+                logger.debug("HDF output variable %r not found in plan", variable)
                 return False
 
             # Write the updated content back to the file
             with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(new_lines)
 
-            logger.info(f"Removed HDF output variable '{variable}' from plan file")
+            logger.info(
+                "Removed HDF output variable %r from plan file: %s",
+                variable,
+                plan_file_path.name,
+            )
             return True
 
         except IOError as e:
@@ -4159,7 +4193,13 @@ class RasPlan:
             if modified:
                 with open(plan_path, 'w', encoding='utf-8', errors='replace') as f:
                     f.writelines(lines)
-                logger.info(f"Updated {key} from {old_value} to {new_value} in {plan_path.name}")
+                logger.debug(
+                    "Updated %s from %s to %s in %s",
+                    key,
+                    old_value,
+                    new_value,
+                    plan_path.name,
+                )
 
             return modified
         except Exception as e:
@@ -4243,7 +4283,7 @@ class RasPlan:
         if len(new_lines) < len(lines):
             with open(ras_obj.prj_file, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(new_lines)
-            logger.info(f"Removed Current Plan=p{plan_number} line from .prj")
+            logger.debug("Removed Current Plan=p%s line from .prj", plan_number)
 
         # Refresh all DataFrames
         RasPlan._refresh_all_dataframes(ras_obj)
@@ -4310,7 +4350,7 @@ class RasPlan:
                 lines[i] = f"Current Plan=p{new_number}\n"
                 with open(ras_obj.prj_file, 'w', encoding='utf-8', errors='replace') as f:
                     f.writelines(lines)
-                logger.info(f"Updated Current Plan from p{old_number} to p{new_number}")
+                logger.debug("Updated Current Plan from p%s to p%s", old_number, new_number)
                 break
 
         # Refresh all DataFrames
@@ -4416,7 +4456,7 @@ class RasPlan:
         c_new = Path(f"{base}.c{new_num}")
         if c_old.exists():
             c_old.rename(c_new)
-            logger.info(f"Renamed {c_old.name} -> {c_new.name}")
+            logger.debug("Renamed %s -> %s", c_old.name, c_new.name)
         return result
 
     @staticmethod
@@ -4656,8 +4696,13 @@ class RasPlan:
             )
             # Truncate to 32 chars (HEC-RAS limit)
             if len(title) > 32:
+                original_title = title
                 title = title[:32]
-                logger.warning(f"Truncated plan title to 32 chars: '{title}'")
+                logger.warning(
+                    "Plan title exceeds 32 characters (received %d); truncating",
+                    len(original_title),
+                )
+                logger.debug("Original plan title before truncation: %s", original_title)
 
             # Build clone_plan kwargs from variant row
             clone_kwargs = {
@@ -4701,7 +4746,7 @@ class RasPlan:
                     'status': 'created',
                     'message': f"Created from plan {base_plan}"
                 })
-                logger.info(f"Created variant '{variant_name}' as plan p{new_plan_num}")
+                logger.debug("Created variant %r as plan p%s", variant_name, new_plan_num)
 
             except Exception as e:
                 report_rows.append({

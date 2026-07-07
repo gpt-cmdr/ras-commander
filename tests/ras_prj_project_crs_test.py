@@ -1,4 +1,5 @@
 from pathlib import Path
+import logging
 
 import h5py
 import pytest
@@ -134,6 +135,33 @@ def test_project_crs_falls_back_to_plan_hdf(tmp_path):
     assert project.project_crs_source == "plan_hdf"
 
 
+def test_project_crs_warning_uses_folder_name_and_debug_keeps_path(tmp_path, caplog):
+    _write_project_files(tmp_path)
+
+    caplog.set_level(logging.DEBUG, logger="ras_commander.RasPrj")
+    project = _init_project(tmp_path)
+
+    assert project.project_crs is None
+    warning_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "ras_commander.RasPrj"
+        and record.levelno == logging.WARNING
+    ]
+    debug_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "ras_commander.RasPrj"
+        and record.levelno == logging.DEBUG
+    ]
+
+    assert warning_messages == [
+        f"Could not resolve project CRS for {tmp_path.name}"
+    ]
+    assert str(tmp_path.parent) not in warning_messages[0]
+    assert any(str(tmp_path) in message for message in debug_messages)
+
+
 def test_project_crs_falls_back_to_rasmap_projection_path(tmp_path):
     project_name = _write_project_files(tmp_path)
     projection_path = tmp_path / "Projection" / "project.prj"
@@ -222,3 +250,65 @@ def test_hdfbase_projection_still_uses_rasmap_projection_file(tmp_path):
     )
 
     assert HdfBase.get_projection(plan_hdf_path) == "EPSG:6347"
+
+
+def test_hdfbase_missing_projection_warns_once_without_critical(tmp_path, caplog):
+    project_name = _write_project_files(tmp_path)
+    plan_hdf_path = tmp_path / f"{project_name}.p01.hdf"
+    _write_hdf(plan_hdf_path, epsg=None)
+
+    caplog.set_level(logging.WARNING, logger="ras_commander.hdf.HdfBase")
+
+    assert HdfBase.get_projection(plan_hdf_path) is None
+    assert HdfBase.get_projection(plan_hdf_path) is None
+
+    warnings = [
+        record
+        for record in caplog.records
+        if record.name == "ras_commander.hdf.HdfBase"
+        and record.levelno == logging.WARNING
+    ]
+    criticals = [
+        record
+        for record in caplog.records
+        if record.name == "ras_commander.hdf.HdfBase"
+        and record.levelno >= logging.CRITICAL
+    ]
+
+    assert len(warnings) == 1
+    assert "Projection not found for TestModel.p01.hdf" in warnings[0].getMessage()
+    assert str(plan_hdf_path) not in warnings[0].getMessage()
+    assert criticals == []
+
+
+def test_hdfbase_missing_projection_debug_includes_diagnostics(tmp_path, caplog):
+    project_name = _write_project_files(tmp_path)
+    plan_hdf_path = tmp_path / f"{project_name}.p01.hdf"
+    _write_hdf(plan_hdf_path, epsg=None)
+
+    caplog.set_level(logging.DEBUG, logger="ras_commander.hdf.HdfBase")
+
+    assert HdfBase.get_projection(plan_hdf_path) is None
+
+    assert "No valid projection found. Checked:" in caplog.text
+    assert str(plan_hdf_path) in caplog.text
+    assert "To fix this:" in caplog.text
+
+
+def test_hdfbase_malformed_rasmap_projection_probe_is_not_error(tmp_path, caplog):
+    project_name = _write_project_files(tmp_path)
+    plan_hdf_path = tmp_path / f"{project_name}.p01.hdf"
+    _write_hdf(plan_hdf_path, epsg=None)
+    (tmp_path / f"{project_name}.rasmap").write_text("<RASMapper>\n", encoding="utf-8")
+
+    caplog.set_level(logging.WARNING, logger="ras_commander.hdf.HdfBase")
+
+    assert HdfBase.get_projection(plan_hdf_path) is None
+
+    errors = [
+        record
+        for record in caplog.records
+        if record.name == "ras_commander.hdf.HdfBase"
+        and record.levelno >= logging.ERROR
+    ]
+    assert errors == []

@@ -120,7 +120,7 @@ class HecRasElements:
             dialog_hwnd = find_already_running_dialog()
 
             if dialog_hwnd:
-                logger.info("Found 'already running' dialog - clicking Yes to continue")
+                logger.debug("Found 'already running' dialog; attempting to continue")
 
                 yes_button = None
                 for button_text in ["Yes", "&Yes", "Ja", "&Ja"]:
@@ -130,7 +130,7 @@ class HecRasElements:
 
                 if yes_button:
                     Win32Primitives.click_button(yes_button)
-                    logger.info("Clicked 'Yes' button on already running dialog")
+                    logger.debug("Clicked 'Yes' button on already running dialog")
                     time.sleep(0.5)
                     return True
                 else:
@@ -141,11 +141,12 @@ class HecRasElements:
                         win32api.keybd_event(Win32Constants.VK_RETURN, 0, 0, 0)
                         time.sleep(0.05)
                         win32api.keybd_event(Win32Constants.VK_RETURN, 0, Win32Constants.KEYEVENTF_KEYUP, 0)
-                        logger.info("Sent Enter key to dismiss dialog")
+                        logger.debug("Sent Enter key to dismiss dialog")
                         time.sleep(0.5)
                         return True
                     except Exception as e:
-                        logger.warning(f"Failed to dismiss dialog: {e}")
+                        logger.warning("Failed to dismiss already-running dialog")
+                        logger.debug("Already-running dialog dismissal failure: %s", e)
 
             time.sleep(check_interval)
 
@@ -189,17 +190,17 @@ class HecRasElements:
 
             for term in search_terms:
                 if Win32Primitives.select_combobox_item_by_text(plan_combo, term):
-                    logger.info(f"Successfully set current plan to p{plan_number}")
+                    logger.debug(f"Successfully set current plan to p{plan_number}")
                     return True
 
             if Win32Primitives.select_combobox_item_by_text(plan_combo, plan_number):
-                logger.info(f"Successfully set current plan to p{plan_number}")
+                logger.debug(f"Successfully set current plan to p{plan_number}")
                 return True
 
         except Exception as e:
-            logger.warning(f"Could not get plan details, trying simple search: {e}")
+            logger.debug("Could not get plan details; trying simple search: %s", e)
             if Win32Primitives.select_combobox_item_by_text(plan_combo, f"p{plan_number}"):
-                logger.info(f"Successfully set current plan to p{plan_number}")
+                logger.debug(f"Successfully set current plan to p{plan_number}")
                 return True
 
         logger.error(f"Failed to set current plan to p{plan_number}")
@@ -244,9 +245,11 @@ class HecRasElements:
             else:
                 hecras_process = subprocess.Popen([str(ras_exe), str(ras_obj.prj_file)])
 
-            logger.info(f"HEC-RAS opened with Process ID: {hecras_process.pid}")
+            logger.info("HEC-RAS opened")
+            logger.debug("HEC-RAS process ID: %s", hecras_process.pid)
         except Exception as e:
-            logger.error(f"Failed to open HEC-RAS: {e}")
+            logger.error("Failed to open HEC-RAS")
+            logger.debug("HEC-RAS launch failure: %s", e)
             return None, None
 
         # Step 2: Handle "already running" dialog if it appears
@@ -254,7 +257,7 @@ class HecRasElements:
         HecRasElements.handle_already_running_dialog(timeout=3)
 
         # Step 3: Wait for main window
-        logger.info("Waiting for HEC-RAS main window...")
+        logger.debug("Waiting for HEC-RAS main window...")
         time.sleep(2)
 
         def find_ras_window():
@@ -272,7 +275,8 @@ class HecRasElements:
                 pass
             return None, None
 
-        logger.info(f"Found HEC-RAS main window: {win32gui.GetWindowText(hec_ras_hwnd)}")
+        logger.info("Found HEC-RAS main window")
+        logger.debug("HEC-RAS main window title: %s", win32gui.GetWindowText(hec_ras_hwnd))
         return hecras_process, hec_ras_hwnd
 
     @staticmethod
@@ -295,7 +299,7 @@ class HecRasElements:
         menus = Win32Primitives.enumerate_all_menus(hwnd)
 
         if not menus:
-            logger.warning("No menus found")
+            logger.debug("No menus found")
             return False
 
         if len(menu_path) != 2:
@@ -309,11 +313,11 @@ class HecRasElements:
             if top_menu_search in menu_name.replace("&", "").lower():
                 for item_text, menu_id in items:
                     if isinstance(item_text, str) and item_search in item_text.replace("&", "").lower():
-                        logger.info(f"Found menu item: '{item_text}' (ID: {menu_id})")
+                        logger.debug(f"Found menu item: '{item_text}' (ID: {menu_id})")
                         if isinstance(menu_id, int) and menu_id > 0:
                             return Win32Primitives.click_menu_item(hwnd, menu_id)
 
-        logger.warning(f"Menu path not found: {menu_path}")
+        logger.debug(f"Menu path not found: {menu_path}")
         return False
 
     @staticmethod
@@ -337,7 +341,7 @@ class HecRasElements:
                         button = Win32Primitives.find_button_by_text(dialog, button_text)
                         if button:
                             Win32Primitives.click_button(button)
-                            logger.info("Dismissed save prompt")
+                            logger.debug("Dismissed save prompt")
                             return True
             time.sleep(0.5)
 

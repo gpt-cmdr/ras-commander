@@ -94,7 +94,8 @@ class UsgsGaugeCatalog:
         parameters: List[str] = None,
         rate_limit_rps: float = 5.0,
         project_crs: Optional[str] = None,
-        api_key: Optional[str] = None
+        api_key: Optional[str] = None,
+        show_progress: bool = False,
     ) -> Dict[str, Any]:
         """
         Generate standardized USGS gauge data catalog for project.
@@ -131,6 +132,9 @@ class UsgsGaugeCatalog:
             With API key: 10 req/sec recommended (set rate_limit_rps=10.0)
             Get free key at: https://api.waterdata.usgs.gov/signup/
             Use test_api_key() to validate before use.
+        show_progress : bool, default False
+            If True, show a tqdm progress bar while processing gauges. Progress
+            bars use ``leave=False`` so notebooks keep only final API output.
 
         Returns
         -------
@@ -178,12 +182,12 @@ class UsgsGaugeCatalog:
         original_api_key = os.environ.get("API_USGS_PAT")
         if api_key is not None:
             os.environ["API_USGS_PAT"] = api_key
-            logger.info("Using provided API key for USGS requests")
+            logger.debug("Using provided API key for USGS requests")
         elif original_api_key:
-            logger.info("Using API key from environment for USGS requests")
+            logger.debug("Using API key from environment for USGS requests")
         else:
-            logger.info(f"No API key provided - using {rate_limit_rps} req/sec rate limit")
-            logger.info("TIP: Get a free USGS API key for faster processing (10 req/sec): https://api.waterdata.usgs.gov/signup/")
+            logger.debug(f"No API key provided - using {rate_limit_rps} req/sec rate limit")
+            logger.debug("TIP: Get a free USGS API key for faster processing (10 req/sec): https://api.waterdata.usgs.gov/signup/")
 
         # Use global ras object if not provided
         if ras_object is None:
@@ -216,15 +220,19 @@ class UsgsGaugeCatalog:
         else:
             output_folder = Path(output_folder)
 
-        logger.info(f"Generating USGS gauge catalog for project: {project_folder}")
-        logger.info(f"Output folder: {output_folder}")
-        logger.info(f"Buffer: {buffer_percent}%, Historical years: {historical_years}")
+        logger.info(
+            f"Generating USGS gauge catalog: buffer={buffer_percent}%, "
+            f"history={historical_years} years, parameters={', '.join(parameters)}, "
+            f"historical_data={include_historical}"
+        )
+        logger.debug(f"USGS gauge catalog project folder: {project_folder}")
+        logger.debug(f"USGS gauge catalog output folder: {output_folder}")
 
         # Create output folder
         output_folder.mkdir(parents=True, exist_ok=True)
 
         # Step 1: Find gauges in project
-        logger.info("Step 1/7: Finding gauges in project extent...")
+        logger.debug("Finding USGS gauges in project extent")
         gauges_df = UsgsGaugeSpatial.find_gauges_in_project(
             hdf_path=geom_hdf_path,
             buffer_percent=buffer_percent,
@@ -238,7 +246,7 @@ class UsgsGaugeCatalog:
             )
 
         gauge_count = len(gauges_df)
-        logger.info(f"Found {gauge_count} gauges in project extent")
+        logger.debug(f"Found {gauge_count} gauges in project extent")
 
         # Initialize counters
         gauges_processed = 0
@@ -253,7 +261,7 @@ class UsgsGaugeCatalog:
                 requests_per_second=rate_limit_rps,
                 burst_size=max(40, int(rate_limit_rps * 8))  # Allow 8 seconds of burst
             )
-            logger.info(f"Rate limiting enabled: {rate_limit_rps} requests/sec")
+            logger.debug(f"Rate limiting enabled: {rate_limit_rps} requests/sec")
 
             # Check for API key
             if not check_api_key():
@@ -263,14 +271,20 @@ class UsgsGaugeCatalog:
                     "Then use: configure_api_key('your_key') or set API_USGS_PAT environment variable"
                 )
         else:
-            logger.info("Rate limiting disabled")
+            logger.debug("Rate limiting disabled")
 
         # Progress bar setup
         if TQDM_AVAILABLE:
-            gauge_iterator = tqdm(gauges_df.iterrows(), total=gauge_count, desc="Processing gauges")
+            gauge_iterator = tqdm(
+                gauges_df.iterrows(),
+                total=gauge_count,
+                desc="Processing gauges",
+                leave=False,
+                disable=not show_progress,
+            )
         else:
             gauge_iterator = gauges_df.iterrows()
-            logger.info("Progress: tqdm not installed, progress bars disabled")
+            logger.debug("Progress: tqdm not installed, progress bars disabled")
 
         # Determine site_no column name (handle API version differences)
         site_id_col = None
@@ -303,7 +317,7 @@ class UsgsGaugeCatalog:
                     rate_limiter.wait_if_needed()
 
                 # Get metadata
-                logger.info(f"Processing gauge {site_id}: Getting metadata...")
+                logger.debug(f"Processing gauge {site_id}: Getting metadata")
                 metadata = None
                 try:
                     metadata = RasUsgsCore.get_gauge_metadata(site_id)
@@ -312,7 +326,7 @@ class UsgsGaugeCatalog:
 
                 # Fallback: use data from gauge DataFrame if metadata retrieval failed
                 if metadata is None:
-                    logger.info(f"Gauge {site_id}: Using data from spatial query as fallback")
+                    logger.debug(f"Gauge {site_id}: Using data from spatial query as fallback")
                     # Build metadata from available gauge DataFrame columns
                     metadata = {
                         'site_id': site_id,
@@ -464,19 +478,19 @@ class UsgsGaugeCatalog:
                 gauges_failed += 1
 
         # Step 7: Create output files
-        logger.info("Step 7/7: Creating catalog files...")
+        logger.debug("Creating USGS gauge catalog output files")
 
         # Save catalog CSV
         catalog_df = pd.DataFrame(catalog_records)
         catalog_file = output_folder / "gauge_catalog.csv"
         catalog_df.to_csv(catalog_file, index=False)
-        logger.info(f"Saved catalog: {catalog_file}")
+        logger.debug(f"Saved catalog: {catalog_file}")
 
         # Save GeoJSON
         if GEOPANDAS_AVAILABLE and len(geojson_features) > 0:
             geojson_file = output_folder / "gauge_locations.geojson"
             _save_geojson(geojson_features, geojson_file)
-            logger.info(f"Saved spatial data: {geojson_file}")
+            logger.debug(f"Saved spatial data: {geojson_file}")
         else:
             if not GEOPANDAS_AVAILABLE:
                 logger.warning("GeoPandas not available, skipping GeoJSON creation")
@@ -491,7 +505,7 @@ class UsgsGaugeCatalog:
             historical_years,
             parameters
         )
-        logger.info(f"Saved README: {readme_file}")
+        logger.debug(f"Saved README: {readme_file}")
 
         # Calculate total data size
         data_size_mb = _calculate_folder_size(output_folder)
@@ -509,15 +523,11 @@ class UsgsGaugeCatalog:
             'processing_time_sec': processing_time
         }
 
-        logger.info("=" * 60)
-        logger.info("USGS Gauge Catalog Generation Complete")
-        logger.info(f"Gauges found: {gauge_count}")
-        logger.info(f"Successfully processed: {gauges_processed}")
-        logger.info(f"Failed: {gauges_failed}")
-        logger.info(f"Output folder: {output_folder}")
-        logger.info(f"Data size: {data_size_mb:.2f} MB")
-        logger.info(f"Processing time: {processing_time:.1f} seconds")
-        logger.info("=" * 60)
+        logger.info(
+            f"USGS gauge catalog complete: {gauges_processed}/{gauge_count} gauges processed, "
+            f"{gauges_failed} failed, {data_size_mb:.2f} MB, {processing_time:.1f} seconds"
+        )
+        logger.debug(f"USGS gauge catalog output folder: {output_folder}")
 
         # Restore original API key state
         if original_api_key is not None:
@@ -585,7 +595,7 @@ class UsgsGaugeCatalog:
 
         # Ensure site_id is read as string to preserve leading zeros (e.g., '01545680')
         catalog_df = pd.read_csv(catalog_file, dtype={'site_id': str})
-        logger.info(f"Loaded gauge catalog: {len(catalog_df)} gauges from {catalog_file}")
+        logger.debug(f"Loaded gauge catalog: {len(catalog_df)} gauges from {catalog_file}")
 
         return catalog_df
 
@@ -658,7 +668,7 @@ class UsgsGaugeCatalog:
             )
 
         data_df = pd.read_csv(data_file, parse_dates=['datetime'])
-        logger.info(f"Loaded {len(data_df)} {parameter} records for gauge {site_id}")
+        logger.debug(f"Loaded {len(data_df)} {parameter} records for gauge {site_id}")
 
         return data_df
 
@@ -720,7 +730,8 @@ class UsgsGaugeCatalog:
         catalog_folder: Optional[Union[str, Path]] = None,
         parameters: List[str] = None,
         rate_limit_rps: float = 5.0,
-        api_key: Optional[str] = None
+        api_key: Optional[str] = None,
+        show_progress: bool = False,
     ) -> Dict[str, Any]:
         """
         Refresh existing catalog with latest data.
@@ -744,6 +755,9 @@ class UsgsGaugeCatalog:
             Without API key: 5 req/sec recommended (default rate_limit_rps=5.0)
             With API key: 10 req/sec recommended (set rate_limit_rps=10.0)
             Get free key at: https://api.waterdata.usgs.gov/signup/
+        show_progress : bool, default False
+            If True, show a tqdm progress bar while updating gauges. Progress
+            bars use ``leave=False`` so notebooks keep only final API output.
 
         Returns
         -------
@@ -788,11 +802,11 @@ class UsgsGaugeCatalog:
         original_api_key = os.environ.get("API_USGS_PAT")
         if api_key is not None:
             os.environ["API_USGS_PAT"] = api_key
-            logger.info("Using provided API key for USGS requests")
+            logger.debug("Using provided API key for USGS requests")
         elif original_api_key:
-            logger.info("Using API key from environment for USGS requests")
+            logger.debug("Using API key from environment for USGS requests")
         else:
-            logger.info(f"No API key provided - using {rate_limit_rps} req/sec rate limit")
+            logger.debug(f"No API key provided - using {rate_limit_rps} req/sec rate limit")
 
         logger.info(f"Updating gauge catalog: {len(catalog_df)} gauges")
 
@@ -806,7 +820,7 @@ class UsgsGaugeCatalog:
                 requests_per_second=rate_limit_rps,
                 burst_size=max(40, int(rate_limit_rps * 8))
             )
-            logger.info(f"Rate limiting enabled: {rate_limit_rps} requests/sec")
+            logger.debug(f"Rate limiting enabled: {rate_limit_rps} requests/sec")
 
             # Check for API key
             if not check_api_key():
@@ -814,11 +828,17 @@ class UsgsGaugeCatalog:
                     "No USGS API key configured. Register at: https://api.waterdata.usgs.gov/signup/"
                 )
         else:
-            logger.info("Rate limiting disabled")
+            logger.debug("Rate limiting disabled")
 
         # Progress bar
         if TQDM_AVAILABLE:
-            gauge_iterator = tqdm(catalog_df.iterrows(), total=len(catalog_df), desc="Updating gauges")
+            gauge_iterator = tqdm(
+                catalog_df.iterrows(),
+                total=len(catalog_df),
+                desc="Updating gauges",
+                leave=False,
+                disable=not show_progress,
+            )
         else:
             gauge_iterator = catalog_df.iterrows()
 

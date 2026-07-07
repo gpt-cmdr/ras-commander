@@ -66,7 +66,8 @@ class CheckFloodways:
         try:
             steady_results = HdfResultsPlan.get_steady_results(plan_hdf)
         except Exception as e:
-            logger.warning(f"Could not read steady results: {e}")
+            logger.warning("Could not read steady results for floodway checks")
+            logger.debug("Floodway steady-results read failure for %s: %s", plan_hdf, e)
             steady_results = None
 
         if steady_results is None or steady_results.empty:
@@ -2533,6 +2534,7 @@ class CheckFloodways:
                 logger.debug(f"Could not check flow area reduction at structures: {e}")
 
         except Exception as e:
-            logger.warning(f"Could not check structure floodway encroachments: {e}")
+            logger.warning("Could not check structure floodway encroachments")
+            logger.debug("Structure floodway encroachment check failure: %s", e)
 
         return messages

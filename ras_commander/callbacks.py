@@ -52,19 +52,22 @@ class ConsoleCallback:
         [Plan 01] SUCCESS in 45.2s
     """
 
-    def __init__(self, verbose: bool = False):
+    def __init__(self, verbose: bool = False, show_command: bool = False):
         """
         Initialize console callback.
 
         Args:
             verbose: If True, print all messages. If False, only print start/complete.
+            show_command: If True, print the full command when execution starts.
+                This may include full executable, project, and plan paths.
         """
         self.verbose = verbose
+        self.show_command = show_command
 
     def on_exec_start(self, plan_number: str, command: str) -> None:
         """Print execution start message."""
         print(f"[Plan {plan_number}] Starting execution...", file=sys.stdout, flush=True)
-        if self.verbose:
+        if self.show_command:
             print(f"[Plan {plan_number}] Command: {command}", file=sys.stdout, flush=True)
 
     def on_exec_message(self, plan_number: str, message: str) -> None:
@@ -111,7 +114,7 @@ class FileLoggerCallback:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.log_handles = {}
         self.lock = Lock()
-        logger.info(f"FileLoggerCallback initialized: {self.output_dir}")
+        logger.debug(f"FileLoggerCallback initialized: {self.output_dir}")
 
     def on_exec_start(self, plan_number: str, command: str) -> None:
         """Open log file for this plan."""

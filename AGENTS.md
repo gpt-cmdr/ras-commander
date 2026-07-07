@@ -89,6 +89,12 @@ This file is the canonical shared instruction contract for repository-local codi
   - `from ras_commander import get_logger, log_call`
   - `logger = get_logger(__name__)`
   - decorate public methods with `@log_call`
+- HEC-RAS executable and version resolution logging should stay concise by default:
+  - default notebook and example logs should not be noisy
+  - successful resolution should not emit full `Ras.exe` paths at INFO
+  - full executable paths and discovery sources belong in DEBUG logs or explicit return values
+  - errors should include enough diagnostic detail to debug path issues, including discovered versions and relevant candidate paths
+  - docs build scripts and committed notebook outputs must stay faithful to real output; do not sanitize or rewrite outputs during documentation generation
 - Keep original project folders immutable when practical. Prefer `dest_folder=` or separate working directories for execution outputs and experiments.
 - Generate reviewable outputs:
   - HEC-RAS project artifacts that open in the GUI

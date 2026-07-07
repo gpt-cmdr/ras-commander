@@ -74,7 +74,17 @@ def copy_plan_hdf_back(
         return None
 
     shutil.copy2(worker_hdf, dest_hdf)
-    logger.info(f"Copied results to {dest_hdf}")
+    logger.info(
+        "Copied plan result HDF for plan %s: %s",
+        str(plan_number).zfill(2),
+        dest_hdf.name,
+    )
+    logger.debug(
+        "Copied plan result HDF for plan %s: %s -> %s",
+        str(plan_number).zfill(2),
+        worker_hdf,
+        dest_hdf,
+    )
     return dest_hdf
 
 
@@ -172,7 +182,17 @@ def copy_geometry_outputs_back(
     if worker_geom_hdf.exists():
         shutil.copy2(worker_geom_hdf, source_geom_hdf)
         copied.append(source_geom_hdf)
-        logger.info(f"Copied geometry HDF to {source_geom_hdf}")
+        logger.info(
+            "Copied geometry HDF for plan %s: %s",
+            str(plan_number).zfill(2),
+            source_geom_hdf.name,
+        )
+        logger.debug(
+            "Copied geometry HDF for plan %s: %s -> %s",
+            str(plan_number).zfill(2),
+            worker_geom_hdf,
+            source_geom_hdf,
+        )
     else:
         message = f"Worker geometry HDF not found: {worker_geom_hdf}"
         if require_geom_hdf:
@@ -191,7 +211,17 @@ def copy_geometry_outputs_back(
         if worker_geompre.exists():
             shutil.copy2(worker_geompre, source_geompre)
             copied.append(source_geompre)
-            logger.info(f"Copied geometry preprocessor file to {source_geompre}")
+            logger.info(
+                "Copied geometry preprocessor file for plan %s: %s",
+                str(plan_number).zfill(2),
+                source_geompre.name,
+            )
+            logger.debug(
+                "Copied geometry preprocessor file for plan %s: %s -> %s",
+                str(plan_number).zfill(2),
+                worker_geompre,
+                source_geompre,
+            )
 
     return copied
 

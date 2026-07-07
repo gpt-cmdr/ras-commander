@@ -154,7 +154,7 @@ class RasUsgsCore:
             from dataretrieval import nwis
             RasUsgsCore._waterdata = nwis
             RasUsgsCore._dataretrieval_loaded = True
-            logger.info("dataretrieval package loaded successfully")
+            logger.debug("dataretrieval package loaded successfully")
             return RasUsgsCore._waterdata
         except ImportError:
             raise ImportError(
@@ -227,7 +227,7 @@ class RasUsgsCore:
         """
         nwis = RasUsgsCore._ensure_dataretrieval()
 
-        logger.info(f"Retrieving flow data for site {site_id}, {start_datetime} to {end_datetime}")
+        logger.debug(f"Retrieving flow data for site {site_id}, {start_datetime} to {end_datetime}")
 
         # Convert datetime objects to strings if needed
         if isinstance(start_datetime, datetime):
@@ -282,7 +282,7 @@ class RasUsgsCore:
             result_df.attrs['data_type'] = data_type
             result_df.attrs['metadata'] = metadata
 
-            logger.info(f"Retrieved {len(result_df)} flow records for site {site_id}")
+            logger.debug(f"Retrieved {len(result_df)} flow records for site {site_id}")
 
             return result_df
 
@@ -347,7 +347,7 @@ class RasUsgsCore:
         """
         nwis = RasUsgsCore._ensure_dataretrieval()
 
-        logger.info(f"Retrieving stage data for site {site_id}, {start_datetime} to {end_datetime}")
+        logger.debug(f"Retrieving stage data for site {site_id}, {start_datetime} to {end_datetime}")
 
         # Convert datetime objects to strings if needed
         if isinstance(start_datetime, datetime):
@@ -401,7 +401,7 @@ class RasUsgsCore:
             result_df.attrs['data_type'] = data_type
             result_df.attrs['metadata'] = metadata
 
-            logger.info(f"Retrieved {len(result_df)} stage records for site {site_id}")
+            logger.debug(f"Retrieved {len(result_df)} stage records for site {site_id}")
 
             return result_df
 
@@ -458,7 +458,7 @@ class RasUsgsCore:
         """
         nwis = RasUsgsCore._ensure_dataretrieval()
 
-        logger.info(f"Retrieving metadata for site {site_id}")
+        logger.debug(f"Retrieving metadata for site {site_id}")
 
         try:
             # Apply rate limiting before API request
@@ -509,7 +509,7 @@ class RasUsgsCore:
             except:
                 metadata['available_parameters'] = []
 
-            logger.info(f"Retrieved metadata for {metadata['station_name']} (drainage area: {metadata['drainage_area_sqmi']} sq mi)")
+            logger.debug(f"Retrieved metadata for {metadata['station_name']} (drainage area: {metadata['drainage_area_sqmi']} sq mi)")
 
             return metadata
 
@@ -588,7 +588,7 @@ class RasUsgsCore:
         else:
             raise ValueError(f"Invalid parameter '{parameter}'. Must be 'flow' or 'stage'.")
 
-        logger.info(f"Checking {parameter} data availability for site {site_id}")
+        logger.debug(f"Checking {parameter} data availability for site {site_id}")
 
         # Convert datetime objects to strings if needed
         if isinstance(start_datetime, datetime):
@@ -621,7 +621,7 @@ class RasUsgsCore:
 
             if result['available']:
                 result['message'] = f"{parameter.capitalize()} data available for site {site_id}"
-                logger.info(result['message'])
+                logger.debug(result['message'])
             else:
                 result['message'] = f"No {parameter} data available for site {site_id} in specified period"
                 logger.warning(result['message'])

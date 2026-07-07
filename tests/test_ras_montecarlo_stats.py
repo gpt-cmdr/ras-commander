@@ -17,6 +17,7 @@ statistics paths run entirely in memory.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -257,6 +258,96 @@ def test_c2_override_allows_low_valid_fraction(tmp_path, patch_full_domain):
     )
     assert out["n_samples_used"] == 4
     assert out["status_accounting"]["valid_fraction"] == pytest.approx(0.4)
+
+
+def test_c2_missing_hdf_warning_is_summarized(
+    tmp_path,
+    patch_full_domain,
+    caplog,
+):
+    ens = _make_ensemble(["completed", "completed"], tmp_path=tmp_path)
+    missing_path = Path(ens["results_df"].loc[1, "hdf_path"])
+    missing_path.unlink()
+
+    with caplog.at_level(logging.DEBUG, logger="ras_commander.RasMonteCarlo"):
+        out = RasMonteCarlo.exceedance_probabilities(
+            ens,
+            variable="wse",
+            min_valid_fraction=0.0,
+        )
+
+    warning_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+    ]
+    debug_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.DEBUG
+    ]
+
+    assert out["n_samples_used"] == 1
+    assert warning_messages == [
+        "Dropping 1 sample(s) with missing HDF files during wse statistics: "
+        "sample_ids=2. Enable DEBUG logging for paths."
+    ]
+    assert any(
+        "sample 2" in message and str(missing_path) in message
+        for message in debug_messages
+    )
+
+
+def test_c2_extraction_error_warning_is_summarized(
+    tmp_path,
+    monkeypatch,
+    caplog,
+):
+    ens = _make_ensemble(["completed", "completed"], tmp_path=tmp_path)
+    failed_path = Path(ens["results_df"].loc[1, "hdf_path"])
+    meta = pd.DataFrame({"mesh_name": ["m"] * 4, "cell_id": [0, 1, 2, 3]})
+
+    def fake_extract(hdf_path, variable, ras_object=None):
+        if Path(hdf_path) == failed_path:
+            raise RuntimeError("bad sample HDF")
+        return meta.copy(), np.array([100.0, 101.0, 102.0, 103.0])
+
+    monkeypatch.setattr(
+        RasMonteCarlo,
+        "_extract_full_domain_values",
+        staticmethod(fake_extract),
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="ras_commander.RasMonteCarlo"):
+        out = RasMonteCarlo.exceedance_probabilities(
+            ens,
+            variable="wse",
+            min_valid_fraction=0.0,
+        )
+
+    warning_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+    ]
+    debug_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.DEBUG
+    ]
+
+    assert out["n_samples_used"] == 1
+    assert warning_messages == [
+        "Dropping 1 sample(s) during wse extraction: sample_ids=2; "
+        "first error: bad sample HDF. Enable DEBUG logging for per-sample "
+        "details."
+    ]
+    assert any(
+        "sample 2" in message
+        and str(failed_path) in message
+        and "bad sample HDF" in message
+        for message in debug_messages
+    )
 
 
 def test_c2_default_min_valid_fraction_value():

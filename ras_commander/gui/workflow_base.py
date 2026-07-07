@@ -96,7 +96,7 @@ class WorkflowExecutor:
 
         for i, step in enumerate(steps, 1):
             step_start = time.time()
-            logger.info(f"[{i}/{len(steps)}] {step.name}")
+            logger.debug(f"[{i}/{len(steps)}] {step.name}")
 
             step_success = False
             step_error = None
@@ -109,12 +109,12 @@ class WorkflowExecutor:
                     step_success = True
 
                     step_elapsed = time.time() - step_start
-                    logger.info(f"[{i}/{len(steps)}] {step.name} completed ({step_elapsed:.1f}s)")
+                    logger.debug(f"[{i}/{len(steps)}] {step.name} completed ({step_elapsed:.1f}s)")
                     break
 
                 except Exception as e:
                     step_error = e
-                    logger.warning(
+                    logger.debug(
                         f"[{i}/{len(steps)}] {step.name} failed (attempt {attempt}/{step.max_retries}): {e}"
                     )
 
@@ -124,7 +124,7 @@ class WorkflowExecutor:
                             try:
                                 step.recovery(context)
                             except Exception as re:
-                                logger.warning(f"Recovery for '{step.name}' failed: {re}")
+                                logger.debug(f"Recovery for '{step.name}' failed: {re}")
 
                         time.sleep(step.retry_delay)
 

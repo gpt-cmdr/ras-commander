@@ -7,6 +7,7 @@ and writes HEC-RAS-compatible horizontal variation blocks.
 """
 
 from pathlib import Path
+from collections import Counter
 from collections.abc import Iterable as IterableABC, Mapping as MappingABC
 import math
 import re
@@ -220,6 +221,12 @@ class ManningsFromLandCover:
             ]
 
         rows = []
+        skipped = Counter()
+
+        def _record_skip(reason: str, detail: str) -> None:
+            skipped[reason] += 1
+            logger.debug("Skipping cross section during Manning's n preview: %s", detail)
+
         with rasterio.open(raster_path) as src:
             regions = []
             regions.extend(
@@ -261,11 +268,17 @@ class ManningsFromLandCover:
                         rs,
                     )
                 except ValueError as exc:
-                    logger.warning(f"Skipping {river}/{reach}/RS {rs}: {exc}")
+                    _record_skip(
+                        "station_elevation_error",
+                        f"{river}/{reach}/RS {rs}: {exc}",
+                    )
                     continue
 
                 if sta_elev.empty:
-                    logger.warning(f"Skipping {river}/{reach}/RS {rs}: empty station/elevation data")
+                    _record_skip(
+                        "empty_station_elevation",
+                        f"{river}/{reach}/RS {rs}: empty station/elevation data",
+                    )
                     continue
 
                 banks = GeomCrossSection.get_bank_stations(
@@ -283,7 +296,10 @@ class ManningsFromLandCover:
                     regions,
                 )
                 if samples.empty:
-                    logger.warning(f"Skipping {river}/{reach}/RS {rs}: no valid land-cover samples")
+                    _record_skip(
+                        "no_valid_land_cover_samples",
+                        f"{river}/{reach}/RS {rs}: no valid land-cover samples",
+                    )
                     continue
 
                 blocks, raw_block_count = ManningsFromLandCover._samples_to_blocks(
@@ -309,6 +325,17 @@ class ManningsFromLandCover:
                         "sources": ",".join(sorted(block["sources"])),
                         "merged_count": block["merged_count"],
                     })
+
+        if skipped:
+            summary = ", ".join(
+                f"{reason}={count}" for reason, count in sorted(skipped.items())
+            )
+            logger.warning(
+                "Skipped %d cross section(s) during Manning's n preview for %s (%s)",
+                sum(skipped.values()),
+                geometry_path.name,
+                summary,
+            )
 
         if not rows:
             return pd.DataFrame(columns=ManningsFromLandCover._PREVIEW_COLUMNS)
