@@ -240,6 +240,7 @@ terminal-logs/
 /agent_tasks/plans
 
 # --- working scratch / large data (do not commit) ---
+/.tmp/
 examples/data/
 /2026 Progress Update/
 agent_tasks/session_state_*.md
