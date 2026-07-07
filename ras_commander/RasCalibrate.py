@@ -869,6 +869,7 @@ def _evaluate_points(
 ) -> Tuple[List[dict], float]:
     point_results: List[dict] = []
     objectives: List[float] = []
+    failed_points: List[str] = []
 
     for point in calibration_points:
         result = {
@@ -899,14 +900,25 @@ def _evaluate_points(
                 objectives.append(float(objective))
         except Exception as exc:
             result["error"] = str(exc)
-            logger.warning(
-                "Calibration point '%s' failed for %s: %s",
+            failed_points.append(point.name)
+            logger.debug(
+                "Calibration point '%s' failed while scoring %s: %s",
                 point.name,
                 plan_hdf,
                 exc,
+                exc_info=True,
             )
 
         point_results.append(result)
+
+    if failed_points:
+        logger.warning(
+            "Calibration scoring failed for %d of %d point(s) in %s; "
+            "see point_results errors or enable DEBUG logging for details.",
+            len(failed_points),
+            len(calibration_points),
+            Path(plan_hdf).name,
+        )
 
     overall_objective = _aggregate_objectives(objectives, metric)
     return point_results, overall_objective
@@ -2074,10 +2086,13 @@ class RasCalibrate:
         )
 
         if method_name == "Nelder-Mead":
-            logger.warning(
+            logger.debug(
                 "SciPy's Nelder-Mead bound handling varies by version; "
                 "midpoint initialization stays inside the requested bounds, "
-                "but strict bound enforcement depends on SciPy."
+                "but strict bound enforcement depends on SciPy. Use "
+                "method='l-bfgs-b' or method='slsqp' when strict bound "
+                "handling is required, and inspect iteration_history for "
+                "evaluated candidate values."
             )
 
         iteration_history: List[dict] = []
@@ -2113,9 +2128,15 @@ class RasCalibrate:
                 optimization_value = penalty
                 success = False
                 logger.warning(
+                    "Optimization iteration failed; penalty applied. "
+                    "Enable DEBUG logging for parameter values and "
+                    "exception details."
+                )
+                logger.debug(
                     "Optimization iteration failed for parameters %s: %s",
                     parameter_values,
                     exc,
+                    exc_info=True,
                 )
 
             history_row = {

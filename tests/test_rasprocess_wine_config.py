@@ -1,4 +1,5 @@
 from importlib import import_module
+import logging
 import subprocess
 
 import pytest
@@ -6,6 +7,7 @@ import pytest
 
 ras_process_module = import_module("ras_commander.RasProcess")
 RasProcess = ras_process_module.RasProcess
+LOGGER_NAME = "ras_commander.RasProcess"
 
 
 @pytest.fixture(autouse=True)
@@ -19,6 +21,35 @@ def _make_wine_prefix(tmp_path):
     prefix = tmp_path / "wineprefix"
     (prefix / "drive_c").mkdir(parents=True)
     return prefix
+
+
+def _messages(caplog, level):
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == LOGGER_NAME and record.levelno == level
+    ]
+
+
+def test_configure_wine_info_is_concise_and_debug_keeps_paths(tmp_path, caplog):
+    prefix = _make_wine_prefix(tmp_path)
+    ras_dir = prefix / "drive_c" / "HEC-RAS"
+    ras_dir.mkdir()
+    wine_executable = "wine64"
+
+    with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
+        RasProcess.configure_wine(
+            wine_prefix=prefix,
+            wine_executable=wine_executable,
+            ras_install_dir=ras_dir,
+        )
+
+    info_messages = _messages(caplog, logging.INFO)
+    assert info_messages == [
+        f"Wine configured for RasProcess: executable={wine_executable}, ras_dir=configured"
+    ]
+    assert not any(str(prefix) in message for message in info_messages)
+    assert any(str(prefix) in message for message in _messages(caplog, logging.DEBUG))
 
 
 def test_linux_to_wine_path_uses_winepath_for_wine64(

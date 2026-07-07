@@ -1455,6 +1455,17 @@ class RasMonteCarlo:
             )
 
     @staticmethod
+    def _format_sample_ids(sample_ids: List[int], max_ids: int = 12) -> str:
+        """Format sample IDs for concise warning messages."""
+        if not sample_ids:
+            return "none"
+
+        visible_ids = [str(int(sample_id)) for sample_id in sample_ids[:max_ids]]
+        if len(sample_ids) > max_ids:
+            visible_ids.append(f"... (+{len(sample_ids) - max_ids} more)")
+        return ", ".join(visible_ids)
+
+    @staticmethod
     def _collect_ensemble_values(
         ensemble_result: dict,
         variable: str,
@@ -1502,6 +1513,7 @@ class RasMonteCarlo:
         dropped_missing_hdf: List[int] = []
         dropped_extraction_error: List[int] = []
         rescued_finalization_race: List[int] = []
+        extraction_error_messages: List[str] = []
 
         if points_of_interest is not None:
             point_metadata = RasMonteCarlo._coerce_points(points_of_interest)
@@ -1511,7 +1523,7 @@ class RasMonteCarlo:
             hdf_path = Path(str(row["hdf_path"]))
 
             if not hdf_path.exists():
-                logger.warning(
+                logger.debug(
                     "Dropping sample %s because HDF file does not exist: %s",
                     sample_id,
                     hdf_path,
@@ -1558,13 +1570,35 @@ class RasMonteCarlo:
                 sample_weights.append(float(sample_weight))
 
             except Exception as exc:
-                logger.warning(
-                    "Dropping sample %s during %s extraction: %s",
+                logger.debug(
+                    "Dropping sample %s during %s extraction from %s: %s",
                     sample_id,
                     variable,
+                    hdf_path,
                     exc,
+                    exc_info=True,
                 )
                 dropped_extraction_error.append(sample_id)
+                extraction_error_messages.append(str(exc))
+
+        if dropped_missing_hdf:
+            logger.warning(
+                "Dropping %d sample(s) with missing HDF files during %s "
+                "statistics: sample_ids=%s. Enable DEBUG logging for paths.",
+                len(dropped_missing_hdf),
+                variable,
+                RasMonteCarlo._format_sample_ids(dropped_missing_hdf),
+            )
+
+        if dropped_extraction_error:
+            logger.warning(
+                "Dropping %d sample(s) during %s extraction: sample_ids=%s; "
+                "first error: %s. Enable DEBUG logging for per-sample details.",
+                len(dropped_extraction_error),
+                variable,
+                RasMonteCarlo._format_sample_ids(dropped_extraction_error),
+                extraction_error_messages[0] if extraction_error_messages else "unknown",
+            )
 
         # Finalization-race rescue. run_ensemble records each sample's status
         # from an in-flight snapshot taken right after compute. A sample whose

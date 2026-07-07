@@ -441,10 +441,10 @@ class RasBreach:
                     'station': loc.station,
                     'is_active': loc.is_active
                 })
-            logger.info(f"Found {len(locations)} breach structures in {plan_path.name}")
+            logger.debug("Found %s breach structures in %s", len(locations), plan_path.name)
             return locations
-        except Exception as e:
-            logger.error(f"Error listing breach structures: {e}")
+        except Exception:
+            logger.debug("Error listing breach structures", exc_info=True)
             raise
 
     @staticmethod
@@ -531,8 +531,8 @@ class RasBreach:
             logger.debug(f"Read breach block for {structure_name} from {plan_path.name}")
             return block.to_dict()
 
-        except Exception as e:
-            logger.error(f"Error reading breach block: {e}")
+        except Exception:
+            logger.debug("Error reading breach block", exc_info=True)
             raise
 
     @staticmethod
@@ -798,8 +798,8 @@ class RasBreach:
             logger.debug(f"Updated breach block for {structure_name} in {plan_path.name}")
             return block.to_dict()
 
-        except Exception as e:
-            logger.error(f"Error updating breach block: {e}")
+        except Exception:
+            logger.debug("Error updating breach block", exc_info=True)
             raise
 
     @staticmethod
@@ -940,10 +940,19 @@ class RasBreach:
                           'active', 'weir_coef', 'top_elev', 'formation_method', 'formation_time']
             for idx, (old, new, name) in enumerate(zip(current_geom, new_geom, field_names)):
                 if str(old) != str(new):
-                    changes.append(f"{name}: {old} → {new}")
+                    changes.append(f"{name}: {old} -> {new}")
 
             if changes:
-                logger.info(f"Modifying breach geometry for {structure_name}: {', '.join(changes)}")
+                logger.info(
+                    "Updating breach geometry for '%s' (%s field changes)",
+                    structure_name,
+                    len(changes),
+                )
+                logger.debug(
+                    "Breach geometry changes for '%s': %s",
+                    structure_name,
+                    "; ".join(changes),
+                )
             else:
                 logger.warning(f"No changes specified for {structure_name}")
 
@@ -955,8 +964,8 @@ class RasBreach:
                 ras_object=ras_object
             )
 
-        except Exception as e:
-            logger.error(f"Error setting breach geometry: {e}")
+        except Exception:
+            logger.debug("Error setting breach geometry", exc_info=True)
             raise
 
     @staticmethod
@@ -1157,8 +1166,8 @@ class RasBreach:
 
             return created_block.to_dict()
 
-        except Exception as e:
-            logger.error(f"Error creating breach block: {e}")
+        except Exception:
+            logger.debug("Error creating breach block", exc_info=True)
             raise
 
     # ==========================================================================
@@ -1404,7 +1413,7 @@ class RasBreach:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = plan_path.parent / f"{plan_path.stem}_backup_{timestamp}{plan_path.suffix}"
         backup_path.write_text(plan_path.read_text())
-        logger.info(f"Created backup: {backup_path.name}")
+        logger.debug("Created backup: %s", backup_path.name)
 
     @staticmethod
     def _validate_crlf(plan_path: Path) -> bool:

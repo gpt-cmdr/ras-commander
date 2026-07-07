@@ -942,7 +942,7 @@ class GeomStorage:
         backup_path = None
         if create_backup:
             backup_path = GeomParser.create_backup(geom_file)
-            logger.info(f"Created backup: {backup_path}")
+            logger.debug(f"Created backup: {backup_path}")
 
         try:
             with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
@@ -1309,7 +1309,7 @@ class GeomStorage:
         backup_path = None
         if create_backup:
             backup_path = GeomParser.create_backup(geom_file)
-            logger.info(f"Created backup: {backup_path}")
+            logger.debug(f"Created backup: {backup_path}")
 
         existing_block = GeomStorage._find_storage_area_block(lines, flow_area_name)
 
@@ -1458,7 +1458,7 @@ class GeomStorage:
         }
 
         if all(value is None for value in updates.values()):
-            logger.info("No 2D flow area settings changes requested")
+            logger.debug("No 2D flow area settings changes requested")
             return geom_file
 
         with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
@@ -1535,7 +1535,7 @@ class GeomStorage:
         backup_path = None
         if create_backup:
             backup_path = GeomParser.create_backup(geom_file)
-            logger.info(f"Created backup: {backup_path}")
+            logger.debug(f"Created backup: {backup_path}")
 
         new_lines = lines[:start_idx] + updated_block_lines + lines[end_idx:]
         with open(geom_file, 'w', encoding='utf-8') as f:
@@ -1659,7 +1659,7 @@ class GeomStorage:
         backup_path = None
         if create_backup:
             backup_path = GeomParser.create_backup(geom_file)
-            logger.info(f"Created backup: {backup_path}")
+            logger.debug(f"Created backup: {backup_path}")
 
         new_lines = lines[:insert_idx] + new_blocks + lines[insert_idx:]
         with open(geom_file, 'w', encoding='utf-8') as f:

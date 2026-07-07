@@ -3,6 +3,7 @@ Tests for GeomBridge.get_bridge_opening_xs() — the 1D bridge inside-opening
 cross-section accessor (CLB-487).
 """
 
+import logging
 import re
 import sys
 from pathlib import Path
@@ -138,6 +139,31 @@ class TestBridgeOpeningXsWithExplicitData:
         assert xs_up["Source"].iloc[0] == "bridge_block"
         assert len(xs_up) == 6
         assert xs_up["Elevation"].min() == pytest.approx(101.0)
+
+    def test_success_summary_logs_debug_not_info(self, tmp_path, caplog):
+        geom_file = _write_fixture(tmp_path, BRIDGE_FIXTURE_WITH_BR_XS)
+
+        with caplog.at_level(logging.DEBUG, logger="ras_commander.geom.GeomBridge"):
+            GeomBridge.get_bridge_opening_xs(
+                geom_file, "TestRiver", "TestReach", "10.0", section="upstream"
+            )
+
+        messages_by_level = [
+            (record.levelno, record.name, record.getMessage())
+            for record in caplog.records
+        ]
+        assert not any(
+            level == logging.INFO
+            and name == "ras_commander.geom.GeomBridge"
+            and "bridge opening XS" in message
+            for level, name, message in messages_by_level
+        )
+        assert any(
+            level == logging.DEBUG
+            and name == "ras_commander.geom.GeomBridge"
+            and "Extracted upstream bridge opening XS" in message
+            for level, name, message in messages_by_level
+        )
 
 
 class TestBridgeOpeningXsFallback:

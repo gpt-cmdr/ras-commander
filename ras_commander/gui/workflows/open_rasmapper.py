@@ -81,7 +81,7 @@ class OpenRasMapperWorkflow:
         # Try menu path first (robust across versions)
         if not HecRasElements.click_menu_by_path(hec_ras_hwnd, ["&GIS Tools", "RAS &Mapper"]):
             # Fallback: Try keyboard shortcut Alt+G, M
-            logger.info("Menu path not found, trying keyboard shortcut...")
+            logger.debug("Menu path not found, trying keyboard shortcut...")
             try:
                 win32gui.SetForegroundWindow(hec_ras_hwnd)
                 time.sleep(0.2)
@@ -100,27 +100,27 @@ class OpenRasMapperWorkflow:
                 win32api.keybd_event(ord('M'), 0, 0, 0)
                 time.sleep(0.05)
                 win32api.keybd_event(ord('M'), 0, Win32Constants.KEYEVENTF_KEYUP, 0)
-                logger.info("Sent keyboard shortcut Alt+G, M")
+                logger.debug("Sent keyboard shortcut Alt+G, M")
             except Exception as e:
-                logger.warning(f"Keyboard shortcut failed: {e}")
-                logger.info("User must manually click GIS Tools > RAS Mapper")
+                logger.warning("User must manually click GIS Tools > RAS Mapper")
+                logger.debug("RASMapper keyboard shortcut failed: %s", e)
 
         # Step 3: Wait for RASMapper window
-        logger.info(f"Waiting for RASMapper window (up to {timeout} seconds)...")
-        logger.info("Note: Large projects may take several minutes to load...")
+        logger.debug(f"Waiting for RASMapper window (up to {timeout} seconds)...")
+        logger.debug("Large projects may take several minutes to load")
 
         rasmapper_result = RasMapperElements.wait_for_rasmapper(
             timeout=timeout, check_interval=3
         )
 
         if not rasmapper_result:
-            logger.info("User may need to manually open RASMapper via GIS Tools menu")
+            logger.warning("RASMapper window did not open automatically")
             if not wait_for_user:
                 return False
 
         # Step 4: Wait for user or return
         if wait_for_user:
-            logger.info("Waiting for user to close RASMapper...")
+            logger.debug("Waiting for user to close RASMapper...")
 
             while True:
                 time.sleep(2)
@@ -129,7 +129,7 @@ class OpenRasMapperWorkflow:
                     break
 
             # Close HEC-RAS
-            logger.info("Closing HEC-RAS...")
+            logger.debug("Closing HEC-RAS...")
             try:
                 win32gui.PostMessage(hec_ras_hwnd, win32con.WM_CLOSE, 0, 0)
             except:
@@ -138,9 +138,9 @@ class OpenRasMapperWorkflow:
                 hecras_process.wait(timeout=10)
             except:
                 pass
-            logger.info("HEC-RAS closed")
+            logger.debug("HEC-RAS closed")
         else:
             logger.info("Returning without waiting for RASMapper to close")
-            logger.info(f"HEC-RAS process ID: {hecras_process.pid}")
+            logger.debug(f"HEC-RAS process ID: {hecras_process.pid}")
 
         return True

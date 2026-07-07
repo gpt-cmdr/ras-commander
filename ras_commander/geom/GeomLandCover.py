@@ -477,6 +477,7 @@ class GeomLandCover:
 
         base_table_rows = []
         table_number = None
+        parse_errors = []
 
         # Read the geometry file
         with open(geom_file_path, 'r', encoding='utf-8', errors='replace') as f:
@@ -525,9 +526,20 @@ class GeomLandCover:
                 try:
                     base_table_rows.append([table_number, name, float(value)])
                 except ValueError:
-                    # Log the error and continue
-                    logger.warning(f"Error parsing line: {line}")
+                    parse_errors.append(line)
+                    logger.debug(
+                        "Malformed base Manning's n line skipped in %s: %s",
+                        geom_file_path.name,
+                        line,
+                    )
                     continue
+
+        if parse_errors:
+            logger.warning(
+                "Skipped %d malformed base Manning's n line(s) in %s",
+                len(parse_errors),
+                geom_file_path.name,
+            )
 
         # Create DataFrame
         # Note: Column uses "Mannings" (no apostrophe) for simplicity in DataFrame operations,
@@ -763,6 +775,7 @@ class GeomLandCover:
         region_rows = []
         current_region = None
         current_table = None
+        parse_errors = []
 
         # Read the geometry file
         with open(geom_file_path, 'r', encoding='utf-8', errors='replace') as f:
@@ -803,9 +816,20 @@ class GeomLandCover:
                 try:
                     region_rows.append([current_table, name, float(value), current_region])
                 except ValueError:
-                    # Log the error and continue
-                    logger.warning(f"Error parsing line: {line}")
+                    parse_errors.append(line)
+                    logger.debug(
+                        "Malformed regional Manning's n line skipped in %s: %s",
+                        geom_file_path.name,
+                        line,
+                    )
                     continue
+
+        if parse_errors:
+            logger.warning(
+                "Skipped %d malformed regional Manning's n line(s) in %s",
+                len(parse_errors),
+                geom_file_path.name,
+            )
 
         # Create DataFrame
         if region_rows:
@@ -1164,7 +1188,7 @@ class GeomLandCover:
                     mann[:, 1] = mannings_n
                     hf[mann_path][:] = mann
                     updated_count += 1
-                    logger.info(
+                    logger.debug(
                         f"Set Manning's n to {mannings_n} in {geom_hdf_path.name}/{area}"
                     )
                 else:

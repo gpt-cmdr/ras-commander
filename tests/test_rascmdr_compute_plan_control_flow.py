@@ -1,6 +1,7 @@
 """Focused control-flow regression tests for ``RasCmdr.compute_plan()``."""
 
 import importlib
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -27,6 +28,7 @@ class _DummyRas:
         self.geom_df = None
         self.flow_df = None
         self.unsteady_df = None
+        self.results_df = None
 
     def check_initialized(self):
         if self.init_exception is not None:
@@ -47,6 +49,9 @@ class _DummyRas:
     def get_unsteady_entries(self):
         self.refresh_calls.append("unsteady")
         return "unsteady_df"
+
+    def update_results_df(self, plan_numbers=None):
+        self.refresh_calls.append(("results", plan_numbers))
 
 
 def test_compute_plan_returns_failed_result_for_regular_exception():
@@ -203,6 +208,89 @@ def test_windows_path_to_wsl_decodes_utf8(monkeypatch):
     assert calls[0][0] == ["wsl", "wslpath", "-a", "C:/model-\xe9"]
     assert calls[0][1]["text"] is True
     assert calls[0][1]["encoding"] == "utf-8"
+
+
+def test_log_execution_results_uses_concise_info(caplog):
+    with caplog.at_level(logging.DEBUG, logger="ras_commander.RasCmdr"):
+        RasCmdr._log_execution_results({"01": True, "02": False})
+
+    info_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.INFO
+        and record.name == "ras_commander.RasCmdr"
+    ]
+    warning_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+        and record.name == "ras_commander.RasCmdr"
+    ]
+    debug_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.DEBUG
+        and record.name == "ras_commander.RasCmdr"
+    ]
+
+    assert info_messages == ["Execution results: 1/2 plan(s) successful"]
+    assert warning_messages == ["Failed plan(s): 02"]
+    assert "Plan 01: Successful" in debug_messages
+    assert "Plan 02: Failed" in debug_messages
+
+
+def test_compute_plan_success_logging_is_concise(monkeypatch, caplog):
+    ras_obj = _DummyRas()
+    plan_path = Path(ras_obj.project_folder) / "test.p01"
+    rascurrency_module = importlib.import_module("ras_commander.RasCurrency")
+
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda plan_number, ras_object: plan_path),
+    )
+    monkeypatch.setattr(
+        rascurrency_module.RasCurrency,
+        "are_plan_results_current",
+        staticmethod(lambda plan_number, ras_object: (False, "stale results")),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda plan_path: None),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="", stderr=""),
+    )
+    with caplog.at_level(logging.DEBUG, logger="ras_commander.RasCmdr"):
+        result = RasCmdr.compute_plan(
+            "01",
+            ras_object=ras_obj,
+            dialog_watchdog=False,
+        )
+
+    info_text = "\n".join(
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.INFO
+        and record.name == "ras_commander.RasCmdr"
+    )
+    debug_text = "\n".join(
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.DEBUG
+        and record.name == "ras_commander.RasCmdr"
+    )
+
+    assert result.success is True
+    assert "HEC-RAS execution completed for plan 01 in" in info_text
+    assert "seconds" in info_text
+    assert "Total run time for plan 01" not in info_text
+    assert str(plan_path) not in info_text
+    assert "Running command:" in debug_text
+    assert str(plan_path) in debug_text
 
 
 def test_wsl_linux_retry_script_uses_utf8_and_cleans_io_tmp(monkeypatch, tmp_path):

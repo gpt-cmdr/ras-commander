@@ -1,3 +1,5 @@
+from importlib import import_module
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -7,9 +9,11 @@ import pytest
 rasterio = pytest.importorskip("rasterio")
 pytest.importorskip("geopandas")
 from rasterio.transform import from_origin
-from shapely.geometry import box
+from shapely.geometry import LineString, box
 
 from ras_commander.geom import GeomCrossSection, ManningsFromLandCover
+
+mflc_module = import_module("ras_commander.geom.ManningsFromLandCover")
 
 
 def _format_values(values):
@@ -165,3 +169,64 @@ def test_geometry_calibration_region_overrides_land_cover_region(tmp_path):
     assert np.isclose(preview.iloc[0]["n_value"], 0.040)
     assert np.isclose(preview.iloc[-1]["n_value"], 0.120)
     assert "geometry:" in preview.iloc[-1]["sources"]
+
+
+def test_preview_aggregates_skipped_cross_section_logging(tmp_path, monkeypatch, caplog):
+    geom_file = _write_geom(tmp_path, multi_reach=True)
+    raster = _write_raster(tmp_path, np.full((10, 10), 71, dtype=np.uint8))
+    cut_lines = pd.DataFrame(
+        [
+            {
+                "river": "TestRiver",
+                "reach": "ReachA",
+                "station": "1000",
+                "geometry": LineString([(0.0, 5.0), (9.0, 5.0)]),
+            },
+            {
+                "river": "TestRiver",
+                "reach": "ReachB",
+                "station": "2000",
+                "geometry": LineString([(0.0, 15.0), (9.0, 15.0)]),
+            },
+        ]
+    )
+
+    monkeypatch.setattr(
+        mflc_module.GeomParser,
+        "get_xs_cut_lines",
+        staticmethod(lambda geometry_path: cut_lines),
+    )
+    monkeypatch.setattr(
+        GeomCrossSection,
+        "get_station_elevation",
+        staticmethod(
+            lambda geometry_path, river, reach, rs: (_ for _ in ()).throw(
+                ValueError("missing #Sta/Elev block")
+            )
+        ),
+    )
+
+    with caplog.at_level(
+        logging.DEBUG,
+        logger="ras_commander.geom.ManningsFromLandCover",
+    ):
+        preview = ManningsFromLandCover.preview(geom_file, raster)
+
+    assert preview.empty
+    records = [
+        record
+        for record in caplog.records
+        if record.name == "ras_commander.geom.ManningsFromLandCover"
+    ]
+    warning_messages = [
+        record.getMessage() for record in records if record.levelno == logging.WARNING
+    ]
+    debug_messages = [
+        record.getMessage() for record in records if record.levelno == logging.DEBUG
+    ]
+
+    assert warning_messages == [
+        "Skipped 2 cross section(s) during Manning's n preview for "
+        "landcover.g01 (station_elevation_error=2)"
+    ]
+    assert sum("Skipping cross section during Manning's n preview" in message for message in debug_messages) == 2

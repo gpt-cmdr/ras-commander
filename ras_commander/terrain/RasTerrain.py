@@ -1808,7 +1808,8 @@ class RasTerrain:
 
         # Write PRJ file
         output_prj.write_text(prj_wkt, encoding='utf-8')
-        logger.info(f"Created projection file: {output_prj}")
+        logger.info(f"Projection file created: {output_prj.name}")
+        logger.debug(f"Projection file path: {output_prj}")
 
         return output_prj
 
@@ -1922,7 +1923,7 @@ class RasTerrain:
         # Remove existing output if present
         if output_hdf.exists():
             output_hdf.unlink()
-            logger.info(f"Removed existing terrain HDF: {output_hdf}")
+            logger.debug(f"Removed existing terrain HDF before creation: {output_hdf}")
 
         # Build command arguments. Passing a list handles spaces in paths
         # without involving the shell.
@@ -1938,7 +1939,7 @@ class RasTerrain:
         ] + [str(raster) for raster in input_rasters]
         env = RasTerrain._build_hecras_terrain_env(hecras_path)
 
-        logger.info(f"Executing terrain creation command...")
+        logger.debug("Running RasProcess.exe CreateTerrain")
         logger.debug(f"Command: {subprocess.list2cmdline(cmd)}")
 
         # Execute command
@@ -1958,7 +1959,14 @@ class RasTerrain:
                 logger.debug(f"STDOUT: {result.stdout}")
 
             if result.stderr:
-                logger.warning(f"STDERR: {result.stderr}")
+                if result.returncode == 0:
+                    logger.warning(
+                        "RasProcess.exe CreateTerrain completed with stderr; "
+                        "enable DEBUG logging for details."
+                    )
+                    logger.debug(f"STDERR: {result.stderr}")
+                else:
+                    logger.debug(f"STDERR: {result.stderr}")
 
         except subprocess.TimeoutExpired:
             raise RuntimeError(
@@ -1985,9 +1993,13 @@ class RasTerrain:
         # Log success
         file_size = output_hdf.stat().st_size
         logger.info(
-            f"Terrain HDF created successfully: {output_hdf} "
-            f"({file_size:,} bytes, {file_size/1024/1024:.2f} MB, "
+            f"Terrain HDF created: {output_hdf.name} "
+            f"({file_size/1024/1024:.2f} MB, "
             f"{validation['datasets']} datasets)"
+        )
+        logger.debug(
+            f"Terrain HDF output path: {output_hdf} "
+            f"({file_size:,} bytes)"
         )
 
         return output_hdf
@@ -2072,7 +2084,9 @@ class RasTerrain:
 
         cmd.extend([str(vrt_path), str(output_path)])
 
-        logger.info(f"Converting VRT to TIFF: {vrt_path} -> {output_path}")
+        logger.info(f"Converting VRT to TIFF: {vrt_path.name} -> {output_path.name}")
+        logger.debug(f"VRT to TIFF input path: {vrt_path}")
+        logger.debug(f"VRT to TIFF output path: {output_path}")
         logger.debug(f"Command: {' '.join(cmd)}")
 
         # Execute gdal_translate
@@ -2106,7 +2120,7 @@ class RasTerrain:
                 f"TIFF creation failed - output file not created: {output_path}"
             )
 
-        logger.info(f"TIFF created: {output_path}")
+        logger.debug(f"TIFF created: {output_path}")
 
         # Add overviews if requested
         if create_overviews:
@@ -2130,9 +2144,11 @@ class RasTerrain:
 
                 if result.returncode != 0:
                     logger.warning(
-                        f"gdaladdo failed with code {result.returncode}. "
-                        f"STDERR: {result.stderr}. Continuing without overviews."
+                        f"gdaladdo failed with code {result.returncode}; "
+                        "continuing without overviews. Enable DEBUG logging for details."
                     )
+                    if result.stderr:
+                        logger.debug(f"gdaladdo STDERR: {result.stderr}")
                 else:
                     logger.info("Pyramid overviews added successfully")
 
@@ -2146,8 +2162,12 @@ class RasTerrain:
         # Log final file info
         file_size = output_path.stat().st_size
         logger.info(
-            f"VRT to TIFF conversion complete: {output_path} "
-            f"({file_size:,} bytes, {file_size/1024/1024:.2f} MB)"
+            f"VRT to TIFF conversion complete: {output_path.name} "
+            f"({file_size/1024/1024:.2f} MB)"
+        )
+        logger.debug(
+            f"VRT to TIFF output path: {output_path} "
+            f"({file_size:,} bytes)"
         )
 
         return output_path

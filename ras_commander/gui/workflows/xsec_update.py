@@ -259,7 +259,8 @@ class RasMapperLayerCommandWorkflow:
             try:
                 RasMapperLayerCommandWorkflow._step_close(context)
             except Exception as exc:
-                logger.warning("Cleanup close step failed: %s", exc)
+                logger.warning("Cleanup close step failed")
+                logger.debug("Cleanup close step failure: %s", exc)
 
     @staticmethod
     def available_commands() -> Iterable[str]:
@@ -510,7 +511,7 @@ class RasMapperLayerCommandWorkflow:
         try:
             import psutil
         except ImportError:
-            logger.warning("psutil unavailable; skipping HEC-RAS closed preflight")
+            logger.debug("psutil unavailable; skipping HEC-RAS closed preflight")
             return
 
         running = []
@@ -550,7 +551,7 @@ class RasMapperLayerCommandWorkflow:
         time.sleep(0.5)
 
         if not HecRasElements.click_menu_by_path(hwnd, ["&GIS Tools", "RAS &Mapper"]):
-            logger.info("Trying keyboard shortcut Alt+G, M...")
+            logger.debug("Trying keyboard shortcut Alt+G, M...")
             Win32Primitives.send_keyboard_shortcut(hwnd, Win32Constants.VK_MENU, ord("G"))
             time.sleep(0.3)
             win32api.keybd_event(ord("M"), 0, 0, 0)
@@ -630,7 +631,7 @@ class RasMapperLayerCommandWorkflow:
                 "Could not start RASMapper edit mode for tree node: "
                 + " > ".join(context["target_path"])
             )
-        logger.info("Started RASMapper geometry edit mode")
+        logger.debug("Started RASMapper geometry edit mode")
         time.sleep(1.0)
 
     @staticmethod
@@ -696,7 +697,7 @@ class RasMapperLayerCommandWorkflow:
         win32api.keybd_event(ord("S"), 0, Win32Constants.KEYEVENTF_KEYUP, 0)
         time.sleep(0.05)
         win32api.keybd_event(0x11, 0, Win32Constants.KEYEVENTF_KEYUP, 0)
-        logger.info("Sent Ctrl+S to RASMapper")
+        logger.debug("Sent Ctrl+S to RASMapper")
 
     @staticmethod
     def _step_close(context: dict) -> None:

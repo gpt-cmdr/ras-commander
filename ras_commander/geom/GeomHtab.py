@@ -210,7 +210,7 @@ class GeomHtab:
             try:
                 backup_path = GeomParser.create_backup(geom_file)
                 result['backup'] = backup_path
-                logger.info(f"Created unified backup: {backup_path}")
+                logger.debug(f"Created unified backup: {backup_path}")
             except Exception as e:
                 error_msg = f"Failed to create backup: {str(e)}"
                 logger.error(error_msg)
@@ -218,7 +218,7 @@ class GeomHtab:
                 raise IOError(error_msg)
 
         # Step 1: Optimize Cross Section HTAB
-        logger.info("Starting cross section HTAB optimization...")
+        logger.debug("Starting cross section HTAB optimization")
         try:
             xs_result = GeomHtab.optimize_xs_htab_from_results(
                 geom_file=geom_file,
@@ -230,7 +230,7 @@ class GeomHtab:
             )
             result['xs_modified'] = xs_result.get('modified', 0)
             result['xs_summary'] = xs_result
-            logger.info(f"Optimized {result['xs_modified']} cross sections")
+            logger.debug(f"Optimized {result['xs_modified']} cross sections")
         except Exception as e:
             error_msg = f"XS HTAB optimization failed: {str(e)}"
             logger.error(error_msg)
@@ -238,7 +238,7 @@ class GeomHtab:
             # Continue to try structure optimization even if XS fails
 
         # Step 2: Optimize Structure HTAB
-        logger.info("Starting structure HTAB optimization...")
+        logger.debug("Starting structure HTAB optimization")
         try:
             struct_result = GeomHtab.optimize_structures_htab_from_results(
                 geom_file=geom_file,
@@ -252,7 +252,7 @@ class GeomHtab:
             )
             result['structures_modified'] = struct_result.get('modified', 0)
             result['structure_summary'] = struct_result
-            logger.info(f"Optimized {result['structures_modified']} structures")
+            logger.debug(f"Optimized {result['structures_modified']} structures")
         except Exception as e:
             error_msg = f"Structure HTAB optimization failed: {str(e)}"
             logger.error(error_msg)

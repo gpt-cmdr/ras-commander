@@ -162,7 +162,8 @@ class RasTerrainMod:
                 logger.error(str(exc))
                 return False
 
-        logger.info("Configured HEC-RAS GDAL runtime from %s", ras_path / "GDAL")
+        logger.info("Configured HEC-RAS GDAL runtime for HEC-RAS %s", ras_path.name)
+        logger.debug("HEC-RAS GDAL runtime path: %s", ras_path / "GDAL")
         return True
 
     @staticmethod
@@ -194,8 +195,10 @@ class RasTerrainMod:
 
         # Load RasMapperLib.dll
         try:
-            clr.AddReference(str(ras_path / "RasMapperLib.dll"))
-            logger.info(f"RasMapperLib.dll loaded from {ras_path}")
+            dll_path = ras_path / "RasMapperLib.dll"
+            clr.AddReference(str(dll_path))
+            logger.info("RasMapperLib.dll loaded")
+            logger.debug("RasMapperLib.dll path: %s", dll_path)
         except Exception as e:
             raise RuntimeError(
                 f"Failed to load RasMapperLib.dll from {ras_path}: {e}"
@@ -779,6 +782,7 @@ class RasTerrainMod:
             with rasterio.open(output_tif_path, 'w', **out_meta) as dst:
                 dst.write(modified, 1)
 
-            logger.info(f"Modified terrain raster written to {output_tif_path}")
+            logger.info(f"Modified terrain raster written: {output_tif_path.name}")
+            logger.debug(f"Modified terrain raster output path: {output_tif_path}")
 
         return modified

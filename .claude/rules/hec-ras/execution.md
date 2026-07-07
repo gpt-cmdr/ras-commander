@@ -694,37 +694,43 @@ RasCmdr.compute_plan("01", force_geompre=True)
 
 **Manual override**: Not currently supported (flag always enabled)
 
+## HEC-RAS Path Resolution Logging
+
+Keep successful HEC-RAS version and executable resolution quiet at INFO:
+- INFO may confirm that a requested version was resolved, but should not print the full `Ras.exe` path.
+- DEBUG may include full executable paths, registry or program-file discovery sources, and candidate lists.
+- Explicit API return values may include full paths when the function contract requires them.
+- Errors must include enough diagnostic detail to debug path problems, including requested version, discovered versions, and relevant candidate paths.
+- Do not make docs build scripts or notebooks sanitize output after the fact. Fix library logging levels so generated docs stay faithful to real output.
+
 ## Post-Execution Protocol (Required)
 
 **After every compute operation, always:**
 
 ### 1. Enable Verbose Streaming During Execution
 
-Always pass `stream_callback` with verbose output — never run silent:
+Use streaming when it helps observe a live compute, but keep notebook and example defaults concise. Prefer concise progress and summaries in user-facing examples; reserve verbose callbacks and full path discovery traces for debugging sessions, CI artifacts, or explicit troubleshooting.
 
 ```python
-from ras_commander.callbacks import ConsoleCallback, FileLoggerCallback
+from ras_commander.callbacks import FileLoggerCallback
 
-# ✅ Standard: stream to console
-RasCmdr.compute_plan("01", stream_callback=ConsoleCallback(verbose=True))
+# Standard notebook/example pattern: concise output unless debugging
+RasCmdr.compute_plan("01")
 
-# ✅ Better for notebooks/CI: stream to file + console
+# Debugging or CI artifact pattern: stream detailed messages to a file
 RasCmdr.compute_plan("01", stream_callback=FileLoggerCallback("logs/plan_01.log", verbose=True))
-
-# ❌ Never run without a callback — silent failures are invisible
-RasCmdr.compute_plan("01")  # Don't do this
 ```
 
 ### 2. Read Compute Messages After Every Run
 
-Always call `get_compute_messages()` after execution and review the output:
+Always call `get_compute_messages()` after execution and review the output, but do not dump full successful logs in notebooks unless the example is specifically about compute-message parsing:
 
 ```python
 from ras_commander.hdf import HdfResultsPlan
 
 # Read messages (HDF primary, .computeMsgs.txt fallback, .comp_msgs.txt fallback)
 messages = HdfResultsPlan.get_compute_messages("01")
-print(messages)  # Always print — don't silently discard
+print(f"Compute message lines: {len(messages.splitlines())}")
 ```
 
 ### 3. Check for Warnings and Errors
@@ -766,12 +772,11 @@ Always summarize what was found in compute messages — even for successful runs
 ```python
 from ras_commander import init_ras_project, RasCmdr
 from ras_commander.hdf import HdfResultsPlan
-from ras_commander.callbacks import ConsoleCallback
 
 init_ras_project("/path/to/project", "7.0")
 
-# Execute with verbose streaming
-RasCmdr.compute_plan("01", stream_callback=ConsoleCallback(verbose=True))
+# Execute with concise default output
+RasCmdr.compute_plan("01")
 
 # Review messages
 messages = HdfResultsPlan.get_compute_messages("01")

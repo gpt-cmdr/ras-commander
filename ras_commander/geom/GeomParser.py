@@ -432,7 +432,7 @@ class GeomParser:
             # Copy file to backup
             import shutil
             shutil.copy2(file_path, backup_path)
-            logger.info(f"Created backup: {backup_path}")
+            logger.debug(f"Created backup: {backup_path}")
             return backup_path
 
         except Exception as e:
@@ -558,7 +558,7 @@ class GeomParser:
                 # Atomic rename
                 temp_path.rename(geom_file)
 
-            logger.info(f"Successfully wrote geometry file: {geom_file}")
+            logger.debug(f"Successfully wrote geometry file: {geom_file}")
             return backup_path
 
         except Exception as e:
@@ -735,7 +735,7 @@ class GeomParser:
         if not geom_file.exists():
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
-        logger.info(f"Extracting XS cut lines from: {geom_file}")
+        logger.debug(f"Extracting XS cut lines from: {geom_file}")
 
         with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
@@ -867,7 +867,7 @@ class GeomParser:
 
             i += 1
 
-        logger.info(f"Found {len(xs_list)} XS cut lines")
+        logger.debug(f"Found {len(xs_list)} XS cut lines")
         return gpd.GeoDataFrame(xs_list, geometry='geometry') if xs_list else gpd.GeoDataFrame(
             columns=['river', 'reach', 'station', 'geometry']
         )
@@ -915,7 +915,7 @@ class GeomParser:
         if not geom_file.exists():
             raise FileNotFoundError(f"Geometry file not found: {geom_file}")
 
-        logger.info(f"Extracting river centerlines from: {geom_file}")
+        logger.debug(f"Extracting river centerlines from: {geom_file}")
 
         with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
@@ -1029,7 +1029,7 @@ class GeomParser:
 
             i += 1
 
-        logger.info(f"Found {len(reaches)} river centerlines")
+        logger.debug(f"Found {len(reaches)} river centerlines")
         return gpd.GeoDataFrame(reaches, geometry='geometry') if reaches else gpd.GeoDataFrame(
             columns=['river', 'reach', 'geometry']
         )

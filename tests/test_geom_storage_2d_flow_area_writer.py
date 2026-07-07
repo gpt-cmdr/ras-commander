@@ -1,5 +1,6 @@
 """Focused tests for storage-area-backed 2D flow area writing in .g## files."""
 
+import logging
 import sys
 from pathlib import Path
 
@@ -185,6 +186,33 @@ def test_set_2d_flow_area_settings_updates_text_settings_without_resetting_mesh_
     assert row["laminar_depth"] == pytest.approx(0.65)
     assert row["min_face_length_ratio"] == pytest.approx(0.75)
     assert row["point_generation_data"] == ",,125,150"
+
+
+def test_set_2d_flow_area_settings_noop_logs_debug_not_info(tmp_path, caplog):
+    geom_file = _write_geom_file(
+        tmp_path,
+        [
+            "Geom Title=2D Writer Regression Test\n",
+            "Program Version=6.60\n",
+        ],
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="ras_commander.geom.GeomStorage"):
+        result = GeomStorage.set_2d_flow_area_settings(geom_file, "Configurable 2D")
+
+    assert result == geom_file
+    assert not [
+        record
+        for record in caplog.records
+        if record.levelno == logging.INFO
+        and record.name == "ras_commander.geom.GeomStorage"
+    ]
+    assert any(
+        record.levelno == logging.DEBUG
+        and record.name == "ras_commander.geom.GeomStorage"
+        and "No 2D flow area settings changes requested" in record.getMessage()
+        for record in caplog.records
+    )
 
 
 def test_unchanged_perimeter_preserves_header_and_mesh_points(tmp_path):

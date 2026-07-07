@@ -119,8 +119,9 @@ class Usgs3depAws:
 
         # Download if not cached
         if not cache_path.exists():
-            logger.info(f"Downloading {resolution}m tile index from AWS S3...")
-            logger.info(f"  URL: {url}")
+            logger.debug(f"Downloading {resolution}m USGS 3DEP tile index")
+            logger.debug(f"USGS 3DEP tile index URL: {url}")
+            logger.debug(f"USGS 3DEP tile index cache path: {cache_path}")
 
             response = requests.get(url, stream=True)
             response.raise_for_status()
@@ -130,13 +131,13 @@ class Usgs3depAws:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
 
-            logger.info(f"  Saved to: {cache_path}")
+            logger.debug(f"USGS 3DEP tile index saved to: {cache_path}")
         else:
-            logger.info(f"Using cached {resolution}m tile index: {cache_path}")
+            logger.debug(f"Using cached {resolution}m USGS 3DEP tile index: {cache_path}")
 
         # Read GeoPackage
         gdf = gpd.read_file(cache_path)
-        logger.info(f"  Loaded {len(gdf)} tiles")
+        logger.debug(f"USGS 3DEP tile index loaded: {len(gdf)} tiles ({resolution}m)")
 
         return gdf
 
@@ -186,7 +187,8 @@ class Usgs3depAws:
             'f': 'geojson'
         }
 
-        logger.info(f"Querying USGS Tile Index API for {resolution}m tiles...")
+        logger.debug(f"Querying USGS Tile Index API for {resolution}m tiles")
+        logger.debug(f"USGS Tile Index API request: {query_url} params={params}")
         response = requests.get(query_url, params=params)
         response.raise_for_status()
 
@@ -200,7 +202,7 @@ class Usgs3depAws:
         # Convert to GeoDataFrame
         gdf = gpd.GeoDataFrame.from_features(data['features'], crs="EPSG:4326")
 
-        logger.info(f"  Found {len(gdf)} tiles")
+        logger.debug(f"USGS Tile Index API returned {len(gdf)} tiles ({resolution}m)")
 
         return gdf
 
@@ -245,7 +247,7 @@ class Usgs3depAws:
         # Find intersecting projects
         intersecting = tile_index[tile_index.intersects(bbox_gdf.geometry.iloc[0])]
 
-        logger.info(f"Found {len(intersecting)} projects intersecting bbox")
+        logger.debug(f"USGS 3DEP projects intersecting bbox: {len(intersecting)} ({resolution}m)")
 
         return intersecting
 
@@ -292,7 +294,7 @@ class Usgs3depAws:
         projects = Usgs3depAws.find_tiles_for_bbox(bbox, resolution, cache_folder)
 
         if len(projects) == 0:
-            logger.info("No projects found for bbox")
+            logger.debug("No USGS 3DEP projects found for bbox")
             return projects
 
         # Extract year from project names
@@ -310,12 +312,12 @@ class Usgs3depAws:
         # Sort by year (most recent first)
         projects = projects.sort_values('_year', ascending=False, na_position='last')
 
-        logger.info(f"Found {len(projects)} project(s) intersecting bbox:")
+        logger.debug(f"USGS 3DEP projects listed: {len(projects)} project(s) intersect bbox")
         for idx, row in projects.iterrows():
             proj_name = row.get('proj_name', row.get('project', row.get('demname', 'Unknown')))
             year = row['_year']
             year_str = str(year) if year else 'unknown'
-            logger.info(f"  - {proj_name} (year {year_str})")
+            logger.debug(f"USGS 3DEP project: {proj_name} (year {year_str})")
 
         return projects
 
@@ -387,7 +389,7 @@ class Usgs3depAws:
 
             # Validate zone (CONUS: 10-19, Hawaii: 4-5)
             if not (4 <= utm_zone <= 19):
-                logger.warning(f"UTM zone {utm_zone} outside expected range (4-5, 10-19)")
+                logger.debug(f"UTM zone {utm_zone} outside expected range (4-5, 10-19)")
                 return None
 
             # Calculate UTM bounds (10km grid, meters)
@@ -430,7 +432,8 @@ class Usgs3depAws:
         # Download the file list
         links_url = f"{Usgs3depAws.S3_BASE_URL}/1m/Projects/{project_name}/0_file_download_links.txt"
 
-        logger.info(f"Fetching tile list from: {project_name}")
+        logger.debug(f"Fetching USGS 3DEP tile list for project: {project_name}")
+        logger.debug(f"USGS 3DEP tile list URL: {links_url}")
 
         try:
             response = requests.get(links_url, timeout=30)
@@ -439,19 +442,18 @@ class Usgs3depAws:
             # Parse URLs
             urls = [line.strip() for line in response.text.strip().split('\n') if line.strip()]
 
-            logger.info(f"  Found {len(urls)} tiles in project")
+            logger.debug(f"USGS 3DEP project tile count for {project_name}: {len(urls)}")
             return urls
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
-                logger.warning(f"  Project not found in S3: {project_name}")
-                logger.warning(f"    (Tile index may contain outdated project names)")
+                logger.warning(f"Project not found in S3: {project_name} (tile index may be outdated)")
                 return None
             else:
                 # Other HTTP errors should propagate
                 raise
         except requests.exceptions.RequestException as e:
-            logger.error(f"  Network error fetching tile list: {e}")
+            logger.error(f"Network error fetching tile list for {project_name}: {e}")
             return None
 
     @staticmethod
@@ -526,21 +528,23 @@ class Usgs3depAws:
                 if expected_size and local_size == expected_size:
                     # File exists with correct size - use cached version
                     size_mb = local_size / 1024 / 1024
-                    logger.info(f"    Using cached: {filename} ({size_mb:.2f} MB)")
+                    logger.debug(f"Using cached USGS 3DEP tile: {output_path} ({size_mb:.2f} MB)")
                     return output_path
                 elif expected_size:
                     # File exists but wrong size - re-download
-                    logger.warning(f"    Cached file size mismatch for {filename}")
-                    logger.warning(f"      Local: {local_size:,} bytes, Expected: {expected_size:,} bytes")
-                    logger.info(f"      Re-downloading...")
+                    logger.warning(
+                        f"Cached file size mismatch for {filename}: "
+                        f"local={local_size:,} bytes, expected={expected_size:,} bytes"
+                    )
+                    logger.debug(f"Re-downloading USGS 3DEP tile after cache size mismatch: {output_path}")
                 else:
                     # Cannot verify size - assume cached file is good
                     size_mb = local_size / 1024 / 1024
-                    logger.info(f"    Using cached: {filename} ({size_mb:.2f} MB, size unverified)")
+                    logger.debug(f"Using cached USGS 3DEP tile: {output_path} ({size_mb:.2f} MB, size unverified)")
                     return output_path
 
             # Download tile
-            logger.info(f"    Downloading: {filename}")
+            logger.debug(f"Downloading USGS 3DEP tile: {filename} from {tile_url}")
             response = requests.get(tile_url, stream=True, timeout=300)
             response.raise_for_status()
 
@@ -549,11 +553,11 @@ class Usgs3depAws:
                     f.write(chunk)
 
             size_mb = output_path.stat().st_size / 1024 / 1024
-            logger.info(f"      Saved ({size_mb:.2f} MB)")
+            logger.debug(f"Saved USGS 3DEP tile: {output_path} ({size_mb:.2f} MB)")
             return output_path
 
         except Exception as e:
-            logger.error(f"      Failed to download {filename}: {e}")
+            logger.error(f"Failed to download USGS 3DEP tile {filename}: {e}")
             return None
 
     @staticmethod
@@ -668,7 +672,7 @@ class Usgs3depAws:
             logger.warning("No projects found for bbox - no data available in this area")
             return []
 
-        logger.info(f"Found {len(projects)} projects intersecting bbox")
+        logger.debug(f"USGS 3DEP download candidate projects: {len(projects)}")
 
         # Extract year from project names for filtering/sorting
         import re
@@ -683,11 +687,12 @@ class Usgs3depAws:
             return None
 
         projects['_year'] = projects.apply(extract_year, axis=1)
+        selection_logged = False
 
         # Project selection logic
         if project_name:
             # Filter to exact project name match
-            logger.info(f"  Filtering to project: {project_name}")
+            logger.debug(f"Filtering USGS 3DEP projects to: {project_name}")
 
             # Try all possible project name fields, plus the S3 folder parsed
             # from 'product_link' (so callers may pass either the collection
@@ -716,11 +721,11 @@ class Usgs3depAws:
                 )
 
             projects = projects_filtered
-            logger.info(f"    Found project: {project_name}")
+            logger.debug(f"Matched requested USGS 3DEP project: {project_name}")
 
         elif min_year:
             # Filter to projects >= min_year
-            logger.info(f"  Filtering to projects from {min_year} or newer")
+            logger.debug(f"Filtering USGS 3DEP projects to {min_year} or newer")
 
             # Filter out projects with no year or year < min_year
             projects_filtered = projects[
@@ -728,12 +733,12 @@ class Usgs3depAws:
             ]
 
             if len(projects_filtered) == 0:
-                logger.warning(f"  No projects found from {min_year} or newer")
-                logger.warning(f"  Available years: {sorted(projects['_year'].dropna().unique())}")
+                logger.warning(f"No USGS 3DEP projects found from {min_year} or newer")
+                logger.warning(f"Available USGS 3DEP project years: {sorted(projects['_year'].dropna().unique())}")
                 raise ValueError(f"No projects found from year {min_year} or newer")
 
             projects = projects_filtered
-            logger.info(f"    Found {len(projects)} project(s) >= {min_year}")
+            logger.debug(f"USGS 3DEP projects matching min_year={min_year}: {len(projects)}")
 
         # If multiple projects remain, select most recent
         if len(projects) > 1:
@@ -742,15 +747,19 @@ class Usgs3depAws:
             most_recent = projects.iloc[0]
             year = projects.iloc[0]['_year']
 
-            logger.info(f"  Selecting most recent project (year {year if year else 'unknown'})")
-            logger.info(f"    Selected: {most_recent.get('proj_name', most_recent.get('project', most_recent.get('demname')))}")
+            selected_name = most_recent.get('proj_name', most_recent.get('project', most_recent.get('demname')))
+            logger.debug(
+                f"USGS 3DEP project selected: {selected_name} "
+                f"(year {year if year else 'unknown'}; skipped {len(projects) - 1} older)"
+            )
+            selection_logged = True
 
-            logger.info(f"    Skipping {len(projects) - 1} older project(s):")
+            logger.debug(f"Skipping {len(projects) - 1} older USGS 3DEP project(s)")
             for idx in range(1, min(len(projects), 4)):
                 older = projects.iloc[idx]
                 older_year = older['_year']
                 older_name = older.get('proj_name', older.get('project', older.get('demname')))
-                logger.info(f"      - {older_name} (year {older_year if older_year else 'unknown'})")
+                logger.debug(f"Skipped older USGS 3DEP project: {older_name} (year {older_year if older_year else 'unknown'})")
 
             # Use only the most recent project
             projects = projects.iloc[[0]]
@@ -777,18 +786,24 @@ class Usgs3depAws:
                 logger.warning(f"No project folder/name found in row {idx}, skipping")
                 continue
 
-            logger.info(f"\nProcessing project: {label or s3_folder} (S3 folder: {s3_folder})")
+            if len(projects) == 1 and not selection_logged:
+                year = project_row['_year'] if '_year' in project_row.index else None
+                logger.debug(
+                    f"USGS 3DEP project selected: {label or s3_folder} "
+                    f"(year {year if year else 'unknown'})"
+                )
+            logger.debug(f"Processing USGS 3DEP project: {label or s3_folder}")
 
             # Get all tile URLs for this project
             tile_urls = Usgs3depAws._get_project_tile_urls(s3_folder)
 
             # Skip if project not found in S3 (outdated tile index)
             if tile_urls is None:
-                logger.info(f"  Skipping project (not available in S3)")
+                logger.debug(f"Skipping USGS 3DEP project not available in S3: {project_name}")
                 continue
 
             # Find which tiles intersect our bbox
-            logger.info(f"  Checking {len(tile_urls)} tiles for intersection...")
+            logger.debug(f"Checking {len(tile_urls)} USGS 3DEP tiles for intersection")
             intersecting_urls = []
 
             for tile_url in tile_urls:
@@ -813,12 +828,12 @@ class Usgs3depAws:
                     logger.debug(f"    Error checking tile {filename}: {e}")
                     continue
 
-            logger.info(f"  Found {len(intersecting_urls)} intersecting tiles")
+            logger.debug(f"USGS 3DEP intersecting tiles: {len(intersecting_urls)}")
 
             # Download intersecting tiles (concurrent)
             if max_workers == 1:
                 # Sequential downloads
-                logger.info(f"  Downloading tiles sequentially...")
+                logger.debug("Downloading USGS 3DEP tiles sequentially")
                 for tile_url in intersecting_urls:
                     result = Usgs3depAws._download_single_tile(
                         tile_url, output_folder, overwrite_dest
@@ -829,7 +844,7 @@ class Usgs3depAws:
                 # Concurrent downloads
                 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-                logger.info(f"  Downloading tiles with {max_workers} concurrent workers...")
+                logger.debug(f"Downloading USGS 3DEP tiles with {max_workers} concurrent workers")
 
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     # Submit all download tasks
@@ -852,9 +867,9 @@ class Usgs3depAws:
                                 all_downloaded.append(result)
                         except Exception as e:
                             filename = tile_url.split('/')[-1]
-                            logger.error(f"      Concurrent download failed for {filename}: {e}")
+                            logger.error(f"Concurrent USGS 3DEP tile download failed for {filename}: {e}")
 
-        logger.info(f"\nTotal tiles downloaded: {len(all_downloaded)}")
+        logger.info(f"USGS 3DEP tile download complete: {len(all_downloaded)} tile(s) available")
         return all_downloaded
 
     @staticmethod
@@ -888,7 +903,7 @@ class Usgs3depAws:
                 raise FileNotFoundError(f"Tile file not found: {tile_path}")
 
         # Build VRT
-        logger.info(f"Creating VRT mosaic from {len(tile_files)} tiles...")
+        logger.debug(f"Creating VRT mosaic from {len(tile_files)} tile(s)")
 
         try:
             gdalbuildvrt = Usgs3depAws._find_gdalbuildvrt_path(hecras_version)
@@ -897,11 +912,13 @@ class Usgs3depAws:
                 "Creating a VRT requires HEC-RAS bundled gdalbuildvrt.exe. "
                 f"{exc}"
             ) from exc
+        logger.debug(f"Using gdalbuildvrt executable: {gdalbuildvrt}")
 
         input_list_path = Usgs3depAws._write_gdal_input_file_list(
             tile_paths,
             output_vrt.parent,
         )
+        logger.debug(f"gdalbuildvrt input file list: {input_list_path}")
         cmd = [
             str(gdalbuildvrt),
             "-overwrite",
@@ -909,6 +926,7 @@ class Usgs3depAws:
             "-input_file_list", str(input_list_path),
             str(output_vrt),
         ]
+        logger.debug(f"gdalbuildvrt command: {cmd}")
 
         try:
             result = subprocess.run(
@@ -939,7 +957,8 @@ class Usgs3depAws:
                 f"gdalbuildvrt completed but VRT was not created: {output_vrt}"
             )
 
-        logger.info(f"  Created: {output_vrt}")
+        logger.info(f"VRT mosaic created: {output_vrt.name}")
+        logger.debug(f"VRT mosaic output path: {output_vrt}")
         return output_vrt
 
     @staticmethod

@@ -718,8 +718,9 @@ class GeomReferenceFeatures:
                 raise
             logger.warning(
                 "Velocity-based reference-line orientation unavailable; "
-                f"falling back to line-normal orientation. Reason: {exc}"
+                "falling back to line-normal orientation"
             )
+            logger.debug("Velocity orientation fallback reason: %s", exc)
             return empty_samples
 
         samples = []
@@ -802,7 +803,7 @@ class GeomReferenceFeatures:
         # Create backup
         backup_path = Path(str(geom_file) + ".bak")
         shutil.copy2(geom_file, backup_path)
-        logger.info(f"Created backup: {backup_path.name}")
+        logger.debug(f"Created backup: {backup_path}")
 
         # Read file with CRLF preservation
         with open(geom_file, "r", encoding="utf-8", errors="ignore", newline="") as f:
@@ -909,7 +910,7 @@ class GeomReferenceFeatures:
         backup_path = Path(str(geom_file) + ".bak")
         if not backup_path.exists():
             shutil.copy2(geom_file, backup_path)
-            logger.info(f"Created backup: {backup_path.name}")
+            logger.debug(f"Created backup: {backup_path}")
 
         with open(geom_file, "r", encoding="utf-8", errors="ignore", newline="") as f:
             file_lines = f.readlines()

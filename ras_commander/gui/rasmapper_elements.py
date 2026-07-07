@@ -91,14 +91,15 @@ class RasMapperElements:
                 hwnd, title = result
                 if Win32Primitives.is_window_responsive(hwnd):
                     elapsed = int(time.time() - start_time)
-                    logger.info(f"RASMapper opened: {title} (took {elapsed}s)")
+                    logger.info(f"RASMapper opened (took {elapsed}s)")
+                    logger.debug("RASMapper window title: %s", title)
                     return result
                 else:
                     logger.debug("RASMapper window found but still loading...")
 
             elapsed = time.time() - start_time
             if elapsed - (last_log_time - start_time) >= 15:
-                logger.info(f"Still waiting for RASMapper... ({int(elapsed)}s elapsed)")
+                logger.debug(f"Still waiting for RASMapper... ({int(elapsed)}s elapsed)")
                 last_log_time = time.time()
 
             time.sleep(check_interval)
@@ -157,12 +158,12 @@ class RasMapperElements:
                     responsive_since = time.time()
                 elif time.time() - responsive_since >= idle_grace_seconds:
                     elapsed = int(time.time() - start_time)
-                    logger.info(f"RASMapper remained responsive; treating as idle ({elapsed}s)")
+                    logger.debug(f"RASMapper remained responsive; treating as idle ({elapsed}s)")
                     return True
 
             elapsed = time.time() - start_time
             if elapsed - (last_log_time - start_time) >= 15:
-                logger.info(f"Waiting for RASMapper operation... ({int(elapsed)}s elapsed)")
+                logger.debug(f"Waiting for RASMapper operation... ({int(elapsed)}s elapsed)")
                 last_log_time = time.time()
 
             time.sleep(check_interval)

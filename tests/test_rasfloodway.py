@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -5,6 +6,16 @@ import pytest
 
 from ras_commander import RasFloodway
 from ras_commander.check import RasCheck
+
+LOGGER_NAME = "ras_commander.RasFloodway"
+
+
+def _log_messages(caplog, level):
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == LOGGER_NAME and record.levelno == level
+    ]
 
 
 def _write_plan(path: Path, encroach_block: str = "") -> Path:
@@ -131,6 +142,48 @@ def test_set_encroachments_writes_multiple_targets_and_bridge_sections(tmp_path)
     assert parsed["profile_number"].tolist() == [2, 3, 2, 3]
 
 
+def test_set_encroachments_logs_concise_info_and_debug_path(tmp_path, caplog):
+    plan = _write_plan(tmp_path / "Project.p01")
+    caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
+
+    RasFloodway.set_encroachments(
+        plan,
+        [
+            {
+                "river": "Clear Creek",
+                "reach": "Main",
+                "node": "1020.50",
+                "profiles": [
+                    {"method": 4, "target_surcharge": 0.5},
+                    {"method": 4, "target_surcharge": 1.0},
+                ],
+            },
+            {
+                "river": "Clear Creek",
+                "reach": "Main",
+                "node": "Bridge DS",
+                "profiles": [
+                    {"method": 1, "left_station": 4910, "right_station": 5075},
+                    {"method": 1, "left_station": 4900, "right_station": 5085},
+                ],
+            },
+        ],
+        profile_count=3,
+    )
+
+    info_messages = _log_messages(caplog, logging.INFO)
+    assert (
+        "Updated floodway encroachments in Project.p01: "
+        "4 records across 2 nodes, profiles 2-3, methods 1, 4"
+    ) in info_messages
+    assert info_messages.count(
+        "Updated floodway encroachments in Project.p01: "
+        "4 records across 2 nodes, profiles 2-3, methods 1, 4"
+    ) == 1
+    assert all(str(tmp_path) not in message for message in info_messages)
+    assert f"Full floodway plan path: {plan}" in _log_messages(caplog, logging.DEBUG)
+
+
 def test_set_encroachments_accepts_method_2_and_3_named_targets(tmp_path):
     plan = _write_plan(tmp_path / "Project.p01")
 
@@ -219,6 +272,33 @@ def test_create_method_4_trial_profiles_duplicates_flows_and_starting_wse(tmp_pa
     assert "base_profile: 1" in plan_text
 
 
+def test_create_trial_profiles_logs_concise_info_and_debug_paths(tmp_path, caplog):
+    plan, flow = _project_files(tmp_path)
+    caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
+
+    RasFloodway.create_method_4_trial_profiles(
+        plan,
+        targets=[0.5, 1.0],
+        profile_names=["FW 0.5 ft", "FW 1 ft"],
+        locations=[
+            {"river": "Clear Creek", "reach": "Main", "node": "1020.50"},
+            {"river": "Clear Creek", "reach": "Main", "node": "Bridge US"},
+        ],
+    )
+
+    info_messages = _log_messages(caplog, logging.INFO)
+    expected_info = (
+        "Created Method 4 floodway trial profiles in Project.p01 using Project.f01: "
+        "2 profiles, 2 targets, 2 locations"
+    )
+    assert info_messages == [expected_info]
+    assert all(str(tmp_path) not in message for message in info_messages)
+
+    debug_messages = _log_messages(caplog, logging.DEBUG)
+    assert f"Full floodway trial plan path: {plan}" in debug_messages
+    assert f"Full floodway trial flow path: {flow}" in debug_messages
+
+
 def test_create_method_5_trial_profiles_writes_energy_targets_and_metadata(tmp_path):
     plan, flow = _project_files(tmp_path)
 
@@ -242,6 +322,58 @@ def test_create_method_5_trial_profiles_writes_energy_targets_and_metadata(tmp_p
     assert "       5     0.5     0.1       5       1     0.2" in plan_text
     assert "method: 5" in plan_text
     assert "source: unit-test" in plan_text
+
+
+def test_missing_flow_from_plan_reports_expected_path(tmp_path):
+    plan = _write_plan(tmp_path / "Project.p01")
+    expected_flow = tmp_path / "Project.f01"
+
+    with pytest.raises(FileNotFoundError) as excinfo:
+        RasFloodway.create_method_4_trial_profiles(plan, targets=[0.5])
+
+    message = str(excinfo.value)
+    assert "Plan references Flow File=f01" in message
+    assert str(expected_flow) in message
+
+
+def test_missing_plan_number_reports_project_context_and_available_plans(tmp_path):
+    class FakeRasObject:
+        project_name = "Project"
+        project_folder = tmp_path
+        plan_df = pd.DataFrame({
+            "plan_number": ["01"],
+            "full_path": [str(tmp_path / "Project.p01")],
+        })
+
+        def check_initialized(self):
+            return None
+
+        def get_plan_entries(self):
+            return self.plan_df
+
+    with pytest.raises(FileNotFoundError) as excinfo:
+        RasFloodway.parse_encroachments("02", ras_object=FakeRasObject())
+
+    message = str(excinfo.value)
+    assert "Plan file not found: 02" in message
+    assert f"Project: Project in {tmp_path}" in message
+    assert "Available plans: 01" in message
+
+
+def test_refresh_ras_object_failure_warns_and_keeps_traceback_debug(caplog):
+    class BrokenRasObject:
+        def get_plan_entries(self):
+            raise RuntimeError("refresh failed")
+
+    caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
+
+    RasFloodway._refresh_ras_object(BrokenRasObject())
+
+    assert (
+        "Could not refresh ras_object.plan_df using get_plan_entries; "
+        "in-memory project tables may be stale"
+    ) in _log_messages(caplog, logging.WARNING)
+    assert "Could not refresh plan_df on ras_object" in _log_messages(caplog, logging.DEBUG)
 
 
 def test_check_floodway_delegates_to_rascheck(monkeypatch):

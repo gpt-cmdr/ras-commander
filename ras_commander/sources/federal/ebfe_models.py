@@ -29,6 +29,9 @@ Last Updated: 2026-06-03
 
 from pathlib import Path
 from typing import Optional, Dict, List, Any, Union
+import builtins
+from contextlib import contextmanager
+import logging
 import os
 import re
 import shutil
@@ -43,6 +46,8 @@ from ras_commander.Decorators import log_call
 from ras_commander.sources.base import (
     DownloadResult, ModelMetadata, ModelSource, ModelType, SourceStatus,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class RasEbfeModels:
@@ -66,6 +71,9 @@ class RasEbfeModels:
         >>> from ras_commander import init_ras_project
         >>> init_ras_project(organized / "RAS Model", "5.0.7")
     """
+
+    _console_output_enabled = False
+    _progress_enabled = False
 
     _MODEL_ALIASES = {
         "spring": "spring-creek",
@@ -396,6 +404,8 @@ class RasEbfeModels:
         output_root: Optional[Path] = None,
         downloaded_folder: Optional[Path] = None,
         output_folder: Optional[Path] = None,
+        verbose: bool = False,
+        show_progress: bool = False,
         **kwargs: Any,
     ) -> Path:
         """
@@ -414,6 +424,9 @@ class RasEbfeModels:
                 ``download_root`` for this call.
             output_folder: Explicit organized output folder. Overrides
                 ``output_root`` for this call.
+            verbose: If True, emit organizer progress messages to stdout.
+                Default False keeps example notebooks concise.
+            show_progress: If True, display download/extraction progress bars.
             **kwargs: Additional arguments passed to the model-specific
                 organizer, such as ``validate_dss``, ``extract_ras_nested``,
                 ``river``, ``reach``, or ``download_components``.
@@ -449,7 +462,10 @@ class RasEbfeModels:
                     Path(download_root) / str(metadata["documents_subdir"])
                 )
 
-        return organizer(**call_kwargs)
+        with RasEbfeModels._output_options(
+            verbose=verbose, show_progress=show_progress,
+        ):
+            return organizer(**call_kwargs)
 
     @staticmethod
     @log_call
@@ -458,6 +474,8 @@ class RasEbfeModels:
         download_root: Optional[Path] = None,
         output_root: Optional[Path] = None,
         model_kwargs: Optional[Dict[str, Dict[str, Any]]] = None,
+        verbose: bool = False,
+        show_progress: bool = False,
     ) -> Dict[str, Path]:
         """
         Organize multiple known eBFE models sequentially.
@@ -468,6 +486,8 @@ class RasEbfeModels:
             output_root: Base delivery folder used by each organizer.
             model_kwargs: Optional per-model kwargs keyed by canonical slug or
                 alias.
+            verbose: If True, emit organizer progress messages to stdout.
+            show_progress: If True, display download/extraction progress bars.
 
         Returns:
             Mapping of canonical model slug to organized delivery folder.
@@ -483,9 +503,44 @@ class RasEbfeModels:
                 key,
                 download_root=download_root,
                 output_root=output_root,
+                verbose=verbose,
+                show_progress=show_progress,
                 **kwargs,
             )
         return results
+
+    @staticmethod
+    @contextmanager
+    def _output_options(verbose: bool = False, show_progress: bool = False):
+        """Temporarily configure legacy organizer console output."""
+        previous_verbose = RasEbfeModels._console_output_enabled
+        previous_progress = RasEbfeModels._progress_enabled
+        RasEbfeModels._console_output_enabled = verbose
+        RasEbfeModels._progress_enabled = show_progress
+        try:
+            yield
+        finally:
+            RasEbfeModels._console_output_enabled = previous_verbose
+            RasEbfeModels._progress_enabled = previous_progress
+
+    @staticmethod
+    def _emit(*args, **kwargs) -> None:
+        """Emit legacy progress text only when explicitly requested."""
+        sep = kwargs.pop("sep", " ")
+        end = kwargs.pop("end", "\n")
+        file = kwargs.pop("file", None)
+        flush = kwargs.pop("flush", False)
+        message = sep.join(str(arg) for arg in args)
+        if RasEbfeModels._console_output_enabled:
+            builtins.print(message, end=end, file=file, flush=flush, **kwargs)
+        else:
+            logger.debug("%s", message.strip())
+
+    @staticmethod
+    def _progress(*args, **kwargs):
+        """Return a tqdm wrapper that is quiet unless explicitly requested."""
+        kwargs.setdefault("disable", not RasEbfeModels._progress_enabled)
+        return tqdm(*args, **kwargs)
 
     @staticmethod
     def _ensure_console_output_safe() -> None:
@@ -571,13 +626,13 @@ class RasEbfeModels:
         for folder in folders.values():
             folder.mkdir(parents=True, exist_ok=True)
 
-        print(f"Organizing Spring Creek (12040102) - Pattern 3a")
-        print(f"Source: {downloaded_folder}")
-        print(f"Output: {output_folder}\n")
+        RasEbfeModels._emit(f"Organizing Spring Creek (12040102) - Pattern 3a")
+        RasEbfeModels._emit(f"Source: {downloaded_folder}")
+        RasEbfeModels._emit(f"Output: {output_folder}\n")
 
         # Download source data if not present
         if not downloaded_folder.exists():
-            print("Source data not found - downloading from eBFE S3...")
+            RasEbfeModels._emit("Source data not found - downloading from eBFE S3...")
             url = "https://ebfedata.s3.amazonaws.com/12040102_Spring/12040102_Models.zip"
 
             # Download and extract to parent folder
@@ -608,15 +663,15 @@ class RasEbfeModels:
             )
 
         # Extract nested _Final.zip
-        print("[1/5] Extracting nested _Final.zip...")
+        RasEbfeModels._emit("[1/5] Extracting nested _Final.zip...")
         final_extracted = models_folder / "_Final_extracted"
         if not final_extracted.exists():
-            print(f"  Extracting 9.67 GB nested zip (may take 5-10 minutes)...")
+            RasEbfeModels._emit(f"  Extracting 9.67 GB nested zip (may take 5-10 minutes)...")
             with zipfile.ZipFile(final_zip, 'r') as zip_ref:
                 zip_ref.extractall(final_extracted)
-            print(f"  ✓ Extracted")
+            RasEbfeModels._emit(f"  ✓ Extracted")
         else:
-            print(f"  ✓ Already extracted")
+            RasEbfeModels._emit(f"  ✓ Already extracted")
 
         # Locate Spring model folder
         spring_folder = final_extracted / "_Final" / "HECRAS_507"
@@ -624,7 +679,7 @@ class RasEbfeModels:
             raise FileNotFoundError(f"Spring model not found at {spring_folder}")
 
         # Organize RAS Model files
-        print("\n[2/5] Organizing RAS Model...")
+        RasEbfeModels._emit("\n[2/5] Organizing RAS Model...")
         files_copied = 0
         for file in spring_folder.rglob('*'):
             if file.is_file():
@@ -638,26 +693,26 @@ class RasEbfeModels:
                 shutil.copy2(file, dest)
                 files_copied += 1
 
-        print(f"  ✓ Organized {files_copied} files")
+        RasEbfeModels._emit(f"  ✓ Organized {files_copied} files")
 
         # Organize Spatial Data
-        print("\n[3/5] Organizing Spatial Data...")
+        RasEbfeModels._emit("\n[3/5] Organizing Spatial Data...")
         terrain_source = spring_folder / "Terrain"
         if terrain_source.exists():
             shutil.copytree(terrain_source, folders['spatial'] / "Terrain", dirs_exist_ok=True)
-            print(f"  ✓ Copied Terrain/")
+            RasEbfeModels._emit(f"  ✓ Copied Terrain/")
 
         for shp_folder in ['Features', 'Shp']:
             shp_source = spring_folder / shp_folder
             if shp_source.exists():
                 shutil.copytree(shp_source, folders['spatial'] / shp_folder, dirs_exist_ok=True)
-                print(f"  ✓ Copied {shp_folder}/")
+                RasEbfeModels._emit(f"  ✓ Copied {shp_folder}/")
 
         # Organize Documentation
-        print("\n[4/6] Organizing Documentation...")
+        RasEbfeModels._emit("\n[4/6] Organizing Documentation...")
         if inventory.exists():
             shutil.copy2(inventory, folders['docs'] / inventory.name)
-            print(f"  ✓ Copied inventory")
+            RasEbfeModels._emit(f"  ✓ Copied inventory")
 
         (folders['hms'] / "README.md").write_text(
             "# No HMS Model\n\n"
@@ -667,13 +722,13 @@ class RasEbfeModels:
         )
 
         # CRITICAL: Correct ALL file paths in HEC-RAS files
-        print("\n[5/6] Correcting all file paths to relative references...")
+        RasEbfeModels._emit("\n[5/6] Correcting all file paths to relative references...")
         dss_corrections = RasEbfeModels._correct_dss_paths(folders['ras'])
         rasmap_corrections = RasEbfeModels._correct_rasmap_terrain_paths(folders['ras'])
         standardization = RasEbfeModels._standardize_ras_model_tree(folders['ras'])
-        print(f"  ✓ Corrected {dss_corrections} DSS path(s)")
-        print(f"  ✓ Corrected {rasmap_corrections} terrain path(s)")
-        print(
+        RasEbfeModels._emit(f"  ✓ Corrected {dss_corrections} DSS path(s)")
+        RasEbfeModels._emit(f"  ✓ Corrected {rasmap_corrections} terrain path(s)")
+        RasEbfeModels._emit(
             "  ✓ Standardized "
             f"{standardization.get('project_count', 0)} RAS project folder(s)"
         )
@@ -681,7 +736,7 @@ class RasEbfeModels:
         # Validate DSS files
         dss_results = []
         if validate_dss:
-            print("\n[6/6] Validating DSS files...")
+            RasEbfeModels._emit("\n[6/6] Validating DSS files...")
             dss_results = RasEbfeModels._validate_dss_files(folders['ras'])
 
         # Create agent model log
@@ -693,8 +748,8 @@ class RasEbfeModels:
             dss_results
         )
 
-        print(f"\n✓ Spring Creek organized to: {output_folder}")
-        print(f"\nSee {output_folder / 'agent' / 'model_log.md'} for details")
+        RasEbfeModels._emit(f"\n✓ Spring Creek organized to: {output_folder}")
+        RasEbfeModels._emit(f"\nSee {output_folder / 'agent' / 'model_log.md'} for details")
 
         return output_folder
 
@@ -775,13 +830,13 @@ class RasEbfeModels:
         for folder in folders.values():
             folder.mkdir(parents=True, exist_ok=True)
 
-        print(f"Organizing North Galveston Bay (12040203) - Pattern 4")
-        print(f"Source: {downloaded_folder}")
-        print(f"Output: {output_folder}\n")
+        RasEbfeModels._emit(f"Organizing North Galveston Bay (12040203) - Pattern 4")
+        RasEbfeModels._emit(f"Source: {downloaded_folder}")
+        RasEbfeModels._emit(f"Output: {output_folder}\n")
 
         # Download source data if not present
         if not downloaded_folder.exists():
-            print("Source data not found - downloading from eBFE S3...")
+            RasEbfeModels._emit("Source data not found - downloading from eBFE S3...")
             url = "https://ebfedata.s3.amazonaws.com/12040203_NorthGalvestonBay/12040203_Models.zip"
 
             # Download and extract to parent folder
@@ -801,18 +856,18 @@ class RasEbfeModels:
         docs_source = downloaded_folder.parent / "12040203_NorthGalvestonBay_Documents_extracted"
 
         # Organize HMS Model
-        print("[1/4] Organizing HMS Model...")
+        RasEbfeModels._emit("[1/4] Organizing HMS Model...")
         hms_files = 0
         if hms_source.exists():
             hms_dest = folders['hms'] / "NorthGalvestonBay"
             shutil.copytree(hms_source, hms_dest, dirs_exist_ok=True)
             hms_files = len(list(hms_dest.rglob('*')))
-            print(f"  ✓ Organized HMS project ({hms_files} files)")
+            RasEbfeModels._emit(f"  ✓ Organized HMS project ({hms_files} files)")
         else:
-            print(f"  ⚠️ HMS folder not found")
+            RasEbfeModels._emit(f"  ⚠️ HMS folder not found")
 
         # Organize Documentation
-        print("\n[2/4] Organizing Documentation...")
+        RasEbfeModels._emit("\n[2/4] Organizing Documentation...")
         docs_copied = 0
 
         for doc_file in [metadata_xml, inventory]:
@@ -826,39 +881,39 @@ class RasEbfeModels:
                     shutil.copy2(doc, folders['docs'] / doc.name)
                     docs_copied += 1
 
-        print(f"  ✓ Organized {docs_copied} document(s)")
+        RasEbfeModels._emit(f"  ✓ Organized {docs_copied} document(s)")
 
         # Handle RAS Model (nested zip)
-        print("\n[3/4] Organizing RAS Model...")
+        RasEbfeModels._emit("\n[3/4] Organizing RAS Model...")
         ras_extracted = False
 
         if ras_nested_zip.exists():
             size_gb = ras_nested_zip.stat().st_size / 1e9
-            print(f"  Found RAS_Submittal.zip ({size_gb:.1f} GB)")
+            RasEbfeModels._emit(f"  Found RAS_Submittal.zip ({size_gb:.1f} GB)")
 
             if extract_ras_nested:
-                print(f"  Attempting extraction...")
+                RasEbfeModels._emit(f"  Attempting extraction...")
                 try:
                     with zipfile.ZipFile(ras_nested_zip, 'r') as zip_ref:
                         zip_ref.extractall(folders['ras'])
-                    print(f"  ✓ Outer zip extracted")
+                    RasEbfeModels._emit(f"  ✓ Outer zip extracted")
 
                     # Recursively extract inner zips (Input.zip, Output.zip, Terrain.zip, etc.)
                     inner_zips = list(folders['ras'].rglob('*.zip'))
                     if inner_zips:
-                        print(f"  Found {len(inner_zips)} inner zip(s), extracting recursively...")
+                        RasEbfeModels._emit(f"  Found {len(inner_zips)} inner zip(s), extracting recursively...")
                         for inner_zip in inner_zips:
                             inner_name = inner_zip.stem
                             inner_dest = inner_zip.parent / inner_name
                             try:
                                 with zipfile.ZipFile(inner_zip, 'r') as zf:
                                     zf.extractall(inner_dest)
-                                print(f"    ✓ {inner_zip.name} → {inner_name}/")
+                                RasEbfeModels._emit(f"    ✓ {inner_zip.name} → {inner_name}/")
                                 inner_zip.unlink()
                             except Exception as inner_e:
-                                print(f"    ✗ {inner_zip.name}: {inner_e}")
+                                RasEbfeModels._emit(f"    ✗ {inner_zip.name}: {inner_e}")
 
-                    print(f"  ✓ RAS model extracted")
+                    RasEbfeModels._emit(f"  ✓ RAS model extracted")
                     ras_extracted = True
                     RasEbfeModels._normalize_north_galveston_ras_submission(
                         folders['ras']
@@ -866,26 +921,26 @@ class RasEbfeModels:
                     standardization = RasEbfeModels._standardize_ras_model_tree(
                         folders['ras']
                     )
-                    print(
+                    RasEbfeModels._emit(
                         "  ✓ Standardized "
                         f"{standardization.get('project_count', 0)} RAS project folder(s)"
                     )
                     RasEbfeModels._organize_spatial_from_ras(folders['ras'], folders['spatial'])
                 except Exception as e:
-                    print(f"  ✗ Extraction failed: {e}")
-                    print(f"  Creating manual extraction instructions...")
+                    RasEbfeModels._emit(f"  ✗ Extraction failed: {e}")
+                    RasEbfeModels._emit(f"  Creating manual extraction instructions...")
                     RasEbfeModels._create_extraction_readme(folders['ras'], ras_nested_zip, output_folder)
             else:
-                print(f"  Skipping auto-extraction (extract_ras_nested=False)")
+                RasEbfeModels._emit(f"  Skipping auto-extraction (extract_ras_nested=False)")
                 RasEbfeModels._create_extraction_readme(folders['ras'], ras_nested_zip, output_folder)
 
         # Validate DSS
         dss_results = []
         if validate_dss and ras_extracted:
-            print("\n[4/4] Validating DSS files...")
+            RasEbfeModels._emit("\n[4/4] Validating DSS files...")
             dss_results = RasEbfeModels._validate_dss_files(folders['ras'])
         else:
-            print("\n[4/4] DSS validation skipped")
+            RasEbfeModels._emit("\n[4/4] DSS validation skipped")
 
         # Create model log
         RasEbfeModels._create_north_galveston_log(
@@ -898,11 +953,11 @@ class RasEbfeModels:
             dss_results
         )
 
-        print(f"\n✓ North Galveston Bay organized to: {output_folder}")
-        print(f"\nOrganized:")
-        print(f"  - HMS Model: ✓ ({hms_files} files)")
-        print(f"  - Documentation: ✓ ({docs_copied} files)")
-        print(f"  - RAS Model: {'✓' if ras_extracted else '⚠️ Requires manual extraction'}")
+        RasEbfeModels._emit(f"\n✓ North Galveston Bay organized to: {output_folder}")
+        RasEbfeModels._emit(f"\nOrganized:")
+        RasEbfeModels._emit(f"  - HMS Model: ✓ ({hms_files} files)")
+        RasEbfeModels._emit(f"  - Documentation: ✓ ({docs_copied} files)")
+        RasEbfeModels._emit(f"  - RAS Model: {'✓' if ras_extracted else '⚠️ Requires manual extraction'}")
 
         return output_folder
 
@@ -991,16 +1046,16 @@ class RasEbfeModels:
         for folder in folders.values():
             folder.mkdir(parents=True, exist_ok=True)
 
-        print(f"Organizing Upper Guadalupe (12100201) - Pattern 3b")
-        print(f"Source: {downloaded_folder}")
-        print(f"Output: {output_folder}\n")
+        RasEbfeModels._emit(f"Organizing Upper Guadalupe (12100201) - Pattern 3b")
+        RasEbfeModels._emit(f"Source: {downloaded_folder}")
+        RasEbfeModels._emit(f"Output: {output_folder}\n")
 
         # Download source data if not present
         if not downloaded_folder.exists():
-            print("Source data not found - downloading from eBFE S3...")
-            print("⚠️  WARNING: This is a VERY LARGE download (54.6 GB)")
-            print("⚠️  Download time will vary based on connection speed")
-            print("⚠️  Ensure you have sufficient disk space available\n")
+            RasEbfeModels._emit("Source data not found - downloading from eBFE S3...")
+            RasEbfeModels._emit("⚠️  WARNING: This is a VERY LARGE download (54.6 GB)")
+            RasEbfeModels._emit("⚠️  Download time will vary based on connection speed")
+            RasEbfeModels._emit("⚠️  Ensure you have sufficient disk space available\n")
 
             url = "https://ebfedata.s3.amazonaws.com/12100201_UpperGuadalupe/12100201_Models.zip"
 
@@ -1027,7 +1082,7 @@ class RasEbfeModels:
         docs_source = downloaded_folder.parent / "12100201_UpperGuadalupe_Documents_extracted"
 
         # Organize RAS Model (4 cascaded watersheds)
-        print("[1/4] Organizing RAS Model (4 cascaded watersheds)...")
+        RasEbfeModels._emit("[1/4] Organizing RAS Model (4 cascaded watersheds)...")
         ras_files = 0
         for model_name in ['UPGU1', 'UPGU2', 'UPGU3', 'UPGU4']:
             model_source = models_source / model_name
@@ -1038,25 +1093,25 @@ class RasEbfeModels:
 
                 if input_source.exists():
                     shutil.copytree(input_source, input_dest, dirs_exist_ok=True)
-                    print(f"  ✓ {model_name}/Input/ copied")
+                    RasEbfeModels._emit(f"  ✓ {model_name}/Input/ copied")
 
                     # CRITICAL: Move Output/ HDF files INTO Input/ folder (where HEC-RAS expects them)
                     output_source = model_source / "Output"
                     if output_source.exists():
-                        print(f"    Moving Output/ HDF files into {model_name}/ folder...")
+                        RasEbfeModels._emit(f"    Moving Output/ HDF files into {model_name}/ folder...")
                         for output_file in output_source.rglob('*'):
                             if output_file.is_file():
                                 # Move HDF and other output files to Input/ (HEC-RAS project folder)
                                 dest_file = input_dest / output_file.name
                                 shutil.copy2(output_file, dest_file)
-                        print(f"    ✓ Pre-run HDF files moved to project folder")
+                        RasEbfeModels._emit(f"    ✓ Pre-run HDF files moved to project folder")
 
                     # CRITICAL: Move Terrain/ INTO project folder (where HEC-RAS expects it)
                     terrain_source = model_source / "Terrain"
                     if terrain_source.exists():
                         terrain_dest = input_dest / "Terrain"
                         shutil.copytree(terrain_source, terrain_dest, dirs_exist_ok=True)
-                        print(f"    ✓ Terrain/ moved to project folder")
+                        RasEbfeModels._emit(f"    ✓ Terrain/ moved to project folder")
 
                     # CRITICAL: Copy land cover / infiltration layers into the
                     # project folder so 2D property tables can be rebuilt.
@@ -1073,18 +1128,18 @@ class RasEbfeModels:
                             land_cover_dest,
                             dirs_exist_ok=True,
                         )
-                        print(f"    ✓ Land Cover/ moved to project folder")
+                        RasEbfeModels._emit(f"    ✓ Land Cover/ moved to project folder")
 
                     model_files = len(list(input_dest.rglob('*')))
                     ras_files += model_files
                 else:
-                    print(f"  ⚠️ {model_name}/Input/ not found")
+                    RasEbfeModels._emit(f"  ⚠️ {model_name}/Input/ not found")
 
         if inventory.exists():
             shutil.copy2(inventory, folders['ras'] / inventory.name)
 
         # Organize Documentation
-        print("\n[2/4] Organizing Documentation...")
+        RasEbfeModels._emit("\n[2/4] Organizing Documentation...")
         docs_copied = 0
 
         if docs_source.exists():
@@ -1093,7 +1148,7 @@ class RasEbfeModels:
                     shutil.copy2(doc, folders['docs'] / doc.name)
                     docs_copied += 1
 
-        print(f"  ✓ Organized {docs_copied} document(s)")
+        RasEbfeModels._emit(f"  ✓ Organized {docs_copied} document(s)")
 
         # Create HMS Model README (no HMS for this pattern)
         # Ensure directory exists (may be lost during large copy operations)
@@ -1108,19 +1163,19 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
 """, encoding='utf-8')
 
         # CRITICAL: Correct ALL file paths in HEC-RAS files
-        print("\n[3/4] Correcting all file paths to relative references...")
+        RasEbfeModels._emit("\n[3/4] Correcting all file paths to relative references...")
         dss_corrections = RasEbfeModels._correct_dss_paths(folders['ras'])
         rasmap_corrections = RasEbfeModels._correct_rasmap_terrain_paths(folders['ras'])
         standardization = RasEbfeModels._standardize_ras_model_tree(folders['ras'])
-        print(f"  ✓ Corrected {dss_corrections} DSS path(s)")
-        print(f"  ✓ Corrected {rasmap_corrections} terrain path(s)")
-        print(
+        RasEbfeModels._emit(f"  ✓ Corrected {dss_corrections} DSS path(s)")
+        RasEbfeModels._emit(f"  ✓ Corrected {rasmap_corrections} terrain path(s)")
+        RasEbfeModels._emit(
             "  ✓ Standardized "
             f"{standardization.get('project_count', 0)} RAS project folder(s)"
         )
 
         # Validate DSS files
-        print("\n[4/4] Validating DSS files...")
+        RasEbfeModels._emit("\n[4/4] Validating DSS files...")
         dss_results = []
         if validate_dss:
             dss_results = RasEbfeModels._validate_dss_files(folders['ras'])
@@ -1135,8 +1190,8 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
             dss_results
         )
 
-        print(f"\n✓ Upper Guadalupe organized to: {output_folder}")
-        print(f"\nCascade: UPGU1 → UPGU2 → UPGU3 → UPGU4 (sequential execution required)")
+        RasEbfeModels._emit(f"\n✓ Upper Guadalupe organized to: {output_folder}")
+        RasEbfeModels._emit(f"\nCascade: UPGU1 → UPGU2 → UPGU3 → UPGU4 (sequential execution required)")
 
         return output_folder
 
@@ -1227,13 +1282,13 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
         for folder in folders.values():
             folder.mkdir(parents=True, exist_ok=True)
 
-        print(f"Organizing Lower Colorado-Cummins (12090301) - Pattern 1D-BLE")
-        print(f"Source: {downloaded_folder}")
-        print(f"Output: {output_folder}\n")
+        RasEbfeModels._emit(f"Organizing Lower Colorado-Cummins (12090301) - Pattern 1D-BLE")
+        RasEbfeModels._emit(f"Source: {downloaded_folder}")
+        RasEbfeModels._emit(f"Output: {output_folder}\n")
 
         # Download source data if not present
         if not downloaded_folder.exists():
-            print("Source data not found - downloading from eBFE S3...")
+            RasEbfeModels._emit("Source data not found - downloading from eBFE S3...")
             url = "https://ebfedata.s3.amazonaws.com/12090301_LowerColoradoCummins/12090301_Models.zip"
 
             downloaded_folder = RasEbfeModels._download_and_extract(
@@ -1282,7 +1337,7 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
             )
 
         # [1/3] Scan reach models
-        print("[1/3] Scanning reach models...")
+        RasEbfeModels._emit("[1/3] Scanning reach models...")
         all_rivers = {}
         for river_dir in sorted(model_dir.iterdir()):
             if not river_dir.is_dir():
@@ -1299,7 +1354,7 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
                 all_rivers[river_dir.name] = reaches
 
         total_reaches = sum(len(v) for v in all_rivers.values())
-        print(f"  Found {total_reaches:,} reach models across {len(all_rivers)} rivers")
+        RasEbfeModels._emit(f"  Found {total_reaches:,} reach models across {len(all_rivers)} rivers")
 
         # Apply river/reach filter
         if river is not None:
@@ -1335,12 +1390,12 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
                 filtered = {matched_river: filtered_reaches}
 
             filtered_count = sum(len(v) for v in filtered.values())
-            print(f"  Filtered to: {filtered_count} reach(es)")
+            RasEbfeModels._emit(f"  Filtered to: {filtered_count} reach(es)")
         else:
             filtered = all_rivers
 
         # [2/3] Organize reach models
-        print("\n[2/3] Organizing reach models...")
+        RasEbfeModels._emit("\n[2/3] Organizing reach models...")
         total_files_copied = 0
         reaches_organized = 0
 
@@ -1359,10 +1414,10 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
                 total_files_copied += files_copied
                 reaches_organized += 1
 
-        print(f"  Organized {reaches_organized:,} reach(es), {total_files_copied:,} files total")
+        RasEbfeModels._emit(f"  Organized {reaches_organized:,} reach(es), {total_files_copied:,} files total")
 
         # [3/3] Create model log
-        print("\n[3/3] Creating model log...")
+        RasEbfeModels._emit("\n[3/3] Creating model log...")
         RasEbfeModels._create_lower_colorado_cummins_log(
             agent_folder=folders['agent'],
             source=downloaded_folder,
@@ -1377,7 +1432,7 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
 
         # Validate with init_ras_project if requested
         if validate:
-            print("\n[Validation] Testing init_ras_project on first reach...")
+            RasEbfeModels._emit("\n[Validation] Testing init_ras_project on first reach...")
             try:
                 from ras_commander import init_ras_project
 
@@ -1398,12 +1453,12 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
 
                 if first_reach is not None:
                     init_ras_project(first_reach, "7.0")
-                    print(f"  ✓ init_ras_project succeeded for: {first_reach.name}")
+                    RasEbfeModels._emit(f"  ✓ init_ras_project succeeded for: {first_reach.name}")
                 else:
-                    print("  ⚠ No reach with .prj file found for validation")
+                    RasEbfeModels._emit("  ⚠ No reach with .prj file found for validation")
 
             except Exception as e:
-                print(f"  ⚠ Validation failed: {e}")
+                RasEbfeModels._emit(f"  ⚠ Validation failed: {e}")
 
         # Create HMS Model README
         # Ensure directory exists (may be lost during large copy operations)
@@ -1417,14 +1472,14 @@ No separate HEC-HMS hydrologic model is included.
 Flow data is contained in steady flow files (.f##) within each reach model.
 """, encoding='utf-8')
 
-        print(f"\n✓ Lower Colorado-Cummins organized to: {output_folder}")
+        RasEbfeModels._emit(f"\n✓ Lower Colorado-Cummins organized to: {output_folder}")
         if river is not None:
             filter_desc = f"  River: {river}"
             if reach is not None:
                 filter_desc += f", Reach: {reach}"
-            print(filter_desc)
-        print(f"  Reaches: {reaches_organized:,} of {total_reaches:,}")
-        print(f"  Files: {total_files_copied:,}")
+            RasEbfeModels._emit(filter_desc)
+        RasEbfeModels._emit(f"  Reaches: {reaches_organized:,} of {total_reaches:,}")
+        RasEbfeModels._emit(f"  Files: {total_files_copied:,}")
 
         return output_folder
 
@@ -1493,12 +1548,12 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         for folder in folders.values():
             folder.mkdir(parents=True, exist_ok=True)
 
-        print("Organizing Rio Hondo (13060008) - Pattern 1D-BLE")
-        print(f"Source: {downloaded_folder}")
-        print(f"Output: {output_folder}\n")
+        RasEbfeModels._emit("Organizing Rio Hondo (13060008) - Pattern 1D-BLE")
+        RasEbfeModels._emit(f"Source: {downloaded_folder}")
+        RasEbfeModels._emit(f"Output: {output_folder}\n")
 
         if not downloaded_folder.exists():
-            print("Source data not found - downloading from eBFE S3...")
+            RasEbfeModels._emit("Source data not found - downloading from eBFE S3...")
             downloaded_folder = RasEbfeModels._download_and_extract(
                 url=RasEbfeModels._RIO_HONDO_URLS['models'],
                 output_folder=downloaded_folder.parent,
@@ -1522,7 +1577,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             )
 
         if not documents_folder.exists():
-            print("Documentation not found - downloading Rio Hondo documents...")
+            RasEbfeModels._emit("Documentation not found - downloading Rio Hondo documents...")
             documents_folder = RasEbfeModels._download_and_extract(
                 url=RasEbfeModels._RIO_HONDO_URLS['documents'],
                 output_folder=documents_folder.parent,
@@ -1534,7 +1589,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             "13060008_Documents"
         ) or documents_folder
 
-        print("[1/4] Scanning raw reach models...")
+        RasEbfeModels._emit("[1/4] Scanning raw reach models...")
         try:
             from ras_commander import RasUtils
         except Exception:
@@ -1555,9 +1610,9 @@ Flow data is contained in steady flow files (.f##) within each reach model.
                 f"No HEC-RAS Model/ folders found in {raw_models_root}"
             )
 
-        print(f"  Found {len(model_folders):,} reach model(s)")
+        RasEbfeModels._emit(f"  Found {len(model_folders):,} reach model(s)")
 
-        print("\n[2/4] Copying reach models into delivery layout...")
+        RasEbfeModels._emit("\n[2/4] Copying reach models into delivery layout...")
         files_copied = 0
         watershed_counts = {}
         for model_folder in model_folders:
@@ -1577,9 +1632,9 @@ Flow data is contained in steady flow files (.f##) within each reach model.
 
             watershed_counts[watershed_name] = watershed_counts.get(watershed_name, 0) + 1
 
-        print(f"  Copied {files_copied:,} file(s)")
+        RasEbfeModels._emit(f"  Copied {files_copied:,} file(s)")
 
-        print("\n[3/4] Organizing documentation and metadata...")
+        RasEbfeModels._emit("\n[3/4] Organizing documentation and metadata...")
         docs_copied = 0
         for doc in sorted(docs_root.rglob("*")):
             if not doc.is_file():
@@ -1596,11 +1651,11 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             "reach project.\n",
             encoding='utf-8'
         )
-        print(f"  Copied {docs_copied} document(s)")
+        RasEbfeModels._emit(f"  Copied {docs_copied} document(s)")
 
-        print("\n[4/4] Standardizing RAS project folders...")
+        RasEbfeModels._emit("\n[4/4] Standardizing RAS project folders...")
         standardization = RasEbfeModels._standardize_ras_model_tree(folders['ras'])
-        print(
+        RasEbfeModels._emit(
             "  Standardized "
             f"{standardization.get('project_count', 0)} RAS project folder(s)"
         )
@@ -1617,16 +1672,16 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         )
 
         if validate:
-            print("\n[Validation] Testing init_ras_project on first reach...")
+            RasEbfeModels._emit("\n[Validation] Testing init_ras_project on first reach...")
             try:
                 from ras_commander import init_ras_project
                 first_project = next(folders['ras'].rglob("*.prj")).parent
                 init_ras_project(first_project, "7.0")
-                print(f"  init_ras_project succeeded for: {first_project.name}")
+                RasEbfeModels._emit(f"  init_ras_project succeeded for: {first_project.name}")
             except Exception as exc:
-                print(f"  Validation failed: {exc}")
+                RasEbfeModels._emit(f"  Validation failed: {exc}")
 
-        print(f"\nRio Hondo organized to: {output_folder}")
+        RasEbfeModels._emit(f"\nRio Hondo organized to: {output_folder}")
         return output_folder
 
     # =========================================================================
@@ -1798,14 +1853,14 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         for folder in folders.values():
             folder.mkdir(parents=True, exist_ok=True)
 
-        print("Organizing Lower Brazos (12070104) - Pattern 2")
-        print(f"Source/cache: {downloaded_folder}")
-        print(f"Output: {output_folder}\n")
+        RasEbfeModels._emit("Organizing Lower Brazos (12070104) - Pattern 2")
+        RasEbfeModels._emit(f"Source/cache: {downloaded_folder}")
+        RasEbfeModels._emit(f"Output: {output_folder}\n")
 
         downloaded_folder.mkdir(parents=True, exist_ok=True)
         urls = RasEbfeModels._LOWER_BRAZOS_URLS
 
-        print("[1/4] Downloading inventory/manifest...")
+        RasEbfeModels._emit("[1/4] Downloading inventory/manifest...")
         inventory_path = downloaded_folder / "2D_Model_Inventory_Lower_Brazos.xlsx"
         RasEbfeModels._download_component(
             urls['inventory'],
@@ -1821,7 +1876,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
 
         processed_components = []
         if download_components:
-            print("\n[2/4] Downloading selected model components...")
+            RasEbfeModels._emit("\n[2/4] Downloading selected model components...")
             for key in selected:
                 if key == 'inventory':
                     continue
@@ -1835,10 +1890,10 @@ Flow data is contained in steady flow files (.f##) within each reach model.
                 RasEbfeModels._extract_component(zip_path, extracted, key.upper())
                 processed_components.append(extracted)
         else:
-            print("\n[2/4] Model component downloads skipped")
-            print("  Pass download_components=True to fetch the 600+ GB model zips.")
+            RasEbfeModels._emit("\n[2/4] Model component downloads skipped")
+            RasEbfeModels._emit("  Pass download_components=True to fetch the 600+ GB model zips.")
 
-        print("\n[3/4] Organizing extracted RAS models...")
+        RasEbfeModels._emit("\n[3/4] Organizing extracted RAS models...")
         copied_files = 0
         mesh_patch_record = {
             "status": "skipped",
@@ -1863,9 +1918,9 @@ Flow data is contained in steady flow files (.f##) within each reach model.
                     component_destination
                 )
                 if not projects:
-                    print(f"  No valid RAS projects found in {component_source}")
+                    RasEbfeModels._emit(f"  No valid RAS projects found in {component_source}")
                     continue
-                print(
+                RasEbfeModels._emit(
                     "  Staged "
                     f"{component_name} from {component_source.name}: "
                     f"{len(projects)} RAS project folder(s)"
@@ -1876,12 +1931,12 @@ Flow data is contained in steady flow files (.f##) within each reach model.
                 folders['ras']
             )
             if mesh_patch_record.get("status") == "applied":
-                print(
+                RasEbfeModels._emit(
                     "  Applied Lower Brazos MA03 mesh seed patch "
                     f"(+{mesh_patch_record.get('points_added', 0)} points)"
                 )
             elif mesh_patch_record.get("status") == "already_applied":
-                print("  Lower Brazos MA03 mesh seed patch already present")
+                RasEbfeModels._emit("  Lower Brazos MA03 mesh seed patch already present")
             if validate_dss:
                 RasEbfeModels._validate_dss_files(folders['ras'])
         else:
@@ -1897,7 +1952,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             )
             standardization = {'project_count': 0, 'projects': []}
 
-        print("\n[4/4] Creating metadata...")
+        RasEbfeModels._emit("\n[4/4] Creating metadata...")
         (folders['hms'] / "README.md").write_text(
             "# HMS Model Not Organized Yet\n\n"
             "Lower Brazos model component downloads were organized from the eBFE "
@@ -1917,7 +1972,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             mesh_patch_record,
         )
 
-        print(f"\nLower Brazos organized to: {output_folder}")
+        RasEbfeModels._emit(f"\nLower Brazos organized to: {output_folder}")
         return output_folder
 
     @staticmethod
@@ -2260,14 +2315,14 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         for folder in folders.values():
             folder.mkdir(parents=True, exist_ok=True)
 
-        print(f"Organizing Amite (08070202) - Pattern 2: URL Links")
-        print(f"Source: {downloaded_folder}")
-        print(f"Output: {output_folder}\n")
+        RasEbfeModels._emit(f"Organizing Amite (08070202) - Pattern 2: URL Links")
+        RasEbfeModels._emit(f"Source: {downloaded_folder}")
+        RasEbfeModels._emit(f"Output: {output_folder}\n")
 
         # ====================================================================
         # Step 1: Download all component zips
         # ====================================================================
-        print("[1/6] Downloading component files...")
+        RasEbfeModels._emit("[1/6] Downloading component files...")
 
         urls = RasEbfeModels._AMITE_URLS
         RasEbfeModels._download_component(urls['inventory'], downloaded_folder / '2D_Model_Inventory_Amite.xlsx', '2D Model Inventory (2 MB)')
@@ -2285,7 +2340,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         # ====================================================================
         # Step 2: Extract all zips
         # ====================================================================
-        print("\n[2/6] Extracting archives...")
+        RasEbfeModels._emit("\n[2/6] Extracting archives...")
 
         input_dir = downloaded_folder / 'Input_extracted'
         terrain_dir = downloaded_folder / 'Terrain_extracted'
@@ -2306,7 +2361,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         # ====================================================================
         # Step 3: Discover terrain and landuse sources
         # ====================================================================
-        print("\n[3/6] Creating organized model structure...")
+        RasEbfeModels._emit("\n[3/6] Creating organized model structure...")
 
         # Copy inventory
         inv_file = downloaded_folder / '2D_Model_Inventory_Amite.xlsx'
@@ -2326,34 +2381,34 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         landuse_source = landuse_candidates[0] if landuse_candidates else None
 
         if terrain_source:
-            print(f"  Terrain source: {terrain_source}")
+            RasEbfeModels._emit(f"  Terrain source: {terrain_source}")
         else:
-            print("  WARNING: Terrain.hdf not found in extracted Terrain.zip")
+            RasEbfeModels._emit("  WARNING: Terrain.hdf not found in extracted Terrain.zip")
 
         if landuse_source:
-            print(f"  LandUse source: {landuse_source}")
+            RasEbfeModels._emit(f"  LandUse source: {landuse_source}")
         else:
-            print("  WARNING: LandCover.tif not found in extracted LandUse.zip")
+            RasEbfeModels._emit("  WARNING: LandCover.tif not found in extracted LandUse.zip")
 
         # ====================================================================
         # Step 4: Organize each watershed model
         # ====================================================================
-        print("\n[4/6] Organizing watershed models...")
+        RasEbfeModels._emit("\n[4/6] Organizing watershed models...")
 
         for wa_key, wa_info in RasEbfeModels._AMITE_WATERSHEDS.items():
             wa_dest = folders['ras'] / wa_key
             wa_src = input_dir / wa_info['input_folder']
 
             if not wa_src.exists():
-                print(f"  WARNING: {wa_info['input_folder']} not found, skipping")
+                RasEbfeModels._emit(f"  WARNING: {wa_info['input_folder']} not found, skipping")
                 continue
 
-            print(f"\n  --- {wa_key} ({wa_info['prj_name']}) ---")
+            RasEbfeModels._emit(f"\n  --- {wa_key} ({wa_info['prj_name']}) ---")
 
             # Copy input files
             shutil.copytree(wa_src, wa_dest, dirs_exist_ok=True)
             file_count = len(list(wa_dest.rglob('*')))
-            print(f"    Copied {file_count} input files")
+            RasEbfeModels._emit(f"    Copied {file_count} input files")
 
             project_reference = next(
                 iter(sorted(wa_dest.glob("*.g[0-9][0-9].hdf"))),
@@ -2386,7 +2441,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
                             terrain_dest,
                             dirs_exist_ok=True,
                         )
-                print(
+                RasEbfeModels._emit(
                     "    Terrain copied into project folder "
                     f"({selected_terrain_source.name})"
                 )
@@ -2408,7 +2463,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
                             landcover_dest,
                             dirs_exist_ok=True,
                         )
-                print(
+                RasEbfeModels._emit(
                     "    Landcover copied into project folder "
                     f"({selected_landuse_source.name})"
                 )
@@ -2447,7 +2502,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
                         if not dest_result.exists():
                             shutil.copytree(result_dir, dest_result, dirs_exist_ok=True)
                 if hdf_count > 0:
-                    print(f"    Moved {hdf_count} Output HDF file(s) into project folder")
+                    RasEbfeModels._emit(f"    Moved {hdf_count} Output HDF file(s) into project folder")
 
         # Copy shared Input_DSS to Spatial Data for reference
         shared_dss = input_dir / 'Input_DSS'
@@ -2457,7 +2512,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         # ====================================================================
         # Step 5: Fix all paths (3 critical fixes)
         # ====================================================================
-        print("\n[5/6] Correcting file paths...")
+        RasEbfeModels._emit("\n[5/6] Correcting file paths...")
 
         import re
         dss_corrections = RasEbfeModels._correct_dss_paths(folders['ras'])
@@ -2488,11 +2543,11 @@ Flow data is contained in steady flow files (.f##) within each reach model.
                     rasmap.write_text(content, encoding='utf-8')
                     cross_model_fixes += 1
             except Exception as e:
-                print(f"    Warning: Could not process {rasmap.name}: {e}")
+                RasEbfeModels._emit(f"    Warning: Could not process {rasmap.name}: {e}")
 
-        print(f"  DSS path corrections: {dss_corrections}")
-        print(f"  Terrain path corrections: {terrain_corrections}")
-        print(f"  Cross-model ref corrections: {cross_model_fixes}")
+        RasEbfeModels._emit(f"  DSS path corrections: {dss_corrections}")
+        RasEbfeModels._emit(f"  Terrain path corrections: {terrain_corrections}")
+        RasEbfeModels._emit(f"  Cross-model ref corrections: {cross_model_fixes}")
 
         repair_summaries = []
         for wa_key in RasEbfeModels._AMITE_WATERSHEDS:
@@ -2514,7 +2569,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             )
 
         standardization = RasEbfeModels._standardize_ras_model_tree(folders['ras'])
-        print(
+        RasEbfeModels._emit(
             "  Standardized "
             f"{standardization.get('project_count', 0)} RAS project folder(s)"
         )
@@ -2522,14 +2577,14 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             RasEbfeModels._apply_amite_projection_overrides(folders['ras'])
         )
         if projection_override_records:
-            print(
+            RasEbfeModels._emit(
                 "  Applied "
                 f"{len(projection_override_records)} Amite projection override(s)"
             )
 
         terrain_rebuild_records = []
         if rebuild_mismatched_terrain:
-            print("\n[5a/6] Checking for CRS-specific terrain rebuilds...")
+            RasEbfeModels._emit("\n[5a/6] Checking for CRS-specific terrain rebuilds...")
             terrain_rebuild_records = (
                 RasEbfeModels._rebuild_mismatched_project_terrains(
                     folders['ras'],
@@ -2544,20 +2599,20 @@ Flow data is contained in steady flow files (.f##) within each reach model.
                 for record in terrain_rebuild_records:
                     status = str(record.get("status", "unknown"))
                     status_counts[status] = status_counts.get(status, 0) + 1
-                print(f"  Terrain rebuild records: {status_counts}")
+                RasEbfeModels._emit(f"  Terrain rebuild records: {status_counts}")
             else:
-                print("  No terrain CRS rebuilds required")
+                RasEbfeModels._emit("  No terrain CRS rebuilds required")
 
         # Validate DSS files
         dss_results = []
         if validate_dss:
-            print("\n[5b/6] Validating DSS files...")
+            RasEbfeModels._emit("\n[5b/6] Validating DSS files...")
             dss_results = RasEbfeModels._validate_dss_files(folders['ras'])
 
         # ====================================================================
         # Step 6: Create metadata files
         # ====================================================================
-        print("\n[6/6] Creating metadata...")
+        RasEbfeModels._emit("\n[6/6] Creating metadata...")
 
         # HMS Model README
         folders['hms'].mkdir(parents=True, exist_ok=True)
@@ -2583,7 +2638,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             projection_override_records=projection_override_records,
         )
 
-        print(f"\n✓ Amite organized to: {output_folder}")
+        RasEbfeModels._emit(f"\n✓ Amite organized to: {output_folder}")
         return output_folder
 
     # =========================================================================
@@ -2640,9 +2695,9 @@ HEC-RAS version: 5.0.1 / 5.0.3
         dss_results = (
             RasEbfeModels._validate_dss_files(folders['ras']) if validate_dss else []
         )
-        print(f"  DSS path corrections: {dss_corrections}")
-        print(f"  Terrain path corrections: {terrain_corrections}")
-        print(
+        RasEbfeModels._emit(f"  DSS path corrections: {dss_corrections}")
+        RasEbfeModels._emit(f"  Terrain path corrections: {terrain_corrections}")
+        RasEbfeModels._emit(
             "  Standardized "
             f"{standardization.get('project_count', 0)} RAS project folder(s)"
         )
@@ -2775,9 +2830,9 @@ HEC-RAS version: 5.0.1 / 5.0.3
         for folder in folders.values():
             folder.mkdir(parents=True, exist_ok=True)
 
-        print("Organizing Lower Ouachita-Bayou De Loutre (08040202) - Pattern 3")
-        print(f"Source: {downloaded_folder}")
-        print(f"Output: {output_folder}\n")
+        RasEbfeModels._emit("Organizing Lower Ouachita-Bayou De Loutre (08040202) - Pattern 3")
+        RasEbfeModels._emit(f"Source: {downloaded_folder}")
+        RasEbfeModels._emit(f"Output: {output_folder}\n")
 
         extracted = RasEbfeModels._component_folder(
             downloaded_folder, "08040202_Models_extracted"
@@ -2793,7 +2848,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             RasEbfeModels._find_named_folder(extracted, "08040202_Models") or extracted
         )
 
-        print("[1/3] Extracting nested model archive(s)...")
+        RasEbfeModels._emit("[1/3] Extracting nested model archive(s)...")
         nested_count = 0
         for nested in sorted(models_root.glob("*.zip")):
             low = nested.name.lower()
@@ -2801,7 +2856,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 dest = nested.parent / nested.stem
                 RasEbfeModels._extract_component(nested, dest, nested.name)
                 nested_count += 1
-        print(f"  Extracted {nested_count} nested archive(s)")
+        RasEbfeModels._emit(f"  Extracted {nested_count} nested archive(s)")
 
         source_root = RasEbfeModels._select_split_delivery_source_root(models_root)
         if not RasEbfeModels._is_split_delivery_root(source_root):
@@ -2811,7 +2866,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             else:
                 source_root = models_root
 
-        print("\n[2/3] Staging RAS projects...")
+        RasEbfeModels._emit("\n[2/3] Staging RAS projects...")
         summary = RasEbfeModels._stage_and_finalize_delivery(
             source_root,
             folders,
@@ -2821,10 +2876,10 @@ HEC-RAS version: 5.0.1 / 5.0.3
             require_projects=require_projects,
             aux_source_root=models_root,
         )
-        print(f"  Copied {summary.get('ras_files', 0)} RAS file(s)")
-        print(f"  Discovered {len(summary['projects'])} RAS project folder(s)")
+        RasEbfeModels._emit(f"  Copied {summary.get('ras_files', 0)} RAS file(s)")
+        RasEbfeModels._emit(f"  Discovered {len(summary['projects'])} RAS project folder(s)")
 
-        print("\n[3/3] Writing log...")
+        RasEbfeModels._emit("\n[3/3] Writing log...")
         RasEbfeModels._write_model_log(
             folders['agent'],
             "Lower Ouachita-Bayou De Loutre",
@@ -2832,7 +2887,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             output_folder,
             summary,
         )
-        print(f"\nLower Ouachita-Bayou De Loutre organized to: {output_folder}")
+        RasEbfeModels._emit(f"\nLower Ouachita-Bayou De Loutre organized to: {output_folder}")
         return output_folder
 
     @staticmethod
@@ -2887,12 +2942,12 @@ HEC-RAS version: 5.0.1 / 5.0.3
             folder.mkdir(parents=True, exist_ok=True)
         downloaded_folder.mkdir(parents=True, exist_ok=True)
 
-        print("Organizing Lower Ouachita (08040207) - Pattern 2 (URL-index)")
-        print(f"Source/cache: {downloaded_folder}")
-        print(f"Output: {output_folder}\n")
+        RasEbfeModels._emit("Organizing Lower Ouachita (08040207) - Pattern 2 (URL-index)")
+        RasEbfeModels._emit(f"Source/cache: {downloaded_folder}")
+        RasEbfeModels._emit(f"Output: {output_folder}\n")
 
         urls = RasEbfeModels._LOWER_OUACHITA_URLS
-        print("[1/5] Downloading project components...")
+        RasEbfeModels._emit("[1/5] Downloading project components...")
         RasEbfeModels._download_component(
             urls['inventory'],
             downloaded_folder / '2D_Model_Inventory_LowerOuachita.xlsx',
@@ -2908,7 +2963,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             urls['terrain'], downloaded_folder / 'Terrain.zip', 'Terrain (1.0 GB)'
         )
 
-        print("\n[2/5] Extracting components...")
+        RasEbfeModels._emit("\n[2/5] Extracting components...")
         input_dir = downloaded_folder / 'Input_extracted'
         terrain_dir = downloaded_folder / 'Terrain_extracted'
         landuse_dir = downloaded_folder / 'LandUse_extracted'
@@ -2922,7 +2977,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             downloaded_folder / 'LandUse.zip', landuse_dir, 'LandUse'
         )
 
-        print("\n[3/5] Staging project...")
+        RasEbfeModels._emit("\n[3/5] Staging project...")
         project_src = RasEbfeModels._find_hecras_project_source(
             input_dir, "lowerouachita"
         )
@@ -2939,7 +2994,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         )
 
         if download_output:
-            print("\n[4/5] Downloading published Output HDF(s)...")
+            RasEbfeModels._emit("\n[4/5] Downloading published Output HDF(s)...")
             for plan in output_plans:
                 RasEbfeModels._download_component(
                     urls[f'output_{plan}'],
@@ -2947,9 +3002,9 @@ HEC-RAS version: 5.0.1 / 5.0.3
                     f'Output {plan} (~25 GB)',
                 )
         else:
-            print("\n[4/5] Output HDF download skipped (download_output=False)")
+            RasEbfeModels._emit("\n[4/5] Output HDF download skipped (download_output=False)")
 
-        print("\n[5/5] Finalizing...")
+        RasEbfeModels._emit("\n[5/5] Finalizing...")
         summary = RasEbfeModels._finalize_delivery(
             folders, input_dir, "Lower Ouachita", "08040207",
             validate_dss=validate_dss, require_projects=require_projects,
@@ -2969,7 +3024,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 "with RasCmdr to produce those grids.",
             ],
         )
-        print(f"\nLower Ouachita organized to: {output_folder}")
+        RasEbfeModels._emit(f"\nLower Ouachita organized to: {output_folder}")
         return output_folder
 
     @staticmethod
@@ -3017,14 +3072,14 @@ HEC-RAS version: 5.0.1 / 5.0.3
             folder.mkdir(parents=True, exist_ok=True)
         downloaded_folder.mkdir(parents=True, exist_ok=True)
 
-        print("Organizing Boeuf (08050001) - Pattern 2 (6-part split)")
-        print(f"Source/cache: {downloaded_folder}")
-        print(f"Output: {output_folder}\n")
+        RasEbfeModels._emit("Organizing Boeuf (08050001) - Pattern 2 (6-part split)")
+        RasEbfeModels._emit(f"Source/cache: {downloaded_folder}")
+        RasEbfeModels._emit(f"Output: {output_folder}\n")
 
         urls = RasEbfeModels._BOEUF_URLS
         processed = []
         if download_components:
-            print("[1/3] Downloading and extracting selected parts...")
+            RasEbfeModels._emit("[1/3] Downloading and extracting selected parts...")
             for key in selected:
                 if key == 'hydrology':
                     continue
@@ -3045,8 +3100,8 @@ HEC-RAS version: 5.0.1 / 5.0.3
                     hydro_zip, downloaded_folder / "Hydrology_extracted", "Hydrology"
                 )
         else:
-            print("[1/3] Component downloads skipped (download_components=False)")
-            print("  Pass download_components=True to fetch the ~175 GiB parts.")
+            RasEbfeModels._emit("[1/3] Component downloads skipped (download_components=False)")
+            RasEbfeModels._emit("  Pass download_components=True to fetch the ~175 GiB parts.")
             (folders['ras'] / "README_DOWNLOAD_REQUIRED.md").write_text(
                 "# Boeuf RAS Components Not Downloaded\n\n"
                 "This delivery shell lists the eBFE component URLs. The six "
@@ -3057,7 +3112,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 encoding='utf-8',
             )
 
-        print("\n[2/3] Staging work-area projects...")
+        RasEbfeModels._emit("\n[2/3] Staging work-area projects...")
         copied = 0
         for extracted in processed:
             src = RasEbfeModels._select_archive_source_root(extracted)
@@ -3073,7 +3128,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         else:
             summary = {'projects': [], 'ras_files': 0}
 
-        print("\n[3/3] Writing log...")
+        RasEbfeModels._emit("\n[3/3] Writing log...")
         RasEbfeModels._write_model_log(
             folders['agent'], "Boeuf", "08050001", output_folder, summary,
             extra_lines=[
@@ -3082,7 +3137,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 "- Results published per work area (plans p01-p07).",
             ],
         )
-        print(f"\nBoeuf organized to: {output_folder}")
+        RasEbfeModels._emit(f"\nBoeuf organized to: {output_folder}")
         return output_folder
 
     @staticmethod
@@ -3125,12 +3180,12 @@ HEC-RAS version: 5.0.1 / 5.0.3
             folder.mkdir(parents=True, exist_ok=True)
         downloaded_folder.mkdir(parents=True, exist_ok=True)
 
-        print("Organizing Bayou D'Arbonne (08040206) - Pattern 2 (URL-index)")
-        print(f"Source/cache: {downloaded_folder}")
-        print(f"Output: {output_folder}\n")
+        RasEbfeModels._emit("Organizing Bayou D'Arbonne (08040206) - Pattern 2 (URL-index)")
+        RasEbfeModels._emit(f"Source/cache: {downloaded_folder}")
+        RasEbfeModels._emit(f"Output: {output_folder}\n")
 
         urls = RasEbfeModels._BAYOU_DARBONNE_URLS
-        print("[1/4] Downloading components...")
+        RasEbfeModels._emit("[1/4] Downloading components...")
         RasEbfeModels._download_component(
             urls['inventory'],
             downloaded_folder / '2D_Model_Inventory_BayouDArbonne.xlsx',
@@ -3148,7 +3203,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             )
 
         if not download_input:
-            print("\n[2/4] Input download skipped (download_input=False)")
+            RasEbfeModels._emit("\n[2/4] Input download skipped (download_input=False)")
             (folders['ras'] / "README_DOWNLOAD_REQUIRED.md").write_text(
                 "# Bayou D'Arbonne RAS Input Not Downloaded\n\n"
                 "The 22 GiB Hydraulic Input zip (which also contains the published "
@@ -3168,7 +3223,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 folders['agent'], "Bayou D'Arbonne", "08040206", output_folder,
                 summary, extra_lines=["- Shell only (download_input=False)."],
             )
-            print(f"\nBayou D'Arbonne shell created at: {output_folder}")
+            RasEbfeModels._emit(f"\nBayou D'Arbonne shell created at: {output_folder}")
             return output_folder
 
         RasEbfeModels._download_component(
@@ -3184,7 +3239,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             'LandUse (50 MiB)',
         )
 
-        print("\n[2/4] Extracting components...")
+        RasEbfeModels._emit("\n[2/4] Extracting components...")
         input_dir = downloaded_folder / 'Input_extracted'
         terrain_dir = downloaded_folder / 'Terrain_extracted'
         landuse_dir = downloaded_folder / 'LandUse_extracted'
@@ -3203,7 +3258,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 downloaded_folder / 'Hydrology_extracted', 'Hydrology'
             )
 
-        print("\n[3/4] Staging project...")
+        RasEbfeModels._emit("\n[3/4] Staging project...")
         project_src = RasEbfeModels._find_hecras_project_source(
             input_dir, "bayoudarbonne"
         )
@@ -3223,7 +3278,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             landuse_dir, project_dest, "LandCover.tif", "LandCover"
         )
 
-        print("\n[4/4] Finalizing...")
+        RasEbfeModels._emit("\n[4/4] Finalizing...")
         summary = RasEbfeModels._finalize_delivery(
             folders, downloaded_folder, "Bayou D'Arbonne", "08040206",
             validate_dss=validate_dss, require_projects=require_projects,
@@ -3235,7 +3290,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 "plans p01-p07).",
             ],
         )
-        print(f"\nBayou D'Arbonne organized to: {output_folder}")
+        RasEbfeModels._emit(f"\nBayou D'Arbonne organized to: {output_folder}")
         return output_folder
 
     # =========================================================================
@@ -3287,7 +3342,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         if dest.exists():
             if part_path.exists():
                 part_path.unlink()
-            print(f"  Already downloaded: {dest.name}")
+            RasEbfeModels._emit(f"  Already downloaded: {dest.name}")
             return dest
 
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -3300,9 +3355,9 @@ HEC-RAS version: 5.0.1 / 5.0.3
             request_headers = {}
             if existing_size > 0:
                 request_headers['Range'] = f"bytes={existing_size}-"
-                print(f"  Resuming {label}...")
+                RasEbfeModels._emit(f"  Resuming {label}...")
             else:
-                print(f"  Downloading {label}...")
+                RasEbfeModels._emit(f"  Downloading {label}...")
 
             response = requests.get(
                 url,
@@ -3314,7 +3369,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             if existing_size > 0 and response.status_code == 416:
                 response.close()
                 response = None
-                print("  Partial download is not usable - restarting from beginning...")
+                RasEbfeModels._emit("  Partial download is not usable - restarting from beginning...")
                 part_path.unlink()
                 existing_size = 0
                 response = requests.get(url, stream=True, timeout=300)
@@ -3325,7 +3380,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             if existing_size > 0 and not append_mode:
                 response.close()
                 response = None
-                print(
+                RasEbfeModels._emit(
                     "  Server did not honor resume request - restarting download "
                     "from beginning..."
                 )
@@ -3343,7 +3398,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             file_mode = 'ab' if append_mode else 'wb'
 
             with open(part_path, file_mode) as file_obj:
-                with tqdm(
+                with RasEbfeModels._progress(
                     total=tqdm_total,
                     initial=resume_from,
                     unit='B',
@@ -3381,13 +3436,13 @@ HEC-RAS version: 5.0.1 / 5.0.3
     ):
         """Extract a component zip, skip if already extracted."""
         if dest.exists() and any(dest.iterdir()):
-            print(f"  Already extracted: {dest.name}/")
+            RasEbfeModels._emit(f"  Already extracted: {dest.name}/")
             return
         dest.mkdir(parents=True, exist_ok=True)
-        print(f"  Extracting {description or zip_path.name}...")
+        RasEbfeModels._emit(f"  Extracting {description or zip_path.name}...")
         with zipfile.ZipFile(zip_path, 'r') as zf:
             total = sum(info.file_size for info in zf.filelist)
-            with tqdm(total=total, unit='B', unit_scale=True, desc=f"    {zip_path.name}", mininterval=2.0) as pbar:
+            with RasEbfeModels._progress(total=total, unit='B', unit_scale=True, desc=f"    {zip_path.name}", mininterval=2.0) as pbar:
                 for member in zf.filelist:
                     zf.extract(member, dest)
                     pbar.update(member.file_size)
@@ -3428,9 +3483,9 @@ HEC-RAS version: 5.0.1 / 5.0.3
                     pass
                 if partial_zip_path.exists():
                     partial_zip_path.unlink()
-                print(f"\n✓ {description} already downloaded: {zip_path}")
+                RasEbfeModels._emit(f"\n✓ {description} already downloaded: {zip_path}")
             except zipfile.BadZipFile:
-                print(f"\n⚠️ Existing file is corrupted, re-downloading...")
+                RasEbfeModels._emit(f"\n⚠️ Existing file is corrupted, re-downloading...")
                 zip_path.unlink()  # Delete corrupted file
                 if partial_zip_path.exists():
                     partial_zip_path.unlink()
@@ -3439,9 +3494,9 @@ HEC-RAS version: 5.0.1 / 5.0.3
             download_needed = True
 
         if download_needed:
-            print(f"\nDownloading {description}...")
-            print(f"  URL: {url}")
-            print(f"  Destination: {zip_path}")
+            RasEbfeModels._emit(f"\nDownloading {description}...")
+            RasEbfeModels._emit(f"  URL: {url}")
+            RasEbfeModels._emit(f"  Destination: {zip_path}")
 
             RasEbfeModels._download_file(
                 url=url,
@@ -3450,26 +3505,26 @@ HEC-RAS version: 5.0.1 / 5.0.3
             )
 
             total_size = zip_path.stat().st_size
-            print(f"  ✓ Downloaded {total_size / 1e9:.1f} GB")
+            RasEbfeModels._emit(f"  ✓ Downloaded {total_size / 1e9:.1f} GB")
 
         # Extract if not already extracted
         extracted_folder_name = zip_filename.replace('.zip', '_extracted')
         extracted_folder = output_folder / extracted_folder_name
 
         if not extracted_folder.exists():
-            print(f"\nExtracting {description}...")
+            RasEbfeModels._emit(f"\nExtracting {description}...")
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 # Get total uncompressed size for progress bar
                 total_size = sum(info.file_size for info in zip_ref.filelist)
 
-                with tqdm(total=total_size, unit='B', unit_scale=True, desc=f"  Extracting", mininterval=2.0) as pbar:
+                with RasEbfeModels._progress(total=total_size, unit='B', unit_scale=True, desc=f"  Extracting", mininterval=2.0) as pbar:
                     for member in zip_ref.filelist:
                         zip_ref.extract(member, extracted_folder)
                         pbar.update(member.file_size)
 
-            print(f"  ✓ Extracted to: {extracted_folder}")
+            RasEbfeModels._emit(f"  ✓ Extracted to: {extracted_folder}")
         else:
-            print(f"✓ {description} already extracted: {extracted_folder}")
+            RasEbfeModels._emit(f"✓ {description} already extracted: {extracted_folder}")
 
         return extracted_folder
 
@@ -3629,7 +3684,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
                         expected_root = zip_path.parent / zip_path.stem
                     if expected_root.exists() and any(expected_root.iterdir()):
                         continue
-                    print(f"  Extracting nested {zip_path.name}...")
+                    RasEbfeModels._emit(f"  Extracting nested {zip_path.name}...")
                     zf.extractall(zip_path.parent)
                     extracted += 1
             except zipfile.BadZipFile:
@@ -3766,12 +3821,12 @@ HEC-RAS version: 5.0.1 / 5.0.3
         for folder in folders.values():
             folder.mkdir(parents=True, exist_ok=True)
 
-        print(f"Organizing {display_name} ({huc8}) - single model archive")
-        print(f"Source: {downloaded_folder}")
-        print(f"Output: {output_folder}\n")
+        RasEbfeModels._emit(f"Organizing {display_name} ({huc8}) - single model archive")
+        RasEbfeModels._emit(f"Source: {downloaded_folder}")
+        RasEbfeModels._emit(f"Output: {output_folder}\n")
 
         if not downloaded_folder.exists() or not any(downloaded_folder.iterdir()):
-            print("Source data not found - downloading from eBFE S3...")
+            RasEbfeModels._emit("Source data not found - downloading from eBFE S3...")
             downloaded_folder = RasEbfeModels._download_and_extract(
                 url=url,
                 output_folder=downloaded_folder.parent,
@@ -3782,7 +3837,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             downloaded_folder
         )
         if nested_components:
-            print(f"  Extracted {nested_components} nested component archive(s)")
+            RasEbfeModels._emit(f"  Extracted {nested_components} nested component archive(s)")
 
         split_root = RasEbfeModels._select_split_delivery_source_root(downloaded_folder)
         if RasEbfeModels._is_split_delivery_root(split_root):
@@ -3790,7 +3845,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
         else:
             source_root = RasEbfeModels._select_archive_source_root(downloaded_folder)
 
-        print("[1/4] Organizing RAS model files...")
+        RasEbfeModels._emit("[1/4] Organizing RAS model files...")
         ras_files = RasEbfeModels._copy_tree_contents(
             source_root,
             folders['ras'],
@@ -3804,15 +3859,15 @@ HEC-RAS version: 5.0.1 / 5.0.3
             )
             if split_normalization.get('projects_normalized', 0):
                 projects = RasEbfeModels._discover_valid_ras_projects(folders['ras'])
-        print(f"  Copied {ras_files} file(s)")
+        RasEbfeModels._emit(f"  Copied {ras_files} file(s)")
         if split_normalization.get('projects_normalized', 0):
-            print(
+            RasEbfeModels._emit(
                 "  Split delivery projects normalized: "
                 f"{split_normalization.get('projects_normalized', 0)}"
             )
-        print(f"  Discovered {len(projects)} RAS project folder(s)")
+        RasEbfeModels._emit(f"  Discovered {len(projects)} RAS project folder(s)")
 
-        print("\n[2/4] Organizing documentation and HMS content...")
+        RasEbfeModels._emit("\n[2/4] Organizing documentation and HMS content...")
         aux_source_root = (
             source_root.parent
             if RasEbfeModels._is_split_delivery_root(source_root)
@@ -3828,14 +3883,14 @@ HEC-RAS version: 5.0.1 / 5.0.3
             display_name,
             huc8,
         )
-        print(f"  Copied {docs_copied} documentation file(s)")
-        print(
+        RasEbfeModels._emit(f"  Copied {docs_copied} documentation file(s)")
+        RasEbfeModels._emit(
             "  HMS projects organized: "
             f"{len(hms_summary.get('projects', []))} "
             f"({hms_summary.get('files_copied', 0)} file(s))"
         )
 
-        print("\n[3/4] Applying common delivery standardization...")
+        RasEbfeModels._emit("\n[3/4] Applying common delivery standardization...")
         dss_corrections = RasEbfeModels._correct_dss_paths(folders['ras'])
         terrain_corrections = RasEbfeModels._correct_rasmap_terrain_paths(
             folders['ras']
@@ -3848,19 +3903,19 @@ HEC-RAS version: 5.0.1 / 5.0.3
             ),
             'split_files_copied': split_normalization.get('files_copied', 0),
         })
-        print(f"  DSS path corrections: {dss_corrections}")
-        print(f"  Terrain path corrections: {terrain_corrections}")
-        print(
+        RasEbfeModels._emit(f"  DSS path corrections: {dss_corrections}")
+        RasEbfeModels._emit(f"  Terrain path corrections: {terrain_corrections}")
+        RasEbfeModels._emit(
             "  Standardized "
             f"{standardization.get('project_count', 0)} RAS project folder(s)"
         )
 
         dss_results = []
         if validate_dss:
-            print("\n[4/4] Validating DSS files...")
+            RasEbfeModels._emit("\n[4/4] Validating DSS files...")
             dss_results = RasEbfeModels._validate_dss_files(folders['ras'])
         else:
-            print("\n[4/4] DSS validation skipped")
+            RasEbfeModels._emit("\n[4/4] DSS validation skipped")
 
         RasEbfeModels._create_single_archive_log(
             agent_folder=folders['agent'],
@@ -3880,7 +3935,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             hms_summary=hms_summary,
         )
 
-        print(f"\n{display_name} organized to: {output_folder}")
+        RasEbfeModels._emit(f"\n{display_name} organized to: {output_folder}")
         return output_folder
 
     @staticmethod
@@ -3951,9 +4006,9 @@ HEC-RAS version: 5.0.1 / 5.0.3
         for folder in folders.values():
             folder.mkdir(parents=True, exist_ok=True)
 
-        print("Organizing Tickfaw (08070203)")
-        print(f"Source: {downloaded_folder}")
-        print(f"Output: {output_folder}\n")
+        RasEbfeModels._emit("Organizing Tickfaw (08070203)")
+        RasEbfeModels._emit(f"Source: {downloaded_folder}")
+        RasEbfeModels._emit(f"Output: {output_folder}\n")
 
         models_root = (
             RasEbfeModels._component_folder(
@@ -3974,16 +4029,16 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 description="Tickfaw Models (13.5 GB)",
             )
 
-        print("[1/4] Organizing RAS model files...")
+        RasEbfeModels._emit("[1/4] Organizing RAS model files...")
         source_project = RasEbfeModels._find_hecras_project_source(
             models_root,
             preferred_name="tickfaw",
         )
         project_dest = folders['ras'] / "Tickfaw"
         ras_files = RasEbfeModels._copy_tree_contents(source_project, project_dest)
-        print(f"  Copied {ras_files} RAS file(s)")
+        RasEbfeModels._emit(f"  Copied {ras_files} RAS file(s)")
 
-        print("\n[2/4] Organizing documentation and spatial data...")
+        RasEbfeModels._emit("\n[2/4] Organizing documentation and spatial data...")
         docs_copied = RasEbfeModels._copy_documentation_assets(
             models_root,
             folders['docs'],
@@ -4050,28 +4105,28 @@ HEC-RAS version: 5.0.1 / 5.0.3
             "RAS model archive.\n",
             encoding='utf-8',
         )
-        print(f"  Copied {docs_copied} documentation file(s)")
-        print(f"  Copied {vector_files} vector data file(s)")
+        RasEbfeModels._emit(f"  Copied {docs_copied} documentation file(s)")
+        RasEbfeModels._emit(f"  Copied {vector_files} vector data file(s)")
 
-        print("\n[3/4] Repairing paths and applying delivery standardization...")
+        RasEbfeModels._emit("\n[3/4] Repairing paths and applying delivery standardization...")
         repair_stats = RasEbfeModels.repair_project_paths(
             project_dest,
             search_roots=[folders['spatial'], folders['docs']],
             ras_version=ras_version,
         )
         standardization = RasEbfeModels._standardize_ras_model_tree(folders['ras'])
-        print(f"  Path repair: {repair_stats}")
-        print(
+        RasEbfeModels._emit(f"  Path repair: {repair_stats}")
+        RasEbfeModels._emit(
             "  Standardized "
             f"{standardization.get('project_count', 0)} RAS project folder(s)"
         )
 
         dss_results = []
         if validate_dss:
-            print("\n[4/4] Validating DSS files...")
+            RasEbfeModels._emit("\n[4/4] Validating DSS files...")
             dss_results = RasEbfeModels._validate_dss_files(folders['ras'])
         else:
-            print("\n[4/4] DSS validation skipped")
+            RasEbfeModels._emit("\n[4/4] DSS validation skipped")
 
         log_content = f"""# Agent Work Log - Tickfaw
 
@@ -4093,7 +4148,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
             encoding='utf-8',
         )
 
-        print(f"\nTickfaw organized to: {output_folder}")
+        RasEbfeModels._emit(f"\nTickfaw organized to: {output_folder}")
         return output_folder
 
     @staticmethod
@@ -5838,24 +5893,24 @@ HEC-RAS version: 5.0.1 / 5.0.3
         try:
             from ras_commander.dss import RasDss
         except ImportError:
-            print("  ⚠️ ras-commander.dss not available - skipping validation")
+            RasEbfeModels._emit("  ⚠️ ras-commander.dss not available - skipping validation")
             return []
 
         dss_files = list(ras_model_folder.glob('**/*.dss'))
         if not dss_files:
-            print("  No DSS files found")
+            RasEbfeModels._emit("  No DSS files found")
             return []
 
-        print(f"  Found {len(dss_files)} DSS file(s)")
+        RasEbfeModels._emit(f"  Found {len(dss_files)} DSS file(s)")
         validation_results = []
 
         for dss_file in dss_files:
-            print(f"\n  Validating: {dss_file.name}")
+            RasEbfeModels._emit(f"\n  Validating: {dss_file.name}")
             try:
                 catalog = RasDss.get_catalog(dss_file)
                 pathnames = catalog["pathname"].astype(str).tolist()
                 pathname_count = len(pathnames)
-                print(f"    Pathnames: {pathname_count}")
+                RasEbfeModels._emit(f"    Pathnames: {pathname_count}")
 
                 # NOTE:
                 # Many DSS files contain mixed record types (time series, paired data,
@@ -5899,12 +5954,12 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 })
 
                 if ok:
-                    print(f"    ✓ Format OK ({format_warnings} warnings)")
+                    RasEbfeModels._emit(f"    ✓ Format OK ({format_warnings} warnings)")
                 else:
-                    print(f"    ⚠️ Format errors: {format_errors} ({format_warnings} warnings)")
+                    RasEbfeModels._emit(f"    ⚠️ Format errors: {format_errors} ({format_warnings} warnings)")
 
             except Exception as e:
-                print(f"    ✗ Error: {e}")
+                RasEbfeModels._emit(f"    ✗ Error: {e}")
                 validation_results.append({
                     'file': dss_file.name,
                     'total_pathnames': 0,
@@ -5977,12 +6032,12 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         # Find all DSS files in the organized structure
         dss_files = list(ras_model_folder.glob('**/*.dss'))
         if not dss_files:
-            print("    No DSS files found")
+            RasEbfeModels._emit("    No DSS files found")
             return 0
 
-        print(f"    Found {len(dss_files)} DSS file(s)")
+        RasEbfeModels._emit(f"    Found {len(dss_files)} DSS file(s)")
         for dss in dss_files:
-            print(f"      - {dss.relative_to(ras_model_folder)}")
+            RasEbfeModels._emit(f"      - {dss.relative_to(ras_model_folder)}")
 
         # Build DSS file lookup by name (for matching)
         dss_lookup = {}
@@ -6053,21 +6108,21 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                                     if old_full in content:
                                         content = content.replace(old_full, new_full)
                                         modified = True
-                                        print(f"    Corrected: {hecras_file.name}")
-                                        print(f"      Old: {keyword}={old_path}")
-                                        print(f"      New: {keyword}={rel_path_str}")
-                                        print(f"      Verified: File exists at {actual_dss_path}")
+                                        RasEbfeModels._emit(f"    Corrected: {hecras_file.name}")
+                                        RasEbfeModels._emit(f"      Old: {keyword}={old_path}")
+                                        RasEbfeModels._emit(f"      New: {keyword}={rel_path_str}")
+                                        RasEbfeModels._emit(f"      Verified: File exists at {actual_dss_path}")
                         else:
-                            print(f"    ⚠️ DSS file not found: {actual_dss_path}")
+                            RasEbfeModels._emit(f"    ⚠️ DSS file not found: {actual_dss_path}")
                     else:
-                        print(f"    ⚠️ DSS file not in organized structure: {dss_filename}")
+                        RasEbfeModels._emit(f"    ⚠️ DSS file not in organized structure: {dss_filename}")
 
                 if modified:
                     hecras_file.write_text(content, encoding='utf-8')
                     corrections_made += 1
 
             except Exception as e:
-                print(f"    ⚠️ Error processing {hecras_file.name}: {e}")
+                RasEbfeModels._emit(f"    ⚠️ Error processing {hecras_file.name}: {e}")
 
         return corrections_made
 
@@ -6125,7 +6180,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                             f'{match.group(1)}{rel_path_str}{match.group(3)}'
                         )
                         modified = True
-                        print(f"      {rasmap_file.name}: {old_path} → {rel_path_str}")
+                        RasEbfeModels._emit(f"      {rasmap_file.name}: {old_path} → {rel_path_str}")
 
                 # Fix TerrainDestinationFolder
                 dest_pattern = re.compile(
@@ -6154,7 +6209,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                     corrections += 1
 
             except Exception as e:
-                print(f"      Error: {e}")
+                RasEbfeModels._emit(f"      Error: {e}")
 
         return corrections
 

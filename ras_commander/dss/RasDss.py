@@ -93,10 +93,10 @@ class RasDss:
         RasDss._monolith = HecMonolithDownloader()
 
         if not RasDss._monolith.is_installed():
-            print("\n" + "="*80)
-            print("HEC Monolith libraries not found")
-            print("Installing automatically (one-time download, ~20 MB)...")
-            print("="*80)
+            logger.info(
+                "Installing HEC Monolith libraries for DSS operations "
+                "(one-time download, ~20 MB)"
+            )
             RasDss._monolith.install()
 
         return RasDss._monolith
@@ -130,7 +130,7 @@ class RasDss:
         classpath = monolith.get_classpath()
         library_path = monolith.get_library_path()
 
-        print("Configuring Java VM for DSS operations...")
+        logger.debug("Configuring Java VM for DSS operations")
 
         # Set JAVA_HOME if not already set
         if 'JAVA_HOME' not in os.environ:
@@ -164,7 +164,7 @@ class RasDss:
             for java_home in java_candidates:
                 if java_home.is_dir() and _has_jvm_lib(java_home):
                     os.environ['JAVA_HOME'] = str(java_home)
-                    print(f"  Found Java: {java_home}")
+                    logger.debug(f"Found Java runtime: {java_home}")
                     break
             else:
                 raise RuntimeError(
@@ -191,7 +191,7 @@ class RasDss:
             )
 
         RasDss._jvm_configured = True
-        print("[OK] Java VM configured")
+        logger.debug("Java VM configured for DSS operations")
 
     @staticmethod
     @log_call
@@ -348,7 +348,8 @@ class RasDss:
             try:
                 results[pathname] = RasDss.read_timeseries(dss_file, pathname)
             except Exception as e:
-                print(f"Warning: Could not read {pathname}: {e}")
+                logger.warning("Could not read DSS pathname: %s", pathname)
+                logger.debug("DSS read failure for %s: %s", pathname, e)
                 results[pathname] = None
 
         return results
@@ -443,7 +444,7 @@ class RasDss:
             logger.debug("No DSS-defined boundaries found")
             return result_df
 
-        logger.info(f"Found {len(dss_boundaries)} DSS-defined boundaries")
+        logger.debug(f"Found {len(dss_boundaries)} DSS-defined boundaries")
 
         # Extract time series for each DSS boundary
         success_count = 0
@@ -485,7 +486,8 @@ class RasDss:
                 fail_count += 1
 
         logger.info(
-            f"Extraction complete: {success_count} success, {fail_count} failed"
+            "DSS boundary extraction complete: "
+            f"{len(dss_boundaries)} found, {success_count} read, {fail_count} failed"
         )
 
         return result_df
@@ -1354,7 +1356,8 @@ class RasDss:
                 raise FileNotFoundError(f"DSS file not found: {dss_path}")
             # HecDss.open() will create the file
             dss_path.parent.mkdir(parents=True, exist_ok=True)
-            logger.info(f"DSS file will be created: {dss_path}")
+            logger.info(f"DSS file will be created: {dss_path.name}")
+            logger.debug(f"DSS file creation path: {dss_path}")
 
         dss_file_str = str(RasUtils.safe_resolve(dss_path))
 
@@ -1393,9 +1396,10 @@ class RasDss:
         try:
             dss = HecDss.open(dss_file_str)
             dss.put(tsc)
-            logger.info(
-                f"Wrote {n} values to {pathname} in {Path(dss_file_str).name} "
-                f"(units={units}, type={data_type}, interval={interval_minutes}min)"
+            logger.info(f"Wrote {n} values to {Path(dss_file_str).name}")
+            logger.debug(
+                f"DSS write details: file={dss_file_str}, pathname={pathname}, "
+                f"units={units}, type={data_type}, interval={interval_minutes}min"
             )
         except Exception as e:
             raise RuntimeError(

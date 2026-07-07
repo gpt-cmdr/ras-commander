@@ -82,7 +82,8 @@ class CheckProfiles:
             plan_hdf = Path(plan_hdf)
             steady_results = HdfResultsPlan.get_steady_results(plan_hdf)
         except Exception as e:
-            logger.error(f"Failed to read steady results: {e}")
+            logger.error("Failed to read steady results for profile checks")
+            logger.debug("Profile steady-results read failure for %s: %s", plan_hdf, e)
             msg = CheckMessage(
                 message_id="SYS_002",
                 severity=Severity.ERROR,

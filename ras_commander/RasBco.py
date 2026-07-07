@@ -70,6 +70,7 @@ class BcoMonitor:
     bco_file: Path = field(init=False)
     execution_start_time: Optional[float] = field(default=None, init=False)
     _last_file_position: int = field(default=0, init=False)
+    _callback_error_logged: bool = field(default=False, init=False)
 
     def __post_init__(self):
         """Initialize paths and validate configuration."""
@@ -122,7 +123,8 @@ class BcoMonitor:
 
             return True
         except Exception as e:
-            logger.warning(f"Could not enable detailed logging: {e}")
+            logger.warning(f"Could not enable detailed logging in {plan_file_path.name}: {e}")
+            logger.debug(f"Detailed logging plan file path: {plan_file_path}")
             return False
 
     def monitor_until_signal(self, process: subprocess.Popen) -> bool:
@@ -153,7 +155,16 @@ class BcoMonitor:
         while time.time() - start_time < self.max_wait_seconds:
             # Check if process died
             if process.poll() is not None:
-                logger.info(f"Process exited with code {process.returncode}")
+                if process.returncode == 0:
+                    logger.debug(
+                        f"Process for plan {self.plan_number} exited with code 0 "
+                        f"while monitoring {self.bco_file.name}"
+                    )
+                else:
+                    logger.warning(
+                        f"Process for plan {self.plan_number} exited with code "
+                        f"{process.returncode} while monitoring {self.bco_file.name}"
+                    )
                 # Read any final messages
                 if self.bco_file.exists():
                     self._read_and_callback_new_content()
@@ -172,7 +183,11 @@ class BcoMonitor:
 
             time.sleep(self.check_interval)
 
-        logger.warning(f"Monitoring timed out after {self.max_wait_seconds}s")
+        logger.warning(
+            f"Monitoring {self.bco_file.name} timed out after "
+            f"{self.max_wait_seconds}s waiting for '{self.signal_string}'"
+        )
+        logger.debug(f"Timed out monitoring .bco file path: {self.bco_file}")
         return False
 
     def get_final_messages(self) -> Optional[str]:
@@ -191,7 +206,7 @@ class BcoMonitor:
         try:
             return self.bco_file.read_text(encoding='utf-8', errors='ignore')
         except Exception as e:
-            logger.debug(f"Could not read .bco file: {e}")
+            logger.debug(f"Could not read .bco file {self.bco_file}: {e}")
             return None
 
     def _read_and_callback_new_content(self) -> Optional[str]:
@@ -226,12 +241,22 @@ class BcoMonitor:
                         try:
                             self.message_callback(line)
                         except Exception as e:
-                            logger.warning(f"Callback error: {e}")
+                            if not self._callback_error_logged:
+                                logger.warning(
+                                    f"Callback error while monitoring {self.bco_file.name}: {e}"
+                                )
+                                logger.debug(f"Callback failure .bco path: {self.bco_file}")
+                                self._callback_error_logged = True
+                            else:
+                                logger.debug(
+                                    f"Repeated callback error while monitoring "
+                                    f"{self.bco_file}: {e}"
+                                )
 
             return new_content
 
         except Exception as e:
-            logger.debug(f"Could not read new .bco content: {e}")
+            logger.debug(f"Could not read new .bco content from {self.bco_file}: {e}")
             return None
 
     def has_signal(self) -> bool:

@@ -497,7 +497,7 @@ class RasPermutation:
             rows.append(row)
 
         result = pd.DataFrame(rows, columns=["absolute_perm_id", *param_names])
-        logger.info("Defined %s total permutation(s)", len(result))
+        logger.debug("Defined %s total permutation(s)", len(result))
         return result
 
     @staticmethod
@@ -601,6 +601,7 @@ class RasPermutation:
                 getattr(source_ras, "ras_exe_path", None),
                 ras_object=batch_ras,
                 load_results_summary=False,
+                hide_intro=True,
             )
 
             template_plan_path = RasPermutation._get_plan_path(
@@ -814,6 +815,8 @@ class RasPermutation:
                 batch_folder,
                 ras_exe_path,
                 ras_object=batch_ras,
+                load_results_summary=False,
+                hide_intro=True,
             )
 
             plan_numbers = batch_log_df["plan_number"].tolist()
@@ -981,6 +984,27 @@ class RasPermutation:
         )
 
         RasPermutation._write_csv(merged_df, master_log_path)
+        status_counts = (
+            merged_df["status"].fillna("unknown").value_counts().to_dict()
+            if "status" in merged_df.columns
+            else {}
+        )
+        status_summary = (
+            ", ".join(
+                f"{status}={count}"
+                for status, count in sorted(status_counts.items())
+            )
+            or "no status data"
+        )
+        logger.info(
+            "Executed and summarized %s permutation(s): %s",
+            len(merged_df),
+            status_summary,
+        )
+        logger.debug(
+            "Updated permutation master log: %s",
+            master_log_path,
+        )
         return merged_df
 
     @staticmethod

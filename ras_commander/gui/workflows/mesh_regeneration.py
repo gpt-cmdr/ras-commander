@@ -442,7 +442,8 @@ class MeshRegenerationWorkflow:
             )
 
             if not attempt.success:
-                logger.warning(f"Attempt {iteration} failed at GUI level: {attempt.error}")
+                logger.warning(f"Attempt {iteration} failed at GUI level")
+                logger.debug("Mesh regeneration GUI attempt %s failure: %s", iteration, attempt.error)
                 result.steps_failed.append(f"attempt_{iteration}_gui")
                 # Continue to try simplification anyway
             else:
@@ -465,9 +466,8 @@ class MeshRegenerationWorkflow:
                 return result
 
             # Step 3: Mesh invalid — log the issue and prepare fix
-            logger.warning(
-                f"Attempt {iteration}: mesh invalid — {mesh_check['error']}"
-            )
+            logger.warning(f"Attempt {iteration}: mesh invalid")
+            logger.debug("Mesh validation failure on attempt %s: %s", iteration, mesh_check['error'])
             result.steps_failed.append(f"attempt_{iteration}_mesh: {mesh_check['error']}")
 
             if iteration >= max_iterations:
@@ -576,7 +576,7 @@ class MeshRegenerationWorkflow:
         time.sleep(0.5)
 
         if not HecRasElements.click_menu_by_path(hwnd, ["&GIS Tools", "RAS &Mapper"]):
-            logger.info("Trying keyboard shortcut Alt+G, M...")
+            logger.debug("Trying keyboard shortcut Alt+G, M...")
             Win32Primitives.send_keyboard_shortcut(hwnd, Win32Constants.VK_MENU, ord('G'))
             time.sleep(0.3)
             win32api.keybd_event(ord('M'), 0, 0, 0)
@@ -613,7 +613,7 @@ class MeshRegenerationWorkflow:
         time.sleep(0.05)
         win32api.keybd_event(0x11, 0, Win32Constants.KEYEVENTF_KEYUP, 0)
 
-        logger.info("Sent Ctrl+S to RASMapper")
+        logger.debug("Sent Ctrl+S to RASMapper")
 
     @staticmethod
     def _step_wait_for_save(context: dict) -> None:
@@ -648,7 +648,7 @@ class MeshRegenerationWorkflow:
             except:
                 pass
 
-        logger.info("RASMapper and HEC-RAS closed")
+        logger.debug("RASMapper and HEC-RAS closed")
 
 
 # ---------------------------------------------------------------------------
@@ -674,6 +674,7 @@ def _find_geometry_file(ras_obj) -> Optional[Path]:
                 return g
 
     except Exception as e:
-        logger.warning(f"Could not find geometry file: {e}")
+        logger.warning("Could not find geometry file")
+        logger.debug("Geometry file discovery failure: %s", e)
 
     return None

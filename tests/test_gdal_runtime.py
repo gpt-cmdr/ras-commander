@@ -1,5 +1,6 @@
 import os
 import importlib
+import logging
 import sys
 from pathlib import Path
 from subprocess import CompletedProcess
@@ -51,7 +52,11 @@ def test_configure_hecras_gdal_runtime_uses_bundled_gdal(monkeypatch, tmp_path):
     assert str(hecras_dir) in sys.path
 
 
-def test_configure_rasmapper_gdal_bridge_creates_python_sibling(monkeypatch, tmp_path):
+def test_configure_rasmapper_gdal_bridge_creates_python_sibling(
+    monkeypatch,
+    tmp_path,
+    caplog,
+):
     hecras_dir = _make_hecras_gdal_tree(tmp_path)
     python_dir = tmp_path / "uv-python"
     python_dir.mkdir()
@@ -67,6 +72,7 @@ def test_configure_rasmapper_gdal_bridge_creates_python_sibling(monkeypatch, tmp
         return CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr(_gdal_runtime.subprocess, "run", fake_run)
+    caplog.set_level(logging.DEBUG, logger="ras_commander._gdal_runtime")
 
     paths = _gdal_runtime.configure_rasmapper_gdal_bridge(
         hecras_dir,
@@ -76,6 +82,25 @@ def test_configure_rasmapper_gdal_bridge_creates_python_sibling(monkeypatch, tmp
     assert paths.hecras_dir == hecras_dir
     assert _gdal_runtime.python_gdal_bridge_is_usable(python_dir)
     assert commands
+
+    info_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "ras_commander._gdal_runtime"
+        and record.levelno == logging.INFO
+    ]
+    debug_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "ras_commander._gdal_runtime"
+        and record.levelno == logging.DEBUG
+    ]
+    assert info_messages == ["Created GDAL junction for HEC-RAS GDAL bridge"]
+    assert all(str(tmp_path) not in message for message in info_messages)
+    assert any(
+        str(python_dir / "GDAL") in message and str(hecras_dir / "GDAL") in message
+        for message in debug_messages
+    )
 
 
 def test_configure_rasmapper_gdal_bridge_creates_venv_and_base_bridges(

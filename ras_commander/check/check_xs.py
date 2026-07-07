@@ -69,7 +69,8 @@ class CheckXs:
             geom_hdf = Path(geom_hdf)
             xs_gdf = HdfXsec.get_cross_sections(geom_hdf)
         except Exception as e:
-            logger.error(f"Failed to read geometry HDF: {e}")
+            logger.error("Failed to read geometry HDF for cross-section checks")
+            logger.debug("Cross-section geometry HDF read failure for %s: %s", geom_hdf, e)
             msg = CheckMessage(
                 message_id="SYS_002",
                 severity=Severity.ERROR,
@@ -91,7 +92,7 @@ class CheckXs:
             if plan_hdf.exists():
                 steady_results = HdfResultsPlan.get_steady_results(plan_hdf)
         except Exception as e:
-            logger.warning(f"Could not read steady results: {e}")
+            logger.debug("Could not read steady results from %s: %s", plan_hdf, e)
 
         # Create summary data
         summary_data = []

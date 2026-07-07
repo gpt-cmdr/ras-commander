@@ -1073,10 +1073,19 @@ class GeomPreprocessor:
             plan_files_to_clear = list(ras_obj.project_folder.glob(r'*.p*'))
         elif isinstance(plan_files, (str, Path)):
             plan_files_to_clear = [plan_files]
-            logger.info(f"Clearing geometry preprocessor file for single plan: {plan_files}")
+            logger.info(
+                "Clearing geometry preprocessor file for single plan: %s",
+                Path(plan_files).name,
+            )
+            logger.debug(f"Clearing geometry preprocessor file for single plan path: {plan_files}")
         elif isinstance(plan_files, list):
             plan_files_to_clear = plan_files
-            logger.info(f"Clearing geometry preprocessor files for multiple plans: {plan_files}")
+            plan_file_names = [Path(plan_file).name for plan_file in plan_files]
+            logger.info(
+                "Clearing geometry preprocessor files for multiple plans: %s",
+                plan_file_names,
+            )
+            logger.debug(f"Clearing geometry preprocessor files for multiple plan paths: {plan_files}")
         else:
             logger.error("Invalid input type for plan_files.")
             raise ValueError("Invalid input. Please provide a string, Path, list of paths, or None.")
