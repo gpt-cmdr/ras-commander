@@ -159,8 +159,23 @@ def test_gridded_precipitation_configuration_info_is_concise(tmp_path, caplog):
         "Configured gridded precipitation in Model.u01: "
         "source=.\\Precipitation\\storm.nc, interpolation=Bilinear"
     ) in info_messages
+    warning_messages = _messages(caplog, logging.WARNING)
+    assert not any(
+        "Could not find 'Precipitation Mode='" in message
+        for message in warning_messages
+    )
+    assert not any(
+        "Could not find 'Met BC=Precipitation|Mode='" in message
+        for message in warning_messages
+    )
+    assert not any("Could not add GDAL Filename line" in message for message in warning_messages)
     assert not any(str(tmp_path) in message for message in info_messages)
     assert any(str(unsteady_file) in message for message in _messages(caplog, logging.DEBUG))
+
+    updated_text = unsteady_file.read_text(encoding="utf-8")
+    assert "Precipitation Mode=Enable" in updated_text
+    assert "Met BC=Precipitation|Mode=Gridded" in updated_text
+    assert "Met BC=Precipitation|Gridded GDAL Filename=.\\Precipitation\\storm.nc" in updated_text
 
 
 def test_gridded_precipitation_hdf_import_logs_one_concise_info(tmp_path, caplog, monkeypatch):

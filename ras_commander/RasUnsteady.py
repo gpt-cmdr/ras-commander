@@ -5722,15 +5722,92 @@ class RasUnsteady:
                 gdal_group_updated = True
                 logger.debug(f"Inserted GDAL Group at line {insert_at+1}")
 
-        # Verify all updates were made
+        # Some older/minimal unsteady files omit the meteorologic
+        # precipitation block entirely. Create only the missing managed keys
+        # instead of warning after a successful configuration request.
         if not precip_mode_updated:
-            logger.warning("Could not find 'Precipitation Mode=' line")
+            insert_at = RasUnsteady._get_default_met_insert_index(lines)
+            lines.insert(insert_at, "Precipitation Mode=Enable\n")
+            precip_mode_updated = True
+
         if not mode_updated:
-            logger.warning("Could not find 'Met BC=Precipitation|Mode=' line")
+            insert_at = next(
+                (
+                    i + 1
+                    for i, line in enumerate(lines)
+                    if line.startswith("Precipitation Mode=")
+                ),
+                RasUnsteady._get_default_met_insert_index(lines),
+            )
+            lines.insert(insert_at, "Met BC=Precipitation|Mode=Gridded\n")
+            mode_updated = True
+
         if not source_updated:
-            logger.warning("Could not find 'Met BC=Precipitation|Gridded Source=' line")
+            insert_at = next(
+                (
+                    i + 1
+                    for i, line in enumerate(lines)
+                    if line.startswith("Met BC=Precipitation|Mode=")
+                ),
+                RasUnsteady._get_default_met_insert_index(lines),
+            )
+            lines.insert(
+                insert_at,
+                "Met BC=Precipitation|Gridded Source=GDAL Raster File(s)\n",
+            )
+            source_updated = True
+
+        if not interp_updated:
+            insert_at = next(
+                (
+                    i + 1
+                    for i, line in enumerate(lines)
+                    if line.startswith("Met BC=Precipitation|Gridded Source=")
+                ),
+                RasUnsteady._get_default_met_insert_index(lines),
+            )
+            lines.insert(
+                insert_at,
+                f"Met BC=Precipitation|Gridded Interpolation={interpolation}\n",
+            )
+            interp_updated = True
+
         if not gdal_filename_updated:
-            logger.warning("Could not add GDAL Filename line")
+            insert_at = next(
+                (
+                    i + 1
+                    for i, line in enumerate(lines)
+                    if line.startswith("Met BC=Precipitation|Gridded Interpolation=")
+                ),
+                next(
+                    (
+                        i + 1
+                        for i, line in enumerate(lines)
+                        if line.startswith("Met BC=Precipitation|Gridded Source=")
+                    ),
+                    RasUnsteady._get_default_met_insert_index(lines),
+                ),
+            )
+            lines.insert(
+                insert_at,
+                f"Met BC=Precipitation|Gridded GDAL Filename={netcdf_str}\n",
+            )
+            gdal_filename_updated = True
+
+        if dataset_name and not gdal_group_updated:
+            insert_at = next(
+                (
+                    i + 1
+                    for i, line in enumerate(lines)
+                    if line.startswith("Met BC=Precipitation|Gridded GDAL Filename=")
+                ),
+                RasUnsteady._get_default_met_insert_index(lines),
+            )
+            lines.insert(
+                insert_at,
+                f"Met BC=Precipitation|Gridded GDAL Group={dataset_name}\n",
+            )
+            gdal_group_updated = True
 
         # Write the updated file
         with open(unsteady_path, 'w', encoding='utf-8', errors='replace', newline='\r\n') as f:
