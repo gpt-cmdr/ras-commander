@@ -117,7 +117,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | Notebook | Source | Runtime |
 | --- | --- | --- |
 | [600 - Floodplain Mapping via GUI Automation](../notebooks/600_floodplain_mapping_gui.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/600_floodplain_mapping_gui.ipynb) | 19.5 min |
-| [601 - Floodplain Mapping via RasProcess CLI](../notebooks/601_floodplain_mapping_rasprocess.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/601_floodplain_mapping_rasprocess.ipynb) | 6.0 min |
+| [601 - Headless Stored Map Generation Using RasMapper](../notebooks/601_headless_stored_map_generation_rasmapper.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/601_headless_stored_map_generation_rasmapper.ipynb) | 6.0 min |
 | [610 - Generate Fluvial Pluvial Delineations using Max WSE Arrival Time](../notebooks/610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.ipynb) | 1.0 h |
 | [611 - Validating RAS Mapper Layers and Terrain Files](../notebooks/611_validating_map_layers.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/611_validating_map_layers.ipynb) | 9 s |
 

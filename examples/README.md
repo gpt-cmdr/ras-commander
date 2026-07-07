@@ -101,7 +101,7 @@ projects, and generated artifacts are intentionally excluded from this README.
 
 ### 600s - Floodplain Mapping
 
-`600_floodplain_mapping_gui.ipynb`, `601_floodplain_mapping_rasprocess.ipynb`,
+`600_floodplain_mapping_gui.ipynb`, `601_headless_stored_map_generation_rasmapper.ipynb`,
 `610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.ipynb`,
 `611_validating_map_layers.ipynb`
 
