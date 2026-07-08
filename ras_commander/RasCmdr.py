@@ -252,10 +252,17 @@ class RasCmdr:
                 f"normalization: {missing_plan_numbers}"
             )
 
-        logger.info(
-            "Filtered plans to execute: "
-            f"{list(filtered_plan_entries['plan_number'])}"
-        )
+        filtered_plan_list = list(filtered_plan_entries["plan_number"])
+        if len(filtered_plan_list) > 10:
+            logger.info(
+                "Filtered plans to execute: %s plan(s) (%s ... %s)",
+                len(filtered_plan_list),
+                ", ".join(map(str, filtered_plan_list[:5])),
+                ", ".join(map(str, filtered_plan_list[-3:])),
+            )
+            logger.debug("Full filtered plan list: %s", filtered_plan_list)
+        else:
+            logger.info("Filtered plans to execute: %s", filtered_plan_list)
         return filtered_plan_entries
 
     @staticmethod
@@ -712,14 +719,14 @@ class RasCmdr:
                 try:
                     RasCurrency.clear_geom_hdf(plan_number, compute_ras)
                     RasGeo.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
-                    logger.info(f"Force-cleared all geometry preprocessor files for plan: {plan_number}")
+                    logger.debug(f"Force-cleared all geometry preprocessor files for plan: {plan_number}")
                 except Exception as e:
                     logger.error(f"Error force-clearing geometry preprocessor files for plan {plan_number}: {str(e)}")
             elif clear_geompre:
                 # Original behavior - only clear .c## files
                 try:
                     RasGeo.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
-                    logger.info(f"Cleared geometry preprocessor files for plan: {plan_number}")
+                    logger.debug(f"Cleared geometry preprocessor files for plan: {plan_number}")
                 except Exception as e:
                     logger.error(f"Error clearing geometry preprocessor files for plan {plan_number}: {str(e)}")
 
@@ -727,7 +734,7 @@ class RasCmdr:
             if num_cores is not None:
                 try:
                     RasPlan.set_num_cores(compute_plan_path, num_cores=num_cores, ras_object=compute_ras)
-                    logger.info(f"Set number of cores to {num_cores} for plan: {plan_number}")
+                    logger.debug(f"Set number of cores to {num_cores} for plan: {plan_number}")
                 except Exception as e:
                     logger.error(f"Error setting number of cores for plan {plan_number}: {str(e)}")
 
@@ -737,7 +744,7 @@ class RasCmdr:
 
             # Prepare the command for HEC-RAS execution
             cmd = f'"{compute_ras.ras_exe_path}" -c "{compute_prj_path}" "{compute_plan_path}"'
-            logger.info("Running Ras.exe with -c command line flag for plan %s", plan_number)
+            logger.debug("Running Ras.exe with -c command line flag for plan %s", plan_number)
             logger.debug(f"Running command: {cmd}")
 
             # Per-plan stdio log. HEC-RAS stdout/stderr are redirected to this file
@@ -816,7 +823,7 @@ class RasCmdr:
 
                 end_time = time.time()
                 run_time = end_time - start_time
-                logger.info(
+                logger.debug(
                     f"HEC-RAS execution completed for plan {plan_number} "
                     f"in {run_time:.2f} seconds"
                 )
@@ -835,7 +842,7 @@ class RasCmdr:
                         stream_callback.on_verify_result(str(plan_number), verified)
 
                     if verified:
-                        logger.info(f"Verification passed for plan {plan_number}")
+                        logger.debug(f"Verification passed for plan {plan_number}")
                         _success = True
                     else:
                         logger.error(
@@ -1159,7 +1166,8 @@ class RasCmdr:
                     worker_ras_object = init_ras_project(
                         ras_project_folder=worker_folder,
                         ras_version=ras_obj.ras_exe_path,
-                        ras_object=worker_ras
+                        ras_object=worker_ras,
+                        hide_intro=True,
                     )
                     worker_ras_objects[worker_id] = worker_ras_object
                 except Exception as e:

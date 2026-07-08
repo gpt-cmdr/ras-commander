@@ -885,7 +885,7 @@ class RasUtils:
 
             with open(file_path, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(updated_lines)
-            logger.info("Successfully updated file: %s", Path(file_path).name)
+            logger.debug("Successfully updated file: %s", Path(file_path).name)
             logger.debug(f"Successfully updated file path: {file_path}")
         except Exception as e:
             logger.exception(f"Failed to update file {file_path}")
@@ -937,7 +937,7 @@ class RasUtils:
             raise FileNotFoundError(f"Template file '{template_path}' does not exist.")
 
         shutil.copy(template_path, new_path)
-        logger.info("File cloned: %s -> %s", Path(template_path).name, Path(new_path).name)
+        logger.debug("File cloned: %s -> %s", Path(template_path).name, Path(new_path).name)
         logger.debug(f"File cloned from {template_path} to {new_path}")
 
         if update_function:
@@ -969,7 +969,7 @@ class RasUtils:
 
             with open(prj_file, 'w', encoding='utf-8', errors='replace') as f:
                 f.writelines(lines)
-            logger.info(f"Project file updated with new {file_type} entry: {new_num}")
+            logger.debug(f"Project file updated with new {file_type} entry: {new_num}")
         except Exception as e:
             logger.exception(f"Failed to update project file {prj_file}")
             raise

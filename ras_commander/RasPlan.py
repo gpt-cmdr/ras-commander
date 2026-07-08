@@ -367,7 +367,7 @@ class RasPlan:
         geom_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{new_geom}"
         ras_obj.plan_df.loc[mask, 'Geom Path'] = str(geom_path)
 
-        logger.info("Set geometry for plan p%s to g%s", plan_number, new_geom)
+        logger.debug("Set geometry for plan p%s to g%s", plan_number, new_geom)
         logger.debug("Updated plan DataFrame:")
         logger.debug(ras_obj.plan_df)
 
@@ -2256,7 +2256,7 @@ class RasPlan:
             with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
                 file.writelines(lines)
 
-            logger.info("Updated Plan Title in plan file to: %s", new_title)
+            logger.debug("Updated Plan Title in plan file to: %s", new_title)
             logger.debug("Updated Plan Title in plan file path: %s", plan_file_path)
 
         except IOError as e:

@@ -2245,26 +2245,27 @@ def init_ras_project(
 
     # Log CLB Engineering branding banner with version and docs links
     from . import __version__
-    logger.info(
+    _init_log = logger.debug if hide_intro else logger.info
+    _init_log(
         f"ras-commander v{__version__} | "
         f"An open-source project of CLB Engineering Corporation (https://clbengineering.com/) | "
         f"Docs: https://rascommander.info | "
         f"GitHub: https://github.com/gpt-cmdr/ras-commander"
     )
-    logger.info("Project initialized: %s", ras_object.project_name)
+    _init_log("Project initialized: %s", ras_object.project_name)
     logger.debug(f"Project initialized folder: {ras_object.project_folder}")
     if explicit_ras_exe_path and ras_exe_path != "Ras.exe":
-        logger.info("Using HEC-RAS executable from explicit path")
+        _init_log("Using HEC-RAS executable from explicit path")
     elif detected_version:
-        logger.info(
+        _init_log(
             "Using HEC-RAS version %s (autodetected from %s)",
             detected_version,
             detected_version_source,
         )
     elif ras_exe_path == "Ras.exe":
-        logger.info("Using HEC-RAS executable: Ras.exe (not resolved)")
+        _init_log("Using HEC-RAS executable: Ras.exe (not resolved)")
     else:
-        logger.info("Using HEC-RAS version %s", _ras_version_label(ras_version, ras_exe_path))
+        _init_log("Using HEC-RAS version %s", _ras_version_label(ras_version, ras_exe_path))
     logger.debug(f"Using HEC-RAS executable path: {ras_exe_path}")
 
     if not hide_intro:

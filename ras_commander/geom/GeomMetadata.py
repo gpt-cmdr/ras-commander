@@ -177,10 +177,6 @@ class GeomMetadata:
                 counts.update(mesh_info)
 
         except Exception as e:
-            logger.warning(
-                "HDF geometry metadata extraction failed for %s",
-                hdf_path.name,
-            )
             logger.debug("HDF metadata extraction failure for %s: %s", hdf_path, e)
 
         return counts
