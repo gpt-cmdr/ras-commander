@@ -1066,14 +1066,14 @@ class GeomPreprocessor:
                     cleared_any = True
 
             if not cleared_any:
-                logger.warning(f"No geometry preprocessor file found for: {plan_file}")
+                logger.debug("No geometry preprocessor artifacts found for plan: %s", plan_path.name)
 
         if plan_files is None:
             logger.info("Clearing all geometry preprocessor files in the project directory.")
             plan_files_to_clear = list(ras_obj.project_folder.glob(r'*.p*'))
         elif isinstance(plan_files, (str, Path)):
             plan_files_to_clear = [plan_files]
-            logger.info(
+            logger.debug(
                 "Clearing geometry preprocessor file for single plan: %s",
                 Path(plan_files).name,
             )
@@ -1081,7 +1081,7 @@ class GeomPreprocessor:
         elif isinstance(plan_files, list):
             plan_files_to_clear = plan_files
             plan_file_names = [Path(plan_file).name for plan_file in plan_files]
-            logger.info(
+            logger.debug(
                 "Clearing geometry preprocessor files for multiple plans: %s",
                 plan_file_names,
             )

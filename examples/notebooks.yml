@@ -2620,22 +2620,31 @@ notebooks:
   title: One-at-a-Time (OAT) Manning's n Sensitivity Analysis
   series: 700
   series_name: Sensitivity & Precipitation
-  summary: This notebook performs a **one-at-a-time (OAT)** sensitivity analysis on Manning’s n values
-    using a 2D HEC-RAS model. Each land cover class is varied individually while holding all others at
-    their baseline values, producing sensitivity c...
+  summary: This notebook performs a one-at-a-time Manning's n sensitivity analysis on the Muncie 2D
+    example project using GeomLandCover edits, local parallel execution, preprocessed cell roughness
+    propagation QA, and POI max-WSE sensitivity plots.
   tags:
   - sensitivity
   difficulty: intermediate
   est_runtime: null
-  data_project: null
+  data_project: Muncie
   functions_used:
-  - HdfMesh.get_mesh_cell_points
-  - HdfResultsMesh.get_mesh_cells_timeseries
+  - GeomLandCover.get_base_mannings_n
+  - GeomLandCover.get_region_mannings_n
+  - GeomLandCover.set_base_mannings_n
+  - HdfLandCover.get_mannings_calibration_table
+  - HdfLandCover.get_preprocessed_mannings_n
+  - HdfMesh.get_mesh_cell_polygons
+  - HdfResultsMesh.get_mesh_max_ws
   - RasCmdr.compute_parallel
+  - RasCurrency.check_plan_hdf_complete
+  - RasCurrency.get_geom_hdf_path
+  - RasCurrency.get_plan_hdf_path
   - RasExamples.extract_project
-  - RasGeo.get_mannings_baseoverrides
-  - RasGeo.get_mannings_regionoverrides
-  - RasGeo.set_mannings_baseoverrides
+  - RasMap.associate_geometry_layers
+  - RasMap.get_hdf_geometry_association
+  - RasMap.list_landcover_layers
+  - RasMap.list_terrain_layers
   - RasPlan.clone_geom
   - RasPlan.clone_plan
   - RasPlan.set_geom
@@ -2646,8 +2655,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 12
-  executed_cells: 0
+  code_cells: 16
+  executed_cells: 16
 - id: 720_precipitation_methods_comprehensive
   filename: 720_precipitation_methods_comprehensive.ipynb
   title: Precipitation Hyetograph Generation - Complete Method Comparison
