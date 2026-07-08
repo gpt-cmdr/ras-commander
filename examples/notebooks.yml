@@ -2599,8 +2599,14 @@ notebooks:
   - GeomLandCover.get_region_mannings_n
   - GeomLandCover.set_base_mannings_n
   - GeomLandCover.set_region_mannings_n
+  - GeomMesh.set_geometry_association
+  - HdfLandCover.get_preprocessed_mannings_n
   - HdfMesh.get_mesh_cell_points
+  - HdfMesh.get_mesh_sloped_topology
   - HdfResultsMesh.get_mesh_cells_timeseries
+  - HdfResultsMesh.get_mesh_max_depth
+  - HdfResultsMesh.get_mesh_max_face_v
+  - HdfResultsMesh.get_mesh_max_ws
   - RasCmdr.compute_parallel
   - RasCmdr.compute_plan
   - RasExamples.extract_project
@@ -2613,8 +2619,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 13
-  executed_cells: 12
+  code_cells: 15
+  executed_cells: 15
 - id: 711_mannings_sensitivity_multi_interval
   filename: 711_mannings_sensitivity_multi_interval.ipynb
   title: One-at-a-Time (OAT) Manning's n Sensitivity Analysis
