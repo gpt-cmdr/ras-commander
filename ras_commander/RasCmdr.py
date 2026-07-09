@@ -439,6 +439,113 @@ class RasCmdr:
         except Exception as e:
             logger.warning(f"Error verifying completion for {hdf_path}: {e}")
             return False
+
+    @staticmethod
+    def _rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path: Path) -> bool:
+        """Return True when a Windows RasUnsteady process still owns this plan tmp HDF."""
+        if os.name != "nt":
+            return False
+
+        try:
+            needle = str(tmp_hdf_path).replace("'", "''")
+            ps_command = (
+                f"$needle = '{needle}'; "
+                "$proc = Get-CimInstance Win32_Process "
+                "-Filter \"Name='RasUnsteady.exe'\" | "
+                "Where-Object { $_.CommandLine -like \"*$needle*\" } | "
+                "Select-Object -First 1 -ExpandProperty ProcessId; "
+                "if ($proc) { Write-Output $proc }"
+            )
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", ps_command],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            return result.returncode == 0 and bool(result.stdout.strip())
+        except Exception as exc:
+            logger.debug(
+                "Could not query RasUnsteady process state for %s: %s",
+                tmp_hdf_path.name,
+                exc,
+            )
+            return False
+
+    @staticmethod
+    def _wait_for_async_plan_completion(
+        plan_number: Union[str, Number],
+        ras_object: 'RasPrj',
+        check_errors: bool = True,
+        poll_interval: float = 5.0,
+        timeout_seconds: float = 7200.0,
+    ) -> Optional[bool]:
+        """
+        Wait for a solver child process that outlives ``Ras.exe -c``.
+
+        HEC-RAS 7 can return from the command launcher before the child
+        ``RasUnsteady.exe`` process has finished writing ``.p##.tmp.hdf``.
+        Returning before that child exits lets parallel workers reuse the same
+        folder early and can create false failure logs.  This helper only waits
+        when there is concrete evidence of an active or partial async solve.
+
+        Returns
+        -------
+        True
+            Final plan HDF verified.
+        False
+            An async solve was observed, but no verified final HDF appeared.
+        None
+            No async solve evidence was present; callers should keep their
+            normal success/failure behavior.
+        """
+        plan_num = RasUtils.normalize_ras_number(plan_number)
+        hdf_path = RasCmdr._get_hdf_path(plan_num, ras_object)
+        tmp_hdf_path = (
+            Path(ras_object.project_folder)
+            / f"{ras_object.project_name}.p{plan_num}.tmp.hdf"
+        )
+
+        if RasCmdr._verify_completion(hdf_path, check_errors=check_errors):
+            return True
+
+        active = RasCmdr._rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path)
+        partial_exists = tmp_hdf_path.exists()
+        if not active and not partial_exists:
+            return None
+
+        logger.debug(
+            "Waiting for RasUnsteady to finish plan %s after Ras.exe returned",
+            plan_num,
+        )
+        deadline = time.time() + timeout_seconds
+        observed_async = True
+
+        while time.time() < deadline:
+            if RasCmdr._verify_completion(hdf_path, check_errors=check_errors):
+                return True
+
+            active = RasCmdr._rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path)
+            partial_exists = tmp_hdf_path.exists()
+            if not active and not partial_exists:
+                return False
+
+            if not active and partial_exists:
+                # Give HEC-RAS a short grace window to rename/close files after
+                # the solver process exits, then verify one final time.
+                time.sleep(min(poll_interval, 2.0))
+                if RasCmdr._verify_completion(hdf_path, check_errors=check_errors):
+                    return True
+                if not RasCmdr._rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path):
+                    return False
+
+            time.sleep(poll_interval)
+
+        logger.warning(
+            "Timed out waiting for RasUnsteady to finish plan %s after %.0f seconds",
+            plan_num,
+            timeout_seconds,
+        )
+        return False if observed_async else None
     
     @staticmethod
     @log_call
@@ -828,77 +935,120 @@ class RasCmdr:
                     f"in {run_time:.2f} seconds"
                 )
 
-                # Callback: execution complete
-                if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
-                    stream_callback.on_exec_complete(str(plan_number), True, run_time)
-
-                # Verify completion if requested
-                if verify:
-                    hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
-                    verified = RasCmdr._verify_completion(hdf_path)
-
-                    # Callback: verification result
-                    if stream_callback and hasattr(stream_callback, 'on_verify_result'):
-                        stream_callback.on_verify_result(str(plan_number), verified)
-
-                    if verified:
-                        logger.debug(f"Verification passed for plan {plan_number}")
-                        _success = True
-                    else:
-                        logger.error(
-                            f"Verification failed for plan {plan_number}: 'Complete Process' not found in compute messages. "
-                            f"See: https://rascommander.info/user-guide/plan-execution/"
-                        )
-                        _success = False
-                else:
+                async_verified = RasCmdr._wait_for_async_plan_completion(
+                    plan_number,
+                    compute_ras,
+                    check_errors=verify,
+                )
+                if async_verified is True:
+                    logger.debug(
+                        "Verified final HDF for plan %s after Ras.exe returned",
+                        plan_number,
+                    )
+                    if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
+                        stream_callback.on_exec_complete(str(plan_number), True, run_time)
+                    if verify and stream_callback and hasattr(stream_callback, 'on_verify_result'):
+                        stream_callback.on_verify_result(str(plan_number), True)
                     _success = True
+                elif async_verified is False and verify:
+                    logger.error(
+                        "Verification failed for plan %s after Ras.exe returned. "
+                        "See: https://rascommander.info/user-guide/plan-execution/",
+                        plan_number,
+                    )
+                    _success = False
+                    if stream_callback and hasattr(stream_callback, 'on_verify_result'):
+                        stream_callback.on_verify_result(str(plan_number), False)
+                else:
+                    # Callback: execution complete
+                    if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
+                        stream_callback.on_exec_complete(str(plan_number), True, run_time)
+
+                    # Verify completion if requested
+                    if verify:
+                        hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
+                        verified = (
+                            async_verified is True
+                            or RasCmdr._verify_completion(hdf_path)
+                        )
+
+                        # Callback: verification result
+                        if stream_callback and hasattr(stream_callback, 'on_verify_result'):
+                            stream_callback.on_verify_result(str(plan_number), verified)
+
+                        if verified:
+                            logger.debug(f"Verification passed for plan {plan_number}")
+                            _success = True
+                        else:
+                            logger.error(
+                                f"Verification failed for plan {plan_number}: 'Complete Process' not found in compute messages. "
+                                f"See: https://rascommander.info/user-guide/plan-execution/"
+                            )
+                            _success = False
+                    else:
+                        _success = True
 
             except subprocess.CalledProcessError as e:
                 end_time = time.time()
                 run_time = end_time - start_time
-                logger.error(f"Error running plan: {plan_number} (exit code {e.returncode})")
-                logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
+                async_verified = RasCmdr._wait_for_async_plan_completion(
+                    plan_number,
+                    compute_ras,
+                    check_errors=True,
+                )
+                if async_verified is True:
+                    logger.info(
+                        "Ras.exe returned exit code %s for plan %s, but the final HDF verified after solver completion",
+                        e.returncode,
+                        plan_number,
+                    )
+                    if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
+                        stream_callback.on_exec_complete(str(plan_number), True, run_time)
+                    _success = True
+                else:
+                    logger.error(f"Error running plan: {plan_number} (exit code {e.returncode})")
+                    logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
 
-                # stdout/stderr were redirected to a file (no PIPE), so e.output is
-                # None; surface the tail of the run log for context. The substantive
-                # compute messages are read from the .bco/.computeMsgs files below.
-                try:
-                    if _run_log_path.exists():
-                        _log_text = _run_log_path.read_text(encoding="utf-8", errors="ignore").strip()
-                        if _log_text:
-                            logger.error(f"HEC-RAS console output ({_run_log_path.name}):\n{_log_text[-2000:]}")
-                except Exception as _log_err:
-                    logger.debug(f"Could not read run log {_run_log_path}: {_log_err}")
+                    # stdout/stderr were redirected to a file (no PIPE), so e.output is
+                    # None; surface the tail of the run log for context. The substantive
+                    # compute messages are read from the .bco/.computeMsgs files below.
+                    try:
+                        if _run_log_path.exists():
+                            _log_text = _run_log_path.read_text(encoding="utf-8", errors="ignore").strip()
+                            if _log_text:
+                                logger.error(f"HEC-RAS console output ({_run_log_path.name}):\n{_log_text[-2000:]}")
+                    except Exception as _log_err:
+                        logger.debug(f"Could not read run log {_run_log_path}: {_log_err}")
 
-                # Read compute message files (.bco## for 5.x, .computeMsgs.txt/.comp_msgs.txt for 6.x+)
-                plan_num_str = RasUtils.normalize_ras_number(plan_number)
-                try:
-                    bco_path = Path(compute_ras.project_folder) / f"{compute_ras.project_name}.bco{plan_num_str}"
-                    if bco_path.exists():
-                        bco_content = bco_path.read_text(encoding='utf-8', errors='ignore')
-                        if bco_content.strip():
-                            logger.error(f"Compute messages from {bco_path.name}:\n{bco_content}")
-                        else:
-                            logger.debug(f"BCO file {bco_path.name} exists but is empty")
-                except Exception as bco_err:
-                    logger.debug(f"Could not read .bco file: {bco_err}")
+                    # Read compute message files (.bco## for 5.x, .computeMsgs.txt/.comp_msgs.txt for 6.x+)
+                    plan_num_str = RasUtils.normalize_ras_number(plan_number)
+                    try:
+                        bco_path = Path(compute_ras.project_folder) / f"{compute_ras.project_name}.bco{plan_num_str}"
+                        if bco_path.exists():
+                            bco_content = bco_path.read_text(encoding='utf-8', errors='ignore')
+                            if bco_content.strip():
+                                logger.error(f"Compute messages from {bco_path.name}:\n{bco_content}")
+                            else:
+                                logger.debug(f"BCO file {bco_path.name} exists but is empty")
+                    except Exception as bco_err:
+                        logger.debug(f"Could not read .bco file: {bco_err}")
 
-                try:
-                    for suffix in [f".p{plan_num_str}.computeMsgs.txt", f".p{plan_num_str}.comp_msgs.txt"]:
-                        msg_path = Path(compute_ras.project_folder) / f"{compute_ras.project_name}{suffix}"
-                        if msg_path.exists():
-                            msg_content = msg_path.read_text(encoding='utf-8', errors='ignore')
-                            if msg_content.strip():
-                                logger.error(f"Compute messages from {msg_path.name}:\n{msg_content}")
-                            break
-                except Exception as msg_err:
-                    logger.debug(f"Could not read compute messages file: {msg_err}")
+                    try:
+                        for suffix in [f".p{plan_num_str}.computeMsgs.txt", f".p{plan_num_str}.comp_msgs.txt"]:
+                            msg_path = Path(compute_ras.project_folder) / f"{compute_ras.project_name}{suffix}"
+                            if msg_path.exists():
+                                msg_content = msg_path.read_text(encoding='utf-8', errors='ignore')
+                                if msg_content.strip():
+                                    logger.error(f"Compute messages from {msg_path.name}:\n{msg_content}")
+                                break
+                    except Exception as msg_err:
+                        logger.debug(f"Could not read compute messages file: {msg_err}")
 
-                # Callback: execution complete (failure case)
-                if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
-                    stream_callback.on_exec_complete(str(plan_number), False, run_time)
+                    # Callback: execution complete (failure case)
+                    if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
+                        stream_callback.on_exec_complete(str(plan_number), False, run_time)
 
-                _success = False
+                    _success = False
         except Exception as e:
             logger.critical(f"Error in compute_plan: {str(e)}")
             _success = False

@@ -219,7 +219,11 @@ class HdfResultsPlan:
                 logger.debug(f"Extracting Plan Information from: {Path(hdf_file.filename).name}")
                 plan_info = hdf_file.get('/Plan Data/Plan Information')
                 if plan_info is None:
-                    logger.warning("Group '/Plan Data/Plan Information' not found.")
+                    logger.debug(
+                        "Runtime metadata group '/Plan Data/Plan Information' "
+                        "not found in %s.",
+                        Path(hdf_file.filename).name,
+                    )
                     return None
 
                 # Extract plan information
