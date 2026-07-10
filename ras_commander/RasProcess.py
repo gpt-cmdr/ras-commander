@@ -31,6 +31,8 @@ Linux/Wine Support:
     No code changes needed for users — just install the Wine environment.
 """
 
+import fnmatch
+import ntpath
 import os
 import sys
 import subprocess
@@ -54,10 +56,12 @@ class ProjectionInfo:
 
     Attributes:
         prj_path: Path to projection file (.prj) if found, None otherwise
-        terrain_path: Path to terrain TIF file if found, None otherwise
+        terrain_path: First terrain TIF file if found, None otherwise
+        terrain_paths: All terrain TIF files referenced by rasmap terrain layers
     """
     prj_path: Optional[Path]
     terrain_path: Optional[Path]
+    terrain_paths: Tuple[Path, ...] = ()
 
 
 @dataclass
@@ -98,6 +102,37 @@ logger = get_logger(__name__)
 # Detect platform once at import time
 IS_LINUX = platform.system() == "Linux"
 IS_WINDOWS = platform.system() == "Windows"
+
+
+def _windows_extended_length_path(path: Union[str, Path]) -> str:
+    """Return an extended-length path on Windows and a normal path elsewhere."""
+    path_str = os.fspath(path)
+    if not IS_WINDOWS or path_str.startswith("\\\\?\\"):
+        return path_str
+
+    absolute_path = ntpath.abspath(path_str)
+    if absolute_path.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + absolute_path[2:]
+    return "\\\\?\\" + absolute_path
+
+
+def _iterdir_paths(directory: Union[str, Path]) -> List[Path]:
+    """List a directory while preserving normal Path values for callers."""
+    directory_path = Path(directory)
+    with os.scandir(_windows_extended_length_path(directory_path)) as entries:
+        return [directory_path / entry.name for entry in entries]
+
+
+def _glob_paths(directory: Union[str, Path], pattern: str) -> List[Path]:
+    """Match direct children using extended-length-safe directory scanning."""
+    return sorted(
+        (
+            path
+            for path in _iterdir_paths(directory)
+            if fnmatch.fnmatch(path.name, pattern)
+        ),
+        key=lambda path: path.name.casefold(),
+    )
 
 
 class RasProcess:
@@ -967,17 +1002,18 @@ Step 5: Configure (optional — auto-detection usually works)
     @log_call
     def _get_projection_info(rasmap_path: Path) -> ProjectionInfo:
         """
-        Extract projection file path and terrain path from .rasmap XML.
+        Extract projection file path and terrain raster paths from .rasmap XML.
 
         Args:
             rasmap_path: Path to .rasmap file
 
         Returns:
-            ProjectionInfo dataclass with prj_path and terrain_path fields.
-            Fields are None if not found.
+            ProjectionInfo containing the projection path and every terrain
+            raster associated with the rasmap terrain layers.
         """
         try:
-            tree = ET.parse(rasmap_path)
+            rasmap_path = Path(rasmap_path)
+            tree = ET.parse(_windows_extended_length_path(rasmap_path))
             root = tree.getroot()
 
             # Get projection file
@@ -987,28 +1023,58 @@ Step 5: Configure (optional — auto-detection usually works)
                 filename = proj_elem.get("Filename")
                 if filename:
                     prj_path = rasmap_path.parent / filename.replace(".\\", "").replace("./", "")
-                    if not prj_path.exists():
+                    if not os.path.exists(_windows_extended_length_path(prj_path)):
                         prj_path = None
 
-            # Get terrain TIF
-            terrain_path = None
-            for layer in root.findall(".//Terrains/Layer"):
+            terrain_paths: List[Path] = []
+            for layer in root.findall("./Terrains/Layer"):
                 filename = layer.get("Filename")
                 if filename:
                     terrain_hdf = rasmap_path.parent / filename.replace(".\\", "").replace("./", "")
-                    if terrain_hdf.exists():
-                        # Look for .tif in same folder
+                    if os.path.exists(_windows_extended_length_path(terrain_hdf)):
                         terrain_dir = terrain_hdf.parent
-                        for tif in terrain_dir.glob("*.tif"):
-                            terrain_path = tif
-                            break
-                    break
+                        layer_tifs = _glob_paths(
+                            terrain_dir,
+                            f"{terrain_hdf.stem}*.tif",
+                        )
+                        if not layer_tifs:
+                            layer_tifs = _glob_paths(terrain_dir, "*.tif")
+                        for tif_path in layer_tifs:
+                            if tif_path not in terrain_paths:
+                                terrain_paths.append(tif_path)
 
-            return ProjectionInfo(prj_path=prj_path, terrain_path=terrain_path)
+            terrain_paths_tuple = tuple(terrain_paths)
+            terrain_path = terrain_paths_tuple[0] if terrain_paths_tuple else None
+            return ProjectionInfo(
+                prj_path=prj_path,
+                terrain_path=terrain_path,
+                terrain_paths=terrain_paths_tuple,
+            )
 
         except Exception as e:
             logger.error(f"Failed to parse rasmap for projection info: {e}")
-            return ProjectionInfo(prj_path=None, terrain_path=None)
+            return ProjectionInfo(prj_path=None, terrain_path=None, terrain_paths=())
+
+    @staticmethod
+    def _terrain_for_stored_map(
+        tif_path: Path,
+        terrain_paths: Tuple[Path, ...],
+    ) -> Optional[Path]:
+        """Match a stored-map terrain suffix to its source terrain raster."""
+        if not terrain_paths:
+            return None
+        if len(terrain_paths) == 1:
+            return terrain_paths[0]
+
+        stored_map_stem = Path(tif_path).stem.casefold()
+        matches = [
+            terrain_path
+            for terrain_path in terrain_paths
+            if stored_map_stem.endswith(terrain_path.stem.casefold())
+        ]
+        if not matches:
+            return None
+        return max(matches, key=lambda path: len(path.stem))
 
     @staticmethod
     @log_call
@@ -1033,13 +1099,22 @@ Step 5: Configure (optional — auto-detection usually works)
             return False
 
         try:
-            with rasterio.open(terrain_path) as terrain:
+            terrain_path = Path(terrain_path)
+            with rasterio.open(
+                _windows_extended_length_path(terrain_path)
+            ) as terrain:
                 transform = terrain.transform
                 terrain_crs = terrain.crs
 
             crs = None
-            if prj_path is not None and prj_path.exists():
-                with open(prj_path, 'r', encoding='utf-8') as f:
+            if prj_path is not None and os.path.exists(
+                _windows_extended_length_path(prj_path)
+            ):
+                with open(
+                    _windows_extended_length_path(prj_path),
+                    'r',
+                    encoding='utf-8',
+                ) as f:
                     wkt = f.read()
                 crs = CRS.from_wkt(wkt)
             elif terrain_crs is not None:
@@ -1059,18 +1134,20 @@ Step 5: Configure (optional — auto-detection usually works)
 
             tif_path = Path(tif_path)
             tmp_path = tif_path.with_name(f"{tif_path.stem}.georef_tmp{tif_path.suffix}")
-            with rasterio.open(tif_path) as src:
+            tif_io_path = _windows_extended_length_path(tif_path)
+            tmp_io_path = _windows_extended_length_path(tmp_path)
+            with rasterio.open(tif_io_path) as src:
                 data = src.read()
                 profile = src.profile.copy()
                 tags = src.tags()
 
             profile.update(crs=crs, transform=transform)
-            with rasterio.open(tmp_path, "w", **profile) as dst:
+            with rasterio.open(tmp_io_path, "w", **profile) as dst:
                 dst.write(data)
                 if tags:
                     dst.update_tags(**tags)
 
-            tmp_path.replace(tif_path)
+            os.replace(tmp_io_path, tif_io_path)
 
             logger.debug("Fixed georeferencing: %s", tif_path)
             return True
@@ -1098,7 +1175,9 @@ Step 5: Configure (optional — auto-detection usually works)
             readable_tifs: List[Path] = []
             for tif_path in tif_list:
                 try:
-                    with rasterio.open(tif_path) as src:
+                    with rasterio.open(
+                        _windows_extended_length_path(tif_path)
+                    ) as src:
                         if src.count < 1 or src.width < 1 or src.height < 1:
                             raise ValueError("GeoTIFF has no readable raster band")
                         src.read(1)
@@ -1110,7 +1189,9 @@ Step 5: Configure (optional — auto-detection usually works)
                         exc,
                     )
                     try:
-                        Path(tif_path).unlink(missing_ok=True)
+                        tif_io_path = _windows_extended_length_path(tif_path)
+                        if os.path.exists(tif_io_path):
+                            os.remove(tif_io_path)
                     except OSError:
                         logger.debug("Could not delete unreadable TIFF: %s", tif_path)
             generated_files[map_key] = readable_tifs
@@ -1179,7 +1260,7 @@ Step 5: Configure (optional — auto-detection usually works)
             True if successful, False otherwise
         """
         try:
-            tree = ET.parse(rasmap_path)
+            tree = ET.parse(_windows_extended_length_path(rasmap_path))
             root = tree.getroot()
 
             # Find or create the Results element
@@ -1259,7 +1340,11 @@ Step 5: Configure (optional — auto-detection usually works)
                 map_params.set(attr_name, str(attr_value))
 
             # Write back
-            tree.write(rasmap_path, encoding='utf-8', xml_declaration=True)
+            tree.write(
+                _windows_extended_length_path(rasmap_path),
+                encoding='utf-8',
+                xml_declaration=True,
+            )
             logger.debug(f"Added stored map: {display_name} ({profile_name})")
             return True
 
@@ -1284,7 +1369,7 @@ Step 5: Configure (optional — auto-detection usually works)
             Number of stored maps removed
         """
         try:
-            tree = ET.parse(rasmap_path)
+            tree = ET.parse(_windows_extended_length_path(rasmap_path))
             root = tree.getroot()
 
             removed_count = 0
@@ -1315,7 +1400,11 @@ Step 5: Configure (optional — auto-detection usually works)
                     removed_count += 1
 
             if removed_count > 0:
-                tree.write(rasmap_path, encoding='utf-8', xml_declaration=True)
+                tree.write(
+                    _windows_extended_length_path(rasmap_path),
+                    encoding='utf-8',
+                    xml_declaration=True,
+                )
                 logger.debug(f"Removed {removed_count} stored maps from rasmap")
 
             return removed_count
@@ -1470,7 +1559,7 @@ Step 5: Configure (optional — auto-detection usually works)
         plan_short_id = RasProcess._get_plan_short_id(plan_hdf_path)
 
         # Get the output folder from rasmap Layer Name (should match Plan ShortID)
-        tree = ET.parse(rasmap_path)
+        tree = ET.parse(_windows_extended_length_path(rasmap_path))
         root = tree.getroot()
         output_folder_from_rasmap = None
         plan_basename = Path(plan_hdf).name.lower()
@@ -1495,7 +1584,7 @@ Step 5: Configure (optional — auto-detection usually works)
             output_folder = actual_output_folder
 
         output_dir = ras_obj.project_folder / actual_output_folder
-        output_dir.mkdir(exist_ok=True)
+        os.makedirs(_windows_extended_length_path(output_dir), exist_ok=True)
 
         logger.debug(f"Plan ShortID from HDF: {plan_short_id}")
         logger.debug(f"Output folder from rasmap: {output_folder_from_rasmap}")
@@ -1518,7 +1607,10 @@ Step 5: Configure (optional — auto-detection usually works)
 
         # Backup rasmap
         rasmap_backup = rasmap_path.with_suffix('.rasmap.bak')
-        shutil.copy2(rasmap_path, rasmap_backup)
+        shutil.copy2(
+            _windows_extended_length_path(rasmap_path),
+            _windows_extended_length_path(rasmap_backup),
+        )
 
         try:
             # Set render mode if requested (before modifying stored maps)
@@ -1605,7 +1697,10 @@ Step 5: Configure (optional — auto-detection usually works)
                 resolved_output_path = Path(output_path)
                 if not resolved_output_path.is_absolute():
                     resolved_output_path = (ras_obj.project_folder / resolved_output_path).resolve()
-                resolved_output_path.mkdir(parents=True, exist_ok=True)
+                os.makedirs(
+                    _windows_extended_length_path(resolved_output_path),
+                    exist_ok=True,
+                )
 
             # Snapshot pre-existing files in output_dir so we only move files
             # that were created or changed by this StoreAllMaps call when
@@ -1613,10 +1708,10 @@ Step 5: Configure (optional — auto-detection usually works)
             # manually curated files while still relocating regenerated rasters
             # that overwrite the same filenames on reruns.
             pre_existing_files = {}
-            if output_dir.exists():
-                for item in output_dir.iterdir():
+            if os.path.isdir(_windows_extended_length_path(output_dir)):
+                for item in _iterdir_paths(output_dir):
                     try:
-                        stat = item.stat()
+                        stat = os.stat(_windows_extended_length_path(item))
                     except FileNotFoundError:
                         continue
                     pre_existing_files[item.name] = (
@@ -1678,9 +1773,9 @@ Step 5: Configure (optional — auto-detection usually works)
                 )
                 moved_count = 0
                 # Move files that were created or modified by this call.
-                for item in output_dir.iterdir():
+                for item in _iterdir_paths(output_dir):
                     try:
-                        stat = item.stat()
+                        stat = os.stat(_windows_extended_length_path(item))
                     except FileNotFoundError:
                         continue
                     # PostProcessing.hdf is RasMapperLib's derived-map cache
@@ -1693,9 +1788,13 @@ Step 5: Configure (optional — auto-detection usually works)
                     current_signature = (stat.st_mtime_ns, stat.st_size)
                     if previous_signature != current_signature:
                         dest = resolved_output_path / item.name
-                        if dest.exists():
-                            dest.unlink()
-                        shutil.move(str(item), str(dest))
+                        dest_move_path = _windows_extended_length_path(dest)
+                        if os.path.exists(dest_move_path):
+                            os.remove(dest_move_path)
+                        shutil.move(
+                            _windows_extended_length_path(item),
+                            dest_move_path,
+                        )
                         moved_count += 1
                 logger.debug(
                     "Moved %d generated file(s) to %s",
@@ -1717,11 +1816,11 @@ Step 5: Configure (optional — auto-detection usually works)
 
                 safe_profile = profile_name.replace(":", " ").replace("/", "_")
                 pattern = f"{display_name_used} ({safe_profile})*.tif"
-                tif_files = list(search_dir.glob(pattern))
+                tif_files = _glob_paths(search_dir, pattern)
 
                 if not tif_files:
                     pattern_alt = f"{display_name_used.replace(' ', '_')} ({safe_profile})*.tif"
-                    tif_files = list(search_dir.glob(pattern_alt))
+                    tif_files = _glob_paths(search_dir, pattern_alt)
 
                 if tif_files:
                     generated_files[map_key] = tif_files
@@ -1739,8 +1838,11 @@ Step 5: Configure (optional — auto-detection usually works)
 
                 pattern = f"{display_name_used} (*.tif"
                 tif_files = [
-                    p for p in search_dir.glob(pattern)
-                    if p.stat().st_mtime >= run_started
+                    path
+                    for path in _glob_paths(search_dir, pattern)
+                    if os.stat(
+                        _windows_extended_length_path(path)
+                    ).st_mtime >= run_started
                 ]
                 if tif_files:
                     generated_files[map_key] = tif_files
@@ -1752,10 +1854,10 @@ Step 5: Configure (optional — auto-detection usually works)
             if inundation_boundary:
                 safe_profile = profile_name.replace(":", " ").replace("/", "_")
                 shp_pattern = f"Inundation Boundary ({safe_profile})*.shp"
-                shp_files = list(search_dir.glob(shp_pattern))
+                shp_files = _glob_paths(search_dir, shp_pattern)
                 if not shp_files:
                     shp_pattern_alt = f"Inundation_Boundary*({safe_profile})*.shp"
-                    shp_files = list(search_dir.glob(shp_pattern_alt))
+                    shp_files = _glob_paths(search_dir, shp_pattern_alt)
                 if shp_files:
                     generated_files['inundation_boundary'] = shp_files
                     logger.debug(
@@ -1768,7 +1870,10 @@ Step 5: Configure (optional — auto-detection usually works)
             # Fix georeferencing if requested
             if fix_georef and generated_files:
                 proj_info = RasProcess._get_projection_info(rasmap_path)
-                if proj_info.terrain_path:
+                terrain_paths = proj_info.terrain_paths
+                if not terrain_paths and proj_info.terrain_path is not None:
+                    terrain_paths = (proj_info.terrain_path,)
+                if terrain_paths:
                     if proj_info.prj_path is None:
                         logger.debug(
                             "Projection file referenced by %s was not found; "
@@ -1777,10 +1882,22 @@ Step 5: Configure (optional — auto-detection usually works)
                         )
                     for tif_list in generated_files.values():
                         for tif_path in tif_list:
+                            terrain_path = RasProcess._terrain_for_stored_map(
+                                tif_path,
+                                terrain_paths,
+                            )
+                            if terrain_path is None:
+                                logger.warning(
+                                    "Could not match stored-map TIFF to one of %d "
+                                    "terrain rasters; georeferencing was not changed: %s",
+                                    len(terrain_paths),
+                                    tif_path,
+                                )
+                                continue
                             RasProcess._fix_georeferencing(
                                 tif_path,
                                 proj_info.prj_path,
-                                proj_info.terrain_path,
+                                terrain_path,
                             )
                 else:
                     logger.warning("Could not find terrain for georef fix")
@@ -1799,9 +1916,13 @@ Step 5: Configure (optional — auto-detection usually works)
 
         finally:
             # Restore rasmap backup
-            if rasmap_backup.exists():
-                shutil.copy2(rasmap_backup, rasmap_path)
-                rasmap_backup.unlink()
+            rasmap_backup_path = _windows_extended_length_path(rasmap_backup)
+            if os.path.exists(rasmap_backup_path):
+                shutil.copy2(
+                    rasmap_backup_path,
+                    _windows_extended_length_path(rasmap_path),
+                )
+                os.remove(rasmap_backup_path)
 
     @staticmethod
     @log_call
