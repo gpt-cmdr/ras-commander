@@ -2,6 +2,7 @@
 
 import importlib
 import logging
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -239,9 +240,15 @@ def test_log_execution_results_uses_concise_info(caplog):
     assert "Plan 02: Failed" in debug_messages
 
 
-def test_compute_plan_success_logging_is_concise(monkeypatch, caplog):
+def test_compute_plan_success_logging_is_concise(monkeypatch, tmp_path, caplog):
     ras_obj = _DummyRas()
-    plan_path = Path(ras_obj.project_folder) / "test.p01"
+    ras_obj.project_folder = tmp_path
+    ras_obj.project_name = "TestProject"
+    ras_obj.prj_file = tmp_path / "TestProject.prj"
+    ras_obj.ras_exe_path = "Ras.exe"
+    plan_path = tmp_path / "TestProject.p01"
+    ras_obj.prj_file.write_text("Proj Title=TestProject\n", encoding="utf-8")
+    plan_path.write_text("Plan Title=Plan 01\n", encoding="utf-8")
     rascurrency_module = importlib.import_module("ras_commander.RasCurrency")
 
     monkeypatch.setattr(
@@ -285,12 +292,219 @@ def test_compute_plan_success_logging_is_concise(monkeypatch, caplog):
     )
 
     assert result.success is True
-    assert "HEC-RAS execution completed for plan 01 in" in info_text
-    assert "seconds" in info_text
+    assert "HEC-RAS execution completed for plan 01 in" in debug_text
+    assert "seconds" in debug_text
     assert "Total run time for plan 01" not in info_text
     assert str(plan_path) not in info_text
     assert "Running command:" in debug_text
     assert str(plan_path) in debug_text
+
+
+def test_compute_plan_treats_verified_hdf_after_launcher_error_as_success(
+    monkeypatch, tmp_path, caplog
+):
+    """A nonzero Ras.exe launcher return can still yield a valid final HDF."""
+    rascurrency_module = importlib.import_module("ras_commander.RasCurrency")
+    prj_path = tmp_path / "TestProject.prj"
+    plan_path = tmp_path / "TestProject.p01"
+    hdf_path = tmp_path / "TestProject.p01.hdf"
+    prj_path.write_text("Proj Title=TestProject\n", encoding="utf-8")
+    plan_path.write_text("Plan Title=Plan 01\n", encoding="utf-8")
+    hdf_path.write_text("computed\n", encoding="utf-8")
+
+    ras_obj = _DummyRas()
+    ras_obj.project_folder = tmp_path
+    ras_obj.project_name = "TestProject"
+    ras_obj.prj_file = prj_path
+    ras_obj.ras_exe_path = "Ras.exe"
+
+    def fake_update_results_df(plan_numbers=None):
+        ras_obj.results_df = pd.DataFrame(
+            {
+                "plan_number": list(plan_numbers),
+                "hdf_path": [str(hdf_path)],
+            }
+        )
+        return ras_obj.results_df
+
+    ras_obj.update_results_df = fake_update_results_df
+
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda plan_number, ras_object: plan_path),
+    )
+    monkeypatch.setattr(
+        rascurrency_module.RasCurrency,
+        "are_plan_results_current",
+        staticmethod(lambda plan_number, ras_object: (False, "stale results")),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda plan_path: None),
+    )
+
+    def fake_run(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, "Ras.exe")
+
+    monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        RasCmdr,
+        "_wait_for_async_plan_completion",
+        staticmethod(lambda *args, **kwargs: True),
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="ras_commander.RasCmdr"):
+        result = RasCmdr.compute_plan(
+            "01",
+            ras_object=ras_obj,
+            dialog_watchdog=False,
+        )
+
+    error_text = "\n".join(
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno >= logging.ERROR
+        and record.name == "ras_commander.RasCmdr"
+    )
+    info_text = "\n".join(
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.INFO
+        and record.name == "ras_commander.RasCmdr"
+    )
+
+    assert result.success is True
+    assert result.results_df_row["plan_number"] == "01"
+    assert "Error running plan" not in error_text
+    assert "final HDF verified after solver completion" in info_text
+
+
+def test_compute_plan_treats_verified_hdf_after_normal_return_as_success(
+    monkeypatch, tmp_path
+):
+    """Async HDF verification after a zero launcher return should set success."""
+    rascurrency_module = importlib.import_module("ras_commander.RasCurrency")
+    prj_path = tmp_path / "TestProject.prj"
+    plan_path = tmp_path / "TestProject.p01"
+    hdf_path = tmp_path / "TestProject.p01.hdf"
+    prj_path.write_text("Proj Title=TestProject\n", encoding="utf-8")
+    plan_path.write_text("Plan Title=Plan 01\n", encoding="utf-8")
+    hdf_path.write_text("computed\n", encoding="utf-8")
+
+    ras_obj = _DummyRas()
+    ras_obj.project_folder = tmp_path
+    ras_obj.project_name = "TestProject"
+    ras_obj.prj_file = prj_path
+    ras_obj.ras_exe_path = "Ras.exe"
+
+    def fake_update_results_df(plan_numbers=None):
+        ras_obj.results_df = pd.DataFrame(
+            {
+                "plan_number": list(plan_numbers),
+                "hdf_path": [str(hdf_path)],
+            }
+        )
+        return ras_obj.results_df
+
+    ras_obj.update_results_df = fake_update_results_df
+
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda plan_number, ras_object: plan_path),
+    )
+    monkeypatch.setattr(
+        rascurrency_module.RasCurrency,
+        "are_plan_results_current",
+        staticmethod(lambda plan_number, ras_object: (False, "stale results")),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda plan_path: None),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="", stderr=""),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_wait_for_async_plan_completion",
+        staticmethod(lambda *args, **kwargs: True),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+        verify=True,
+    )
+
+    assert result.success is True
+    assert result.results_df_row["plan_number"] == "01"
+
+
+def test_compute_plan_keeps_launcher_error_when_final_hdf_not_verified(
+    monkeypatch, tmp_path, caplog
+):
+    """Real launcher failures should still be reported as failed plans."""
+    rascurrency_module = importlib.import_module("ras_commander.RasCurrency")
+    prj_path = tmp_path / "TestProject.prj"
+    plan_path = tmp_path / "TestProject.p01"
+    prj_path.write_text("Proj Title=TestProject\n", encoding="utf-8")
+    plan_path.write_text("Plan Title=Plan 01\n", encoding="utf-8")
+
+    ras_obj = _DummyRas()
+    ras_obj.project_folder = tmp_path
+    ras_obj.project_name = "TestProject"
+    ras_obj.prj_file = prj_path
+    ras_obj.ras_exe_path = "Ras.exe"
+
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda plan_number, ras_object: plan_path),
+    )
+    monkeypatch.setattr(
+        rascurrency_module.RasCurrency,
+        "are_plan_results_current",
+        staticmethod(lambda plan_number, ras_object: (False, "stale results")),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda plan_path: None),
+    )
+
+    def fake_run(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, "Ras.exe")
+
+    monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        RasCmdr,
+        "_wait_for_async_plan_completion",
+        staticmethod(lambda *args, **kwargs: False),
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="ras_commander.RasCmdr"):
+        result = RasCmdr.compute_plan(
+            "01",
+            ras_object=ras_obj,
+            dialog_watchdog=False,
+        )
+
+    error_text = "\n".join(
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno >= logging.ERROR
+        and record.name == "ras_commander.RasCmdr"
+    )
+
+    assert result.success is False
+    assert "Error running plan: 01 (exit code 1)" in error_text
 
 
 def test_wsl_linux_retry_script_uses_utf8_and_cleans_io_tmp(monkeypatch, tmp_path):
