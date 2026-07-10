@@ -534,6 +534,28 @@ notebooks:
   excluded: false
   code_cells: 6
   executed_cells: 4
+- id: 125_rasmapper_stored_maps_arrival_duration
+  filename: 125_rasmapper_stored_maps_arrival_duration.ipynb
+  title: 'RASMapper Stored Maps: Arrival Time, Duration, and Percent Time Inundated'
+  series: 100
+  series_name: Initialization & Execution
+  summary: '`RasProcess.store_maps()` generates rendered result rasters through the HEC-RAS mapping engine
+    (RasMapperLib via the bundled `RasStoreMapHelper.exe`). This notebook covers the whole-simulation
+    map types added alongside the profile-based WSE, depth, and velocity products.'
+  tags:
+  - rasmapper
+  difficulty: beginner
+  est_runtime: null
+  data_project: BaldEagleCrkMulti2D
+  functions_used:
+  - RasCmdr.compute_plan
+  - RasExamples.extract_project
+  - RasProcess.store_maps
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 6
+  executed_cells: 0
 - id: 150_results_dataframe
   filename: 150_results_dataframe.ipynb
   title: Using results_df for Plan Results Summary
