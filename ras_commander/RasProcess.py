@@ -35,6 +35,7 @@ import os
 import sys
 import subprocess
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -147,9 +148,16 @@ class RasProcess:
         'depth_x_velocity': ('depth and velocity', 'D * V', True),
         'depth_x_velocity_sq': ('depth and velocity squared', 'D * V^2', True),
         'flow': ('flow', 'Flow', True),
-        'arrival_time': ('arrivaltime', 'Arrival Time', False),
+        # XML names verified against the RasMapperLib.dll MapTypes table
+        # (identical in 6.6 and 7.0.1): "arrival time" (with space) and
+        # "fraction inundated". These types use the ArrivalDepth threshold
+        # attribute and label outputs "(<depth><unit> hrs)" instead of the
+        # profile name.
+        'arrival_time': ('arrival time', 'Arrival Time', False),
         'duration': ('duration', 'Duration', False),
-        'recession': ('recession', 'Recession', False),
+        'percent_inundated': ('fraction inundated', 'Percent Time Inundated', False),
+        # NOTE: RasMapperLib has no 'recession' MapType (verified 6.6/7.0.1).
+        # Recession time = arrival_time + duration; derive it downstream.
         'inundation_boundary': ('depth', 'Inundation Boundary', False),
     }
 
@@ -1146,6 +1154,7 @@ Step 5: Configure (optional — auto-detection usually works)
         output_folder: str,
         profile_index: int = 2147483647,
         output_mode: str = "Stored Current Terrain",
+        extra_attrs: Optional[Dict[str, str]] = None,
     ) -> bool:
         """
         Add a stored map configuration to the .rasmap file.
@@ -1162,6 +1171,9 @@ Step 5: Configure (optional — auto-detection usually works)
             output_mode: OutputMode for MapParameters. Use "Stored Current Terrain"
                 for raster outputs (default), or "Stored Polygon Specified Depth"
                 for inundation boundary shapefile output.
+            extra_attrs: Additional attributes set on the MapParameters element
+                (e.g. {"ArrivalDepth": "0.1"} for arrival time / duration /
+                percent-inundated maps).
 
         Returns:
             True if successful, False otherwise
@@ -1243,6 +1255,8 @@ Step 5: Configure (optional — auto-detection usually works)
             map_params.set("StoredFilename", output_filename)
             map_params.set("ProfileIndex", str(profile_index))
             map_params.set("ProfileName", profile_name)
+            for attr_name, attr_value in (extra_attrs or {}).items():
+                map_params.set(attr_name, str(attr_value))
 
             # Write back
             tree.write(rasmap_path, encoding='utf-8', xml_declaration=True)
@@ -1326,6 +1340,10 @@ Step 5: Configure (optional — auto-detection usually works)
         depth_x_velocity: bool = False,
         depth_x_velocity_sq: bool = False,
         inundation_boundary: bool = False,
+        arrival_time: bool = False,
+        duration: bool = False,
+        percent_inundated: bool = False,
+        arrival_depth: float = 0.0,
         clear_existing: bool = True,
         fix_georef: bool = True,
         ras_object=None,
@@ -1376,6 +1394,15 @@ Step 5: Configure (optional — auto-detection usually works)
             depth_x_velocity: Generate D*V hazard map (default: False)
             depth_x_velocity_sq: Generate D*V² impact map (default: False)
             inundation_boundary: Generate inundation boundary polygon (default: False)
+            arrival_time: Generate flood Arrival Time map in hours (default: False).
+                Whole-simulation product; ignores the ``profile`` argument.
+            duration: Generate inundation Duration map in hours (default: False).
+                Whole-simulation product; ignores the ``profile`` argument.
+            percent_inundated: Generate Percent Time Inundated map (default: False).
+                Whole-simulation product; ignores the ``profile`` argument.
+            arrival_depth: Wet/dry depth threshold (model vertical units) for
+                arrival_time / duration / percent_inundated maps (default: 0.0).
+                Appears in output filenames, e.g. "Arrival Time (0.1ft hrs)".
             clear_existing: Clear existing stored maps before adding new ones (default: True)
             fix_georef: Apply georeferencing fix to output TIFs (default: True)
             ras_object: Optional RAS object instance
@@ -1523,6 +1550,21 @@ Step 5: Configure (optional — auto-detection usually works)
             if depth_x_velocity_sq:
                 maps_to_add.append(('depth and velocity squared', 'depth_x_velocity_sq'))
 
+            # Whole-simulation map types: always Max profile, labeled by the
+            # ArrivalDepth threshold (e.g. "Arrival Time (0.1ft hrs)") rather
+            # than the profile name. XML names come from MAP_TYPES — the
+            # single source of truth for RasMapperLib name strings.
+            adr_flags = {
+                'arrival_time': arrival_time,
+                'duration': duration,
+                'percent_inundated': percent_inundated,
+            }
+            adr_maps_to_add = [
+                (RasProcess.MAP_TYPES[key][0], key)
+                for key, enabled in adr_flags.items()
+                if enabled
+            ]
+
             # Add stored maps to rasmap
             for map_type, _ in maps_to_add:
                 RasProcess._add_stored_map_to_rasmap(
@@ -1532,6 +1574,17 @@ Step 5: Configure (optional — auto-detection usually works)
                     profile_name,
                     output_folder,
                     profile_index
+                )
+
+            for map_type, _ in adr_maps_to_add:
+                RasProcess._add_stored_map_to_rasmap(
+                    rasmap_path,
+                    plan_hdf,
+                    map_type,
+                    "Max",
+                    output_folder,
+                    2147483647,
+                    extra_attrs={"ArrivalDepth": str(arrival_depth)},
                 )
 
             # Add inundation boundary if requested (shapefile polygon output)
@@ -1586,6 +1639,10 @@ Step 5: Configure (optional — auto-detection usually works)
 
             logger.debug("Running StoreAllMaps for plan %s (mode=%s)", plan_num, helper_mode)
 
+            # Files created by this run have mtime >= now (moves preserve
+            # mtime); 2s slack covers coarse filesystem timestamp granularity.
+            run_started = time.time() - 2
+
             result = run_store_all_maps_helper(
                 hecras_dir=hecras_dir,
                 render_mode=helper_mode,
@@ -1626,6 +1683,12 @@ Step 5: Configure (optional — auto-detection usually works)
                         stat = item.stat()
                     except FileNotFoundError:
                         continue
+                    # PostProcessing.hdf is RasMapperLib's derived-map cache
+                    # (can exceed the plan HDF in size): leave it beside the
+                    # plan so reruns reuse it instead of paying a potentially
+                    # cross-volume move of a multi-GB scratch file.
+                    if item.name == "PostProcessing.hdf":
+                        continue
                     previous_signature = pre_existing_files.get(item.name)
                     current_signature = (stat.st_mtime_ns, stat.st_size)
                     if previous_signature != current_signature:
@@ -1663,6 +1726,25 @@ Step 5: Configure (optional — auto-detection usually works)
                 if tif_files:
                     generated_files[map_key] = tif_files
                     logger.debug("Generated %d %s TIF(s)", len(tif_files), map_key)
+                else:
+                    logger.debug(f"No TIF files found for {map_key} with pattern: {pattern}")
+
+            # Whole-simulation types label outputs by threshold, not profile
+            # (e.g. "Arrival Time (0.1ft hrs).Terrain.tile.tif") — glob by
+            # display-name prefix, restricted to files produced by this run
+            # (mtime survives shutil.move) so a rerun at a different
+            # arrival_depth never collects the previous threshold's rasters.
+            for map_type, map_key in adr_maps_to_add:
+                display_name_used = RasProcess.MAP_TYPES[map_key][1]
+
+                pattern = f"{display_name_used} (*.tif"
+                tif_files = [
+                    p for p in search_dir.glob(pattern)
+                    if p.stat().st_mtime >= run_started
+                ]
+                if tif_files:
+                    generated_files[map_key] = tif_files
+                    logger.info(f"Generated {len(tif_files)} {map_key} TIF(s)")
                 else:
                     logger.debug(f"No TIF files found for {map_key} with pattern: {pattern}")
 
