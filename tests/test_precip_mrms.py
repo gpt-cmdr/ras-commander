@@ -27,6 +27,26 @@ class FakeResponse:
             yield self.content[idx : idx + chunk_size]
 
 
+def _write_stored_map_raster(path, values, transform, crs="EPSG:2871", nodata=-9999):
+    import rasterio
+
+    data = np.asarray(values, dtype="float32")
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        height=data.shape[0],
+        width=data.shape[1],
+        count=1,
+        dtype="float32",
+        crs=crs,
+        transform=transform,
+        nodata=nodata,
+    ) as dst:
+        dst.write(data, 1)
+    return path
+
+
 def test_catalog_parses_noaa_s3_listing(monkeypatch):
     xml = b"""<?xml version="1.0" encoding="UTF-8"?>
     <ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
@@ -425,3 +445,264 @@ def test_flood_animation_accepts_stored_map_rasters(tmp_path):
     assert output.exists()
     assert output.stat().st_size > 0
     assert raster_stack.attrs["crs"] == "EPSG:2871"
+
+
+def test_load_stored_map_stack_reconciles_mixed_single_raster_grids(tmp_path):
+    pytest.importorskip("rasterio")
+    from rasterio.transform import from_origin
+
+    first = _write_stored_map_raster(
+        tmp_path / "frame_0.tif",
+        np.full((2, 2), 1.0),
+        from_origin(0, 2, 1, 1),
+    )
+    second = _write_stored_map_raster(
+        tmp_path / "frame_1.tif",
+        np.full((1, 3), 2.0),
+        from_origin(1, 2, 1, 1),
+    )
+
+    stack = PrecipMrms.load_stored_map_stack(
+        [first, second],
+        times=pd.date_range("2024-02-04", periods=2, freq="h"),
+        units="ft",
+    )
+
+    assert stack.dims == ("time", "y", "x")
+    assert stack.shape == (2, 2, 4)
+    assert stack.attrs == {"units": "ft", "crs": "EPSG:2871"}
+    assert np.count_nonzero(np.isfinite(stack.values[0])) == 4
+    assert np.count_nonzero(np.isfinite(stack.values[1])) == 3
+    assert np.all(stack.values[0, :, :2] == 1.0)
+    assert np.all(stack.values[1, 0, 1:] == 2.0)
+
+
+def test_load_stored_map_stack_mosaics_every_grouped_tile(tmp_path):
+    pytest.importorskip("rasterio")
+    from rasterio.transform import from_origin
+
+    frames = []
+    for frame_index, values in enumerate(((1.0, 2.0), (3.0, 4.0))):
+        left = _write_stored_map_raster(
+            tmp_path / f"frame_{frame_index}_left.tif",
+            np.full((2, 2), values[0]),
+            from_origin(0, 2, 1, 1),
+        )
+        right = _write_stored_map_raster(
+            tmp_path / f"frame_{frame_index}_right.tif",
+            np.full((2, 2), values[1]),
+            from_origin(2, 2, 1, 1),
+        )
+        frames.append([left, right])
+
+    stack = PrecipMrms.load_stored_map_stack(frames, units="ft")
+
+    assert stack.shape == (2, 2, 4)
+    np.testing.assert_allclose(stack.values[0, :, :2], 1.0)
+    np.testing.assert_allclose(stack.values[0, :, 2:], 2.0)
+    np.testing.assert_allclose(stack.values[1, :, :2], 3.0)
+    np.testing.assert_allclose(stack.values[1, :, 2:], 4.0)
+
+
+def test_load_stored_map_stack_grouped_overlap_preserves_valid_cells(tmp_path):
+    pytest.importorskip("rasterio")
+    from rasterio.transform import from_origin
+
+    transform = from_origin(0, 2, 1, 1)
+    earlier = _write_stored_map_raster(
+        tmp_path / "earlier.tif",
+        np.ones((2, 2)),
+        transform,
+    )
+    later = _write_stored_map_raster(
+        tmp_path / "later.tif",
+        np.array([[2.0, -9999.0], [-9999.0, 3.0]]),
+        transform,
+    )
+
+    stack = PrecipMrms.load_stored_map_stack([[earlier, later]])
+
+    assert stack.dtype == np.dtype("float32")
+    np.testing.assert_allclose(
+        stack.values[0],
+        np.array([[2.0, 1.0], [1.0, 3.0]], dtype="float32"),
+    )
+
+
+def test_load_stored_map_stack_honors_explicit_cell_size(tmp_path):
+    pytest.importorskip("rasterio")
+    from rasterio.transform import from_origin
+
+    raster_path = _write_stored_map_raster(
+        tmp_path / "frame.tif",
+        np.full((4, 4), 5.0),
+        from_origin(0, 4, 1, 1),
+    )
+
+    stack = PrecipMrms.load_stored_map_stack(
+        raster_path,
+        cell_size=2,
+        resampling="bilinear",
+    )
+
+    assert stack.shape == (1, 2, 2)
+    np.testing.assert_allclose(stack.coords["x"], [1.0, 3.0])
+    np.testing.assert_allclose(stack.coords["y"], [3.0, 1.0])
+    np.testing.assert_allclose(stack.values, 5.0)
+
+
+def test_load_stored_map_stack_rejects_invalid_arguments(tmp_path):
+    pytest.importorskip("rasterio")
+    from rasterio.transform import from_origin
+
+    raster_path = _write_stored_map_raster(
+        tmp_path / "frame.tif",
+        np.ones((2, 2)),
+        from_origin(0, 2, 1, 1),
+    )
+
+    with pytest.raises(ValueError, match="at least one frame"):
+        PrecipMrms.load_stored_map_stack([])
+    with pytest.raises(ValueError, match="at least one raster"):
+        PrecipMrms.load_stored_map_stack([[]])
+    with pytest.raises(ValueError, match="times length"):
+        PrecipMrms.load_stored_map_stack(
+            [raster_path],
+            times=pd.date_range("2024-02-04", periods=2, freq="h"),
+        )
+    with pytest.raises(ValueError, match="max_frames"):
+        PrecipMrms.load_stored_map_stack(raster_path, max_frames=0)
+    with pytest.raises(ValueError, match="cell_size"):
+        PrecipMrms.load_stored_map_stack(raster_path, cell_size=0)
+    with pytest.raises(ValueError, match="Unsupported resampling"):
+        PrecipMrms.load_stored_map_stack(raster_path, resampling="not-a-method")
+
+
+def test_load_stored_map_stack_rejects_missing_or_mixed_crs(tmp_path):
+    pytest.importorskip("rasterio")
+    from rasterio.transform import from_origin
+
+    transform = from_origin(0, 2, 1, 1)
+    projected = _write_stored_map_raster(
+        tmp_path / "projected.tif",
+        np.ones((2, 2)),
+        transform,
+    )
+    geographic = _write_stored_map_raster(
+        tmp_path / "geographic.tif",
+        np.ones((2, 2)),
+        transform,
+        crs="EPSG:4326",
+    )
+    missing = _write_stored_map_raster(
+        tmp_path / "missing.tif",
+        np.ones((2, 2)),
+        transform,
+        crs=None,
+    )
+
+    with pytest.raises(ValueError, match="common CRS"):
+        PrecipMrms.load_stored_map_stack([projected, geographic])
+    with pytest.raises(ValueError, match="no CRS"):
+        PrecipMrms.load_stored_map_stack(missing)
+
+
+def test_load_stored_map_stack_limits_frames_before_opening_files(
+    monkeypatch, tmp_path
+):
+    rasterio = pytest.importorskip("rasterio")
+    from rasterio.transform import from_origin
+
+    raster_paths = [
+        _write_stored_map_raster(
+            tmp_path / f"frame_{index}.tif",
+            np.full((2, 2), index, dtype="float32"),
+            from_origin(0, 2, 1, 1),
+        )
+        for index in range(5)
+    ]
+    times = pd.date_range("2024-02-04", periods=5, freq="h")
+    real_open = rasterio.open
+    opened_paths = []
+
+    def tracking_open(path, *args, **kwargs):
+        opened_paths.append(Path(path))
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(rasterio, "open", tracking_open)
+
+    stack = PrecipMrms.load_stored_map_stack(
+        raster_paths,
+        times=times,
+        max_frames=2,
+    )
+
+    assert set(opened_paths) == {raster_paths[0], raster_paths[-1]}
+    assert stack.sizes["time"] == 2
+    np.testing.assert_array_equal(stack.coords["time"].values, times[[0, -1]].values)
+
+
+def test_public_animations_route_grouped_rasters_and_forward_grid_options(
+    monkeypatch, tmp_path
+):
+    pytest.importorskip("matplotlib")
+    xr = pytest.importorskip("xarray")
+
+    grouped_frames = [[Path("frame_0_a.tif"), Path("frame_0_b.tif")]]
+    calls = {}
+    flood_output = tmp_path / "flood.gif"
+
+    def fake_raster_animation(raster_files, output_mp4, **kwargs):
+        calls["flood"] = (raster_files, output_mp4, kwargs)
+        return Path(output_mp4)
+
+    monkeypatch.setattr(
+        PrecipMrms,
+        "animate_flood_inundation_from_rasters",
+        staticmethod(fake_raster_animation),
+    )
+
+    result = PrecipMrms.animate_flood_inundation(
+        grouped_frames,
+        flood_output,
+        cell_size=25,
+        resampling="bilinear",
+    )
+
+    assert result == flood_output
+    assert calls["flood"][0] == grouped_frames
+    assert calls["flood"][2]["cell_size"] == 25
+    assert calls["flood"][2]["resampling"] == "bilinear"
+
+    precip = xr.DataArray(
+        np.ones((1, 2, 2), dtype="float32"),
+        dims=("time", "y", "x"),
+        coords={"time": [pd.Timestamp("2024-02-04")], "y": [1.5, 0.5], "x": [0.5, 1.5]},
+        attrs={"units": "mm", "crs": "EPSG:2871"},
+    )
+
+    class CombinedRasterRoute(Exception):
+        pass
+
+    def fake_loader(raster_files, **kwargs):
+        calls["combined"] = (raster_files, kwargs)
+        raise CombinedRasterRoute
+
+    monkeypatch.setattr(
+        PrecipMrms,
+        "load_stored_map_stack",
+        staticmethod(fake_loader),
+    )
+
+    with pytest.raises(CombinedRasterRoute):
+        PrecipMrms.animate_combined(
+            precip,
+            grouped_frames,
+            tmp_path / "combined.gif",
+            cell_size=50,
+            resampling="cubic",
+        )
+
+    assert calls["combined"][0] == grouped_frames
+    assert calls["combined"][1]["cell_size"] == 50
+    assert calls["combined"][1]["resampling"] == "cubic"

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import gzip
+from numbers import Integral
 from pathlib import Path
 import re
 import shutil
@@ -241,7 +242,7 @@ class PrecipMrms:
                 downloaded.append(local_path)
                 continue
 
-            logger.info("Downloading MRMS: %s", archive_name)
+            logger.debug("Downloading MRMS: %s", archive_name)
             PrecipMrms._download_one(
                 url=str(row.url),
                 local_path=local_path,
@@ -549,51 +550,16 @@ class PrecipMrms:
         dpi: int = 150,
         cmap: str = "Blues",
         title: str = "Flood Inundation",
+        cell_size: Optional[float] = None,
+        resampling: str = "nearest",
     ) -> Path:
         """
         Generate an MP4 animation from a gridded flood-depth or WSE stack.
 
-        ``flood_data`` may be a 3-D numpy array with shape ``(time, y, x)``, an
-        xarray DataArray with a time dimension, or a HEC-RAS plan HDF path. HDF
-        inputs are rendered from 2D mesh cell centers via ras-commander HDF APIs.
+        ``flood_data`` may be a 3-D numpy array, an xarray DataArray, a HEC-RAS
+        plan HDF path, one raster per timestep, or grouped terrain rasters per
+        timestep. HDF inputs are rendered from 2D mesh cell centers.
         """
-        if isinstance(flood_data, (str, Path)):
-            flood_path = Path(flood_data)
-            if flood_path.suffix.lower() in {".tif", ".tiff"}:
-                return PrecipMrms.animate_flood_inundation_from_rasters(
-                    [flood_path],
-                    output_mp4=output_mp4,
-                    terrain=terrain,
-                    boundary=boundary,
-                    mesh_boundary=mesh_boundary,
-                    pump_stations=pump_stations,
-                    add_basemap=add_basemap,
-                    crs=crs,
-                    raster_alpha=raster_alpha,
-                    units=units,
-                    fps=fps,
-                    dpi=dpi,
-                    cmap=cmap,
-                    title=title,
-                )
-            return PrecipMrms.animate_flood_inundation_from_hdf(
-                plan_hdf=flood_data,
-                output_mp4=output_mp4,
-                variable=variable,
-                mesh_name=mesh_name,
-                max_frames=max_frames,
-                boundary=boundary,
-                mesh_boundary=mesh_boundary,
-                pump_stations=pump_stations,
-                add_basemap=add_basemap,
-                crs=crs,
-                raster_alpha=raster_alpha,
-                units=units,
-                fps=fps,
-                dpi=dpi,
-                cmap=cmap,
-                title=title,
-            )
         if PrecipMrms._looks_like_raster_paths(flood_data):
             return PrecipMrms.animate_flood_inundation_from_rasters(
                 flood_data,
@@ -607,6 +573,28 @@ class PrecipMrms:
                 crs=crs,
                 raster_alpha=raster_alpha,
                 max_frames=max_frames,
+                units=units,
+                fps=fps,
+                dpi=dpi,
+                cmap=cmap,
+                title=title,
+                cell_size=cell_size,
+                resampling=resampling,
+            )
+
+        if isinstance(flood_data, (str, Path)):
+            return PrecipMrms.animate_flood_inundation_from_hdf(
+                plan_hdf=flood_data,
+                output_mp4=output_mp4,
+                variable=variable,
+                mesh_name=mesh_name,
+                max_frames=max_frames,
+                boundary=boundary,
+                mesh_boundary=mesh_boundary,
+                pump_stations=pump_stations,
+                add_basemap=add_basemap,
+                crs=crs,
+                raster_alpha=raster_alpha,
                 units=units,
                 fps=fps,
                 dpi=dpi,
@@ -735,7 +723,11 @@ class PrecipMrms:
     @staticmethod
     @log_call
     def animate_flood_inundation_from_rasters(
-        raster_files: Union[str, Path, Iterable[Union[str, Path]]],
+        raster_files: Union[
+            str,
+            Path,
+            Iterable[Union[str, Path, Iterable[Union[str, Path]]]],
+        ],
         output_mp4: Union[str, Path],
         times: Optional[Iterable[Any]] = None,
         terrain: Optional[Any] = None,
@@ -751,19 +743,28 @@ class PrecipMrms:
         dpi: int = 150,
         cmap: str = "Blues",
         title: str = "HEC-RAS Flood Inundation",
+        cell_size: Optional[float] = None,
+        resampling: str = "nearest",
     ) -> Path:
         """
         Generate a flood animation from stored-map depth rasters.
 
         This is the raster-video companion for
         ``RasProcess.store_maps_at_timesteps()`` outputs.
+
+        A timestep may be one raster path or a group of terrain-tile paths.
+        Nonuniform frames are reconciled onto their union grid. ``cell_size``
+        sets that grid's resolution in map units; otherwise the resolution of
+        the largest-coverage source raster is used.
         """
-        flood = PrecipMrms._load_raster_stack(
+        flood = PrecipMrms.load_stored_map_stack(
             raster_files,
             times=times,
             max_frames=max_frames,
             name="flood_inundation",
             units=units,
+            cell_size=cell_size,
+            resampling=resampling,
         )
         return PrecipMrms._animate_grid_stack(
             data=flood,
@@ -807,14 +808,16 @@ class PrecipMrms:
         mesh_name: Optional[str] = None,
         flood_variable: str = "Depth",
         max_frames: Optional[int] = 24,
+        cell_size: Optional[float] = None,
+        resampling: str = "nearest",
     ) -> Path:
         """
         Generate a synchronized split-screen precipitation and flood animation.
 
         ``precip_data`` can be GRIB2 file paths or an already loaded xarray
-        DataArray. ``flood_data`` can be a gridded array, xarray DataArray, or a
-        HEC-RAS plan HDF path. ``bounds`` is accepted as an alias for
-        ``precip_bounds`` for notebook readability.
+        DataArray. ``flood_data`` can be a gridded array, xarray DataArray,
+        HEC-RAS plan HDF path, or flat/grouped stored-map raster frames.
+        ``bounds`` is accepted as an alias for ``precip_bounds``.
         """
         _check_animation_dependencies()
         import matplotlib.pyplot as plt
@@ -830,7 +833,17 @@ class PrecipMrms:
         )
         precip_in = PrecipMrms._convert_precip_units(precip, "in/hr")
 
-        if isinstance(flood_data, (str, Path)):
+        if PrecipMrms._looks_like_raster_paths(flood_data):
+            flood = PrecipMrms.load_stored_map_stack(
+                flood_data,
+                times=flood_times,
+                max_frames=max_frames,
+                name="flood_inundation",
+                units="ft",
+                cell_size=cell_size,
+                resampling=resampling,
+            )
+        elif isinstance(flood_data, (str, Path)):
             flood_points = PrecipMrms._load_hdf_flood_points(
                 plan_hdf=flood_data,
                 variable=flood_variable,
@@ -851,15 +864,6 @@ class PrecipMrms:
                 fps=fps,
                 dpi=dpi,
                 title=title,
-            )
-
-        if PrecipMrms._looks_like_raster_paths(flood_data):
-            flood = PrecipMrms._load_raster_stack(
-                flood_data,
-                times=flood_times,
-                max_frames=max_frames,
-                name="flood_inundation",
-                units="ft",
             )
         else:
             flood = PrecipMrms._coerce_grid_data(
@@ -1699,15 +1703,26 @@ class PrecipMrms:
 
     @staticmethod
     def _looks_like_raster_paths(value: Any) -> bool:
-        if isinstance(value, (str, Path)):
-            return Path(value).suffix.lower() in {".tif", ".tiff"}
+        def _is_raster_path(item: Any) -> bool:
+            return isinstance(item, (str, Path)) and Path(item).suffix.lower() in {
+                ".tif",
+                ".tiff",
+            }
+
+        if _is_raster_path(value):
+            return True
         if isinstance(value, (list, tuple, set)) and not hasattr(value, "dims"):
             values = list(value)
-            return bool(values) and all(
-                isinstance(item, (str, Path))
-                and Path(item).suffix.lower() in {".tif", ".tiff"}
-                for item in values
-            )
+            if not values:
+                return False
+            for item in values:
+                if _is_raster_path(item):
+                    continue
+                if not isinstance(item, (list, tuple, set)):
+                    return False
+                if not all(_is_raster_path(tile) for tile in item):
+                    return False
+            return True
         return False
 
     @staticmethod
@@ -1760,15 +1775,39 @@ class PrecipMrms:
         return da
 
     @staticmethod
-    def _load_raster_stack(
-        raster_files: Union[str, Path, Iterable[Union[str, Path]]],
+    @log_call
+    def load_stored_map_stack(
+        raster_files: Union[
+            str,
+            Path,
+            Iterable[Union[str, Path, Iterable[Union[str, Path]]]],
+        ],
         times: Optional[Iterable[Any]] = None,
         max_frames: Optional[int] = None,
         name: str = "raster",
         units: str = "",
-    ) -> Any:
+        cell_size: Optional[float] = None,
+        resampling: str = "nearest",
+    ) -> "xr.DataArray":
+        """
+        Load HEC-RAS stored-map rasters as a time-indexed grid stack.
+
+        ``raster_files`` may be a flat sequence with one raster per timestep or
+        a sequence of raster groups, where each group contains all terrain tiles
+        for one timestep. Nonuniform rasters are mosaicked onto a common union
+        grid in input order. ``cell_size`` sets the union-grid resolution in map
+        units; otherwise the largest-coverage source raster supplies it.
+
+        Frame limiting occurs before any selected raster metadata or data is
+        read. The returned DataArray has ``time``, ``y``, and ``x`` dimensions
+        and includes ``units`` and ``crs`` attributes. The returned stack is
+        allocated eagerly; specify both ``cell_size`` and ``max_frames`` for
+        large multi-terrain domains to bound memory use.
+        """
         try:
             import rasterio
+            from rasterio.transform import from_origin
+            from rasterio.warp import Resampling, reproject
         except ImportError as exc:
             raise ImportError(
                 "rasterio is required to animate stored-map rasters. "
@@ -1779,51 +1818,257 @@ class PrecipMrms:
         import pandas as pd
         import xarray as xr
 
-        raster_paths = PrecipMrms._normalize_paths(raster_files)
-        if not raster_paths:
-            raise ValueError("raster_files must contain at least one raster")
+        raster_frames, flat_input = PrecipMrms._normalize_stored_map_frames(
+            raster_files
+        )
+        frame_count = len(raster_frames)
 
-        frames = []
-        x_coords = None
-        y_coords = None
-        crs = None
-        for raster_path in raster_paths:
-            if not raster_path.exists():
-                raise FileNotFoundError(f"Raster file not found: {raster_path}")
-            with rasterio.open(raster_path) as src:
-                data = src.read(1).astype(float)
-                if crs is None and src.crs is not None:
-                    crs = src.crs.to_string()
-                if src.nodata is not None:
-                    data[data == src.nodata] = np.nan
-                if x_coords is None or y_coords is None:
-                    rows, cols = data.shape
-                    xs = np.arange(cols) + 0.5
-                    ys = np.arange(rows) + 0.5
-                    x_coords = src.transform.c + xs * src.transform.a
-                    y_coords = src.transform.f + ys * src.transform.e
-                frames.append(data)
+        if max_frames is None:
+            max_frames_value = None
+        else:
+            if isinstance(max_frames, bool) or not isinstance(max_frames, Integral):
+                raise ValueError("max_frames must be a positive integer")
+            max_frames_value = int(max_frames)
+            if max_frames_value <= 0:
+                raise ValueError("max_frames must be a positive integer")
 
-        values = np.stack(frames, axis=0)
+        if cell_size is None:
+            cell_size_value = None
+        else:
+            if isinstance(cell_size, bool):
+                raise ValueError("cell_size must be a positive finite number")
+            try:
+                cell_size_value = float(cell_size)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("cell_size must be a positive finite number") from exc
+            if not np.isfinite(cell_size_value) or cell_size_value <= 0:
+                raise ValueError("cell_size must be a positive finite number")
+
+        resampling_name = str(resampling).strip().lower()
+        supported_resampling = tuple(
+            item for item in Resampling.__members__ if item != "gauss"
+        )
+        if resampling_name not in supported_resampling:
+            raise ValueError(
+                f"Unsupported resampling method {resampling!r}. "
+                f"Choose one of: {', '.join(supported_resampling)}"
+            )
+        resampling_method = Resampling[resampling_name]
 
         if times is None:
-            time_index = pd.date_range("2000-01-01", periods=values.shape[0], freq="h")
+            full_time_index = pd.date_range(
+                "2000-01-01",
+                periods=frame_count,
+                freq="h",
+                name="time",
+            )
         else:
-            time_index = pd.DatetimeIndex(pd.to_datetime(list(times)), name="time")
-            if len(time_index) != values.shape[0]:
-                raise ValueError("times length must match raster_files length")
+            time_values = list(times)
+            if len(time_values) != frame_count:
+                raise ValueError("times length must match raster frame count")
+            full_time_index = pd.DatetimeIndex(
+                pd.to_datetime(time_values),
+                name="time",
+            )
 
-        if max_frames is not None and values.shape[0] > max_frames:
-            frame_indices = np.linspace(0, values.shape[0] - 1, int(max_frames), dtype=int)
-            values = values[frame_indices]
-            time_index = time_index[frame_indices]
+        if max_frames_value is not None and frame_count > max_frames_value:
+            frame_indices = np.linspace(
+                0,
+                frame_count - 1,
+                max_frames_value,
+                dtype=int,
+            )
+        else:
+            frame_indices = np.arange(frame_count, dtype=int)
+
+        selected_frames = [raster_frames[int(index)] for index in frame_indices]
+        time_index = full_time_index.take(frame_indices)
+
+        frame_metas: List[List[Dict[str, Any]]] = []
+        all_metas: List[Dict[str, Any]] = []
+        common_crs = None
+        for frame_index, raster_paths in enumerate(selected_frames):
+            metas = []
+            for raster_path in raster_paths:
+                if not raster_path.exists():
+                    raise FileNotFoundError(f"Raster file not found: {raster_path}")
+                with rasterio.open(raster_path) as src:
+                    if src.count < 1:
+                        raise ValueError(f"Raster has no data bands: {raster_path}")
+                    if src.crs is None:
+                        raise ValueError(f"Raster has no CRS: {raster_path}")
+                    if common_crs is None:
+                        common_crs = src.crs
+                    elif src.crs != common_crs:
+                        raise ValueError(
+                            "All stored-map rasters must use a common CRS; "
+                            f"frame {frame_index} raster {raster_path} uses {src.crs}, "
+                            f"expected {common_crs}"
+                        )
+
+                    src_nodata = src.nodata
+                    if src_nodata is None and np.issubdtype(
+                        np.dtype(src.dtypes[0]), np.floating
+                    ):
+                        src_nodata = np.nan
+                    meta = {
+                        "path": raster_path,
+                        "shape": (src.height, src.width),
+                        "transform": src.transform,
+                        "bounds": src.bounds,
+                        "res": (abs(src.res[0]), abs(src.res[1])),
+                        "nodata": src_nodata,
+                    }
+                metas.append(meta)
+                all_metas.append(meta)
+            frame_metas.append(metas)
+
+        uniform = (
+            flat_input
+            and cell_size_value is None
+            and len({meta["shape"] for meta in all_metas}) == 1
+            and len({meta["transform"] for meta in all_metas}) == 1
+        )
+
+        if uniform:
+            ref_transform = all_metas[0]["transform"]
+            rows, cols = all_metas[0]["shape"]
+            values = np.empty(
+                (len(all_metas), rows, cols),
+                dtype=np.float32,
+            )
+            for frame_index, meta in enumerate(all_metas):
+                with rasterio.open(meta["path"]) as src:
+                    src.read(1, out=values[frame_index])
+                nodata = meta["nodata"]
+                if nodata is not None and not np.isnan(nodata):
+                    frame = values[frame_index]
+                    frame[frame == nodata] = np.nan
+        else:
+            if cell_size_value is None:
+                def _coverage(meta: Dict[str, Any]) -> float:
+                    bounds = meta["bounds"]
+                    return (bounds.right - bounds.left) * (
+                        bounds.top - bounds.bottom
+                    )
+
+                base_meta = max(all_metas, key=_coverage)
+                xres, yres = base_meta["res"]
+            else:
+                xres = yres = cell_size_value
+
+            left = min(meta["bounds"].left for meta in all_metas)
+            bottom = min(meta["bounds"].bottom for meta in all_metas)
+            right = max(meta["bounds"].right for meta in all_metas)
+            top = max(meta["bounds"].top for meta in all_metas)
+            cols = max(1, int(np.ceil((right - left) / xres)))
+            rows = max(1, int(np.ceil((top - bottom) / yres)))
+            ref_transform = from_origin(left, top, xres, yres)
+
+            values = np.full(
+                (len(frame_metas), rows, cols),
+                np.nan,
+                dtype=np.float32,
+            )
+            for frame_index, metas in enumerate(frame_metas):
+                destination = values[frame_index]
+                for meta in metas:
+                    with rasterio.open(meta["path"]) as src:
+                        reproject(
+                            source=rasterio.band(src, 1),
+                            destination=destination,
+                            src_transform=src.transform,
+                            src_crs=src.crs,
+                            src_nodata=meta["nodata"],
+                            dst_transform=ref_transform,
+                            dst_crs=common_crs,
+                            dst_nodata=np.nan,
+                            resampling=resampling_method,
+                            init_dest_nodata=False,
+                        )
+
+        xs = np.arange(cols, dtype=float) + 0.5
+        ys = np.arange(rows, dtype=float) + 0.5
+        x_coords = ref_transform.c + xs * ref_transform.a
+        y_coords = ref_transform.f + ys * ref_transform.e
 
         return xr.DataArray(
             values,
             dims=("time", "y", "x"),
             coords={"time": time_index, "y": y_coords, "x": x_coords},
             name=name,
-            attrs={"units": units, "crs": crs} if crs else {"units": units},
+            attrs={"units": units, "crs": common_crs.to_string()},
+        )
+
+    @staticmethod
+    def _normalize_stored_map_frames(
+        raster_files: Union[
+            str,
+            Path,
+            Iterable[Union[str, Path, Iterable[Union[str, Path]]]],
+        ],
+    ) -> Tuple[List[List[Path]], bool]:
+        if isinstance(raster_files, (str, Path)):
+            return [[Path(raster_files)]], True
+
+        try:
+            raw_frames = list(raster_files)
+        except TypeError as exc:
+            raise TypeError(
+                "raster_files must be a raster path or an iterable of raster frames"
+            ) from exc
+        if isinstance(raster_files, set):
+            raw_frames.sort(key=lambda item: str(item))
+        if not raw_frames:
+            raise ValueError("raster_files must contain at least one frame")
+
+        flat_input = all(isinstance(frame, (str, Path)) for frame in raw_frames)
+        frames: List[List[Path]] = []
+        for frame_index, frame in enumerate(raw_frames):
+            if isinstance(frame, (str, Path)):
+                frames.append([Path(frame)])
+                continue
+            try:
+                tiles = list(frame)
+            except TypeError as exc:
+                raise TypeError(
+                    f"Raster frame {frame_index} must be a path or iterable of paths"
+                ) from exc
+            if isinstance(frame, set):
+                tiles.sort(key=lambda item: str(item))
+            if not tiles:
+                raise ValueError(
+                    f"Raster frame {frame_index} must contain at least one raster"
+                )
+            if not all(isinstance(tile, (str, Path)) for tile in tiles):
+                raise TypeError(
+                    f"Raster frame {frame_index} must contain only raster paths"
+                )
+            frames.append([Path(tile) for tile in tiles])
+        return frames, flat_input
+
+    @staticmethod
+    def _load_raster_stack(
+        raster_files: Union[
+            str,
+            Path,
+            Iterable[Union[str, Path, Iterable[Union[str, Path]]]],
+        ],
+        times: Optional[Iterable[Any]] = None,
+        max_frames: Optional[int] = None,
+        name: str = "raster",
+        units: str = "",
+        cell_size: Optional[float] = None,
+        resampling: str = "nearest",
+    ) -> "xr.DataArray":
+        return PrecipMrms.load_stored_map_stack(
+            raster_files=raster_files,
+            times=times,
+            max_frames=max_frames,
+            name=name,
+            units=units,
+            cell_size=cell_size,
+            resampling=resampling,
         )
 
     @staticmethod
