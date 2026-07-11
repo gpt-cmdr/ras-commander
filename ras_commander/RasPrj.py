@@ -1682,16 +1682,13 @@ class RasPrj:
                 values_count = int(hydrograph_line.split('=')[1].strip())
                 bc_info['hydrograph_num_values'] = values_count
                 if values_count > 0:
-                    numeric_field_count = values_count
-                    if bc_info['hydrograph_type'] == 'Precipitation Hydrograph':
-                        numeric_field_count = values_count * 2
                     data_lines = []
                     for data_line in lines[hydrograph_index + 1:]:
                         if '=' in data_line or data_line.startswith('Boundary Location='):
                             break
                         if data_line.strip():
                             data_lines.append(data_line)
-                    values = ' '.join(data_lines).split()[:numeric_field_count]
+                    values = ' '.join(data_lines).split()[:values_count]
                     bc_info['hydrograph_values'] = values
                     parsed_lines.update(range(hydrograph_index, hydrograph_index + len(data_lines) + 1))
         

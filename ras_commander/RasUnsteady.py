@@ -343,17 +343,9 @@ class RasUnsteady:
         return interval_hours
 
     @staticmethod
-    def _fixed_width_field_count(table_name: str, record_count: int) -> int:
-        """Return the number of numeric fields used by a HEC-RAS inline table."""
-        if table_name.strip().startswith("Precipitation Hydrograph"):
-            return record_count * 2
-        return record_count
-
-    @staticmethod
-    def _fixed_width_data_line_count(table_name: str, record_count: int) -> int:
+    def _fixed_width_data_line_count(record_count: int) -> int:
         """Return the number of 10-field fixed-width rows used by an inline table."""
-        field_count = RasUnsteady._fixed_width_field_count(table_name, record_count)
-        return (field_count + 9) // 10
+        return (record_count + 9) // 10
 
     @staticmethod
     @log_call
@@ -3915,16 +3907,15 @@ class RasUnsteady:
                     current_table = line.split('=')
                     current_table_name = current_table[0].strip()
                     num_values = int(current_table[1])
-                    field_count = RasUnsteady._fixed_width_field_count(current_table_name, num_values)
                     table_values = []
                     
                     # Read the table values
-                    rows_needed = RasUnsteady._fixed_width_data_line_count(current_table_name, num_values)
+                    rows_needed = RasUnsteady._fixed_width_data_line_count(num_values)
                     for _ in range(rows_needed):
                         i += 1
                         if i >= len(lines):
                             break
-                        row = lines[i].strip()
+                        row = lines[i].rstrip('\r\n')
                         # Parse fixed-width values (8 characters each)
                         j = 0
                         while j < len(row):
@@ -3938,7 +3929,7 @@ class RasUnsteady:
                                     parts = re.findall(r'-?\d+\.?\d*', value_str)
                                     table_values.extend([float(p) for p in parts])
                             j += 8
-                    table_values = table_values[:field_count]
+                    table_values = table_values[:num_values]
                 
                 except (ValueError, IndexError) as e:
                     logger.error(f"Error processing table at line {i}: {e}")
@@ -4437,7 +4428,7 @@ class RasUnsteady:
 
         def finish_table(table_info, next_header_idx=None):
             table_name, start_line, record_count = table_info
-            expected_end = start_line + RasUnsteady._fixed_width_data_line_count(table_name, record_count)
+            expected_end = start_line + RasUnsteady._fixed_width_data_line_count(record_count)
             if next_header_idx is not None:
                 expected_end = min(expected_end, next_header_idx)
             return (table_name, start_line, expected_end)
@@ -4716,9 +4707,8 @@ class RasUnsteady:
 
         **Fixed-Width Format**:
         - Values formatted as 8-character fixed-width fields (8.2f)
-        - 10 numeric values per line (5 time-depth pairs)
-        - Precipitation Hydrograph stores time-depth pairs
-        - Count = number of time steps; Interval= line is still updated for HEC-RAS metadata
+        - 10 incremental-depth values per line
+        - Count = number of depth values; timing comes from the Interval= line
 
         **Depth Conservation**:
         - Total depth is logged for verification
@@ -4787,17 +4777,13 @@ class RasUnsteady:
         # Calculate total depth for logging
         total_depth = hyetograph_df['cumulative_depth'].iloc[-1]
 
-        # Precipitation Hydrograph uses time-depth pairs. Count remains the number
-        # of time steps, not the number of numeric fields written below.
+        # Precipitation Hydrograph stores one incremental depth per interval.
         num_values = len(precip_values)
-        paired_values = []
-        for hour, depth in zip(hours, precip_values):
-            paired_values.extend((hour, depth))
 
-        # Format into fixed-width lines (8 chars each, 10 numeric values per line)
+        # Format into fixed-width lines (8 chars each, 10 depth values per line)
         formatted_lines = []
-        for i in range(0, len(paired_values), 10):
-            row_values = paired_values[i:i+10]
+        for i in range(0, len(precip_values), 10):
+            row_values = precip_values[i:i+10]
             formatted_row = ''.join(f'{value:8.2f}' for value in row_values)
             formatted_lines.append(formatted_row + '\n')
 
@@ -7385,7 +7371,7 @@ class RasUnsteady:
         Each value is 8 characters wide, 10 values per line. The count on the header
         line is the number of values, and time is implied from the Interval setting.
 
-        This differs from Precipitation Hydrograph which stores (time, depth) pairs.
+        Precipitation Hydrograph uses the same values-only timing convention.
 
         **State Transition**:
 
@@ -7399,7 +7385,7 @@ class RasUnsteady:
         See Also
         --------
         set_boundary_dss_link : Convert inline boundary to DSS mode
-        set_precipitation_hyetograph : Write precipitation hyetograph (uses time-value pairs)
+        set_precipitation_hyetograph : Write an incremental-depth precipitation hyetograph
         """
         SUPPORTED_TYPES = {
             "Flow Hydrograph": "Flow Hydrograph=",
