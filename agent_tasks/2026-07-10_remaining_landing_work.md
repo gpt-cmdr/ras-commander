@@ -2,6 +2,11 @@
 
 Date: 2026-07-10
 
+Status: **Precipitation replay completed.** PR #275 merged the selective DSS,
+MRMS, stored-map, and notebook payload on 2026-07-11. The subsequent HRRR
+temporal-contract correction described below was validated from current
+`main`; the remaining items are independent backlogs.
+
 ## Goal
 
 Preserve useful unlanded work without replaying stale feature branches over
@@ -9,15 +14,15 @@ current `main`. Every candidate must be reassessed against the APIs, notebooks,
 and fixes that have already landed, then delivered through a focused branch and
 independently validated.
 
-## Current Main State
+## Main State At HRRR Follow-Up Start
 
-- `origin/main` is `f5442cfb`, including PR #274.
+- `origin/main` is `f814a9e0`, including PR #275.
 - There are no open pull requests.
 - PR #260 was closed and its approved slices landed through PRs #262-#273.
 - PR #251 was superseded by PR #274.
 - The notebook 710 and 711 follow-ups were closed by PRs #272 and #271.
 
-## Active Tranche
+## Completed Precipitation Replay Tranche
 
 Selective replay of `origin/feature/dss-container-qpkit-notebooks`:
 
@@ -153,15 +158,46 @@ The user approved this full scope, including notebook 926, on 2026-07-10:
 - Real-file smoke tests passed for both projects before execution. The final
   source-matching execution and independent artifact review also passed.
 
+## HRRR Temporal-Contract Follow-Up
+
+`PrecipHrrr.get_basin_average()` previously labeled its sequential row index
+as `forecast_hour` and logged every record as one hour. That was incorrect for
+HRRR `wrfsubhf`, which returned four 15-minute records per forecast hour in the
+live notebook validation.
+
+The focused correction:
+
+- preserves `forecast_hour` as a documented legacy 1-based record index;
+- adds source-derived `valid_time` and fractional `forecast_lead_hours`;
+- requires one coherent forecast cycle, strictly increasing leads, unique
+  chronological valid times, and agreement between `time + step` and
+  `valid_time`; and
+- logs record count, valid-time spacing, and lead range instead of calling the
+  record count hours.
+
+Validation evidence:
+
+- focused HRRR basin-average suite: 10 passed;
+- combined HRRR, MRMS, and unsteady precipitation suite: 52 passed with the
+  established headless Matplotlib backend and one pre-existing `slow` marker
+  warning;
+- notebook 916: 13/13 code cells executed from source in 1,505.56 seconds with
+  no errors or warning output and one embedded two-panel figure;
+- live extraction: 72 quarter-hour records covering lead hours 0.25-18.00,
+  with 0.047 inches total and a 0.006-inch peak 15-minute depth;
+- qpkit verification: seven GRIB2 files downloaded, six hourly `PER-CUM` grids
+  written and cataloged at 3,000 m resolution with exact pathname agreement;
+  and
+- independent notebook review: PASS (model context Partial, hydraulic
+  relevancy Pass for the forcing-data scope, visual quality Acceptable, and
+  demonstration completeness Complete).
+
+Notebook 916 intentionally remains an input-data/API example. Its rectangular
+averaging geometry is not a delineated watershed, and it does not claim a
+HEC-RAS hydraulic response calculation.
+
 ## Remaining Independent Backlogs
 
-- `PrecipHrrr.get_basin_average()` currently names its sequential row index
-  `forecast_hour` and logs the row count as hours. HRRR `wrfsubhf` extraction
-  can return four 15-minute records per forecast hour, so notebook 916 now
-  aligns those rows to the dataset's `valid_time` coordinate and describes the
-  peak as a 15-minute depth. A separate API change should assess backward
-  compatibility before adding timestamp/interval columns or revising the
-  existing DataFrame contract and INFO summary.
 - `2026-04-29_ebfe_validation_matrix_completion_plan.md`: real eBFE validation
   and model-delivery work; substantial and independent of precipitation.
 - `notebook_inventory_audit_2026-06-26.md`: duplicate `219` numbering and
