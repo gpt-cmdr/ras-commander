@@ -11,6 +11,7 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 
 - Core helpers: `HdfBase`, `HdfUtils`, `HdfPlan`
 - Geometry readers: `HdfMesh`, `HdfXsec`, `HdfBndry`, `HdfStruc`, `HdfHydraulicTables`
+- Project extent / footprint: `HdfProject`
 - Results readers: `HdfResultsPlan`, `HdfResultsMesh`, `HdfResultsXsec`, `HdfResultsBreach`
 - Infrastructure and land surface: `HdfPipe`, `HdfPump`, `HdfInfiltration`, `HdfLandCover`
 - Plotting and analysis: `HdfPlot`, `HdfResultsPlot`, `HdfBenefitAreas`, `HdfChannelCapacity`, `HdfFluvialPluvial`
@@ -43,6 +44,17 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - Both `extend_face_property_tables()` and `set_face_mannings_n_values()` accept optional `polygon` and `region_name` parameters for selective face application (precedence: `face_ids` > `region_name` > `polygon` > all faces)
 - 2D results extraction: `HdfResultsMesh`
 - 1D cross section geometry and results: `HdfXsec`, `HdfResultsXsec`
+- 1D river edge lines: `HdfXsec.get_river_edge_lines()` (stored `Geometry/River Edge Lines`);
+  `HdfXsec.generate_river_edge_lines()` builds them from XS cut-line end points when none are
+  stored (pure-Python equivalent of RASMapper "Create Edge Lines at XS Limits").
+- 1D model footprint polygons: `HdfXsec.get_1d_footprint()` closes left/right edge lines into a
+  per-(River, Reach) polygon (matching end points at the upstream/downstream cross sections);
+  `edge_source='auto'|'stored'|'generate'`, `dissolve=True` for a single (multi)polygon.
+- True model extent polygon: `HdfProject.get_project_extent(..., geometry_type='footprint')`
+  unions 2D flow-area perimeters with 1D reach footprints (multipart when multiple areas/reaches).
+  Use `include_1d=False` / `include_2d=False` for 2D-only / 1D-only extents, and
+  `buffer_percent=0` for the raw footprint. `geometry_type='bbox'` returns the legacy buffered
+  bounding box (still used by `get_project_bounds_latlon` for data downloads).
 - Land cover and infiltration preprocessing: `HdfLandCover`, `HdfInfiltration`
 - Infiltration group authoring: `HdfInfiltration.create_infiltration_group()`, `HdfInfiltration.set_infiltration_baseoverrides()`
 
