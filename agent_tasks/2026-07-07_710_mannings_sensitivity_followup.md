@@ -2,6 +2,11 @@
 
 Date: 2026-07-07
 
+Status: **Closed as of 2026-07-10.** PR #272 repaired the land-cover
+association, reran notebook 710, and demonstrated a nonzero hydraulic response.
+The findings below describe the pre-fix run and are retained as validation
+history, not as an open work item.
+
 ## Context
 
 Notebook `examples/710_mannings_sensitivity_bulk_analysis.ipynb` was included in

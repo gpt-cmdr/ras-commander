@@ -2,6 +2,12 @@
 
 Date: 2026-07-07
 
+Status: **Public example scope closed as of 2026-07-10.** PR #271 refreshed and
+landed notebook 711 with local, credential-free defaults. The larger remote and
+Sabinal-specific workflow described below remains optional future feature work;
+it must be extracted onto a fresh branch if pursued and should not reopen the
+closed PR #260 replay.
+
 Context: PR #260 (`codex/docs-notebook-refresh`) was closed as superseded
 after its useful logging and notebook slices were extracted into focused PRs.
 The only substantial unlanded candidate identified in the remaining PR #260

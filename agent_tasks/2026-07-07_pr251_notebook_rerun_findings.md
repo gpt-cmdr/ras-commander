@@ -2,6 +2,12 @@
 
 Date: 2026-07-07
 
+Status: **Closed / superseded as of 2026-07-10.** PR #251 was not merged. The
+event-alignment, boundary-condition, precipitation, compute-completion, and
+notebook-output work was reassessed and landed on current `main` through PR
+#274. The failure evidence below is retained because it explains the corrective
+scope; it no longer represents the state of notebooks 901 and 914 on `main`.
+
 Context: PR #251 (`linear/CLB-899`) was replayed onto current `origin/main`
 after the logging PRs and dependency updates landed. The PR source edits were
 limited to notebook plotting/result-reporting cells:
