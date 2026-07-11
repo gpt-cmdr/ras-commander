@@ -410,6 +410,50 @@ def test_animation_helpers_accept_dataarray_and_hdf(monkeypatch, tmp_path):
         assert animation_path.stat().st_size > 0
 
 
+def test_precipitation_animation_separates_rate_and_cumulative_units(
+    monkeypatch, tmp_path
+):
+    pytest.importorskip("matplotlib")
+    xr = pytest.importorskip("xarray")
+
+    precip = xr.DataArray(
+        np.full((2, 2, 2), 25.4, dtype="float32"),
+        dims=("time", "latitude", "longitude"),
+        coords={
+            "time": pd.date_range("2024-07-08 12:00", periods=2, freq="h"),
+            "latitude": [30.0, 29.9],
+            "longitude": [-95.5, -95.4],
+        },
+        attrs={"units": "mm"},
+    )
+    captured = {}
+
+    def capture_final_frame(fig, update_func, frame_count, output_path, fps, dpi):
+        import matplotlib.pyplot as plt
+
+        artists = update_func(frame_count - 1)
+        captured["annotation"] = artists[-1].get_text()
+        captured["axis_ylabels"] = [axis.get_ylabel() for axis in fig.axes]
+        Path(output_path).touch()
+        plt.close(fig)
+
+    monkeypatch.setattr(
+        PrecipMrms,
+        "_save_animation",
+        staticmethod(capture_final_frame),
+    )
+
+    output = PrecipMrms.animate_precipitation(
+        precip,
+        tmp_path / "precipitation.mp4",
+        units="in/hr",
+    )
+
+    assert output.exists()
+    assert "Precipitation (in/hr)" in captured["axis_ylabels"]
+    assert captured["annotation"].endswith("Mean cumulative: 2.00 in")
+
+
 def test_flood_animation_accepts_stored_map_rasters(tmp_path):
     rasterio = pytest.importorskip("rasterio")
     pytest.importorskip("matplotlib")

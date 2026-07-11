@@ -2122,6 +2122,17 @@ class PrecipMrms:
         return converted
 
     @staticmethod
+    def _cumulative_depth_units(rate_units: str) -> str:
+        """Return depth units for a cumulative value derived from rate data."""
+        units = rate_units.strip()
+        depth_units = re.sub(
+            r"(?i)\s*(?:/\s*(?:h|hr|hour)s?|\s+per\s+(?:h|hr|hour)s?)$",
+            "",
+            units,
+        ).strip()
+        return depth_units or units
+
+    @staticmethod
     def _animate_grid_stack(
         data: Any,
         output_path: Union[str, Path],
@@ -2207,13 +2218,17 @@ class PrecipMrms:
         cumulative_values = (
             np.nanmean(values, axis=(1, 2)).cumsum() if cumulative else None
         )
+        cumulative_units = (
+            PrecipMrms._cumulative_depth_units(units) if cumulative else None
+        )
 
         def update(frame_idx: int) -> list:
             image.set_data(values[frame_idx])
             timestamp = times[frame_idx].strftime("%Y-%m-%d %H:%M")
             if cumulative:
                 annotation.set_text(
-                    f"{timestamp}\nMean cumulative: {cumulative_values[frame_idx]:.2f} {units}"
+                    f"{timestamp}\nMean cumulative: "
+                    f"{cumulative_values[frame_idx]:.2f} {cumulative_units}"
                 )
             else:
                 annotation.set_text(timestamp)
