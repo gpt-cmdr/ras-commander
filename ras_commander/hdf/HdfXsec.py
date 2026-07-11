@@ -18,6 +18,8 @@ Available Functions:
 - get_river_reaches(): Return the model 1D river reach lines
 - get_river_edge_lines(): Return the model river edge lines
 - get_river_bank_lines(): Extract river bank lines from HDF geometry file
+- generate_river_edge_lines(): Generate edge lines from XS cut-line end points
+- get_1d_footprint(): Build 1D model footprint polygon(s) from edge lines
 - _interpolate_station(): Private helper method for station interpolation
 
 All functions follow the get_ prefix convention for methods that return data.
@@ -34,8 +36,8 @@ import numpy as np
 import pandas as pd
 from geopandas import GeoDataFrame
 import geopandas as gpd
-from shapely.geometry import LineString, MultiLineString
-from typing import List  # Import List to avoid NameError
+from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon
+from typing import List, Optional  # Import List to avoid NameError
 from ..Decorators import standardize_input, log_call
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
@@ -833,4 +835,277 @@ class HdfXsec:
         except Exception as e:
             logger.error(f"Error reading river bank lines from {hdf_path}: {str(e)}")
             return GeoDataFrame()
+
+    # ------------------------------------------------------------------
+    # Edge-line generation and 1D footprint polygonization
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _as_single_linestring(geometry):
+        """Return a simple 2D LineString from single- or multi-part line geometry."""
+        from shapely.ops import linemerge
+
+        if geometry is None or getattr(geometry, "is_empty", True):
+            return None
+        if isinstance(geometry, LineString):
+            return geometry if len(geometry.coords) >= 2 else None
+        if isinstance(geometry, MultiLineString):
+            merged = linemerge(geometry)
+            if isinstance(merged, LineString):
+                return merged if len(merged.coords) >= 2 else None
+            if isinstance(merged, MultiLineString) and len(merged.geoms) > 0:
+                longest = max(merged.geoms, key=lambda g: g.length)
+                return longest if len(longest.coords) >= 2 else None
+        if hasattr(geometry, "geoms"):
+            parts = [
+                p for p in geometry.geoms
+                if isinstance(p, LineString) and len(p.coords) >= 2
+            ]
+            if parts:
+                return max(parts, key=lambda g: g.length)
+        return None
+
+    @staticmethod
+    def _polygon_from_edge_pair(left_line, right_line):
+        """Close a left/right edge-line pair into a polygon (matching end points).
+
+        The ring is left edge (upstream->downstream) followed by the reversed
+        right edge (downstream->upstream). The closing segments are exactly the
+        downstream and upstream cross-section limits, so the ring closes on
+        matching end points.
+        """
+        left = HdfXsec._as_single_linestring(left_line)
+        right = HdfXsec._as_single_linestring(right_line)
+        if left is None or right is None:
+            return None
+        coords = [c[:2] for c in left.coords] + [c[:2] for c in reversed(list(right.coords))]
+        if len(coords) < 4:
+            return None
+        polygon = Polygon(coords)
+        if not polygon.is_valid:
+            polygon = polygon.buffer(0)
+        if polygon is None or polygon.is_empty:
+            return None
+        return polygon
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def generate_river_edge_lines(hdf_path: Path, ras_object=None) -> GeoDataFrame:
+        """
+        Generate river edge lines from cross-section cut-line end points.
+
+        Pure-Python equivalent of RASMapper's "Create Edge Lines at XS Limits".
+        For each (River, Reach), the left end points of consecutive cross-section
+        cut lines are connected into a left edge line and the right end points
+        into a right edge line. HEC-RAS stores cut lines left(start) -> right(end)
+        looking downstream, so ``coords[0]`` is the left limit and ``coords[-1]``
+        is the right limit of each cross section.
+
+        Use this when a geometry has no stored ``Geometry/River Edge Lines``
+        (e.g. the XS interpolation surface has not been computed) or to derive a
+        1D footprint boundary directly from cross sections.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file.
+        ras_object : RasPrj, optional
+            RAS project object for path resolution context.
+
+        Returns
+        -------
+        GeoDataFrame
+            Generated edge lines with columns matching ``get_river_edge_lines``:
+            - edge_id : int
+            - River : str
+            - Reach : str
+            - bank_side : str ('Left' or 'Right')
+            - geometry : LineString
+            - length : float (project units)
+            Empty GeoDataFrame when no cross sections are available.
+        """
+        xs_gdf = HdfXsec.get_cross_sections(hdf_path, ras_object=ras_object)
+        if xs_gdf is None or xs_gdf.empty:
+            logger.warning("No cross sections found; cannot generate river edge lines")
+            return GeoDataFrame()
+
+        if not {"River", "Reach"}.issubset(xs_gdf.columns):
+            logger.warning("Cross sections missing River/Reach columns; cannot group edge lines")
+            return GeoDataFrame()
+
+        rows = []
+        edge_id = 0
+        # Preserve reach order (HDF file order) while grouping.
+        for (river, reach), group in xs_gdf.groupby(["River", "Reach"], sort=False):
+            left_pts: List = []
+            right_pts: List = []
+            for geom in group.geometry:
+                line = HdfXsec._as_single_linestring(geom)
+                if line is None:
+                    continue
+                coords = list(line.coords)
+                left_pts.append(tuple(coords[0][:2]))
+                right_pts.append(tuple(coords[-1][:2]))
+
+            for side, pts in (("Left", left_pts), ("Right", right_pts)):
+                # Drop consecutive duplicate points so LineString stays valid.
+                unique_pts = []
+                for c in pts:
+                    if not unique_pts or c != unique_pts[-1]:
+                        unique_pts.append(c)
+                if len(unique_pts) >= 2:
+                    edge = LineString(unique_pts)
+                    rows.append({
+                        "edge_id": edge_id,
+                        "River": river,
+                        "Reach": reach,
+                        "bank_side": side,
+                        "geometry": edge,
+                        "length": edge.length,
+                    })
+                    edge_id += 1
+
+        crs = xs_gdf.crs if xs_gdf.crs is not None else HdfBase.get_projection(hdf_path)
+        if not rows:
+            logger.warning("Could not generate any river edge lines from cross sections")
+            return GeoDataFrame()
+        return GeoDataFrame(rows, geometry="geometry", crs=crs)
+
+    @staticmethod
+    def _reach_edge_pairs(hdf_path: Path, edge_source: str, ras_object=None):
+        """Return a list of (River, Reach, left_line, right_line, source) tuples.
+
+        Labels (River/Reach) always come from the generated (XS-endpoint) edge
+        lines, which are reliably grouped by reach. When stored edge lines are
+        present and requested, their geometry replaces the generated geometry by
+        reach order, giving HEC-RAS's own edge lines with correct reach labels.
+        """
+        generated = HdfXsec.generate_river_edge_lines(hdf_path, ras_object=ras_object)
+        if generated.empty:
+            return []
+
+        # Build ordered (river, reach) -> {Left, Right} from generated edge lines.
+        gen_pairs = []
+        seen = {}
+        for _, row in generated.iterrows():
+            key = (row["River"], row["Reach"])
+            if key not in seen:
+                seen[key] = {"River": row["River"], "Reach": row["Reach"],
+                             "Left": None, "Right": None}
+                gen_pairs.append(seen[key])
+            seen[key][row["bank_side"]] = row.geometry
+
+        use_stored = edge_source in ("stored", "auto")
+        stored_lines = None
+        if use_stored:
+            try:
+                stored = HdfXsec.get_river_edge_lines(hdf_path)
+            except Exception as e:
+                logger.debug(f"Could not read stored river edge lines: {e}")
+                stored = GeoDataFrame()
+            if stored is not None and not stored.empty and len(stored) % 2 == 0:
+                # Stored edge lines come as alternating Left/Right per reach.
+                stored_lines = list(stored.geometry)
+
+        if edge_source == "stored" and stored_lines is None:
+            logger.warning("No usable stored river edge lines; returning empty pairs")
+            return []
+
+        pairs = []
+        for idx, gp in enumerate(gen_pairs):
+            source = "generated_edge_lines"
+            left = gp["Left"]
+            right = gp["Right"]
+            if stored_lines is not None and (2 * idx + 1) < len(stored_lines) \
+                    and len(stored_lines) == 2 * len(gen_pairs):
+                left = stored_lines[2 * idx]
+                right = stored_lines[2 * idx + 1]
+                source = "stored_edge_lines"
+            if left is None or right is None:
+                continue
+            pairs.append((gp["River"], gp["Reach"], left, right, source))
+        return pairs
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_1d_footprint(
+        hdf_path: Path,
+        edge_source: str = "auto",
+        dissolve: bool = False,
+        ras_object=None,
+    ) -> GeoDataFrame:
+        """
+        Build the 1D model footprint polygon(s) from river edge lines.
+
+        For each (River, Reach) the left and right edge lines are closed into a
+        polygon ring (left edge, then reversed right edge). The end points of the
+        edge lines coincide with the outer cross-section limits, so each ring is
+        closed by the upstream and downstream cross sections on matching end
+        points. This is the true 1D study footprint, not a bounding box.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file.
+        edge_source : {'auto', 'stored', 'generate'}, default 'auto'
+            - 'stored'   : use ``Geometry/River Edge Lines`` only.
+            - 'generate' : always generate edge lines from XS end points.
+            - 'auto'     : use stored edge lines when present, otherwise generate.
+        dissolve : bool, default False
+            If True, dissolve the per-reach polygons into a single (multi)polygon
+            row. If False, return one polygon row per (River, Reach).
+        ras_object : RasPrj, optional
+            RAS project object for path resolution context.
+
+        Returns
+        -------
+        GeoDataFrame
+            Columns River, Reach, source, geometry (Polygon). When
+            ``dissolve=True``, a single row with a (Multi)Polygon and
+            ``source='1d_footprint'``. Empty GeoDataFrame when no 1D geometry is
+            available.
+        """
+        if edge_source not in ("auto", "stored", "generate"):
+            raise ValueError(
+                f"edge_source must be 'auto', 'stored', or 'generate', got '{edge_source}'"
+            )
+
+        crs = HdfBase.get_projection(hdf_path)
+        pairs = HdfXsec._reach_edge_pairs(hdf_path, edge_source, ras_object=ras_object)
+        if not pairs:
+            logger.warning("No 1D edge-line pairs available; returning empty footprint")
+            return GeoDataFrame()
+
+        rows = []
+        for river, reach, left, right, source in pairs:
+            polygon = HdfXsec._polygon_from_edge_pair(left, right)
+            if polygon is None:
+                logger.debug(f"Could not polygonize reach {river}/{reach}")
+                continue
+            rows.append({
+                "River": river,
+                "Reach": reach,
+                "source": source,
+                "geometry": polygon,
+            })
+
+        if not rows:
+            logger.warning("Could not build any 1D footprint polygons")
+            return GeoDataFrame()
+
+        footprint_gdf = GeoDataFrame(rows, geometry="geometry", crs=crs)
+
+        if dissolve:
+            from shapely.ops import unary_union
+
+            combined = unary_union(footprint_gdf.geometry.tolist())
+            return GeoDataFrame(
+                {"source": ["1d_footprint"]},
+                geometry=[combined],
+                crs=crs,
+            )
+
+        return footprint_gdf
 

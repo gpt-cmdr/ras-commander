@@ -100,53 +100,89 @@ class HdfProject:
         include_storage: bool = True,
         buffer_percent: float = 50.0,
         buffer_x_percent: Optional[float] = None,
-        buffer_y_percent: Optional[float] = None
+        buffer_y_percent: Optional[float] = None,
+        geometry_type: str = "footprint",
     ) -> Tuple['GeoDataFrame', Tuple[float, float, float, float]]:
         """
-        Calculate combined project extent from all model elements.
+        Calculate the combined project extent from all model elements.
 
-        Extracts geometries from 2D flow areas, cross sections, river centerlines,
-        and storage areas, combines them into a single extent, and applies buffering.
+        With ``geometry_type='footprint'`` (default) this returns the true model
+        extent as a (multi)polygon: the union of 2D flow-area perimeters and 1D
+        reach footprints (built from river edge lines, see
+        ``HdfXsec.get_1d_footprint``). With ``geometry_type='bbox'`` it returns
+        the legacy buffered bounding box.
+
+        In both modes the returned ``bounds`` tuple is the (optionally buffered)
+        bounding box of the geometry, so downstream callers that only use the
+        bounds (lat/lon conversion, data downloads) are unaffected.
 
         Parameters
         ----------
         hdf_path : Path
             Path to HEC-RAS geometry HDF file (.g##.hdf)
         include_1d : bool, default True
-            Include 1D river centerlines and cross sections
+            Include 1D river reach footprints (footprint mode) or 1D cross
+            sections and river centerlines (bbox mode). Set include_2d=False to
+            get the 1D-only extent.
         include_2d : bool, default True
-            Include 2D flow area perimeters
+            Include 2D flow area perimeters. Set include_1d=False to get the
+            2D-only extent.
         include_storage : bool, default True
-            Include storage area extents (if stored in HDF)
+            Include storage area extents (if stored in HDF).
         buffer_percent : float, default 50.0
-            Default buffer percentage applied to all directions.
-            For precipitation data, 50% is recommended to capture
-            upstream contributing areas.
+            Buffer percentage. In bbox mode it expands the bounding box on each
+            axis (recommended 50% for precipitation to capture contributing
+            areas). In footprint mode it buffers the footprint polygon outward by
+            an equivalent distance. Pass ``buffer_percent=0`` for the raw,
+            unbuffered footprint.
         buffer_x_percent : float, optional
-            Override buffer for X axis. If None, uses buffer_percent.
+            Override buffer for X axis (bbox mode). If None, uses buffer_percent.
         buffer_y_percent : float, optional
-            Override buffer for Y axis. If None, uses buffer_percent.
+            Override buffer for Y axis (bbox mode). If None, uses buffer_percent.
+        geometry_type : {'footprint', 'bbox'}, default 'footprint'
+            'footprint' returns the true extent polygon; 'bbox' returns the
+            legacy buffered bounding box.
 
         Returns
         -------
         Tuple[GeoDataFrame, Tuple[float, float, float, float]]
-            - GeoDataFrame with combined geometry envelope and project CRS
-            - Buffered bounding box (minx, miny, maxx, maxy) in project CRS
+            - GeoDataFrame with the extent geometry (footprint polygon or box)
+              and project CRS
+            - Bounding box (minx, miny, maxx, maxy) in project CRS
 
         Examples
         --------
-        >>> extent_gdf, bounds = HdfProject.get_project_extent(
-        ...     "BaldEagle.g01.hdf",
-        ...     buffer_percent=50.0
+        >>> # True model footprint (raw, unbuffered)
+        >>> gdf, bounds = HdfProject.get_project_extent(
+        ...     "BaldEagle.g01.hdf", buffer_percent=0.0
         ... )
-        >>> print(f"Project extent: {bounds}")
-        >>> print(f"CRS: {extent_gdf.crs}")
+        >>> # 2D-only footprint
+        >>> gdf_2d, _ = HdfProject.get_project_extent(
+        ...     "BaldEagle.g01.hdf", include_1d=False, buffer_percent=0.0
+        ... )
+        >>> # Legacy buffered bounding box (for precipitation download)
+        >>> box_gdf, box_bounds = HdfProject.get_project_extent(
+        ...     "BaldEagle.g01.hdf", geometry_type='bbox', buffer_percent=50.0
+        ... )
         """
+        if geometry_type not in ("footprint", "bbox"):
+            raise ValueError(
+                f"geometry_type must be 'footprint' or 'bbox', got '{geometry_type}'"
+            )
+
+        if geometry_type == "footprint":
+            return HdfProject._get_project_footprint(
+                hdf_path,
+                include_1d=include_1d,
+                include_2d=include_2d,
+                include_storage=include_storage,
+                buffer_percent=buffer_percent,
+            )
+
         # Lazy imports
         from geopandas import GeoDataFrame
         from shapely.geometry import box
         from shapely.ops import unary_union
-        import pandas as pd
 
         geometries = []
         crs = None
@@ -282,6 +318,102 @@ class HdfProject:
         return extent_gdf, (buffered_minx, buffered_miny, buffered_maxx, buffered_maxy)
 
     @staticmethod
+    def _get_project_footprint(
+        hdf_path: Path,
+        include_1d: bool = True,
+        include_2d: bool = True,
+        include_storage: bool = True,
+        buffer_percent: float = 0.0,
+    ) -> Tuple['GeoDataFrame', Tuple[float, float, float, float]]:
+        """
+        Build the true model extent as a footprint (multi)polygon.
+
+        Unions 2D flow-area perimeters with 1D reach footprints. Falls back to the
+        convex hull of 1D line geometry when reaches cannot be polygonized (e.g.
+        a model with no cross-section end points). See ``get_project_extent`` for
+        parameter semantics.
+        """
+        from geopandas import GeoDataFrame
+        from shapely.ops import unary_union
+
+        polygons = []
+        fallback_lines = []
+        crs = None
+
+        # 2D flow area perimeters (already polygons).
+        if include_2d:
+            try:
+                mesh_areas = HdfMesh.get_mesh_areas(hdf_path)
+                if not mesh_areas.empty:
+                    polygons.extend(mesh_areas.geometry.tolist())
+                    if crs is None:
+                        crs = mesh_areas.crs
+                    logger.debug(f"Footprint: {len(mesh_areas)} 2D flow areas")
+            except Exception as e:
+                logger.debug(f"No 2D areas found or error: {e}")
+
+        # 1D reach footprints (from river edge lines).
+        if include_1d:
+            try:
+                footprint_1d = HdfXsec.get_1d_footprint(hdf_path, dissolve=False)
+                if not footprint_1d.empty:
+                    polygons.extend(footprint_1d.geometry.tolist())
+                    if crs is None:
+                        crs = footprint_1d.crs
+                    logger.debug(f"Footprint: {len(footprint_1d)} 1D reach footprints")
+            except Exception as e:
+                logger.debug(f"No 1D footprint or error: {e}")
+
+            # Keep 1D line geometry for a convex-hull fallback if no polygons form.
+            if not polygons:
+                for getter in (HdfXsec.get_cross_sections, HdfXsec.get_river_centerlines):
+                    try:
+                        lines = getter(hdf_path)
+                        if lines is not None and not lines.empty:
+                            fallback_lines.extend(lines.geometry.tolist())
+                            if crs is None:
+                                crs = lines.crs
+                    except Exception as e:
+                        logger.debug(f"1D line fallback getter failed: {e}")
+
+        if crs is None:
+            crs = HdfBase.get_projection(hdf_path)
+
+        # Resolve the core footprint geometry.
+        if polygons:
+            combined = unary_union(polygons)
+        elif fallback_lines:
+            logger.debug("Footprint: no polygonizable areas; using convex hull of 1D lines")
+            combined = unary_union(fallback_lines).convex_hull
+        else:
+            logger.warning("No geometries found in HDF file")
+            empty_gdf = GeoDataFrame(geometry=[], crs=crs)
+            return empty_gdf, (0.0, 0.0, 0.0, 0.0)
+
+        if combined.is_empty:
+            logger.warning("Combined footprint geometry is empty")
+            empty_gdf = GeoDataFrame(geometry=[], crs=crs)
+            return empty_gdf, (0.0, 0.0, 0.0, 0.0)
+
+        # Optional isotropic buffer (0 => raw footprint).
+        if buffer_percent and buffer_percent > 0:
+            minx, miny, maxx, maxy = combined.bounds
+            width = maxx - minx
+            height = maxy - miny
+            reference = min(d for d in (width, height) if d > 0) if (width > 0 or height > 0) else 0.0
+            buffer_distance = (buffer_percent / 100.0) * 0.5 * reference
+            if buffer_distance > 0:
+                combined = combined.buffer(buffer_distance)
+
+        extent_gdf = GeoDataFrame(
+            {'description': ['Project Extent (Footprint)']},
+            geometry=[combined],
+            crs=crs,
+        )
+
+        return extent_gdf, tuple(float(v) for v in combined.bounds)
+
+    @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
     def get_project_bounds_latlon(
@@ -335,12 +467,14 @@ class HdfProject:
         ...     project_crs="EPSG:26918"  # UTM Zone 18N
         ... )
         """
+        # Use the buffered bounding box (download-oriented) to preserve behavior.
         extent_gdf, _ = HdfProject.get_project_extent(
             hdf_path,
             include_1d=include_1d,
             include_2d=include_2d,
             include_storage=include_storage,
-            buffer_percent=buffer_percent
+            buffer_percent=buffer_percent,
+            geometry_type="bbox",
         )
 
         if extent_gdf.empty:
