@@ -28,28 +28,37 @@ class GeoJsonPolygon:
         }
 
 
-def _make_precip_dataset():
+def _make_precip_dataset(step_minutes=(15, 30), include_valid_time=True):
+    step_minutes = np.asarray(step_minutes, dtype="timedelta64[m]")
+    record_count = len(step_minutes)
+    precipitation = np.stack([
+        np.array([[1.0 + index, 9.0], [3.0 + index, 100.0]])
+        for index in range(record_count)
+    ])
+    coordinates = {
+        "step": ("step", step_minutes),
+        "time": np.datetime64("2026-07-11T12:00:00"),
+        "latitude": (
+            ("y", "x"),
+            np.array([[1.0, 1.0], [0.0, 0.0]]),
+        ),
+        "longitude": (
+            ("y", "x"),
+            np.array([[0.0, 1.0], [0.0, 1.0]]),
+        ),
+    }
+    if include_valid_time:
+        coordinates["valid_time"] = (
+            "step",
+            np.datetime64("2026-07-11T12:00:00") + step_minutes,
+        )
+
     return xr.Dataset(
         {
             "tp": xr.DataArray(
-                np.array(
-                    [
-                        [[1.0, 9.0], [3.0, 100.0]],
-                        [[2.0, 10.0], [4.0, 200.0]],
-                    ]
-                ),
+                precipitation,
                 dims=("step", "y", "x"),
-                coords={
-                    "step": [0, 1],
-                    "latitude": (
-                        ("y", "x"),
-                        np.array([[1.0, 1.0], [0.0, 0.0]]),
-                    ),
-                    "longitude": (
-                        ("y", "x"),
-                        np.array([[0.0, 1.0], [0.0, 1.0]]),
-                    ),
-                },
+                coords=coordinates,
             )
         }
     )
@@ -138,12 +147,20 @@ def test_get_basin_average_uses_exact_mask_when_rasterstats_missing(
     )
     _force_missing_rasterstats(monkeypatch)
 
-    with caplog.at_level("WARNING"):
+    with caplog.at_level("INFO"):
         df = PrecipHrrr.get_basin_average(["dummy.grib2"], geometry)
 
     assert df["precip_mm"].tolist() == pytest.approx([2.0, 3.0])
     assert df["cumulative_mm"].tolist() == pytest.approx([2.0, 5.0])
+    assert df["forecast_hour"].tolist() == [1, 2]
+    assert df["forecast_lead_hours"].tolist() == pytest.approx([0.25, 0.5])
+    assert df["valid_time"].tolist() == [
+        np.datetime64("2026-07-11T12:15:00"),
+        np.datetime64("2026-07-11T12:30:00"),
+    ]
     assert "rasterio geometry mask fallback" in caplog.text
+    assert "2 records (15-minute valid-time spacing; lead 0.25-0.50 h)" in caplog.text
+    assert "2 hours" not in caplog.text
 
 
 def test_get_basin_average_uses_bbox_mean_when_exact_mask_unavailable(
@@ -169,3 +186,127 @@ def test_get_basin_average_uses_bbox_mean_when_exact_mask_unavailable(
 
     assert df["precip_mm"].tolist() == pytest.approx([2.0, 3.0])
     assert "watershed bounding box average" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("step_minutes", "expected_summary"),
+    [
+        ((60, 120), "1-hour valid-time spacing"),
+        ((15, 30, 60), "mixed valid-time spacing"),
+    ],
+)
+def test_get_basin_average_reports_source_timing(
+    monkeypatch, caplog, step_minutes, expected_summary
+):
+    dataset = _make_precip_dataset(step_minutes=step_minutes)
+    geometry = GeoJsonPolygon(bounds=(-0.5, -0.5, 0.5, 1.5))
+
+    monkeypatch.setattr(
+        PrecipHrrr,
+        "extract_precipitation",
+        staticmethod(lambda grib_files: dataset),
+    )
+    _force_missing_rasterstats(monkeypatch)
+
+    with caplog.at_level("INFO"):
+        df = PrecipHrrr.get_basin_average(["dummy.grib2"], geometry)
+
+    assert expected_summary in caplog.text
+    assert df["forecast_lead_hours"].tolist() == pytest.approx(
+        np.asarray(step_minutes) / 60.0
+    )
+
+
+def test_get_basin_average_derives_valid_time_from_cycle_and_step(monkeypatch):
+    dataset = _make_precip_dataset(include_valid_time=False)
+    geometry = GeoJsonPolygon(bounds=(-0.5, -0.5, 0.5, 1.5))
+
+    monkeypatch.setattr(
+        PrecipHrrr,
+        "extract_precipitation",
+        staticmethod(lambda grib_files: dataset),
+    )
+    _force_missing_rasterstats(monkeypatch)
+
+    df = PrecipHrrr.get_basin_average(["dummy.grib2"], geometry)
+
+    assert df["valid_time"].tolist() == [
+        np.datetime64("2026-07-11T12:15:00"),
+        np.datetime64("2026-07-11T12:30:00"),
+    ]
+
+
+def test_get_basin_average_rejects_duplicate_valid_times(monkeypatch):
+    dataset = _make_precip_dataset().assign_coords(
+        valid_time=(
+            "step",
+            [
+                np.datetime64("2026-07-11T12:15:00"),
+                np.datetime64("2026-07-11T12:15:00"),
+            ],
+        )
+    )
+    geometry = GeoJsonPolygon(bounds=(-0.5, -0.5, 0.5, 1.5))
+    monkeypatch.setattr(
+        PrecipHrrr,
+        "extract_precipitation",
+        staticmethod(lambda grib_files: dataset),
+    )
+
+    with pytest.raises(ValueError, match="duplicate timestamps"):
+        PrecipHrrr.get_basin_average(["dummy.grib2"], geometry)
+
+
+def test_get_basin_average_rejects_nonincreasing_forecast_leads(monkeypatch):
+    dataset = _make_precip_dataset(step_minutes=(15, 30, 15))
+    geometry = GeoJsonPolygon(bounds=(-0.5, -0.5, 0.5, 1.5))
+    monkeypatch.setattr(
+        PrecipHrrr,
+        "extract_precipitation",
+        staticmethod(lambda grib_files: dataset),
+    )
+
+    with pytest.raises(ValueError, match="strictly increasing"):
+        PrecipHrrr.get_basin_average(["dummy.grib2"], geometry)
+
+
+def test_get_basin_average_rejects_multiple_forecast_cycles(monkeypatch):
+    dataset = _make_precip_dataset().assign_coords(
+        time=(
+            "step",
+            [
+                np.datetime64("2026-07-11T12:00:00"),
+                np.datetime64("2026-07-11T13:00:00"),
+            ],
+        )
+    )
+    geometry = GeoJsonPolygon(bounds=(-0.5, -0.5, 0.5, 1.5))
+    monkeypatch.setattr(
+        PrecipHrrr,
+        "extract_precipitation",
+        staticmethod(lambda grib_files: dataset),
+    )
+
+    with pytest.raises(ValueError, match="one forecast cycle"):
+        PrecipHrrr.get_basin_average(["dummy.grib2"], geometry)
+
+
+def test_get_basin_average_rejects_inconsistent_valid_time(monkeypatch):
+    dataset = _make_precip_dataset().assign_coords(
+        valid_time=(
+            "step",
+            [
+                np.datetime64("2026-07-11T12:15:00"),
+                np.datetime64("2026-07-11T12:45:00"),
+            ],
+        )
+    )
+    geometry = GeoJsonPolygon(bounds=(-0.5, -0.5, 0.5, 1.5))
+    monkeypatch.setattr(
+        PrecipHrrr,
+        "extract_precipitation",
+        staticmethod(lambda grib_files: dataset),
+    )
+
+    with pytest.raises(ValueError, match="cycle time plus step"):
+        PrecipHrrr.get_basin_average(["dummy.grib2"], geometry)
