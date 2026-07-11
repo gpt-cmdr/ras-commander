@@ -19,6 +19,7 @@ Available Functions:
 - get_river_edge_lines(): Return the model river edge lines
 - get_river_bank_lines(): Extract river bank lines from HDF geometry file
 - generate_river_edge_lines(): Generate edge lines from XS cut-line end points
+- set_river_edge_lines(): Write river edge lines into the geometry HDF (no GUI)
 - get_1d_footprint(): Build 1D model footprint polygon(s) from edge lines
 - _interpolate_station(): Private helper method for station interpolation
 
@@ -728,14 +729,16 @@ class HdfXsec:
 
                 edge_data = hdf_file["Geometry/River Edge Lines"]
                 geoms = HdfBase.get_polylines_from_parts(
-                    hdf_path, 
+                    hdf_path,
                     "Geometry/River Edge Lines",
                     info_name="Polyline Info",
                     parts_name="Polyline Parts",
                     points_name="Polyline Points"
                 )
 
-                # Get attributes if they exist
+                # Genuine HEC-RAS edge lines carry no "Attributes" dataset, so the
+                # geometry count is the source of truth for edge_id/bank_side (bank
+                # side alternates Left/Right per reach: RASEdgeLines' IsLeft = i % 2 == 0).
                 if "Attributes" in edge_data:
                     attrs = edge_data["Attributes"][()]
 
@@ -866,23 +869,89 @@ class HdfXsec:
         return None
 
     @staticmethod
-    def _polygon_from_edge_pair(left_line, right_line):
-        """Close a left/right edge-line pair into a polygon (matching end points).
+    def _cutline_interior(start_pt, end_pt, cut_lines, tolerance):
+        """Interior vertices of the cut line spanning start_pt -> end_pt.
 
-        The ring is left edge (upstream->downstream) followed by the reversed
-        right edge (downstream->upstream). The closing segments are exactly the
-        downstream and upstream cross-section limits, so the ring closes on
-        matching end points.
+        Searches ``cut_lines`` for a cut line whose two end points match
+        ``start_pt`` and ``end_pt`` (in either order) within ``tolerance``, and
+        returns that cut line's interior vertices oriented start -> end. Returns
+        None when no cut line matches, in which case the caller falls back to a
+        straight closing chord.
+        """
+        from math import hypot
+
+        def close(a, b):
+            return hypot(a[0] - b[0], a[1] - b[1]) <= tolerance
+
+        for line in cut_lines:
+            cut = HdfXsec._as_single_linestring(line)
+            if cut is None:
+                continue
+            coords = [tuple(c[:2]) for c in cut.coords]
+            if len(coords) < 3:
+                # Two-point cut line: the straight chord already IS the cut line.
+                continue
+            first, last = coords[0], coords[-1]
+            if close(first, start_pt) and close(last, end_pt):
+                return coords[1:-1]
+            if close(last, start_pt) and close(first, end_pt):
+                return list(reversed(coords[1:-1]))
+        return None
+
+    @staticmethod
+    def _polygon_from_edge_pair(left_line, right_line, cut_lines=None,
+                                snap_tolerance=None):
+        """Close a left/right edge-line pair into a polygon.
+
+        The ring runs along the left edge, across the downstream cross section,
+        back up the reversed right edge, and across the upstream cross section.
+        When ``cut_lines`` (the end cross-section cut lines for the reach) are
+        supplied, each end cap follows the real cut-line geometry, including its
+        interior vertices. Without them - or when an edge-line end point does not
+        land on a cut-line limit (possible for HEC-RAS stored edge lines) - the
+        end cap falls back to a straight chord between the edge-line end points.
         """
         left = HdfXsec._as_single_linestring(left_line)
         right = HdfXsec._as_single_linestring(right_line)
         if left is None or right is None:
             return None
-        coords = [c[:2] for c in left.coords] + [c[:2] for c in reversed(list(right.coords))]
+
+        left_coords = [tuple(c[:2]) for c in left.coords]
+        right_coords = [tuple(c[:2]) for c in right.coords]
+        if len(left_coords) + len(right_coords) < 4:
+            return None
+
+        cut_lines = list(cut_lines) if cut_lines else []
+        if cut_lines and snap_tolerance is None:
+            lengths = [
+                cut.length for cut in
+                (HdfXsec._as_single_linestring(c) for c in cut_lines)
+                if cut is not None and cut.length > 0
+            ]
+            # 1% of a typical cut-line width: tight enough to reject a mismatched
+            # cut line, loose enough for stored edge lines with rounded coords.
+            snap_tolerance = 0.01 * (sum(lengths) / len(lengths)) if lengths else 0.0
+
+        # Downstream cap: left edge end -> right edge end.
+        far_cap = HdfXsec._cutline_interior(
+            left_coords[-1], right_coords[-1], cut_lines, snap_tolerance
+        ) if cut_lines else None
+        # Upstream cap: right edge start -> left edge start (closes the ring).
+        near_cap = HdfXsec._cutline_interior(
+            right_coords[0], left_coords[0], cut_lines, snap_tolerance
+        ) if cut_lines else None
+
+        coords = (
+            left_coords
+            + (far_cap or [])
+            + list(reversed(right_coords))
+            + (near_cap or [])
+        )
         if len(coords) < 4:
             return None
         polygon = Polygon(coords)
         if not polygon.is_valid:
+            # A bent cut line spliced into the ring can self-intersect; repair.
             polygon = polygon.buffer(0)
         if polygon is None or polygon.is_empty:
             return None
@@ -973,17 +1042,151 @@ class HdfXsec:
         return GeoDataFrame(rows, geometry="geometry", crs=crs)
 
     @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def set_river_edge_lines(hdf_path: Path, edge_lines: Optional[GeoDataFrame] = None,
+                             ras_object=None) -> int:
+        """
+        Write river edge lines into ``Geometry/River Edge Lines`` of a geometry HDF.
+
+        Pure-Python authoring of the artifact RASMapper's *Create Edge Lines at XS
+        Limits* produces. Writing the edge lines directly makes them readable by
+        ``get_river_edge_lines()`` and usable by ``get_1d_footprint(edge_source=
+        'stored')`` without a RASMapper GUI round trip. Any existing
+        ``Geometry/River Edge Lines`` group is replaced.
+
+        Edge lines are stored one polyline per bank in ``Left, Right`` order per
+        reach (the convention HEC-RAS derives from row order via ``IsLeft = i %
+        2 == 0``). Geometry uses the native RAS polyline encoding — ``Polyline
+        Info`` / ``Polyline Parts`` / ``Polyline Points`` (``float64`` points),
+        each stamped with the same ``Row`` / ``Column`` / ``Feature Type`` HDF5
+        attributes HEC-RAS writes. HEC-RAS stores no ``Attributes`` dataset for
+        this layer, so none is written.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file (opened for in-place update).
+        edge_lines : GeoDataFrame, optional
+            Edge lines to write, with a ``geometry`` column of LineStrings in
+            ``Left, Right`` row order per reach (as returned by
+            ``generate_river_edge_lines`` or ``get_river_edge_lines``). When None,
+            edge lines are generated from cross-section end points via
+            ``generate_river_edge_lines()``.
+        ras_object : RasPrj, optional
+            RAS project object for path resolution context.
+
+        Returns
+        -------
+        int
+            Number of edge-line polylines written. 0 when no edge lines are
+            available (nothing is written in that case).
+
+        Notes
+        -----
+        This writes the geometry-HDF representation that ras-commander reads. It
+        does **not** write the group-level ``Source Data Hash`` (the SHA-256 over
+        cross-section geometry and bank stations that HEC-RAS uses for cache
+        invalidation), nor does it update the ``.rasmap``. As a result HEC-RAS may
+        recompute and overwrite these edge lines the next time it opens or
+        completes the geometry. For edge lines that survive a HEC-RAS round trip,
+        use HEC-RAS's own headless geometry completion (RasProcess.exe
+        ``CompleteGeometry``) instead. ``generate_river_edge_lines`` is a
+        simplified XS-endpoint construction and does not reproduce HEC-RAS's
+        bank-line-anchored offset-curve edge lines vertex-for-vertex.
+        """
+        if edge_lines is None:
+            edge_lines = HdfXsec.generate_river_edge_lines(hdf_path, ras_object=ras_object)
+        if edge_lines is None or edge_lines.empty:
+            logger.warning("No edge lines to write; Geometry/River Edge Lines unchanged")
+            return 0
+
+        lines = [HdfXsec._as_single_linestring(g) for g in edge_lines.geometry]
+        lines = [ln for ln in lines if ln is not None]
+        if not lines:
+            logger.warning("Edge lines contained no valid LineStrings; nothing written")
+            return 0
+
+        # Native RAS polyline encoding: a flat float64 point array indexed by a
+        # per-polyline [pnt_start, pnt_cnt, part_start, part_cnt] Info row, with
+        # one single-part Parts row [local_pnt_start, pnt_cnt] per polyline.
+        points: List = []
+        info_rows: List = []
+        parts_rows: List = []
+        pnt_offset = 0
+        for idx, line in enumerate(lines):
+            coords = [(float(x), float(y)) for x, y in (c[:2] for c in line.coords)]
+            points.extend(coords)
+            n = len(coords)
+            info_rows.append((pnt_offset, n, idx, 1))
+            parts_rows.append((0, n))
+            pnt_offset += n
+
+        points_arr = np.asarray(points, dtype=np.float64).reshape(-1, 2)
+        info_arr = np.asarray(info_rows, dtype=np.int32)
+        parts_arr = np.asarray(parts_rows, dtype=np.int32)
+
+        with h5py.File(hdf_path, "a") as hdf_file:
+            geom = hdf_file.require_group("Geometry")
+            if "River Edge Lines" in geom:
+                del geom["River Edge Lines"]
+            grp = geom.create_group("River Edge Lines")
+
+            info_ds = grp.create_dataset("Polyline Info", data=info_arr)
+            info_ds.attrs.create("Row", np.bytes_("Feature"))
+            info_ds.attrs.create("Column", np.array(
+                [b"Point Starting Index", b"Point Count",
+                 b"Part Starting Index", b"Part Count"], dtype="S20"))
+            info_ds.attrs.create("Feature Type", np.bytes_("Polyline"))
+
+            parts_ds = grp.create_dataset("Polyline Parts", data=parts_arr)
+            parts_ds.attrs.create("Row", np.bytes_("Part"))
+            parts_ds.attrs.create("Column", np.array(
+                [b"Point Starting Index", b"Point Count"], dtype="S20"))
+
+            points_ds = grp.create_dataset("Polyline Points", data=points_arr)
+            points_ds.attrs.create("Row", np.bytes_("Points"))
+            points_ds.attrs.create("Column", np.array([b"X", b"Y"], dtype="S1"))
+
+        logger.info(f"Wrote {len(lines)} river edge lines to {Path(hdf_path).name}")
+        return len(lines)
+
+    @staticmethod
+    def _reach_end_cutlines(hdf_path: Path, ras_object=None):
+        """Map (River, Reach) -> [first cut line, last cut line] for the reach.
+
+        These are the cross sections that close the upstream and downstream ends
+        of the reach footprint ring.
+        """
+        xs_gdf = HdfXsec.get_cross_sections(hdf_path, ras_object=ras_object)
+        if xs_gdf is None or xs_gdf.empty:
+            return {}
+        if not {"River", "Reach"}.issubset(xs_gdf.columns):
+            return {}
+
+        end_cutlines = {}
+        for key, group in xs_gdf.groupby(["River", "Reach"], sort=False):
+            geoms = [g for g in group.geometry if g is not None]
+            if not geoms:
+                continue
+            end_cutlines[key] = [geoms[0], geoms[-1]]
+        return end_cutlines
+
+    @staticmethod
     def _reach_edge_pairs(hdf_path: Path, edge_source: str, ras_object=None):
-        """Return a list of (River, Reach, left_line, right_line, source) tuples.
+        """Return (River, Reach, left_line, right_line, source, cut_lines) tuples.
 
         Labels (River/Reach) always come from the generated (XS-endpoint) edge
         lines, which are reliably grouped by reach. When stored edge lines are
         present and requested, their geometry replaces the generated geometry by
         reach order, giving HEC-RAS's own edge lines with correct reach labels.
+        ``cut_lines`` carries the reach's end cross-section cut lines so the
+        footprint ring can be closed on real cut-line geometry.
         """
         generated = HdfXsec.generate_river_edge_lines(hdf_path, ras_object=ras_object)
         if generated.empty:
             return []
+        end_cutlines = HdfXsec._reach_end_cutlines(hdf_path, ras_object=ras_object)
 
         # Build ordered (river, reach) -> {Left, Right} from generated edge lines.
         gen_pairs = []
@@ -1024,7 +1227,8 @@ class HdfXsec:
                 source = "stored_edge_lines"
             if left is None or right is None:
                 continue
-            pairs.append((gp["River"], gp["Reach"], left, right, source))
+            cut_lines = end_cutlines.get((gp["River"], gp["Reach"]), [])
+            pairs.append((gp["River"], gp["Reach"], left, right, source, cut_lines))
         return pairs
 
     @staticmethod
@@ -1034,16 +1238,18 @@ class HdfXsec:
         hdf_path: Path,
         edge_source: str = "auto",
         dissolve: bool = False,
+        close_with_end_xs: bool = True,
         ras_object=None,
     ) -> GeoDataFrame:
         """
         Build the 1D model footprint polygon(s) from river edge lines.
 
         For each (River, Reach) the left and right edge lines are closed into a
-        polygon ring (left edge, then reversed right edge). The end points of the
-        edge lines coincide with the outer cross-section limits, so each ring is
-        closed by the upstream and downstream cross sections on matching end
-        points. This is the true 1D study footprint, not a bounding box.
+        polygon ring: left edge, downstream cross section, reversed right edge,
+        upstream cross section. The end caps follow the real cut-line geometry of
+        the end cross sections, including their interior vertices, so a bent cut
+        line is reproduced instead of chorded. This is the true 1D study
+        footprint, not a bounding box.
 
         Parameters
         ----------
@@ -1056,6 +1262,12 @@ class HdfXsec:
         dissolve : bool, default False
             If True, dissolve the per-reach polygons into a single (multi)polygon
             row. If False, return one polygon row per (River, Reach).
+        close_with_end_xs : bool, default True
+            Close each ring on the end cross-section cut-line geometry. Set False
+            for the legacy behavior, a straight chord between the edge-line end
+            points. When an edge-line end point does not land on a cut-line limit
+            (possible for stored edge lines), that end cap falls back to the
+            straight chord regardless of this setting.
         ras_object : RasPrj, optional
             RAS project object for path resolution context.
 
@@ -1079,8 +1291,11 @@ class HdfXsec:
             return GeoDataFrame()
 
         rows = []
-        for river, reach, left, right, source in pairs:
-            polygon = HdfXsec._polygon_from_edge_pair(left, right)
+        for river, reach, left, right, source, cut_lines in pairs:
+            polygon = HdfXsec._polygon_from_edge_pair(
+                left, right,
+                cut_lines=cut_lines if close_with_end_xs else None,
+            )
             if polygon is None:
                 logger.debug(f"Could not polygonize reach {river}/{reach}")
                 continue

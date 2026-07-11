@@ -51,10 +51,21 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - 1D cross section geometry and results: `HdfXsec`, `HdfResultsXsec`
 - 1D river edge lines: `HdfXsec.get_river_edge_lines()` (stored `Geometry/River Edge Lines`);
   `HdfXsec.generate_river_edge_lines()` builds them from XS cut-line end points when none are
-  stored (pure-Python equivalent of RASMapper "Create Edge Lines at XS Limits").
+  stored (pure-Python equivalent of RASMapper "Create Edge Lines at XS Limits");
+  `HdfXsec.set_river_edge_lines()` writes edge lines back into the geometry HDF in HEC-RAS's native
+  schema — `Polyline Info/Parts/Points` with the `Row`/`Column`/`Feature Type` attrs and no
+  `Attributes` dataset (HEC-RAS stores none for this layer; `get_river_edge_lines` derives bank side
+  from row order). No RASMapper GUI is needed. It does NOT write the group-level `Source Data Hash`
+  or update the `.rasmap`, so HEC-RAS may recompute these on next open; for edge lines HEC-RAS treats
+  as authoritative, run its own headless geometry completion (`RasProcess.exe CompleteGeometry`),
+  which also builds the XS interpolation surface.
 - 1D model footprint polygons: `HdfXsec.get_1d_footprint()` closes left/right edge lines into a
-  per-(River, Reach) polygon (matching end points at the upstream/downstream cross sections);
-  `edge_source='auto'|'stored'|'generate'`, `dissolve=True` for a single (multi)polygon.
+  per-(River, Reach) polygon. Each end cap follows the real cut-line geometry of the end cross
+  section, interior vertices included, so a bent cut line is not chorded straight across; when an
+  edge-line end point does not land on a cut-line limit (possible for stored edge lines) that cap
+  falls back to a straight chord. `edge_source='auto'|'stored'|'generate'`,
+  `close_with_end_xs=False` for the legacy straight-chord closure, `dissolve=True` for a single
+  (multi)polygon.
 - True model extent polygon: `HdfProject.get_project_extent(..., geometry_type='footprint')`
   unions 2D flow-area perimeters with 1D reach footprints (multipart when multiple areas/reaches).
   Use `include_1d=False` / `include_2d=False` for 2D-only / 1D-only extents, and
