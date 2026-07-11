@@ -2,6 +2,12 @@
 
 Date: 2026-07-07
 
+Status: **Closed / superseded as of 2026-07-10.** PR #260 was closed without
+merging. Its approved slices landed through focused PRs #262-#270, followed by
+the reviewed notebook fixes in PRs #271-#272 and the stored-map work in PR
+#273. Keep this file as the decision record for why the bulk replay was split;
+it is not an active replay queue.
+
 Context: PR #260 (`codex/docs-notebook-refresh`) was replayed onto current
 `origin/main` after the logging/API/documentation PRs landed. The replay applies
 one large notebook/docs commit and conflicts only in generated docs navigation

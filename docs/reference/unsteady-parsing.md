@@ -155,12 +155,14 @@ Rainfall for rain-on-grid (when not using gridded meteorology):
 
 ```
 Precipitation Hydrograph= 12
-    0.50    0.00    1.00    0.10    1.50    0.25    2.00    0.50    2.50    0.80
-    3.00    1.00    3.50    0.80    4.00    0.50    4.50    0.20    5.00    0.00
-    5.50    0.00    6.00    0.00
+    0.00    0.10    0.25    0.50    0.80    1.00    0.80    0.50    0.20    0.00
+    0.00    0.00
 ```
 
-Paired values: (time, incremental precipitation depth in inches or mm). The header count is the number of time-depth pairs, so `Precipitation Hydrograph= 12` is followed by 24 numeric fields.
+The header count is the number of sequential incremental precipitation depths, so
+`Precipitation Hydrograph= 12` is followed by exactly 12 numeric fields. Timing
+comes from the preceding `Interval=` value. HEC-RAS writes up to ten fields per
+line, so this example occupies two data lines.
 
 ### Rating Curve
 
@@ -344,10 +346,11 @@ if 'Flow Hydrograph' in tables:
 | `Stage Hydrograph=` | Number of values | count |
 | `Lateral Inflow Hydrograph=` | Number of values | count |
 | `Uniform Lateral Inflow=` | Number of values | count |
-| `Precipitation Hydrograph=` | Number of time-depth pairs | count × 2 |
+| `Precipitation Hydrograph=` | Number of incremental-depth values | count |
 
-Most interval-based hydrograph tables use the preceding `Interval=` line for timing and store values only.
-For `Precipitation Hydrograph=`, the count is the number of time steps/time-depth pairs, not the total number of numeric fields.
+Interval-based hydrograph tables use the preceding `Interval=` line for timing
+and store values only. For `Precipitation Hydrograph=`, the count is both the
+number of time steps and the total number of numeric depth fields.
 
 ## Validation
 

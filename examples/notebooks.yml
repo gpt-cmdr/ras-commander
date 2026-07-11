@@ -3091,26 +3091,33 @@ notebooks:
   title: HRRR Precipitation Forecast Download
   series: 900
   series_name: Data Integration
-  summary: This notebook demonstrates how to download and process HRRR (High-Resolution Rapid Refresh)
-    precipitation forecast data using the `PrecipHrrr` class in ras-commander.
+  summary: download and inspect live HRRR precipitation with PrecipHrrr, then write and verify regional
+    incremental HRRR grids in DSS with qpkit and RasDss
   tags:
+  - dss
+  - forecast
   - precipitation
   difficulty: advanced
   est_runtime: null
   data_project: null
-  functions_used: []
+  functions_used:
+  - RasDss.get_catalog
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 10
-  executed_cells: 10
+  code_cells: 13
+  executed_cells: 13
 - id: 917_mrms_precipitation_qpe
   filename: 917_mrms_precipitation_qpe.ipynb
-  title: MRMS Precipitation QPE
+  title: MRMS QPE Rain-on-Grid Workflow
   series: 900
   series_name: Data Integration
-  summary: MRMS QPE workflows, including direct NetCDF rain-on-grid validation
+  summary: download archived MRMS QPE, write and verify DSS precipitation forcing, compute Davis and New
+    Orleans rain-on-grid cases, and mosaic multi-terrain stored maps into hydraulic animations
   tags:
+  - 2d
+  - dss
+  - hdf
   - precipitation
   difficulty: advanced
   est_runtime: null
@@ -3124,6 +3131,8 @@ notebooks:
   - HdfResultsMesh.export_depth_rasters_at_times
   - HdfResultsMesh.get_mesh_timeseries
   - RasCmdr.compute_plan
+  - RasDss.get_catalog
+  - RasDss.read_grid
   - RasExamples.extract_project
   - RasPlan.get_plan_value
   - RasPlan.update_plan_intervals
@@ -3131,14 +3140,16 @@ notebooks:
   - RasProcess.get_plan_timestamps
   - RasProcess.store_maps_at_timesteps
   - RasUnsteady.set_precipitation_hyetograph
+  - ras.boundaries_df
   - ras.plan_df
   - ras.project_folder
   - ras.project_name
+  - ras.rasmap_df
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 7
-  executed_cells: 5
+  code_cells: 8
+  executed_cells: 8
 - id: 918_hms_ras_coupled_forecast
   filename: 918_hms_ras_coupled_forecast.ipynb
   title: HMS-RAS Coupled Forecast Execution
@@ -3337,6 +3348,27 @@ notebooks:
   excluded: false
   code_cells: 10
   executed_cells: 10
+- id: 926_wpc_qpf_precipitation_forecast
+  filename: 926_wpc_qpf_precipitation_forecast.ipynb
+  title: WPC QPF Precipitation Forecast to DSS
+  series: 900
+  series_name: Data Integration
+  summary: download current WPC QPF grids, crop them to a regional extent, write HEC-DSS, verify the fresh
+    catalog, and map the source precipitation field
+  tags:
+  - dss
+  - forecast
+  - precipitation
+  difficulty: advanced
+  est_runtime: null
+  data_project: null
+  functions_used:
+  - RasDss.get_catalog
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 5
+  executed_cells: 5
 - id: 930_terrain_modification_analysis
   filename: 930_terrain_modification_analysis.ipynb
   title: Terrain Modification Analysis

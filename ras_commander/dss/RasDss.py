@@ -17,6 +17,8 @@ Functions:
         Returns a list of all data pathnames in a DSS file.
     read_timeseries(dss_file, pathname, start_date=None, end_date=None):
         Reads a DSS time series by pathname and returns it as a pandas DataFrame.
+    read_grid(dss_file, pathname):
+        Reads one exact DSS spatial grid record and its metadata.
     read_multiple_timeseries(dss_file, pathnames):
         Reads multiple DSS time series, returning a dict of pathname to DataFrame
         (or None on failure).
@@ -317,6 +319,232 @@ class RasDss:
 
             return df
 
+        finally:
+            if dss is not None:
+                dss.done()
+
+    @staticmethod
+    @log_call
+    def read_grid(
+        dss_file: Union[str, Path],
+        pathname: str,
+    ) -> Dict[str, Any]:
+        """
+        Read one spatial grid record from an exact DSS pathname.
+
+        Args:
+            dss_file: Path to an existing DSS file.
+            pathname: Exact six-part DSS grid pathname. Wildcards are not
+                accepted; D and E parts identify the record's time window.
+
+        Returns:
+            Dictionary containing:
+
+            - ``dss_file``: Absolute DSS file path.
+            - ``pathname``: Exact pathname requested.
+            - ``data``: Two-dimensional ``float32`` array in row-major order.
+              The HEC grid no-data sentinel is represented as ``numpy.nan``.
+            - ``shape``: ``(rows, columns)``.
+            - ``units`` and ``data_type``: DSS parameter metadata.
+            - ``grid_type``: ``"albers"``, ``"specified"``, ``"hrap"``, or
+              the runtime grid-info class name for another grid type.
+            - ``crs`` and ``cell_size``: Spatial reference and resolution.
+            - ``start_time`` and ``end_time``: Naive ``pandas.Timestamp``
+              values parsed from pathname parts D and E when present.
+            - ``metadata``: Grid dimensions, cell indexes, origin/projection,
+              compression, type codes, missing-value count, and raw timing.
+
+        Raises:
+            FileNotFoundError: If ``dss_file`` does not exist.
+            IsADirectoryError: If ``dss_file`` is not a file.
+            ValueError: If the pathname is malformed, uses wildcards, or does
+                not identify an existing exact record.
+            TypeError: If the exact pathname identifies a non-grid record.
+            ImportError: If pyjnius is not installed.
+            RuntimeError: If the Java grid read fails or returns invalid data.
+        """
+        if not isinstance(pathname, str):
+            raise ValueError(f"DSS pathname must be a string, got {type(pathname).__name__}")
+        if "*" in pathname or "?" in pathname:
+            raise ValueError(
+                "read_grid requires an exact DSS pathname without wildcard "
+                f"characters: {pathname}"
+            )
+
+        _, path_parts = RasDss._split_dss_pathname(pathname)
+
+        dss_path = Path(dss_file)
+        if not dss_path.exists():
+            raise FileNotFoundError(f"DSS file not found: {dss_path}")
+        if not dss_path.is_file():
+            raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
+
+        RasDss._configure_jvm()
+
+        from jnius import autoclass, cast
+        from ras_commander.RasUtils import RasUtils
+
+        HecDss = autoclass('hec.heclib.dss.HecDss')
+        GridInfo = autoclass('hec.heclib.grid.GridInfo')
+        dss_file_str = str(RasUtils.safe_resolve(dss_path))
+
+        dss = None
+        try:
+            dss = HecDss.open(dss_file_str)
+            if not dss.recordExists(pathname):
+                raise ValueError(
+                    f"No DSS record found for exact pathname {pathname} "
+                    f"in {dss_file_str}"
+                )
+
+            container = dss.get(pathname)
+            if container is None:
+                raise RuntimeError(
+                    f"HEC-DSS returned no container for existing pathname: {pathname}"
+                )
+
+            container_class = str(container.getClass().getName())
+            if container_class != "hec.io.GridContainer":
+                raise TypeError(
+                    f"DSS pathname is not a spatial grid record: {pathname} "
+                    f"(container type: {container_class})"
+                )
+
+            grid_container = cast('hec.io.GridContainer', container)
+            grid_data = grid_container.getGridData()
+            if grid_data is None:
+                raise RuntimeError(f"Grid record contains no grid data: {pathname}")
+
+            grid_info_base = grid_data.getGridInfo()
+            if grid_info_base is None:
+                raise RuntimeError(f"Grid record contains no grid metadata: {pathname}")
+
+            grid_class = str(grid_info_base.getClass().getName())
+            grid_info = cast(grid_class, grid_info_base)
+            n_cols = int(grid_info.getNumberOfCellsX())
+            n_rows = int(grid_info.getNumberOfCellsY())
+            if n_rows <= 0 or n_cols <= 0:
+                raise RuntimeError(
+                    f"Grid record has invalid dimensions {n_rows}x{n_cols}: {pathname}"
+                )
+
+            values = np.asarray(grid_data.getData(), dtype=np.float32)
+            expected_size = n_rows * n_cols
+            if values.size != expected_size:
+                raise RuntimeError(
+                    f"Grid record returned {values.size} values for dimensions "
+                    f"{n_rows}x{n_cols} ({expected_size} expected): {pathname}"
+                )
+
+            nodata_value = np.float32(GridInfo.getGridNodataValue())
+            values = values.reshape((n_rows, n_cols), order="C").copy()
+            values[values == nodata_value] = np.nan
+
+            grid_class_name = grid_class.rsplit('.', 1)[-1]
+            grid_type_names = {
+                "AlbersInfo": "albers",
+                "SpecifiedGridInfo": "specified",
+                "HrapInfo": "hrap",
+            }
+            grid_type = grid_type_names.get(grid_class_name, grid_class_name)
+
+            cell_size = float(grid_info.getCellSize())
+            lower_left_cell = (
+                int(grid_info.getLowerLeftCellX()),
+                int(grid_info.getLowerLeftCellY()),
+            )
+            projection: Dict[str, Any] = {}
+            origin = None
+
+            if grid_class_name in {"AlbersInfo", "SpecifiedGridInfo"}:
+                x_cell_zero = float(grid_info.getXCoordOfGridCellZero())
+                y_cell_zero = float(grid_info.getYCoordOfGridCellZero())
+                projection.update({
+                    "x_coord_cell_zero": x_cell_zero,
+                    "y_coord_cell_zero": y_cell_zero,
+                })
+                origin = (
+                    x_cell_zero + lower_left_cell[0] * cell_size,
+                    y_cell_zero + lower_left_cell[1] * cell_size,
+                )
+
+            if grid_class_name == "AlbersInfo":
+                projection.update({
+                    "datum_code": int(grid_info.getProjectionDatum()),
+                    "units": str(grid_info.getProjectionUnits()),
+                    "standard_parallel_1": float(grid_info.getFirstStandardParallel()),
+                    "standard_parallel_2": float(grid_info.getSecondStandardParallel()),
+                    "central_meridian": float(grid_info.getCentralMeridian()),
+                    "latitude_of_origin": float(
+                        grid_info.getLatitudeOfProjectionOrigin()
+                    ),
+                    "false_easting": float(grid_info.getFalseEasting()),
+                    "false_northing": float(grid_info.getFalseNorthing()),
+                })
+
+            raw_start_time = str(grid_info.getStartTime())
+            raw_end_time = str(grid_info.getEndTime())
+            start_time = RasDss._parse_grid_dss_datetime(path_parts[3])
+            end_time = RasDss._parse_grid_dss_datetime(path_parts[4])
+            if start_time is None:
+                try:
+                    start_time = pd.Timestamp(pd.to_datetime(raw_start_time))
+                except (TypeError, ValueError):
+                    pass
+            if end_time is None:
+                try:
+                    end_time = pd.Timestamp(pd.to_datetime(raw_end_time))
+                except (TypeError, ValueError):
+                    pass
+
+            metadata = {
+                "pathname_parts": dict(zip("ABCDEF", path_parts)),
+                "grid_class": grid_class,
+                "grid_type_code": int(grid_info.getGridType()),
+                "data_type_code": int(grid_info.getDataType()),
+                "shape": (n_rows, n_cols),
+                "number_of_cells_x": n_cols,
+                "number_of_cells_y": n_rows,
+                "lower_left_cell": lower_left_cell,
+                "origin": origin,
+                "projection": projection,
+                "number_missing": int(grid_data.getNumberMissing()),
+                "nodata_value": float(nodata_value),
+                "compression": {
+                    "method": int(grid_info.getCompressionMethod()),
+                    "base": float(grid_info.getCompressionBase()),
+                    "scale_factor": float(grid_info.getCompressionScaleFactor()),
+                    "element_size": int(grid_info.getSizeOfCompressedElements()),
+                },
+                "timing": {
+                    "start": raw_start_time,
+                    "end": raw_end_time,
+                    "period": str(grid_info.getTimePeriod()),
+                },
+            }
+
+            return {
+                "dss_file": dss_file_str,
+                "pathname": pathname,
+                "data": values,
+                "shape": (n_rows, n_cols),
+                "units": str(grid_info.getDataUnits()),
+                "data_type": str(grid_info.getDataTypeName()),
+                "grid_type": grid_type,
+                "crs": str(grid_info.getSpatialReferenceSystem()),
+                "cell_size": cell_size,
+                "start_time": start_time,
+                "end_time": end_time,
+                "metadata": metadata,
+            }
+        except (ValueError, TypeError):
+            raise
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to read DSS grid record: {exc}\n"
+                f"  File: {dss_file_str}\n"
+                f"  Pathname: {pathname}"
+            ) from exc
         finally:
             if dss is not None:
                 dss.done()
@@ -1503,6 +1731,9 @@ class RasDss:
         """Parse a DSS grid D/E datetime part, returning None when blank."""
         if not value:
             return None
+        if value.endswith(":2400"):
+            day = pd.Timestamp(pd.to_datetime(value[:-5], format="%d%b%Y"))
+            return day + pd.Timedelta(days=1)
         try:
             return pd.Timestamp(pd.to_datetime(value, format="%d%b%Y:%H%M"))
         except ValueError:

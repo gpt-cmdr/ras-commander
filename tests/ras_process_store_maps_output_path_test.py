@@ -1,7 +1,11 @@
+from contextlib import nullcontext
 from importlib import import_module
 import logging
 from pathlib import Path
 import subprocess
+from types import SimpleNamespace
+
+import pytest
 
 
 ras_process_module = import_module("ras_commander.RasProcess")
@@ -14,6 +18,75 @@ def _messages(caplog, level):
         record.getMessage()
         for record in caplog.records
         if record.name == LOGGER_NAME and record.levelno == level
+    ]
+
+
+def test_windows_extended_length_path_conversion_is_cross_platform(monkeypatch):
+    monkeypatch.setattr(ras_process_module, "IS_WINDOWS", True)
+
+    drive_path = r"C:\projects\Demo\PlanShort\Depth (Max).tif"
+    unc_path = r"\\server\share\Demo\PlanShort\Depth (Max).tif"
+    prefixed_drive_path = r"\\?\C:\projects\Demo\PlanShort\Depth (Max).tif"
+    prefixed_unc_path = r"\\?\UNC\server\share\Demo\PlanShort\Depth (Max).tif"
+
+    assert ras_process_module._windows_extended_length_path(drive_path) == (
+        r"\\?\C:\projects\Demo\PlanShort\Depth (Max).tif"
+    )
+    assert ras_process_module._windows_extended_length_path(unc_path) == (
+        r"\\?\UNC\server\share\Demo\PlanShort\Depth (Max).tif"
+    )
+    assert (
+        ras_process_module._windows_extended_length_path(prefixed_drive_path)
+        == prefixed_drive_path
+    )
+    assert (
+        ras_process_module._windows_extended_length_path(prefixed_unc_path)
+        == prefixed_unc_path
+    )
+
+    monkeypatch.setattr(ras_process_module, "IS_WINDOWS", False)
+    assert ras_process_module._windows_extended_length_path(unc_path) == unc_path
+
+
+@pytest.mark.parametrize(
+    ("directory", "expected_scan_path"),
+    [
+        (
+            r"C:\projects\Demo\PlanShort",
+            r"\\?\C:\projects\Demo\PlanShort",
+        ),
+        (
+            r"\\server\share\Demo\PlanShort",
+            r"\\?\UNC\server\share\Demo\PlanShort",
+        ),
+    ],
+)
+def test_glob_paths_scans_with_extended_length_drive_and_unc_paths(
+    monkeypatch,
+    directory,
+    expected_scan_path,
+):
+    scanned_paths = []
+
+    def fake_scandir(path):
+        scanned_paths.append(path)
+        return nullcontext(
+            [
+                SimpleNamespace(name="WSE (Max).Terrain.tif"),
+                SimpleNamespace(name="Depth (Max).Terrain B.tif"),
+                SimpleNamespace(name="Depth (Max).Terrain A.tif"),
+            ]
+        )
+
+    monkeypatch.setattr(ras_process_module, "IS_WINDOWS", True)
+    monkeypatch.setattr(ras_process_module.os, "scandir", fake_scandir)
+
+    matches = ras_process_module._glob_paths(directory, "Depth (Max)*.tif")
+
+    assert scanned_paths == [expected_scan_path]
+    assert [path.name for path in matches] == [
+        "Depth (Max).Terrain A.tif",
+        "Depth (Max).Terrain B.tif",
     ]
 
 
@@ -300,6 +373,190 @@ def test_add_stored_map_rasmap_setup_logs_debug_not_info(tmp_path, caplog):
     debug_messages = _messages(caplog, logging.DEBUG)
     assert any("Created Results element in rasmap" in message for message in debug_messages)
     assert any("Created plan layer 'PlanShort' in rasmap" in message for message in debug_messages)
+
+
+def test_projection_info_discovers_all_tiffs_associated_with_terrain_hdf(tmp_path):
+    terrain_dir = tmp_path / "Terrain"
+    terrain_dir.mkdir()
+    terrain_hdf = terrain_dir / "Composite Terrain.hdf"
+    terrain_hdf.write_bytes(b"")
+    expected_paths = (
+        terrain_dir / "Composite Terrain.East.tif",
+        terrain_dir / "Composite Terrain.West.tif",
+    )
+    for terrain_path in reversed(expected_paths):
+        terrain_path.write_bytes(b"")
+    (terrain_dir / "Unrelated Terrain.tif").write_bytes(b"")
+
+    rasmap_path = tmp_path / "Demo.rasmap"
+    rasmap_path.write_text(
+        """<?xml version="1.0" encoding="utf-8"?>
+<RASMapper>
+  <Terrains>
+    <Layer Name="Composite Terrain" Filename="./Terrain/Composite Terrain.hdf" />
+  </Terrains>
+</RASMapper>
+""",
+        encoding="utf-8",
+    )
+
+    projection_info = RasProcess._get_projection_info(rasmap_path)
+
+    assert projection_info.terrain_path == expected_paths[0]
+    assert projection_info.terrain_paths == expected_paths
+
+
+def test_terrain_for_stored_map_matches_each_stem_and_rejects_unmatched(tmp_path):
+    east_terrain = tmp_path / "Composite Terrain.East.tif"
+    west_terrain = tmp_path / "Composite Terrain.West.tif"
+    terrain_paths = (east_terrain, west_terrain)
+
+    assert RasProcess._terrain_for_stored_map(
+        tmp_path / "Depth (Max).Composite Terrain.East.tif",
+        terrain_paths,
+    ) == east_terrain
+    assert RasProcess._terrain_for_stored_map(
+        tmp_path / "Depth (Max).Composite Terrain.West.tif",
+        terrain_paths,
+    ) == west_terrain
+    assert (
+        RasProcess._terrain_for_stored_map(
+            tmp_path / "Depth (Max).Unknown Terrain.tif",
+            terrain_paths,
+        )
+        is None
+    )
+
+
+def test_store_maps_applies_each_terrain_transform_to_its_output_tile(
+    monkeypatch,
+    tmp_path,
+):
+    rasterio = pytest.importorskip("rasterio")
+    np = pytest.importorskip("numpy")
+    from rasterio.crs import CRS
+    from rasterio.transform import from_origin
+
+    output_dir = tmp_path / "PlanShort"
+    terrain_dir = tmp_path / "Terrain"
+    terrain_dir.mkdir()
+    (tmp_path / "hecras").mkdir()
+    (tmp_path / "hecras" / "Ras.exe").write_bytes(b"")
+    (tmp_path / "Demo.p01.hdf").write_bytes(b"")
+    (terrain_dir / "Composite Terrain.hdf").write_bytes(b"")
+
+    rasmap_path = tmp_path / "Demo.rasmap"
+    rasmap_path.write_text(
+        """<?xml version="1.0" encoding="utf-8"?>
+<RASMapper>
+  <Terrains>
+    <Layer Name="Composite Terrain" Filename="./Terrain/Composite Terrain.hdf" />
+  </Terrains>
+  <Results>
+    <Layer Name="PlanShort" Filename="Demo.p01.hdf" />
+  </Results>
+</RASMapper>
+""",
+        encoding="utf-8",
+    )
+
+    terrain_transforms = {
+        "East": from_origin(1000, 2000, 10, 10),
+        "West": from_origin(5000, 8000, 25, 25),
+    }
+    crs = CRS.from_epsg(2871)
+    data = np.arange(9, dtype="float32").reshape(3, 3)
+    for tile_name, transform in terrain_transforms.items():
+        terrain_path = terrain_dir / f"Composite Terrain.{tile_name}.tif"
+        with rasterio.open(
+            terrain_path,
+            "w",
+            driver="GTiff",
+            height=3,
+            width=3,
+            count=1,
+            dtype="float32",
+            crs=crs,
+            transform=transform,
+        ) as dst:
+            dst.write(data, 1)
+
+    ras_obj = _DummyRas(project_folder=tmp_path)
+    monkeypatch.setattr(
+        ras_process_module.RasMap,
+        "get_rasmap_path",
+        staticmethod(lambda ras_object=None: rasmap_path),
+    )
+    monkeypatch.setattr(
+        RasProcess,
+        "_get_plan_short_id",
+        staticmethod(lambda hdf_path: "PlanShort"),
+    )
+    monkeypatch.setattr(
+        RasProcess,
+        "_remove_stored_maps_from_rasmap",
+        staticmethod(lambda *args, **kwargs: 0),
+    )
+    monkeypatch.setattr(
+        RasProcess,
+        "_add_stored_map_to_rasmap",
+        staticmethod(lambda *args, **kwargs: True),
+    )
+    monkeypatch.setattr(
+        ras_process_module.RasMap,
+        "get_water_surface_render_mode",
+        staticmethod(lambda ras_object=None: "horizontal"),
+    )
+
+    raw_transform = from_origin(10, 20, 1, 1)
+
+    def fake_run_store_all_maps_helper(**kwargs):
+        for tile_name in terrain_transforms:
+            output_path = output_dir / f"Depth (Max).Composite Terrain.{tile_name}.tif"
+            with rasterio.open(
+                output_path,
+                "w",
+                driver="GTiff",
+                height=3,
+                width=3,
+                count=1,
+                dtype="float32",
+                transform=raw_transform,
+            ) as dst:
+                dst.write(data, 1)
+        return subprocess.CompletedProcess(
+            args=["RasStoreMapHelper.exe"],
+            returncode=0,
+            stdout="Maps generated: 2",
+            stderr="",
+        )
+
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_all_maps_helper",
+        fake_run_store_all_maps_helper,
+    )
+
+    results = RasProcess.store_maps(
+        plan_number="01",
+        profile="Max",
+        wse=False,
+        depth=True,
+        velocity=False,
+        clear_existing=True,
+        fix_georef=True,
+        ras_object=ras_obj,
+    )
+
+    expected_outputs = [
+        output_dir / f"Depth (Max).Composite Terrain.{tile_name}.tif"
+        for tile_name in terrain_transforms
+    ]
+    assert results["depth"] == expected_outputs
+    for tile_name, output_path in zip(terrain_transforms, expected_outputs):
+        with rasterio.open(output_path) as src:
+            assert src.crs == crs
+            assert src.transform == terrain_transforms[tile_name]
 
 
 def test_fix_georeferencing_rewrites_compressed_tiff(tmp_path):
