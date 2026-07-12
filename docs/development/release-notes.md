@@ -2,6 +2,17 @@
 
 ## Version History
 
+### Unreleased
+
+**HRRR Forecast Timing**
+
+- `PrecipHrrr.get_basin_average()` now returns source-derived `valid_time` and
+  fractional `forecast_lead_hours` columns for hourly and subhourly products.
+- The legacy 1-based `forecast_hour` record index remains available for
+  compatibility but is no longer described as elapsed forecast time.
+- Basin-average INFO logging now reports record count, valid-time spacing, and
+  the lead-hour range instead of treating every record as one hour.
+
 ### v0.96.2 (Current — May 2026)
 
 **Precipitation & Dependencies**

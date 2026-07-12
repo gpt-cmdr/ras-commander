@@ -553,8 +553,8 @@ class PrecipHrrr:
         """
         Calculate basin-average precipitation from HRRR forecast files.
 
-        Clips HRRR precipitation grid to a watershed boundary polygon and
-        calculates the spatial average for each forecast hour.
+        Clips the HRRR precipitation grid to a watershed boundary polygon and
+        calculates the spatial average for each forecast record.
 
         Args:
             grib_files: List of HRRR GRIB2 file paths.
@@ -562,11 +562,16 @@ class PrecipHrrr:
                      Must be in EPSG:4326 (WGS84).
 
         Returns:
-            pandas.DataFrame: Time series with columns ['datetime', 'precip_mm',
-                             'precip_inches', 'cumulative_mm', 'cumulative_inches'].
+            pandas.DataFrame: Time series with ``forecast_hour`` (legacy
+            1-based record index), ``precip_mm``, ``precip_inches``,
+            ``cumulative_mm``, ``cumulative_inches``, ``valid_time`` (UTC),
+            and ``forecast_lead_hours``. Lead hours may be fractional for
+            subhourly products.
 
         Raises:
             ImportError: If required packages not installed.
+            ValueError: If HRRR temporal coordinates are missing, invalid, or
+                inconsistent with the precipitation records.
 
         Example:
             >>> import geopandas as gpd
@@ -609,6 +614,111 @@ class PrecipHrrr:
 
         # Extract full precipitation grid
         precip_ds = PrecipHrrr.extract_precipitation(grib_files)
+
+        record_count = precip_ds.sizes.get('step', 0)
+        if record_count == 0:
+            raise ValueError("HRRR precipitation data contains no forecast records")
+
+        step_values = np.asarray(precip_ds['step'].values).reshape(-1)
+        if step_values.size != record_count:
+            raise ValueError(
+                "HRRR step coordinate does not match the precipitation record count"
+            )
+        if (
+            np.issubdtype(step_values.dtype, np.number)
+            and not np.issubdtype(step_values.dtype, np.timedelta64)
+        ):
+            raise ValueError(
+                "HRRR step coordinate must contain forecast lead timedeltas"
+            )
+
+        try:
+            step_deltas = pd.to_timedelta(step_values)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "Could not interpret the HRRR step coordinate as forecast leads"
+            ) from exc
+        if step_deltas.isna().any():
+            raise ValueError("HRRR step coordinate contains missing forecast leads")
+
+        forecast_lead_hours = step_deltas.total_seconds() / 3600.0
+        if np.any(forecast_lead_hours < 0):
+            raise ValueError("HRRR forecast leads must be nonnegative")
+        if record_count > 1 and np.any(np.diff(forecast_lead_hours) <= 0):
+            raise ValueError("HRRR forecast leads must be strictly increasing")
+
+        if 'valid_time' in precip_ds.coords:
+            valid_time_values = np.asarray(
+                precip_ds['valid_time'].values
+            ).reshape(-1)
+            if valid_time_values.size != record_count:
+                raise ValueError(
+                    "HRRR valid_time coordinate does not match the precipitation "
+                    "record count"
+                )
+            valid_times = pd.DatetimeIndex(pd.to_datetime(valid_time_values))
+            if valid_times.isna().any():
+                raise ValueError(
+                    "HRRR valid_time coordinate contains missing timestamps"
+                )
+            if not valid_times.is_unique:
+                raise ValueError(
+                    "HRRR valid_time coordinate contains duplicate timestamps"
+                )
+            if not valid_times.is_monotonic_increasing:
+                raise ValueError(
+                    "HRRR valid_time coordinate must be chronological"
+                )
+        else:
+            valid_times = None
+
+        forecast_reference_time = None
+        if 'time' in precip_ds.coords:
+            cycle_time_values = np.asarray(precip_ds['time'].values).reshape(-1)
+            if cycle_time_values.size == 1:
+                cycle_times = pd.DatetimeIndex(pd.to_datetime(cycle_time_values))
+            elif cycle_time_values.size == record_count:
+                cycle_times = pd.DatetimeIndex(
+                    pd.to_datetime(cycle_time_values)
+                )
+            else:
+                raise ValueError(
+                    "HRRR time coordinate cannot be aligned with forecast records"
+                )
+            if cycle_times.isna().any():
+                raise ValueError("HRRR time coordinate contains missing cycle times")
+            unique_cycle_times = cycle_times.unique()
+            if len(unique_cycle_times) != 1:
+                raise ValueError(
+                    "HRRR precipitation records must come from one forecast cycle"
+                )
+            forecast_reference_time = unique_cycle_times[0]
+
+        if valid_times is None and forecast_reference_time is None:
+            raise ValueError(
+                "HRRR precipitation data must include valid_time or time metadata"
+            )
+
+        if valid_times is None:
+            valid_times = pd.DatetimeIndex(
+                [forecast_reference_time] * record_count
+            ) + step_deltas
+        elif forecast_reference_time is None:
+            derived_reference_times = valid_times - step_deltas
+            unique_reference_times = derived_reference_times.unique()
+            if len(unique_reference_times) != 1:
+                raise ValueError(
+                    "HRRR valid times and forecast leads imply multiple forecast cycles"
+                )
+            forecast_reference_time = unique_reference_times[0]
+        else:
+            expected_valid_times = pd.DatetimeIndex(
+                [forecast_reference_time] * record_count
+            ) + step_deltas
+            if not valid_times.equals(expected_valid_times):
+                raise ValueError(
+                    "HRRR valid_time must equal the forecast cycle time plus step"
+                )
 
         logger.info("Calculating basin-average precipitation")
 
@@ -698,11 +808,6 @@ class PrecipHrrr:
                 mean_precip = stats[0]['mean'] if stats[0]['mean'] is not None else 0.0
                 results.append(mean_precip)
 
-            df = pd.DataFrame({
-                'forecast_hour': range(1, len(results) + 1),
-                'precip_mm': results,
-            })
-
         except ImportError:
             if _exact_mask is not None:
                 logger.warning(
@@ -730,19 +835,53 @@ class PrecipHrrr:
                 mean_val = float(finite_values.mean()) if finite_values.size else 0.0
                 results.append(mean_val)
 
-            df = pd.DataFrame({
-                'forecast_hour': range(1, len(results) + 1),
-                'precip_mm': results,
-            })
+        if len(results) != record_count:
+            raise ValueError(
+                "Basin-average results do not match the HRRR record count"
+            )
+
+        df = pd.DataFrame({
+            'forecast_hour': range(1, record_count + 1),
+            'precip_mm': results,
+        })
 
         # Add unit conversions
         df['precip_inches'] = df['precip_mm'] / 25.4
         df['cumulative_mm'] = df['precip_mm'].cumsum()
         df['cumulative_inches'] = df['precip_inches'].cumsum()
+        df['valid_time'] = valid_times
+        df['forecast_lead_hours'] = forecast_lead_hours
+
+        if record_count == 1:
+            spacing_summary = "single valid time"
+        else:
+            spacing_minutes = (
+                pd.Series(valid_times)
+                .diff()
+                .dropna()
+                .dt.total_seconds()
+                .to_numpy()
+                / 60.0
+            )
+            unique_spacing = np.unique(np.round(spacing_minutes, decimals=9))
+            if unique_spacing.size == 1:
+                minutes = float(unique_spacing[0])
+                if minutes == 60.0:
+                    spacing_summary = "1-hour valid-time spacing"
+                elif minutes.is_integer():
+                    spacing_summary = f"{int(minutes)}-minute valid-time spacing"
+                else:
+                    spacing_summary = f"{minutes:g}-minute valid-time spacing"
+            else:
+                spacing_summary = "mixed valid-time spacing"
 
         logger.info(
-            f"Basin average: {df['cumulative_inches'].iloc[-1]:.2f} inches "
-            f"total over {len(df)} hours"
+            "Basin average: %.2f in across %d records (%s; lead %.2f-%.2f h)",
+            df['cumulative_inches'].iloc[-1],
+            record_count,
+            spacing_summary,
+            float(forecast_lead_hours[0]),
+            float(forecast_lead_hours[-1]),
         )
 
         return df

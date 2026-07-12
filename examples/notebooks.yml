@@ -3088,25 +3088,35 @@ notebooks:
   executed_cells: 9
 - id: 916_hrrr_precipitation_forecast
   filename: 916_hrrr_precipitation_forecast.ipynb
-  title: HRRR Precipitation Forecast Download
+  title: 'HRRR Forecast to HEC-RAS: End-to-End Rain-on-Grid Execution'
   series: 900
   series_name: Data Integration
-  summary: download and inspect live HRRR precipitation with PrecipHrrr, then write and verify regional
-    incremental HRRR grids in DSS with qpkit and RasDss
+  summary: select one mature live HRRR cycle, preserve source timing, write and spatially verify hourly
+    SHG DSS forcing, run converged no-rain and forecast plans through HEC-RAS 7.0, and audit hydraulic response
   tags:
+  - 2d
   - dss
   - forecast
+  - hdf
   - precipitation
   difficulty: advanced
   est_runtime: null
   data_project: null
   functions_used:
+  - PrecipHrrr.download_forecast
+  - PrecipHrrr.get_basin_average
   - RasDss.get_catalog
+  - RasExamples.extract_project
+  - RasPlan.clone_plan
+  - RasPlan.clone_unsteady
+  - RasUnsteady.configure_gridded_dss_precipitation
+  - RasCmdr.compute_plan
+  - HdfResultsMesh.get_mesh_timeseries
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 13
-  executed_cells: 13
+  code_cells: 12
+  executed_cells: 12
 - id: 917_mrms_precipitation_qpe
   filename: 917_mrms_precipitation_qpe.ipynb
   title: MRMS QPE Rain-on-Grid Workflow
