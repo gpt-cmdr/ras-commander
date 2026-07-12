@@ -65,6 +65,7 @@ FORECAST_INPUTS = {
     "919_stofs3d_coastal_boundary",
     "923_stofs3d_coastal_boundary",
     "924_mrms_netcdf_rain_on_grid",
+    "926_wpc_qpf_precipitation_forecast",
 }
 
 TERRAIN_AND_SURFACES = {

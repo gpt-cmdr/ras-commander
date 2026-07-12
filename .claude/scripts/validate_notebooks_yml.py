@@ -14,6 +14,8 @@ from reality -- not mere "is there an entry", but a SEMANTIC check (docs overhau
      must be a public member of a public class; a `ras.<attr>` must be a known RasPrj attribute or a
      documented DataFrame (ras_commander/schemas.py). Symbols whose class can't be imported on this
      host (optional GUI/remote deps) are reported as UNVERIFIABLE warnings, never hard errors.
+  4. Numeric prefixes are unique so generated navigation and published example references remain
+     unambiguous.
 
 Exit code: 0 if no errors (warnings allowed), 1 on any error. Run in content-repo CI and as a
 build-fatal step before the gallery generator.
@@ -32,6 +34,8 @@ import sys
 from pathlib import Path
 
 import yaml
+
+from _docs_notebook_common import numeric_prefix
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES_DIR = REPO_ROOT / "examples"
@@ -115,6 +119,18 @@ def main() -> int:
         errors.append(f"orphan entry: notebooks.yml has '{orphan}' but no examples/{orphan}.ipynb")
     if len(entries) != len(by_id):
         errors.append(f"duplicate or id-less entries: {len(entries)} entries, {len(by_id)} unique ids")
+
+    prefixes: dict[str, list[str]] = {}
+    for nb_id in disk_ids:
+        prefix = numeric_prefix(nb_id)
+        if prefix:
+            prefixes.setdefault(prefix, []).append(nb_id)
+    for prefix, ids in sorted(prefixes.items()):
+        if len(ids) > 1:
+            errors.append(
+                f"duplicate numeric prefix '{prefix}': "
+                + ", ".join(f"{nb_id}.ipynb" for nb_id in sorted(ids))
+            )
 
     # 2) Required fields
     for nb_id, e in sorted(by_id.items()):

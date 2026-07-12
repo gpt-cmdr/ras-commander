@@ -50,6 +50,11 @@ jobs:
           pip install -r docs/requirements-docs.txt
           pip install -e .
 
+      - name: Validate notebook inventory
+        run: |
+          python .claude/scripts/generate_notebooks_metadata.py --check
+          python .claude/scripts/validate_notebooks_yml.py
+
       - name: Prepare notebooks for docs
         run: |
           python .claude/scripts/prepare_notebooks_for_docs.py
@@ -59,6 +64,7 @@ jobs:
       - name: Generate examples index table
         run: |
           python .claude/scripts/generate_examples_index.py
+          git diff --exit-code -- docs/examples/index.md
 
       - name: Generate cognitive infrastructure docs
         run: |

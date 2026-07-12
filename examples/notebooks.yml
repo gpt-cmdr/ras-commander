@@ -1142,29 +1142,6 @@ notebooks:
   excluded: false
   code_cells: 8
   executed_cells: 6
-- id: 219_mannings_region_polygon_authoring
-  filename: 219_mannings_region_polygon_authoring.ipynb
-  title: Manning's n Region Polygon Authoring
-  series: 200
-  series_name: Geometry & Calibration
-  summary: This workflow writes Manning's n calibration region polygons to the plain-text HEC-RAS geometry
-    file with `GeomLandCover.set_mannings_region_polygons()` and checks the paired regional Manning's
-    n table remains readable.
-  tags: []
-  difficulty: intermediate
-  est_runtime: null
-  data_project: Muncie
-  functions_used:
-  - GeomLandCover.get_region_mannings_n
-  - GeomLandCover.set_mannings_region_polygons
-  - HdfLandCover.get_mannings_region_polygons
-  - HdfMesh.get_mesh_areas
-  - RasExamples.extract_project
-  hec_refs: []
-  learning_paths: []
-  excluded: false
-  code_cells: 3
-  executed_cells: 3
 - id: 220_calibration_workflow
   filename: 220_calibration_workflow.ipynb
   title: Manning's n Calibration with RasCalibrate
@@ -1411,6 +1388,34 @@ notebooks:
   excluded: false
   code_cells: 9
   executed_cells: 8
+- id: 229_model_extent_polygons
+  filename: 229_model_extent_polygons.ipynb
+  title: Model Extent Polygons (1D, 2D, and Overall Footprints)
+  series: 200
+  series_name: Geometry & Calibration
+  summary: extract 2D flow-area perimeters, generate 1D river edge lines and reach footprints, combine
+    them into the true model extent, and compare 1D-only, 2D-only, and legacy bounding-box geometries
+    for Bald Eagle Creek and Muncie
+  tags:
+  - 1d
+  - 2d
+  difficulty: intermediate
+  est_runtime: null
+  data_project: null
+  functions_used:
+  - HdfMesh.get_mesh_area_names
+  - HdfMesh.get_mesh_areas
+  - HdfProject.get_project_extent
+  - HdfXsec.generate_river_edge_lines
+  - HdfXsec.get_1d_footprint
+  - HdfXsec.get_cross_sections
+  - HdfXsec.get_river_edge_lines
+  - RasExamples.extract_project
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 8
+  executed_cells: 8
 - id: 230_mesh_sensitivity_analysis
   filename: 230_mesh_sensitivity_analysis.ipynb
   title: 2D Mesh Cell-Size Sensitivity for Sediment Transport
@@ -1505,6 +1510,29 @@ notebooks:
   excluded: false
   code_cells: 8
   executed_cells: 8
+- id: 233_mannings_region_polygon_authoring
+  filename: 233_mannings_region_polygon_authoring.ipynb
+  title: Manning's n Region Polygon Authoring
+  series: 200
+  series_name: Geometry & Calibration
+  summary: This workflow writes Manning's n calibration region polygons to the plain-text HEC-RAS geometry
+    file with `GeomLandCover.set_mannings_region_polygons()` and checks the paired regional Manning's
+    n table remains readable.
+  tags: []
+  difficulty: intermediate
+  est_runtime: null
+  data_project: Muncie
+  functions_used:
+  - GeomLandCover.get_region_mannings_n
+  - GeomLandCover.set_mannings_region_polygons
+  - HdfLandCover.get_mannings_region_polygons
+  - HdfMesh.get_mesh_areas
+  - RasExamples.extract_project
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 3
+  executed_cells: 3
 - id: 300_unsteady_flow_operations
   filename: 300_unsteady_flow_operations.ipynb
   title: Unsteady Flow Operations
@@ -2642,20 +2670,20 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 15
-  executed_cells: 15
+  executed_cells: 14
 - id: 711_mannings_sensitivity_multi_interval
   filename: 711_mannings_sensitivity_multi_interval.ipynb
   title: One-at-a-Time (OAT) Manning's n Sensitivity Analysis
   series: 700
   series_name: Sensitivity & Precipitation
-  summary: This notebook performs a one-at-a-time Manning's n sensitivity analysis on the Muncie 2D
-    example project using GeomLandCover edits, local parallel execution, preprocessed cell roughness
-    propagation QA, and POI max-WSE sensitivity plots.
+  summary: This notebook performs a one-at-a-time Manning's n sensitivity analysis on the Muncie 2D example
+    project using GeomLandCover edits, local parallel execution, preprocessed cell roughness propagation
+    QA, and POI max-WSE sensitivity plots.
   tags:
   - sensitivity
   difficulty: intermediate
   est_runtime: null
-  data_project: Muncie
+  data_project: null
   functions_used:
   - GeomLandCover.get_base_mannings_n
   - GeomLandCover.get_region_mannings_n
@@ -2684,7 +2712,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 16
-  executed_cells: 16
+  executed_cells: 14
 - id: 720_precipitation_methods_comprehensive
   filename: 720_precipitation_methods_comprehensive.ipynb
   title: Precipitation Hyetograph Generation - Complete Method Comparison
@@ -2923,17 +2951,20 @@ notebooks:
   - HdfProject.get_project_bounds_latlon
   - RasCmdr.compute_parallel
   - RasExamples.extract_project
+  - RasUnsteady.get_gate_openings
+  - RasUnsteady.set_gate_openings
   - RasUtils.remove_with_retry
+  - ras.boundaries_df
+  - ras.get_boundary_conditions
   - ras.get_plan_entries
   - ras.plan_df
   - ras.project_folder
   - ras.project_name
-  - ras.results_df
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 17
-  executed_cells: 16
+  code_cells: 18
+  executed_cells: 17
 - id: 910_usgs_gauge_catalog
   filename: 910_usgs_gauge_catalog.ipynb
   title: USGS Gauge Catalog Generation
@@ -3049,31 +3080,32 @@ notebooks:
   est_runtime: null
   data_project: null
   functions_used:
-  - HdfMesh.find_nearest_cell
-  - HdfMesh.get_mesh_area_names
   - HdfMesh.get_mesh_areas
-  - HdfMesh.get_mesh_cell_points
   - HdfProject.get_project_bounds_latlon
-  - HdfResultsMesh.get_mesh_cells_timeseries
   - HdfResultsXsec.get_ref_lines_timeseries
   - HdfResultsXsec.get_xsec_timeseries
   - RasCmdr.compute_plan
   - RasExamples.extract_project
   - RasPlan.clone_plan
+  - RasPlan.clone_unsteady
+  - RasPlan.update_simulation_date
+  - RasUnsteady.set_gridded_precipitation
+  - RasUtils.remove_with_retry
+  - ras.boundaries_df
   - ras.plan_df
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 22
-  executed_cells: 22
+  code_cells: 21
+  executed_cells: 21
 - id: 915_realtime_forecast_workflow
   filename: 915_realtime_forecast_workflow.ipynb
   title: Real-Time Forecast Workflow with ras-commander
   series: 900
   series_name: Data Integration
-  summary: This notebook demonstrates how to build an operational real-time flood forecast workflow using
-    ras-commander. It covers the equivalent functionality of the rtsPy pipeline used in NOAA/NWS operational
-    systems, implemented with ras-command...
+  summary: check and download current HRRR and STOFS-3D forecast inputs, extract coastal WSE when data
+    are available, and show the API calls for plan-date updates, stage-boundary writing, and HEC-RAS execution
+    without running a forecast model
   tags: []
   difficulty: advanced
   est_runtime: null
@@ -3092,7 +3124,8 @@ notebooks:
   series: 900
   series_name: Data Integration
   summary: select one mature live HRRR cycle, preserve source timing, write and spatially verify hourly
-    SHG DSS forcing, run converged no-rain and forecast plans through HEC-RAS 7.0, and audit hydraulic response
+    SHG DSS forcing, run converged no-rain and forecast plans through HEC-RAS 7.0, and audit hydraulic
+    response
   tags:
   - 2d
   - dss
@@ -3101,17 +3134,37 @@ notebooks:
   - precipitation
   difficulty: advanced
   est_runtime: null
-  data_project: null
+  data_project: BaldEagleCrkMulti2D
   functions_used:
-  - PrecipHrrr.download_forecast
-  - PrecipHrrr.get_basin_average
+  - HdfBndry.get_bc_lines
+  - HdfInfiltration.get_preprocessed_infiltration_stats
+  - HdfMesh.get_mesh_area_attributes
+  - HdfMesh.get_mesh_areas
+  - HdfMesh.get_mesh_cell_faces
+  - HdfMesh.get_mesh_cell_points
+  - HdfProject.get_project_bounds_latlon
+  - HdfResultsMesh.get_mesh_max_ws_err
+  - HdfResultsMesh.get_mesh_timeseries
+  - HdfResultsPlan.get_compute_messages_hdf_only
+  - HdfResultsPlan.get_volume_accounting
+  - HdfStruc.get_structures
+  - RasCmdr.compute_plan
   - RasDss.get_catalog
+  - RasDss.read_grid
   - RasExamples.extract_project
   - RasPlan.clone_plan
   - RasPlan.clone_unsteady
+  - RasPlan.update_simulation_date
   - RasUnsteady.configure_gridded_dss_precipitation
-  - RasCmdr.compute_plan
-  - HdfResultsMesh.get_mesh_timeseries
+  - RasUnsteady.get_gate_openings
+  - RasUnsteady.get_inline_hydrograph_boundaries
+  - RasUnsteady.get_met_precipitation_config
+  - RasUnsteady.set_constant_precipitation
+  - ras.boundaries_df
+  - ras.plan_df
+  - ras.project_folder
+  - ras.project_name
+  - ras.rasmap_df
   hec_refs: []
   learning_paths: []
   excluded: false
@@ -3159,15 +3212,15 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 8
-  executed_cells: 8
+  executed_cells: 6
 - id: 918_hms_ras_coupled_forecast
   filename: 918_hms_ras_coupled_forecast.ipynb
   title: HMS-RAS Coupled Forecast Execution
   series: 900
   series_name: Data Integration
-  summary: This notebook demonstrates the pattern for coupling HEC-HMS and HEC-RAS in a forecast workflow.
-    HEC-HMS (Hydrologic Modeling System) computes rainfall-runoff to produce flow hydrographs, which are
-    then fed as upstream boundary conditions...
+  summary: illustrate the HMS-to-RAS handoff pattern with a synthetic outlet hydrograph and printed templates
+    for HMS execution, inline or DSS boundary writes, plan-date alignment, and optional HEC-RAS execution;
+    no coupled models are run
   tags:
   - execution
   difficulty: advanced
@@ -3190,9 +3243,9 @@ notebooks:
   title: Operational Forecast Cycling
   series: 900
   series_name: Data Integration
-  summary: Operational forecast cycling is the process of running a hydraulic model repeatedly as new
-    forecast data arrives, typically updating every 6 hours as HRRR (High-Resolution Rapid Refresh) weather
-    model cycles are released.
+  summary: compare four deterministic synthetic QPF cycles with routed flow and rating-curve stage estimates,
+    plot crest convergence and flood-threshold exceedance, and dry-run RAS-ready cycle metadata with optional
+    execution hooks
   tags: []
   difficulty: advanced
   est_runtime: null
@@ -3257,9 +3310,9 @@ notebooks:
   title: Model Validation with USGS Gauge Data
   series: 900
   series_name: Data Integration
-  summary: This example demonstrates how to validate HEC-RAS model results against observed USGS gauge
-    data. We'll compare modeled flows from the Bald Eagle Creek model to observed data from a downstream
-    gauge and calculate comprehensive validation...
+  summary: run the Bald Eagle Creek example plan and query USGS 01548005 metadata, then conditionally
+    retrieve, align, score, and plot modeled versus observed flow when a results HDF is available; the
+    committed run stops before timeseries validation
   tags:
   - usgs
   difficulty: advanced
@@ -3378,13 +3431,15 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 5
-  executed_cells: 5
+  executed_cells: 1
 - id: 930_terrain_modification_analysis
   filename: 930_terrain_modification_analysis.ipynb
   title: Terrain Modification Analysis
   series: 900
   series_name: Data Integration
-  summary: terrain and geometry surface workflows
+  summary: write and verify a channel terrain modification in the Bald Eagle Creek example, then use the
+    optional GDAL bridge to report terrain extent and sample the modified profile and polygon elevation-volume
+    curve; no baseline or modified hydraulic plans are run
   tags:
   - terrain
   difficulty: advanced

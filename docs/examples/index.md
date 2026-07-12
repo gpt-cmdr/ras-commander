@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*124 notebooks indexed - 113 with runtime data, 11 without.*
+*127 notebooks indexed - 118 with runtime data, 9 without.*
 
 ## 100s - Initialization & Execution
 
@@ -16,7 +16,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [100 - Using RasExamples](../notebooks/100_using_ras_examples.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/100_using_ras_examples.ipynb) | 35 s |
 | [101 - Project Initialization](../notebooks/101_project_initialization.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/101_project_initialization.ipynb) | 5 s |
 | [102 - Multiple Project Operations](../notebooks/102_multiple_project_operations.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/102_multiple_project_operations.ipynb) | 2.2 min |
-| [103 - Plan and Geometry Operations](../notebooks/103_plan_and_geometry_operations.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/103_plan_and_geometry_operations.ipynb) | 1.5 min |
+| [103 - Plan and Geometry Operations](../notebooks/103_plan_and_geometry_operations.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/103_plan_and_geometry_operations.ipynb) | 1.8 min |
 | [104 - Plan Parameter Operations](../notebooks/104_plan_parameter_operations.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/104_plan_parameter_operations.ipynb) | 1.3 min |
 | [110 - Single Plan Execution](../notebooks/110_single_plan_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/110_single_plan_execution.ipynb) | 8.1 min |
 | [111 - Executing Plan Sets](../notebooks/111_executing_plan_sets.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/111_executing_plan_sets.ipynb) | 3.0 min |
@@ -27,19 +27,20 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [116 - HDF Output Options Read Benchmark](../notebooks/116_hdf_output_options_benchmark.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/116_hdf_output_options_benchmark.ipynb) | 25.6 min |
 | [117 - Monte Carlo Uncertainty Analysis (Hardened API)](../notebooks/117_monte_carlo_uncertainty.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/117_monte_carlo_uncertainty.ipynb) | 11.8 min |
 | [120 - Win32COM Automation](../notebooks/120_automating_ras_with_win32com.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/120_automating_ras_with_win32com.ipynb) | 13 s |
-| [121 - HECRASController Profiles](../notebooks/121_legacy_hecrascontroller_and_rascontrol.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/121_legacy_hecrascontroller_and_rascontrol.ipynb) | 12.7 min |
+| [121 - HECRASController Profiles](../notebooks/121_legacy_hecrascontroller_and_rascontrol.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/121_legacy_hecrascontroller_and_rascontrol.ipynb) | 2.2 min |
 | [122 - RASMapper Spatial Review](../notebooks/122_rasmapper_spatial_review.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/122_rasmapper_spatial_review.ipynb) | 1.1 min |
 | [123 - RASMapper Geometry Layer Updates](../notebooks/123_rasmapper_geometry_layer_updates.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/123_rasmapper_geometry_layer_updates.ipynb) | 9.8 min |
 | [124 - RASMapper Bank Lines](../notebooks/124_rasmapper_bank_lines.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/124_rasmapper_bank_lines.ipynb) | 44 s |
+| [125 - RASMapper Stored Maps: Arrival Time, Duration, and Percent Time Inundated](../notebooks/125_rasmapper_stored_maps_arrival_duration.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/125_rasmapper_stored_maps_arrival_duration.ipynb) | N/A |
 | [150 - Using results_df for Plan Results Summary](../notebooks/150_results_dataframe.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/150_results_dataframe.ipynb) | 1.1 min |
 
 ## 200s - Geometry & Calibration
 
 | Notebook | Source | Runtime |
 | --- | --- | --- |
-| [201 - 1D Geometry File Parsing](../notebooks/201_1d_plaintext_geometry.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/201_1d_plaintext_geometry.ipynb) | 24 s |
-| [202 - 2D Geometry File Parsing](../notebooks/202_2d_plaintext_geometry.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/202_2d_plaintext_geometry.ipynb) | 3.6 min |
-| [203 - HTAB Parameter Optimization for Model Stability](../notebooks/203_htab_parameter_optimization.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/203_htab_parameter_optimization.ipynb) | 1.0 min |
+| [201 - 1D Geometry File Parsing](../notebooks/201_1d_plaintext_geometry.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/201_1d_plaintext_geometry.ipynb) | 18 s |
+| [202 - 2D Geometry File Parsing](../notebooks/202_2d_plaintext_geometry.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/202_2d_plaintext_geometry.ipynb) | 3.7 min |
+| [203 - HTAB Parameter Optimization for Model Stability](../notebooks/203_htab_parameter_optimization.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/203_htab_parameter_optimization.ipynb) | 33 s |
 | [204 - Culvert GIS Reconstruction and Hydraulic-Validity Checks (1D)](../notebooks/204_culvert_gis_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/204_culvert_gis_validation.ipynb) | 14 s |
 | [205 - Extract Cross Section XYZ Coordinates from Plain Text Geometry](../notebooks/205_extract_xs_xyz_from_geometry.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/205_extract_xs_xyz_from_geometry.ipynb) | 4 s |
 | [206 - Structures and Metadata from Geometry Files](../notebooks/206_structures_and_metadata.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/206_structures_and_metadata.ipynb) | 4 s |
@@ -56,7 +57,6 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [217 - 1D Cross-Section Levee Authoring](../notebooks/217_1d_levee_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/217_1d_levee_authoring.ipynb) | 2.4 min |
 | [218 - Infiltration Base Override Authoring](../notebooks/218_infiltration_base_override_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/218_infiltration_base_override_authoring.ipynb) | 4 s |
 | [219 - 1D Bridge Cross-Section Plotting with Deck/Pier Overlay](../notebooks/219_1d_bridge_xs_plotting.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/219_1d_bridge_xs_plotting.ipynb) | 5 s |
-| [219 - Manning's n Region Polygon Authoring](../notebooks/219_mannings_region_polygon_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/219_mannings_region_polygon_authoring.ipynb) | 3 s |
 | [220 - Kalamazoo River Calibration Workflow](../notebooks/220_calibration_workflow.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/220_calibration_workflow.ipynb) | 8 s |
 | [221 - 1D Manning's N Calibration Workflow](../notebooks/221_calibration_1d_workflow.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/221_calibration_1d_workflow.ipynb) | 36.6 min |
 | [222 - Steady Flow Calibration](../notebooks/222_steady_flow_calibration.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/222_steady_flow_calibration.ipynb) | 39 s |
@@ -66,9 +66,11 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [226 - 2D Connection Culvert Invert Validation (Terrain Cell Minimum)](../notebooks/226_2d_connection_culvert_invert_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/226_2d_connection_culvert_invert_validation.ipynb) | 32 s |
 | [227 - Authoring a 2D Connection Culvert (`Connection Culv=`)](../notebooks/227_2d_connection_culvert_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/227_2d_connection_culvert_authoring.ipynb) | 22 s |
 | [228 - Manning's n from NLCD Validation](../notebooks/228_mannings_n_from_nlcd.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/228_mannings_n_from_nlcd.ipynb) | 2.3 min |
+| [229 - Model Extent Polygons (1D, 2D, and Overall Footprints)](../notebooks/229_model_extent_polygons.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/229_model_extent_polygons.ipynb) | 18.2 min |
 | [230 - 2D Mesh Cell-Size Sensitivity for Sediment Transport](../notebooks/230_mesh_sensitivity_analysis.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/230_mesh_sensitivity_analysis.ipynb) | 6.9 min |
 | [231 - Pipe Network Mesh Generation](../notebooks/231_pipe_network_mesh_generation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/231_pipe_network_mesh_generation.ipynb) | 10 s |
 | [232 - 2D Mesh Cell-Size Sensitivity for Sediment Transport - Second Case: Weise Flume](../notebooks/232_weise_2d_sediment_mesh_sensitivity.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/232_weise_2d_sediment_mesh_sensitivity.ipynb) | 16.7 min |
+| [233 - Manning's n Region Polygon Authoring](../notebooks/233_mannings_region_polygon_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/233_mannings_region_polygon_authoring.ipynb) | 3 s |
 
 ## 300s - Unsteady Flow & DSS
 
@@ -82,7 +84,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [313 - HMS-to-RAS Boundary Condition Matching](../notebooks/313_hms_to_ras_boundary_matching.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/313_hms_to_ras_boundary_matching.ipynb) | 5 s |
 | [314 - Breakline-Derived Reference Lines And USGS Gauge Points](../notebooks/314_reference_line_generation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/314_reference_line_generation.ipynb) | 3.3 min |
 | [315 - 2D Computation Options](../notebooks/315_2d_computation_options.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/315_2d_computation_options.ipynb) | 2.4 min |
-| [316 - Terrain Modifications: High-Ground and Polygon Writer Validation](../notebooks/316_terrain_modifications.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/316_terrain_modifications.ipynb) | 2.7 min |
+| [316 - Terrain Modifications: High-Ground and Polygon Writer Validation](../notebooks/316_terrain_modifications.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/316_terrain_modifications.ipynb) | 2.8 min |
 | [317 - Restart File Output and Warm-Start Settings](../notebooks/317_restart_file_settings.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/317_restart_file_settings.ipynb) | 24 s |
 | [318 - Validating DSS File Paths and Data Availability](../notebooks/318_validating_dss_paths.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/318_validating_dss_paths.ipynb) | 4 s |
 | [319 - Post-fire debris-flow 2D modeling, built from scratch (non-Newtonian)](../notebooks/319_post_fire_debris_flow_nonnewtonian.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/319_post_fire_debris_flow_nonnewtonian.ipynb) | 6.3 min |
@@ -92,7 +94,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 
 | Notebook | Source | Runtime |
 | --- | --- | --- |
-| [400 - 1D HDF Data Extraction](../notebooks/400_1d_hdf_data_extraction.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/400_1d_hdf_data_extraction.ipynb) | 21 s |
+| [400 - 1D HDF Data Extraction](../notebooks/400_1d_hdf_data_extraction.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/400_1d_hdf_data_extraction.ipynb) | 1.6 min |
 | [401 - Steady Flow Analysis](../notebooks/401_steady_flow_analysis.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/401_steady_flow_analysis.ipynb) | 5.8 min |
 | [410 - 2D HDF Data Extraction](../notebooks/410_2d_hdf_data_extraction.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/410_2d_hdf_data_extraction.ipynb) | 5.4 min |
 | [411 - Pipes and Pumps](../notebooks/411_2d_hdf_pipes_and_pumps.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/411_2d_hdf_pipes_and_pumps.ipynb) | 3.3 min |
@@ -117,7 +119,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | Notebook | Source | Runtime |
 | --- | --- | --- |
 | [600 - Floodplain Mapping via GUI Automation](../notebooks/600_floodplain_mapping_gui.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/600_floodplain_mapping_gui.ipynb) | 19.5 min |
-| [601 - Headless Stored Map Generation Using RasMapper](../notebooks/601_headless_stored_map_generation_rasmapper.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/601_headless_stored_map_generation_rasmapper.ipynb) | 6.0 min |
+| [601 - Headless Stored Map Generation Using RasMapper](../notebooks/601_headless_stored_map_generation_rasmapper.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/601_headless_stored_map_generation_rasmapper.ipynb) | 6.1 min |
 | [610 - Generate Fluvial Pluvial Delineations using Max WSE Arrival Time](../notebooks/610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.ipynb) | 1.0 h |
 | [611 - Validating RAS Mapper Layers and Terrain Files](../notebooks/611_validating_map_layers.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/611_validating_map_layers.ipynb) | 9 s |
 
@@ -125,16 +127,16 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 
 | Notebook | Source | Runtime |
 | --- | --- | --- |
-| [700 - Core Sensitivity Testing with results_df](../notebooks/700_core_sensitivity.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/700_core_sensitivity.ipynb) | 16.3 min |
-| [701 - Version Benchmarking and Core Scaling (HEC-RAS 6.0, 6.3.1, 6.6, 7.0)](../notebooks/701_benchmarking_versions_6.1_to_6.6.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/701_benchmarking_versions_6.1_to_6.6.ipynb) | 5.4 h |
-| [710 - Manning's n Bulk Sensitivity Analysis](../notebooks/710_mannings_sensitivity_bulk_analysis.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/710_mannings_sensitivity_bulk_analysis.ipynb) | N/A |
-| [711 - One-at-a-Time (OAT) Manning's n Sensitivity Analysis](../notebooks/711_mannings_sensitivity_multi_interval.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/711_mannings_sensitivity_multi_interval.ipynb) | N/A |
+| [700 - Core Sensitivity Testing with results_df](../notebooks/700_core_sensitivity.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/700_core_sensitivity.ipynb) | 17.0 min |
+| [701 - Version Benchmarking and Core Scaling (HEC-RAS 6.0, 6.3.1, 6.6, 7.0)](../notebooks/701_benchmarking_versions_6.1_to_6.6.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/701_benchmarking_versions_6.1_to_6.6.ipynb) | 2 s |
+| [710 - Manning's n Bulk Sensitivity Analysis](../notebooks/710_mannings_sensitivity_bulk_analysis.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/710_mannings_sensitivity_bulk_analysis.ipynb) | 2.0 min |
+| [711 - One-at-a-Time (OAT) Manning's n Sensitivity Analysis](../notebooks/711_mannings_sensitivity_multi_interval.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/711_mannings_sensitivity_multi_interval.ipynb) | 12.1 min |
 | [720 - Precipitation Hyetograph Generation - Complete Method Comparison](../notebooks/720_precipitation_methods_comprehensive.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/720_precipitation_methods_comprehensive.ipynb) | 16 s |
 | [721 - Precipitation Hyetograph Comparison](../notebooks/721_precipitation_hyetograph_comparison.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/721_precipitation_hyetograph_comparison.ipynb) | 44.1 min |
 | [722 - Gridded Precipitation for Rain-on-Grid 2D Modeling](../notebooks/722_gridded_precipitation_atlas14.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/722_gridded_precipitation_atlas14.ipynb) | N/A |
 | [723 - StormGenerator Alternating Block Method - Independent Textbook Validation](../notebooks/723_storm_generator_abm_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/723_storm_generator_abm_validation.ipynb) | 5 s |
 | [725 - Atlas 14 Spatial Variance Analysis](../notebooks/725_atlas14_spatial_variance.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/725_atlas14_spatial_variance.ipynb) | 1.3 min |
-| [726 - Gridded ABM Hyetograph Generation](../notebooks/726_abm_hyetograph_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/726_abm_hyetograph_grid.ipynb) | N/A |
+| [726 - Gridded ABM Hyetograph Generation](../notebooks/726_abm_hyetograph_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/726_abm_hyetograph_grid.ipynb) | 2.4 min |
 
 ## 800s - Quality Assurance
 
@@ -174,10 +176,11 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 
 | Notebook | Source | Runtime |
 | --- | --- | --- |
-| [916 - HRRR Precipitation Forecast Download](../notebooks/916_hrrr_precipitation_forecast.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/916_hrrr_precipitation_forecast.ipynb) | 5.6 min |
-| [917 - MRMS QPE Rain-on-Grid Workflow](../notebooks/917_mrms_precipitation_qpe.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/917_mrms_precipitation_qpe.ipynb) | 46.5 min |
+| [916 - HRRR Forecast to HEC-RAS: End-to-End Rain-on-Grid Execution](../notebooks/916_hrrr_precipitation_forecast.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/916_hrrr_precipitation_forecast.ipynb) | 16.0 min |
+| [917 - MRMS QPE Rain-on-Grid Workflow](../notebooks/917_mrms_precipitation_qpe.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/917_mrms_precipitation_qpe.ipynb) | 1.1 h |
 | [923 - STOFS-3D Coastal Boundary Integration](../notebooks/923_stofs3d_coastal_boundary.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/923_stofs3d_coastal_boundary.ipynb) | 1.3 min |
 | [924 - MRMS NetCDF Rain-on-Grid Validation](../notebooks/924_mrms_netcdf_rain_on_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/924_mrms_netcdf_rain_on_grid.ipynb) | N/A |
+| [926 - WPC QPF Precipitation Forecast to DSS](../notebooks/926_wpc_qpf_precipitation_forecast.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/926_wpc_qpf_precipitation_forecast.ipynb) | 22 s |
 
 ## 920s - Terrain & Surfaces
 

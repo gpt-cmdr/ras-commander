@@ -101,6 +101,7 @@ plugins:
   - redirects:
       redirect_maps:
         notebooks/610_fluvial_pluvial_delineation.md: notebooks/610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.md
+        notebooks/219_mannings_region_polygon_authoring.md: notebooks/233_mannings_region_polygon_authoring.md
 
 markdown_extensions:
   - pymdownx.highlight:

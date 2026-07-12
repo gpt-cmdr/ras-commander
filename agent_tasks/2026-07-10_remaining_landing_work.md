@@ -210,12 +210,29 @@ upstream hydrograph is synthetic, Sayers Dam Gate #1 retains the supplied
 2.0-foot opening because operating data are unavailable, and the instructional
 diffusion-wave model is not calibrated for forecasting.
 
+## Completed Notebook Inventory Integrity Follow-Up
+
+The July 2026 inventory follow-up resolved repository bookkeeping without
+changing notebook input or output cells:
+
+- renamed the newer Manning-region authoring notebook from duplicate prefix
+  `219` to `233` and preserved the old published route with a redirect;
+- added missing notebook 229 metadata and refreshed stale factual counts;
+- made template-like 900-series summaries state what is and is not executed;
+- enforced unique numeric prefixes and complete metadata in documentation CI;
+  and
+- synchronized the 127-notebook README and published example index.
+
+Substantive upgrades to the template-like forecast, validation, and terrain
+examples remain independent work; they are no longer conflated with inventory
+or numbering defects.
+
 ## Remaining Independent Backlogs
 
 - `2026-04-29_ebfe_validation_matrix_completion_plan.md`: real eBFE validation
   and model-delivery work; substantial and independent of precipitation.
-- `notebook_inventory_audit_2026-06-26.md`: duplicate `219` numbering and
-  template-like 900-series examples remain open.
+- `notebook_inventory_audit_2026-06-26.md`: numbering and manifest integrity
+  are complete; substantive template-like 900-series example upgrades remain.
 - `2026-06-22_docs_navigability_audit.md`: residual public-doc navigation,
   consistency, and landing-page work requires a fresh verification pass.
 - `origin/claude/joss-paper-ras-commander-KXMbR`: unlanded JOSS paper work;

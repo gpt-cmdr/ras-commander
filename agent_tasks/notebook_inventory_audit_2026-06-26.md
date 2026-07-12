@@ -7,16 +7,38 @@ demonstration completeness, and hydrologic/hydraulic usefulness. This audit was
 requested after reviewing the published forecast pages, especially `915`, `918`,
 and `919`.
 
+Status: **Inventory integrity completed on 2026-07-12.** Notebook numbering,
+manifest coverage, factual cell counts, generated index coverage, and CI
+validation now agree. The remaining items are substantive notebook-content
+improvements, not inventory defects.
+
 ## Current Inventory Findings
 
-- Top-level inventory on current `main`: 124 notebooks.
-- Saved-output status from committed notebooks: 118 have saved outputs, 6 have
+- Top-level inventory on current `main`: 127 notebooks.
+- Saved-output status from committed notebooks: 123 have saved outputs, 4 have
   no saved outputs, and 0 have stored error outputs.
 - All top-level notebooks currently have a markdown H1 title.
-- One duplicate numeric prefix remains: `219_1d_bridge_xs_plotting.ipynb` and
-  `219_mannings_region_polygon_authoring.ipynb`.
+- Numeric prefixes are unique. The Manning-region authoring notebook moved
+  from duplicate prefix `219` to `233`; the older bridge notebook remains
+  `219`.
+- `examples/notebooks.yml` contains one entry for every notebook, including
+  the previously missing `229_model_extent_polygons.ipynb`.
 - The docs pipeline relies on saved notebook outputs, so no-output notebooks
   publish as templates or code walkthroughs rather than demonstrated workflows.
+
+## Inventory Integrity Follow-Up
+
+- Renamed `219_mannings_region_polygon_authoring.ipynb` to
+  `233_mannings_region_polygon_authoring.ipynb` without changing notebook
+  content or stored outputs, and added an old-to-new MkDocs redirect.
+- Regenerated factual notebook metadata, including the six stale cell-count
+  records for notebooks 710, 711, 901, 914, 917, and 926.
+- Replaced overstated summaries for notebooks 915, 918, 919, 922, and 930 with
+  descriptions of their demonstrated scope and execution limits.
+- Added duplicate numeric-prefix validation and made notebook metadata checks
+  part of documentation CI.
+- Updated the manual notebook README and regenerated the published example
+  index from the current 127-notebook inventory.
 
 ## Changes Applied In This Pass
 
@@ -55,10 +77,9 @@ The notebook is still an educational demonstration, not a production forecast
 model. The next improvement should connect the same cycle loop to a real
 HEC-RAS project and extract WSE/depth/velocity after each RAS run.
 
-## Remaining Naming And Completeness Issues
+## Remaining Completeness Issues
 
-- `219_1d_bridge_xs_plotting.ipynb` and
-  `219_mannings_region_polygon_authoring.ipynb` still share the `219` prefix.
+- No duplicate numeric prefixes remain; CI now prevents recurrence.
 - Some 900-series notebooks remain template-like and would benefit from real
   model/gauge evidence:
   - `915_realtime_forecast_workflow.ipynb` is best treated as an overview unless
@@ -90,8 +111,7 @@ HEC-RAS project and extract WSE/depth/velocity after each RAS run.
 
 ## Immediate Follow-Up Checklist
 
-- Decide whether the remaining duplicate `219` notebooks should be renumbered or
-  combined.
+- Inventory naming and manifest integrity are complete.
 - Expand the overview/template forecast notebooks into real model examples or
   label them explicitly as conceptual patterns.
 - Continue applying redirects whenever notebook filenames change.
