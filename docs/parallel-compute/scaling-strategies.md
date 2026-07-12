@@ -41,13 +41,14 @@ import os
 init_ras_project("/path/to/project", "6.5")
 
 # Determine optimal configuration
-total_cores = os.cpu_count()
-cores_per_plan = 4  # Sweet spot for most 2D models
-num_workers = total_cores // cores_per_plan
+total_cores = os.cpu_count() or 1
+cores_per_plan = min(4, total_cores)  # Up to 4 cores per plan
+max_workers = total_cores // cores_per_plan
+max_workers = max(1, max_workers)
 
 results = RasCmdr.compute_parallel(
     plan_number=plans,
-    num_workers=num_workers,
+    max_workers=max_workers,
     num_cores=cores_per_plan
 )
 ```
@@ -130,7 +131,7 @@ RasCmdr.compute_plan("01", clear_geompre=False)  # First run builds geom
 # Parallel runs use cached geometry
 results = RasCmdr.compute_parallel(
     plan_number=["02", "03", "04", "05"],
-    num_workers=4,
+    max_workers=4,
     num_cores=4,
     clear_geompre=False  # Don't clear cached geometry
 )
@@ -150,15 +151,19 @@ Worker folder creation is I/O intensive. Storage hierarchy:
 ```python
 from pathlib import Path
 
-# Use fast local storage for workers
-fast_drive = Path("D:/temp/ras_workers")  # SSD/NVMe
+# Use fast local storage for the copied project and its sibling workers
+parallel_project = Path("D:/temp/BaldEagle_parallel_results")  # SSD/NVMe
 
 results = RasCmdr.compute_parallel(
     plan_number=plans,
-    dest_folder=fast_drive,
-    num_workers=8
+    dest_folder=parallel_project,
+    max_workers=8
 )
 ```
+
+`dest_folder` is the final copied project directory, not a parent directory for
+multiple runs. If `overwrite_dest=True` is added, that complete directory is
+removed before the project is copied.
 
 ### 3. Right-size Worker Count
 
@@ -170,7 +175,7 @@ import psutil
 def optimal_worker_config(model_cells, total_cores=None):
     """Suggest optimal worker configuration."""
     if total_cores is None:
-        total_cores = psutil.cpu_count(logical=False)
+        total_cores = psutil.cpu_count(logical=False) or 1
 
     # Reserve cores for system
     available_cores = max(1, total_cores - 2)
@@ -182,17 +187,18 @@ def optimal_worker_config(model_cells, total_cores=None):
     else:
         cores_per_plan = 8
 
-    num_workers = available_cores // cores_per_plan
+    cores_per_plan = min(cores_per_plan, available_cores)
+    max_workers = available_cores // cores_per_plan
 
     return {
-        "num_workers": max(1, num_workers),
+        "max_workers": max(1, max_workers),
         "num_cores": cores_per_plan,
-        "total_utilized": num_workers * cores_per_plan
+        "total_utilized": max_workers * cores_per_plan
     }
 
 # Usage
 config = optimal_worker_config(model_cells=50000)
-print(f"Recommended: {config['num_workers']} workers, "
+print(f"Recommended: {config['max_workers']} workers, "
       f"{config['num_cores']} cores each")
 ```
 
@@ -217,14 +223,13 @@ def process_in_batches(all_plans, batch_size=20, **kwargs):
         )
         all_results.update(results)
 
-        # Optional: cleanup between batches
-        # cleanup_worker_folders(kwargs.get('dest_folder'))
+        # Worker artifacts are consolidated and temporary workers are removed.
 
     return all_results
 
 # Process 100 plans in batches of 20
 all_plans = [f"{i:02d}" for i in range(1, 101)]
-results = process_in_batches(all_plans, batch_size=20, num_workers=4, num_cores=4)
+results = process_in_batches(all_plans, batch_size=20, max_workers=4, num_cores=4)
 ```
 
 ### 5. Memory Management
@@ -234,22 +239,26 @@ Monitor memory usage to avoid swapping:
 ```python
 import psutil
 
-def check_memory_for_workers(num_workers, mem_per_plan_gb=4):
+def check_memory_for_workers(max_workers, mem_per_plan_gb=4):
     """Check if system has enough memory for planned workers."""
     available_gb = psutil.virtual_memory().available / (1024**3)
-    required_gb = num_workers * mem_per_plan_gb
+    required_gb = max_workers * mem_per_plan_gb
 
     if required_gb > available_gb * 0.8:  # 80% threshold
         suggested = int(available_gb * 0.8 / mem_per_plan_gb)
-        print(f"Warning: {num_workers} workers need ~{required_gb:.1f} GB")
+        print(f"Warning: {max_workers} workers need ~{required_gb:.1f} GB")
         print(f"Available: {available_gb:.1f} GB")
         print(f"Suggested max workers: {suggested}")
         return False
     return True
 
 # Check before running
-if check_memory_for_workers(num_workers=8, mem_per_plan_gb=4):
-    results = RasCmdr.compute_parallel(...)
+if check_memory_for_workers(max_workers=8, mem_per_plan_gb=4):
+    results = RasCmdr.compute_parallel(
+        plan_number=["01", "02", "03"],
+        max_workers=8,
+        num_cores=4,
+    )
 ```
 
 ## Performance Benchmarking
@@ -260,13 +269,13 @@ if check_memory_for_workers(num_workers=8, mem_per_plan_gb=4):
 import time
 from ras_commander import RasCmdr
 
-def benchmark_config(plans, num_workers, num_cores, **kwargs):
+def benchmark_config(plans, max_workers, num_cores, **kwargs):
     """Benchmark a specific configuration."""
     start = time.time()
 
     results = RasCmdr.compute_parallel(
         plan_number=plans,
-        num_workers=num_workers,
+        max_workers=max_workers,
         num_cores=num_cores,
         **kwargs
     )
@@ -275,7 +284,7 @@ def benchmark_config(plans, num_workers, num_cores, **kwargs):
     successful = sum(1 for v in results.values() if v)
 
     return {
-        "num_workers": num_workers,
+        "max_workers": max_workers,
         "num_cores": num_cores,
         "total_plans": len(plans),
         "successful": successful,
@@ -286,14 +295,14 @@ def benchmark_config(plans, num_workers, num_cores, **kwargs):
 
 # Compare configurations
 configs = [
-    {"num_workers": 2, "num_cores": 8},
-    {"num_workers": 4, "num_cores": 4},
-    {"num_workers": 8, "num_cores": 2},
+    {"max_workers": 2, "num_cores": 8},
+    {"max_workers": 4, "num_cores": 4},
+    {"max_workers": 8, "num_cores": 2},
 ]
 
 for config in configs:
     result = benchmark_config(plans[:8], **config)
-    print(f"Workers={config['num_workers']}, Cores={config['num_cores']}: "
+    print(f"Workers={config['max_workers']}, Cores={config['num_cores']}: "
           f"{result['plans_per_hour']:.1f} plans/hour")
 ```
 
@@ -301,10 +310,10 @@ for config in configs:
 
 | Symptom | Cause | Solution |
 |---------|-------|----------|
-| Low CPU usage | Too few workers | Increase num_workers |
+| Low CPU usage | Too few workers | Increase `max_workers` |
 | High CPU but slow | Too many cores/plan | Decrease num_cores |
 | Disk thrashing | HDD storage | Use SSD for workers |
-| Memory pressure | Too many workers | Reduce num_workers |
+| Memory pressure | Too many workers | Reduce `max_workers` |
 | Network bottleneck | Remote workers | Check bandwidth |
 
 ## Summary Recommendations

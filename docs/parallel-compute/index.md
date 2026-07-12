@@ -51,7 +51,7 @@ result = RasCmdr.compute_plan("01")
 # Local Parallel - multiple plans on same machine
 results = RasCmdr.compute_parallel(
     plan_number=["01", "02", "03", "04"],
-    num_workers=4,
+    max_workers=4,
     num_cores=4
 )
 
