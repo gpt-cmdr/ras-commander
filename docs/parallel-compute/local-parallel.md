@@ -13,7 +13,7 @@ init_ras_project("/path/to/project", "6.5")
 # Run multiple plans in parallel
 results = RasCmdr.compute_parallel(
     plan_number=["01", "02", "03", "04"],
-    num_workers=4,
+    max_workers=4,
     num_cores=4
 )
 
@@ -26,56 +26,68 @@ for plan, success in results.items():
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `plan_number` | list | List of plan numbers to execute |
-| `num_workers` | int | Number of concurrent workers (parallel plans) |
+| `plan_number` | str, number, list, or None | Plan number(s) to execute; `None` selects all plans |
+| `max_workers` | int | Maximum number of concurrent workers (parallel plans) |
 | `num_cores` | int | CPU cores allocated per plan |
-| `dest_folder` | Path | Base folder for worker directories |
-| `ras_object` | RasPrj | Project object (uses global `ras` if None) |
 | `clear_geompre` | bool | Clear geometry preprocessor before run |
-| `overwrite_dest` | bool | Overwrite existing worker folders |
+| `force_geompre` | bool | Clear geometry HDF and `.c##` files before each assigned run |
+| `force_rerun` | bool | Compatibility option; assigned worker plans are already forced to execute |
+| `ras_object` | RasPrj | Project object (uses global `ras` if `None`) |
+| `dest_folder` | str, Path, or None | Final copied project directory; results are consolidated here |
+| `overwrite_dest` | bool | Remove and replace the complete `dest_folder` directory if it exists |
+| `skip_existing` | bool | Skip source plans whose HDF compute messages report `Complete Process` |
+| `verify` | bool | Require `Complete Process` verification for each assigned plan |
 
 ## How It Works
 
 ### 1. Worker Folder Creation
 
-For each worker, `compute_parallel` creates an isolated copy of the HEC-RAS project:
+`compute_parallel` first uses the original project, or copies it to
+`dest_folder` when one is supplied. Temporary worker projects are created as
+siblings of that project:
 
 ```
-dest_folder/
-├── worker_01/
+project_parent/
+├── parallel_run/
 │   ├── project.prj
 │   ├── project.g01
-│   ├── project.p01
-│   └── ...
-├── worker_02/
-│   └── ...
-└── worker_03/
-    └── ...
+│   └── project.p01
+├── parallel_run [Worker 1]/
+├── parallel_run [Worker 2]/
+└── parallel_run [Worker 3]/
 ```
+
+If `overwrite_dest=True`, the entire `dest_folder` is removed before the
+project is copied. Use a dedicated output location, never a directory that
+contains unrelated files.
 
 ### 2. Plan Distribution
 
-Plans are distributed across workers using a queue. As each worker completes a plan, it picks up the next available one:
+Plans are assigned to worker IDs in round-robin order before execution begins.
+The thread pool may finish plans in any order, but workers do not dynamically
+dequeue the next plan:
 
 ```
 Plans: [01, 02, 03, 04, 05, 06]
 Workers: 3
 
-Time 0: Worker1=01, Worker2=02, Worker3=03
-Time 1: Worker1=04 (01 done), Worker2=02, Worker3=05 (03 done)
-Time 2: Worker1=04, Worker2=06 (02 done), Worker3=05
-...
+Worker 1: [01, 04]
+Worker 2: [02, 05]
+Worker 3: [03, 06]
 ```
 
 ### 3. Results Collection
 
-After all plans complete, results from each worker folder can be collected and analyzed.
+After all plans complete, their plan and geometry artifacts are consolidated
+into the selected project directory. Temporary worker folders are then
+removed. Review the returned result, consolidated HDF compute messages, and
+DEBUG logs when diagnosing failures.
 
 ## Optimal Configuration
 
 ### Balancing Workers vs. Cores
 
-The total CPU usage is: `num_workers × num_cores`
+The total CPU usage is: `max_workers × num_cores`
 
 For a 16-core machine:
 
@@ -109,7 +121,7 @@ all_plans = ras.plan_df['plan_number'].tolist()
 # Run all plans in parallel
 results = RasCmdr.compute_parallel(
     plan_number=all_plans,
-    num_workers=4,
+    max_workers=4,
     num_cores=4,
     dest_folder=Path("/output/parallel_run"),
     overwrite_dest=True
@@ -143,7 +155,7 @@ for n in manning_values:
 # Execute all variations in parallel
 results = RasCmdr.compute_parallel(
     plan_number=plans_created,
-    num_workers=len(plans_created),
+    max_workers=len(plans_created),
     num_cores=4
 )
 ```
@@ -157,7 +169,7 @@ init_ras_project("/path/to/project", "6.5")
 
 results = RasCmdr.compute_parallel(
     plan_number=["01", "02", "03"],
-    num_workers=2,
+    max_workers=2,
     num_cores=4
 )
 
@@ -165,7 +177,7 @@ results = RasCmdr.compute_parallel(
 failed = [plan for plan, success in results.items() if not success]
 if failed:
     print(f"Failed plans: {failed}")
-    # Investigate by checking worker folder logs
+    # Inspect consolidated HDF compute messages and DEBUG logs
 ```
 
 ## Limitations

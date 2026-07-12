@@ -2,10 +2,11 @@
 
 Date: 2026-07-10
 
-Status: **Precipitation replay completed.** PR #275 merged the selective DSS,
-MRMS, stored-map, and notebook payload on 2026-07-11. The subsequent HRRR
-temporal-contract correction described below was validated from current
-`main`; the remaining items are independent backlogs.
+Status: **Precipitation replay and HRRR hydraulic follow-up completed.** PR
+#275 merged the selective DSS, MRMS, stored-map, and notebook payload on
+2026-07-11. PR #276 merged the HRRR temporal contract and end-to-end HEC-RAS
+forecast demonstration as `6c8090c7` on 2026-07-12. No precipitation replay
+PR remains open; the remaining items are independent backlogs.
 
 ## Goal
 
@@ -16,8 +17,8 @@ independently validated.
 
 ## Main State At HRRR Follow-Up Start
 
-- `origin/main` is `f814a9e0`, including PR #275.
-- There are no open pull requests.
+- `origin/main` was `f814a9e0`, including PR #275.
+- There were no open pull requests.
 - PR #260 was closed and its approved slices landed through PRs #262-#273.
 - PR #251 was superseded by PR #274.
 - The notebook 710 and 711 follow-ups were closed by PRs #272 and #271.
@@ -95,7 +96,9 @@ The user approved this full scope, including notebook 926, on 2026-07-10:
   default Tk backend in the local UV Python is incomplete, and the successful
   run still emits the known netCDF/numpy binary warning plus a post-exit
   Windows `0xc0000139` diagnostic; pytest itself exits 0.
-- Notebook 916: 13/13 code cells executed; independent review PASS.
+- Notebook 916 as merged in PR #275: 13/13 code cells executed; independent
+  review PASS. PR #276 later superseded this forcing-only execution with the
+  end-to-end hydraulic workflow recorded below.
 - Notebook 926: 5/5 code cells executed; independent review PASS.
 - Notebook 917: 8/8 code cells executed from source in 4,040.7 seconds;
   independent review PASS. The executed notebook, terminal log, and six MP4s
@@ -158,7 +161,7 @@ The user approved this full scope, including notebook 926, on 2026-07-10:
 - Real-file smoke tests passed for both projects before execution. The final
   source-matching execution and independent artifact review also passed.
 
-## HRRR Temporal-Contract Follow-Up
+## Completed HRRR Temporal Contract And Hydraulic Follow-Up
 
 `PrecipHrrr.get_basin_average()` previously labeled its sequential row index
 as `forecast_hour` and logged every record as one hour. That was incorrect for
@@ -178,23 +181,34 @@ The focused correction:
 Validation evidence:
 
 - focused HRRR basin-average suite: 10 passed;
-- combined HRRR, MRMS, and unsteady precipitation suite: 52 passed with the
-  established headless Matplotlib backend and one pre-existing `slow` marker
-  warning;
-- notebook 916: 13/13 code cells executed from source in 1,505.56 seconds with
-  no errors or warning output and one embedded two-panel figure;
-- live extraction: 72 quarter-hour records covering lead hours 0.25-18.00,
-  with 0.047 inches total and a 0.006-inch peak 15-minute depth;
-- qpkit verification: seven GRIB2 files downloaded, six hourly `PER-CUM` grids
-  written and cataloged at 3,000 m resolution with exact pathname agreement;
-  and
-- independent notebook review: PASS (model context Partial, hydraulic
-  relevancy Pass for the forcing-data scope, visual quality Acceptable, and
-  demonstration completeness Complete).
+- notebook 916: 12/12 code cells executed from source in 961.01 seconds with
+  no errors or warning output and four embedded figures;
+- live `wrfsubhf` timing analysis: 72 quarter-hour records covering lead hours
+  0.25-18.00, with 0.066 inches over the rectangular analysis window;
+- qpkit `v0.1.0` used hourly `wrfsfc` APCP from the same forecast cycle to
+  write and catalog 18 contiguous hourly `PER-CUM` SHG grids over the exact
+  simulation period; `wrfsubhf` and `wrfsfc` are related but distinct products,
+  so the 0.066-inch analysis average is not the DSS forcing total;
+- the DSS footprint covered all 19,597 result/cell centers and all 37,594 mesh
+  faces;
+- HEC-RAS 7.0 completed both the no-rain `p07` and live-HRRR `p08` plans at a
+  10-second computation interval;
+- both plans reported `Complete Process`, maximum cell WSEL error of 0.0099
+  feet, zero cells above 0.01 feet WSEL error, and approximately 0.000002
+  percent volume error;
+- the selected live cycle was dry over the hydraulic model, so HEC-RAS applied
+  zero precipitation at model cells and the verified hydraulic difference was
+  zero; and
+- independent notebook review, hydraulic consistency audit, and notebook
+  schema/metadata validation all passed.
 
-Notebook 916 intentionally remains an input-data/API example. Its rectangular
-averaging geometry is not a delineated watershed, and it does not claim a
-HEC-RAS hydraulic response calculation.
+Notebook 916 now demonstrates forecast acquisition through hydraulic result
+comparison. It remains an automation and hydraulic-evaluation example rather
+than an operational forecast: the averaging window is rectangular rather than
+a delineated watershed, precipitation is the only live forecast input, the
+upstream hydrograph is synthetic, Sayers Dam Gate #1 retains the supplied
+2.0-foot opening because operating data are unavailable, and the instructional
+diffusion-wave model is not calibrated for forecasting.
 
 ## Remaining Independent Backlogs
 
