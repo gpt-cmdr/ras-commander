@@ -2,11 +2,12 @@
 
 Date: 2026-07-10
 
-Status: **Precipitation replay and HRRR hydraulic follow-up completed.** PR
-#275 merged the selective DSS, MRMS, stored-map, and notebook payload on
+Status: **Selective landing work through the JOSS paper follow-up completed.**
+PR #275 merged the selective DSS, MRMS, stored-map, and notebook payload on
 2026-07-11. PR #276 merged the HRRR temporal contract and end-to-end HEC-RAS
-forecast demonstration as `6c8090c7` on 2026-07-12. No precipitation replay
-PR remains open; the remaining items are independent backlogs.
+forecast demonstration as `6c8090c7` on 2026-07-12. PRs #279 and #280 then
+landed the reconstructed JOSS paper and complete MIT license. No replay PR
+remains open; the remaining items are independent backlogs.
 
 ## Goal
 
@@ -227,6 +228,29 @@ Substantive upgrades to the template-like forecast, validation, and terrain
 examples remain independent work; they are no longer conflated with inventory
 or numbering defects.
 
+## Completed JOSS Paper And License Follow-Up
+
+The stale `origin/claude/joss-paper-ras-commander-KXMbR` branch was used only
+as historical source material. It was not merged or cherry-picked because its
+module counts, notebook counts, agent architecture, test claims, related-work
+metadata, performance claims, and operational claims no longer matched current
+`main`.
+
+- PR #279 reconstructed the paper on current `main` and merged as `4116d86f`
+  on 2026-07-12.
+- The 1,111-word manuscript contains all eight current JOSS sections and nine
+  audited references. It replaces the historical false pyHMT2D DOI and removes
+  unsupported benchmark, adoption, and feature-completeness claims.
+- `paper/architecture.py` writes repository-relative output and provides a
+  deterministic `--check` mode. The committed PNG is 3000 by 1860 pixels.
+- The official Open Journals draft action compiled a four-page PDF successfully
+  in run `29196158022`; all pages and the architecture figure were inspected.
+- PR #280 restored the complete canonical MIT license and merged as `60f99ba4`
+  on 2026-07-12. GitHub now identifies the repository license as SPDX `MIT`.
+- No API or notebook files changed in either PR. Persistent paper, PDF, rendered
+  page, and git review artifacts are under
+  `H:/Symphony/ras-commander/JOSS-paper-2026-07-12/`.
+
 ## Remaining Independent Backlogs
 
 - `2026-04-29_ebfe_validation_matrix_completion_plan.md`: real eBFE validation
@@ -235,9 +259,15 @@ or numbering defects.
   are complete; substantive template-like 900-series example upgrades remain.
 - `2026-06-22_docs_navigability_audit.md`: residual public-doc navigation,
   consistency, and landing-page work requires a fresh verification pass.
-- `origin/claude/joss-paper-ras-commander-KXMbR`: unlanded JOSS paper work;
-  orthogonal to the active precipitation tranche and stale enough to require a
-  dedicated reassessment.
+- JOSS paper-build CI: decide whether to retain the official Open Journals
+  draft workflow used for the temporary validation branch.
+- JOSS test readiness: audit the current test suite and define a reliable CI
+  subset without pretending Windows/HEC-RAS integration tests run on Linux.
+- JOSS archiving: create an immutable software release archive and DOI before
+  final acceptance, then replace the repository-only software citation.
+- JOSS research impact: preserve public evidence of external use, integrations,
+  publications, or case studies as it becomes available; do not substitute
+  aspirational adoption language.
 - `origin/feature/711-rasremote-mannings-sensitivity`: optional advanced remote
   and Sabinal-specific 711 concepts only. Do not merge the branch wholesale;
   the public notebook refresh already landed in PR #271.
