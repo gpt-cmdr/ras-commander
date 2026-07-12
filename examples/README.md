@@ -5,7 +5,7 @@ The notebooks are reference workflows for hydraulic modelers and developers;
 use them to understand API patterns, then move repeatable production logic into
 library code or scripts.
 
-The current git inventory contains **124 canonical notebooks** under
+The current git inventory contains **127 canonical notebooks** under
 `examples/`. Executed copies, temporary test notebooks, extracted HEC-RAS
 projects, and generated artifacts are intentionally excluded from this README.
 
@@ -53,7 +53,8 @@ projects, and generated artifacts are intentionally excluded from this README.
 `117_monte_carlo_uncertainty.ipynb`, `120_automating_ras_with_win32com.ipynb`,
 `121_legacy_hecrascontroller_and_rascontrol.ipynb`,
 `122_rasmapper_spatial_review.ipynb`, `123_rasmapper_geometry_layer_updates.ipynb`,
-`124_rasmapper_bank_lines.ipynb`, `150_results_dataframe.ipynb`
+`124_rasmapper_bank_lines.ipynb`, `125_rasmapper_stored_maps_arrival_duration.ipynb`,
+`150_results_dataframe.ipynb`
 
 ### 200s - Geometry & Calibration
 
@@ -66,14 +67,16 @@ projects, and generated artifacts are intentionally excluded from this README.
 `213_land_classification_polygon_authoring.ipynb`, `214_connection_authoring.ipynb`,
 `215_sa2d_bridge_connection_authoring.ipynb`, `216_1d_bridge_authoring.ipynb`,
 `217_1d_levee_authoring.ipynb`, `218_infiltration_base_override_authoring.ipynb`,
-`219_1d_bridge_xs_plotting.ipynb`, `219_mannings_region_polygon_authoring.ipynb`,
+`219_1d_bridge_xs_plotting.ipynb`,
 `220_calibration_workflow.ipynb`, `221_calibration_1d_workflow.ipynb`,
 `222_steady_flow_calibration.ipynb`, `223_steady_floodway_encroachment.ipynb`,
 `224_steady_flow_authoring.ipynb`, `225_fixit_blocked_obstructions.ipynb`,
 `226_2d_connection_culvert_invert_validation.ipynb`,
 `227_2d_connection_culvert_authoring.ipynb`, `228_mannings_n_from_nlcd.ipynb`,
-`230_mesh_sensitivity_analysis.ipynb`, `231_pipe_network_mesh_generation.ipynb`,
-`232_weise_2d_sediment_mesh_sensitivity.ipynb`
+`229_model_extent_polygons.ipynb`, `230_mesh_sensitivity_analysis.ipynb`,
+`231_pipe_network_mesh_generation.ipynb`,
+`232_weise_2d_sediment_mesh_sensitivity.ipynb`,
+`233_mannings_region_polygon_authoring.ipynb`
 
 ### 300s - Unsteady Flow & DSS
 
@@ -138,7 +141,8 @@ projects, and generated artifacts are intentionally excluded from this README.
 ### 916s - Forecast Inputs
 
 `916_hrrr_precipitation_forecast.ipynb`, `917_mrms_precipitation_qpe.ipynb`,
-`923_stofs3d_coastal_boundary.ipynb`, `924_mrms_netcdf_rain_on_grid.ipynb`
+`923_stofs3d_coastal_boundary.ipynb`, `924_mrms_netcdf_rain_on_grid.ipynb`,
+`926_wpc_qpf_precipitation_forecast.ipynb`
 
 ### 920s - Terrain & Surfaces
 
