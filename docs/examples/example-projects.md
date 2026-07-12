@@ -1,12 +1,12 @@
 # Example Project Library
 
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
-<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260703Tneworleans01">
+<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260711Tstjoseph01">
 
 !!! warning "Under construction"
     The Example Project Library is moving to a RAS Commander MapLibre viewer
-    backed by PMTiles and WebGIS-hosted artifacts. Muncie and New Orleans Metro
-    are the first published pilots.
+    backed by PMTiles and WebGIS-hosted artifacts. Muncie, New Orleans Metro,
+    and St. Joseph are the first published pilots.
 
 RAS Commander uses repeatable HEC-RAS project fixtures for examples, tests,
 documentation, and regression checks. The library combines several source
@@ -35,7 +35,7 @@ Click a polygon to review source metadata and open that project's webmap.
 Projects stay out of this map until they have a valid CRS, a WGS84 model limit,
 and a published MapLibre webmap.
 
-<div class="ras-example-library" data-ras-example-library data-index="../../assets/data/ras-example-projects.json?v=20260703Tneworleans01">
+<div class="ras-example-library" data-ras-example-library data-index="../../assets/data/ras-example-projects.json?v=20260711Tstjoseph01">
   <div class="ras-library-map-shell">
     <div class="ras-library-map" data-library-map></div>
   </div>
@@ -47,8 +47,8 @@ and a published MapLibre webmap.
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260703Tneworleans01"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260703Tneworleans01"></script>
+<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260711Tstjoseph01"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260711Tstjoseph01"></script>
 
 ## Current MapLibre Projects
 
@@ -56,6 +56,7 @@ and a published MapLibre webmap.
 |---------|--------|-----|--------|
 | Muncie | HEC tutorial/example project | `EPSG:2965` | [Open MapLibre viewer](example-project-viewer.md) |
 | New Orleans Metro | HEC tutorial/example project | `EPSG:3457` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fneworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a%2Fviewer%2Fmanifest.json%3Fv%3D20260703Tneworleans01) |
+| St. Joseph / St. Joe Elkhart FIM | USGS ScienceBase model release | `EPSG:2965` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fst-joseph-st-joe-elkhart-fim-6f8e01d0%2Fviewer%2Fmanifest.json%3Fv%3D20260711Tstjoseph01) |
 
 The generated Muncie bundle currently includes:
 
@@ -110,6 +111,24 @@ Live public paths:
 | Terrain PMTiles | [terrain.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/tiles/terrain.pmtiles) |
 | Project manifest | [project.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/project.json) |
 
+The St. Joseph / St. Joe Elkhart FIM bundle currently includes:
+
+- project id:
+  `st-joseph-st-joe-elkhart-fim-6f8e01d0`
+- one geometry archive: `g18`
+- RAS-style geometry sublayers for model extents, river centerline, and cross
+  sections
+- no terrain layer and no renderable result layers in the viewer yet
+
+Live public paths:
+
+| Resource | Link |
+|----------|------|
+| MapLibre viewer | [St. Joseph Map Viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fst-joseph-st-joe-elkhart-fim-6f8e01d0%2Fviewer%2Fmanifest.json%3Fv%3D20260711Tstjoseph01) |
+| MapLibre manifest | [manifest.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/st-joseph-st-joe-elkhart-fim-6f8e01d0/viewer/manifest.json?v=20260711Tstjoseph01) |
+| Geometry PMTiles | [geometry.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/st-joseph-st-joe-elkhart-fim-6f8e01d0/viewer/tiles/geometry.pmtiles) |
+| Project manifest | [project.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/st-joseph-st-joe-elkhart-fim-6f8e01d0/project.json) |
+
 ## WebGIS Publishing Model
 
 The docs site should not store raw HEC-RAS projects or large generated GIS
@@ -163,12 +182,12 @@ for repeatable analysis and browser review.
 
 ## Next Candidates
 
-After Muncie and New Orleans Metro, the next projects should be added one at a
-time as their WebGIS bundles are published and validated:
+After Muncie, New Orleans Metro, and St. Joseph, the next projects should be
+added one at a time as their WebGIS bundles are published and validated:
 
 - Bald Eagle Creek 1D and Bald Eagle Creek Multi-2D
 - at least one eBFE/BLE delivery
-- at least two ScienceBase releases
+- at least one more ScienceBase release
 
 Do not add the 1D steady BLE model collection to this landing page. That set
 should be handled as its own consolidated map once the grouping, symbology, and

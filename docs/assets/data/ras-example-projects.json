@@ -100,6 +100,55 @@
           ]
         ]
       }
+    },
+    {
+      "type": "Feature",
+      "id": "st-joseph-st-joe-elkhart-fim-6f8e01d0",
+      "properties": {
+        "title": "St. Joseph / St. Joe Elkhart FIM",
+        "sourceFamily": "USGS ScienceBase model release",
+        "crs": "EPSG:2965",
+        "status": "MapLibre pilot",
+        "projectId": "st-joseph-st-joe-elkhart-fim-6f8e01d0",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fst-joseph-st-joe-elkhart-fim-6f8e01d0%2Fviewer%2Fmanifest.json%3Fv%3D20260711Tstjoseph01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/st-joseph-st-joe-elkhart-fim-6f8e01d0/viewer/manifest.json?v=20260711Tstjoseph01",
+        "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/st-joseph-st-joe-elkhart-fim-6f8e01d0/project.json",
+        "viewerType": "MapLibre",
+        "notes": "Geometry-only ScienceBase pilot with model extents, river centerline, and cross sections."
+      },
+      "bbox": [
+        -86.05288650503482,
+        41.67223878974706,
+        -85.96901837355678,
+        41.6953449619564
+      ],
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -86.05288650503482,
+              41.67223878974706
+            ],
+            [
+              -85.96901837355678,
+              41.67223878974706
+            ],
+            [
+              -85.96901837355678,
+              41.6953449619564
+            ],
+            [
+              -86.05288650503482,
+              41.6953449619564
+            ],
+            [
+              -86.05288650503482,
+              41.67223878974706
+            ]
+          ]
+        ]
+      }
     }
   ]
 }
