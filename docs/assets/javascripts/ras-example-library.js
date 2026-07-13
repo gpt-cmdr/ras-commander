@@ -261,42 +261,43 @@
         .addTo(map);
     }
 
-    map.on("click", "project-extents-fill", (event) => {
-      openProjectPopup(event, event.features && event.features[0]);
-    });
+    function renderedFeatures(event, layerIds) {
+      return map.queryRenderedFeatures(event.point, { layers: layerIds });
+    }
 
-    map.on("click", "project-location", (event) => {
-      const location = event.features && event.features[0];
-      const feature =
-        location &&
-        (featuresById.get(String(location.id)) ||
-          featuresById.get(String(location.properties?.projectId)));
-      if (!feature) {
+    map.on("click", (event) => {
+      const location = renderedFeatures(event, ["project-location"])[0];
+      if (location) {
+        const feature =
+          featuresById.get(String(location.id)) ||
+          featuresById.get(String(location.properties?.projectId));
+        if (!feature) {
+          return;
+        }
+        const projectBounds = normalizeBounds(feature.bbox) || geometryBounds(feature.geometry);
+        if (projectBounds) {
+          map.fitBounds(
+            [
+              [projectBounds[0], projectBounds[1]],
+              [projectBounds[2], projectBounds[3]],
+            ],
+            { padding: 64, maxZoom: 12, duration: 600 }
+          );
+        }
+        openProjectPopup(event, feature);
         return;
       }
-      const projectBounds = normalizeBounds(feature.bbox) || geometryBounds(feature.geometry);
-      if (projectBounds) {
-        map.fitBounds(
-          [
-            [projectBounds[0], projectBounds[1]],
-            [projectBounds[2], projectBounds[3]],
-          ],
-          { padding: 64, maxZoom: 12, duration: 600 }
-        );
-      }
-      openProjectPopup(event, feature);
+
+      openProjectPopup(event, renderedFeatures(event, ["project-extents-fill"])[0]);
     });
 
-    function setPointerCursor() {
-      map.getCanvas().style.cursor = "pointer";
-    }
-    function clearPointerCursor() {
-      map.getCanvas().style.cursor = "";
-    }
-    for (const layerId of ["project-extents-fill", "project-location"]) {
-      map.on("mouseenter", layerId, setPointerCursor);
-      map.on("mouseleave", layerId, clearPointerCursor);
-    }
+    map.on("mousemove", (event) => {
+      const interactive = renderedFeatures(event, [
+        "project-location",
+        "project-extents-fill",
+      ]);
+      map.getCanvas().style.cursor = interactive.length ? "pointer" : "";
+    });
   }
 
   for (const root of roots) {
