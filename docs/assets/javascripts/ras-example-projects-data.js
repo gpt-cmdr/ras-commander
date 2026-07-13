@@ -1,7 +1,7 @@
 window.RAS_EXAMPLE_PROJECTS = {
   "type": "FeatureCollection",
   "name": "ras-commander-example-projects",
-  "generatedAt": "2026-07-13T21:02:49.508830Z",
+  "generatedAt": "2026-07-13T21:22:52.005041Z",
   "fallbackGeometry": "bounding-box",
   "features": [
     {
@@ -779,6 +779,58 @@ window.RAS_EXAMPLE_PROJECTS = {
             [
               -98.71760442029861,
               29.796267715490476
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "squannacook-squannacook-15df5e30",
+      "properties": {
+        "title": "Squannacook",
+        "sourceFamily": "USGS ScienceBase model release",
+        "crs": "EPSG:2249",
+        "crsDefinition": "EPSG:2249",
+        "status": "MapLibre geometry bundle",
+        "projectId": "squannacook-squannacook-15df5e30",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fsquannacook-squannacook-15df5e30%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tsquannacook01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/squannacook-squannacook-15df5e30/viewer/manifest.json?v=20260713Tsquannacook01",
+        "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/squannacook-squannacook-15df5e30/project.json",
+        "viewerType": "MapLibre",
+        "notes": "Geometry-only 1D-steady USGS ScienceBase bundle with fifteen separate plan and geometry configurations. Source result HDFs have no spatial result parquet for browser delivery.",
+        "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "fallbackGeometry": "bounding-box"
+      },
+      "bbox": [
+        -71.84107686475589,
+        42.63043149093957,
+        -71.67063643962399,
+        42.6928489295816
+      ],
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -71.84107686475589,
+              42.63043149093957
+            ],
+            [
+              -71.67063643962399,
+              42.63043149093957
+            ],
+            [
+              -71.67063643962399,
+              42.6928489295816
+            ],
+            [
+              -71.84107686475589,
+              42.6928489295816
+            ],
+            [
+              -71.84107686475589,
+              42.63043149093957
             ]
           ]
         ]

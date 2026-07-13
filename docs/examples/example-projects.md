@@ -35,7 +35,7 @@ Click a polygon to review source metadata and open that project's webmap.
 Projects stay out of this map until they have a valid CRS, a WGS84 model limit,
 and a published MapLibre webmap.
 
-<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260714Tebfe02">
+<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260713Tsquannacook01">
   <div class="ras-library-map-shell">
     <div class="ras-library-map" data-library-map></div>
   </div>
@@ -47,7 +47,7 @@ and a published MapLibre webmap.
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260714Tebfe03"></script>
+<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260713Tsquannacook01"></script>
 <script src="../../assets/javascripts/ras-example-library.js?v=20260713Textents05"></script>
 
 ## Current MapLibre Projects
@@ -63,6 +63,7 @@ and a published MapLibre webmap.
 | Bald Eagle Creek | HEC tutorial/example project | `EPSG:2271` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fbalde-eagle-creek-balde-eagle-creek-rerun-7-0-20260629-224833-d0758cd9%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02) |
 | Bald Eagle Creek Multi2D | HEC tutorial/example project | `EPSG:2271` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fbaldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tbaldeagle01) |
 | Kalamazoo | USGS ScienceBase model release | `EPSG:6499` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fkalamazoo-kalamazoo-trowbridg-b2c7eef6%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02) |
+| Squannacook | USGS ScienceBase model release | `EPSG:2249` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fsquannacook-squannacook-15df5e30%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tsquannacook01) |
 | Spring River | FEMA eBFE/BLE delivery | `EPSG:3433` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-river-ras-model-spring-ble-prj-15b882a5%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02) |
 | Spring Creek | FEMA eBFE/BLE delivery | `EPSG:2278` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-creek-spring-c61c5625%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02) |
 | Upper Guadalupe UPGU1 | FEMA eBFE/BLE delivery | `EPSG:2278` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02) |

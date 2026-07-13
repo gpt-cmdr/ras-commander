@@ -8,10 +8,20 @@ import geopandas as gpd
 from shapely.geometry import box
 
 SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "example_library" / "build_extent_catalog.py"
+CATALOG_CONFIG_PATH = Path(__file__).parents[1] / "agent_tasks" / "rasexamples_extent_catalog.json"
 SPEC = importlib.util.spec_from_file_location("build_extent_catalog", SCRIPT_PATH)
 assert SPEC and SPEC.loader
 builder = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(builder)
+
+
+def test_catalog_extent_outputs_do_not_overlap_viewer_artifacts() -> None:
+    config = json.loads(CATALOG_CONFIG_PATH.read_text(encoding="utf-8"))
+
+    assert config["projects"]
+    for project in config["projects"]:
+        assert project["extent_output"].startswith("project-extents/")
+        assert "/viewer/" not in project["extent_output"]
 
 
 def test_write_javascript_catalog_assigns_a_compact_bbox_fallback(tmp_path: Path) -> None:
