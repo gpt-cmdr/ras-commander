@@ -97,9 +97,9 @@ exec rsync \
     --no-owner \
     --no-group \
     --no-perms \
+    --chmod=Du=rwx,Dg=rwx,Do=rx,Fu=rw,Fg=rw,Fo=r \
     --omit-dir-times \
     --itemize-changes \
-    --protect-args \
     -e "ssh -i ${KEY_PATH} -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS}" \
     "${release_dir}/data/rasexamples/" \
     "${WEBGIS_USER}@${WEBGIS_HOST}:./"
