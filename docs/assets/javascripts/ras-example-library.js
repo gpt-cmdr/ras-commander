@@ -188,10 +188,6 @@
             type: "geojson",
             data: collection,
           },
-          "project-locations": {
-            type: "geojson",
-            data: projectLocations(features),
-          },
         },
         layers: [
           {
@@ -218,29 +214,6 @@
               "line-width": 2.5,
             },
           },
-          {
-            id: "project-location-halo",
-            type: "circle",
-            source: "project-locations",
-            paint: {
-              "circle-radius": 10,
-              "circle-color": "#ffffff",
-              "circle-opacity": 0.9,
-              "circle-stroke-color": "#1d4ed8",
-              "circle-stroke-width": 1.5,
-            },
-          },
-          {
-            id: "project-location",
-            type: "circle",
-            source: "project-locations",
-            paint: {
-              "circle-radius": 5,
-              "circle-color": "#2563eb",
-              "circle-stroke-color": "#ffffff",
-              "circle-stroke-width": 1.5,
-            },
-          },
         ],
       },
       bounds,
@@ -251,51 +224,62 @@
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
 
-    function openProjectPopup(event, feature) {
+    function openProjectPopup(lngLat, feature) {
       if (!feature) {
         return;
       }
       new maplibregl.Popup({ closeButton: true, maxWidth: "360px" })
-        .setLngLat(event.lngLat)
+        .setLngLat(lngLat)
         .setHTML(popupHtml(feature))
         .addTo(map);
+    }
+
+    function zoomToProject(feature) {
+      const projectBounds = normalizeBounds(feature.bbox) || geometryBounds(feature.geometry);
+      if (!projectBounds) {
+        return;
+      }
+      map.fitBounds(
+        [
+          [projectBounds[0], projectBounds[1]],
+          [projectBounds[2], projectBounds[3]],
+        ],
+        { padding: 64, maxZoom: 12, duration: 600 }
+      );
     }
 
     function renderedFeatures(event, layerIds) {
       return map.queryRenderedFeatures(event.point, { layers: layerIds });
     }
 
-    map.on("click", (event) => {
-      const location = renderedFeatures(event, ["project-location"])[0];
-      if (location) {
-        const feature =
-          featuresById.get(String(location.id)) ||
-          featuresById.get(String(location.properties?.projectId));
-        if (!feature) {
-          return;
-        }
-        const projectBounds = normalizeBounds(feature.bbox) || geometryBounds(feature.geometry);
-        if (projectBounds) {
-          map.fitBounds(
-            [
-              [projectBounds[0], projectBounds[1]],
-              [projectBounds[2], projectBounds[3]],
-            ],
-            { padding: 64, maxZoom: 12, duration: 600 }
-          );
-        }
-        openProjectPopup(event, feature);
-        return;
+    for (const location of projectLocations(features).features) {
+      const feature =
+        featuresById.get(String(location.id)) ||
+        featuresById.get(String(location.properties?.projectId));
+      if (!feature) {
+        continue;
       }
+      const markerElement = document.createElement("button");
+      markerElement.type = "button";
+      markerElement.className = "ras-library-project-marker";
+      markerElement.setAttribute("aria-label", `Open ${feature.properties?.title || feature.id}`);
+      markerElement.title = feature.properties?.title || feature.id;
+      markerElement.addEventListener("click", (event) => {
+        event.stopPropagation();
+        zoomToProject(feature);
+        openProjectPopup(location.geometry.coordinates, feature);
+      });
+      new maplibregl.Marker({ element: markerElement, anchor: "center" })
+        .setLngLat(location.geometry.coordinates)
+        .addTo(map);
+    }
 
-      openProjectPopup(event, renderedFeatures(event, ["project-extents-fill"])[0]);
+    map.on("click", (event) => {
+      openProjectPopup(event.lngLat, renderedFeatures(event, ["project-extents-fill"])[0]);
     });
 
     map.on("mousemove", (event) => {
-      const interactive = renderedFeatures(event, [
-        "project-location",
-        "project-extents-fill",
-      ]);
+      const interactive = renderedFeatures(event, ["project-extents-fill"]);
       map.getCanvas().style.cursor = interactive.length ? "pointer" : "";
     });
   }
