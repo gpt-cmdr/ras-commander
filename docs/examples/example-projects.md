@@ -48,7 +48,7 @@ and a published MapLibre webmap.
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
 <script src="../../assets/javascripts/ras-example-projects-data.js?v=20260713Textents02"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260713Textents02"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260713Textents03"></script>
 
 ## Current MapLibre Projects
 
