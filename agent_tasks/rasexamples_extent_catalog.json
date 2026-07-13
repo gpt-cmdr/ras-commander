@@ -142,6 +142,71 @@
       "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab/viewer/manifest.json?v=20260714Tbaldeagle01",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab/project.json",
       "notes": "Geometry-only HEC instructional example with ten geometry configurations and high-zoom 2D mesh tiles."
+    },
+    {
+      "id": "spring-creek-spring-c61c5625",
+      "title": "Spring Creek",
+      "source_family": "FEMA eBFE/BLE delivery",
+      "crs": "EPSG:2278",
+      "geometry_hdf": "compute_outputs/ebfe/spring-creek/remote_20260630_061120/SpringCreek_12040102/RAS Model/Spring.g01.hdf",
+      "extent_output": "projects/spring-creek-spring-c61c5625/viewer/model_extent.geojson",
+      "status": "MapLibre geometry bundle",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-creek-spring-c61c5625%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-creek-spring-c61c5625/viewer/manifest.json?v=20260714Tebfe02",
+      "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-creek-spring-c61c5625/project.json",
+      "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle. Stored-map output is withheld pending validation of the all-cells-NoData warnings."
+    },
+    {
+      "id": "upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a",
+      "title": "Upper Guadalupe UPGU1",
+      "source_family": "FEMA eBFE/BLE delivery",
+      "crs": "EPSG:2278",
+      "geometry_hdf": "source_projects/ebfe_organized/UpperGuadalupe_12100201/RAS Model/UPGU1/UPGU1.g01.hdf",
+      "extent_output": "projects/upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a/viewer/model_extent.geojson",
+      "status": "MapLibre geometry bundle",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a/viewer/manifest.json?v=20260714Tebfe02",
+      "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a/project.json",
+      "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle with high-zoom mesh delivery."
+    },
+    {
+      "id": "upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b",
+      "title": "Upper Guadalupe UPGU2",
+      "source_family": "FEMA eBFE/BLE delivery",
+      "crs": "EPSG:2278",
+      "geometry_hdf": "source_projects/ebfe_organized/UpperGuadalupe_12100201/RAS Model/UPGU2/UPGU2.g01.hdf",
+      "extent_output": "projects/upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b/viewer/model_extent.geojson",
+      "status": "MapLibre geometry bundle",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b/viewer/manifest.json?v=20260714Tebfe02",
+      "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b/project.json",
+      "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle with high-zoom mesh delivery."
+    },
+    {
+      "id": "upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4",
+      "title": "Upper Guadalupe UPGU3",
+      "source_family": "FEMA eBFE/BLE delivery",
+      "crs": "EPSG:2278",
+      "geometry_hdf": "source_projects/ebfe_organized/UpperGuadalupe_12100201/RAS Model/UPGU3/UPGU3.g01.hdf",
+      "extent_output": "projects/upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4/viewer/model_extent.geojson",
+      "status": "MapLibre geometry bundle",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4/viewer/manifest.json?v=20260714Tebfe02",
+      "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4/project.json",
+      "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle with high-zoom mesh delivery."
+    },
+    {
+      "id": "upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f",
+      "title": "Upper Guadalupe UPGU4",
+      "source_family": "FEMA eBFE/BLE delivery",
+      "crs": "EPSG:2278",
+      "geometry_hdf": "source_projects/ebfe_organized/UpperGuadalupe_12100201/RAS Model/UPGU4/UPGU4.g01.hdf",
+      "extent_output": "projects/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f/viewer/model_extent.geojson",
+      "status": "MapLibre geometry bundle",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f/viewer/manifest.json?v=20260714Tebfe02",
+      "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f/project.json",
+      "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle and large-model streaming validation case with high-zoom mesh delivery."
     }
   ]
 }

@@ -35,7 +35,7 @@ Click a polygon to review source metadata and open that project's webmap.
 Projects stay out of this map until they have a valid CRS, a WGS84 model limit,
 and a published MapLibre webmap.
 
-<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260714Tbaldeagle01">
+<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260714Tebfe02">
   <div class="ras-library-map-shell">
     <div class="ras-library-map" data-library-map></div>
   </div>
@@ -47,7 +47,7 @@ and a published MapLibre webmap.
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260714Tbaldeagle01"></script>
+<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260714Tebfe02"></script>
 <script src="../../assets/javascripts/ras-example-library.js?v=20260713Textents05"></script>
 
 ## Current MapLibre Projects
@@ -64,6 +64,11 @@ and a published MapLibre webmap.
 | Bald Eagle Creek Multi2D | HEC tutorial/example project | `EPSG:2271` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fbaldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tbaldeagle01) |
 | Kalamazoo | USGS ScienceBase model release | `EPSG:6499` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fkalamazoo-kalamazoo-trowbridg-b2c7eef6%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02) |
 | Spring River | FEMA eBFE/BLE delivery | `EPSG:3433` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-river-ras-model-spring-ble-prj-15b882a5%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02) |
+| Spring Creek | FEMA eBFE/BLE delivery | `EPSG:2278` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-creek-spring-c61c5625%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02) |
+| Upper Guadalupe UPGU1 | FEMA eBFE/BLE delivery | `EPSG:2278` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02) |
+| Upper Guadalupe UPGU2 | FEMA eBFE/BLE delivery | `EPSG:2278` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02) |
+| Upper Guadalupe UPGU3 | FEMA eBFE/BLE delivery | `EPSG:2278` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02) |
+| Upper Guadalupe UPGU4 | FEMA eBFE/BLE delivery | `EPSG:2278` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02) |
 
 The generated Muncie bundle currently includes:
 
@@ -189,11 +194,11 @@ for repeatable analysis and browser review.
 
 ## Next Candidates
 
-After Muncie, New Orleans Metro, and St. Joseph, the next projects should be
-added one at a time as their WebGIS bundles are published and validated:
+Further expansion should be added one project at a time as its WebGIS bundle is
+published and validated:
 
-- Spring Creek and Upper Guadalupe eBFE/BLE deliveries
 - terrain and selected stored-map results for the larger 2D releases
+- additional eligible public model releases after CRS and license review
 
 Do not add the 1D steady BLE model collection to this landing page. That set
 should be handled as its own consolidated map once the grouping, symbology, and
