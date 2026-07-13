@@ -76,7 +76,10 @@
           return {
             type: "Feature",
             id: feature.id,
-            properties: feature.properties || {},
+            properties: {
+              ...(feature.properties || {}),
+              projectId: feature.id || feature.properties?.projectId || "",
+            },
             geometry: {
               type: "Point",
               coordinates: [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2],
@@ -161,7 +164,12 @@
       "https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson";
     const collection = await loadProjectIndex(dataUrl);
     const features = (collection.features || []).filter((feature) => feature.geometry);
-    const featuresById = new Map(features.map((feature) => [String(feature.id), feature]));
+    const featuresById = new Map(
+      features.flatMap((feature) => [
+        [String(feature.id), feature],
+        [String(feature.properties?.projectId || feature.id), feature],
+      ])
+    );
     renderProjectList(root, features);
 
     const bounds = mergeBounds(features);
@@ -259,7 +267,10 @@
 
     map.on("click", "project-location", (event) => {
       const location = event.features && event.features[0];
-      const feature = location && featuresById.get(String(location.id));
+      const feature =
+        location &&
+        (featuresById.get(String(location.id)) ||
+          featuresById.get(String(location.properties?.projectId)));
       if (!feature) {
         return;
       }
