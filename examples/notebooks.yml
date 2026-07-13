@@ -2856,6 +2856,47 @@ notebooks:
   excluded: false
   code_cells: 13
   executed_cells: 13
+- id: 727_atlas14_gridded_rain_on_grid_hecras
+  filename: 727_atlas14_gridded_rain_on_grid_hecras.ipynb
+  title: Atlas 14 Gridded Design Storm Rain-on-Grid in HEC-RAS
+  series: 700
+  series_name: Sensitivity & Precipitation
+  summary: Convert spatial NOAA Atlas 14 depths to projected ABM rain-on-grid forcing, execute controlled
+    no-rain, spatial, and equivalent-uniform Bald Eagle HEC-RAS scenarios, and quantify the modeled hydraulic
+    response.
+  tags:
+  - 2d
+  - unsteady
+  - precipitation
+  difficulty: advanced
+  est_runtime: 55 min
+  data_project: BaldEagleCrkMulti2D
+  functions_used:
+  - HdfMesh.get_mesh_areas
+  - HdfMesh.get_mesh_cell_polygons
+  - HdfResultsMesh.get_mesh_timeseries
+  - HdfResultsMesh.get_mesh_max_ws
+  - HdfResultsPlan.get_compute_messages_hdf_only
+  - HdfStruc.get_structures
+  - RasCmdr.compute_plan
+  - RasExamples.extract_project
+  - RasPlan.clone_plan
+  - RasPlan.clone_unsteady
+  - RasPlan.update_simulation_date
+  - RasUnsteady.get_gate_openings
+  - RasUnsteady.get_met_precipitation_config
+  - RasUnsteady.set_constant_precipitation
+  - RasUnsteady.set_gridded_precipitation
+  - ras.boundaries_df
+  - ras.plan_df
+  - ras.project_folder
+  - ras.project_name
+  - ras.rasmap_df
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 20
+  executed_cells: 20
 - id: 800_quality_assurance_rascheck
   filename: 800_quality_assurance_rascheck.ipynb
   title: Quality Assurance with RasCheck

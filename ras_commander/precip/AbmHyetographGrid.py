@@ -46,6 +46,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import pandas as pd
 
 from ..LoggingConfig import get_logger, log_call
 from .Atlas14Grid import Atlas14Grid
@@ -88,6 +89,472 @@ class AbmHyetographGrid:
     CONUS_RETURN_PERIODS = [2, 5, 10, 25, 50, 100, 200, 500, 1000]
     CONUS_DURATIONS_HR = [1, 2, 3, 6, 12, 24, 48, 72, 96, 168]
     SUBHOURLY_DURATIONS_HR = [5/60, 10/60, 15/60, 30/60]
+
+    @staticmethod
+    @log_call
+    def to_ras_netcdf(
+        abm_netcdf: Union[str, Path],
+        output_netcdf: Union[str, Path],
+        start_time: Union[str, datetime, pd.Timestamp],
+        target_crs: str = "EPSG:5070",
+        resolution: Optional[float] = None,
+        output_variable: str = "APCP_surface",
+        end_time: Optional[Union[str, datetime, pd.Timestamp]] = None,
+    ) -> Path:
+        """Convert an ABM depth grid to a HEC-RAS GDAL NetCDF forcing file.
+
+        :meth:`generate` writes one incremental precipitation depth in inches
+        for each relative-time interval on a WGS84 latitude/longitude grid.
+        HEC-RAS' imported-raster workflow instead consumes absolute timestamps,
+        projected ``x``/``y`` coordinates, and precipitation rates. This method
+        performs that conversion without changing the source design-storm file.
+
+        A zero-rate frame is written at ``start_time``. Each source increment is
+        then assigned to its interval-end timestamp and converted to ``mm/hr``.
+        This convention preserves every incremental block when
+        :meth:`ras_commander.RasUnsteady.set_gridded_precipitation` integrates
+        the rate frames into cumulative HDF precipitation.
+
+        Parameters
+        ----------
+        abm_netcdf : str or Path
+            NetCDF created by :meth:`generate` or
+            :meth:`generate_from_asc_files`.
+        output_netcdf : str or Path
+            Destination for the HEC-RAS-compatible NetCDF.
+        start_time : str, datetime, or pandas.Timestamp
+            Timezone-naive simulation time at the start of the first interval.
+        target_crs : str, default "EPSG:5070"
+            Projected output CRS. EPSG:5070 is the HEC-RAS SHG convention.
+        resolution : float, optional
+            Output cell size in target-CRS units. When omitted, GDAL derives a
+            resolution from the source grid to avoid forced downsampling.
+        output_variable : str, default "APCP_surface"
+            NetCDF variable name selected by HEC-RAS.
+        end_time : str, datetime, or pandas.Timestamp, optional
+            Timezone-naive forcing end. When later than the natural storm end,
+            zero-rate frames are appended at the source timestep through this
+            exact timestamp. The value must not precede the storm end and must
+            align with the source timestep.
+
+        Returns
+        -------
+        Path
+            Resolved path to the converted NetCDF.
+
+        Raises
+        ------
+        FileNotFoundError
+            If ``abm_netcdf`` does not exist.
+        ValueError
+            If source dimensions, units, times, values, CRS, resolution, or
+            converted depth-conservation checks are invalid.
+        ImportError
+            If xarray, netCDF4, rasterio, or pyproj is unavailable.
+        """
+        try:
+            import netCDF4  # noqa: F401
+            import xarray as xr
+            from pyproj import CRS
+            from rasterio.enums import Resampling
+            from rasterio.transform import from_origin
+            from rasterio.warp import calculate_default_transform, reproject
+        except ImportError as exc:
+            raise ImportError(
+                "xarray, netCDF4, rasterio, and pyproj are required for "
+                "HEC-RAS NetCDF conversion. Install ras-commander[notebooks]."
+            ) from exc
+
+        source_path = Path(abm_netcdf).resolve()
+        output_path = Path(output_netcdf).resolve()
+        if not source_path.exists():
+            raise FileNotFoundError(f"ABM NetCDF not found: {source_path}")
+        if source_path == output_path:
+            raise ValueError("output_netcdf must differ from abm_netcdf")
+
+        output_variable = str(output_variable).strip()
+        if not output_variable:
+            raise ValueError("output_variable must not be empty")
+
+        try:
+            output_crs = CRS.from_user_input(target_crs)
+        except Exception as exc:
+            raise ValueError(f"Invalid target_crs: {target_crs!r}") from exc
+        if not output_crs.is_projected:
+            raise ValueError("target_crs must be a projected coordinate system")
+
+        if resolution is not None:
+            resolution = float(resolution)
+            if not np.isfinite(resolution) or resolution <= 0:
+                raise ValueError("resolution must be a finite positive value")
+
+        try:
+            start_timestamp = pd.Timestamp(start_time)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("start_time must be a valid timestamp") from exc
+        if pd.isna(start_timestamp):
+            raise ValueError("start_time must be a valid timestamp")
+        if start_timestamp.tzinfo is not None:
+            raise ValueError(
+                "start_time must be timezone-naive to match HEC-RAS plan times"
+            )
+
+        forcing_end_timestamp = None
+        if end_time is not None:
+            try:
+                forcing_end_timestamp = pd.Timestamp(end_time)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("end_time must be a valid timestamp") from exc
+            if pd.isna(forcing_end_timestamp):
+                raise ValueError("end_time must be a valid timestamp")
+            if forcing_end_timestamp.tzinfo is not None:
+                raise ValueError(
+                    "end_time must be timezone-naive to match HEC-RAS plan times"
+                )
+
+        try:
+            source_ds = xr.open_dataset(
+                source_path,
+                engine="netcdf4",
+                decode_timedelta=False,
+            )
+        except ImportError as exc:
+            raise ImportError(
+                "netCDF4 is required for HEC-RAS NetCDF conversion. "
+                "Install ras-commander[notebooks]."
+            ) from exc
+
+        try:
+            if "precip_incremental" not in source_ds.data_vars:
+                raise ValueError(
+                    "ABM NetCDF must contain a 'precip_incremental' variable"
+                )
+
+            incremental = source_ds["precip_incremental"]
+            required_dims = {"time", "lat", "lon"}
+            if set(incremental.dims) != required_dims or incremental.ndim != 3:
+                raise ValueError(
+                    "precip_incremental must have exactly time, lat, and lon dimensions"
+                )
+            incremental = incremental.transpose("time", "lat", "lon").load()
+
+            for coord_name in ("time", "lat", "lon"):
+                if coord_name not in source_ds.coords:
+                    raise ValueError(f"ABM NetCDF is missing {coord_name!r} coordinates")
+
+            units = str(incremental.attrs.get("units", "")).strip().lower()
+            if units not in {"in", "inch", "inches"}:
+                raise ValueError(
+                    "precip_incremental units must be inches; "
+                    f"found {incremental.attrs.get('units')!r}"
+                )
+
+            time_coord = source_ds["time"]
+            time_units = str(time_coord.attrs.get("units", "")).strip().lower()
+            if time_units not in {"h", "hour", "hours", "hr", "hrs"}:
+                raise ValueError(
+                    "ABM time coordinate units must be hours; "
+                    f"found {time_coord.attrs.get('units')!r}"
+                )
+            if not np.issubdtype(time_coord.dtype, np.number):
+                raise ValueError(
+                    "ABM time coordinate must contain numeric relative-hour values"
+                )
+
+            time_values = np.asarray(time_coord.values, dtype=np.float64)
+            if time_values.size < 2 or not np.all(np.isfinite(time_values)):
+                raise ValueError("ABM time coordinate must contain at least two finite values")
+            if not np.isclose(time_values[0], 0.0, atol=1e-9):
+                raise ValueError("ABM time coordinate must start at 0 hours")
+            time_deltas = np.diff(time_values)
+            if np.any(time_deltas <= 0) or not np.allclose(
+                time_deltas,
+                time_deltas[0],
+                rtol=1e-7,
+                atol=1e-9,
+            ):
+                raise ValueError("ABM time coordinate must be strictly increasing and regular")
+            interval_hours = float(time_deltas[0])
+
+            coordinates = {}
+            for coord_name in ("lat", "lon"):
+                coord = np.asarray(source_ds[coord_name].values, dtype=np.float64)
+                if coord.size < 2 or not np.all(np.isfinite(coord)):
+                    raise ValueError(
+                        f"ABM {coord_name} coordinate must contain at least two finite values"
+                    )
+                coord_deltas = np.diff(coord)
+                if not (np.all(coord_deltas > 0) or np.all(coord_deltas < 0)):
+                    raise ValueError(f"ABM {coord_name} coordinate must be monotonic")
+                if not np.allclose(
+                    coord_deltas,
+                    coord_deltas[0],
+                    # Atlas 14 coordinate centers originate as float32 values;
+                    # allow their sub-0.1% quantization without accepting a
+                    # materially variable raster spacing.
+                    rtol=2e-3,
+                    atol=1e-9,
+                ):
+                    raise ValueError(
+                        f"ABM {coord_name} coordinate must be regularly spaced"
+                    )
+                coordinates[coord_name] = coord
+
+            lat = coordinates["lat"]
+            lon = coordinates["lon"]
+            if np.any((lat < -90.0) | (lat > 90.0)):
+                raise ValueError("ABM latitude values must be within [-90, 90]")
+            if np.any((lon < -180.0) | (lon > 180.0)):
+                raise ValueError("ABM longitude values must be within [-180, 180]")
+
+            incremental_values = np.asarray(incremental.values, dtype=np.float64)
+            finite_mask = np.isfinite(incremental_values)
+            if not finite_mask.any():
+                raise ValueError("precip_incremental contains no finite precipitation values")
+            if np.any(incremental_values[finite_mask] < 0):
+                raise ValueError("precip_incremental contains negative precipitation depths")
+        finally:
+            source_ds.close()
+
+        lon_order = np.argsort(lon)
+        lat_order = np.argsort(lat)[::-1]
+        lon = lon[lon_order]
+        lat = lat[lat_order]
+        incremental_values = incremental_values[:, lat_order, :][:, :, lon_order]
+
+        x_resolution = float(abs(lon[1] - lon[0]))
+        y_resolution = float(abs(lat[1] - lat[0]))
+        source_transform = from_origin(
+            float(lon[0] - x_resolution / 2.0),
+            float(lat[0] + y_resolution / 2.0),
+            x_resolution,
+            y_resolution,
+        )
+        source_height, source_width = incremental_values.shape[1:]
+        source_bounds = (
+            float(lon[0] - x_resolution / 2.0),
+            float(lat[-1] - y_resolution / 2.0),
+            float(lon[-1] + x_resolution / 2.0),
+            float(lat[0] + y_resolution / 2.0),
+        )
+
+        transform_kwargs = {}
+        if resolution is not None:
+            transform_kwargs["resolution"] = resolution
+        target_transform, target_width, target_height = calculate_default_transform(
+            "EPSG:4326",
+            output_crs.to_wkt(),
+            source_width,
+            source_height,
+            *source_bounds,
+            **transform_kwargs,
+        )
+        if target_width < 1 or target_height < 1:
+            raise ValueError("Converted NetCDF has an empty projected grid")
+
+        source_rates_mm_hr = incremental_values * 25.4 / interval_hours
+        projected_rates = np.full(
+            (source_rates_mm_hr.shape[0], target_height, target_width),
+            np.nan,
+            dtype=np.float64,
+        )
+        for index, source_rate in enumerate(source_rates_mm_hr):
+            reproject(
+                source=source_rate,
+                destination=projected_rates[index],
+                src_transform=source_transform,
+                src_crs="EPSG:4326",
+                src_nodata=np.nan,
+                dst_transform=target_transform,
+                dst_crs=output_crs.to_wkt(),
+                dst_nodata=np.nan,
+                resampling=Resampling.bilinear,
+                init_dest_nodata=True,
+            )
+        # Depth verification must reflect the float32 rates actually written.
+        projected_rates = projected_rates.astype(np.float32)
+
+        expected_total_mm = np.full(
+            (target_height, target_width),
+            np.nan,
+            dtype=np.float64,
+        )
+        reproject(
+            source=np.sum(incremental_values, axis=0) * 25.4,
+            destination=expected_total_mm,
+            src_transform=source_transform,
+            src_crs="EPSG:4326",
+            src_nodata=np.nan,
+            dst_transform=target_transform,
+            dst_crs=output_crs.to_wkt(),
+            dst_nodata=np.nan,
+            resampling=Resampling.bilinear,
+            init_dest_nodata=True,
+        )
+        converted_total_mm = (
+            np.sum(projected_rates.astype(np.float64), axis=0) * interval_hours
+        )
+
+        interval_delta = pd.Timedelta(hours=interval_hours)
+        interval_ends = pd.date_range(
+            start=start_timestamp + interval_delta,
+            periods=projected_rates.shape[0],
+            freq=interval_delta,
+        )
+        natural_storm_end = interval_ends[-1]
+
+        if forcing_end_timestamp is None:
+            forcing_end_timestamp = natural_storm_end
+        if forcing_end_timestamp < natural_storm_end:
+            raise ValueError(
+                "end_time must be on or after the natural storm end "
+                f"({natural_storm_end.isoformat()})"
+            )
+
+        tail_duration = forcing_end_timestamp - natural_storm_end
+        if tail_duration.value % interval_delta.value != 0:
+            raise ValueError(
+                "end_time must align with the source timestep "
+                f"({interval_delta.total_seconds() / 60.0:g} minutes)"
+            )
+        zero_tail_frames = int(tail_duration.value // interval_delta.value)
+
+        valid_depth = np.isfinite(expected_total_mm) & np.isfinite(
+            converted_total_mm
+        )
+        if not valid_depth.any():
+            raise ValueError("Converted NetCDF has no valid projected precipitation cells")
+        max_depth_error_mm = float(
+            np.nanmax(
+                np.abs(
+                    converted_total_mm[valid_depth]
+                    - expected_total_mm[valid_depth]
+                )
+            )
+        )
+        max_expected_mm = float(np.nanmax(expected_total_mm[valid_depth]))
+        depth_tolerance_mm = max(1e-4, max_expected_mm * 1e-6)
+        if max_depth_error_mm > depth_tolerance_mm:
+            raise ValueError(
+                "Projected precipitation failed depth conservation: "
+                f"max error {max_depth_error_mm:.6f} mm exceeds "
+                f"{depth_tolerance_mm:.6f} mm"
+            )
+
+        valid_coverage = np.isfinite(projected_rates).any(axis=0)
+        valid_cells = int(valid_coverage.sum())
+        total_cells = int(valid_coverage.size)
+        valid_fraction = valid_cells / total_cells
+        if valid_cells == 0:
+            raise ValueError("Converted NetCDF has no valid forcing coverage")
+
+        forcing_rates = projected_rates
+        forcing_times = interval_ends
+        if zero_tail_frames:
+            zero_rate = np.where(valid_coverage, 0.0, np.nan).astype(np.float32)
+            zero_tail = np.repeat(
+                zero_rate[np.newaxis, :, :],
+                zero_tail_frames,
+                axis=0,
+            )
+            forcing_rates = np.concatenate([projected_rates, zero_tail], axis=0)
+            tail_times = pd.date_range(
+                start=natural_storm_end + interval_delta,
+                periods=zero_tail_frames,
+                freq=interval_delta,
+            )
+            forcing_times = interval_ends.append(tail_times)
+
+        zero_frame = np.where(valid_coverage, 0.0, np.nan).astype(np.float32)[
+            np.newaxis, :, :
+        ]
+        output_rates = np.concatenate([zero_frame, forcing_rates], axis=0)
+        output_times = pd.DatetimeIndex([start_timestamp]).append(forcing_times)
+        x = target_transform.c + target_transform.a * (
+            np.arange(target_width, dtype=np.float64) + 0.5
+        )
+        y = target_transform.f + target_transform.e * (
+            np.arange(target_height, dtype=np.float64) + 0.5
+        )
+
+        crs_wkt = output_crs.to_wkt()
+        spatial_ref_attrs = output_crs.to_cf()
+        spatial_ref_attrs.update(
+            {
+                "crs_wkt": crs_wkt,
+                "spatial_ref": crs_wkt,
+                "GeoTransform": " ".join(
+                    f"{value:.15g}" for value in target_transform.to_gdal()
+                ),
+            }
+        )
+        output_ds = xr.Dataset(
+            data_vars={
+                output_variable: (
+                    ("time", "y", "x"),
+                    output_rates,
+                    {
+                        "long_name": "Atlas 14 ABM precipitation rate",
+                        "units": "mm/hr",
+                        "grid_mapping": "spatial_ref",
+                        "cell_methods": "time: mean (interval ending)",
+                        "source": (
+                            "NOAA Atlas 14 ABM incremental precipitation depth"
+                        ),
+                    },
+                ),
+                "spatial_ref": ((), np.int32(0), spatial_ref_attrs),
+            },
+            coords={"time": output_times, "x": x, "y": y},
+            attrs={
+                "Conventions": "CF-1.8",
+                "title": "HEC-RAS Atlas 14 ABM gridded precipitation forcing",
+                "source_file": source_path.name,
+                "storm_start": start_timestamp.isoformat(),
+                "storm_end": natural_storm_end.isoformat(),
+                "forcing_end": forcing_end_timestamp.isoformat(),
+                "zero_tail_hours": tail_duration.total_seconds() / 3600.0,
+                "zero_tail_frames": zero_tail_frames,
+                "interval_minutes": interval_hours * 60.0,
+                "source_depth_units": "inches",
+                "forcing_rate_units": "mm/hr",
+                "target_crs": output_crs.to_string(),
+                "valid_coverage_fraction": valid_fraction,
+                "depth_conservation_max_error_mm": max_depth_error_mm,
+            },
+        )
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        encoding = {
+            output_variable: {
+                "zlib": True,
+                "complevel": 4,
+                "dtype": "float32",
+                "_FillValue": np.float32(-9999.0),
+            }
+        }
+        output_ds.to_netcdf(
+            output_path,
+            engine="netcdf4",
+            format="NETCDF4",
+            encoding=encoding,
+        )
+
+        logger.info(
+            "Prepared HEC-RAS Atlas 14 forcing %s: %d storm intervals, "
+            "%d zero-tail frames (%g hr), %dx%d cells, %.1f%% valid "
+            "coverage, max depth error %.6f mm",
+            output_path.name,
+            projected_rates.shape[0],
+            zero_tail_frames,
+            tail_duration.total_seconds() / 3600.0,
+            target_height,
+            target_width,
+            valid_fraction * 100.0,
+            max_depth_error_mm,
+        )
+        logger.debug("HEC-RAS Atlas 14 forcing path: %s", output_path)
+        return output_path
 
     @staticmethod
     @log_call
