@@ -21,6 +21,23 @@
   height: 100%;
 }
 
+.ras-library-project-marker {
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 2px solid #1d4ed8;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 4px #2563eb, 0 1px 3px rgb(15 23 42 / 0.25);
+  cursor: pointer;
+  padding: 0;
+}
+
+.ras-library-project-marker:focus-visible {
+  outline: 2px solid #172033;
+  outline-offset: 2px;
+}
+
 .ras-library-map-footer {
   display: flex;
   align-items: center;

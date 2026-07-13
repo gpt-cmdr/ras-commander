@@ -64,6 +64,32 @@
     ];
   }
 
+  function projectLocations(features) {
+    return {
+      type: "FeatureCollection",
+      features: features
+        .map((feature) => {
+          const bounds = normalizeBounds(feature.bbox) || geometryBounds(feature.geometry);
+          if (!bounds) {
+            return null;
+          }
+          return {
+            type: "Feature",
+            id: feature.id,
+            properties: {
+              ...(feature.properties || {}),
+              projectId: feature.id || feature.properties?.projectId || "",
+            },
+            geometry: {
+              type: "Point",
+              coordinates: [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2],
+            },
+          };
+        })
+        .filter(Boolean),
+    };
+  }
+
   function popupHtml(feature) {
     const props = feature.properties || {};
     const webmap = props.webmap ? resolveHref(props.webmap) : "";
@@ -114,16 +140,18 @@
   }
 
   async function loadProjectIndex(dataUrl) {
-    if (window.RAS_EXAMPLE_PROJECTS) {
-      return window.RAS_EXAMPLE_PROJECTS;
-    }
-
-    return fetch(dataUrl, { cache: "no-store" }).then((response) => {
+    try {
+      const response = await fetch(dataUrl, { cache: "no-store" });
       if (!response.ok) {
         throw new Error(`Example project index request failed: ${response.status}`);
       }
       return response.json();
-    });
+    } catch (error) {
+      if (window.RAS_EXAMPLE_PROJECTS) {
+        return window.RAS_EXAMPLE_PROJECTS;
+      }
+      throw error;
+    }
   }
 
   async function init(root) {
@@ -132,9 +160,16 @@
       return;
     }
 
-    const dataUrl = root.dataset.index || "../../assets/data/ras-example-projects.json";
+    const dataUrl = root.dataset.index ||
+      "https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson";
     const collection = await loadProjectIndex(dataUrl);
     const features = (collection.features || []).filter((feature) => feature.geometry);
+    const featuresById = new Map(
+      features.flatMap((feature) => [
+        [String(feature.id), feature],
+        [String(feature.properties?.projectId || feature.id), feature],
+      ])
+    );
     renderProjectList(root, features);
 
     const bounds = mergeBounds(features);
@@ -176,7 +211,7 @@
             source: "projects",
             paint: {
               "line-color": "#1d4ed8",
-              "line-width": 2,
+              "line-width": 2.5,
             },
           },
         ],
@@ -189,22 +224,63 @@
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
 
-    map.on("click", "project-extents-fill", (event) => {
-      const feature = event.features && event.features[0];
+    function openProjectPopup(lngLat, feature) {
       if (!feature) {
         return;
       }
       new maplibregl.Popup({ closeButton: true, maxWidth: "360px" })
-        .setLngLat(event.lngLat)
+        .setLngLat(lngLat)
         .setHTML(popupHtml(feature))
         .addTo(map);
+    }
+
+    function zoomToProject(feature) {
+      const projectBounds = normalizeBounds(feature.bbox) || geometryBounds(feature.geometry);
+      if (!projectBounds) {
+        return;
+      }
+      map.fitBounds(
+        [
+          [projectBounds[0], projectBounds[1]],
+          [projectBounds[2], projectBounds[3]],
+        ],
+        { padding: 64, maxZoom: 12, duration: 600 }
+      );
+    }
+
+    function renderedFeatures(event, layerIds) {
+      return map.queryRenderedFeatures(event.point, { layers: layerIds });
+    }
+
+    for (const location of projectLocations(features).features) {
+      const feature =
+        featuresById.get(String(location.id)) ||
+        featuresById.get(String(location.properties?.projectId));
+      if (!feature) {
+        continue;
+      }
+      const markerElement = document.createElement("button");
+      markerElement.type = "button";
+      markerElement.className = "ras-library-project-marker";
+      markerElement.setAttribute("aria-label", `Open ${feature.properties?.title || feature.id}`);
+      markerElement.title = feature.properties?.title || feature.id;
+      markerElement.addEventListener("click", (event) => {
+        event.stopPropagation();
+        zoomToProject(feature);
+        openProjectPopup(location.geometry.coordinates, feature);
+      });
+      new maplibregl.Marker({ element: markerElement, anchor: "center" })
+        .setLngLat(location.geometry.coordinates)
+        .addTo(map);
+    }
+
+    map.on("click", (event) => {
+      openProjectPopup(event.lngLat, renderedFeatures(event, ["project-extents-fill"])[0]);
     });
 
-    map.on("mouseenter", "project-extents-fill", () => {
-      map.getCanvas().style.cursor = "pointer";
-    });
-    map.on("mouseleave", "project-extents-fill", () => {
-      map.getCanvas().style.cursor = "";
+    map.on("mousemove", (event) => {
+      const interactive = renderedFeatures(event, ["project-extents-fill"]);
+      map.getCanvas().style.cursor = interactive.length ? "pointer" : "";
     });
   }
 
