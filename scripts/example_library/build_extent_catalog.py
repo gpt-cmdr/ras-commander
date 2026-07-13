@@ -62,7 +62,8 @@ def _project_feature(project: dict[str, Any], source_root: Path) -> dict[str, An
     properties = {
         "title": project["title"],
         "sourceFamily": project["source_family"],
-        "crs": project["crs"],
+        "crs": project.get("crs_display", project["crs"]),
+        "crsDefinition": project["crs"],
         "status": project.get("status", "Published"),
         "projectId": project["id"],
         "webmap": project["webmap"],

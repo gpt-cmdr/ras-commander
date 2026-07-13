@@ -5,8 +5,8 @@
 
 !!! warning "Under construction"
     The Example Project Library is moving to a RAS Commander MapLibre viewer
-    backed by PMTiles and WebGIS-hosted artifacts. Muncie, New Orleans Metro,
-    and St. Joseph are the first published pilots.
+    backed by PMTiles and WebGIS-hosted artifacts. The current promotion set
+    includes HEC examples, ScienceBase releases, and an eBFE/BLE delivery.
 
 RAS Commander uses repeatable HEC-RAS project fixtures for examples, tests,
 documentation, and regression checks. The library combines several source
@@ -35,7 +35,7 @@ Click a polygon to review source metadata and open that project's webmap.
 Projects stay out of this map until they have a valid CRS, a WGS84 model limit,
 and a published MapLibre webmap.
 
-<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260712Textents01">
+<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260713Tmaplibre02">
   <div class="ras-library-map-shell">
     <div class="ras-library-map" data-library-map></div>
   </div>
@@ -47,7 +47,7 @@ and a published MapLibre webmap.
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260713Textents02"></script>
+<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260713Tmaplibre02"></script>
 <script src="../../assets/javascripts/ras-example-library.js?v=20260713Textents05"></script>
 
 ## Current MapLibre Projects
@@ -57,6 +57,12 @@ and a published MapLibre webmap.
 | Muncie | HEC tutorial/example project | `EPSG:2965` | [Open MapLibre viewer](example-project-viewer.md) |
 | New Orleans Metro | HEC tutorial/example project | `EPSG:3457` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fneworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a%2Fviewer%2Fmanifest.json%3Fv%3D20260703Tneworleans01) |
 | St. Joseph / St. Joe Elkhart FIM | USGS ScienceBase model release | `EPSG:2965` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fst-joseph-st-joe-elkhart-fim-6f8e01d0%2Fviewer%2Fmanifest.json%3Fv%3D20260711Tstjoseph01) |
+| Chippewa 2D | HEC tutorial/example project | NAD83 / CONUS Albers (US ft) | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fchippewa-2d-chippewa-2d-rerun-7-0-20260628-170311-14e51a07%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02) |
+| Davis | HEC tutorial/example project | `EPSG:2871` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fdavis-davis-rerun-7-0-20260628-193602-d666d9cb%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02) |
+| Beaver Lake | HEC tutorial/example project | `EPSG:2274` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fbeaverlake-beaverlake-rerun-7-0-20260628-194053-eb3bacd7%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02) |
+| Bald Eagle Creek | HEC tutorial/example project | `EPSG:2271` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fbalde-eagle-creek-balde-eagle-creek-rerun-7-0-20260629-224833-d0758cd9%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02) |
+| Kalamazoo | USGS ScienceBase model release | `EPSG:6499` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fkalamazoo-kalamazoo-trowbridg-b2c7eef6%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02) |
+| Spring River | FEMA eBFE/BLE delivery | `EPSG:3433` | [Open MapLibre viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-river-ras-model-spring-ble-prj-15b882a5%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02) |
 
 The generated Muncie bundle currently includes:
 
@@ -185,9 +191,9 @@ for repeatable analysis and browser review.
 After Muncie, New Orleans Metro, and St. Joseph, the next projects should be
 added one at a time as their WebGIS bundles are published and validated:
 
-- Bald Eagle Creek 1D and Bald Eagle Creek Multi-2D
-- at least one eBFE/BLE delivery
-- at least one more ScienceBase release
+- Bald Eagle Creek Multi-2D
+- Spring Creek and Upper Guadalupe eBFE/BLE deliveries
+- terrain and selected stored-map results for the larger 2D releases
 
 Do not add the 1D steady BLE model collection to this landing page. That set
 should be handled as its own consolidated map once the grouping, symbology, and
