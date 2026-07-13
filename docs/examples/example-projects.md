@@ -35,7 +35,7 @@ Click a polygon to review source metadata and open that project's webmap.
 Projects stay out of this map until they have a valid CRS, a WGS84 model limit,
 and a published MapLibre webmap.
 
-<div class="ras-example-library" data-ras-example-library data-index="../../assets/data/ras-example-projects.json?v=20260711Tstjoseph01">
+<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260712Textents01">
   <div class="ras-library-map-shell">
     <div class="ras-library-map" data-library-map></div>
   </div>
@@ -47,7 +47,6 @@ and a published MapLibre webmap.
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260711Tstjoseph01"></script>
 <script src="../../assets/javascripts/ras-example-library.js?v=20260711Tstjoseph01"></script>
 
 ## Current MapLibre Projects
@@ -196,8 +195,8 @@ metadata pattern are clear.
 Each project entry should be added only after:
 
 - the catalog entry has a valid CRS and WGS84 bounding box
-- the project has a model-limit polygon in
-  `assets/javascripts/ras-example-projects-data.js`
+- `HdfProject.get_project_extent(geometry_type="footprint")` has produced a
+  raw, WGS84 model-limit polygon in the published WebGIS catalog
 - the MapLibre manifest uses hosted URLs, not local file paths
 - PMTiles or COG assets support HTTP range requests
 - large layers have sensible default visibility

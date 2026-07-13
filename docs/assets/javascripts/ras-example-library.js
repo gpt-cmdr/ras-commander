@@ -132,7 +132,8 @@
       return;
     }
 
-    const dataUrl = root.dataset.index || "../../assets/data/ras-example-projects.json";
+    const dataUrl = root.dataset.index ||
+      "https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson";
     const collection = await loadProjectIndex(dataUrl);
     const features = (collection.features || []).filter((feature) => feature.geometry);
     renderProjectList(root, features);
