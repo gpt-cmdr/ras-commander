@@ -117,6 +117,31 @@
       "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-river-ras-model-spring-ble-prj-15b882a5/viewer/manifest.json?v=20260713Tmaplibre02",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-river-ras-model-spring-ble-prj-15b882a5/project.json",
       "notes": "Geometry-only FEMA eBFE/BLE bundle with large 2D mesh cells delivered only at detail zoom."
+    },
+    {
+      "id": "baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab",
+      "title": "Bald Eagle Creek Multi2D",
+      "source_family": "HEC tutorial/example project",
+      "crs": "EPSG:2271",
+      "geometry_hdf": "compute_outputs/BaldEagleCrkMulti2D/remote_20260628_212722/BaldEagleCrkMulti2D_remote_7_0_20260628_212722/BaldEagleDamBrk.g06.hdf",
+      "geometry_hdfs": [
+        "compute_outputs/BaldEagleCrkMulti2D/remote_20260628_212722/BaldEagleCrkMulti2D_remote_7_0_20260628_212722/BaldEagleDamBrk.g01.hdf",
+        "compute_outputs/BaldEagleCrkMulti2D/remote_20260628_212722/BaldEagleCrkMulti2D_remote_7_0_20260628_212722/BaldEagleDamBrk.g02.hdf",
+        "compute_outputs/BaldEagleCrkMulti2D/remote_20260628_212722/BaldEagleCrkMulti2D_remote_7_0_20260628_212722/BaldEagleDamBrk.g03.hdf",
+        "compute_outputs/BaldEagleCrkMulti2D/remote_20260628_212722/BaldEagleCrkMulti2D_remote_7_0_20260628_212722/BaldEagleDamBrk.g06.hdf",
+        "compute_outputs/BaldEagleCrkMulti2D/remote_20260628_212722/BaldEagleCrkMulti2D_remote_7_0_20260628_212722/BaldEagleDamBrk.g08.hdf",
+        "compute_outputs/BaldEagleCrkMulti2D/remote_20260628_212722/BaldEagleCrkMulti2D_remote_7_0_20260628_212722/BaldEagleDamBrk.g09.hdf",
+        "compute_outputs/BaldEagleCrkMulti2D/remote_20260628_212722/BaldEagleCrkMulti2D_remote_7_0_20260628_212722/BaldEagleDamBrk.g10.hdf",
+        "compute_outputs/BaldEagleCrkMulti2D/remote_20260628_212722/BaldEagleCrkMulti2D_remote_7_0_20260628_212722/BaldEagleDamBrk.g11.hdf",
+        "compute_outputs/BaldEagleCrkMulti2D/remote_20260628_212722/BaldEagleCrkMulti2D_remote_7_0_20260628_212722/BaldEagleDamBrk.g12.hdf",
+        "compute_outputs/BaldEagleCrkMulti2D/remote_20260628_212722/BaldEagleCrkMulti2D_remote_7_0_20260628_212722/BaldEagleDamBrk.g13.hdf"
+      ],
+      "extent_output": "projects/baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab/viewer/model_extent.geojson",
+      "status": "MapLibre geometry bundle",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fbaldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tbaldeagle01",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab/viewer/manifest.json?v=20260714Tbaldeagle01",
+      "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab/project.json",
+      "notes": "Geometry-only HEC instructional example with ten geometry configurations and high-zoom 2D mesh tiles."
     }
   ]
 }

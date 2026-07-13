@@ -49,3 +49,37 @@ def test_project_feature_uses_display_crs_without_losing_definition(monkeypatch,
 
     assert feature["properties"]["crs"] == "WGS 84"
     assert feature["properties"]["crsDefinition"] == "EPSG:4326"
+
+
+def test_project_feature_unions_configured_geometry_hdfs(monkeypatch, tmp_path: Path) -> None:
+    first_hdf_path = tmp_path / "model.g01.hdf"
+    second_hdf_path = tmp_path / "model.g02.hdf"
+    first_hdf_path.touch()
+    second_hdf_path.touch()
+    extents = {
+        first_hdf_path: gpd.GeoDataFrame(geometry=[box(-85.0, 40.0, -84.9, 40.1)], crs="EPSG:4326"),
+        second_hdf_path: gpd.GeoDataFrame(geometry=[box(-84.8, 40.0, -84.7, 40.1)], crs="EPSG:4326"),
+    }
+
+    def get_project_extent(path: Path, **_kwargs):
+        extent = extents[path]
+        return extent, extent.total_bounds
+
+    monkeypatch.setattr(builder.HdfProject, "get_project_extent", get_project_extent)
+    project = {
+        "id": "model-1",
+        "title": "Model 1",
+        "source_family": "Example",
+        "crs": "EPSG:4326",
+        "geometry_hdf": first_hdf_path.name,
+        "geometry_hdfs": [first_hdf_path.name, second_hdf_path.name],
+        "webmap": "../viewer/",
+        "manifest": "https://example.test/manifest.json",
+        "project_manifest": "https://example.test/project.json",
+        "notes": "Test model",
+    }
+
+    feature = builder._project_feature(project, tmp_path)
+
+    assert feature["geometry"]["type"] == "MultiPolygon"
+    assert feature["bbox"] == [-85.0, 40.0, -84.7, 40.1]
