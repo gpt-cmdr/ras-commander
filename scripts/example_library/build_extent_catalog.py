@@ -27,11 +27,55 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+def _docs_fallback_catalog(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return a compact metadata fallback with bbox geometry only.
+
+    The full model footprints belong in the WebGIS GeoJSON. Shipping those
+    vertices in the docs JavaScript would make every docs-page load download a
+    second copy of the catalog. A bounding box keeps the fallback map and
+    project links useful when WebGIS is temporarily unavailable.
+    """
+    features: list[dict[str, Any]] = []
+    for feature in payload["features"]:
+        min_x, min_y, max_x, max_y = feature["bbox"]
+        properties = dict(feature["properties"])
+        properties["fallbackGeometry"] = "bounding-box"
+        features.append(
+            {
+                "type": "Feature",
+                "id": feature["id"],
+                "properties": properties,
+                "bbox": feature["bbox"],
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [min_x, min_y],
+                            [max_x, min_y],
+                            [max_x, max_y],
+                            [min_x, max_y],
+                            [min_x, min_y],
+                        ]
+                    ],
+                },
+            }
+        )
+    return {
+        "type": "FeatureCollection",
+        "name": payload.get("name", "ras-commander-example-projects"),
+        "generatedAt": payload.get("generatedAt"),
+        "fallbackGeometry": "bounding-box",
+        "features": features,
+    }
+
+
 def _write_javascript_catalog(path: Path, payload: dict[str, Any]) -> None:
-    """Write a small docs fallback without making it the catalog authority."""
+    """Write a compact docs fallback without making it the catalog authority."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        "window.RAS_EXAMPLE_PROJECTS = " + json.dumps(payload, indent=2) + ";\n",
+        "window.RAS_EXAMPLE_PROJECTS = "
+        + json.dumps(_docs_fallback_catalog(payload), indent=2)
+        + ";\n",
         encoding="utf-8",
     )
 

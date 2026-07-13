@@ -14,9 +14,32 @@ builder = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(builder)
 
 
-def test_write_javascript_catalog_assigns_the_feature_collection(tmp_path: Path) -> None:
+def test_write_javascript_catalog_assigns_a_compact_bbox_fallback(tmp_path: Path) -> None:
     output = tmp_path / "ras-example-projects-data.js"
-    catalog = {"type": "FeatureCollection", "features": [{"id": "model-1"}]}
+    catalog = {
+        "type": "FeatureCollection",
+        "name": "example-projects",
+        "generatedAt": "2026-07-13T00:00:00Z",
+        "features": [
+            {
+                "type": "Feature",
+                "id": "model-1",
+                "properties": {"title": "Model 1"},
+                "bbox": [-85.0, 40.0, -84.0, 41.0],
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [-85.0, 40.0],
+                            [-84.5, 40.0],
+                            [-84.0, 41.0],
+                            [-85.0, 40.0],
+                        ]
+                    ],
+                },
+            }
+        ],
+    }
 
     builder._write_javascript_catalog(output, catalog)
 
@@ -24,7 +47,14 @@ def test_write_javascript_catalog_assigns_the_feature_collection(tmp_path: Path)
     contents = output.read_text(encoding="utf-8")
     assert contents.startswith(prefix)
     assert contents.endswith(";\n")
-    assert json.loads(contents.removeprefix(prefix).removesuffix(";\n")) == catalog
+    fallback = json.loads(contents.removeprefix(prefix).removesuffix(";\n"))
+    assert fallback["name"] == catalog["name"]
+    assert fallback["fallbackGeometry"] == "bounding-box"
+    assert fallback["features"][0]["properties"]["fallbackGeometry"] == "bounding-box"
+    assert fallback["features"][0]["geometry"] == {
+        "type": "Polygon",
+        "coordinates": [[[-85.0, 40.0], [-84.0, 40.0], [-84.0, 41.0], [-85.0, 41.0], [-85.0, 40.0]]],
+    }
 
 
 def test_project_feature_uses_display_crs_without_losing_definition(monkeypatch, tmp_path: Path) -> None:
