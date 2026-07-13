@@ -1,7 +1,7 @@
 # Example Project Library
 
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
-<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260713Textents05">
+<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260714Textents01">
 
 !!! warning "Under construction"
     The Example Project Library is moving to a RAS Commander MapLibre viewer
@@ -48,7 +48,7 @@ and a published MapLibre webmap.
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
 <script src="../../assets/javascripts/ras-example-projects-data.js?v=20260713Tpublished01"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260713Textents05"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260714Textents01"></script>
 
 ## Current MapLibre Projects
 

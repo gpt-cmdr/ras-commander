@@ -188,6 +188,10 @@
             type: "geojson",
             data: collection,
           },
+          "selected-project": {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+          },
         },
         layers: [
           {
@@ -210,8 +214,29 @@
             type: "line",
             source: "projects",
             paint: {
-              "line-color": "#1d4ed8",
-              "line-width": 2.5,
+              "line-color": "#163ea5",
+              "line-width": 3,
+              "line-opacity": 0.94,
+            },
+          },
+          {
+            id: "selected-project-extent-halo",
+            type: "line",
+            source: "selected-project",
+            paint: {
+              "line-color": "#ffffff",
+              "line-width": 9,
+              "line-opacity": 0.9,
+            },
+          },
+          {
+            id: "selected-project-extent",
+            type: "line",
+            source: "selected-project",
+            paint: {
+              "line-color": "#d94801",
+              "line-width": 5,
+              "line-opacity": 1,
             },
           },
         ],
@@ -239,12 +264,16 @@
       if (!projectBounds) {
         return;
       }
+      map.getSource("selected-project").setData({
+        type: "FeatureCollection",
+        features: [feature],
+      });
       map.fitBounds(
         [
           [projectBounds[0], projectBounds[1]],
           [projectBounds[2], projectBounds[3]],
         ],
-        { padding: 64, maxZoom: 12, duration: 600 }
+        { padding: 64, maxZoom: 15, duration: 600 }
       );
     }
 
@@ -275,11 +304,15 @@
     }
 
     map.on("click", (event) => {
-      openProjectPopup(event.lngLat, renderedFeatures(event, ["project-extents-fill"])[0]);
+      const feature = renderedFeatures(event, ["project-extents-fill", "project-extents-line"])[0];
+      if (feature) {
+        zoomToProject(feature);
+        openProjectPopup(event.lngLat, feature);
+      }
     });
 
     map.on("mousemove", (event) => {
-      const interactive = renderedFeatures(event, ["project-extents-fill"]);
+      const interactive = renderedFeatures(event, ["project-extents-fill", "project-extents-line"]);
       map.getCanvas().style.cursor = interactive.length ? "pointer" : "";
     });
   }
