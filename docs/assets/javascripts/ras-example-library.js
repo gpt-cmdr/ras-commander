@@ -64,6 +64,29 @@
     ];
   }
 
+  function projectLocations(features) {
+    return {
+      type: "FeatureCollection",
+      features: features
+        .map((feature) => {
+          const bounds = normalizeBounds(feature.bbox) || geometryBounds(feature.geometry);
+          if (!bounds) {
+            return null;
+          }
+          return {
+            type: "Feature",
+            id: feature.id,
+            properties: feature.properties || {},
+            geometry: {
+              type: "Point",
+              coordinates: [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2],
+            },
+          };
+        })
+        .filter(Boolean),
+    };
+  }
+
   function popupHtml(feature) {
     const props = feature.properties || {};
     const webmap = props.webmap ? resolveHref(props.webmap) : "";
@@ -114,16 +137,18 @@
   }
 
   async function loadProjectIndex(dataUrl) {
-    if (window.RAS_EXAMPLE_PROJECTS) {
-      return window.RAS_EXAMPLE_PROJECTS;
-    }
-
-    return fetch(dataUrl, { cache: "no-store" }).then((response) => {
+    try {
+      const response = await fetch(dataUrl, { cache: "no-store" });
       if (!response.ok) {
         throw new Error(`Example project index request failed: ${response.status}`);
       }
       return response.json();
-    });
+    } catch (error) {
+      if (window.RAS_EXAMPLE_PROJECTS) {
+        return window.RAS_EXAMPLE_PROJECTS;
+      }
+      throw error;
+    }
   }
 
   async function init(root) {
@@ -136,6 +161,7 @@
       "https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson";
     const collection = await loadProjectIndex(dataUrl);
     const features = (collection.features || []).filter((feature) => feature.geometry);
+    const featuresById = new Map(features.map((feature) => [String(feature.id), feature]));
     renderProjectList(root, features);
 
     const bounds = mergeBounds(features);
@@ -153,6 +179,10 @@
           projects: {
             type: "geojson",
             data: collection,
+          },
+          "project-locations": {
+            type: "geojson",
+            data: projectLocations(features),
           },
         },
         layers: [
@@ -177,7 +207,30 @@
             source: "projects",
             paint: {
               "line-color": "#1d4ed8",
-              "line-width": 2,
+              "line-width": 2.5,
+            },
+          },
+          {
+            id: "project-location-halo",
+            type: "circle",
+            source: "project-locations",
+            paint: {
+              "circle-radius": 10,
+              "circle-color": "#ffffff",
+              "circle-opacity": 0.9,
+              "circle-stroke-color": "#1d4ed8",
+              "circle-stroke-width": 1.5,
+            },
+          },
+          {
+            id: "project-location",
+            type: "circle",
+            source: "project-locations",
+            paint: {
+              "circle-radius": 5,
+              "circle-color": "#2563eb",
+              "circle-stroke-color": "#ffffff",
+              "circle-stroke-width": 1.5,
             },
           },
         ],
@@ -190,8 +243,7 @@
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
 
-    map.on("click", "project-extents-fill", (event) => {
-      const feature = event.features && event.features[0];
+    function openProjectPopup(event, feature) {
       if (!feature) {
         return;
       }
@@ -199,14 +251,41 @@
         .setLngLat(event.lngLat)
         .setHTML(popupHtml(feature))
         .addTo(map);
+    }
+
+    map.on("click", "project-extents-fill", (event) => {
+      openProjectPopup(event, event.features && event.features[0]);
     });
 
-    map.on("mouseenter", "project-extents-fill", () => {
+    map.on("click", "project-location", (event) => {
+      const location = event.features && event.features[0];
+      const feature = location && featuresById.get(String(location.id));
+      if (!feature) {
+        return;
+      }
+      const projectBounds = normalizeBounds(feature.bbox) || geometryBounds(feature.geometry);
+      if (projectBounds) {
+        map.fitBounds(
+          [
+            [projectBounds[0], projectBounds[1]],
+            [projectBounds[2], projectBounds[3]],
+          ],
+          { padding: 64, maxZoom: 12, duration: 600 }
+        );
+      }
+      openProjectPopup(event, feature);
+    });
+
+    function setPointerCursor() {
       map.getCanvas().style.cursor = "pointer";
-    });
-    map.on("mouseleave", "project-extents-fill", () => {
+    }
+    function clearPointerCursor() {
       map.getCanvas().style.cursor = "";
-    });
+    }
+    for (const layerId of ["project-extents-fill", "project-location"]) {
+      map.on("mouseenter", layerId, setPointerCursor);
+      map.on("mouseleave", layerId, clearPointerCursor);
+    }
   }
 
   for (const root of roots) {

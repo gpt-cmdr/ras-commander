@@ -25,6 +25,15 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+def _write_javascript_catalog(path: Path, payload: dict[str, Any]) -> None:
+    """Write a small docs fallback without making it the catalog authority."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "window.RAS_EXAMPLE_PROJECTS = " + json.dumps(payload, indent=2) + ";\n",
+        encoding="utf-8",
+    )
+
+
 def _project_feature(project: dict[str, Any], source_root: Path) -> dict[str, Any]:
     hdf_path = source_root / project["geometry_hdf"]
     if not hdf_path.is_file():
@@ -121,6 +130,15 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="ISO-8601 generation time. Defaults to the current UTC time.",
     )
+    parser.add_argument(
+        "--fallback-js-output",
+        type=Path,
+        default=None,
+        help=(
+            "Optional JavaScript fallback for the docs page. The WebGIS GeoJSON "
+            "remains the authoritative published catalog."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -133,6 +151,8 @@ def main() -> None:
     if not catalog_output.is_absolute():
         catalog_output = args.webgis_root / catalog_output
     _write_json(catalog_output, catalog)
+    if args.fallback_js_output:
+        _write_javascript_catalog(args.fallback_js_output, catalog)
     print(f"Wrote {len(catalog['features'])} model footprints to {catalog_output}")
 
 
