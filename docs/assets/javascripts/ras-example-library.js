@@ -220,6 +220,15 @@
             },
           },
           {
+            id: "selected-project-extent-fill",
+            type: "fill",
+            source: "selected-project",
+            paint: {
+              "fill-color": "#f97316",
+              "fill-opacity": 0.3,
+            },
+          },
+          {
             id: "selected-project-extent-halo",
             type: "line",
             source: "selected-project",
