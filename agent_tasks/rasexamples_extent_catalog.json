@@ -61,10 +61,10 @@
       "geometry_hdf": "source_projects/Davis_rerun_7_0_20260628_193602/DavisStormSystem.g02.hdf",
       "extent_output": "project-extents/davis-davis-rerun-7-0-20260628-193602-d666d9cb.geojson",
       "status": "MapLibre geometry bundle",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fdavis-davis-rerun-7-0-20260628-193602-d666d9cb%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/davis-davis-rerun-7-0-20260628-193602-d666d9cb/viewer/manifest.json?v=20260713Tmaplibre02",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fdavis-davis-rerun-7-0-20260628-193602-d666d9cb%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tdavis-pipes01",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/davis-davis-rerun-7-0-20260628-193602-d666d9cb/viewer/manifest.json?v=20260714Tdavis-pipes01",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/davis-davis-rerun-7-0-20260628-193602-d666d9cb/project.json",
-      "notes": "Geometry-only HEC example with a 2D mesh and API-derived footprint."
+      "notes": "HEC 2D storm-drainage example with mesh cells, pipe conduits, pipe nodes, terrain, and an API-derived footprint."
     },
     {
       "id": "beaverlake-beaverlake-rerun-7-0-20260628-194053-eb3bacd7",

@@ -93,7 +93,6 @@
   function popupHtml(feature) {
     const props = feature.properties || {};
     const webmap = props.webmap ? resolveHref(props.webmap) : "";
-    const manifest = props.manifest ? resolveHref(props.manifest) : "";
     return [
       '<div class="ras-library-popup">',
       `<h3>${escapeHtml(props.title || feature.id || "Example Project")}</h3>`,
@@ -108,38 +107,45 @@
       props.notes ? `<p>${escapeHtml(props.notes)}</p>` : "",
       '<div class="ras-library-popup__actions">',
       webmap ? `<a href="${escapeHtml(webmap)}">Open webmap</a>` : "",
-      manifest ? `<a href="${escapeHtml(manifest)}">Manifest</a>` : "",
       "</div>",
       "</div>",
     ].join("");
   }
 
-  function projectCard(feature) {
+  function projectRow(feature) {
     const props = feature.properties || {};
-    const article = document.createElement("article");
-    article.className = "ras-library-project";
-    article.dataset.projectId = feature.id || "";
+    const row = document.createElement("tr");
+    row.dataset.projectId = feature.id || "";
 
-    const title = document.createElement("h3");
-    title.textContent = props.title || feature.id || "Example Project";
-    const meta = document.createElement("p");
-    meta.textContent = [props.sourceFamily, props.crs, props.status].filter(Boolean).join(" | ");
+    const project = document.createElement("td");
     const link = document.createElement("a");
     link.href = props.webmap ? resolveHref(props.webmap) : "#";
-    link.textContent = "Open webmap";
+    link.textContent = props.title || feature.id || "Example Project";
     if (!props.webmap) {
       link.setAttribute("aria-disabled", "true");
     }
-    article.append(title, meta, link);
-    return article;
+    project.append(link);
+
+    const information = document.createElement("td");
+    information.className = "ras-library-project-information";
+    information.textContent = props.notes || "Published MapLibre project bundle.";
+
+    const source = document.createElement("td");
+    source.textContent = props.sourceFamily || "Unknown";
+
+    const crs = document.createElement("td");
+    crs.textContent = props.crs || "Unknown";
+
+    row.append(project, information, source, crs);
+    return row;
   }
 
-  function renderProjectList(root, features) {
-    const list = root.querySelector("[data-project-list]");
-    if (!list) {
+  function renderProjectTable(root, features) {
+    const table = root.querySelector("[data-project-table]");
+    if (!table) {
       return;
     }
-    list.replaceChildren(...features.map(projectCard));
+    table.replaceChildren(...features.map(projectRow));
   }
 
   async function loadProjectIndex(dataUrl) {
@@ -173,7 +179,11 @@
         [String(feature.properties?.projectId || feature.id), feature],
       ])
     );
-    renderProjectList(root, features);
+    renderProjectTable(root, features);
+    const status = root.querySelector("[data-library-status]");
+    if (status) {
+      status.textContent = `${features.length} published MapLibre project extents`;
+    }
 
     const bounds = mergeBounds(features);
     const map = new maplibregl.Map({

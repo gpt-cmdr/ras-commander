@@ -1,7 +1,7 @@
 window.RAS_EXAMPLE_PROJECTS = {
   "type": "FeatureCollection",
   "name": "ras-commander-example-projects",
-  "generatedAt": "2026-07-14T20:17:15.353542Z",
+  "generatedAt": "2026-07-14T21:30:00Z",
   "fallbackGeometry": "bounding-box",
   "features": [
     {
@@ -226,11 +226,11 @@ window.RAS_EXAMPLE_PROJECTS = {
         "crsDefinition": "EPSG:2871",
         "status": "MapLibre geometry bundle",
         "projectId": "davis-davis-rerun-7-0-20260628-193602-d666d9cb",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fdavis-davis-rerun-7-0-20260628-193602-d666d9cb%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/davis-davis-rerun-7-0-20260628-193602-d666d9cb/viewer/manifest.json?v=20260713Tmaplibre02",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fdavis-davis-rerun-7-0-20260628-193602-d666d9cb%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tdavis-pipes01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/davis-davis-rerun-7-0-20260628-193602-d666d9cb/viewer/manifest.json?v=20260714Tdavis-pipes01",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/davis-davis-rerun-7-0-20260628-193602-d666d9cb/project.json",
         "viewerType": "MapLibre",
-        "notes": "Geometry-only HEC example with a 2D mesh and API-derived footprint.",
+        "notes": "HEC 2D storm-drainage example with mesh cells, pipe conduits, pipe nodes, terrain, and an API-derived footprint.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
         "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
