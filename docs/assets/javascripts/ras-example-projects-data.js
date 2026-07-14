@@ -1,7 +1,7 @@
 window.RAS_EXAMPLE_PROJECTS = {
   "type": "FeatureCollection",
   "name": "ras-commander-example-projects",
-  "generatedAt": "2026-07-14T01:15:00Z",
+  "generatedAt": "2026-07-14T20:17:15.353542Z",
   "fallbackGeometry": "bounding-box",
   "features": [
     {
