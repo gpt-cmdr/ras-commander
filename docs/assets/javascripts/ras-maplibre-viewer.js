@@ -5,6 +5,17 @@
   }
 
   const DEFAULT_BOUNDS = [-85.3942, 40.1896, -85.3601, 40.2057];
+  const VIEWER_MANIFEST_REFRESH = "20260714Tdefaults01";
+  const SATELLITE_ATTRIBUTION = "Tiles &copy; Esri";
+  const SATELLITE_IMAGERY_TILES = [
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  ];
+  const HYBRID_BOUNDARY_TILES = [
+    "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+  ];
+  const HYBRID_TRANSPORTATION_TILES = [
+    "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
+  ];
   const DEFAULT_STYLES = {
     model_extents: { fill: "#f59e0b", fillOpacity: 0.08, line: "#ea580c", lineWidth: 2 },
     mesh_areas: { fill: "#60a5fa", fillOpacity: 0.1, line: "#1d4ed8", lineWidth: 1 },
@@ -75,10 +86,9 @@
   function manifestUrlFor(root) {
     const params = new URLSearchParams(window.location.search);
     const requested = params.get("manifest");
-    if (requested) {
-      return new URL(requested, window.location.href).toString();
-    }
-    return root.dataset.manifest;
+    const manifestUrl = new URL(requested || root.dataset.manifest, window.location.href);
+    manifestUrl.searchParams.set("viewerRefresh", VIEWER_MANIFEST_REFRESH);
+    return manifestUrl.toString();
   }
 
   function setProjectChrome(root, manifest, manifestUrl) {
@@ -155,6 +165,90 @@
       return tileset.groupId;
     }
     return tileset.id === "terrain" ? "ras-terrains" : "ras-raster-results";
+  }
+
+  function isTerrainTileset(tileset) {
+    return tileset.id === "terrain"
+      || tileset.groupId === "ras-terrains"
+      || (tileset.storedMap && tileset.storedMap.mapType === "terrain");
+  }
+
+  function projectAvailability(manifest) {
+    const tilesets = manifest.tilesets || [];
+    const vectorLayers = tilesets
+      .filter((tileset) => tileset.type === "vector")
+      .flatMap((tileset) => tileset.layers || []);
+    const hasModelExtents = vectorLayers.some((layer) => layer.kind === "model_extents");
+    const is2D = vectorLayers.some((layer) => (
+      ["mesh_areas", "mesh_cells", "mesh_faces", "breaklines", "refinement_regions"].includes(layer.kind)
+    ));
+    const terrain = tilesets.some((tileset) => tileset.type === "raster" && isTerrainTileset(tileset));
+    const storedMaps = tilesets.filter((tileset) => tileset.type === "raster" && !isTerrainTileset(tileset));
+    const rawResultLayers = tilesets
+      .filter((tileset) => tileset.type === "vector" && tileset.groupId === "ras-results")
+      .reduce((count, tileset) => count + (tileset.layers || []).length, 0);
+
+    return [
+      { label: "Basemap", detail: "Satellite imagery with labels and roads is enabled." },
+      {
+        label: "Model Extents",
+        detail: hasModelExtents
+          ? "Enabled with the default geometry configuration."
+          : "Model extent geometry is not yet published for this model.",
+        unavailable: !hasModelExtents,
+      },
+      {
+        label: "Default Geometry",
+        detail: is2D
+          ? "2D mesh cells plus breaklines and refinement regions when supplied by the model."
+          : "1D river and reach centerlines.",
+      },
+      {
+        label: "Terrain",
+        detail: terrain
+          ? "Project terrain is published."
+          : "No project terrain was provided or published for this model.",
+        unavailable: !terrain,
+      },
+      {
+        label: "Raster Results",
+        detail: storedMaps.length
+          ? `${storedMaps.length} RASMapper Stored Map raster layer${storedMaps.length === 1 ? "" : "s"} published.`
+          : "No RASMapper Stored Map rasters are published.",
+        unavailable: !storedMaps.length,
+      },
+      {
+        label: "Vector Results",
+        detail: rawResultLayers
+          ? `${rawResultLayers} raw HDF element result layer${rawResultLayers === 1 ? "" : "s"} published.`
+          : "No raw HDF vector result layers are published.",
+        unavailable: !rawResultLayers,
+      },
+    ];
+  }
+
+  function renderProjectAvailability(root, manifest) {
+    const container = root.querySelector("[data-project-availability]");
+    if (!container) {
+      return;
+    }
+
+    container.replaceChildren();
+    const title = document.createElement("h3");
+    title.textContent = "Project Availability";
+    const list = document.createElement("dl");
+    list.className = "ras-project-availability__list";
+    for (const item of projectAvailability(manifest)) {
+      const term = document.createElement("dt");
+      term.textContent = item.label;
+      const detail = document.createElement("dd");
+      detail.textContent = item.detail;
+      if (item.unavailable) {
+        detail.className = "ras-project-availability__unavailable";
+      }
+      list.append(term, detail);
+    }
+    container.append(title, list);
   }
 
   function slugify(value) {
@@ -1000,6 +1094,7 @@
       return response.json();
     });
     setProjectChrome(root, manifest, manifestUrl);
+    renderProjectAvailability(root, manifest);
 
     const protocol = new pmtiles.Protocol();
     if (!window.__rasCommanderPmtilesProtocol) {
@@ -1018,12 +1113,46 @@
       style: {
         version: 8,
         glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
-        sources: {},
+        sources: {
+          "satellite-imagery": {
+            type: "raster",
+            tiles: SATELLITE_IMAGERY_TILES,
+            tileSize: 256,
+            attribution: SATELLITE_ATTRIBUTION,
+          },
+          "hybrid-boundaries": {
+            type: "raster",
+            tiles: HYBRID_BOUNDARY_TILES,
+            tileSize: 256,
+            attribution: SATELLITE_ATTRIBUTION,
+          },
+          "hybrid-transportation": {
+            type: "raster",
+            tiles: HYBRID_TRANSPORTATION_TILES,
+            tileSize: 256,
+            attribution: SATELLITE_ATTRIBUTION,
+          },
+        },
         layers: [
           {
             id: "background",
             type: "background",
             paint: { "background-color": "#eef2f3" },
+          },
+          {
+            id: "satellite-imagery",
+            type: "raster",
+            source: "satellite-imagery",
+          },
+          {
+            id: "hybrid-boundaries",
+            type: "raster",
+            source: "hybrid-boundaries",
+          },
+          {
+            id: "hybrid-transportation",
+            type: "raster",
+            source: "hybrid-transportation",
           },
         ],
       },
@@ -1034,6 +1163,7 @@
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
 
     const registry = new Map();
     const mapLayerLookup = new Map();

@@ -275,6 +275,43 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
   white-space: nowrap;
 }
 
+.ras-project-availability {
+  max-width: 980px;
+  margin: 0.9rem auto 0;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--ras-panel-border);
+  color: var(--ras-text);
+}
+
+.ras-project-availability h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.ras-project-availability__list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.28rem 0.75rem;
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.ras-project-availability__list dt {
+  color: var(--ras-muted);
+  font-weight: 700;
+}
+
+.ras-project-availability__list dd {
+  margin: 0;
+}
+
+.ras-project-availability__unavailable {
+  color: #9a3412;
+}
+
 .ras-maplibre-viewer .maplibregl-ctrl-scale {
   border-color: #111827;
   color: #111827;
@@ -487,6 +524,16 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
   .ras-layer-menu input[type="checkbox"] {
     width: 0.9rem;
     height: 0.9rem;
+  }
+
+  .ras-project-availability__list {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+    font-size: 0.76rem;
+  }
+
+  .ras-project-availability__list dd + dt {
+    margin-top: 0.35rem;
   }
 
   .ras-identify-popup {
