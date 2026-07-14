@@ -101,6 +101,9 @@
       `<dt>Source</dt><dd>${escapeHtml(props.sourceFamily || "Unknown")}</dd>`,
       `<dt>CRS</dt><dd>${escapeHtml(props.crs || "Unknown")}</dd>`,
       `<dt>Status</dt><dd>${escapeHtml(props.status || "Published")}</dd>`,
+      props.landingExtentSource
+        ? `<dt>Map extent</dt><dd>${escapeHtml(props.landingExtentSource)}</dd>`
+        : "",
       "</dl>",
       props.notes ? `<p>${escapeHtml(props.notes)}</p>` : "",
       '<div class="ras-library-popup__actions">',

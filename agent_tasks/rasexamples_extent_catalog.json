@@ -232,6 +232,10 @@
         "source_projects/sciencebase/squannacook/Squannacook.g26.hdf"
       ],
       "extent_output": "project-extents/squannacook-squannacook-15df5e30.geojson",
+      "landing_extent": {
+        "mode": "concave_hull",
+        "ratio": 0.1
+      },
       "status": "MapLibre geometry and raw 1D steady-result bundle",
       "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fsquannacook-squannacook-15df5e30%2Fviewer%2Fmanifest.json%3Fv%3D20260714T2300Z",
       "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/squannacook-squannacook-15df5e30/viewer/manifest.json?v=20260714T2300Z",

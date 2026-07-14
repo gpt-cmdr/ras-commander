@@ -1,7 +1,7 @@
 window.RAS_EXAMPLE_PROJECTS = {
   "type": "FeatureCollection",
   "name": "ras-commander-example-projects",
-  "generatedAt": "2026-07-13T21:22:52.005041Z",
+  "generatedAt": "2026-07-14T01:15:00Z",
   "fallbackGeometry": "bounding-box",
   "features": [
     {
@@ -20,6 +20,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "First MapLibre pilot with terrain, geometry, raw HDF vector results, and RASMapper Stored Map rasters.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -72,6 +73,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry and terrain PMTiles are published. Result layers need join-to-geometry post-processing before tiling.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -124,6 +126,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only ScienceBase pilot with model extents, river centerline, and cross sections.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -176,6 +179,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only 2D HEC instructional example with a verified packaged Albers projection.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -228,6 +232,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only HEC example with a 2D mesh and API-derived footprint.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -280,6 +285,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only HEC example with two geometry configurations and high-zoom mesh delivery.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -332,6 +338,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only 1D HEC example with centerline, cross-section, and structure review layers.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -384,6 +391,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only ScienceBase bundle with five geometry configurations and detail-only mesh tiles.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -436,6 +444,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only FEMA eBFE/BLE bundle with large 2D mesh cells delivered only at detail zoom.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -488,6 +497,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only HEC instructional example with ten geometry configurations and high-zoom 2D mesh tiles.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -540,6 +550,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle. Stored-map output is withheld pending validation of the all-cells-NoData warnings.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -592,6 +603,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle with high-zoom mesh delivery.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -644,6 +656,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle with high-zoom mesh delivery.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -696,6 +709,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle with high-zoom mesh delivery.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -748,6 +762,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle and large-model streaming validation case with high-zoom mesh delivery.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Exact model footprint",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [
@@ -792,14 +807,15 @@ window.RAS_EXAMPLE_PROJECTS = {
         "sourceFamily": "USGS ScienceBase model release",
         "crs": "EPSG:2249",
         "crsDefinition": "EPSG:2249",
-        "status": "MapLibre geometry bundle",
+        "status": "MapLibre geometry and raw 1D steady-result bundle",
         "projectId": "squannacook-squannacook-15df5e30",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fsquannacook-squannacook-15df5e30%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tpublished01",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/squannacook-squannacook-15df5e30/viewer/manifest.json?v=20260713Tpublished01",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fsquannacook-squannacook-15df5e30%2Fviewer%2Fmanifest.json%3Fv%3D20260714T2300Z",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/squannacook-squannacook-15df5e30/viewer/manifest.json?v=20260714T2300Z",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/squannacook-squannacook-15df5e30/project.json",
         "viewerType": "MapLibre",
-        "notes": "Geometry-only 1D-steady USGS ScienceBase bundle with fifteen separate plan and geometry configurations. Source result HDFs have no spatial result parquet for browser delivery.",
+        "notes": "1D-steady USGS ScienceBase bundle with fifteen separate plan and geometry configurations. Raw HEC-RAS HDF cross-section results are published by plan and profile; no RASMapper stored-map rasters are included in the source package.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "landingExtentSource": "Model coverage envelope (concave hull of exact 1D reach footprints)",
         "fallbackGeometry": "bounding-box"
       },
       "bbox": [

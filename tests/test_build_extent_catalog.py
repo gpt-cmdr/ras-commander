@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import geopandas as gpd
-from shapely.geometry import box
+from shapely.geometry import MultiPolygon, box, shape
 
 SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "example_library" / "build_extent_catalog.py"
 CATALOG_CONFIG_PATH = Path(__file__).parents[1] / "agent_tasks" / "rasexamples_extent_catalog.json"
@@ -123,3 +123,46 @@ def test_project_feature_unions_configured_geometry_hdfs(monkeypatch, tmp_path: 
 
     assert feature["geometry"]["type"] == "MultiPolygon"
     assert feature["bbox"] == [-85.0, 40.0, -84.7, 40.1]
+
+
+def test_catalog_uses_configured_landing_envelope_without_changing_exact_extent(
+    monkeypatch, tmp_path: Path
+) -> None:
+    hdf_path = tmp_path / "model.g01.hdf"
+    hdf_path.touch()
+    exact_geometry = MultiPolygon(
+        [box(-85.0, 40.0, -84.99, 40.01), box(-84.8, 40.1, -84.79, 40.11)]
+    )
+    exact_extent = gpd.GeoDataFrame(geometry=[exact_geometry], crs="EPSG:4326")
+    monkeypatch.setattr(
+        builder.HdfProject,
+        "get_project_extent",
+        lambda *args, **kwargs: (exact_extent, exact_extent.total_bounds),
+    )
+    project = {
+        "id": "model-1",
+        "title": "Model 1",
+        "source_family": "Example",
+        "crs": "EPSG:4326",
+        "geometry_hdf": hdf_path.name,
+        "extent_output": "project-extents/model-1.geojson",
+        "webmap": "../viewer/",
+        "manifest": "https://example.test/manifest.json",
+        "project_manifest": "https://example.test/project.json",
+        "notes": "Test model",
+        "landing_extent": {"mode": "concave_hull", "ratio": 0.1},
+    }
+
+    catalog = builder.build_catalog(
+        {"projects": [project]}, tmp_path, tmp_path / "webgis", "2026-07-14T00:00:00Z"
+    )
+
+    landing_feature = catalog["features"][0]
+    exact_feature = json.loads(
+        (tmp_path / "webgis" / "project-extents" / "model-1.geojson").read_text()
+    )["features"][0]
+    assert landing_feature["geometry"]["type"] == "Polygon"
+    assert landing_feature["properties"]["landingExtentSource"].startswith(
+        "Model coverage envelope"
+    )
+    assert shape(exact_feature["geometry"]).equals(exact_geometry)

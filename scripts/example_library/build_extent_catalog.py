@@ -16,7 +16,8 @@ from pathlib import Path
 from typing import Any
 
 import geopandas as gpd
-from shapely.geometry import mapping
+from shapely import concave_hull
+from shapely.geometry import mapping, shape
 from shapely.ops import unary_union
 
 from ras_commander.hdf import HdfProject
@@ -78,6 +79,50 @@ def _write_javascript_catalog(path: Path, payload: dict[str, Any]) -> None:
         + ";\n",
         encoding="utf-8",
     )
+
+
+def _landing_extent_geometry(project: dict[str, Any], geometry):
+    """Return a discovery-map geometry without changing the exact footprint."""
+    policy = project.get("landing_extent") or {}
+    mode = str(policy.get("mode", "footprint")).strip().lower()
+    if mode == "footprint":
+        return geometry, "Exact model footprint"
+    if mode != "concave_hull":
+        raise ValueError(
+            f"Unsupported landing extent mode for {project['id']}: {mode}"
+        )
+
+    ratio = float(policy.get("ratio", 0.10))
+    if not 0.0 <= ratio <= 1.0:
+        raise ValueError(
+            f"landing_extent.ratio must be between 0 and 1 for {project['id']}"
+        )
+    overview = concave_hull(geometry, ratio=ratio, allow_holes=False)
+    if overview.is_empty or overview.geom_type not in {"Polygon", "MultiPolygon"}:
+        raise ValueError(
+            f"Could not produce a polygon coverage envelope for {project['id']}"
+        )
+    if not overview.is_valid:
+        raise ValueError(f"Invalid coverage envelope for {project['id']}")
+    return overview, "Model coverage envelope (concave hull of exact 1D reach footprints)"
+
+
+def _landing_project_feature(
+    project: dict[str, Any], exact_feature: dict[str, Any]
+) -> dict[str, Any]:
+    """Build the landing-map feature while retaining an exact extent artifact."""
+    landing_geometry, landing_extent_source = _landing_extent_geometry(
+        project, shape(exact_feature["geometry"])
+    )
+    properties = dict(exact_feature["properties"])
+    properties["landingExtentSource"] = landing_extent_source
+    return {
+        "type": "Feature",
+        "id": exact_feature["id"],
+        "properties": properties,
+        "bbox": [float(value) for value in landing_geometry.bounds],
+        "geometry": mapping(landing_geometry),
+    }
 
 
 def _project_feature(project: dict[str, Any], source_root: Path) -> dict[str, Any]:
@@ -143,13 +188,13 @@ def build_catalog(
 ) -> dict[str, Any]:
     features: list[dict[str, Any]] = []
     for project in config["projects"]:
-        feature = _project_feature(project, source_root)
-        features.append(feature)
+        exact_feature = _project_feature(project, source_root)
+        features.append(_landing_project_feature(project, exact_feature))
         extent_payload = {
             "type": "FeatureCollection",
             "name": f"{project['id']}-model-extent",
             "generatedAt": generated_at,
-            "features": [feature],
+            "features": [exact_feature],
         }
         _write_json(webgis_root / project["extent_output"], extent_payload)
 

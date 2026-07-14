@@ -35,7 +35,7 @@ Click a polygon to review source metadata and open that project's webmap.
 Projects stay out of this map until they have a valid CRS, a WGS84 model limit,
 and a published MapLibre webmap.
 
-<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260714T0035Z">
+<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260714Tcoverage01">
   <div class="ras-library-map-shell">
     <div class="ras-library-map" data-library-map></div>
   </div>
@@ -47,8 +47,8 @@ and a published MapLibre webmap.
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260713Tpublished01"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260714Tselectedfill01"></script>
+<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260714Tcoverage01"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260714Tcoverage01"></script>
 
 ## Current MapLibre Projects
 
