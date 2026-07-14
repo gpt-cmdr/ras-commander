@@ -5,7 +5,7 @@
   }
 
   const DEFAULT_BOUNDS = [-85.3942, 40.1896, -85.3601, 40.2057];
-  const VIEWER_MANIFEST_REFRESH = "20260714Tterrain01";
+  const VIEWER_MANIFEST_REFRESH = "20260714Tdavis-pipes01";
   const SATELLITE_ATTRIBUTION = "Tiles &copy; Esri";
   const SATELLITE_IMAGERY_TILES = [
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -25,6 +25,8 @@
     centerlines: { fill: "#0f766e", fillOpacity: 0, line: "#0f766e", lineWidth: 1.2 },
     river_centerlines: { fill: "#0f766e", fillOpacity: 0, line: "#0f766e", lineWidth: 1.2 },
     structures: { fill: "#dc2626", fillOpacity: 0, line: "#dc2626", lineWidth: 1.4 },
+    pipe_conduits: { fill: "#0891b2", fillOpacity: 0, line: "#0891b2", lineWidth: 1.6 },
+    pipe_nodes: { fill: "#facc15", fillOpacity: 0.72, line: "#a16207", lineWidth: 0.9 },
     cross_sections: { fill: "#0f766e", fillOpacity: 0, line: "#0f766e", lineWidth: 1 },
     water_surface: { fill: "#2b8cbe", fillOpacity: 0.52, line: "#045a8d", lineWidth: 0.4 },
     velocity: { fill: "#7c3aed", fillOpacity: 0, line: "#7c3aed", lineWidth: 0.9 },
