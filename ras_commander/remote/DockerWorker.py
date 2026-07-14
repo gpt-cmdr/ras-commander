@@ -53,6 +53,7 @@ import shutil
 import uuid
 import time
 from dataclasses import dataclass, field
+from numbers import Real
 from pathlib import Path
 from typing import Dict, Optional, Any
 
@@ -161,6 +162,12 @@ class DockerWorker(RasWorker):
 
         if not self.docker_image:
             raise ValueError("docker_image is required for DockerWorker")
+        if (
+            isinstance(self.max_runtime_minutes, bool)
+            or not isinstance(self.max_runtime_minutes, Real)
+            or self.max_runtime_minutes <= 0
+        ):
+            raise ValueError("max_runtime_minutes must be a positive number")
 
         # Check if this is a remote Docker host
         self._is_remote = bool(self.docker_host and not self.docker_host.startswith("unix:"))

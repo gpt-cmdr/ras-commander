@@ -78,7 +78,7 @@ import logging
 from pathlib import Path
 import shutil
 from typing import Union, Optional, List, Dict, Any, Tuple
-from numbers import Number
+from numbers import Integral, Number
 import pandas as pd
 from .RasPrj import RasPrj, ras
 from .RasUtils import RasUtils
@@ -523,7 +523,13 @@ class RasPlan:
     
     @staticmethod
     @log_call
-    def set_num_cores(plan_number: Union[str, Number], num_cores: int, ras_object=None):
+    def set_num_cores(
+        plan_number: Union[str, Number],
+        num_cores: int,
+        ras_object=None,
+        *,
+        refresh_dataframes: bool = True,
+    ):
         """
         Update the maximum number of cores to use in the HEC-RAS plan file.
 
@@ -531,6 +537,8 @@ class RasPlan:
         plan_number (Union[str, Number]): Plan number (e.g., '02', 2, or 2.0) or full path to the plan file
         num_cores (int): Maximum number of cores to use
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        refresh_dataframes (bool, optional): Refresh project dataframes after updating the plan.
+            Defaults to True. Set to False when modifying an isolated plan copy.
         
         Returns:
         None
@@ -540,7 +548,8 @@ class RasPlan:
         UNET D2 Cores=
         PS Cores=
 
-        Where a value of "0" is used for "All Available" cores, and values of 1 or more are used to specify the number of cores to use.
+        A value of "0" uses "All Available" cores, and values of 1 or more
+        specify an explicit number of cores.
         For complex 1D/2D models with pipe systems, a more complex approach may be needed to optimize performance.  (Suggest writing a custom function based on this code).
         This function simply sets the "num_cores" parameter for ALL instances of the above parameters in the plan file.
 
@@ -557,10 +566,16 @@ class RasPlan:
         >>> RasPlan.set_num_cores('02', 4)
         >>> # Using full path to plan file
         >>> RasPlan.set_num_cores('/path/to/project.p02', 4)
+        >>> # Update an isolated copy without refreshing source project metadata
+        >>> RasPlan.set_num_cores('/staging/project.p02', 4, refresh_dataframes=False)
 
         Note:
-            This function updates the ras object's dataframes after modifying the project structure.
+            By default, this function updates the ras object's dataframes after modifying the plan.
         """
+        if isinstance(num_cores, bool) or not isinstance(num_cores, Integral) or num_cores < 0:
+            raise ValueError("num_cores must be a nonnegative integer")
+        num_cores = int(num_cores)
+
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
         
@@ -586,11 +601,11 @@ class RasPlan:
         except Exception as e:
             raise IOError(f"Failed to update number of cores in plan file: {e}")
         
-        # Update the ras object's dataframes
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        if refresh_dataframes:
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+            ras_obj.geom_df = ras_obj.get_geom_entries()
+            ras_obj.flow_df = ras_obj.get_flow_entries()
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
 
     @staticmethod
     @log_call

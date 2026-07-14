@@ -141,7 +141,8 @@ def execute_local_plan(
     force_geompre: bool = False,
     force_rerun: bool = False,
     sub_worker_id: int = 1,
-    autoclean: bool = True
+    autoclean: bool = True,
+    copy_geometry_outputs: bool = True,
 ) -> bool:
     """
     Execute a plan on a local worker using RasCmdr.compute_plan().
@@ -163,6 +164,10 @@ def execute_local_plan(
         force_rerun: Force execution even if results are current
         sub_worker_id: Sub-worker ID for parallel execution (default 1)
         autoclean: Delete temporary worker folder after execution (default True)
+        copy_geometry_outputs: Copy geometry HDF and preprocessor outputs back to
+            the source project (default True for backward compatibility).
+            Concurrent plans sharing a geometry can race during copyback; use
+            False for scenario ensembles that share preprocessed geometry.
 
     Returns:
         bool: True if successful
@@ -238,20 +243,21 @@ def execute_local_plan(
         if copy_plan_hdf_back(worker_project_path, plan_number, ras_obj) is None:
             return False
 
-        try:
-            copy_geometry_outputs_back(
-                worker_project_path=worker_project_path,
-                project_folder=project_folder,
-                project_name=project_name,
-                plan_number=plan_number,
-                ras_obj=ras_obj,
-            )
-        except FileNotFoundError as e:
-            logger.error(
-                f"Geometry output copyback failed for plan {plan_number}: {e}. "
-                f"worker_project={worker_project_path}; destination_project={project_folder}"
-            )
-            return False
+        if copy_geometry_outputs:
+            try:
+                copy_geometry_outputs_back(
+                    worker_project_path=worker_project_path,
+                    project_folder=project_folder,
+                    project_name=project_name,
+                    plan_number=plan_number,
+                    ras_obj=ras_obj,
+                )
+            except FileNotFoundError as e:
+                logger.error(
+                    f"Geometry output copyback failed for plan {plan_number}: {e}. "
+                    f"worker_project={worker_project_path}; destination_project={project_folder}"
+                )
+                return False
 
         # Also copy any other result files (.computeMsgs.txt, etc.)
         for result_file in worker_project_path.glob(f"{project_name}.p{plan_number}.*"):

@@ -14,6 +14,7 @@ import uuid
 import urllib.request
 import zipfile
 from dataclasses import dataclass, field
+from numbers import Integral, Real
 from pathlib import Path
 from typing import Dict
 
@@ -27,6 +28,7 @@ from .Utils import (
 )
 from ..LoggingConfig import get_logger
 from ..RasCurrency import RasCurrency
+from ..RasPlan import RasPlan
 from ..RasUtils import RasUtils
 from ..geom import GeomPreprocessor
 
@@ -76,8 +78,9 @@ class PsexecWorker(RasWorker):
         max_parallel_plans: Max plans to run in parallel (calculated: cores_total/cores_per_plan)
 
     CRITICAL: HEC-RAS is a GUI application and REQUIRES session-based execution.
-    - system_account=False (default) - Runs in user session with desktop (REQUIRED for HEC-RAS)
-    - system_account=True - Runs as SYSTEM (no desktop, HEC-RAS will hang)
+    - system_account=False (default) - Runs in the configured user desktop session
+    - system_account=True - Uses SYSTEM in the configured interactive session;
+      generally not recommended for HEC-RAS
 
     Multi-Core Parallelism:
     - Set cores_total (e.g., 16) and cores_per_plan (e.g., 4) for parallel execution
@@ -134,6 +137,19 @@ class PsexecWorker(RasWorker):
             raise ValueError("share_path is required for PsExec workers")
         if not self.hostname:
             raise ValueError("hostname is required for PsExec workers")
+        if (
+            isinstance(self.session_id, bool)
+            or not isinstance(self.session_id, Integral)
+            or self.session_id < 1
+        ):
+            raise ValueError("session_id must be a positive integer")
+        self.session_id = int(self.session_id)
+        if (
+            isinstance(self.max_runtime_minutes, bool)
+            or not isinstance(self.max_runtime_minutes, Real)
+            or self.max_runtime_minutes <= 0
+        ):
+            raise ValueError("max_runtime_minutes must be a positive number")
         # Credentials are optional - if provided, must have both username and password
         if self.credentials:
             if "username" not in self.credentials or "password" not in self.credentials:
@@ -326,7 +342,7 @@ def init_psexec_worker(**kwargs) -> PsexecWorker:
         worker.hostname,
         auth_mode,
         worker.system_account,
-        worker.session_id if not worker.system_account else "N/A",
+        worker.session_id,
         worker.process_priority,
         worker.queue_priority,
         worker.max_parallel_plans,
@@ -355,7 +371,8 @@ def execute_psexec_plan(
     force_geompre: bool = False,
     force_rerun: bool = False,
     sub_worker_id: int = 1,
-    autoclean: bool = True
+    autoclean: bool = True,
+    copy_geometry_outputs: bool = True,
 ) -> bool:
     """
     Execute a plan on a PsExec worker.
@@ -382,10 +399,18 @@ def execute_psexec_plan(
         sub_worker_id: Sub-worker ID for parallel execution (default 1)
         autoclean: Delete temporary worker folder after execution (default True).
                    Set to False for debugging to preserve worker folders.
+        copy_geometry_outputs: Copy geometry HDF and preprocessor outputs back to
+            the source project (default True for backward compatibility).
+            Concurrent plans sharing a geometry can race during copyback; use
+            False for scenario ensembles that share preprocessed geometry.
 
     Returns:
         bool: True if successful
     """
+    if isinstance(num_cores, bool) or not isinstance(num_cores, Integral) or num_cores < 1:
+        raise ValueError("num_cores must be an integer greater than or equal to 1")
+    num_cores = int(num_cores)
+
     plan_number = RasUtils.normalize_ras_number(plan_number)
     logger.debug(
         "Starting PsExec execution of plan %s (sub-worker #%s)",
@@ -482,6 +507,18 @@ def execute_psexec_plan(
         prj_file = list(worker_project_path.glob("*.prj"))[0]
         plan_file = worker_project_path / f"{project_name}.p{plan_number}"
 
+        RasPlan.set_num_cores(
+            plan_file,
+            num_cores,
+            ras_object=ras_obj,
+            refresh_dataframes=False,
+        )
+        logger.debug(
+            "Set staged plan %s to use %s core(s)",
+            plan_number,
+            num_cores,
+        )
+
         # Enable Write Detailed= 1 to ensure .computeMsgs.txt is written
         # This is critical for results_df fallback on pre-6.4 HEC-RAS versions
         from ..RasBco import BcoMonitor
@@ -527,8 +564,7 @@ def execute_psexec_plan(
 
         if worker.system_account:
             psexec_cmd.append("-s")
-        else:
-            psexec_cmd.extend(["-i", str(worker.session_id)])
+        psexec_cmd.extend(["-i", str(worker.session_id)])
 
         priority_flags = {
             "low": "-low",
@@ -546,7 +582,11 @@ def execute_psexec_plan(
             cmd_display = ' '.join(psexec_cmd[:2]) + " -u <user> -p <password> -accepteula -h ..."
         else:
             cmd_display = ' '.join(psexec_cmd[:2]) + " -accepteula -h ..."
-        logger.debug("Executing PsExec command: %s", cmd_display)
+        logger.debug(
+            "Executing PsExec command in session %s: %s",
+            worker.session_id,
+            cmd_display,
+        )
 
         # Step 5: Execute PsExec command
         result = subprocess.run(
@@ -596,17 +636,18 @@ def execute_psexec_plan(
         if copy_plan_hdf_back(worker_project_path, plan_number, ras_obj) is None:
             return False
 
-        try:
-            copy_geometry_outputs_back(
-                worker_project_path=worker_project_path,
-                project_folder=project_folder,
-                project_name=project_name,
-                plan_number=plan_number,
-                ras_obj=ras_obj,
-            )
-        except FileNotFoundError as e:
-            logger.error(f"Geometry output copyback failed for plan {plan_number}: {e}")
-            return False
+        if copy_geometry_outputs:
+            try:
+                copy_geometry_outputs_back(
+                    worker_project_path=worker_project_path,
+                    project_folder=project_folder,
+                    project_name=project_name,
+                    plan_number=plan_number,
+                    ras_obj=ras_obj,
+                )
+            except FileNotFoundError as e:
+                logger.error(f"Geometry output copyback failed for plan {plan_number}: {e}")
+                return False
 
         # Step 8: Cleanup (if autoclean enabled)
         if autoclean:
