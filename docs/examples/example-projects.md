@@ -117,8 +117,8 @@ Live public paths:
 
 | Resource | Link |
 |----------|------|
-| MapLibre viewer | [New Orleans Metro Map Viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fneworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a%2Fviewer%2Fmanifest.json%3Fv%3D20260703Tneworleans01) |
-| MapLibre manifest | [manifest.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/manifest.json?v=20260703Tneworleans01) |
+| MapLibre viewer | [New Orleans Metro Map Viewer](https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fneworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tneworleans02) |
+| MapLibre manifest | [manifest.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/manifest.json?v=20260714Tneworleans02) |
 | Geometry PMTiles | [geometry.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/tiles/geometry.pmtiles) |
 | Terrain PMTiles | [terrain.pmtiles](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/tiles/terrain.pmtiles) |
 | Project manifest | [project.json](https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/project.json) |
