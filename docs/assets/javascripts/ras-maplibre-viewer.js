@@ -251,6 +251,23 @@
     container.append(title, list);
   }
 
+  function addHybridBasemap(map) {
+    const sources = [
+      ["satellite-imagery", SATELLITE_IMAGERY_TILES],
+      ["hybrid-boundaries", HYBRID_BOUNDARY_TILES],
+      ["hybrid-transportation", HYBRID_TRANSPORTATION_TILES],
+    ];
+    for (const [id, tiles] of sources) {
+      map.addSource(id, {
+        type: "raster",
+        tiles,
+        tileSize: 256,
+        attribution: SATELLITE_ATTRIBUTION,
+      });
+      map.addLayer({ id, type: "raster", source: id });
+    }
+  }
+
   function slugify(value) {
     return String(value || "")
       .trim()
@@ -1113,46 +1130,12 @@
       style: {
         version: 8,
         glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
-        sources: {
-          "satellite-imagery": {
-            type: "raster",
-            tiles: SATELLITE_IMAGERY_TILES,
-            tileSize: 256,
-            attribution: SATELLITE_ATTRIBUTION,
-          },
-          "hybrid-boundaries": {
-            type: "raster",
-            tiles: HYBRID_BOUNDARY_TILES,
-            tileSize: 256,
-            attribution: SATELLITE_ATTRIBUTION,
-          },
-          "hybrid-transportation": {
-            type: "raster",
-            tiles: HYBRID_TRANSPORTATION_TILES,
-            tileSize: 256,
-            attribution: SATELLITE_ATTRIBUTION,
-          },
-        },
+        sources: {},
         layers: [
           {
             id: "background",
             type: "background",
             paint: { "background-color": "#eef2f3" },
-          },
-          {
-            id: "satellite-imagery",
-            type: "raster",
-            source: "satellite-imagery",
-          },
-          {
-            id: "hybrid-boundaries",
-            type: "raster",
-            source: "hybrid-boundaries",
-          },
-          {
-            id: "hybrid-transportation",
-            type: "raster",
-            source: "hybrid-transportation",
           },
         ],
       },
@@ -1169,6 +1152,7 @@
     const mapLayerLookup = new Map();
 
     map.on("load", () => {
+      addHybridBasemap(map);
       const rasterTilesets = (manifest.tilesets || []).filter((tileset) => tileset.type === "raster");
       const resultTilesets = (manifest.tilesets || []).filter((tileset) => tileset.type === "vector" && tileset.id === "results");
       const geometryTilesets = (manifest.tilesets || []).filter((tileset) => tileset.type === "vector" && tileset.id !== "results");
