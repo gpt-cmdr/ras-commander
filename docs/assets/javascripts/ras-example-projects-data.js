@@ -798,59 +798,6 @@ window.RAS_EXAMPLE_PROJECTS = {
           ]
         ]
       }
-    },
-    {
-      "type": "Feature",
-      "id": "squannacook-squannacook-15df5e30",
-      "properties": {
-        "title": "Squannacook",
-        "sourceFamily": "USGS ScienceBase model release",
-        "crs": "EPSG:2249",
-        "crsDefinition": "EPSG:2249",
-        "status": "MapLibre geometry and raw 1D steady-result bundle",
-        "projectId": "squannacook-squannacook-15df5e30",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fsquannacook-squannacook-15df5e30%2Fviewer%2Fmanifest.json%3Fv%3D20260714T2300Z",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/squannacook-squannacook-15df5e30/viewer/manifest.json?v=20260714T2300Z",
-        "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/squannacook-squannacook-15df5e30/project.json",
-        "viewerType": "MapLibre",
-        "notes": "1D-steady USGS ScienceBase bundle with fifteen separate plan and geometry configurations. Raw HEC-RAS HDF cross-section results are published by plan and profile; no RASMapper stored-map rasters are included in the source package.",
-        "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Model coverage envelope (concave hull of exact 1D reach footprints)",
-        "fallbackGeometry": "bounding-box"
-      },
-      "bbox": [
-        -71.84107686475589,
-        42.63043149093957,
-        -71.67063643962399,
-        42.6928489295816
-      ],
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [
-              -71.84107686475589,
-              42.63043149093957
-            ],
-            [
-              -71.67063643962399,
-              42.63043149093957
-            ],
-            [
-              -71.67063643962399,
-              42.6928489295816
-            ],
-            [
-              -71.84107686475589,
-              42.6928489295816
-            ],
-            [
-              -71.84107686475589,
-              42.63043149093957
-            ]
-          ]
-        ]
-      }
     }
   ]
 };

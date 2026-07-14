@@ -207,40 +207,6 @@
       "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f/viewer/manifest.json?v=20260714Tebfe02",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f/project.json",
       "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle and large-model streaming validation case with high-zoom mesh delivery."
-    },
-    {
-      "id": "squannacook-squannacook-15df5e30",
-      "title": "Squannacook",
-      "source_family": "USGS ScienceBase model release",
-      "crs": "EPSG:2249",
-      "geometry_hdf": "source_projects/sciencebase/squannacook/Squannacook.g01.hdf",
-      "geometry_hdfs": [
-        "source_projects/sciencebase/squannacook/Squannacook.g01.hdf",
-        "source_projects/sciencebase/squannacook/Squannacook.g06.hdf",
-        "source_projects/sciencebase/squannacook/Squannacook.g04.hdf",
-        "source_projects/sciencebase/squannacook/Squannacook.g13.hdf",
-        "source_projects/sciencebase/squannacook/Squannacook.g09.hdf",
-        "source_projects/sciencebase/squannacook/Squannacook.g16.hdf",
-        "source_projects/sciencebase/squannacook/Squannacook.g17.hdf",
-        "source_projects/sciencebase/squannacook/Squannacook.g18.hdf",
-        "source_projects/sciencebase/squannacook/Squannacook.g19.hdf",
-        "source_projects/sciencebase/squannacook/Squannacook.g21.hdf",
-        "source_projects/sciencebase/squannacook/Squannacook.g20.hdf",
-        "source_projects/sciencebase/squannacook/Squannacook.g22.hdf",
-        "source_projects/sciencebase/squannacook/Squannacook.g23.hdf",
-        "source_projects/sciencebase/squannacook/Squannacook.g24.hdf",
-        "source_projects/sciencebase/squannacook/Squannacook.g26.hdf"
-      ],
-      "extent_output": "project-extents/squannacook-squannacook-15df5e30.geojson",
-      "landing_extent": {
-        "mode": "concave_hull",
-        "ratio": 0.1
-      },
-      "status": "MapLibre geometry and raw 1D steady-result bundle",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fsquannacook-squannacook-15df5e30%2Fviewer%2Fmanifest.json%3Fv%3D20260714T2300Z",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/squannacook-squannacook-15df5e30/viewer/manifest.json?v=20260714T2300Z",
-      "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/squannacook-squannacook-15df5e30/project.json",
-      "notes": "1D-steady USGS ScienceBase bundle with fifteen separate plan and geometry configurations. Raw HEC-RAS HDF cross-section results are published by plan and profile; no RASMapper stored-map rasters are included in the source package."
     }
   ]
 }
