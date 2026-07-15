@@ -38,6 +38,7 @@ import sys
 import subprocess
 import tempfile
 import time
+import warnings
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -958,7 +959,7 @@ Step 5: Configure (optional — auto-detection usually works)
 
     @staticmethod
     @log_call
-    def complete_geometry(
+    def compute_geometry(
         geom_hdf_path: Union[str, Path],
         rasmap_path: Optional[Union[str, Path]] = None,
         ras_object=None,
@@ -968,19 +969,26 @@ Step 5: Configure (optional — auto-detection usually works)
         """
         Run HEC-RAS's headless geometry completion (RasProcess.exe CompleteGeometry).
 
-        This is the GUI-free equivalent of RASMapper's *compute geometry* action.
+        This is the GUI-free equivalent of RASMapper's *Compute Geometry* action.
         It wraps ``RASGeometry.CompleteForComputations()``, the same pipeline the
         RASMapper GUI runs, so it authors HEC-RAS's own **River Edge Lines**
         ("Create Edge Lines at XS Limits") and **XS Interpolation Surface**, plus
         bank lines, ineffective areas, blocked obstructions, storage-area and
-        structure connectivity, and 2D property tables. Unlike
-        ``HdfXsec.set_river_edge_lines()`` (a lightweight Python approximation),
-        the edge lines this produces use HEC-RAS's bank-line-anchored offset-curve
-        algorithm and carry the group-level ``Source Data Hash``, so HEC-RAS
-        treats them as authoritative and will not silently recompute them.
+        structure connectivity, and 2D property tables. The edge lines it produces
+        use HEC-RAS's bank-line-anchored offset-curve algorithm and carry the
+        group-level ``Source Data Hash``, so HEC-RAS treats them as authoritative
+        and will not silently recompute them. (Flow paths are not part of this
+        pipeline.)
 
-        Works on Windows (native) and Linux (via Wine, auto-detected), the same as
-        the other RasProcess methods.
+        Platform guidance
+        -----------------
+        This runs ``RasProcess.exe`` as a subprocess and works on both Windows
+        (native) and Linux (via Wine, auto-detected). **On Windows, prefer
+        ``RasGeometryCompute.compute_geometry()``** — it runs the same pipeline
+        in-process via pythonnet (no subprocess), exposes each layer separately
+        (edge lines / interpolation surface / flow paths), and returns structured
+        ``ValidateGeometry`` diagnostics. This subprocess method remains the only
+        supported geometry-completion path for **Linux/Wine** execution.
 
         Warning
         -------
@@ -1084,6 +1092,27 @@ Step 5: Configure (optional — auto-detection usually works)
             "interpolation_surface_written": interp_surface_written,
             "success": success,
         }
+
+    @staticmethod
+    @log_call
+    def complete_geometry(
+        geom_hdf_path: Union[str, Path],
+        rasmap_path: Optional[Union[str, Path]] = None,
+        ras_object=None,
+        ras_version: str = None,
+        timeout: int = 1800,
+    ) -> Dict[str, Any]:
+        """Deprecated alias for :meth:`compute_geometry`. Use ``compute_geometry``."""
+        warnings.warn(
+            "RasProcess.complete_geometry() is renamed to compute_geometry(); "
+            "the old name will be removed in a future release.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return RasProcess.compute_geometry(
+            geom_hdf_path, rasmap_path=rasmap_path, ras_object=ras_object,
+            ras_version=ras_version, timeout=timeout,
+        )
 
     @staticmethod
     @log_call

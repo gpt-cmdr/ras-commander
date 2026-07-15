@@ -90,6 +90,8 @@ from .ComputeResults import (
     RasControlResult,
     PreprocessResult,
     GeometryPreprocessResult,
+    GeometryLayerResult,
+    GeometryCompleteResult,
 )
 from .RasPreprocess import RasPreprocess
 from .RasMap import RasMap
@@ -97,6 +99,7 @@ from .RasDialogWatchdog import DialogWatchdog, DismissedDialog
 from .RasEncroachments import RasEncroachments
 from .RasMapValidation import RasMapValidation
 from .RasProcess import RasProcess, ProjectionInfo
+from .RasGeometryCompute import RasGeometryCompute
 from .RasGuiAutomation import RasGuiAutomation
 from .RasScreenshot import RasScreenshot
 from .RasBreach import RasBreach
@@ -229,6 +232,8 @@ __all__ = [
     'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils',
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
     'PreprocessResult', 'GeometryPreprocessResult',
+    'GeometryLayerResult', 'GeometryCompleteResult',
+    'RasGeometryCompute',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',

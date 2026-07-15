@@ -52,13 +52,16 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - 1D river edge lines: `HdfXsec.get_river_edge_lines()` (stored `Geometry/River Edge Lines`);
   `HdfXsec.generate_river_edge_lines()` builds them from XS cut-line end points when none are
   stored (pure-Python equivalent of RASMapper "Create Edge Lines at XS Limits");
-  `HdfXsec.set_river_edge_lines()` writes edge lines back into the geometry HDF in HEC-RAS's native
-  schema — `Polyline Info/Parts/Points` with the `Row`/`Column`/`Feature Type` attrs and no
-  `Attributes` dataset (HEC-RAS stores none for this layer; `get_river_edge_lines` derives bank side
-  from row order). No RASMapper GUI is needed. It does NOT write the group-level `Source Data Hash`
-  or update the `.rasmap`, so HEC-RAS may recompute these on next open; for edge lines HEC-RAS treats
-  as authoritative, run its own headless geometry completion (`RasProcess.exe CompleteGeometry`),
-  which also builds the XS interpolation surface.
+  `HdfXsec.set_river_edge_lines()` is **deprecated** (emits `DeprecationWarning`) — it wrote a
+  simplified approximation with no `Source Data Hash`, which HEC-RAS may recompute. Use
+  `RasGeometryCompute.generate_edge_lines()` for HEC-RAS's own edge lines instead.
+- 1D XS interpolation surface: `HdfXsec.get_xs_interpolation_surface()` reads
+  `Geometry/Cross Section Interpolation Surfaces` — one dissolved (Multi)Polygon per XS-to-XS TIN
+  segment, with `us_xs_id` / `ds_xs_id` / `area` columns (triangle indices are local to each
+  segment's point slice). Generate it with `RasGeometryCompute.generate_interpolation_surface()`.
+- 1D river flow paths: `HdfXsec.get_river_flow_paths()` reads `Geometry/River Flow Paths`
+  (`Flow Path Lines Info/Parts/Points`). Generate/backup with
+  `RasGeometryCompute.generate_flow_paths()`.
 - 1D model footprint polygons: `HdfXsec.get_1d_footprint()` closes left/right edge lines into a
   per-(River, Reach) polygon. Each end cap follows the real cut-line geometry of the end cross
   section, interior vertices included, so a bent cut line is not chorded straight across; when an

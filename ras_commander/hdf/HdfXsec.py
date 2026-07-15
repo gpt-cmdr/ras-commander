@@ -18,8 +18,10 @@ Available Functions:
 - get_river_reaches(): Return the model 1D river reach lines
 - get_river_edge_lines(): Return the model river edge lines
 - get_river_bank_lines(): Extract river bank lines from HDF geometry file
+- get_river_flow_paths(): Extract river flow paths from HDF geometry file
+- get_xs_interpolation_surface(): Extract XS interpolation surface (TIN) from HDF
 - generate_river_edge_lines(): Generate edge lines from XS cut-line end points
-- set_river_edge_lines(): Write river edge lines into the geometry HDF (no GUI)
+- set_river_edge_lines(): DEPRECATED - use RasGeometryCompute.generate_edge_lines()
 - get_1d_footprint(): Build 1D model footprint polygon(s) from edge lines
 - _interpolate_station(): Private helper method for station interpolation
 
@@ -839,6 +841,156 @@ class HdfXsec:
             logger.error(f"Error reading river bank lines from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_river_flow_paths(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+        """
+        Return the model river flow paths (``Geometry/River Flow Paths``).
+
+        RASMapper's *Create Flow Paths from XS Layout* artifact: the flow-path
+        polylines (left overbank, channel, right overbank) that drive 1D reach
+        lengths. Pure h5py read; the group must already exist. Generate it with
+        ``RasGeometryCompute.generate_flow_paths()`` when absent.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file.
+        datetime_to_str : bool, optional
+            Accepted for signature parity with the other river-layer readers;
+            flow paths carry no timestamp attribute, so this is a no-op.
+
+        Returns
+        -------
+        GeoDataFrame
+            Columns ``flow_path_id`` (int), ``geometry`` (LineString), and
+            ``length`` (project units). Empty GeoDataFrame when no flow paths
+            are stored.
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                if "Geometry/River Flow Paths" not in hdf_file:
+                    logger.warning("No river flow paths found in geometry file")
+                    return GeoDataFrame()
+
+            geoms = HdfBase.get_polylines_from_parts(
+                hdf_path,
+                "Geometry/River Flow Paths",
+                info_name="Flow Path Lines Info",
+                parts_name="Flow Path Lines Parts",
+                points_name="Flow Path Lines Points",
+            )
+            if not geoms:
+                return GeoDataFrame()
+
+            flow_gdf = GeoDataFrame(
+                {"flow_path_id": list(range(len(geoms)))},
+                geometry=geoms,
+                crs=HdfBase.get_projection(hdf_path),
+            )
+            flow_gdf['length'] = flow_gdf.geometry.length
+            return flow_gdf
+
+        except Exception as e:
+            logger.error(f"Error reading river flow paths: {str(e)}")
+            return GeoDataFrame()
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_xs_interpolation_surface(hdf_path: Path) -> GeoDataFrame:
+        """
+        Return the cross-section interpolation surface.
+
+        RASMapper's *Compute XS Interpolation Surface* artifact
+        (``Geometry/Cross Section Interpolation Surfaces``): the triangulated
+        surface HEC-RAS builds between each pair of adjacent cross sections. The
+        stored TIN is returned as one dissolved polygon per XS-to-XS segment,
+        tagged with the upstream/downstream cross-section ids and the stored
+        area. Pure h5py read; the group must already exist. Generate it with
+        ``RasGeometryCompute.generate_interpolation_surface()`` when absent.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file.
+
+        Returns
+        -------
+        GeoDataFrame
+            One row per interpolation segment with columns ``surface_id`` (int),
+            ``us_xs_id`` / ``ds_xs_id`` (int, when ``XSIDs`` present), ``area``
+            (float, when ``Areas`` present), and ``geometry`` ((Multi)Polygon of
+            the segment's TIN triangles). Empty GeoDataFrame when no surface is
+            stored.
+        """
+        base = "Geometry/Cross Section Interpolation Surfaces"
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                if base not in hdf_file:
+                    logger.warning("No XS interpolation surface found in geometry file")
+                    return GeoDataFrame()
+                grp = hdf_file[base]
+                if "TIN Info" not in grp or "TIN Points" not in grp or "TIN Triangles" not in grp:
+                    logger.warning("XS interpolation surface group missing TIN datasets")
+                    return GeoDataFrame()
+                tin_info = grp["TIN Info"][()]
+                tin_points = grp["TIN Points"][()]
+                tin_tris = grp["TIN Triangles"][()]
+                xsids = grp["XSIDs"][()] if "XSIDs" in grp else None
+                areas = grp["Areas"][()] if "Areas" in grp else None
+
+            from shapely.ops import unary_union
+
+            n_pts = len(tin_points)
+            n_tris = len(tin_tris)
+            rows = []
+            for i, (pnt_start, pnt_cnt, tri_start, tri_cnt) in enumerate(tin_info):
+                try:
+                    # Bounds-check the segment slices before use; a single corrupt
+                    # segment must not drop the whole surface.
+                    if (pnt_start < 0 or tri_start < 0
+                            or pnt_start + pnt_cnt > n_pts
+                            or tri_start + tri_cnt > n_tris):
+                        logger.warning(
+                            f"Interpolation surface segment {i}: slice out of bounds; skipping")
+                        continue
+                    # Triangle vertex indices are LOCAL to this segment's point slice.
+                    seg_pts = tin_points[pnt_start:pnt_start + pnt_cnt][:, :2]
+                    seg_tris = tin_tris[tri_start:tri_start + tri_cnt]
+                    tri_polys = []
+                    for a, b, c in seg_tris:
+                        if not (0 <= a < pnt_cnt and 0 <= b < pnt_cnt and 0 <= c < pnt_cnt):
+                            continue
+                        poly = Polygon([seg_pts[a], seg_pts[b], seg_pts[c]])
+                        if poly.is_valid and poly.area > 0:
+                            tri_polys.append(poly)
+                    if not tri_polys:
+                        continue
+                    geom = unary_union(tri_polys)
+                    if geom is None or geom.is_empty:
+                        continue
+                    row = {"surface_id": i, "geometry": geom}
+                    if xsids is not None and i < len(xsids):
+                        row["us_xs_id"] = int(xsids[i, 0])
+                        row["ds_xs_id"] = int(xsids[i, 1])
+                    if areas is not None and i < len(areas):
+                        row["area"] = float(areas[i])
+                    rows.append(row)
+                except Exception as seg_exc:
+                    logger.warning(
+                        f"Interpolation surface segment {i} unreadable; skipping: {seg_exc}")
+                    continue
+
+            if not rows:
+                return GeoDataFrame()
+            return GeoDataFrame(rows, geometry="geometry", crs=HdfBase.get_projection(hdf_path))
+
+        except Exception as e:
+            logger.error(f"Error reading XS interpolation surface: {str(e)}")
+            return GeoDataFrame()
+
     # ------------------------------------------------------------------
     # Edge-line generation and 1D footprint polygonization
     # ------------------------------------------------------------------
@@ -973,7 +1125,10 @@ class HdfXsec:
 
         Use this when a geometry has no stored ``Geometry/River Edge Lines``
         (e.g. the XS interpolation surface has not been computed) or to derive a
-        1D footprint boundary directly from cross sections.
+        1D footprint boundary directly from cross sections. This is a simplified
+        XS-endpoint construction; for HEC-RAS's own bank-line-anchored
+        offset-curve edge lines (written to the geometry HDF with the group-level
+        ``Source Data Hash``), use ``RasGeometryCompute.generate_edge_lines()``.
 
         Parameters
         ----------
@@ -1049,6 +1204,14 @@ class HdfXsec:
         """
         Write river edge lines into ``Geometry/River Edge Lines`` of a geometry HDF.
 
+        .. deprecated::
+            Use ``RasGeometryCompute.generate_edge_lines()`` instead, which drives
+            HEC-RAS's own edge-line generation in-process (real bank-line-anchored
+            offset-curve geometry with the group-level ``Source Data Hash`` that
+            HEC-RAS honors). This pure-Python writer produces only a simplified
+            approximation that HEC-RAS may silently recompute. Scheduled for
+            removal in a future release.
+
         Pure-Python authoring of the artifact RASMapper's *Create Edge Lines at XS
         Limits* produces. Writing the edge lines directly makes them readable by
         ``get_river_edge_lines()`` and usable by ``get_1d_footprint(edge_source=
@@ -1095,6 +1258,14 @@ class HdfXsec:
         simplified XS-endpoint construction and does not reproduce HEC-RAS's
         bank-line-anchored offset-curve edge lines vertex-for-vertex.
         """
+        import warnings
+        warnings.warn(
+            "HdfXsec.set_river_edge_lines() is deprecated; use "
+            "RasGeometryCompute.generate_edge_lines() for HEC-RAS-authoritative "
+            "edge lines with a Source Data Hash.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if edge_lines is None:
             edge_lines = HdfXsec.generate_river_edge_lines(hdf_path, ras_object=ras_object)
         if edge_lines is None or edge_lines.empty:
