@@ -151,7 +151,7 @@ def test_complete_geometry_headless_edge_lines():
     before = HdfXsec.get_river_edge_lines(geom_hdf)
     assert before is None or before.empty
 
-    res = RasProcess.complete_geometry(geom_hdf, ras_object=ras, ras_version="6.6")
+    res = RasProcess.compute_geometry(geom_hdf, ras_object=ras, ras_version="6.6")
     assert res["success"], f"CompleteGeometry failed: {res['stdout']}\n{res['stderr']}"
     assert res["edge_lines_written"]
     assert res["interpolation_surface_written"]
