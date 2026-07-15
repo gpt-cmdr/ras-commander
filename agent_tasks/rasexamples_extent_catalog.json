@@ -21,8 +21,8 @@
       "geometry_hdf": "source_projects/NewOrleansMetro_rerun_7_0_20260628_194053/NewOrleansMetro.g02.hdf",
       "extent_output": "project-extents/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a.geojson",
       "status": "MapLibre pilot",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fneworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tneworleans02",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/manifest.json?v=20260714Tneworleans02",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fneworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/manifest.json?v=20260715Tterrainalpha01",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/project.json",
       "notes": "Geometry and terrain PMTiles are published. Result layers need join-to-geometry post-processing before tiling."
     },
@@ -48,10 +48,10 @@
       "geometry_hdf": "source_projects/Chippewa_2D_rerun_7_0_20260628_170311/Chippewa_2D.g01.hdf",
       "extent_output": "project-extents/chippewa-2d-chippewa-2d-rerun-7-0-20260628-170311-14e51a07.geojson",
       "status": "MapLibre geometry bundle",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fchippewa-2d-chippewa-2d-rerun-7-0-20260628-170311-14e51a07%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/chippewa-2d-chippewa-2d-rerun-7-0-20260628-170311-14e51a07/viewer/manifest.json?v=20260713Tmaplibre02",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fchippewa-2d-chippewa-2d-rerun-7-0-20260628-170311-14e51a07%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/chippewa-2d-chippewa-2d-rerun-7-0-20260628-170311-14e51a07/viewer/manifest.json?v=20260715Tterrainalpha01",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/chippewa-2d-chippewa-2d-rerun-7-0-20260628-170311-14e51a07/project.json",
-      "notes": "Geometry-only 2D HEC instructional example with a verified packaged Albers projection."
+      "notes": "2D HEC instructional example with mesh geometry, a verified packaged Albers projection, and published terrain."
     },
     {
       "id": "davis-davis-rerun-7-0-20260628-193602-d666d9cb",
@@ -61,8 +61,8 @@
       "geometry_hdf": "source_projects/Davis_rerun_7_0_20260628_193602/DavisStormSystem.g02.hdf",
       "extent_output": "project-extents/davis-davis-rerun-7-0-20260628-193602-d666d9cb.geojson",
       "status": "MapLibre geometry bundle",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fdavis-davis-rerun-7-0-20260628-193602-d666d9cb%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tdavis-pipes01",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/davis-davis-rerun-7-0-20260628-193602-d666d9cb/viewer/manifest.json?v=20260714Tdavis-pipes01",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fdavis-davis-rerun-7-0-20260628-193602-d666d9cb%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/davis-davis-rerun-7-0-20260628-193602-d666d9cb/viewer/manifest.json?v=20260715Tterrainalpha01",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/davis-davis-rerun-7-0-20260628-193602-d666d9cb/project.json",
       "notes": "HEC 2D storm-drainage example with mesh cells, pipe conduits, pipe nodes, terrain, and an API-derived footprint."
     },
@@ -74,10 +74,10 @@
       "geometry_hdf": "source_projects/BeaverLake_rerun_7_0_20260628_194053/BeaverLakeSWMMImpor.g03.hdf",
       "extent_output": "project-extents/beaverlake-beaverlake-rerun-7-0-20260628-194053-eb3bacd7.geojson",
       "status": "MapLibre geometry bundle",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fbeaverlake-beaverlake-rerun-7-0-20260628-194053-eb3bacd7%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/beaverlake-beaverlake-rerun-7-0-20260628-194053-eb3bacd7/viewer/manifest.json?v=20260713Tmaplibre02",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fbeaverlake-beaverlake-rerun-7-0-20260628-194053-eb3bacd7%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/beaverlake-beaverlake-rerun-7-0-20260628-194053-eb3bacd7/viewer/manifest.json?v=20260715Tterrainalpha01",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/beaverlake-beaverlake-rerun-7-0-20260628-194053-eb3bacd7/project.json",
-      "notes": "Geometry-only HEC example with two geometry configurations and high-zoom mesh delivery."
+      "notes": "HEC example with two geometry configurations, published terrain, and high-zoom mesh delivery."
     },
     {
       "id": "balde-eagle-creek-balde-eagle-creek-rerun-7-0-20260629-224833-d0758cd9",
@@ -100,10 +100,10 @@
       "geometry_hdf": "source_projects/sciencebase/kalamazoo/hec_ras_model/kalamazoo_trowbridg.g05.hdf",
       "extent_output": "project-extents/kalamazoo-kalamazoo-trowbridg-b2c7eef6.geojson",
       "status": "MapLibre geometry bundle",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fkalamazoo-kalamazoo-trowbridg-b2c7eef6%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/kalamazoo-kalamazoo-trowbridg-b2c7eef6/viewer/manifest.json?v=20260713Tmaplibre02",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fkalamazoo-kalamazoo-trowbridg-b2c7eef6%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/kalamazoo-kalamazoo-trowbridg-b2c7eef6/viewer/manifest.json?v=20260715Tterrainalpha01",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/kalamazoo-kalamazoo-trowbridg-b2c7eef6/project.json",
-      "notes": "Geometry-only ScienceBase bundle with five geometry configurations and detail-only mesh tiles."
+      "notes": "ScienceBase bundle with five geometry configurations, published terrain, and detail-only mesh tiles."
     },
     {
       "id": "spring-river-ras-model-spring-ble-prj-15b882a5",
@@ -113,10 +113,10 @@
       "geometry_hdf": "source_projects/ebfe_organized/SpringRiver_11010010/RAS Model/Spring_BLE.g01.hdf",
       "extent_output": "project-extents/spring-river-ras-model-spring-ble-prj-15b882a5.geojson",
       "status": "MapLibre geometry bundle",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-river-ras-model-spring-ble-prj-15b882a5%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-river-ras-model-spring-ble-prj-15b882a5/viewer/manifest.json?v=20260713Tmaplibre02",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-river-ras-model-spring-ble-prj-15b882a5%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-river-ras-model-spring-ble-prj-15b882a5/viewer/manifest.json?v=20260715Tterrainalpha01",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-river-ras-model-spring-ble-prj-15b882a5/project.json",
-      "notes": "Geometry-only FEMA eBFE/BLE bundle with large 2D mesh cells delivered only at detail zoom."
+      "notes": "FEMA eBFE/BLE bundle with published terrain and large 2D mesh cells delivered only at detail zoom."
     },
     {
       "id": "baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab",
@@ -138,10 +138,10 @@
       ],
       "extent_output": "project-extents/baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab.geojson",
       "status": "MapLibre geometry bundle",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fbaldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tbaldeagle01",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab/viewer/manifest.json?v=20260714Tbaldeagle01",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fbaldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab/viewer/manifest.json?v=20260715Tterrainalpha01",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab/project.json",
-      "notes": "Geometry-only HEC instructional example with ten geometry configurations and high-zoom 2D mesh tiles."
+      "notes": "HEC instructional example with ten geometry configurations, published terrain, and high-zoom 2D mesh tiles."
     },
     {
       "id": "spring-creek-spring-c61c5625",
@@ -151,10 +151,10 @@
       "geometry_hdf": "compute_outputs/ebfe/spring-creek/remote_20260630_061120/SpringCreek_12040102/RAS Model/Spring.g01.hdf",
       "extent_output": "project-extents/spring-creek-spring-c61c5625.geojson",
       "status": "MapLibre geometry bundle",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-creek-spring-c61c5625%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-creek-spring-c61c5625/viewer/manifest.json?v=20260714Tebfe02",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-creek-spring-c61c5625%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-creek-spring-c61c5625/viewer/manifest.json?v=20260715Tterrainalpha01",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-creek-spring-c61c5625/project.json",
-      "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle. Stored-map output is withheld pending validation of the all-cells-NoData warnings."
+      "notes": "2D-unsteady FEMA eBFE/BLE bundle with published terrain. Stored-map output is withheld pending validation of the all-cells-NoData warnings."
     },
     {
       "id": "upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a",
@@ -164,10 +164,10 @@
       "geometry_hdf": "source_projects/ebfe_organized/UpperGuadalupe_12100201/RAS Model/UPGU1/UPGU1.g01.hdf",
       "extent_output": "project-extents/upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a.geojson",
       "status": "MapLibre geometry bundle",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a/viewer/manifest.json?v=20260714Tebfe02",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a/viewer/manifest.json?v=20260715Tterrainalpha01",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a/project.json",
-      "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle with high-zoom mesh delivery."
+      "notes": "2D-unsteady FEMA eBFE/BLE bundle with published terrain and high-zoom mesh delivery."
     },
     {
       "id": "upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b",
@@ -177,10 +177,10 @@
       "geometry_hdf": "source_projects/ebfe_organized/UpperGuadalupe_12100201/RAS Model/UPGU2/UPGU2.g01.hdf",
       "extent_output": "project-extents/upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b.geojson",
       "status": "MapLibre geometry bundle",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b/viewer/manifest.json?v=20260714Tebfe02",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b/viewer/manifest.json?v=20260715Tterrainalpha01",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b/project.json",
-      "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle with high-zoom mesh delivery."
+      "notes": "2D-unsteady FEMA eBFE/BLE bundle with published terrain and high-zoom mesh delivery."
     },
     {
       "id": "upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4",
@@ -190,10 +190,10 @@
       "geometry_hdf": "source_projects/ebfe_organized/UpperGuadalupe_12100201/RAS Model/UPGU3/UPGU3.g01.hdf",
       "extent_output": "project-extents/upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4.geojson",
       "status": "MapLibre geometry bundle",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4/viewer/manifest.json?v=20260714Tebfe02",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4/viewer/manifest.json?v=20260715Tterrainalpha01",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4/project.json",
-      "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle with high-zoom mesh delivery."
+      "notes": "2D-unsteady FEMA eBFE/BLE bundle with published terrain and high-zoom mesh delivery."
     },
     {
       "id": "upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f",
@@ -203,10 +203,10 @@
       "geometry_hdf": "source_projects/ebfe_organized/UpperGuadalupe_12100201/RAS Model/UPGU4/UPGU4.g01.hdf",
       "extent_output": "project-extents/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f.geojson",
       "status": "MapLibre geometry bundle",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f/viewer/manifest.json?v=20260714Tebfe02",
+      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f/viewer/manifest.json?v=20260715Tterrainalpha01",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f/project.json",
-      "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle and large-model streaming validation case with high-zoom mesh delivery."
+      "notes": "2D-unsteady FEMA eBFE/BLE bundle with published terrain and a large-model streaming validation case with high-zoom mesh delivery."
     }
   ]
 }
