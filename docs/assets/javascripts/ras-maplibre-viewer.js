@@ -5,7 +5,7 @@
   }
 
   const DEFAULT_BOUNDS = [-85.3942, 40.1896, -85.3601, 40.2057];
-  const VIEWER_MANIFEST_REFRESH = "20260716Textent-color-01";
+  const VIEWER_MANIFEST_REFRESH = "20260716Tcontent-tree-01";
   const SATELLITE_ATTRIBUTION = "Tiles &copy; Esri";
   const SATELLITE_IMAGERY_TILES = [
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -1831,6 +1831,44 @@
     return ids;
   }
 
+  function semanticLayerHasContent(manifest, layerId) {
+    const layer = manifest.layers?.[layerId];
+    if (!layer || layer.available === false || layer.published === false || layer.empty === true) {
+      return false;
+    }
+    if (Number.isFinite(layer.featureCount)) {
+      return layer.featureCount > 0;
+    }
+    const statistics = layer.raster?.statistics || {};
+    if (Number.isFinite(statistics.validPixels)) {
+      return statistics.validPixels > 0;
+    }
+    if (Number.isFinite(statistics.width) && Number.isFinite(statistics.height)) {
+      return Number(statistics.width) > 0 && Number(statistics.height) > 0;
+    }
+    if (Object.hasOwn(statistics, "minimum") || Object.hasOwn(statistics, "maximum")) {
+      return Boolean(finiteRasterDomain(statistics));
+    }
+    const resource = manifest.resources?.[layer.resource] || {};
+    if (Number.isFinite(resource.featureCount)) {
+      return resource.featureCount > 0;
+    }
+    if (Number.isFinite(resource.bytes)) {
+      return resource.bytes > 0;
+    }
+    return true;
+  }
+
+  function pruneSemanticTreeNode(manifest, node) {
+    if (node.layerId) {
+      return semanticLayerHasContent(manifest, node.layerId) ? node : null;
+    }
+    const children = (node.children || [])
+      .map((child) => pruneSemanticTreeNode(manifest, child))
+      .filter(Boolean);
+    return children.length ? { ...node, children } : null;
+  }
+
   function semanticLayerMetric(manifest, layer) {
     if (Number.isFinite(layer.featureCount)) {
       return layer.featureCount.toLocaleString();
@@ -1870,8 +1908,11 @@
     if (!list) {
       return;
     }
+    const publishedTree = (manifest.tree || [])
+      .map((node) => pruneSemanticTreeNode(manifest, node))
+      .filter(Boolean);
     const openNodeIds = new Set();
-    const rootIds = new Set((manifest.tree || []).map((node) => node.id));
+    const rootIds = new Set(publishedTree.map((node) => node.id));
 
     function containsActive(node) {
       return semanticTreeLayerIds(node).includes(interactionState.activeLayerId);
@@ -1886,7 +1927,7 @@
       }
     }
 
-    for (const node of manifest.tree || []) {
+    for (const node of publishedTree) {
       initializeOpenState(node, 0);
     }
 
@@ -2034,6 +2075,10 @@
       details.open = openNodeIds.has(node.id) || containsActive(node);
 
       const summary = document.createElement("summary");
+      const disclosure = document.createElement("span");
+      disclosure.className = "ras-tree-node__disclosure";
+      disclosure.setAttribute("aria-hidden", "true");
+      summary.append(disclosure);
       const layerIds = semanticTreeLayerIds(node);
       if (!isRoot) {
         const branchVisibility = document.createElement("input");
@@ -2063,15 +2108,8 @@
 
       const children = document.createElement("div");
       children.className = "ras-tree-children";
-      if ((node.children || []).length) {
-        for (const child of node.children) {
-          children.append(renderBranch(child, depth + 1, false));
-        }
-      } else {
-        const empty = document.createElement("p");
-        empty.className = "ras-tree-empty";
-        empty.textContent = "Not published";
-        children.append(empty);
+      for (const child of node.children || []) {
+        children.append(renderBranch(child, depth + 1, false));
       }
       details.append(summary, children);
       details.addEventListener("toggle", () => {
@@ -2106,14 +2144,22 @@
       list.replaceChildren();
       const modelColumn = makeColumn("model", "Model Data");
       const resultColumn = makeColumn("results", "Surfaces and Results");
-      list.append(modelColumn, resultColumn);
-
-      for (const node of manifest.tree || []) {
-        const target = ["features", "geometries", "map-layers"].includes(node.id)
-          ? modelColumn
-          : resultColumn;
-        target.append(renderBranch(node, 0, rootIds.has(node.id)));
+      const modelRootIds = new Set(["features", "geometries", "map-layers"]);
+      const modelNodes = publishedTree.filter((node) => modelRootIds.has(node.id));
+      const resultNodes = publishedTree.filter((node) => !modelRootIds.has(node.id));
+      for (const [column, nodes] of [
+        [modelColumn, modelNodes],
+        [resultColumn, resultNodes],
+      ]) {
+        if (!nodes.length) {
+          continue;
+        }
+        for (const node of nodes) {
+          column.append(renderBranch(node, 0, rootIds.has(node.id)));
+        }
+        list.append(column);
       }
+      list.classList.toggle("is-single-column", list.children.length === 1);
     }
 
     rasterStyleController?.setNotify(render);

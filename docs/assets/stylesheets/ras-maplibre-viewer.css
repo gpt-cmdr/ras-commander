@@ -157,6 +157,10 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
   padding: 0;
 }
 
+.ras-layer-list.is-single-column {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .ras-layer-column {
   min-width: 0;
 }
@@ -304,18 +308,18 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
 }
 
 .ras-maplibre-viewer .ras-tree-root > summary {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 15px minmax(0, 1fr) auto;
   min-height: 30px;
-  padding: 4px 28px 4px 6px;
+  padding: 4px 6px;
   font-size: 12px;
   line-height: 1.2;
   font-weight: 700;
 }
 
 .ras-maplibre-viewer .ras-tree-branch > summary {
-  grid-template-columns: 0.8rem minmax(0, 1fr) auto;
+  grid-template-columns: 15px 0.8rem minmax(0, 1fr) auto;
   min-height: 28px;
-  padding: 3px 26px 3px 4px;
+  padding: 3px 4px;
   color: #34425a;
   font-size: 11.5px;
   line-height: 1.2;
@@ -323,9 +327,35 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
 }
 
 .ras-maplibre-viewer .ras-tree-root > summary::before,
-.ras-maplibre-viewer .ras-tree-branch > summary::before {
+.ras-maplibre-viewer .ras-tree-branch > summary::before,
+.ras-maplibre-viewer .ras-tree-root > summary::after,
+.ras-maplibre-viewer .ras-tree-branch > summary::after {
   display: none !important;
   content: none !important;
+}
+
+.ras-tree-node__disclosure {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  box-sizing: border-box;
+  border: 1px solid #64748b;
+  border-radius: 1px;
+  background: #fff;
+  color: #334155;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.ras-tree-node__disclosure::before {
+  content: "+";
+}
+
+details[open] > summary > .ras-tree-node__disclosure::before {
+  content: "-";
 }
 
 .ras-tree-root > summary:hover,
@@ -972,14 +1002,22 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
 
   .ras-maplibre-viewer .ras-tree-root > summary {
     min-height: 44px;
-    padding: 6px 28px 6px 6px;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    padding: 6px;
     font-size: 14px;
   }
 
   .ras-maplibre-viewer .ras-tree-branch > summary {
     min-height: 42px;
-    padding: 5px 26px 5px 4px;
+    grid-template-columns: 18px 0.9rem minmax(0, 1fr) auto;
+    padding: 5px 4px;
     font-size: 13px;
+  }
+
+  .ras-tree-node__disclosure {
+    width: 18px;
+    height: 18px;
+    font-size: 14px;
   }
 
   .ras-tree-leaf {
