@@ -1547,7 +1547,7 @@ notebooks:
   - 1d
   difficulty: advanced
   est_runtime: null
-  data_project: Muncie
+  data_project: null
   functions_used:
   - HdfXsec.get_cross_sections
   - HdfXsec.get_river_edge_lines
