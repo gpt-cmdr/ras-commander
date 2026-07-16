@@ -1533,6 +1533,38 @@ notebooks:
   excluded: false
   code_cells: 3
   executed_cells: 3
+- id: 234_rasmapper_geometry_completion
+  filename: 234_rasmapper_geometry_completion.ipynb
+  title: Headless RASMapper Geometry Completion (Edge Lines, Interpolation Surface, Flow Paths)
+  series: 200
+  series_name: Geometry & Calibration
+  summary: Generate the RASMapper-derived geometry layers in-process via pythonnet - river edge lines,
+    the cross-section interpolation surface, and flow path lines - read each one back, surface per-cross-section
+    validation diagnostics, and audit stored 1D reach lengths against freshly recomputed flow lengths
+    on a throwaway copy of the project.
+  tags:
+  - 1d
+  difficulty: advanced
+  est_runtime: null
+  data_project: Muncie
+  functions_used:
+  - HdfXsec.get_cross_sections
+  - HdfXsec.get_river_edge_lines
+  - HdfXsec.get_river_flow_paths
+  - HdfXsec.get_xs_interpolation_surface
+  - RasExamples.extract_project
+  - RasGeometryCompute.audit_reach_lengths
+  - RasGeometryCompute.compute_geometry
+  - RasGeometryCompute.generate_edge_lines
+  - RasGeometryCompute.generate_flow_paths
+  - RasGeometryCompute.generate_interpolation_surface
+  - RasGeometryCompute.is_valid_geometry
+  - RasGeometryCompute.validate_geometry
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 8
+  executed_cells: 8
 - id: 300_unsteady_flow_operations
   filename: 300_unsteady_flow_operations.ipynb
   title: Unsteady Flow Operations

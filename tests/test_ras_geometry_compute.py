@@ -128,7 +128,7 @@ def test_windows_only_guard(monkeypatch, completed_geom):
 # `audit_reach_lengths()` are heavy mutating operations that exhaust in-process
 # .NET file handles when run after the other CLR calls above in the same pytest
 # process (Windows can't fork to isolate them). Their end-to-end behavior is
-# validated in examples/225_rasmapper_geometry_completion.ipynb (which asserts
+# validated in examples/234_rasmapper_geometry_completion.ipynb (which asserts
 # the original geometry is byte-identical after the audit and that drift is
 # detected), and their logic (backup fail-closed, the reach-length diff, the
 # no-op guard, tolerance/mode validation) is covered without HEC-RAS in
