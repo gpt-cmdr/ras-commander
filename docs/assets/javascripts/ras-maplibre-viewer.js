@@ -5,7 +5,7 @@
   }
 
   const DEFAULT_BOUNDS = [-85.3942, 40.1896, -85.3601, 40.2057];
-  const VIEWER_MANIFEST_REFRESH = "20260716Tcontent-tree-01";
+  const VIEWER_MANIFEST_REFRESH = "20260716Tmuncie-full-01";
   const SATELLITE_ATTRIBUTION = "Tiles &copy; Esri";
   const SATELLITE_IMAGERY_TILES = [
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -280,6 +280,15 @@
       || (tileset.storedMap && tileset.storedMap.mapType === "terrain");
   }
 
+  function isStoredMapRasterTileset(tileset) {
+    return tileset.type === "raster"
+      && !isTerrainTileset(tileset)
+      && (
+        tileset.sourceKind === "stored-map"
+        || (!tileset.sourceKind && tileset.storedMap)
+      );
+  }
+
   function projectAvailability(manifest) {
     const tilesets = viewerTilesets(manifest);
     const vectorLayers = tilesets
@@ -290,7 +299,7 @@
       ["mesh_areas", "mesh_cells", "mesh_faces", "breaklines", "refinement_regions"].includes(layer.kind)
     ));
     const terrain = tilesets.some((tileset) => tileset.type === "raster" && isTerrainTileset(tileset));
-    const storedMaps = tilesets.filter((tileset) => tileset.type === "raster" && !isTerrainTileset(tileset));
+    const storedMaps = tilesets.filter(isStoredMapRasterTileset);
     const rawResultLayers = tilesets
       .filter((tileset) => tileset.type === "vector")
       .flatMap((tileset) => tileset.layers || [])

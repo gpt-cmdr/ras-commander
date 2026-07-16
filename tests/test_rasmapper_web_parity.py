@@ -19,6 +19,13 @@ RUNNER_PATH = (
     / "scripts"
     / "rasmapper_web_parity.py"
 )
+VIEWER_SCRIPT_PATH = (
+    Path(__file__).parents[1]
+    / "docs"
+    / "assets"
+    / "javascripts"
+    / "ras-maplibre-viewer.js"
+)
 
 
 @pytest.fixture(scope="module")
@@ -160,3 +167,10 @@ def test_tree_contract_rejects_empty_nodes_and_missing_disclosures(parity_runner
     assert any("disclosure" in failure for failure in failures)
     assert any("features" in failure for failure in failures)
     assert any("Not published" in failure for failure in failures)
+
+
+def test_project_availability_does_not_count_calculated_rasters_as_stored_maps() -> None:
+    source = VIEWER_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert 'tileset.sourceKind === "stored-map"' in source
+    assert "tilesets.filter(isStoredMapRasterTileset)" in source
