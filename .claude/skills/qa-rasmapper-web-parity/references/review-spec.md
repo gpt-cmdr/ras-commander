@@ -26,6 +26,7 @@ rasmapper_result:
 selected_web_layer: p03-depth-max
 ramp_id: rasmapper.depth
 range_mode: current-view
+extent_color_layers: [terrain, p03-depth-max]
 render_mode: slopingPretty
 basemap: hybrid
 expanded_tree_paths: [Geometries/Geometry 04, Results/Plan p03]
@@ -56,3 +57,7 @@ pixels are not stable golden evidence; compare model/raster alignment and transp
 `rasmapper_result` is optional. When present, the runner registers the computed plan HDF and
 a dynamic `RASResultsMap` only in the copied review workspace before capture. This leaves the
 source `.rasmap` unchanged while giving RASMapper and the web viewer the same map type/profile.
+
+`extent_color_layers` is optional. Each listed continuous terrain or raster-result layer is
+switched to Color Map by Extents before capture, and the runner waits for every listed layer's
+bounded statistics and styled raster source to become idle.

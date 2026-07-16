@@ -546,7 +546,7 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
 
 .ras-raster-modes {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 0.42rem;
   border: 1px solid #b9c5d4;
   border-radius: 4px;
@@ -574,6 +574,58 @@ body:has(.ras-maplibre-viewer) .md-content__inner > table {
 .ras-raster-modes button.is-selected {
   background: #25466f;
   color: #fff;
+}
+
+.ras-raster-extent-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  margin-top: 0.42rem;
+  color: #334155;
+  font-size: 10.5px;
+  line-height: 1.2;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ras-raster-extent-toggle input {
+  position: relative;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
+  appearance: none;
+  background: #e2e8f0;
+  cursor: pointer;
+}
+
+.ras-raster-extent-toggle input::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.32);
+  content: "";
+  transition: transform 120ms ease;
+}
+
+.ras-raster-extent-toggle input:checked {
+  border-color: #25466f;
+  background: #25466f;
+}
+
+.ras-raster-extent-toggle input:checked::after {
+  transform: translateX(14px);
+}
+
+.ras-raster-extent-toggle input:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .ras-raster-exact {

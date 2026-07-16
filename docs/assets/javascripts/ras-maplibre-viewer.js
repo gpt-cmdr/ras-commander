@@ -5,7 +5,7 @@
   }
 
   const DEFAULT_BOUNDS = [-85.3942, 40.1896, -85.3601, 40.2057];
-  const VIEWER_MANIFEST_REFRESH = "20260716Tmanifest-v2-03";
+  const VIEWER_MANIFEST_REFRESH = "20260716Textent-color-01";
   const SATELLITE_ATTRIBUTION = "Tiles &copy; Esri";
   const SATELLITE_IMAGERY_TILES = [
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -803,7 +803,6 @@
       if (
         !serviceReady(state)
         || state.mode !== "current-view"
-        || activeLayerId !== state.layerId
         || !state.visible
       ) {
         return;
@@ -812,7 +811,7 @@
       const abortController = new AbortController();
       state.abortController = abortController;
       state.busy = true;
-      state.message = "Reading current view";
+      state.message = "Reading map extent";
       notify();
 
       const bounds = map.getBounds();
@@ -841,12 +840,14 @@
         if (!domain) {
           throw new Error("Current view has no finite raster range");
         }
-        if (state.mode !== "current-view" || activeLayerId !== state.layerId) {
+        if (state.mode !== "current-view" || !state.visible) {
           return;
         }
         state.domain = domain;
         state.busy = false;
-        state.message = state.exact ? "Exact range for current view" : "2nd-98th percentile for current view";
+        state.message = state.exact
+          ? "Exact range for map extent"
+          : "2nd-98th percentile for map extent";
         ensureDynamicLayer(state, domain);
         notify();
       } catch (error) {
@@ -884,7 +885,9 @@
         applyVisibility(state);
       } else if (mode === "current-view") {
         state.dynamicReady = false;
-        state.message = "Waiting for current-view range";
+        state.message = state.visible
+          ? "Reading map-extent range"
+          : "Color Map by Extents enabled";
         applyVisibility(state);
         scheduleCurrentView(state, 0);
       } else if (mode === "custom") {
@@ -948,23 +951,40 @@
       renderLegend(panel, state);
 
       if (serviceReady(state)) {
-        const modes = document.createElement("div");
-        modes.className = "ras-raster-modes";
-        modes.setAttribute("aria-label", "Raster legend range");
-        for (const [mode, name] of [
-          ["dataset", "Dataset"],
-          ["current-view", "Current View"],
-          ["custom", "Custom"],
-        ]) {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.textContent = name;
-          button.className = state.mode === mode ? "is-selected" : "";
-          button.setAttribute("aria-pressed", state.mode === mode ? "true" : "false");
-          button.addEventListener("click", () => setMode(state, mode));
-          modes.append(button);
+        const extentToggle = document.createElement("label");
+        extentToggle.className = "ras-raster-extent-toggle";
+        const extentCheckbox = document.createElement("input");
+        extentCheckbox.type = "checkbox";
+        extentCheckbox.setAttribute("role", "switch");
+        extentCheckbox.setAttribute("aria-label", "Color Map by Extents");
+        extentCheckbox.checked = state.mode === "current-view";
+        extentCheckbox.addEventListener("change", () => {
+          setMode(state, extentCheckbox.checked ? "current-view" : "dataset");
+        });
+        extentToggle.append(
+          extentCheckbox,
+          document.createTextNode("Color Map by Extents")
+        );
+        panel.append(extentToggle);
+
+        if (state.mode !== "current-view") {
+          const modes = document.createElement("div");
+          modes.className = "ras-raster-modes";
+          modes.setAttribute("aria-label", "Raster legend range");
+          for (const [mode, name] of [
+            ["dataset", "Dataset"],
+            ["custom", "Custom"],
+          ]) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = name;
+            button.className = state.mode === mode ? "is-selected" : "";
+            button.setAttribute("aria-pressed", state.mode === mode ? "true" : "false");
+            button.addEventListener("click", () => setMode(state, mode));
+            modes.append(button);
+          }
+          panel.append(modes);
         }
-        panel.append(modes);
 
         if (state.mode === "current-view") {
           const exact = document.createElement("label");
@@ -1016,9 +1036,11 @@
 
       const message = document.createElement("p");
       message.className = state.busy ? "ras-raster-style__status is-busy" : "ras-raster-style__status";
-      message.textContent = state.message || (serviceReady(state)
-        ? "Dataset stretch"
-        : "Current-view styling is not published for this layer");
+      message.textContent = state.categorical
+        ? "Categorical color map uses fixed classes"
+        : state.message || (serviceReady(state)
+          ? "Dataset stretch"
+          : "Color Map by Extents is not published for this layer");
       panel.append(message);
       parent.append(panel);
     }
@@ -1036,19 +1058,31 @@
       },
       visibilityChanged(layerId) {
         const state = states.get(layerId);
-        if (state?.mode === "current-view" && state.visible && activeLayerId === layerId) {
+        if (!state) {
+          return;
+        }
+        if (!state.visible) {
+          cancelRequest(state);
+          state.busy = false;
+          return;
+        }
+        if (state.mode === "current-view") {
           scheduleCurrentView(state, 0);
         }
       },
       moveEnded() {
-        const state = states.get(activeLayerId);
-        if (state?.mode === "current-view" && state.visible) {
-          scheduleCurrentView(state, 250);
+        for (const state of states.values()) {
+          if (state.mode === "current-view" && state.visible) {
+            scheduleCurrentView(state, 250);
+          }
         }
       },
       setRangeMode(layerId, mode, options) {
         const state = states.get(layerId);
         if (!state || !["dataset", "current-view", "custom"].includes(mode)) {
+          return false;
+        }
+        if (["current-view", "custom"].includes(mode) && !serviceReady(state)) {
           return false;
         }
         if (options && typeof options === "object") {
@@ -1064,6 +1098,26 @@
       isIdle(layerId) {
         const state = states.get(layerId || activeLayerId);
         return !state || (!state.busy && !state.timer && !state.abortController);
+      },
+      areIdle(layerIds) {
+        const selected = Array.isArray(layerIds) && layerIds.length
+          ? layerIds.map((layerId) => states.get(layerId)).filter(Boolean)
+          : Array.from(states.values());
+        return selected.every((state) => !state.busy && !state.timer && !state.abortController);
+      },
+      getState(layerId) {
+        const state = states.get(layerId);
+        return state ? {
+          mode: state.mode,
+          visible: state.visible,
+          busy: state.busy,
+          domain: state.domain ? { ...state.domain } : null,
+          datasetDomain: state.datasetDomain ? { ...state.datasetDomain } : null,
+          dynamicReady: state.dynamicReady,
+          extentColorAvailable: serviceReady(state),
+          exact: state.exact,
+          message: state.message,
+        } : null;
       },
       refresh() {
         notify();
@@ -2220,9 +2274,13 @@
             : "dataset",
           exact: false,
           busy: false,
-          message: preferredPolicy === "current-view" && canStyleCurrentView
-            ? "Waiting for current-view range"
-            : "Dataset stretch",
+          message: categorical
+            ? "Categorical color map uses fixed classes"
+            : preferredPolicy === "current-view" && canStyleCurrentView
+              ? "Reading map-extent range"
+              : canStyleCurrentView
+                ? "Dataset stretch"
+                : "Color Map by Extents is not published for this layer",
           datasetDomain,
           customDomain: datasetDomain,
           domain: datasetDomain,
@@ -2298,6 +2356,12 @@
         },
         isIdle(layerId) {
           return rasterStyleController.isIdle(layerId);
+        },
+        areRasterStylesIdle(layerIds) {
+          return rasterStyleController.areIdle(layerIds);
+        },
+        getRasterStyleState(layerId) {
+          return rasterStyleController.getState(layerId);
         },
       });
       const sidePadding = root.clientWidth > 760 ? 60 : 28;

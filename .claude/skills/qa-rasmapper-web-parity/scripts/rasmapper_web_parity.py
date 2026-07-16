@@ -190,7 +190,14 @@ def capture_web(spec: Mapping[str, Any], output: Path) -> dict[str, Any]:
                     viewer.setLayerVisible(layerId, true);
                   }
                   if (spec.selected_web_layer) viewer.setActiveLayer(spec.selected_web_layer);
-                  if (spec.selected_web_layer && spec.range_mode) {
+                  const extentLayers = spec.extent_color_layers || [];
+                  for (const layerId of extentLayers) {
+                    viewer.setRangeMode(layerId, 'current-view', {
+                      exact: Boolean(spec.exact_range)
+                    });
+                  }
+                  if (spec.selected_web_layer && spec.range_mode
+                      && !extentLayers.includes(spec.selected_web_layer)) {
                     viewer.setRangeMode(spec.selected_web_layer, spec.range_mode, {
                       exact: Boolean(spec.exact_range), domain: spec.custom_domain || null
                     });
@@ -204,14 +211,23 @@ def capture_web(spec: Mapping[str, Any], output: Path) -> dict[str, Any]:
                 {"spec": dict(spec), "bounds": bounds},
             )
             page.wait_for_function(
-                """(layerId) => {
+                """(layerIds) => {
                   const viewer = window.__rasCommanderViewerInstances[0];
-                  return viewer.map.loaded() && viewer.isIdle(layerId);
+                  return viewer.map.loaded() && viewer.areRasterStylesIdle(layerIds);
                 }""",
-                arg=spec.get("selected_web_layer"),
+                arg=spec.get("extent_color_layers") or [spec.get("selected_web_layer")],
                 timeout=120_000,
             )
             page.wait_for_timeout(1500)
+            records.setdefault("raster_styles", {})[mode] = page.evaluate(
+                """(layerIds) => Object.fromEntries(
+                  (layerIds || []).map((layerId) => [
+                    layerId,
+                    window.__rasCommanderViewerInstances[0].getRasterStyleState(layerId)
+                  ])
+                )""",
+                spec.get("extent_color_layers") or [spec.get("selected_web_layer")],
+            )
             paths = {
                 "page": capture_dir / f"{mode}-page.png",
                 "map": capture_dir / f"{mode}-map.png",
