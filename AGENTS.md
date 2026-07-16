@@ -75,6 +75,9 @@ This file is the canonical shared instruction contract for repository-local codi
 - `examples/` - notebooks and scenario workflows. Read [examples/AGENTS.md](examples/AGENTS.md) before doing notebook work.
 - `docs/` - MkDocs documentation source. Read [docs/AGENTS.md](docs/AGENTS.md) for docs-local rules.
 - `tests/` - repo tests and smoke checks. Read [tests/AGENTS.md](tests/AGENTS.md) for test-local rules.
+- `scripts/example_library/` - Example Library build and WebGIS publishing tools. Read
+  [scripts/example_library/AGENTS.md](scripts/example_library/AGENTS.md) before changing the
+  public catalog, project manifests, terrain/results bundles, or publishing workflow.
 - `agent_tasks/` - long-running task coordination and worktree tracking.
 - `.claude/` - Claude-native rules, skills, agents, commands, and manifests.
 - `.codex/` - Codex-native hook configuration only. Shared Codex instructions still live in `AGENTS.md`; Codex skills use `.agents/`.

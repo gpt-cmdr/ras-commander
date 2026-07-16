@@ -959,6 +959,35 @@ def open_rasmapper(
     return process
 
 
+def _resize_rasmapper_window(
+    hwnd: int,
+    width: Optional[int],
+    height: Optional[int],
+) -> None:
+    """Resize the outer RASMapper window before deterministic capture."""
+
+    try:
+        import win32con
+        import win32gui
+    except ImportError as exc:
+        raise RuntimeError("pywin32 is required to resize RASMapper") from exc
+
+    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    target_width = int(width) if width is not None else right - left
+    target_height = int(height) if height is not None else bottom - top
+    if target_width < 320 or target_height < 240:
+        raise ValueError("RASMapper viewport must be at least 320 by 240 pixels")
+    win32gui.SetWindowPos(
+        hwnd,
+        0,
+        left,
+        top,
+        target_width,
+        target_height,
+        win32con.SWP_NOACTIVATE | win32con.SWP_NOZORDER,
+    )
+
+
 def capture_rasmapper_snapshot(
     *,
     pid: Optional[int] = None,
@@ -966,6 +995,8 @@ def capture_rasmapper_snapshot(
     delay_seconds: float = 1.0,
     timeout_seconds: float = 1800.0,
     poll_interval_seconds: float = 0.5,
+    viewport_width: Optional[int] = None,
+    viewport_height: Optional[int] = None,
 ) -> Optional[Path]:
     """Capture a visible RASMapper window using the existing Win32 screenshot helper.
 
@@ -982,6 +1013,9 @@ def capture_rasmapper_snapshot(
     if hwnd is None:
         logger.warning("No visible RASMapper window found for screenshot capture")
         return None
+
+    if viewport_width is not None or viewport_height is not None:
+        _resize_rasmapper_window(hwnd, viewport_width, viewport_height)
 
     # Sleep *after* the window appears so the delay is spent on map rendering,
     # not on waiting for the process to start.
@@ -1046,6 +1080,17 @@ def create_spatial_review_package(
     snapshot_timeout_seconds: float = 1800.0,
     snapshot_poll_interval_seconds: float = 0.5,
     close_after_capture: bool = True,
+    viewport_width: Optional[int] = None,
+    viewport_height: Optional[int] = None,
+    dpi: Optional[int] = None,
+    expanded_tree_paths: Optional[Sequence[str]] = None,
+    ramp_id: Optional[str] = None,
+    range_mode: Optional[str] = None,
+    selected_layer: Optional[str] = None,
+    result_profile: Optional[str] = None,
+    render_mode: Optional[str] = None,
+    basemap: Optional[str] = None,
+    web_manifest_url: Optional[str] = None,
     rasmapper_exe_path: Optional[Union[str, Path]] = None,
     ras_version: Optional[str] = None,
     ras_object=None,
@@ -1071,6 +1116,12 @@ def create_spatial_review_package(
         use_feature_bounds=uses_feature_selector,
         padding_fraction=padding_fraction,
     )
+    if (viewport_width is None) != (viewport_height is None):
+        raise ValueError("viewport_width and viewport_height must be provided together")
+    if viewport_width is not None and (viewport_width < 320 or viewport_height < 240):
+        raise ValueError("RASMapper viewport must be at least 320 by 240 pixels")
+    if dpi is not None and dpi <= 0:
+        raise ValueError("dpi must be positive")
 
     artifacts: dict[str, Optional[str]] = {
         "rasmap_before": str(package_dir / "rasmap_before.xml"),
@@ -1123,6 +1174,21 @@ def create_spatial_review_package(
         "delay_seconds": delay_seconds,
         "snapshot_timeout_seconds": snapshot_timeout_seconds,
         "snapshot_poll_interval_seconds": snapshot_poll_interval_seconds,
+        "viewport": (
+            {"width": viewport_width, "height": viewport_height}
+            if viewport_width is not None
+            else None
+        ),
+        "dpi": dpi,
+        "expanded_tree_paths": sorted(set(expanded_tree_paths or [])),
+        "ramp_id": ramp_id,
+        "range_mode": range_mode,
+        "selected_layer": selected_layer,
+        "result_profile": result_profile,
+        "render_mode": render_mode,
+        "basemap": basemap,
+        "ras_version": ras_version,
+        "web_manifest_url": web_manifest_url,
     }
 
     geometry_layers_before = list_geometry_layers(project_paths.rasmap_path)
@@ -1277,6 +1343,8 @@ def create_spatial_review_package(
                 delay_seconds=delay_seconds,
                 timeout_seconds=snapshot_timeout_seconds,
                 poll_interval_seconds=snapshot_poll_interval_seconds,
+                viewport_width=viewport_width,
+                viewport_height=viewport_height,
             )
             if captured is not None:
                 artifacts["snapshot"] = str(captured)
