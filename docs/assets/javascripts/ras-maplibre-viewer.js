@@ -5,7 +5,7 @@
   }
 
   const DEFAULT_BOUNDS = [-85.3942, 40.1896, -85.3601, 40.2057];
-  const VIEWER_MANIFEST_REFRESH = "20260716Tmanifest-v2-02";
+  const VIEWER_MANIFEST_REFRESH = "20260716Tmanifest-v2-03";
   const SATELLITE_ATTRIBUTION = "Tiles &copy; Esri";
   const SATELLITE_IMAGERY_TILES = [
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -1175,7 +1175,52 @@
     return rasterSourceCache.get(url);
   }
 
+  async function sampleRasterFromService(tileset, manifest, manifestUrl, lngLat) {
+    const service = tileset.rasterService || manifest.services?.numericRaster || {};
+    if (
+      !service.baseUrl
+      || !service.samplePath
+      || !tileset.serviceAsset
+      || !tileset.serviceRevision
+    ) {
+      return null;
+    }
+    const endpoint = serviceEndpoint(manifestUrl, service, service.samplePath);
+    endpoint.searchParams.set("asset", tileset.serviceAsset);
+    endpoint.searchParams.set("lng", String(lngLat.lng));
+    endpoint.searchParams.set("lat", String(lngLat.lat));
+    endpoint.searchParams.set("revision", tileset.serviceRevision);
+    const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
+    if (!response.ok) {
+      throw new Error(`Raster point service failed (${response.status})`);
+    }
+    const result = await response.json();
+    if (!["value", "nodata", "outside"].includes(result.state)) {
+      throw new Error("Raster point service returned an invalid state");
+    }
+    if (result.state === "value" && !Number.isFinite(Number(result.value))) {
+      throw new Error("Raster point service returned a non-numeric value");
+    }
+    return {
+      tileset,
+      state: result.state,
+      value: result.state === "value" ? Number(result.value) : undefined,
+      units: result.units || rasterUnits(tileset),
+      col: result.column,
+      row: result.row,
+    };
+  }
+
   async function sampleRasterAtClick(tileset, manifest, baseUrl, lngLat) {
+    const serviceSample = await sampleRasterFromService(
+      tileset,
+      manifest,
+      baseUrl,
+      lngLat
+    );
+    if (serviceSample) {
+      return serviceSample;
+    }
     ensureRasterQueryLibraries();
     const url = resolveHref(baseUrl, tileset.sourceCog);
     const source = await loadRasterSource(url);
