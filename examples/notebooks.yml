@@ -1411,11 +1411,12 @@ notebooks:
   - HdfXsec.get_cross_sections
   - HdfXsec.get_river_edge_lines
   - RasExamples.extract_project
+  - RasGeometryCompute.generate_edge_lines
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 8
-  executed_cells: 8
+  code_cells: 10
+  executed_cells: 10
 - id: 230_mesh_sensitivity_analysis
   filename: 230_mesh_sensitivity_analysis.ipynb
   title: 2D Mesh Cell-Size Sensitivity for Sediment Transport

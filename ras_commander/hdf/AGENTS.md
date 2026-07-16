@@ -51,10 +51,11 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - 1D cross section geometry and results: `HdfXsec`, `HdfResultsXsec`
 - 1D river edge lines: `HdfXsec.get_river_edge_lines()` (stored `Geometry/River Edge Lines`);
   `HdfXsec.generate_river_edge_lines()` builds them from XS cut-line end points when none are
-  stored (pure-Python equivalent of RASMapper "Create Edge Lines at XS Limits");
-  `HdfXsec.set_river_edge_lines()` is **deprecated** (emits `DeprecationWarning`) — it wrote a
-  simplified approximation with no `Source Data Hash`, which HEC-RAS may recompute. Use
-  `RasGeometryCompute.generate_edge_lines()` for HEC-RAS's own edge lines instead.
+  stored (pure-Python equivalent of RASMapper "Create Edge Lines at XS Limits") — it returns a
+  GeoDataFrame and does not write to the HDF. To author edge lines that HEC-RAS honors (real
+  bank-line-anchored offset curves, with the group-level `Source Data Hash`), use
+  `RasGeometryCompute.generate_edge_lines()`; there is deliberately no pure-Python writer, since a
+  hand-written approximation carries no valid hash and HEC-RAS may silently recompute it.
 - 1D XS interpolation surface: `HdfXsec.get_xs_interpolation_surface()` reads
   `Geometry/Cross Section Interpolation Surfaces` — one dissolved (Multi)Polygon per XS-to-XS TIN
   segment, with `us_xs_id` / `ds_xs_id` / `area` columns (triangle indices are local to each
