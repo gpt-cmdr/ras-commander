@@ -25,6 +25,8 @@ All methods are static; do not instantiate this class.
 from __future__ import annotations
 
 import platform
+import shutil
+import tempfile
 import threading
 import time
 import warnings
@@ -78,14 +80,27 @@ class RasGeometryCompute:
 
     @staticmethod
     def _release_geometry(geom) -> None:
-        """Best-effort deterministic release of a .NET RASGeometry object."""
-        if geom is None:
-            return
-        for method in ("Dispose", "Close"):
-            try:
-                getattr(geom, method)()
-            except Exception:
-                pass
+        """Release a .NET RASGeometry object and its underlying HDF file handles.
+
+        Runs the .NET finalizers so file handles are freed before the HDF is
+        reopened or copied; without this, handles accumulate across many
+        in-process calls and later reads/writes hit
+        ``System.UnauthorizedAccessException`` on the locked file.
+        """
+        if geom is not None:
+            for method in ("Dispose", "Close"):
+                try:
+                    getattr(geom, method)()
+                except Exception:
+                    pass
+        try:
+            from System import GC as _GC  # type: ignore
+            _GC.Collect()
+            _GC.WaitForPendingFinalizers()
+            _GC.Collect()
+        except Exception:
+            import gc
+            gc.collect()
 
     @staticmethod
     def _resolve_rasmap(rasmap_path, geom_hdf_path: Path, ras_object):
@@ -531,6 +546,225 @@ class RasGeometryCompute:
         if report is None or report.empty:
             return True
         return not (report["severity"] == "ERROR").any()
+
+    # ------------------------------------------------------------------ #
+    #  Reach-length audit
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    @log_call
+    def audit_reach_lengths(
+        geom_hdf_path: Union[str, Path],
+        flow_paths: str = "existing_or_generate",
+        tolerance: float = 0.5,
+        keep_working_copy: bool = False,
+        rasmap_path: Optional[Union[str, Path]] = None,
+        ras_object=None,
+        hecras_version: Optional[str] = None,
+    ) -> "object":
+        """
+        Audit XS reach (flow) lengths against the current cut lines and flow paths.
+
+        A 1D unsteady model requires LOB / channel / ROB reach lengths on every
+        cross section; HEC-RAS measures those along the flow paths, so they go
+        stale when cut lines move. This copies the **whole project** to a
+        temporary location (the original is never modified), recomputes the reach
+        lengths from the flow paths on the copy (RASMapper's "Update Reach Lengths
+        on XSs"), and returns a per-XS before/after comparison so you can see which
+        lengths have drifted.
+
+        The project (not just the geometry HDF) is copied because RASGeometry
+        needs the full project context to build the XS / river / flow-path
+        intersections that reach-length measurement depends on. For large projects
+        this copies the project directory; pass ``keep_working_copy=True`` to keep
+        the recomputed copy for inspection instead of deleting it.
+
+        Parameters
+        ----------
+        geom_hdf_path : str or Path
+            Geometry HDF to audit (must sit in its HEC-RAS project folder).
+            **Not** modified.
+        flow_paths : {'existing_or_generate', 'regenerate', 'existing'}
+            How to obtain flow paths on the copy before measuring lengths.
+            'existing_or_generate' (default) leaves existing flow paths untouched
+            (protecting manual edits) and generates them only when absent;
+            'regenerate' always regenerates them on the copy; 'existing' requires
+            them and raises if absent.
+        tolerance : float, default 0.5
+            Absolute length change (project units) above which a length is flagged
+            as ``changed``.
+        keep_working_copy : bool, default False
+            Keep the temporary project copy (with recomputed lengths) instead of
+            deleting it. The copied geometry HDF path is returned in
+            ``report.attrs['working_copy']``.
+        rasmap_path, ras_object, hecras_version
+            As in the generators.
+
+        Returns
+        -------
+        GeoDataFrame
+            One row per cross section: ``River``, ``Reach``, ``RS``,
+            ``len_{left,channel,right}_stored`` / ``_recomputed``,
+            ``delta_{left,channel,right}``, ``reach_end`` (bool; the
+            downstream-most XS of a reach whose recomputed lengths are undefined),
+            ``changed`` (bool), and ``geometry`` (the XS cut line). ``.attrs``
+            carries a summary (``changed_count``, ``used_existing_flow_paths``,
+            ``working_copy``).
+
+        Raises
+        ------
+        ValueError
+            If ``flow_paths`` is unrecognized, ``flow_paths='existing'`` but the
+            geometry has none, or the geometry has no cross sections.
+        """
+        if flow_paths not in ("existing_or_generate", "regenerate", "existing"):
+            raise ValueError(
+                "flow_paths must be 'existing_or_generate', 'regenerate', or "
+                f"'existing', got {flow_paths!r}"
+            )
+        import numpy as np
+        if not isinstance(tolerance, (int, float)) or np.isnan(tolerance) or tolerance < 0:
+            raise ValueError(f"tolerance must be a non-negative number, got {tolerance!r}")
+
+        geom_hdf_path = Path(geom_hdf_path)
+        if not geom_hdf_path.exists():
+            raise FileNotFoundError(f"Geometry HDF not found: {geom_hdf_path}")
+        RasGeometryCompute._require_windows()
+
+        from .hdf.HdfXsec import HdfXsec
+        from .RasUtils import RasUtils
+
+        # The geometry HDF must live in its HEC-RAS project folder (RASGeometry
+        # needs the full project context, resolved relative to the .prj).
+        project_folder = geom_hdf_path.parent
+        if not any(project_folder.glob("*.prj")):
+            raise ValueError(
+                f"{geom_hdf_path.name} is not in a HEC-RAS project folder (no .prj "
+                f"found in {project_folder}); audit_reach_lengths needs the project "
+                f"context to compute reach lengths.")
+
+        tmp_root = Path(tempfile.mkdtemp(prefix="reach_audit_"))
+        work_project = tmp_root / project_folder.name
+        used_existing_flow_paths = False
+        try:
+            geom = None
+            # Serialize the whole snapshot+compute so the copy is consistent with
+            # (and not racing) any concurrent in-process geometry writer.
+            with _LOCK:
+                try:
+                    shutil.copytree(project_folder, work_project,
+                                    ignore=RasUtils.ignore_windows_reserved)
+                    work = work_project / geom_hdf_path.name
+
+                    stored = HdfXsec.get_cross_sections(work, ras_object=ras_object)
+                    if stored is None or stored.empty:
+                        raise ValueError("No cross sections found; cannot audit reach lengths")
+
+                    RasGeometryCompute._ensure_clr(hecras_version)
+                    rasmap = RasGeometryCompute._resolve_rasmap(rasmap_path, work, ras_object)
+                    geom = RasGeometryCompute._load_geometry(work, rasmap)
+
+                    fp_exists = RasGeometryCompute._layer_exists(work, _GROUP_FLOW_PATHS)
+                    if flow_paths == "existing":
+                        if not fp_exists:
+                            raise ValueError(
+                                "flow_paths='existing' but the geometry has no flow paths")
+                        used_existing_flow_paths = True
+                    elif flow_paths == "regenerate" or not fp_exists:
+                        geom.FlowPathLines.ComputeFlowPathLines()
+                    else:  # existing_or_generate and flow paths already present
+                        used_existing_flow_paths = True
+
+                    from System.Collections.Generic import List  # type: ignore
+                    from System import Int32  # type: ignore
+                    xsids = List[Int32]()
+                    for i in range(int(geom.XS.FeatureCount())):
+                        xsids.Add(i)
+                    # ref RiverMap defaults to null -> HEC-RAS builds it internally.
+                    geom.ComputeReachLengthsForXSs(xsids, None)
+                    geom.Save()
+                finally:
+                    RasGeometryCompute._release_geometry(geom)
+
+            recomputed = HdfXsec.get_cross_sections(work, ras_object=ras_object)
+
+            # No-op guard: a real recompute writes NaN to the downstream-most XS of
+            # every reach (no downstream XS). Zero NaNs means the recompute silently
+            # did nothing (e.g. missing project context or flow paths).
+            len_cols = ["Len Left", "Len Channel", "Len Right"]
+            if not recomputed[len_cols].isna().to_numpy().any():
+                raise RuntimeError(
+                    "Reach-length recompute produced no reach-end NaN values; it "
+                    "likely no-op'd (missing project context or flow paths). No "
+                    "reliable audit could be produced.")
+
+            report = RasGeometryCompute._reach_length_diff(stored, recomputed, tolerance)
+            report.attrs["changed_count"] = int(report["changed"].sum())
+            report.attrs["invalid_recompute_count"] = int(report["invalid_recompute"].sum())
+            report.attrs["used_existing_flow_paths"] = used_existing_flow_paths
+            report.attrs["working_copy"] = str(work) if keep_working_copy else None
+            return report
+        finally:
+            if not keep_working_copy:
+                shutil.rmtree(tmp_root, ignore_errors=True)
+
+    @staticmethod
+    def _reach_length_diff(stored, recomputed, tolerance: float):
+        """Per-XS before/after reach-length comparison as a GeoDataFrame.
+
+        ``stored`` and ``recomputed`` are two reads of the SAME cross-section set
+        (recompute changes only the length values), so rows are aligned by
+        position rather than an unvalidated key merge; identity and order are
+        asserted to catch any mismatch instead of silently dropping/duplicating.
+        """
+        import numpy as np
+        import geopandas as gpd
+
+        if len(stored) != len(recomputed):
+            raise ValueError(
+                f"Reach-length audit: stored ({len(stored)}) and recomputed "
+                f"({len(recomputed)}) cross-section counts differ; cannot align")
+
+        sides = [("left", "Len Left"), ("channel", "Len Channel"), ("right", "Len Right")]
+        s = stored.reset_index(drop=True)
+        r = recomputed.reset_index(drop=True)
+        for col in ("River", "Reach", "RS"):
+            if not (s[col].astype(str).values == r[col].astype(str).values).all():
+                raise ValueError(
+                    "Reach-length audit: cross-section identity/order differs between "
+                    "the stored and recomputed reads; cannot align")
+
+        rows = []
+        for i in range(len(s)):
+            srow, rrow = s.iloc[i], r.iloc[i]
+            rec = {"River": srow["River"], "Reach": srow["Reach"], "RS": srow["RS"]}
+            changed_any = False
+            nan_sides = 0
+            for name, col in sides:
+                sv = float(srow[col])
+                rv = float(rrow[col])
+                rec[f"len_{name}_stored"] = sv
+                rec[f"len_{name}_recomputed"] = rv
+                if np.isnan(rv):
+                    nan_sides += 1
+                if np.isnan(sv) or np.isnan(rv):
+                    rec[f"delta_{name}"] = float("nan")
+                else:
+                    delta = rv - sv
+                    rec[f"delta_{name}"] = delta
+                    if abs(delta) > tolerance:
+                        changed_any = True
+            # All recomputed sides NaN => the downstream-most XS of a reach
+            # (no downstream XS); a *partial* NaN means the flow-path intersection
+            # failed for that XS and is flagged as an invalid recompute.
+            rec["reach_end"] = bool(nan_sides == 3)
+            rec["invalid_recompute"] = bool(0 < nan_sides < 3)
+            rec["changed"] = bool(changed_any or rec["invalid_recompute"])
+            rec["geometry"] = srow["geometry"]
+            rows.append(rec)
+
+        return gpd.GeoDataFrame(rows, geometry="geometry",
+                                crs=getattr(stored, "crs", None))
 
     # ------------------------------------------------------------------ #
     #  Diagnostics marshalling

@@ -103,6 +103,32 @@ def test_backup_false_allows_overwrite_without_backup(monkeypatch, on_windows, g
     assert r.backup_path is None
 
 
+def test_compute_geometry_no_skip_when_interp_absent(monkeypatch, on_windows, geom_file):
+    """overwrite=False must still run when edge lines exist but interp surface does not."""
+    state = {"computed": False}
+
+    def fake_layer_exists(p, group):
+        if "River Edge Lines" in group:
+            return True
+        if "Interpolation Surface" in group:
+            return state["computed"]   # absent before compute, present after
+        return False  # flow paths
+
+    class _FakeGeom:
+        def CompleteForComputations(self, force, prog):
+            state["computed"] = True
+            return True
+
+    monkeypatch.setattr(RasGeometryCompute, "_layer_exists", staticmethod(fake_layer_exists))
+    monkeypatch.setattr(RasGeometryCompute, "_ensure_clr", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(RasGeometryCompute, "_resolve_rasmap", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(RasGeometryCompute, "_load_geometry", staticmethod(lambda *a, **k: _FakeGeom()))
+
+    cr = RasGeometryCompute.compute_geometry(geom_file)  # overwrite=False
+    assert state["computed"] is True, "must not skip when interpolation surface is absent"
+    assert cr.success and cr.edge_lines_written and cr.interpolation_surface_written
+
+
 def test_validate_fail_closed(monkeypatch, on_windows, geom_file):
     monkeypatch.setattr(RasGeometryCompute, "_ensure_clr", staticmethod(lambda *a, **k: None))
     monkeypatch.setattr(RasGeometryCompute, "_resolve_rasmap", staticmethod(lambda *a, **k: None))
@@ -128,3 +154,67 @@ def test_parse_feature_name():
 def test_complete_geometry_alias_signature_preserved():
     assert (inspect.signature(RasProcess.complete_geometry)
             == inspect.signature(RasProcess.compute_geometry))
+
+
+def _diff_frames(left, channel, right):
+    import geopandas as gpd
+    from shapely.geometry import LineString
+    line = LineString([(0, 0), (1, 0)])
+    stored = gpd.GeoDataFrame({
+        "River": ["R", "R", "R", "R"], "Reach": ["A", "A", "A", "A"],
+        "RS": ["4", "3", "2", "1"],
+        "Len Left": [100.0, 200.0, 300.0, 400.0],
+        "Len Channel": [100.0, 200.0, 300.0, 400.0],
+        "Len Right": [100.0, 200.0, 300.0, 400.0],
+        "geometry": [line] * 4,
+    })
+    recomputed = gpd.GeoDataFrame({
+        "River": ["R", "R", "R", "R"], "Reach": ["A", "A", "A", "A"],
+        "RS": ["4", "3", "2", "1"],
+        "Len Left": left, "Len Channel": channel, "Len Right": right,
+        "geometry": [line] * 4,
+    })
+    return stored, recomputed
+
+
+def test_reach_length_diff():
+    nan = float("nan")
+    # RS4: <tol; RS3: +10; RS2: partial NaN (invalid); RS1: all-NaN reach end
+    stored, recomputed = _diff_frames(
+        left=[100.2, 210.0, nan, nan],
+        channel=[100.0, 200.0, 300.0, nan],
+        right=[100.0, 200.0, 300.0, nan],
+    )
+    d = RasGeometryCompute._reach_length_diff(stored, recomputed, tolerance=0.5).set_index("RS")
+    assert bool(d.loc["4", "changed"]) is False            # 0.2 < 0.5 tolerance
+    assert bool(d.loc["3", "changed"]) is True and abs(d.loc["3", "delta_left"] - 10.0) < 1e-6
+    assert bool(d.loc["2", "invalid_recompute"]) is True   # only left NaN -> anomaly
+    assert bool(d.loc["2", "changed"]) is True             # invalid recompute is flagged
+    assert bool(d.loc["2", "reach_end"]) is False
+    assert bool(d.loc["1", "reach_end"]) is True           # all recomputed NaN
+    assert bool(d.loc["1", "invalid_recompute"]) is False
+    assert bool(d.loc["1", "changed"]) is False
+
+
+def test_reach_length_diff_row_count_mismatch_raises():
+    stored, recomputed = _diff_frames([1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4])
+    with pytest.raises(ValueError, match="counts differ"):
+        RasGeometryCompute._reach_length_diff(stored, recomputed.iloc[:3], tolerance=0.5)
+
+
+def test_reach_length_diff_identity_mismatch_raises():
+    stored, recomputed = _diff_frames([1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4])
+    recomputed = recomputed.copy()
+    recomputed.loc[0, "RS"] = "99"  # reorder/relabel -> identity mismatch
+    with pytest.raises(ValueError, match="identity/order"):
+        RasGeometryCompute._reach_length_diff(stored, recomputed, tolerance=0.5)
+
+
+def test_audit_reach_lengths_rejects_bad_flow_paths_mode(geom_file):
+    with pytest.raises(ValueError, match="flow_paths"):
+        RasGeometryCompute.audit_reach_lengths(geom_file, flow_paths="bogus")
+
+
+def test_audit_reach_lengths_rejects_negative_tolerance(geom_file):
+    with pytest.raises(ValueError, match="tolerance"):
+        RasGeometryCompute.audit_reach_lengths(geom_file, tolerance=-1.0)
