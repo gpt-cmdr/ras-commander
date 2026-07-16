@@ -34,8 +34,9 @@ uv run python .claude/skills/qa-rasmapper-web-parity/scripts/rasmapper_web_parit
   selected plan/layer, terrain, range/ramp, RAS version, and matching web manifest metadata.
 - Web: wait for `window.__rasCommanderViewerInstances`, apply WGS84 bounds and manifest layer
   state through that QA hook, enable every declared extent-colored raster, wait for MapLibre and
-  all raster styling to become idle, then capture page, map, tree, and active legend separately
-  at desktop and mobile sizes.
+  all raster styling to become idle, require a content-only semantic tree with one disclosure
+  control per collapsible node, then capture page, map, tree, and active legend separately at
+  desktop and mobile sizes.
 - Comparison: crop only declared RASMapper regions; normalize dimensions; report global SSIM,
   normalized mean absolute error, and a diff image. Do not use full desktop chrome as a golden.
 - Numeric probes: sample authoritative numeric COGs with rasterio and compare to explicit

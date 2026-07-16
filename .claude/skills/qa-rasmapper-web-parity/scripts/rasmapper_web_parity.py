@@ -228,6 +228,30 @@ def capture_web(spec: Mapping[str, Any], output: Path) -> dict[str, Any]:
                 )""",
                 spec.get("extent_color_layers") or [spec.get("selected_web_layer")],
             )
+            tree_contract = page.evaluate(
+                """() => {
+                  const details = Array.from(
+                    document.querySelectorAll('details[data-tree-node-id]')
+                  );
+                  return {
+                    nodeCount: details.length,
+                    disclosureCount: document.querySelectorAll(
+                      'details[data-tree-node-id] > summary .ras-tree-node__disclosure'
+                    ).length,
+                    emptyNodeIds: details
+                      .filter((node) => !node.querySelector(':scope > .ras-tree-children > *'))
+                      .map((node) => node.dataset.treeNodeId),
+                    placeholderCount: document.querySelectorAll('.ras-tree-empty').length,
+                    notPublishedCount: Array.from(document.querySelectorAll('.ras-layer-list *'))
+                      .filter((node) => node.children.length === 0
+                        && node.textContent.trim() === 'Not published').length
+                  };
+                }"""
+            )
+            failures = tree_contract_failures(tree_contract)
+            if failures:
+                raise RuntimeError(f"{mode} semantic tree contract failed: {'; '.join(failures)}")
+            records.setdefault("tree_contract", {})[mode] = tree_contract
             paths = {
                 "page": capture_dir / f"{mode}-page.png",
                 "map": capture_dir / f"{mode}-map.png",
@@ -245,6 +269,22 @@ def capture_web(spec: Mapping[str, Any], output: Path) -> dict[str, Any]:
         browser.close()
     atomic_json(capture_dir / "capture-state.json", records)
     return records
+
+
+def tree_contract_failures(contract: Mapping[str, Any]) -> list[str]:
+    """Return actionable failures for the content-only semantic tree contract."""
+
+    failures: list[str] = []
+    if int(contract.get("nodeCount", 0)) != int(contract.get("disclosureCount", -1)):
+        failures.append("each collapsible node must have exactly one disclosure control")
+    empty_node_ids = list(contract.get("emptyNodeIds") or [])
+    if empty_node_ids:
+        failures.append("empty nodes rendered: " + ", ".join(map(str, empty_node_ids)))
+    if int(contract.get("placeholderCount", 0)):
+        failures.append("empty tree placeholders rendered")
+    if int(contract.get("notPublishedCount", 0)):
+        failures.append("Not published placeholders rendered")
+    return failures
 
 
 def fetch_manifest(url: str) -> dict[str, Any]:

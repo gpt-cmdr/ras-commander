@@ -139,3 +139,24 @@ def test_image_comparison_reports_identity_and_difference(tmp_path: Path, parity
     assert identity["normalized_mae"] == pytest.approx(0.0)
     assert difference["ssim"] < 0.01
     assert difference["normalized_mae"] == pytest.approx(1.0)
+
+
+def test_tree_contract_rejects_empty_nodes_and_missing_disclosures(parity_runner) -> None:
+    valid = {
+        "nodeCount": 4,
+        "disclosureCount": 4,
+        "emptyNodeIds": [],
+        "placeholderCount": 0,
+        "notPublishedCount": 0,
+    }
+    assert parity_runner.tree_contract_failures(valid) == []
+
+    invalid = valid | {
+        "disclosureCount": 3,
+        "emptyNodeIds": ["features"],
+        "notPublishedCount": 1,
+    }
+    failures = parity_runner.tree_contract_failures(invalid)
+    assert any("disclosure" in failure for failure in failures)
+    assert any("features" in failure for failure in failures)
+    assert any("Not published" in failure for failure in failures)
