@@ -38,6 +38,7 @@ import sys
 import subprocess
 import tempfile
 import time
+import warnings
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -955,6 +956,163 @@ Step 5: Configure (optional — auto-detection usually works)
             "mismatches": mismatches,
             "passed": passed,
         }
+
+    @staticmethod
+    @log_call
+    def compute_geometry(
+        geom_hdf_path: Union[str, Path],
+        rasmap_path: Optional[Union[str, Path]] = None,
+        ras_object=None,
+        ras_version: str = None,
+        timeout: int = 1800,
+    ) -> Dict[str, Any]:
+        """
+        Run HEC-RAS's headless geometry completion (RasProcess.exe CompleteGeometry).
+
+        This is the GUI-free equivalent of RASMapper's *Compute Geometry* action.
+        It wraps ``RASGeometry.CompleteForComputations()``, the same pipeline the
+        RASMapper GUI runs, so it authors HEC-RAS's own **River Edge Lines**
+        ("Create Edge Lines at XS Limits") and **XS Interpolation Surface**, plus
+        bank lines, ineffective areas, blocked obstructions, storage-area and
+        structure connectivity, and 2D property tables. The edge lines it produces
+        use HEC-RAS's bank-line-anchored offset-curve algorithm and carry the
+        group-level ``Source Data Hash``, so HEC-RAS treats them as authoritative
+        and will not silently recompute them. (Flow paths are not part of this
+        pipeline.)
+
+        Platform guidance
+        -----------------
+        This runs ``RasProcess.exe`` as a subprocess and works on both Windows
+        (native) and Linux (via Wine, auto-detected). **On Windows, prefer
+        ``RasGeometryCompute.compute_geometry()``** — it runs the same pipeline
+        in-process via pythonnet (no subprocess), exposes each layer separately
+        (edge lines / interpolation surface / flow paths), and returns structured
+        ``ValidateGeometry`` diagnostics. This subprocess method remains the only
+        supported geometry-completion path for **Linux/Wine** execution.
+
+        Warning
+        -------
+        This runs the **entire** geometry-completion pipeline (there is no
+        narrower "just edge lines" RasProcess subcommand) and **mutates the
+        geometry HDF in place**. Point it at a disposable copy unless you intend
+        to complete the original geometry. On models with large 2D flow areas the
+        pipeline also (re)builds 2D property tables and can take minutes.
+
+        Parameters
+        ----------
+        geom_hdf_path : str or Path
+            Geometry HDF (``.g##.hdf``) to complete, mutated in place.
+        rasmap_path : str or Path, optional
+            ``.rasmap`` used to resolve the spatial reference. When None and a
+            ``ras_object`` is available, it is discovered via
+            ``RasMap.get_rasmap_path``.
+        ras_object : RasPrj, optional
+            RAS project object used to locate the ``.rasmap`` when not supplied.
+        ras_version : str, optional
+            Specific HEC-RAS version for the RasProcess.exe lookup.
+        timeout : int, optional
+            Command timeout in seconds (default 1800).
+
+        Returns
+        -------
+        dict
+            ``rasprocess_path``, ``command_args``, ``return_code``, ``stdout``,
+            ``stderr``, ``edge_lines_written`` (bool), ``interpolation_surface_written``
+            (bool), and ``success`` (return code 0, no ``Error:`` in stdout, and the
+            River Edge Lines group present afterward).
+
+        Raises
+        ------
+        FileNotFoundError
+            If the geometry HDF or RasProcess.exe cannot be found.
+        """
+        geom_hdf_path = Path(geom_hdf_path)
+        if not geom_hdf_path.exists():
+            raise FileNotFoundError(f"Geometry HDF not found: {geom_hdf_path}")
+
+        # Resolve the .rasmap for the spatial reference when not supplied.
+        if rasmap_path is None:
+            ras_obj = ras_object or ras
+            try:
+                if getattr(ras_obj, "initialized", False) or getattr(ras_obj, "project_folder", None):
+                    rasmap_path = RasMap.get_rasmap_path(ras_obj)
+            except Exception as e:
+                logger.debug(f"Could not auto-resolve .rasmap: {e}")
+        rasmap_path = Path(rasmap_path) if rasmap_path else None
+
+        rasprocess = RasProcess.find_rasprocess(ras_version)
+        if rasprocess is None:
+            raise FileNotFoundError("RasProcess.exe not found")
+
+        args = [
+            "CompleteGeometry",
+            f"GeomFilename={RasProcess._resolve_path_for_rasprocess(geom_hdf_path)}",
+        ]
+        if rasmap_path is not None and rasmap_path.exists():
+            args.append(f"RasMapFilename={RasProcess._resolve_path_for_rasprocess(rasmap_path)}")
+
+        logger.info(f"Running RasProcess.exe CompleteGeometry on {geom_hdf_path.name}")
+        result = RasProcess._run_rasprocess(
+            rasprocess, args, timeout=timeout, working_dir=geom_hdf_path.parent
+        )
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+
+        # Confirm the artifacts landed in the geometry HDF.
+        edge_lines_written = False
+        interp_surface_written = False
+        try:
+            import h5py
+            with h5py.File(geom_hdf_path, "r") as hdf:
+                edge_lines_written = "Geometry/River Edge Lines" in hdf
+                interp_surface_written = (
+                    "Geometry/Cross Section Interpolation Surfaces" in hdf
+                )
+        except Exception as e:
+            logger.debug(f"Post-run HDF inspection failed: {e}")
+
+        success = (
+            result.returncode == 0
+            and "Error:" not in stdout
+            and edge_lines_written
+        )
+        if not success:
+            logger.warning(
+                f"CompleteGeometry did not fully succeed (rc={result.returncode}, "
+                f"edge_lines={edge_lines_written}). stdout: {stdout.strip()[:400]}"
+            )
+
+        return {
+            "rasprocess_path": str(rasprocess),
+            "command_args": args,
+            "return_code": result.returncode,
+            "stdout": stdout,
+            "stderr": stderr,
+            "edge_lines_written": edge_lines_written,
+            "interpolation_surface_written": interp_surface_written,
+            "success": success,
+        }
+
+    @staticmethod
+    @log_call
+    def complete_geometry(
+        geom_hdf_path: Union[str, Path],
+        rasmap_path: Optional[Union[str, Path]] = None,
+        ras_object=None,
+        ras_version: str = None,
+        timeout: int = 1800,
+    ) -> Dict[str, Any]:
+        """Deprecated alias for :meth:`compute_geometry`. Use ``compute_geometry``."""
+        warnings.warn(
+            "RasProcess.complete_geometry() is renamed to compute_geometry(); "
+            "the old name will be removed in a future release.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return RasProcess.compute_geometry(
+            geom_hdf_path, rasmap_path=rasmap_path, ras_object=ras_object,
+            ras_version=ras_version, timeout=timeout,
+        )
 
     @staticmethod
     @log_call

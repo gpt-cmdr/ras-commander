@@ -18,6 +18,8 @@ Available Functions:
 - get_river_reaches(): Return the model 1D river reach lines
 - get_river_edge_lines(): Return the model river edge lines
 - get_river_bank_lines(): Extract river bank lines from HDF geometry file
+- get_river_flow_paths(): Extract river flow paths from HDF geometry file
+- get_xs_interpolation_surface(): Extract XS interpolation surface (TIN) from HDF
 - generate_river_edge_lines(): Generate edge lines from XS cut-line end points
 - get_1d_footprint(): Build 1D model footprint polygon(s) from edge lines
 - _interpolate_station(): Private helper method for station interpolation
@@ -728,14 +730,16 @@ class HdfXsec:
 
                 edge_data = hdf_file["Geometry/River Edge Lines"]
                 geoms = HdfBase.get_polylines_from_parts(
-                    hdf_path, 
+                    hdf_path,
                     "Geometry/River Edge Lines",
                     info_name="Polyline Info",
                     parts_name="Polyline Parts",
                     points_name="Polyline Points"
                 )
 
-                # Get attributes if they exist
+                # Genuine HEC-RAS edge lines carry no "Attributes" dataset, so the
+                # geometry count is the source of truth for edge_id/bank_side (bank
+                # side alternates Left/Right per reach: RASEdgeLines' IsLeft = i % 2 == 0).
                 if "Attributes" in edge_data:
                     attrs = edge_data["Attributes"][()]
 
@@ -836,6 +840,156 @@ class HdfXsec:
             logger.error(f"Error reading river bank lines from {hdf_path}: {str(e)}")
             return GeoDataFrame()
 
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_river_flow_paths(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+        """
+        Return the model river flow paths (``Geometry/River Flow Paths``).
+
+        RASMapper's *Create Flow Paths from XS Layout* artifact: the flow-path
+        polylines (left overbank, channel, right overbank) that drive 1D reach
+        lengths. Pure h5py read; the group must already exist. Generate it with
+        ``RasGeometryCompute.generate_flow_paths()`` when absent.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file.
+        datetime_to_str : bool, optional
+            Accepted for signature parity with the other river-layer readers;
+            flow paths carry no timestamp attribute, so this is a no-op.
+
+        Returns
+        -------
+        GeoDataFrame
+            Columns ``flow_path_id`` (int), ``geometry`` (LineString), and
+            ``length`` (project units). Empty GeoDataFrame when no flow paths
+            are stored.
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                if "Geometry/River Flow Paths" not in hdf_file:
+                    logger.warning("No river flow paths found in geometry file")
+                    return GeoDataFrame()
+
+            geoms = HdfBase.get_polylines_from_parts(
+                hdf_path,
+                "Geometry/River Flow Paths",
+                info_name="Flow Path Lines Info",
+                parts_name="Flow Path Lines Parts",
+                points_name="Flow Path Lines Points",
+            )
+            if not geoms:
+                return GeoDataFrame()
+
+            flow_gdf = GeoDataFrame(
+                {"flow_path_id": list(range(len(geoms)))},
+                geometry=geoms,
+                crs=HdfBase.get_projection(hdf_path),
+            )
+            flow_gdf['length'] = flow_gdf.geometry.length
+            return flow_gdf
+
+        except Exception as e:
+            logger.error(f"Error reading river flow paths: {str(e)}")
+            return GeoDataFrame()
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_xs_interpolation_surface(hdf_path: Path) -> GeoDataFrame:
+        """
+        Return the cross-section interpolation surface.
+
+        RASMapper's *Compute XS Interpolation Surface* artifact
+        (``Geometry/Cross Section Interpolation Surfaces``): the triangulated
+        surface HEC-RAS builds between each pair of adjacent cross sections. The
+        stored TIN is returned as one dissolved polygon per XS-to-XS segment,
+        tagged with the upstream/downstream cross-section ids and the stored
+        area. Pure h5py read; the group must already exist. Generate it with
+        ``RasGeometryCompute.generate_interpolation_surface()`` when absent.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS geometry HDF file.
+
+        Returns
+        -------
+        GeoDataFrame
+            One row per interpolation segment with columns ``surface_id`` (int),
+            ``us_xs_id`` / ``ds_xs_id`` (int, when ``XSIDs`` present), ``area``
+            (float, when ``Areas`` present), and ``geometry`` ((Multi)Polygon of
+            the segment's TIN triangles). Empty GeoDataFrame when no surface is
+            stored.
+        """
+        base = "Geometry/Cross Section Interpolation Surfaces"
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                if base not in hdf_file:
+                    logger.warning("No XS interpolation surface found in geometry file")
+                    return GeoDataFrame()
+                grp = hdf_file[base]
+                if "TIN Info" not in grp or "TIN Points" not in grp or "TIN Triangles" not in grp:
+                    logger.warning("XS interpolation surface group missing TIN datasets")
+                    return GeoDataFrame()
+                tin_info = grp["TIN Info"][()]
+                tin_points = grp["TIN Points"][()]
+                tin_tris = grp["TIN Triangles"][()]
+                xsids = grp["XSIDs"][()] if "XSIDs" in grp else None
+                areas = grp["Areas"][()] if "Areas" in grp else None
+
+            from shapely.ops import unary_union
+
+            n_pts = len(tin_points)
+            n_tris = len(tin_tris)
+            rows = []
+            for i, (pnt_start, pnt_cnt, tri_start, tri_cnt) in enumerate(tin_info):
+                try:
+                    # Bounds-check the segment slices before use; a single corrupt
+                    # segment must not drop the whole surface.
+                    if (pnt_start < 0 or tri_start < 0
+                            or pnt_start + pnt_cnt > n_pts
+                            or tri_start + tri_cnt > n_tris):
+                        logger.warning(
+                            f"Interpolation surface segment {i}: slice out of bounds; skipping")
+                        continue
+                    # Triangle vertex indices are LOCAL to this segment's point slice.
+                    seg_pts = tin_points[pnt_start:pnt_start + pnt_cnt][:, :2]
+                    seg_tris = tin_tris[tri_start:tri_start + tri_cnt]
+                    tri_polys = []
+                    for a, b, c in seg_tris:
+                        if not (0 <= a < pnt_cnt and 0 <= b < pnt_cnt and 0 <= c < pnt_cnt):
+                            continue
+                        poly = Polygon([seg_pts[a], seg_pts[b], seg_pts[c]])
+                        if poly.is_valid and poly.area > 0:
+                            tri_polys.append(poly)
+                    if not tri_polys:
+                        continue
+                    geom = unary_union(tri_polys)
+                    if geom is None or geom.is_empty:
+                        continue
+                    row = {"surface_id": i, "geometry": geom}
+                    if xsids is not None and i < len(xsids):
+                        row["us_xs_id"] = int(xsids[i, 0])
+                        row["ds_xs_id"] = int(xsids[i, 1])
+                    if areas is not None and i < len(areas):
+                        row["area"] = float(areas[i])
+                    rows.append(row)
+                except Exception as seg_exc:
+                    logger.warning(
+                        f"Interpolation surface segment {i} unreadable; skipping: {seg_exc}")
+                    continue
+
+            if not rows:
+                return GeoDataFrame()
+            return GeoDataFrame(rows, geometry="geometry", crs=HdfBase.get_projection(hdf_path))
+
+        except Exception as e:
+            logger.error(f"Error reading XS interpolation surface: {str(e)}")
+            return GeoDataFrame()
+
     # ------------------------------------------------------------------
     # Edge-line generation and 1D footprint polygonization
     # ------------------------------------------------------------------
@@ -866,23 +1020,89 @@ class HdfXsec:
         return None
 
     @staticmethod
-    def _polygon_from_edge_pair(left_line, right_line):
-        """Close a left/right edge-line pair into a polygon (matching end points).
+    def _cutline_interior(start_pt, end_pt, cut_lines, tolerance):
+        """Interior vertices of the cut line spanning start_pt -> end_pt.
 
-        The ring is left edge (upstream->downstream) followed by the reversed
-        right edge (downstream->upstream). The closing segments are exactly the
-        downstream and upstream cross-section limits, so the ring closes on
-        matching end points.
+        Searches ``cut_lines`` for a cut line whose two end points match
+        ``start_pt`` and ``end_pt`` (in either order) within ``tolerance``, and
+        returns that cut line's interior vertices oriented start -> end. Returns
+        None when no cut line matches, in which case the caller falls back to a
+        straight closing chord.
+        """
+        from math import hypot
+
+        def close(a, b):
+            return hypot(a[0] - b[0], a[1] - b[1]) <= tolerance
+
+        for line in cut_lines:
+            cut = HdfXsec._as_single_linestring(line)
+            if cut is None:
+                continue
+            coords = [tuple(c[:2]) for c in cut.coords]
+            if len(coords) < 3:
+                # Two-point cut line: the straight chord already IS the cut line.
+                continue
+            first, last = coords[0], coords[-1]
+            if close(first, start_pt) and close(last, end_pt):
+                return coords[1:-1]
+            if close(last, start_pt) and close(first, end_pt):
+                return list(reversed(coords[1:-1]))
+        return None
+
+    @staticmethod
+    def _polygon_from_edge_pair(left_line, right_line, cut_lines=None,
+                                snap_tolerance=None):
+        """Close a left/right edge-line pair into a polygon.
+
+        The ring runs along the left edge, across the downstream cross section,
+        back up the reversed right edge, and across the upstream cross section.
+        When ``cut_lines`` (the end cross-section cut lines for the reach) are
+        supplied, each end cap follows the real cut-line geometry, including its
+        interior vertices. Without them - or when an edge-line end point does not
+        land on a cut-line limit (possible for HEC-RAS stored edge lines) - the
+        end cap falls back to a straight chord between the edge-line end points.
         """
         left = HdfXsec._as_single_linestring(left_line)
         right = HdfXsec._as_single_linestring(right_line)
         if left is None or right is None:
             return None
-        coords = [c[:2] for c in left.coords] + [c[:2] for c in reversed(list(right.coords))]
+
+        left_coords = [tuple(c[:2]) for c in left.coords]
+        right_coords = [tuple(c[:2]) for c in right.coords]
+        if len(left_coords) + len(right_coords) < 4:
+            return None
+
+        cut_lines = list(cut_lines) if cut_lines else []
+        if cut_lines and snap_tolerance is None:
+            lengths = [
+                cut.length for cut in
+                (HdfXsec._as_single_linestring(c) for c in cut_lines)
+                if cut is not None and cut.length > 0
+            ]
+            # 1% of a typical cut-line width: tight enough to reject a mismatched
+            # cut line, loose enough for stored edge lines with rounded coords.
+            snap_tolerance = 0.01 * (sum(lengths) / len(lengths)) if lengths else 0.0
+
+        # Downstream cap: left edge end -> right edge end.
+        far_cap = HdfXsec._cutline_interior(
+            left_coords[-1], right_coords[-1], cut_lines, snap_tolerance
+        ) if cut_lines else None
+        # Upstream cap: right edge start -> left edge start (closes the ring).
+        near_cap = HdfXsec._cutline_interior(
+            right_coords[0], left_coords[0], cut_lines, snap_tolerance
+        ) if cut_lines else None
+
+        coords = (
+            left_coords
+            + (far_cap or [])
+            + list(reversed(right_coords))
+            + (near_cap or [])
+        )
         if len(coords) < 4:
             return None
         polygon = Polygon(coords)
         if not polygon.is_valid:
+            # A bent cut line spliced into the ring can self-intersect; repair.
             polygon = polygon.buffer(0)
         if polygon is None or polygon.is_empty:
             return None
@@ -904,7 +1124,10 @@ class HdfXsec:
 
         Use this when a geometry has no stored ``Geometry/River Edge Lines``
         (e.g. the XS interpolation surface has not been computed) or to derive a
-        1D footprint boundary directly from cross sections.
+        1D footprint boundary directly from cross sections. This is a simplified
+        XS-endpoint construction; for HEC-RAS's own bank-line-anchored
+        offset-curve edge lines (written to the geometry HDF with the group-level
+        ``Source Data Hash``), use ``RasGeometryCompute.generate_edge_lines()``.
 
         Parameters
         ----------
@@ -973,17 +1196,41 @@ class HdfXsec:
         return GeoDataFrame(rows, geometry="geometry", crs=crs)
 
     @staticmethod
+    def _reach_end_cutlines(hdf_path: Path, ras_object=None):
+        """Map (River, Reach) -> [first cut line, last cut line] for the reach.
+
+        These are the cross sections that close the upstream and downstream ends
+        of the reach footprint ring.
+        """
+        xs_gdf = HdfXsec.get_cross_sections(hdf_path, ras_object=ras_object)
+        if xs_gdf is None or xs_gdf.empty:
+            return {}
+        if not {"River", "Reach"}.issubset(xs_gdf.columns):
+            return {}
+
+        end_cutlines = {}
+        for key, group in xs_gdf.groupby(["River", "Reach"], sort=False):
+            geoms = [g for g in group.geometry if g is not None]
+            if not geoms:
+                continue
+            end_cutlines[key] = [geoms[0], geoms[-1]]
+        return end_cutlines
+
+    @staticmethod
     def _reach_edge_pairs(hdf_path: Path, edge_source: str, ras_object=None):
-        """Return a list of (River, Reach, left_line, right_line, source) tuples.
+        """Return (River, Reach, left_line, right_line, source, cut_lines) tuples.
 
         Labels (River/Reach) always come from the generated (XS-endpoint) edge
         lines, which are reliably grouped by reach. When stored edge lines are
         present and requested, their geometry replaces the generated geometry by
         reach order, giving HEC-RAS's own edge lines with correct reach labels.
+        ``cut_lines`` carries the reach's end cross-section cut lines so the
+        footprint ring can be closed on real cut-line geometry.
         """
         generated = HdfXsec.generate_river_edge_lines(hdf_path, ras_object=ras_object)
         if generated.empty:
             return []
+        end_cutlines = HdfXsec._reach_end_cutlines(hdf_path, ras_object=ras_object)
 
         # Build ordered (river, reach) -> {Left, Right} from generated edge lines.
         gen_pairs = []
@@ -1024,7 +1271,8 @@ class HdfXsec:
                 source = "stored_edge_lines"
             if left is None or right is None:
                 continue
-            pairs.append((gp["River"], gp["Reach"], left, right, source))
+            cut_lines = end_cutlines.get((gp["River"], gp["Reach"]), [])
+            pairs.append((gp["River"], gp["Reach"], left, right, source, cut_lines))
         return pairs
 
     @staticmethod
@@ -1034,16 +1282,18 @@ class HdfXsec:
         hdf_path: Path,
         edge_source: str = "auto",
         dissolve: bool = False,
+        close_with_end_xs: bool = True,
         ras_object=None,
     ) -> GeoDataFrame:
         """
         Build the 1D model footprint polygon(s) from river edge lines.
 
         For each (River, Reach) the left and right edge lines are closed into a
-        polygon ring (left edge, then reversed right edge). The end points of the
-        edge lines coincide with the outer cross-section limits, so each ring is
-        closed by the upstream and downstream cross sections on matching end
-        points. This is the true 1D study footprint, not a bounding box.
+        polygon ring: left edge, downstream cross section, reversed right edge,
+        upstream cross section. The end caps follow the real cut-line geometry of
+        the end cross sections, including their interior vertices, so a bent cut
+        line is reproduced instead of chorded. This is the true 1D study
+        footprint, not a bounding box.
 
         Parameters
         ----------
@@ -1056,6 +1306,12 @@ class HdfXsec:
         dissolve : bool, default False
             If True, dissolve the per-reach polygons into a single (multi)polygon
             row. If False, return one polygon row per (River, Reach).
+        close_with_end_xs : bool, default True
+            Close each ring on the end cross-section cut-line geometry. Set False
+            for the legacy behavior, a straight chord between the edge-line end
+            points. When an edge-line end point does not land on a cut-line limit
+            (possible for stored edge lines), that end cap falls back to the
+            straight chord regardless of this setting.
         ras_object : RasPrj, optional
             RAS project object for path resolution context.
 
@@ -1079,8 +1335,11 @@ class HdfXsec:
             return GeoDataFrame()
 
         rows = []
-        for river, reach, left, right, source in pairs:
-            polygon = HdfXsec._polygon_from_edge_pair(left, right)
+        for river, reach, left, right, source, cut_lines in pairs:
+            polygon = HdfXsec._polygon_from_edge_pair(
+                left, right,
+                cut_lines=cut_lines if close_with_end_xs else None,
+            )
             if polygon is None:
                 logger.debug(f"Could not polygonize reach {river}/{reach}")
                 continue
