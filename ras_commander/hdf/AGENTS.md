@@ -73,7 +73,10 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - True model extent polygon: `HdfProject.get_project_extent(..., geometry_type='footprint')`
   unions 2D flow-area perimeters with 1D reach footprints (multipart when multiple areas/reaches).
   Use `include_1d=False` / `include_2d=False` for 2D-only / 1D-only extents, and
-  `buffer_percent=0` for the raw footprint. `geometry_type='bbox'` returns the legacy buffered
+  `buffer_percent=0` for the raw footprint. `fill_holes=True` (default, footprint mode) removes the
+  thin interior sliver gaps left where 1D reach footprints and 2D flow areas overlap without
+  aligning exactly — it drops interior rings only, never disconnected parts of a multipart model;
+  pass `fill_holes=False` to keep the raw union. `geometry_type='bbox'` returns the legacy buffered
   bounding box (still used by `get_project_bounds_latlon` for data downloads).
 - Land cover and infiltration preprocessing: `HdfLandCover`, `HdfInfiltration`
 - Infiltration group authoring: `HdfInfiltration.create_infiltration_group()`, `HdfInfiltration.set_infiltration_baseoverrides()`

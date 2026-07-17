@@ -1405,18 +1405,21 @@ notebooks:
   functions_used:
   - HdfMesh.get_mesh_area_names
   - HdfMesh.get_mesh_areas
+  - HdfMesh.get_mesh_cell_faces
   - HdfProject.get_project_extent
+  - HdfStruc.get_structures
   - HdfXsec.generate_river_edge_lines
   - HdfXsec.get_1d_footprint
   - HdfXsec.get_cross_sections
+  - HdfXsec.get_river_centerlines
   - HdfXsec.get_river_edge_lines
   - RasExamples.extract_project
   - RasGeometryCompute.generate_edge_lines
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 10
-  executed_cells: 10
+  code_cells: 12
+  executed_cells: 12
 - id: 230_mesh_sensitivity_analysis
   filename: 230_mesh_sensitivity_analysis.ipynb
   title: 2D Mesh Cell-Size Sensitivity for Sediment Transport
