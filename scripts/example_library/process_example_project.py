@@ -909,7 +909,7 @@ def import_stored_maps(
     scratch = _package_scratch_dir(context, "stored-maps")
     if scratch is not None:
         command.extend(["--scratch-dir", str(scratch)])
-    if bool(package.get("require_all_stored_maps", False)):
+    if bool(package.get("require_all_stored_maps", True)):
         command.append("--require-all")
     else:
         command.append("--allow-partial")

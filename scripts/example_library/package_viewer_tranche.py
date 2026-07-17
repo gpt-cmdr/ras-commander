@@ -147,6 +147,7 @@ def package_project(
     primary_geometry: str | None = None,
     refreshed_archive: Path | None = None,
     stored_maps: Path | None = None,
+    require_all_stored_maps: bool = True,
     overwrite: bool = False,
     validate: bool = False,
     runner: Runner = subprocess.run,
@@ -236,20 +237,21 @@ def package_project(
     if stored_maps is not None:
         if not stored_maps.is_dir():
             raise TrancheError(f"Stored Map directory does not exist: {stored_maps}")
-        _run(
-            [
-                ras2cng,
-                "maplibre-import-stored-maps",
-                str(stored_maps),
-                str(working / "archive"),
-                str(viewer_dir),
-                "--scratch-dir",
-                str(scratch / "stored-maps"),
-                "--allow-partial",
-                "--overwrite",
-            ],
-            runner=runner,
+        import_command = [
+            ras2cng,
+            "maplibre-import-stored-maps",
+            str(stored_maps),
+            str(working / "archive"),
+            str(viewer_dir),
+            "--scratch-dir",
+            str(scratch / "stored-maps"),
+            "--overwrite",
+        ]
+        import_command.insert(
+            -1,
+            "--require-all" if require_all_stored_maps else "--allow-partial",
         )
+        _run(import_command, runner=runner)
 
     if validate:
         _run(
@@ -292,6 +294,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--primary", action="append", default=[])
     parser.add_argument("--archive", action="append", default=[])
     parser.add_argument("--stored-maps", action="append", default=[])
+    parser.add_argument(
+        "--allow-partial-stored-maps",
+        action="store_true",
+        help="Allow incomplete Stored Map sets for diagnostic tranche builds.",
+    )
     parser.add_argument("--project", action="append", default=[])
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--validate", action="store_true")
@@ -340,6 +347,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     primary_geometry=primary.get(project_id),
                     refreshed_archive=archives.get(project_id),
                     stored_maps=stored_maps.get(project_id),
+                    require_all_stored_maps=not args.allow_partial_stored_maps,
                     overwrite=args.overwrite,
                     validate=args.validate,
                 )

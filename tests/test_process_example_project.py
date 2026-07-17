@@ -240,7 +240,8 @@ def test_all_mode_builds_safe_commands_imports_stored_maps_and_records_status(
     ]
     assert [binding.split("=", 1)[0] for binding in hdf_bindings] == ["g01", "g02"]
     assert terrain_command[terrain_command.index("--source-cog") + 1] == "../archive/terrain/terrain.cog.tif"
-    assert "--allow-partial" in import_command
+    assert "--require-all" in import_command
+    assert "--allow-partial" not in import_command
     assert "--overwrite" in import_command
     assert all(kwargs["shell"] is False for _, kwargs in fake.calls)
 

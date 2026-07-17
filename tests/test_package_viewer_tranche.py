@@ -189,3 +189,56 @@ def test_package_project_atomically_overlays_refreshed_archive(tmp_path: Path) -
     assert (target / "archive" / "terrain" / "fresh.cog.tif").read_bytes() == b"fresh-cog"
     assert not (target / "archive" / "stale.txt").exists()
     assert status["refreshedArchive"] is True
+
+
+def test_package_project_requires_complete_stored_maps_by_default(tmp_path: Path) -> None:
+    module = load_script()
+    source = tmp_path / "source" / "muncie"
+    archive = source / "archive"
+    viewer = source / "viewer"
+    stored_maps = tmp_path / "stored-maps"
+    archive.mkdir(parents=True)
+    viewer.mkdir()
+    stored_maps.mkdir()
+    project_file = tmp_path / "model" / "Muncie.prj"
+    project_file.parent.mkdir()
+    project_file.write_text("Proj Title=Muncie\n", encoding="ascii")
+    project_file.with_suffix(".g01.hdf").write_bytes(b"hdf")
+    (archive / "manifest.json").write_text(
+        json.dumps({"project": {"crs": "EPSG:2965"}, "geometry": [{"geom_id": "g01"}]}),
+        encoding="utf-8",
+    )
+    (viewer / "manifest.json").write_text(
+        json.dumps({"title": "Muncie", "groups": []}), encoding="utf-8"
+    )
+    (source / "project.json").write_text(
+        json.dumps({"title": "Muncie", "crs": "EPSG:2965"}), encoding="utf-8"
+    )
+    calls: list[list[str]] = []
+
+    def runner(command, **_kwargs):
+        command = list(command)
+        calls.append(command)
+        if command[1] == "maplibre":
+            output = Path(command[3])
+            output.mkdir(parents=True)
+            (output / "manifest.json").write_text(
+                json.dumps({"schema": "rascommander.maplibre/v2"}), encoding="utf-8"
+            )
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    module.package_project(
+        project_id="muncie",
+        project_file=project_file,
+        source_project_dir=source,
+        output_projects_root=tmp_path / "output" / "projects",
+        ras2cng="ras2cng",
+        scratch_root=tmp_path / "scratch",
+        stored_maps=stored_maps,
+        overwrite=True,
+        runner=runner,
+    )
+
+    import_command = next(command for command in calls if command[1] == "maplibre-import-stored-maps")
+    assert "--require-all" in import_command
+    assert "--allow-partial" not in import_command
