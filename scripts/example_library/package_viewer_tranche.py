@@ -145,6 +145,7 @@ def package_project(
     ras2cng: str,
     scratch_root: Path,
     primary_geometry: str | None = None,
+    refreshed_archive: Path | None = None,
     stored_maps: Path | None = None,
     overwrite: bool = False,
     validate: bool = False,
@@ -152,8 +153,10 @@ def package_project(
 ) -> dict[str, Any]:
     """Build one complete staged project, replacing it only after success."""
 
-    archive_dir = source_project_dir / "archive"
-    archive = _read_json(archive_dir / "manifest.json")
+    archive_source = Path(refreshed_archive) if refreshed_archive else source_project_dir / "archive"
+    if not archive_source.is_dir():
+        raise TrancheError(f"Archive directory does not exist: {archive_source}")
+    archive = _read_json(archive_source / "manifest.json")
     old_viewer = _read_json(source_project_dir / "viewer" / "manifest.json")
     project = _read_json(source_project_dir / "project.json")
     primary = infer_primary_geometry(old_viewer, archive, primary_geometry)
@@ -168,6 +171,9 @@ def package_project(
     if target.exists() and not overwrite:
         raise TrancheError(f"Output project already exists: {target}")
     shutil.copytree(source_project_dir, working)
+    if refreshed_archive is not None:
+        shutil.rmtree(working / "archive", ignore_errors=True)
+        shutil.copytree(archive_source, working / "archive")
     shutil.rmtree(working / "viewer", ignore_errors=True)
 
     scratch = scratch_root / project_id
@@ -264,6 +270,7 @@ def package_project(
         "primaryGeometry": primary,
         "geometryCount": len(bindings),
         "terrainCount": terrain_count,
+        "refreshedArchive": refreshed_archive is not None,
         "storedMapsImported": stored_maps is not None,
         "validated": validate,
     }
@@ -283,6 +290,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--scratch-root", type=Path, required=True)
     parser.add_argument("--path-map", action="append", default=[])
     parser.add_argument("--primary", action="append", default=[])
+    parser.add_argument("--archive", action="append", default=[])
     parser.add_argument("--stored-maps", action="append", default=[])
     parser.add_argument("--project", action="append", default=[])
     parser.add_argument("--overwrite", action="store_true")
@@ -296,6 +304,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     path_maps = _assignments(args.path_map, label="--path-map")
     primary = _assignments(args.primary, label="--primary")
+    archives = {
+        key: Path(value)
+        for key, value in _assignments(args.archive, label="--archive").items()
+    }
     stored_maps = {
         key: Path(value)
         for key, value in _assignments(args.stored_maps, label="--stored-maps").items()
@@ -326,6 +338,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     ras2cng=args.ras2cng,
                     scratch_root=args.scratch_root,
                     primary_geometry=primary.get(project_id),
+                    refreshed_archive=archives.get(project_id),
                     stored_maps=stored_maps.get(project_id),
                     overwrite=args.overwrite,
                     validate=args.validate,

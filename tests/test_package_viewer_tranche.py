@@ -116,4 +116,76 @@ def test_package_project_builds_vector_viewer_and_terrain(tmp_path: Path) -> Non
     assert calls[0][calls[0].index("--primary-geometry") + 1] == "g01"
     assert calls[1][calls[1].index("--source-cog") + 1] == "../archive/terrain/terrain.cog.tif"
     assert status["terrainCount"] == 1
+    assert status["refreshedArchive"] is False
     assert (tmp_path / "output" / "projects" / "muncie" / "viewer-v2-status.json").is_file()
+
+
+def test_package_project_atomically_overlays_refreshed_archive(tmp_path: Path) -> None:
+    module = load_script()
+    source = tmp_path / "source" / "muncie"
+    stale_archive = source / "archive"
+    viewer = source / "viewer"
+    stale_archive.mkdir(parents=True)
+    viewer.mkdir()
+    (stale_archive / "manifest.json").write_text(
+        json.dumps({"project": {"crs": "EPSG:2965"}, "geometry": [{"geom_id": "g01"}]}),
+        encoding="utf-8",
+    )
+    (viewer / "manifest.json").write_text(
+        json.dumps({"title": "Muncie", "groups": []}), encoding="utf-8"
+    )
+    (source / "project.json").write_text(
+        json.dumps({"title": "Muncie", "crs": "EPSG:2965"}), encoding="utf-8"
+    )
+
+    refreshed = tmp_path / "refreshed" / "archive"
+    refreshed_terrain = refreshed / "terrain" / "fresh.cog.tif"
+    refreshed_terrain.parent.mkdir(parents=True)
+    refreshed_terrain.write_bytes(b"fresh-cog")
+    (refreshed / "manifest.json").write_text(
+        json.dumps(
+            {
+                "project": {"crs": "EPSG:2965"},
+                "geometry": [{"geom_id": "g02"}],
+                "terrain": [
+                    {"terrain_name": "Fresh Terrain", "cog_file": "terrain/fresh.cog.tif"}
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    project_file = tmp_path / "model" / "Muncie.prj"
+    project_file.parent.mkdir()
+    project_file.write_text("Proj Title=Muncie\n", encoding="ascii")
+    project_file.with_suffix(".g02.hdf").write_bytes(b"hdf")
+    calls: list[list[str]] = []
+
+    def runner(command, **_kwargs):
+        command = list(command)
+        calls.append(command)
+        if command[1] == "maplibre":
+            output = Path(command[3])
+            output.mkdir(parents=True)
+            (output / "manifest.json").write_text(
+                json.dumps({"schema": "rascommander.maplibre/v2"}), encoding="utf-8"
+            )
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    status = module.package_project(
+        project_id="muncie",
+        project_file=project_file,
+        source_project_dir=source,
+        output_projects_root=tmp_path / "output" / "projects",
+        ras2cng="ras2cng",
+        scratch_root=tmp_path / "scratch",
+        refreshed_archive=refreshed,
+        overwrite=True,
+        runner=runner,
+    )
+
+    target = tmp_path / "output" / "projects" / "muncie"
+    assert calls[0][calls[0].index("--geometry-hdf") + 1].startswith("g02=")
+    assert calls[1][calls[1].index("--source-cog") + 1] == "../archive/terrain/fresh.cog.tif"
+    assert (target / "archive" / "terrain" / "fresh.cog.tif").read_bytes() == b"fresh-cog"
+    assert not (target / "archive" / "stale.txt").exists()
+    assert status["refreshedArchive"] is True
