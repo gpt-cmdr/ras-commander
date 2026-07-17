@@ -91,8 +91,14 @@ source HDF, map type, and interpolation authority in result metadata.
   the native cell size that is at least 5 ft.
 - If native terrain is already 5 ft or coarser, retain its native resolution,
   including terrain coarser than 10 ft.
-- Mixed-native-resolution source sets require an explicit recorded target; do
-  not silently upsample any source during consolidation.
+- Mixed-native-resolution source sets require an explicit recorded target. Use
+  a whole-number multiple of the coarsest native source grid so mixed 2-foot
+  and 1-meter mosaics do not require an impractically coarse common multiple.
+  Record every source resolution and resampling factor, and do not silently
+  upsample any source during consolidation.
+- When relocated RASMapper paths cannot be resolved, call ras2cng's
+  `consolidate_terrain_files()` with the explicit priority-ordered TIFF list;
+  do not replace the provenance-bearing pipeline with an ad hoc GDAL command.
 - Preserve source priority, grid alignment, horizontal and vertical units and
   datums, resampling method, cutline, and source-file inventory.
 - Build tiled, compressed COGs with statistics and overviews, and verify that
