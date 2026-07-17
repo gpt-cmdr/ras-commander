@@ -9,7 +9,7 @@
       "extent_output": "project-extents/muncie-muncie-rerun-7-0-20260628-193916-4120d261.geojson",
       "status": "MapLibre pilot",
       "webmap": "../example-project-viewer/",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260703Tidentify02",
+      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260716Tmuncie-contract-v2",
       "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/project.json",
       "notes": "First MapLibre pilot with terrain, geometry, raw HDF vector results, and RASMapper Stored Map rasters."
     },

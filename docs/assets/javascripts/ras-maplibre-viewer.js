@@ -5,7 +5,7 @@
   }
 
   const DEFAULT_BOUNDS = [-85.3942, 40.1896, -85.3601, 40.2057];
-  const VIEWER_MANIFEST_REFRESH = "20260716Tmuncie-full-01";
+  const VIEWER_MANIFEST_REFRESH = "20260716Tmuncie-contract-v2";
   const SATELLITE_ATTRIBUTION = "Tiles &copy; Esri";
   const SATELLITE_IMAGERY_TILES = [
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -1905,6 +1905,20 @@
     return labels[layer.sourceKind] || "Project layer";
   }
 
+  function semanticPlanLabel(planId, planTitle) {
+    const id = String(planId || "").toUpperCase();
+    const title = String(planTitle || "").trim();
+    return title ? `${id} - ${title}` : id;
+  }
+
+  function semanticGeometryLabel(geometryId, geometryTitle) {
+    const id = String(geometryId || "").trim().toLowerCase();
+    const number = id.startsWith("g") ? id.slice(1) : id;
+    const label = `Geometry ${number}`;
+    const title = String(geometryTitle || "").trim();
+    return title ? `${label} - ${title}` : label;
+  }
+
   function buildSemanticLayerTree(
     root,
     map,
@@ -1957,10 +1971,10 @@
       source.className = "ras-layer-inspector__source";
       const context = [semanticSourceLabel(layer)];
       if (layer.plan) {
-        context.push(`Plan ${layer.plan}`);
+        context.push(semanticPlanLabel(layer.plan, layer.planTitle));
       }
       if (layer.geometry) {
-        context.push(`Geometry ${layer.geometry}`);
+        context.push(semanticGeometryLabel(layer.geometry, layer.geometryTitle));
       }
       source.textContent = context.join(" | ");
 
@@ -2107,13 +2121,22 @@
         summary.append(branchVisibility);
       }
 
+      const label = document.createElement("span");
+      label.className = "ras-tree-node__label";
       const name = document.createElement("span");
       name.className = "ras-tree-node__name";
       name.textContent = node.name || node.id;
+      label.append(name);
+      if (node.role === "plan" && node.metadata?.geometryLabel) {
+        const context = document.createElement("span");
+        context.className = "ras-tree-node__context";
+        context.textContent = node.metadata.geometryLabel;
+        label.append(context);
+      }
       const count = document.createElement("span");
       count.className = "ras-tree-node__count";
       count.textContent = layerIds.length ? layerIds.length.toLocaleString() : "";
-      summary.append(name, count);
+      summary.append(label, count);
 
       const children = document.createElement("div");
       children.className = "ras-tree-children";

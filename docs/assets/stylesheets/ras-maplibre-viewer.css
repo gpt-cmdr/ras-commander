@@ -373,9 +373,28 @@ details[open] > summary > .ras-tree-node__disclosure::before {
   border-left: 1px solid #dfe6ef;
 }
 
+.ras-tree-node__label,
 .ras-tree-node__name {
   min-width: 0;
+}
+
+.ras-tree-node__label {
+  display: grid;
+  gap: 1px;
+}
+
+.ras-tree-node__name {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ras-tree-node__context {
+  overflow: hidden;
+  color: var(--ras-muted);
+  font-size: 9.5px;
+  line-height: 1.15;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1032,6 +1051,10 @@ details[open] > summary > .ras-tree-node__disclosure::before {
 
   .ras-tree-node__count,
   .ras-tree-leaf__metric {
+    font-size: 11px;
+  }
+
+  .ras-tree-node__context {
     font-size: 11px;
   }
 

@@ -15,7 +15,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "status": "MapLibre pilot",
         "projectId": "muncie-muncie-rerun-7-0-20260628-193916-4120d261",
         "webmap": "../example-project-viewer/",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260703Tidentify02",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260716Tmuncie-contract-v2",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/project.json",
         "viewerType": "MapLibre",
         "notes": "First MapLibre pilot with terrain, geometry, raw HDF vector results, and RASMapper Stored Map rasters.",

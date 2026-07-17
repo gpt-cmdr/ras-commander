@@ -174,3 +174,12 @@ def test_project_availability_does_not_count_calculated_rasters_as_stored_maps()
 
     assert 'tileset.sourceKind === "stored-map"' in source
     assert "tilesets.filter(isStoredMapRasterTileset)" in source
+
+
+def test_result_tree_renders_plan_and_geometry_titles() -> None:
+    source = VIEWER_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert "semanticPlanLabel(layer.plan, layer.planTitle)" in source
+    assert "semanticGeometryLabel(layer.geometry, layer.geometryTitle)" in source
+    assert 'node.metadata?.geometryLabel' in source
+    assert 'context.className = "ras-tree-node__context"' in source
