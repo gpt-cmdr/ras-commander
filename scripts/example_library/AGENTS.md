@@ -54,13 +54,19 @@ be copied onto the public Example Project Library page.
 
 ## Required Result Gate
 
-Every public project must have a successfully computed plan and both result
-families populated:
+Every public project must have a successfully computed plan and every
+applicable result family populated:
 
 1. **Vector Results** from raw HDF values joined to applicable cross sections,
    2D cells/faces, structures, pipes, and reference elements.
 2. **Raster Results** generated from RASMapper Stored Maps, beginning with
    Depth, WSE, Velocity, and Inundation Boundary where supported by the plan.
+   This family is required for every 2D plan and every terrain-backed 1D plan.
+
+A pure 1D source project that contains no RASMapper terrain must still publish
+its computed raw cross-section results, but continuous Stored Map rasters are
+not applicable. Record that capability explicitly in manifest v2; do not add a
+substitute terrain or mislabel a derived surface as a RASMapper Stored Map.
 
 Treat either of these public viewer messages as a failed publication:
 
@@ -111,7 +117,8 @@ Add projects one at a time only after all checks pass:
 - `HdfProject.get_project_extent(geometry_type="footprint")` produced the raw
   WGS84 model-limit polygon used by the catalog;
 - at least one plan computed successfully;
-- raw HDF vector results and RASMapper Stored Map rasters are populated;
+- raw HDF vector results are populated, and RASMapper Stored Map rasters are
+  populated for every 2D or terrain-backed plan;
 - each 2D model has a consolidated, validated terrain COG;
 - manifests use hosted URLs and contain no local paths;
 - PMTiles and COG endpoints support HTTP range requests;

@@ -5,6 +5,34 @@
   }
 
   const DEFAULT_BOUNDS = [-125, 24, -66, 50];
+  const LANDING_GEOMETRY_KINDS = new Set([
+    "bank_lines",
+    "bc_lines",
+    "breaklines",
+    "centerlines",
+    "edge_lines",
+    "flow_paths",
+    "junctions",
+    "mesh_areas",
+    "model_extents",
+    "pipe_conduits",
+    "pipe_inlets",
+    "pipe_nodes",
+    "pump_stations",
+    "refinement_regions",
+    "river_reaches",
+    "storage_areas",
+    "structures",
+  ]);
+
+  function registerPmtilesProtocol() {
+    if (!window.pmtiles || window.RAS_EXAMPLE_LIBRARY_PMTILES_PROTOCOL) {
+      return;
+    }
+    const protocol = new window.pmtiles.Protocol();
+    maplibregl.addProtocol("pmtiles", protocol.tile);
+    window.RAS_EXAMPLE_LIBRARY_PMTILES_PROTOCOL = protocol;
+  }
 
   function escapeHtml(value) {
     return String(value || "")
@@ -62,6 +90,58 @@
       Math.max(...bounds.map((b) => b[2])),
       Math.max(...bounds.map((b) => b[3])),
     ];
+  }
+
+  function safeId(value) {
+    return String(value || "layer")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "layer";
+  }
+
+  function geometryFamily(layer) {
+    const types = layer.geometryTypes || [];
+    if (types.some((type) => String(type).includes("Polygon"))) {
+      return "polygon";
+    }
+    if (types.some((type) => String(type).includes("Point"))) {
+      return "point";
+    }
+    return "line";
+  }
+
+  function geometryPaint(layer, family) {
+    const style = layer.style || {};
+    if (family === "polygon") {
+      return {
+        fill: {
+          "fill-color": style.fill || "#2a9d8f",
+          "fill-opacity": Math.min(Number(style.fillOpacity ?? 0.16), 0.24),
+        },
+        line: {
+          "line-color": style.line || "#155e75",
+          "line-width": Math.max(Number(style.lineWidth || 1.2), 1.2),
+          "line-opacity": 0.9,
+        },
+      };
+    }
+    if (family === "point") {
+      return {
+        circle: {
+          "circle-color": style.fill || style.line || "#b45309",
+          "circle-radius": 4,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 1,
+        },
+      };
+    }
+    return {
+      line: {
+        "line-color": style.line || "#155e75",
+        "line-width": Math.max(Number(style.lineWidth || 1.3), 1.3),
+        "line-opacity": 0.92,
+      },
+    };
   }
 
   function projectLocations(features) {
@@ -169,6 +249,7 @@
       return;
     }
 
+    registerPmtilesProtocol();
     const dataUrl = root.dataset.index ||
       "https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson";
     const collection = await loadProjectIndex(dataUrl);
@@ -271,6 +352,90 @@
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
 
+    let selectedGeometry = { layers: [], sources: [] };
+    let selectedGeometryRequest = 0;
+
+    function clearSelectedGeometry() {
+      for (const layerId of [...selectedGeometry.layers].reverse()) {
+        if (map.getLayer(layerId)) {
+          map.removeLayer(layerId);
+        }
+      }
+      for (const sourceId of selectedGeometry.sources) {
+        if (map.getSource(sourceId)) {
+          map.removeSource(sourceId);
+        }
+      }
+      selectedGeometry = { layers: [], sources: [] };
+    }
+
+    async function showSelectedProjectGeometry(feature) {
+      const manifestHref = feature.properties?.manifest;
+      const request = ++selectedGeometryRequest;
+      clearSelectedGeometry();
+      if (!manifestHref || !window.pmtiles) {
+        return;
+      }
+      if (!map.isStyleLoaded()) {
+        await new Promise((resolve) => map.once("load", resolve));
+      }
+      const manifestUrl = resolveHref(manifestHref);
+      const response = await fetch(manifestUrl, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Project manifest request failed: ${response.status}`);
+      }
+      const manifest = await response.json();
+      if (request !== selectedGeometryRequest) {
+        return;
+      }
+      const projectId = safeId(feature.id || feature.properties?.projectId);
+      const beforeId = map.getLayer("selected-project-extent-fill")
+        ? "selected-project-extent-fill"
+        : undefined;
+      for (const tileset of manifest.tilesets || []) {
+        if (tileset.type !== "vector" || tileset.id === "geometry-detail") {
+          continue;
+        }
+        const layers = (tileset.layers || []).filter((layer) => (
+          LANDING_GEOMETRY_KINDS.has(layer.kind)
+          && layer.kind !== "model_extents"
+          && layer.sourceKind !== "raw-hdf"
+          && layer.sourceKind !== "stored-map"
+        ));
+        if (!layers.length || !tileset.href) {
+          continue;
+        }
+        const sourceId = `selected-model-${projectId}-${safeId(tileset.id)}`;
+        const tileUrl = new URL(tileset.href, manifestUrl).toString();
+        map.addSource(sourceId, {
+          type: "vector",
+          url: `pmtiles://${tileUrl}`,
+        });
+        selectedGeometry.sources.push(sourceId);
+        for (const layer of layers) {
+          const family = geometryFamily(layer);
+          const paint = geometryPaint(layer, family);
+          const baseId = `${sourceId}-${safeId(layer.id)}`;
+          const common = {
+            source: sourceId,
+            "source-layer": layer.sourceLayer,
+            minzoom: Number(tileset.minzoom || 0),
+          };
+          if (family === "polygon") {
+            const fillId = `${baseId}-fill`;
+            const lineId = `${baseId}-line`;
+            map.addLayer({ id: fillId, type: "fill", ...common, paint: paint.fill }, beforeId);
+            map.addLayer({ id: lineId, type: "line", ...common, paint: paint.line }, beforeId);
+            selectedGeometry.layers.push(fillId, lineId);
+          } else {
+            const layerId = `${baseId}-${family}`;
+            map.addLayer({ id: layerId, type: family === "point" ? "circle" : "line", ...common, paint: paint[family === "point" ? "circle" : "line"] }, beforeId);
+            selectedGeometry.layers.push(layerId);
+          }
+        }
+      }
+    }
+
     function openProjectPopup(lngLat, feature) {
       if (!feature) {
         return;
@@ -297,6 +462,9 @@
         ],
         { padding: 64, maxZoom: 15, duration: 600 }
       );
+      showSelectedProjectGeometry(feature).catch(() => {
+        clearSelectedGeometry();
+      });
     }
 
     function renderedFeatures(event, layerIds) {

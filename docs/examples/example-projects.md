@@ -61,6 +61,7 @@ and a published MapLibre webmap.
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
 <script src="../../assets/javascripts/ras-example-projects-data.js?v=20260715Tterrainalpha01"></script>
 <script src="../../assets/javascripts/ras-example-library.js?v=20260714Tlibrarytable01"></script>
 

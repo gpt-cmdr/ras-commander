@@ -291,6 +291,9 @@
 
   function projectAvailability(manifest) {
     const tilesets = viewerTilesets(manifest);
+    const capabilities = manifest.capabilities || {};
+    const terrainApplicable = capabilities.terrain?.applicable !== false;
+    const storedMapsApplicable = capabilities.storedMaps?.applicable !== false;
     const vectorLayers = tilesets
       .filter((tileset) => tileset.type === "vector")
       .flatMap((tileset) => tileset.layers || []);
@@ -325,15 +328,19 @@
         label: "Terrain",
         detail: terrain
           ? "Project terrain is published."
-          : "No project terrain was provided or published for this model.",
-        unavailable: !terrain,
+          : terrainApplicable
+            ? "No project terrain was provided or published for this model."
+            : "Not applicable: this source is a pure 1D model and does not include a RASMapper terrain.",
+        unavailable: !terrain && terrainApplicable,
       },
       {
         label: "Raster Results",
         detail: storedMaps.length
           ? `${storedMaps.length} RASMapper Stored Map raster layer${storedMaps.length === 1 ? "" : "s"} published.`
-          : "No RASMapper Stored Map rasters are published.",
-        unavailable: !storedMaps.length,
+          : storedMapsApplicable
+            ? "No RASMapper Stored Map rasters are published."
+            : "Not applicable: this pure 1D source has no terrain for a continuous RASMapper result surface.",
+        unavailable: !storedMaps.length && storedMapsApplicable,
       },
       {
         label: "Vector Results",
