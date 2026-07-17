@@ -258,18 +258,6 @@ def package_project(
         )
         _run(import_command, runner=runner)
 
-    if validate:
-        _run(
-            [
-                ras2cng,
-                "validate-publication",
-                str(viewer_dir / "manifest.json"),
-                str(working / "archive" / "manifest.json"),
-                "--json",
-            ],
-            runner=runner,
-        )
-
     status = {
         "schema": "rascommander.example-viewer-tranche-status/v1",
         "project": project_id,
@@ -283,9 +271,56 @@ def package_project(
         "validated": validate,
     }
     _write_json(working / "viewer-v2-status.json", status)
+
+    if not validate:
+        if target.exists():
+            shutil.rmtree(target)
+        os.replace(working, target)
+        return status
+
+    previous = output_projects_root / f".{project_id}.previous"
+    failed = output_projects_root / f".{project_id}.failed"
+    shutil.rmtree(previous, ignore_errors=True)
+    shutil.rmtree(failed, ignore_errors=True)
     if target.exists():
-        shutil.rmtree(target)
-    os.replace(working, target)
+        os.replace(target, previous)
+
+    try:
+        os.replace(working, target)
+        validation_catalog = scratch / "raster-assets.validation.json"
+        _run(
+            [
+                ras2cng,
+                "raster-service-catalog",
+                str(output_projects_root.parent),
+                str(validation_catalog),
+                "--manifest",
+                str(target / "viewer" / "manifest.json"),
+                "--attach-manifests",
+                "--service-base-url",
+                "/ras-raster",
+            ],
+            runner=runner,
+        )
+        _run(
+            [
+                ras2cng,
+                "validate-publication",
+                str(target / "viewer" / "manifest.json"),
+                str(target / "archive" / "manifest.json"),
+                "--json",
+                "--check-files",
+            ],
+            runner=runner,
+        )
+    except Exception:
+        if target.exists():
+            os.replace(target, failed)
+        if previous.exists():
+            os.replace(previous, target)
+        raise
+    else:
+        shutil.rmtree(previous, ignore_errors=True)
     return status
 
 
