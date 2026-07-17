@@ -763,13 +763,31 @@ def write_project_manifest(
 
 
 def _stored_map_type(filename: str) -> tuple[str, str] | None:
-    normalized = filename.casefold().replace("_", " ")
+    normalized = filename.casefold()
+    normalized = normalized.replace("²", " squared").replace("^2", " squared")
+    normalized = re.sub(r"\s+", " ", normalized.replace("_", " ")).strip()
+    normalized = re.sub(
+        r"^d\s+v\s+squared\b",
+        "depth x velocity squared",
+        normalized,
+    )
+    normalized = re.sub(r"^d\s+v\b", "depth x velocity", normalized)
     checks = (
         ("percent time inundated", "percent-inundated", "Percent Time Inundated"),
+        ("fraction inundated", "percent-inundated", "Percent Time Inundated"),
         ("arrival time", "arrival-time", "Arrival Time"),
+        (
+            "depth x velocity squared",
+            "depth-x-velocity-squared",
+            "Depth x Velocity Squared",
+        ),
         ("depth x velocity", "depth-x-velocity", "Depth x Velocity"),
+        ("inundation boundary", "inundation-boundary", "Inundation Boundary"),
         ("water surface", "wse", "Water Surface Elevation"),
         ("wse", "wse", "Water Surface Elevation"),
+        ("froude number", "froude", "Froude Number"),
+        ("froude", "froude", "Froude Number"),
+        ("shear stress", "shear-stress", "Shear Stress"),
         ("velocity", "velocity", "Velocity"),
         ("duration", "duration", "Duration"),
         ("depth", "depth", "Depth"),
@@ -792,8 +810,10 @@ def _stored_map_candidates(maps_dir: Path) -> list[tuple[str, Path]]:
         plan_id = _normalize_id(plan_dir.name, "p")
         candidates.extend(
             (plan_id, path)
-            for path in sorted(plan_dir.glob("*_cog.tif"))
-            if path.is_file() and _stored_map_type(path.name)
+            for path in sorted(plan_dir.iterdir())
+            if path.is_file()
+            and (path.name.casefold().endswith("_cog.tif") or path.suffix.casefold() == ".shp")
+            and _stored_map_type(path.name)
         )
     return candidates
 

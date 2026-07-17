@@ -273,6 +273,50 @@ def test_all_mode_builds_safe_commands_imports_stored_maps_and_records_status(
     assert str(tmp_path) not in json.dumps(project_manifest)
 
 
+@pytest.mark.parametrize(
+    ("filename", "expected"),
+    [
+        ("Depth (Max).Terrain_cog.tif", "depth"),
+        ("Water Surface Elevation (Max).Terrain_cog.tif", "wse"),
+        ("Velocity (Max).Terrain_cog.tif", "velocity"),
+        ("Froude Number (Max).Terrain_cog.tif", "froude"),
+        ("Shear Stress (Max).Terrain_cog.tif", "shear-stress"),
+        ("Depth x Velocity (Max).Terrain_cog.tif", "depth-x-velocity"),
+        ("D _ V Squared (Max).Terrain_cog.tif", "depth-x-velocity-squared"),
+        ("Arrival Time (Max).Terrain_cog.tif", "arrival-time"),
+        ("Duration (Max).Terrain_cog.tif", "duration"),
+        ("Percent Time Inundated (Max).Terrain_cog.tif", "percent-inundated"),
+        ("Inundation Boundary (Max).shp", "inundation-boundary"),
+    ],
+)
+def test_stored_map_type_recognizes_every_default_output(
+    filename: str, expected: str, processor
+) -> None:
+    assert processor._stored_map_type(filename)[0] == expected
+
+
+def test_stored_map_candidates_include_rasters_and_inundation_boundaries(
+    tmp_path: Path, processor
+) -> None:
+    plan_dir = tmp_path / "maps" / "p03"
+    plan_dir.mkdir(parents=True)
+    for filename in (
+        "Froude Number (Max).Terrain_cog.tif",
+        "D _ V Squared (Max).Terrain_cog.tif",
+        "Inundation Boundary (Max).shp",
+    ):
+        (plan_dir / filename).touch()
+    (plan_dir / "Inundation Boundary (Max).dbf").touch()
+
+    candidates = processor._stored_map_candidates(tmp_path / "maps")
+
+    assert [(plan, path.name) for plan, path in candidates] == [
+        ("p03", "D _ V Squared (Max).Terrain_cog.tif"),
+        ("p03", "Froude Number (Max).Terrain_cog.tif"),
+        ("p03", "Inundation Boundary (Max).shp"),
+    ]
+
+
 def test_dry_run_records_planned_argv_without_invoking_subprocess(
     tmp_path: Path, processor
 ) -> None:
