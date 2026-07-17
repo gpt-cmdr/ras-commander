@@ -71,7 +71,13 @@ def test_project_feature_uses_display_crs_without_losing_definition(monkeypatch,
     hdf_path = tmp_path / "model.g01.hdf"
     hdf_path.touch()
     extent = gpd.GeoDataFrame(geometry=[box(-85.0, 40.0, -84.9, 40.1)], crs="EPSG:4326")
-    monkeypatch.setattr(builder.HdfProject, "get_project_extent", lambda *args, **kwargs: (extent, extent.total_bounds))
+    calls = []
+
+    def get_project_extent(*args, **kwargs):
+        calls.append((args, kwargs))
+        return extent, extent.total_bounds
+
+    monkeypatch.setattr(builder.HdfProject, "get_project_extent", get_project_extent)
     project = {
         "id": "model-1",
         "title": "Model 1",
@@ -89,6 +95,17 @@ def test_project_feature_uses_display_crs_without_losing_definition(monkeypatch,
 
     assert feature["properties"]["crs"] == "WGS 84"
     assert feature["properties"]["crsDefinition"] == "EPSG:4326"
+    assert calls == [
+        (
+            (hdf_path,),
+            {
+                "geometry_type": "footprint",
+                "buffer_percent": 0,
+                "fill_holes": True,
+            },
+        )
+    ]
+    assert "fill_holes=True" in feature["properties"]["extentSource"]
 
 
 def test_project_feature_unions_configured_geometry_hdfs(monkeypatch, tmp_path: Path) -> None:

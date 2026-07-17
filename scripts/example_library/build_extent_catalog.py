@@ -137,6 +137,7 @@ def _project_feature(project: dict[str, Any], source_root: Path) -> dict[str, An
             hdf_path,
             geometry_type="footprint",
             buffer_percent=0,
+            fill_holes=True,
         )
         if extent_gdf.empty:
             raise ValueError(f"No footprint was produced for {project['id']}: {hdf_path}")
@@ -172,7 +173,10 @@ def _project_feature(project: dict[str, Any], source_root: Path) -> dict[str, An
         "projectManifest": project["project_manifest"],
         "viewerType": "MapLibre",
         "notes": project["notes"],
-        "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "extentSource": (
+            "HdfProject.get_project_extent(geometry_type='footprint', "
+            "fill_holes=True)"
+        ),
     }
     return {
         "type": "Feature",
