@@ -135,11 +135,19 @@ class FakeRas2cng:
                 },
                 "geometry": [{"geom_id": "g01"}, {"geom_id": "g02"}],
                 "results": [{"plan_id": "p03", "geom_id": "g02"}],
-                "terrain": [],
+                "terrain": [
+                    {
+                        "terrain_name": "TerrainWithChannel",
+                        "cog_file": "terrain/terrain.cog.tif",
+                    }
+                ],
             }
             (archive_dir / "manifest.json").write_text(
                 json.dumps(archive_manifest), encoding="utf-8"
             )
+            terrain = archive_dir / "terrain" / "terrain.cog.tif"
+            terrain.parent.mkdir()
+            terrain.write_bytes(b"cog")
         elif subcommand == "map":
             cog = Path(command[3]) / "p03" / "Depth (Max).Terrain_cog.tif"
             cog.parent.mkdir(parents=True, exist_ok=True)
@@ -148,19 +156,28 @@ class FakeRas2cng:
             viewer_dir = Path(command[3])
             viewer_dir.mkdir(parents=True, exist_ok=True)
             viewer_manifest = {
-                "schema": "rascommander.maplibre.project/1",
+                "schema": "rascommander.maplibre/v2",
                 "sourceProject": "../project.json",
                 "source_path": str(viewer_dir),
                 "tilesets": [],
                 "groups": [],
+                "layers": {},
             }
             (viewer_dir / "manifest.json").write_text(
                 json.dumps(viewer_manifest), encoding="utf-8"
             )
-        elif subcommand == "pmtiles":
-            pmtiles = Path(command[3])
-            pmtiles.parent.mkdir(parents=True, exist_ok=True)
-            pmtiles.write_bytes(b"pmtiles")
+        elif subcommand == "maplibre-import-stored-maps":
+            viewer_dir = Path(command[4])
+            viewer_manifest = json.loads((viewer_dir / "manifest.json").read_text())
+            viewer_manifest["layers"]["result-p03-depth-max"] = {
+                "sourceKind": "stored-map",
+                "sourceCog": "../archive/stored-maps/p03/depth-max.cog.tif",
+                "plan": "p03",
+                "geometry": "g02",
+            }
+            (viewer_dir / "manifest.json").write_text(
+                json.dumps(viewer_manifest), encoding="utf-8"
+            )
         return subprocess.CompletedProcess(command, 0, stdout=f"{subcommand} ok", stderr="")
 
 
@@ -188,15 +205,31 @@ def test_all_mode_builds_safe_commands_imports_stored_maps_and_records_status(
         "archive",
         "map",
         "maplibre",
-        "pmtiles",
+        "maplibre-terrain",
+        "maplibre-import-stored-maps",
     ]
-    inspect_command, archive_command, map_command, maplibre_command, _ = commands
+    inspect_command, archive_command, map_command, maplibre_command, terrain_command, import_command = commands
     assert inspect_command[2:] == [str(project_root / "Muncie.prj"), "--json"]
     assert "--results" in archive_command
     assert archive_command[archive_command.index("--plans") + 1] == "p03"
     assert "--terrain" in archive_command
     assert "--consolidate-terrain" in archive_command
-    assert {"--cog", "--inundation-boundary", "--render-mode"} <= set(map_command)
+    assert archive_command[archive_command.index("--results-layout") + 1] == "variable"
+    assert archive_command[archive_command.index("--results-geometry") + 1] == "none"
+    assert "--auxiliary-results" in archive_command
+    assert {
+        "--cog",
+        "--inundation-boundary",
+        "--froude",
+        "--shear-stress",
+        "--dv",
+        "--dv-sq",
+        "--arrival-time",
+        "--duration",
+        "--percent-inundated",
+        "--render-mode",
+    } <= set(map_command)
+    assert map_command[map_command.index("--arrival-depth") + 1] == "0.1"
     assert "--vector-results" in maplibre_command
     assert maplibre_command[maplibre_command.index("--primary-geometry") + 1] == "g02"
     assert "--all-primary-geometry" in maplibre_command
@@ -206,6 +239,9 @@ def test_all_mode_builds_safe_commands_imports_stored_maps_and_records_status(
         if value == "--geometry-hdf"
     ]
     assert [binding.split("=", 1)[0] for binding in hdf_bindings] == ["g01", "g02"]
+    assert terrain_command[terrain_command.index("--source-cog") + 1] == "../archive/terrain/terrain.cog.tif"
+    assert "--allow-partial" in import_command
+    assert "--overwrite" in import_command
     assert all(kwargs["shell"] is False for _, kwargs in fake.calls)
 
     assert status["state"] == "completed"
@@ -225,9 +261,8 @@ def test_all_mode_builds_safe_commands_imports_stored_maps_and_records_status(
     assert "source_path" not in archive["project"]
     assert "archive_path" not in archive["project"]
     viewer = json.loads((output_root / "viewer" / "manifest.json").read_text())
-    stored_map = next(item for item in viewer["tilesets"] if item["sourceKind"] == "stored-map")
-    assert stored_map["sourceCog"] == "../maps/p03/Depth (Max).Terrain_cog.tif"
-    assert stored_map["storedMap"]["source"] == "RasProcess.store_maps"
+    stored_map = viewer["layers"]["result-p03-depth-max"]
+    assert stored_map["sourceCog"] == "../archive/stored-maps/p03/depth-max.cog.tif"
     assert str(tmp_path) not in json.dumps(viewer)
     project_manifest = json.loads((output_root / "project.json").read_text())
     assert project_manifest["source"] == {

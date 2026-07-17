@@ -45,7 +45,14 @@ CONFIG_SCHEMA = "rascommander.example-project-processor/v1"
 STATUS_SCHEMA = "rascommander.example-project-processor-status/v1"
 PROJECT_SCHEMA = "rascommander.example-project/v1"
 MODES = ("inspect", "extract", "package", "all")
-ALLOWED_RAS2CNG_COMMANDS = {"inspect", "archive", "map", "maplibre", "pmtiles"}
+ALLOWED_RAS2CNG_COMMANDS = {
+    "inspect",
+    "archive",
+    "map",
+    "maplibre",
+    "maplibre-import-stored-maps",
+    "maplibre-terrain",
+}
 LOCAL_ONLY_MANIFEST_KEYS = {
     "archive_path",
     "hdf_path",
@@ -63,7 +70,19 @@ PUBLIC_SOURCE_KEYS = {
     "license_url",
     "publisher",
 }
-DEFAULT_MAP_TYPES = ("wse", "depth", "velocity", "inundation_boundary")
+DEFAULT_MAP_TYPES = (
+    "wse",
+    "depth",
+    "velocity",
+    "froude",
+    "shear_stress",
+    "depth_x_velocity",
+    "depth_x_velocity_sq",
+    "inundation_boundary",
+    "arrival_time",
+    "duration",
+    "percent_inundated",
+)
 MAP_TYPE_FLAGS = {
     "froude": "--froude",
     "shear_stress": "--shear-stress",
@@ -491,7 +510,18 @@ def build_extract_commands(
     )
     archive = [context.ras2cng, "archive", str(context.project_file), str(context.archive_dir)]
     if plan_ids:
-        archive.extend(["--results", "--plans", ",".join(plan_ids)])
+        archive.extend(
+            [
+                "--results",
+                "--plans",
+                ",".join(plan_ids),
+                "--results-layout",
+                "variable",
+                "--results-geometry",
+                "none",
+                "--auxiliary-results",
+            ]
+        )
     if include_terrain:
         archive.append("--terrain")
     if consolidate_terrain:
@@ -520,6 +550,9 @@ def build_extract_commands(
             "--profile",
             str(extract.get("profile", "Max")),
             "--cog",
+            "--arrival-depth",
+            str(float(extract.get("arrival_depth", 0.1))),
+            "--skip-errors",
         ]
         for default_name, disable_flag in (
             ("wse", "--no-wse"),
@@ -729,10 +762,6 @@ def write_project_manifest(
     return sanitized
 
 
-def _slug(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", value.casefold()).strip("-") or "map"
-
-
 def _stored_map_type(filename: str) -> tuple[str, str] | None:
     normalized = filename.casefold().replace("_", " ")
     checks = (
@@ -769,17 +798,66 @@ def _stored_map_candidates(maps_dir: Path) -> list[tuple[str, Path]]:
     return candidates
 
 
-def _plan_metadata(inspection: Mapping[str, Any], plan_id: str) -> dict[str, str]:
-    for item in inspection.get("plan_files") or []:
-        if not isinstance(item, dict) or not item.get("plan_id"):
+def _package_scratch_dir(context: ProjectContext, child: str) -> Path | None:
+    package = context.config.get("package")
+    package = package if isinstance(package, dict) else {}
+    if not package.get("scratch_dir"):
+        return None
+    return _resolve_config_path(context.config_path, package["scratch_dir"]) / child
+
+
+def import_terrain(
+    context: ProjectContext,
+    *,
+    phase: MutableMapping[str, Any],
+    runner: Runner,
+    dry_run: bool,
+    clock: Clock,
+) -> list[dict[str, Any]]:
+    """Publish the archived terrain COG through the semantic terrain command."""
+
+    if dry_run:
+        return []
+    archive = _read_json_object(context.archive_dir / "manifest.json", label="archive manifest")
+    terrain_entries = [item for item in archive.get("terrain") or [] if isinstance(item, dict)]
+    if len(terrain_entries) > 1:
+        raise ProcessorError(
+            "Multiple archived terrain entries require explicit viewer layer IDs; "
+            "the one-project processor will not overwrite one terrain with another"
+        )
+
+    imported: list[dict[str, Any]] = []
+    for item in terrain_entries:
+        cog_file = item.get("cog_file")
+        if not cog_file:
             continue
-        if _normalize_id(item["plan_id"], "p") == plan_id:
-            geom_number = item.get("geom_number")
-            return {
-                "planTitle": str(item.get("plan_title") or plan_id),
-                "geometry": _normalize_id(geom_number, "g") if geom_number else "",
-            }
-    return {"planTitle": plan_id, "geometry": ""}
+        cog_path = context.archive_dir / Path(str(cog_file))
+        if not cog_path.is_file():
+            raise ProcessorError(f"Archived terrain COG does not exist: {cog_path}")
+        command = [
+            context.ras2cng,
+            "maplibre-terrain",
+            str(cog_path),
+            str(context.viewer_dir),
+            "--name",
+            str(item.get("terrain_name") or "Terrain"),
+            "--source-cog",
+            f"../archive/{Path(str(cog_file)).as_posix()}",
+            "--units",
+            str(context.config["project"].get("terrain_units") or "ft"),
+        ]
+        scratch = _package_scratch_dir(context, "terrain")
+        if scratch is not None:
+            command.extend(["--scratch-dir", str(scratch)])
+        _run_command(
+            command,
+            phase=phase,
+            runner=runner,
+            dry_run=False,
+            clock=clock,
+        )
+        imported.append(item)
+    return imported
 
 
 def import_stored_maps(
@@ -791,7 +869,7 @@ def import_stored_maps(
     dry_run: bool,
     clock: Clock,
 ) -> list[dict[str, Any]]:
-    """Convert generated Stored Map COGs to PMTiles and add viewer entries."""
+    """Import generated Stored Maps through ras2cng's semantic importer."""
 
     package = context.config.get("package")
     package = package if isinstance(package, dict) else {}
@@ -801,70 +879,46 @@ def import_stored_maps(
     if not candidates:
         return []
 
-    manifest_path = context.viewer_dir / "manifest.json"
-    if dry_run:
-        manifest: dict[str, Any] = {"tilesets": [], "groups": []}
+    command = [
+        context.ras2cng,
+        "maplibre-import-stored-maps",
+        str(context.maps_dir),
+        str(context.archive_dir),
+        str(context.viewer_dir),
+    ]
+    scratch = _package_scratch_dir(context, "stored-maps")
+    if scratch is not None:
+        command.extend(["--scratch-dir", str(scratch)])
+    if bool(package.get("require_all_stored_maps", False)):
+        command.append("--require-all")
     else:
-        manifest = _read_json_object(manifest_path, label="MapLibre viewer manifest")
-    tilesets = manifest.setdefault("tilesets", [])
-    groups = manifest.setdefault("groups", [])
-    if not isinstance(tilesets, list) or not isinstance(groups, list):
-        raise ProcessorError("MapLibre viewer manifest tilesets/groups must be lists")
-    if not any(isinstance(group, dict) and group.get("id") == "ras-raster-results" for group in groups):
-        groups.append({"id": "ras-raster-results", "name": "Raster Results", "visible": True})
+        command.append("--allow-partial")
+    command.append("--overwrite")
+    _run_command(
+        command,
+        phase=phase,
+        runner=runner,
+        dry_run=dry_run,
+        clock=clock,
+    )
+    if dry_run:
+        return [
+            {"id": f"result-{plan_id}-{_stored_map_type(path.name)[0]}"}
+            for plan_id, path in candidates
+            if _stored_map_type(path.name)
+        ]
 
-    imported: list[dict[str, Any]] = []
-    existing_ids = {str(item.get("id")) for item in tilesets if isinstance(item, dict)}
-    extract = context.config.get("extract")
-    extract = extract if isinstance(extract, dict) else {}
-    profile = str(extract.get("profile", "Max"))
-    for plan_id, cog_path in candidates:
-        map_info = _stored_map_type(cog_path.name)
-        assert map_info is not None
-        map_slug, map_title = map_info
-        layer_id = f"result-{plan_id}-{map_slug}-{_slug(profile)}"
-        if layer_id in existing_ids:
-            raise ProcessorError(f"Duplicate Stored Map viewer layer: {layer_id}")
-        pmtiles_path = context.viewer_dir / "tiles" / f"{layer_id}.pmtiles"
-        _run_command(
-            [context.ras2cng, "pmtiles", str(cog_path), str(pmtiles_path)],
-            phase=phase,
-            runner=runner,
-            dry_run=dry_run,
-            clock=clock,
-        )
-        metadata = _plan_metadata(inspection, plan_id)
-        source_cog = Path(os.path.relpath(cog_path, context.viewer_dir)).as_posix()
-        entry = {
-            "id": layer_id,
-            "type": "raster",
-            "name": f"{map_title} ({profile})",
-            "href": f"tiles/{pmtiles_path.name}",
-            "bytes": pmtiles_path.stat().st_size if pmtiles_path.is_file() else 0,
-            "sourceCog": source_cog,
-            "groupId": "ras-raster-results",
-            "visible": False,
-            "queryable": True,
-            "sourceKind": "stored-map",
-            "plan": plan_id,
-            "planTitle": metadata["planTitle"],
-            "geometry": metadata["geometry"],
-            "storedMap": {
-                "source": "RasProcess.store_maps",
-                "plan": plan_id,
-                "planTitle": metadata["planTitle"],
-                "geometry": metadata["geometry"],
-                "mapType": map_title,
-                "profile": profile,
-            },
-        }
-        tilesets.append(entry)
-        existing_ids.add(layer_id)
-        imported.append(entry)
-
-    if not dry_run:
-        _atomic_write_json(manifest_path, manifest)
-    return imported
+    manifest = _read_json_object(
+        context.viewer_dir / "manifest.json", label="MapLibre viewer manifest"
+    )
+    layers = manifest.get("layers") or {}
+    if not isinstance(layers, dict):
+        raise ProcessorError("MapLibre viewer manifest layers must be an object")
+    return [
+        {"id": layer_id, **entry}
+        for layer_id, entry in layers.items()
+        if isinstance(entry, dict) and entry.get("sourceKind") == "stored-map"
+    ]
 
 
 def _start_phase(status: MutableMapping[str, Any], name: str, clock: Clock) -> MutableMapping[str, Any]:
@@ -967,6 +1021,16 @@ def process_project(
                     context.viewer_dir / "manifest.json",
                     local_roots=[context.project_root, context.output_root, context.config_path.parent],
                 )
+            terrain = import_terrain(
+                context,
+                phase=package_phase,
+                runner=runner,
+                dry_run=dry_run,
+                clock=clock,
+            )
+            package_phase["terrainImported"] = [
+                str(entry.get("terrain_name") or "Terrain") for entry in terrain
+            ]
             imported = import_stored_maps(
                 context,
                 inspection,
