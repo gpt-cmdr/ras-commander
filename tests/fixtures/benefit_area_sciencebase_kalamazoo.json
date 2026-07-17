@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "fixture_id": "usgs-sciencebase-kalamazoo-p01-p33",
+  "source": {
+    "publisher": "U.S. Geological Survey",
+    "sciencebase_item_id": "67a38201d34ee33d441d2f22",
+    "doi": "10.5066/P13CPA5B",
+    "license": "CC0-1.0",
+    "data_release_url": "https://www.usgs.gov/data/model-application-data-release-a-2d-hydraulic-model-hec-ras-kalamazoo-river-trowbridge-dam",
+    "archive_name": "hec_ras_model.zip",
+    "archive_size_bytes": 3121325101,
+    "archive_sha256": "535564b40328f92d48663b708e8b03c1001cb9cb96c120354cf6ece77daae311"
+  },
+  "model": {
+    "ras_version": "6.6",
+    "project_name": "kalamazoo_trowbridg",
+    "project_sha256": "731b6fe7140524ab77bb854969751a1b8f3841709c3ade3353a6dee01936ec61",
+    "rasmap_sha256": "f0201532bb4db6ab87b893ec172d0eaf59ae27c087c70af2db0e173cbcc4d273",
+    "plan_count": 21
+  },
+  "comparison": {
+    "pre_plan": "01",
+    "post_plan": "33",
+    "pre_plan_hdf_sha256": "0893850bffd6daf36ed885d24664df17dc6015cdbb019b576defa29fe1fc489f",
+    "post_plan_hdf_sha256": "b72ec857501c07e76e17c31aa54e3f7b27f29e9718ea6cf7abbcadd990674033",
+    "pre_geometry": "02",
+    "post_geometry": "05",
+    "mesh_area": "perimeter_1",
+    "mesh_cell_count": 48124
+  },
+  "terrain": {
+    "name": "be_Area_5",
+    "hdf_relative_path": "Terrain/be_Area_5.hdf",
+    "tif_relative_path": "Terrain/be_Area_5.be_Area_5.tif",
+    "hdf_sha256": "b2b3360814af44d1e709635215dfb58088a97c8c0a2d2ea9410c4731011f1f36",
+    "tif_sha256": "06f42f9c2d3420894343d1a010f8de2315bf4a505260609413c04435fd9334d3",
+    "crs": "EPSG:6499",
+    "bands": 1,
+    "width": 23074,
+    "height": 21531,
+    "cell_size": 1.0
+  },
+  "algorithm": {
+    "flood_min_depth": 0.05,
+    "benefit_min_depth": 0.25,
+    "minimum_region_pixels": 16,
+    "connectivity": 4,
+    "polygon_edge_mode": "exact-cell-edge",
+    "include_wse": false,
+    "render_mode": "horizontal"
+  },
+  "expected": {
+    "default": {
+      "array_sha256": "a06ee7d0b53857bd6c0b4e9919c13b48a811a1a3bd1a0918285ead7efc30289e",
+      "cell_counts": {"1": 7704903, "2": 5660043, "3": 71039}
+    },
+    "no_filter": {
+      "array_sha256": "11d40064a8a91eb96f636dc383e9e83c04dc666053fb397224acc3ebaf39b525",
+      "cell_counts": {"1": 7709791, "2": 5662416, "3": 121378}
+    },
+    "filter_100": {
+      "array_sha256": "3d1b99e7221e0683960dcc867a4ea10186e2cf9ec6fb594b607d276c81f7436b",
+      "cell_counts": {"1": 7697719, "2": 5658492, "3": 44855}
+    },
+    "custom_thresholds": {
+      "array_sha256": "49e860220fe2e2be6745f65b210e17d6dc7ef6d5a8487a44eb410fe7694f734d",
+      "cell_counts": {"1": 12878276, "2": 389591, "3": 8019}
+    },
+    "analysis_boundary": {
+      "array_sha256": "4155a00e2ede239dd679922c5b8dbd8adc3b8158cb73d34af675f0a233fd53f3",
+      "cell_counts": {"1": 7458602, "2": 1856300, "3": 38906}
+    },
+    "analysis_minus_improvement": {
+      "array_sha256": "cf311ab062f5b5ccfbd1a8fa895a9459357410f6b57e7a50deb0003baca75338",
+      "cell_counts": {"1": 6981292, "2": 1421400, "3": 33646}
+    }
+  }
+}

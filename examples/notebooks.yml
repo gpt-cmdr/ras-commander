@@ -2613,6 +2613,40 @@ notebooks:
   excluded: false
   code_cells: 25
   executed_cells: 24
+- id: 612_benefit_area_analysis
+  filename: 612_benefit_area_analysis.ipynb
+  title: Benefit-area mapping from pre- and post-project HEC-RAS plans
+  series: 600
+  series_name: Floodplain Mapping
+  summary: This example builds and computes a public HEC-RAS 7.0 drainage-improvement scenario, compares
+    hydraulic performance, and creates a categorical benefit-area raster plus polygon output.
+  tags: []
+  difficulty: intermediate
+  est_runtime: null
+  data_project: Davis
+  functions_used:
+  - GeomPipeNetwork.set_conduit_dimensions
+  - GeomPipeNetwork.set_pump_group_hq_curve
+  - HdfPipe.get_pipe_conduits
+  - HdfPipe.get_pipe_network_timeseries
+  - HdfPipe.get_pipe_nodes
+  - HdfPump.get_pump_groups
+  - HdfPump.get_pump_station_timeseries
+  - HdfResultsPlan.get_compute_messages
+  - HdfResultsPlan.get_runtime_data
+  - RasBenefits.get_registered_terrain_source
+  - RasCmdr.compute_plan
+  - RasExamples.extract_project
+  - RasGeo.clone_geom
+  - RasPlan.clone_plan
+  - RasProcess.store_maps
+  - ras.plan_df
+  - ras.project_name
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 8
+  executed_cells: 7
 - id: 700_core_sensitivity
   filename: 700_core_sensitivity.ipynb
   title: Core Sensitivity Testing with results_df
