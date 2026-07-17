@@ -59,9 +59,11 @@ applicable result family populated:
 
 1. **Vector Results** from raw HDF values joined to applicable cross sections,
    2D cells/faces, structures, pipes, and reference elements.
-2. **Raster Results** generated from RASMapper Stored Maps, beginning with
-   Depth, WSE, Velocity, and Inundation Boundary where supported by the plan.
-   This family is required for every 2D plan and every terrain-backed 1D plan.
+2. **Raster Results** generated from RASMapper Stored Maps. Every applicable
+   plan must publish the complete standard set: Depth, WSE, Velocity, Froude
+   Number, Shear Stress, Depth x Velocity, Depth x Velocity Squared, Arrival
+   Time, Duration, Percent Time Inundated, and Inundation Boundary. This family
+   is required for every 2D plan and every terrain-backed 1D plan.
 
 A pure 1D source project that contains no RASMapper terrain must still publish
 its computed raw cross-section results, but continuous Stored Map rasters are
