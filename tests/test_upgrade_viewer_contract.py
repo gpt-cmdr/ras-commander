@@ -20,6 +20,16 @@ def load_script():
     return module
 
 
+def test_metadata_normalization_rejects_dataframe_missing_values() -> None:
+    module = load_script()
+
+    assert module._metadata_text(float("nan")) == ""
+    assert module._metadata_text("<NA>") == ""
+    assert module._metadata_text(" Named Plan ") == "Named Plan"
+    assert module._numbered_id("p", float("nan")) == ""
+    assert module._numbered_id("g", 4.0) == "g04"
+
+
 def test_upgrade_adds_titles_and_all_primary_geometry_visibility() -> None:
     module = load_script()
     archive = {

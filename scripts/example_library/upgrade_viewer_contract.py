@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -68,6 +69,17 @@ def apply_geometry_visibility(
                 layer["visible"] = True
 
 
+def _metadata_text(value: Any) -> str:
+    text = str(value).strip() if value is not None else ""
+    return "" if text.casefold() in {"nan", "nat", "none", "<na>"} else text
+
+
+def _numbered_id(prefix: str, value: Any) -> str:
+    text = _metadata_text(value)
+    match = re.fullmatch(r"(\d+)(?:\.0+)?", text)
+    return f"{prefix}{int(match.group(1)):02d}" if match else ""
+
+
 def project_metadata(project_path: Path) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
     from ras_commander import init_ras_project
 
@@ -76,21 +88,24 @@ def project_metadata(project_path: Path) -> tuple[dict[str, str], dict[str, dict
         ras_object="new",
         load_results_summary=False,
     )
-    geometry_titles = {
-        f"g{str(row.get('geom_number') or '').zfill(2)}": str(
-            row.get("geom_title") or ""
-        ).strip()
-        for _, row in ras.geom_df.iterrows()
-    }
-    plan_metadata = {
-        f"p{str(row.get('plan_number') or '').zfill(2)}": {
-            "plan_title": str(
-                row.get("Plan Title", row.get("plan_title", "")) or ""
-            ).strip(),
-            "geom_id": f"g{str(row.get('geometry_number') or '').zfill(2)}",
+    geometry_titles: dict[str, str] = {}
+    for _, row in ras.geom_df.iterrows():
+        geometry_id = _numbered_id("g", row.get("geom_number"))
+        if geometry_id:
+            geometry_titles[geometry_id] = _metadata_text(row.get("geom_title"))
+
+    plan_metadata: dict[str, dict[str, str]] = {}
+    for _, row in ras.plan_df.iterrows():
+        plan_id = _numbered_id("p", row.get("plan_number"))
+        if not plan_id:
+            continue
+        plan_title = _metadata_text(row.get("Plan Title")) or _metadata_text(
+            row.get("plan_title")
+        )
+        plan_metadata[plan_id] = {
+            "plan_title": plan_title,
+            "geom_id": _numbered_id("g", row.get("geometry_number")),
         }
-        for _, row in ras.plan_df.iterrows()
-    }
     return geometry_titles, plan_metadata
 
 
