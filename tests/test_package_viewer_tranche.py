@@ -120,6 +120,57 @@ def test_package_project_builds_vector_viewer_and_terrain(tmp_path: Path) -> Non
     assert (tmp_path / "output" / "projects" / "muncie" / "viewer-v2-status.json").is_file()
 
 
+def test_package_project_can_enable_all_primary_geometry_layers(tmp_path: Path) -> None:
+    module = load_script()
+    source = tmp_path / "source" / "muncie"
+    archive = source / "archive"
+    viewer = source / "viewer"
+    archive.mkdir(parents=True)
+    viewer.mkdir()
+    project_file = tmp_path / "model" / "Muncie.prj"
+    project_file.parent.mkdir()
+    project_file.write_text("Proj Title=Muncie\n", encoding="ascii")
+    project_file.with_suffix(".g01.hdf").write_bytes(b"hdf")
+    (archive / "manifest.json").write_text(
+        json.dumps({"project": {"crs": "EPSG:2965"}, "geometry": [{"geom_id": "g01"}]}),
+        encoding="utf-8",
+    )
+    (viewer / "manifest.json").write_text(
+        json.dumps({"title": "Muncie", "groups": []}), encoding="utf-8"
+    )
+    (source / "project.json").write_text(
+        json.dumps({"title": "Muncie", "crs": "EPSG:2965"}), encoding="utf-8"
+    )
+    calls: list[list[str]] = []
+
+    def runner(command, **_kwargs):
+        command = list(command)
+        calls.append(command)
+        if command[1] == "maplibre":
+            output = Path(command[3])
+            output.mkdir(parents=True)
+            (output / "manifest.json").write_text(
+                json.dumps({"schema": "rascommander.maplibre/v2"}), encoding="utf-8"
+            )
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    status = module.package_project(
+        project_id="muncie",
+        project_file=project_file,
+        source_project_dir=source,
+        output_projects_root=tmp_path / "output" / "projects",
+        ras2cng="ras2cng",
+        scratch_root=tmp_path / "scratch",
+        show_all_primary_geometry=True,
+        overwrite=True,
+        runner=runner,
+    )
+
+    assert "--all-primary-geometry" in calls[0]
+    assert "--standard-primary-geometry" not in calls[0]
+    assert status["allPrimaryGeometry"] is True
+
+
 def test_package_project_atomically_overlays_refreshed_archive(tmp_path: Path) -> None:
     module = load_script()
     source = tmp_path / "source" / "muncie"

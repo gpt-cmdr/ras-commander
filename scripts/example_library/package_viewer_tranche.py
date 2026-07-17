@@ -145,6 +145,7 @@ def package_project(
     ras2cng: str,
     scratch_root: Path,
     primary_geometry: str | None = None,
+    show_all_primary_geometry: bool = False,
     refreshed_archive: Path | None = None,
     stored_maps: Path | None = None,
     require_all_stored_maps: bool = True,
@@ -193,7 +194,11 @@ def package_project(
             "--vector-results",
             "--primary-geometry",
             primary,
-            "--standard-primary-geometry",
+            (
+                "--all-primary-geometry"
+                if show_all_primary_geometry
+                else "--standard-primary-geometry"
+            ),
             "--title",
             title,
             "--source-project",
@@ -270,6 +275,7 @@ def package_project(
         "project": project_id,
         "title": title,
         "primaryGeometry": primary,
+        "allPrimaryGeometry": show_all_primary_geometry,
         "geometryCount": len(bindings),
         "terrainCount": terrain_count,
         "refreshedArchive": refreshed_archive is not None,
@@ -292,6 +298,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--scratch-root", type=Path, required=True)
     parser.add_argument("--path-map", action="append", default=[])
     parser.add_argument("--primary", action="append", default=[])
+    parser.add_argument(
+        "--all-primary-geometry",
+        action="append",
+        default=[],
+        metavar="PROJECT_ID",
+        help="Enable every populated layer in the primary geometry; repeat per project.",
+    )
     parser.add_argument("--archive", action="append", default=[])
     parser.add_argument("--stored-maps", action="append", default=[])
     parser.add_argument(
@@ -311,6 +324,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     path_maps = _assignments(args.path_map, label="--path-map")
     primary = _assignments(args.primary, label="--primary")
+    all_primary_geometry = set(args.all_primary_geometry)
     archives = {
         key: Path(value)
         for key, value in _assignments(args.archive, label="--archive").items()
@@ -326,7 +340,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if isinstance(item, dict) and item.get("id")
     }
     selected = args.project or list(projects)
-    unknown = sorted(set(selected) - set(projects))
+    unknown = sorted((set(selected) | all_primary_geometry) - set(projects))
     if unknown:
         raise TrancheError(f"Project(s) absent from metadata report: {', '.join(unknown)}")
 
@@ -345,6 +359,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     ras2cng=args.ras2cng,
                     scratch_root=args.scratch_root,
                     primary_geometry=primary.get(project_id),
+                    show_all_primary_geometry=project_id in all_primary_geometry,
                     refreshed_archive=archives.get(project_id),
                     stored_maps=stored_maps.get(project_id),
                     require_all_stored_maps=not args.allow_partial_stored_maps,
