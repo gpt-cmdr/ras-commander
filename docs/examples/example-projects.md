@@ -1,12 +1,7 @@
 # Example Project Library
 
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
-<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260714Tlibrarytable01">
-
-!!! warning "Under construction"
-    The Example Project Library is moving to a RAS Commander MapLibre viewer
-    backed by PMTiles and WebGIS-hosted artifacts. The current promotion set
-    includes HEC examples, ScienceBase releases, and an eBFE/BLE delivery.
+<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260717Tviewer-v2-library01">
 
 RAS Commander uses repeatable HEC-RAS project fixtures for examples, tests,
 documentation, and regression checks. The library combines several source
@@ -30,14 +25,14 @@ but they are not published as map-review targets until their CRS is resolved.
 
 ## Project Explorer
 
-The explorer shows one model-limit polygon per promoted MapLibre project.
+The explorer shows one model-limit polygon per published MapLibre project.
 Click a polygon to review source metadata and open that project's webmap. The
 table below is the same published catalog: each project name is linked once to
 its viewer and the Project Information column summarizes the current bundle.
 Projects stay out of this map until they have a valid CRS, a WGS84 model limit,
 and a published MapLibre webmap.
 
-<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260715Tterrainalpha01">
+<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260717Tviewer-v2-library01">
   <div class="ras-library-map-shell">
     <div class="ras-library-map" data-library-map></div>
   </div>
@@ -62,8 +57,8 @@ and a published MapLibre webmap.
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
-<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260715Tterrainalpha01"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260714Tlibrarytable01"></script>
+<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260717Tviewer-v2-library01"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260717Tviewer-v2-library01"></script>
 
 ## Related Workflows
 
