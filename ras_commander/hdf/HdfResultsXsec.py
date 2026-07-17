@@ -27,6 +27,7 @@ Notes:
 - Functions return xarray Datasets for efficient handling of multi-dimensional data
 """
 
+import re
 from pathlib import Path
 from typing import Union, Optional, List, Dict, Tuple, Sequence
 
@@ -198,6 +199,225 @@ class HdfResultsXsec:
                 exc_info=True,
             )
             raise
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_xsec_summary(
+        hdf_path: Path,
+        variables: Optional[Union[str, Sequence[str]]] = None,
+        chunk_rows: int = 4096,
+    ) -> pd.DataFrame:
+        """Summarize unsteady 1D cross-section results with bounded memory.
+
+        One row is returned for each cross section. ``river``, ``reach``, and
+        ``node_id`` preserve the native HEC-RAS identity used to join result
+        attributes to cross-section geometry. Every available numeric
+        time-series variable contributes minimum, maximum, and time-of-maximum
+        columns. Missing optional variables are ignored.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Path to the HEC-RAS plan results HDF.
+        variables : str or sequence of str, optional
+            Native HDF variable names to summarize. Matching is
+            case-insensitive. By default, all numeric cross-section time-series
+            variables are included.
+        chunk_rows : int, default 4096
+            Maximum number of timesteps read from one HDF dataset at a time.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Attribute-only summary rows. An empty frame indicates that the
+            plan contains no unsteady cross-section output.
+        """
+        if chunk_rows < 1:
+            raise ValueError("chunk_rows must be at least 1")
+
+        requested = HdfResultsXsec._normalize_xsec_variable_filter(variables)
+        with h5py.File(hdf_path, "r") as hdf_file:
+            group = hdf_file.get(HdfResultsXsec._XSEC_OUTPUT_PATH)
+            if group is None:
+                return pd.DataFrame()
+
+            attributes = group.get("Cross Section Attributes")
+            if not isinstance(attributes, h5py.Dataset):
+                raise KeyError(
+                    f"Cross-section output in {Path(hdf_path).name} is missing "
+                    "required dataset 'Cross Section Attributes'."
+                )
+
+            attribute_rows = attributes[:]
+            feature_count = len(attribute_rows)
+            frame = pd.DataFrame(
+                {
+                    "river": HdfResultsXsec._xsec_attribute_values(
+                        attribute_rows, "River", required=True
+                    ),
+                    "reach": HdfResultsXsec._xsec_attribute_values(
+                        attribute_rows, "Reach", required=True
+                    ),
+                    "node_id": HdfResultsXsec._xsec_attribute_values(
+                        attribute_rows, "Station", required=True
+                    ),
+                    "name": HdfResultsXsec._xsec_attribute_values(
+                        attribute_rows, "Name", required=False
+                    ),
+                }
+            )
+
+            try:
+                timestamps = np.asarray(
+                    HdfBase.get_unsteady_timestamps(hdf_file), dtype="datetime64[ns]"
+                )
+            except (KeyError, ValueError):
+                timestamps = np.asarray([], dtype="datetime64[ns]")
+
+            units: Dict[str, str] = {}
+            native_variables: Dict[str, str] = {}
+            for variable_name, dataset in group.items():
+                if not HdfResultsXsec._is_xsec_summary_dataset(
+                    variable_name,
+                    dataset,
+                    feature_count=feature_count,
+                    requested=requested,
+                ):
+                    continue
+
+                summary = HdfResultsXsec._summarize_xsec_dataset(
+                    dataset,
+                    chunk_rows=chunk_rows,
+                )
+                variable_slug = HdfResultsXsec._xsec_variable_slug(variable_name)
+                frame[f"maximum_{variable_slug}"] = summary["maximum"]
+                frame[f"minimum_{variable_slug}"] = summary["minimum"]
+                frame[f"maximum_{variable_slug}_time_index"] = summary["time_index"]
+
+                maximum_times = np.full(
+                    feature_count,
+                    np.datetime64("NaT", "ns"),
+                    dtype="datetime64[ns]",
+                )
+                valid_time = (
+                    (summary["time_index"] >= 0)
+                    & (summary["time_index"] < len(timestamps))
+                )
+                maximum_times[valid_time] = timestamps[summary["time_index"][valid_time]]
+                frame[f"maximum_{variable_slug}_time"] = maximum_times
+
+                units[variable_slug] = HdfResultsXsec._decode_reference_attr(
+                    dataset.attrs.get("Units", "")
+                )
+                native_variables[variable_slug] = str(variable_name)
+
+            if len(frame.columns) == 4:
+                return pd.DataFrame()
+
+            frame.attrs.update(
+                {
+                    "source_file": Path(hdf_path).name,
+                    "source": "Raw HEC-RAS HDF unsteady cross-section result values",
+                    "units": units,
+                    "native_variables": native_variables,
+                }
+            )
+            return frame
+
+    @staticmethod
+    def _normalize_xsec_variable_filter(
+        variables: Optional[Union[str, Sequence[str]]]
+    ) -> Optional[set[str]]:
+        """Normalize optional native cross-section variable names."""
+        if variables is None:
+            return None
+        if isinstance(variables, str):
+            variables = [variables]
+        return {str(value).strip().casefold() for value in variables if str(value).strip()}
+
+    @staticmethod
+    def _xsec_attribute_values(
+        rows: np.ndarray,
+        field_name: str,
+        *,
+        required: bool,
+    ) -> List[str]:
+        """Decode one cross-section attribute field."""
+        available = rows.dtype.names or ()
+        matched = next(
+            (name for name in available if name.casefold() == field_name.casefold()),
+            None,
+        )
+        if matched is None:
+            if required:
+                raise KeyError(
+                    f"Cross Section Attributes is missing required field '{field_name}'."
+                )
+            return [""] * len(rows)
+        return [
+            HdfResultsXsec._decode_reference_attr(value).strip()
+            for value in rows[matched]
+        ]
+
+    @staticmethod
+    def _is_xsec_summary_dataset(
+        name: str,
+        dataset: object,
+        *,
+        feature_count: int,
+        requested: Optional[set[str]],
+    ) -> bool:
+        """Return whether a dataset is a selected cross-section time series."""
+        if requested is not None and name.casefold() not in requested:
+            return False
+        if not isinstance(dataset, h5py.Dataset):
+            return False
+        if dataset.ndim != 2 or dataset.shape[1] != feature_count:
+            return False
+        try:
+            return np.issubdtype(dataset.dtype, np.number)
+        except TypeError:
+            return False
+
+    @staticmethod
+    def _xsec_variable_slug(variable_name: str) -> str:
+        """Return a stable snake-case column name for an HDF variable."""
+        return re.sub(r"[^a-z0-9]+", "_", variable_name.casefold()).strip("_")
+
+    @staticmethod
+    def _summarize_xsec_dataset(
+        dataset: h5py.Dataset,
+        *,
+        chunk_rows: int,
+    ) -> Dict[str, np.ndarray]:
+        """Reduce a time-by-cross-section dataset without loading it whole."""
+        feature_count = int(dataset.shape[1])
+        maximum = np.full(feature_count, -np.inf, dtype="float64")
+        minimum = np.full(feature_count, np.inf, dtype="float64")
+        time_index = np.full(feature_count, -1, dtype="int64")
+
+        for start in range(0, int(dataset.shape[0]), chunk_rows):
+            stop = min(int(dataset.shape[0]), start + chunk_rows)
+            block = np.asarray(dataset[start:stop], dtype="float64")
+            valid = np.isfinite(block) & (np.abs(block) < 1.0e30)
+            maximum_block = np.where(valid, block, -np.inf)
+            minimum_block = np.where(valid, block, np.inf)
+            local_maximum = maximum_block.max(axis=0)
+            update = local_maximum > maximum
+            if update.any():
+                local_index = maximum_block.argmax(axis=0)
+                maximum[update] = local_maximum[update]
+                time_index[update] = start + local_index[update]
+            minimum = np.minimum(minimum, minimum_block.min(axis=0))
+
+        maximum[~np.isfinite(maximum)] = np.nan
+        minimum[~np.isfinite(minimum)] = np.nan
+        return {
+            "maximum": maximum,
+            "minimum": minimum,
+            "time_index": time_index,
+        }
 
     @staticmethod
     def _validate_xsec_timeseries_paths(
