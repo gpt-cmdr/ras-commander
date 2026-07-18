@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*128 notebooks indexed - 119 with runtime data, 9 without.*
+*129 notebooks indexed - 120 with runtime data, 9 without.*
 
 ## 100s - Initialization & Execution
 
@@ -123,6 +123,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [601 - Headless Stored Map Generation Using RasMapper](../notebooks/601_headless_stored_map_generation_rasmapper.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/601_headless_stored_map_generation_rasmapper.ipynb) | 6.1 min |
 | [610 - Generate Fluvial Pluvial Delineations using Max WSE Arrival Time](../notebooks/610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.ipynb) | 1.0 h |
 | [611 - Validating RAS Mapper Layers and Terrain Files](../notebooks/611_validating_map_layers.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/611_validating_map_layers.ipynb) | 9 s |
+| [612 - Benefit-area mapping for storm-system alternatives](../notebooks/612_benefit_area_analysis.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/612_benefit_area_analysis.ipynb) | 1.3 min |
 
 ## 700s - Sensitivity & Precipitation
 
