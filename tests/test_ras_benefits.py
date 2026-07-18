@@ -153,6 +153,54 @@ def test_filter_small_regions_uses_four_connectivity_and_retains_exact_threshold
     )
 
 
+def test_classify_adverse_depth_arrays_uses_inclusive_threshold_and_valid_masks():
+    from ras_commander import RasBenefits
+
+    pre = np.array([[1.0, 1.0, 1.0], [1.0, np.nan, 1.0]], dtype=np.float32)
+    post = np.array([[1.124, 1.125, 1.20], [1.20, 2.0, np.nan]], dtype=np.float32)
+    analysis = np.array([[True, True, False], [True, True, True]])
+
+    result = RasBenefits.classify_adverse_depth_arrays(
+        pre,
+        post,
+        analysis_mask=analysis,
+        adverse_min_depth=0.125,
+        minimum_region_pixels=None,
+    )
+
+    assert result.tolist() == [[0, 1, 0], [1, 0, 0]]
+
+
+def test_classify_adverse_depth_arrays_applies_region_filter():
+    from ras_commander import RasBenefits
+
+    pre = np.zeros((4, 5), dtype=np.float32)
+    post = np.zeros_like(pre)
+    post[0, 0] = 0.10
+    post[2, 1:4] = 0.10
+
+    result = RasBenefits.classify_adverse_depth_arrays(
+        pre,
+        post,
+        minimum_region_pixels=3,
+    )
+
+    assert result[0, 0] == 0
+    assert np.all(result[2, 1:4] == 1)
+
+
+@pytest.mark.parametrize("threshold", [0, -0.1, float("inf"), True, "bad"])
+def test_classify_adverse_depth_arrays_requires_positive_finite_threshold(threshold):
+    from ras_commander import RasBenefits
+
+    with pytest.raises((TypeError, ValueError), match="adverse_min_depth"):
+        RasBenefits.classify_adverse_depth_arrays(
+            np.zeros((2, 2)),
+            np.zeros((2, 2)),
+            adverse_min_depth=threshold,
+        )
+
+
 def test_create_benefit_area_writes_categorical_geotiff_and_metadata(tmp_path):
     from ras_commander.RasBenefits import BenefitCategory, RasBenefits
 

@@ -7,6 +7,7 @@ when conduit dimensions are changed.
 """
 
 from pathlib import Path
+import shutil
 from typing import Mapping, Optional, Sequence, Tuple, Union
 
 import h5py
@@ -24,6 +25,7 @@ class GeomPipeNetwork:
     """Static helpers for pipe-network and pump-station scenario edits."""
 
     CONDUIT_ATTRIBUTES = "/Geometry/Pipe Conduits/Attributes"
+    COMPILED_PIPE_NETWORKS = "/Geometry/Pipe Networks"
     PUMP_GROUPS = "/Geometry/Pump Stations/Pump Groups"
 
     @staticmethod
@@ -142,17 +144,49 @@ class GeomPipeNetwork:
                     attributes["Span"][index] = new_span
 
         if any(row["changed"] for row in rows):
+            hdf_backup: Optional[Path] = None
             if create_backup:
-                GeomParser.create_backup(hdf_path)
-            with h5py.File(hdf_path, "r+") as hdf:
-                dataset = hdf[GeomPipeNetwork.CONDUIT_ATTRIBUTES]
-                dataset.id.write(
-                    h5py.h5s.ALL,
-                    h5py.h5s.ALL,
-                    attributes,
-                    mtype=dataset.id.get_type(),
-                )
-                hdf.flush()
+                hdf_backup = GeomParser.create_backup(hdf_path)
+            try:
+                with h5py.File(hdf_path, "r+") as hdf:
+                    dataset = hdf[GeomPipeNetwork.CONDUIT_ATTRIBUTES]
+                    dataset.id.write(
+                        h5py.h5s.ALL,
+                        h5py.h5s.ALL,
+                        attributes,
+                        mtype=dataset.id.get_type(),
+                    )
+
+                    # HEC-RAS stores discretized pipe cells, faces, and
+                    # hydraulic property tables separately from the editable
+                    # conduit attributes.  If those compiled network subgroups
+                    # remain, the geometry preprocessor reports the pipe tables
+                    # as current and silently reuses the old dimensions.  Keep
+                    # the top-level Attributes dataset because it maps every
+                    # node to its network; removing it makes geometry processing
+                    # fail with "pipe network ... does not exist".
+                    if GeomPipeNetwork.COMPILED_PIPE_NETWORKS in hdf:
+                        pipe_networks = hdf[
+                            GeomPipeNetwork.COMPILED_PIPE_NETWORKS
+                        ]
+                        compiled_names = [
+                            name
+                            for name in pipe_networks.keys()
+                            if name != "Attributes"
+                        ]
+                        for name in compiled_names:
+                            del pipe_networks[name]
+                        if compiled_names:
+                            logger.debug(
+                                "Invalidated compiled pipe-network tables %s in %s",
+                                compiled_names,
+                                hdf_path,
+                            )
+                    hdf.flush()
+            except Exception:
+                if hdf_backup is not None:
+                    shutil.copy2(hdf_backup, hdf_path)
+                raise
 
         return pd.DataFrame(rows)
 

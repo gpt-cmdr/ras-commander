@@ -590,6 +590,62 @@ class RasBenefits:
 
     @staticmethod
     @log_call
+    def classify_adverse_depth_arrays(
+        pre_depth: np.ndarray,
+        post_depth: np.ndarray,
+        *,
+        pre_valid_mask: Optional[np.ndarray] = None,
+        post_valid_mask: Optional[np.ndarray] = None,
+        analysis_mask: Optional[np.ndarray] = None,
+        adverse_min_depth: float = 0.05,
+        minimum_region_pixels: Optional[int] = 16,
+    ) -> np.ndarray:
+        """Return a binary mask of qualifying post-minus-pre depth increases.
+
+        A valid analysis cell is adverse when ``post_depth - pre_depth`` is
+        greater than or equal to ``adverse_min_depth``. Both rasters must be
+        valid at the cell. The optional region filter uses the same four-cell
+        connectivity and exact-threshold retention as BenefitArea classes.
+        """
+
+        if isinstance(adverse_min_depth, (bool, np.bool_)) or not isinstance(
+            adverse_min_depth, (int, float, np.integer, np.floating)
+        ):
+            raise TypeError("adverse_min_depth must be a positive finite number")
+        threshold = float(adverse_min_depth)
+        if not np.isfinite(threshold) or threshold <= 0:
+            raise ValueError("adverse_min_depth must be a positive finite number")
+        RasBenefits._validate_minimum_region_pixels(minimum_region_pixels)
+
+        pre, pre_valid = RasBenefits._array_and_valid_mask(
+            pre_depth, pre_valid_mask
+        )
+        post, post_valid = RasBenefits._array_and_valid_mask(
+            post_depth, post_valid_mask
+        )
+        if pre.shape != post.shape:
+            raise ValueError("Pre- and post-project depth arrays must have the same shape")
+
+        if analysis_mask is None:
+            in_analysis = np.ones(pre.shape, dtype=bool)
+        else:
+            in_analysis = np.asarray(analysis_mask, dtype=bool)
+            if in_analysis.shape != pre.shape:
+                raise ValueError("analysis_mask must match the depth-array shape")
+
+        adverse = (
+            pre_valid
+            & post_valid
+            & in_analysis
+            & ((post - pre) >= threshold)
+        ).astype(np.uint8)
+        return RasBenefits.filter_small_regions(
+            adverse,
+            minimum_region_pixels=minimum_region_pixels,
+        )
+
+    @staticmethod
+    @log_call
     def filter_small_regions(
         classified: np.ndarray,
         minimum_region_pixels: Optional[int] = 16,

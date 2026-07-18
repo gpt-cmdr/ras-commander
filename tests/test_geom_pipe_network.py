@@ -41,6 +41,12 @@ LCMann Table=0
             "Efficiency Curves Values",
             data=np.array([[2.0, 70.0], [8.0, 50.0], [16.0, 25.0]], dtype=np.float32),
         )
+        networks = hdf.require_group("Geometry/Pipe Networks")
+        networks.create_dataset(
+            "Attributes", data=np.array([(b"System A",)], dtype=[("Name", "S8")])
+        )
+        compiled = networks.require_group("System A")
+        compiled.create_dataset("Cell Property Table Values", data=np.ones((2, 2)))
     return geom
 
 
@@ -58,10 +64,25 @@ def test_set_conduit_dimensions_preserves_compound_strings_and_is_idempotent(tmp
     assert second["changed"].tolist() == [False, False]
     with h5py.File(f"{geom}.hdf", "r") as hdf:
         attributes = hdf["Geometry/Pipe Conduits/Attributes"][()]
+        assert "Geometry/Pipe Networks" in hdf
+        assert "Geometry/Pipe Networks/Attributes" in hdf
+        assert "Geometry/Pipe Networks/System A" not in hdf
     assert attributes["Name"].tolist() == [b"101", b"102"]
     assert attributes["System Name"].tolist() == [b"System A", b"System A"]
     np.testing.assert_allclose(attributes["Rise"], [7.5, 9.0])
     np.testing.assert_allclose(attributes["Span"], [7.5, 9.0])
+
+
+def test_set_conduit_dimensions_keeps_compiled_tables_for_noop(tmp_path):
+    geom = _write_geometry_fixture(tmp_path)
+
+    result = GeomPipeNetwork.set_conduit_dimensions(
+        geom, {"101": (5.0, 5.0), "102": (6.0, 6.0)}
+    )
+
+    assert not result["changed"].any()
+    with h5py.File(f"{geom}.hdf", "r") as hdf:
+        assert "Geometry/Pipe Networks" in hdf
 
 
 def test_set_pump_group_hq_curve_updates_text_and_hdf_idempotently(tmp_path):
