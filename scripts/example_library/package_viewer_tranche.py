@@ -280,7 +280,17 @@ def package_project(
 
     previous = output_projects_root / f".{project_id}.previous"
     failed = output_projects_root / f".{project_id}.failed"
-    shutil.rmtree(previous, ignore_errors=True)
+
+    # A hard process/host stop can occur after the live project is moved aside
+    # but before validation restores or commits the candidate. Recover the last
+    # known live project before starting another promotion; never delete the
+    # only rollback copy on restart.
+    if previous.exists():
+        if target.exists():
+            shutil.rmtree(failed, ignore_errors=True)
+            os.replace(target, failed)
+        os.replace(previous, target)
+
     shutil.rmtree(failed, ignore_errors=True)
     if target.exists():
         os.replace(target, previous)

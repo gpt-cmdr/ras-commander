@@ -416,3 +416,62 @@ def test_validate_failure_restores_previous_project(tmp_path: Path) -> None:
     assert (target / "old.txt").read_text(encoding="ascii") == "preserve"
     assert (projects_root / ".muncie.failed" / "project.json").is_file()
     assert not (projects_root / ".muncie.previous").exists()
+
+
+def test_validate_restart_recovers_previous_project_before_promotion(
+    tmp_path: Path,
+) -> None:
+    module = load_script()
+    source = tmp_path / "source" / "muncie"
+    archive = source / "archive"
+    viewer = source / "viewer"
+    archive.mkdir(parents=True)
+    viewer.mkdir()
+    project_file = tmp_path / "model" / "Muncie.prj"
+    project_file.parent.mkdir()
+    project_file.write_text("Proj Title=Muncie\n", encoding="ascii")
+    project_file.with_suffix(".g01.hdf").write_bytes(b"hdf")
+    (archive / "manifest.json").write_text(
+        json.dumps({"project": {"crs": "EPSG:2965"}, "geometry": [{"geom_id": "g01"}]}),
+        encoding="utf-8",
+    )
+    (viewer / "manifest.json").write_text(
+        json.dumps({"title": "Muncie", "groups": []}), encoding="utf-8"
+    )
+    (source / "project.json").write_text(
+        json.dumps({"title": "Muncie", "crs": "EPSG:2965"}), encoding="utf-8"
+    )
+    projects_root = tmp_path / "output" / "projects"
+    previous = projects_root / ".muncie.previous"
+    previous.mkdir(parents=True)
+    (previous / "old.txt").write_text("preserve", encoding="ascii")
+
+    def runner(command, **_kwargs):
+        command = list(command)
+        if command[1] == "maplibre":
+            output = Path(command[3])
+            output.mkdir(parents=True)
+            (output / "manifest.json").write_text(
+                json.dumps({"schema": "rascommander.maplibre/v2"}), encoding="utf-8"
+            )
+        if command[1] == "validate-publication":
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="invalid")
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    with pytest.raises(module.TrancheError, match="invalid"):
+        module.package_project(
+            project_id="muncie",
+            project_file=project_file,
+            source_project_dir=source,
+            output_projects_root=projects_root,
+            ras2cng="ras2cng",
+            scratch_root=tmp_path / "scratch",
+            overwrite=True,
+            validate=True,
+            runner=runner,
+        )
+
+    target = projects_root / "muncie"
+    assert (target / "old.txt").read_text(encoding="ascii") == "preserve"
+    assert (projects_root / ".muncie.failed" / "project.json").is_file()
+    assert not previous.exists()
