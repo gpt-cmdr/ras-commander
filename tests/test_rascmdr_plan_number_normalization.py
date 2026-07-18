@@ -79,7 +79,17 @@ class FakeRasProject:
         return None
 
 
-def fake_init_ras_project(ras_project_folder, ras_version, ras_object):
+def fake_init_ras_project(
+    ras_project_folder,
+    ras_version=None,
+    ras_object=None,
+    load_results_summary=True,
+    hide_intro=False,
+    **kwargs,
+):
+    # Mirror init_ras_project's signature. compute_parallel initializes worker
+    # projects with hide_intro=True; a narrower signature makes every worker init
+    # raise TypeError and silently fails the whole parallel run.
     ras_object.initialize(ras_project_folder, ras_version)
     return ras_object
 
