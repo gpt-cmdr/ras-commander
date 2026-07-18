@@ -1150,7 +1150,7 @@ Step 5: Configure (optional — auto-detection usually works)
             ``ras_object`` is available, it is discovered via
             ``RasMap.get_rasmap_path``.
         ras_object : RasPrj, optional
-            RAS project object used to locate the ``.rasmap`` when not supplied.
+            RAS project object used to locate the ``.rasmap`` and version-matched RasProcess.exe when not supplied.
         ras_version : str, optional
             Specific HEC-RAS version for the RasProcess.exe lookup.
         timeout : int, optional
@@ -1183,7 +1183,20 @@ Step 5: Configure (optional — auto-detection usually works)
                 logger.debug(f"Could not auto-resolve .rasmap: {e}")
         rasmap_path = Path(rasmap_path) if rasmap_path else None
 
-        rasprocess = RasProcess.find_rasprocess(ras_version)
+        # Prefer the RasProcess.exe shipped beside the project's own Ras.exe.
+        # This keeps preprocessing aligned with the HEC-RAS version that will
+        # compute the plan; fall back to normal version discovery otherwise.
+        ras_obj = ras_object or ras
+        rasprocess = None
+        if ras_version is None:
+            ras_exe_path = getattr(ras_obj, "ras_exe_path", None)
+            if ras_exe_path:
+                candidate = Path(ras_exe_path).parent / "RasProcess.exe"
+                if candidate.exists():
+                    rasprocess = candidate
+
+        if rasprocess is None:
+            rasprocess = RasProcess.find_rasprocess(ras_version)
         if rasprocess is None:
             raise FileNotFoundError("RasProcess.exe not found")
 
@@ -1217,6 +1230,7 @@ Step 5: Configure (optional — auto-detection usually works)
         success = (
             result.returncode == 0
             and "Error:" not in stdout
+            and not stderr.lstrip().startswith("Error:")
             and edge_lines_written
         )
         if not success:
