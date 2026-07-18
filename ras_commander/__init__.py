@@ -14,7 +14,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.98.2"
+    __version__ = "0.99.0"
 
 # Canonical machine-readable agent index (see docs() helper below)
 __llms_txt__ = "https://rascommander.info/ras/llms.txt"
@@ -98,6 +98,12 @@ from .RasMap import RasMap
 from .RasDialogWatchdog import DialogWatchdog, DismissedDialog
 from .RasEncroachments import RasEncroachments
 from .RasMapValidation import RasMapValidation
+from .RasBenefits import (
+    BenefitAreaConfig,
+    BenefitAreaResult,
+    BenefitCategory,
+    RasBenefits,
+)
 from .RasProcess import RasProcess, ProjectionInfo
 from .RasGeometryCompute import RasGeometryCompute
 from .RasGuiAutomation import RasGuiAutomation
@@ -144,6 +150,7 @@ from .geom import (
     GeomStorage, GeomProjection, GeomLateral,
     GeomInlineWeir, GeomBridge, GeomCulvert, GeomCulvertGIS,
     GeomReferenceFeatures, GeomBcLines, GeomMesh,
+    GeomPipeNetwork,
     MeshResult, BCConflict, BCFixResult,
 )
 
@@ -236,6 +243,7 @@ __all__ = [
     'RasGeometryCompute',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
+    'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',
     'compute_objective', 'extract_modeled',
@@ -251,6 +259,7 @@ __all__ = [
     'GeomStorage', 'GeomProjection', 'GeomLateral',
     'GeomInlineWeir', 'GeomBridge', 'GeomCulvert', 'GeomCulvertGIS',
     'GeomReferenceFeatures', 'GeomBcLines', 'GeomMesh',
+    'GeomPipeNetwork',
     'MeshResult', 'BCConflict', 'BCFixResult',
 
     # Deprecated geometry classes (will be removed before v1.0)

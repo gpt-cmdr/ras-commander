@@ -1,10 +1,15 @@
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from importlib import import_module
 import logging
 from pathlib import Path
 import subprocess
+import threading
+import time
 from types import SimpleNamespace
+import xml.etree.ElementTree as ET
 
+import h5py
 import pytest
 
 
@@ -19,6 +24,87 @@ def _messages(caplog, level):
         for record in caplog.records
         if record.name == LOGGER_NAME and record.levelno == level
     ]
+
+
+def test_add_stored_map_creates_checked_expanded_results_plan_layer(tmp_path):
+    rasmap_path = tmp_path / "Demo.rasmap"
+    rasmap_path.write_text("<RASMapper><Results /></RASMapper>", encoding="utf-8")
+
+    assert RasProcess._add_stored_map_to_rasmap(
+        rasmap_path,
+        "Demo.p01.hdf",
+        "depth",
+        "Max",
+        "PipePumpUpgrade",
+    )
+
+    root = ET.parse(rasmap_path).getroot()
+    plan_layer = root.find("./Results/Layer[@Type='RASResults']")
+
+    assert plan_layer is not None
+    assert plan_layer.get("Name") == "PipePumpUpgrade"
+    assert plan_layer.get("Filename") == r".\Demo.p01.hdf"
+    assert plan_layer.get("Checked") == "True"
+    assert plan_layer.get("Expanded") == "True"
+
+    map_layer = plan_layer.find("./Layer[@Type='RASResultsMap']")
+    assert map_layer is not None
+    assert map_layer.get("Name") == "Depth"
+
+    params = map_layer.find("MapParameters")
+    assert params is not None
+    assert params.get("MapType") == "depth"
+    assert params.get("OutputMode") == "Stored Current Terrain"
+    assert params.get("StoredFilename") == r".\PipePumpUpgrade\Depth (Max).vrt"
+
+
+def test_mapper_compatible_hdf_normalizes_temporary_copy_and_restores_source(
+    tmp_path,
+):
+    hdf_path = tmp_path / "Demo.p01.hdf"
+    with h5py.File(hdf_path, "w") as hdf:
+        geometry = hdf.create_group("Geometry")
+        geometry.attrs["Geometry Time"] = b"15Jul2026 19:33:14"
+        flow_area = geometry.create_group("2D Flow Areas/area2")
+        flow_area.attrs["Data Date"] = b"15Jul2026 19:33:21"
+        flow_area.create_dataset("Cells Minimum Elevation", data=[1.0, 2.0])
+        pipe_network = geometry.create_group("Pipe Networks/Network")
+        pipe_network.create_dataset("Cell Property Table", data=[3.0])
+        pump_stations = geometry.create_group("Pump Stations")
+        pump_stations.create_dataset("Attributes", data=[4.0])
+
+    original_bytes = hdf_path.read_bytes()
+    with RasProcess._mapper_compatible_result_hdf(hdf_path, "7.0") as mapped:
+        assert mapped == hdf_path
+        assert hdf_path.read_bytes() != original_bytes
+        with h5py.File(hdf_path, "r") as hdf:
+            geometry_time = hdf["Geometry"].attrs["Geometry Time"]
+            data_date = hdf["Geometry/2D Flow Areas/area2"].attrs["Data Date"]
+            if isinstance(geometry_time, bytes):
+                geometry_time = geometry_time.decode()
+            if isinstance(data_date, bytes):
+                data_date = data_date.decode()
+            assert geometry_time == "15Jul2026 07:33:14"
+            assert (
+                data_date
+                == "15Jul2026 07:33:21"
+            )
+
+    assert hdf_path.read_bytes() == original_bytes
+    assert not list(tmp_path.glob(".Demo.p01.hdf.*.mapper-*"))
+
+
+def test_mapper_compatible_hdf_leaves_morning_geometry_unchanged(tmp_path):
+    hdf_path = tmp_path / "Demo.p01.hdf"
+    with h5py.File(hdf_path, "w") as hdf:
+        geometry = hdf.create_group("Geometry")
+        geometry.attrs["Geometry Time"] = b"15Jul2026 06:17:31"
+        geometry.create_dataset("Attributes", data=[1.0])
+
+    original_bytes = hdf_path.read_bytes()
+    with RasProcess._mapper_compatible_result_hdf(hdf_path, "7.0"):
+        assert hdf_path.read_bytes() == original_bytes
+    assert hdf_path.read_bytes() == original_bytes
 
 
 def test_windows_extended_length_path_conversion_is_cross_platform(monkeypatch):
@@ -98,6 +184,206 @@ class _DummyRas:
 
     def check_initialized(self):
         return None
+
+
+def _configure_store_maps_test(monkeypatch, tmp_path):
+    """Create the minimum real-file layout needed by ``store_maps``."""
+    project_name = "Demo"
+    output_dir = tmp_path / "PlanShort"
+    custom_output_dir = tmp_path / "custom_maps"
+    rasmap_path = tmp_path / f"{project_name}.rasmap"
+    plan_hdf_path = tmp_path / f"{project_name}.p01.hdf"
+
+    (tmp_path / "hecras").mkdir()
+    (tmp_path / "hecras" / "Ras.exe").write_text("", encoding="utf-8")
+    output_dir.mkdir()
+    custom_output_dir.mkdir()
+    plan_hdf_path.write_text("", encoding="utf-8")
+    rasmap_path.write_text(
+        """<?xml version="1.0" encoding="utf-8"?>
+<RASMapper>
+  <Results>
+    <Layer Name="PlanShort" Filename="Demo.p01.hdf" />
+  </Results>
+</RASMapper>
+""",
+        encoding="utf-8",
+    )
+
+    ras_obj = _DummyRas(project_folder=tmp_path, project_name=project_name)
+    monkeypatch.setattr(
+        ras_process_module.RasMap,
+        "get_rasmap_path",
+        staticmethod(lambda ras_object=None: rasmap_path),
+    )
+    monkeypatch.setattr(
+        RasProcess,
+        "_get_plan_short_id",
+        staticmethod(lambda hdf_path: "PlanShort"),
+    )
+    monkeypatch.setattr(
+        RasProcess,
+        "_remove_stored_maps_from_rasmap",
+        staticmethod(lambda *args, **kwargs: 0),
+    )
+    monkeypatch.setattr(
+        RasProcess,
+        "_add_stored_map_to_rasmap",
+        staticmethod(lambda *args, **kwargs: True),
+    )
+    monkeypatch.setattr(
+        ras_process_module.RasMap,
+        "get_water_surface_render_mode",
+        staticmethod(lambda ras_object=None: "horizontal"),
+    )
+    return ras_obj, output_dir, custom_output_dir
+
+
+def test_store_maps_raises_on_helper_failure_instead_of_returning_stale_output(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, output_dir, custom_output_dir = _configure_store_maps_test(
+        monkeypatch,
+        tmp_path,
+    )
+    stale_default = output_dir / "Depth (Max).tif"
+    stale_custom = custom_output_dir / "Depth (Max).tif"
+    stale_default.write_text("old-default", encoding="utf-8")
+    stale_custom.write_text("old-custom", encoding="utf-8")
+
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_all_maps_helper",
+        lambda **kwargs: subprocess.CompletedProcess(
+            args=["RasStoreMapHelper.exe"],
+            returncode=9,
+            stdout="",
+            stderr="renderer failed\nextra diagnostic",
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match=r"StoreAllMaps failed for plan 01 \(exit code 9\): renderer failed",
+    ):
+        RasProcess.store_maps(
+            plan_number="01",
+            output_path=custom_output_dir,
+            profile="Max",
+            wse=False,
+            depth=True,
+            velocity=False,
+            fix_georef=False,
+            ras_object=ras_obj,
+        )
+
+    assert stale_default.read_text(encoding="utf-8") == "old-default"
+    assert stale_custom.read_text(encoding="utf-8") == "old-custom"
+
+
+def test_store_maps_success_without_fresh_output_does_not_return_stale_file(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, output_dir, custom_output_dir = _configure_store_maps_test(
+        monkeypatch,
+        tmp_path,
+    )
+    (output_dir / "Depth (Max).tif").write_text("old-default", encoding="utf-8")
+    stale_custom = custom_output_dir / "Depth (Max).tif"
+    stale_custom.write_text("old-custom", encoding="utf-8")
+
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_all_maps_helper",
+        lambda **kwargs: subprocess.CompletedProcess(
+            args=["RasStoreMapHelper.exe"],
+            returncode=0,
+            stdout="Maps generated: 0",
+            stderr="",
+        ),
+    )
+
+    result = RasProcess.store_maps(
+        plan_number="01",
+        output_path=custom_output_dir,
+        profile="Max",
+        wse=False,
+        depth=True,
+        velocity=False,
+        fix_georef=False,
+        ras_object=ras_obj,
+    )
+
+    assert result == {}
+    assert stale_custom.read_text(encoding="utf-8") == "old-custom"
+
+
+def test_store_maps_serializes_concurrent_calls_for_same_project(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, output_dir, first_output = _configure_store_maps_test(
+        monkeypatch,
+        tmp_path,
+    )
+    second_output = tmp_path / "custom_maps_2"
+    state_lock = threading.Lock()
+    state = {"active": 0, "maximum": 0, "calls": 0}
+
+    def fake_run_store_all_maps_helper(**kwargs):
+        with state_lock:
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+            state["calls"] += 1
+            call_number = state["calls"]
+        try:
+            time.sleep(0.1)
+            (output_dir / "Depth (Max).tif").write_text(
+                f"depth-{call_number}",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(
+                args=["RasStoreMapHelper.exe"],
+                returncode=0,
+                stdout="Maps generated: 1",
+                stderr="",
+            )
+        finally:
+            with state_lock:
+                state["active"] -= 1
+
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_all_maps_helper",
+        fake_run_store_all_maps_helper,
+    )
+
+    def run(output_path):
+        return RasProcess.store_maps(
+            plan_number="01",
+            output_path=output_path,
+            profile="Max",
+            wse=False,
+            depth=True,
+            velocity=False,
+            fix_georef=False,
+            ras_object=ras_obj,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(run, first_output),
+            executor.submit(run, second_output),
+        ]
+        results = [future.result() for future in futures]
+
+    assert state["maximum"] == 1
+    assert results[0]["depth"] == [first_output / "Depth (Max).tif"]
+    assert results[1]["depth"] == [second_output / "Depth (Max).tif"]
+    assert not (tmp_path / ".Demo.storemaps.lock").exists()
+    assert not list(tmp_path.glob(".*.rasmap.*.bak"))
 
 
 def test_store_maps_moves_overwritten_outputs_to_custom_path(monkeypatch, tmp_path, caplog):
@@ -406,6 +692,38 @@ def test_projection_info_discovers_all_tiffs_associated_with_terrain_hdf(tmp_pat
     assert projection_info.terrain_paths == expected_paths
 
 
+def test_projection_info_ignores_explicitly_unchecked_terrain_layers(tmp_path):
+    terrain_dir = tmp_path / "Terrain"
+    terrain_dir.mkdir()
+    active_hdf = terrain_dir / "Active.hdf"
+    inactive_hdf = terrain_dir / "Inactive.hdf"
+    active_hdf.write_bytes(b"")
+    inactive_hdf.write_bytes(b"")
+    active_tif = terrain_dir / "Active.Source.tif"
+    inactive_tif = terrain_dir / "Inactive.Source.tif"
+    active_tif.write_bytes(b"")
+    inactive_tif.write_bytes(b"")
+    rasmap_path = tmp_path / "Demo.rasmap"
+    rasmap_path.write_text(
+        """<?xml version="1.0" encoding="utf-8"?>
+<RASMapper>
+  <Terrains>
+    <Layer Name="Active" Type="TerrainLayer" Checked="True"
+           Filename="./Terrain/Active.hdf"><Surface On="True" /></Layer>
+    <Layer Name="Inactive" Type="TerrainLayer" Checked="False"
+           Filename="./Terrain/Inactive.hdf"><Surface On="False" /></Layer>
+  </Terrains>
+</RASMapper>
+""",
+        encoding="utf-8",
+    )
+
+    projection_info = RasProcess._get_projection_info(rasmap_path)
+
+    assert projection_info.terrain_path == active_tif
+    assert projection_info.terrain_paths == (active_tif,)
+
+
 def test_terrain_for_stored_map_matches_each_stem_and_rejects_unmatched(tmp_path):
     east_terrain = tmp_path / "Composite Terrain.East.tif"
     west_terrain = tmp_path / "Composite Terrain.West.tif"
@@ -634,3 +952,15 @@ def test_drop_unreadable_tifs_removes_corrupt_stored_map(tmp_path):
     assert results["depth"] == [valid_path]
     assert valid_path.exists()
     assert not corrupt_path.exists()
+
+
+def test_drop_unreadable_tifs_preserves_vector_outputs(tmp_path):
+    boundary = tmp_path / "Inundation Boundary.shp"
+    boundary.write_bytes(b"vector-output")
+
+    results = RasProcess._drop_unreadable_tifs(
+        {"inundation_boundary": [boundary]}
+    )
+
+    assert results["inundation_boundary"] == [boundary]
+    assert boundary.read_bytes() == b"vector-output"
