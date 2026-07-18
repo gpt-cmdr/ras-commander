@@ -2619,7 +2619,8 @@ notebooks:
   series: 600
   series_name: Floodplain Mapping
   summary: This example builds and computes HEC-RAS 7.0 conduit, second-pump, and combined alternatives,
-    compares hydraulic performance, and maps categorical benefits, adverse depth increases, and building-footprint exposure.
+    compares hydraulic performance, and maps categorical benefits, adverse depth increases, and building-footprint
+    exposure.
   tags: []
   difficulty: intermediate
   est_runtime: null
@@ -2631,12 +2632,12 @@ notebooks:
   - HdfPipe.get_pipe_network_timeseries
   - HdfPipe.get_pipe_nodes
   - HdfPump.get_pump_groups
-  - HdfPump.get_pump_stations
   - HdfPump.get_pump_station_timeseries
+  - HdfPump.get_pump_stations
   - HdfResultsPlan.get_compute_messages
   - HdfResultsPlan.get_runtime_data
-  - RasBenefits.get_registered_terrain_source
   - RasBenefits.classify_adverse_depth_arrays
+  - RasBenefits.get_registered_terrain_source
   - RasCmdr.compute_plan
   - RasExamples.extract_project
   - RasGeo.clone_geom
@@ -2648,7 +2649,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 11
-  executed_cells: 11
+  executed_cells: 10
 - id: 700_core_sensitivity
   filename: 700_core_sensitivity.ipynb
   title: Core Sensitivity Testing with results_df
