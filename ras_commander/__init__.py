@@ -84,6 +84,7 @@ from .sources.county import M3Model
 from .RasCmdr import RasCmdr
 from .RasCurrency import RasCurrency
 from .RasControl import RasControl
+from .RasTcu import RasTcu, TcuStatus
 from .ComputeResults import (
     ComputeResult,
     ComputeParallelResult,
@@ -242,7 +243,7 @@ __all__ = [
     'GeometryLayerResult', 'GeometryCompleteResult',
     'RasGeometryCompute',
     'RasPreprocess',
-    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
+    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',
