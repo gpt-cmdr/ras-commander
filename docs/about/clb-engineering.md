@@ -75,8 +75,14 @@ Owner & Vice President, CLB Engineering Corporation
 
 ## Citing RAS Commander
 
-If you use ras-commander in your work, please cite the library and provide a link to the GitHub repository:
+If you use RAS Commander, please consider citing the library in published work
+or mentioning it when sharing results. The canonical
+[citation and sharing guide](../cite.md) provides copy-ready language, structured
+citation metadata, contributor acknowledgments, and contribution guidance.
 
-> This analysis was performed using ras-commander ([https://github.com/gpt-cmdr/ras-commander](https://github.com/gpt-cmdr/ras-commander)), an open-source Python library for HEC-RAS automation by CLB Engineering Corporation.
+> This work used RAS Commander vX.Y.Z, the open-source Python library for
+> automating and analyzing HEC-RAS projects
+> ([https://github.com/gpt-cmdr/ras-commander](https://github.com/gpt-cmdr/ras-commander)).
 
-If you are building products or services on top of ras-commander, acknowledgment of CLB Engineering Corporation is appreciated.
+For products and services, a short "Built with RAS Commander" acknowledgment is
+appreciated and voluntary.

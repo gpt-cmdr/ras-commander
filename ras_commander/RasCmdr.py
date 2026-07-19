@@ -953,7 +953,7 @@ class RasCmdr:
                 elif async_verified is False and verify:
                     logger.error(
                         "Verification failed for plan %s after Ras.exe returned. "
-                        "See: https://rascommander.info/user-guide/plan-execution/",
+                        "See: https://rascommander.info/ras/user-guide/plan-execution/",
                         plan_number,
                     )
                     _success = False
@@ -982,7 +982,7 @@ class RasCmdr:
                         else:
                             logger.error(
                                 f"Verification failed for plan {plan_number}: 'Complete Process' not found in compute messages. "
-                                f"See: https://rascommander.info/user-guide/plan-execution/"
+                                f"See: https://rascommander.info/ras/user-guide/plan-execution/"
                             )
                             _success = False
                     else:

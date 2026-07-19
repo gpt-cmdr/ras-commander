@@ -57,9 +57,10 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/gpt-cmdr/ras-commander",
     project_urls={
-        "Documentation": "https://rascommander.info",
-        "AI Agent Guide": "https://rascommander.info/llms.txt",
-        "Changelog": "https://rascommander.info/development/release-notes/",
+        "Documentation": "https://rascommander.info/ras/",
+        "AI Agent Guide": "https://rascommander.info/ras/llms.txt",
+        "Citation": "https://rascommander.info/ras/cite/",
+        "Changelog": "https://rascommander.info/ras/development/release-notes/",
         "Source": "https://github.com/gpt-cmdr/ras-commander",
     },
     cmdclass={
