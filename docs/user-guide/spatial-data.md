@@ -729,6 +729,66 @@ MyRasModel/
     └── Velocity (Max).tif
 ```
 
+## Raster BenefitArea
+
+`RasProcess.store_maps()` can treat a pre/post plan pair as a custom BenefitArea
+product. It generates aligned Depth rasters for both plans and classifies cells
+as No Change (`1`), Partially Benefited (`2`), or Fully Benefited (`3`), with
+`0` reserved for NoData/background.
+
+BenefitArea mode is Depth-only by default. WSE is optional and does not affect
+the classification; enable it only when the additional review raster is worth
+the StoreMaps time and storage.
+
+```python
+from ras_commander import BenefitAreaConfig, RasBenefits, RasProcess
+
+terrain_tif = RasBenefits.get_registered_terrain_source(
+    r"C:\Projects\FloodModel\Terrain\BenefitsTerrain.hdf"
+)
+
+config = BenefitAreaConfig(
+    pre_plan_number="01",
+    terrain_tif=terrain_tif,
+    terrain_name="BenefitsTerrain",
+    minimum_region_pixels=16,  # use None to disable pixel filtering
+    polygon_output=True,       # writes a GeoPackage beside the raster
+)
+
+outputs = RasProcess.store_maps(
+    plan_number="02",          # post-project plan
+    output_path="Benefits/01-to-02",
+    profile="Max",
+    benefit_area=config,
+)
+
+print(outputs["benefit_area"][0])
+```
+
+The terrain must be a readable, one-band GeoTIFF and the sole source recorded
+by a terrain HDF registered in the project `.rasmap`. If the current terrain
+has multiple sources, use `RasTerrain.vrt_to_tiff()` to consolidate a VRT,
+create a one-source HDF with `RasTerrain.create_terrain_from_rasters()` or
+`RasTerrain.create_terrain_hdf()`, and register it with
+`RasMap.add_terrain_layer()`. Associate both source geometries through
+`RasMap.associate_geometry_layers(..., terrain_hdf_path=...)` and recompute the
+plans so both result HDFs record that same terrain. The workflow verifies those
+associations, selects the terrain exclusively for each StoreMaps call, and
+restores the original RASMapper configuration. Visibility alone does not
+override a different terrain stored in a plan HDF.
+
+Set `include_wse=True` in `BenefitAreaConfig` (or pass `wse=True` to
+`store_maps()`) to retain pre/post WSE maps. Set `minimum_region_pixels=None` to
+skip the four-connected component filter. `polygon_output=True` creates exact
+raster-edge polygons; an explicit `.gpkg`, `.shp`, `.geojson`, `.parquet`, or
+`.geoparquet` path is also accepted. Install
+`ras-commander[geoparquet]` before requesting either GeoParquet suffix.
+
+This raster workflow is distinct from `HdfBenefitAreas`, which reads maximum
+WSE at 2D mesh cells and returns benefit/rise GeoDataFrames rather than a
+categorical raster. See the [Benefits Analysis API](../api/benefits.md)
+for thresholds, class definitions, terrain setup, and direct-raster usage.
+
 ## Calculated Layers (WSE Comparison)
 
 RASMapper Calculated Layers perform raster algebra on plan results. The most common use case is comparing Water Surface Elevation (WSE) between Existing and Proposed conditions to identify benefits and adverse impacts.

@@ -70,6 +70,7 @@ plugins:
         API Reference:
           - api/index.md
           - api/core.md
+          - api/benefits.md
           - api/hdf.md
           - api/geometry.md
   - mkdocstrings:
@@ -201,6 +202,7 @@ nav:
   - API Reference:
     - Overview: api/index.md
     - Core Classes: api/core.md
+    - Benefits Analysis: api/benefits.md
     - HDF Modules: api/hdf.md
     - Geometry Modules: api/geometry.md
     - Terrain Modules: api/terrain.md

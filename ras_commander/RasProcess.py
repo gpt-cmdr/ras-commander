@@ -32,14 +32,21 @@ Linux/Wine Support:
 """
 
 import fnmatch
+import functools
+import inspect
 import ntpath
 import os
+import re
+import socket
 import sys
 import subprocess
 import tempfile
+import threading
 import time
+import uuid
 import warnings
 import xml.etree.ElementTree as ET
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Union, Optional, List, Dict, Any, Tuple
@@ -82,12 +89,14 @@ class WineConfig:
 
 from .RasPrj import ras
 from .RasMap import RasMap
+from .RasBenefits import BenefitAreaConfig, RasBenefits
 from .RasUtils import RasUtils
 from .LoggingConfig import get_logger
 from .Decorators import log_call
 from ._native_helper import (
     normalize_store_map_render_mode,
     run_store_all_maps_helper,
+    store_maps_runtime_provenance,
 )
 
 # Optional rasterio for georeferencing fix
@@ -103,6 +112,10 @@ logger = get_logger(__name__)
 # Detect platform once at import time
 IS_LINUX = platform.system() == "Linux"
 IS_WINDOWS = platform.system() == "Windows"
+
+_STORE_MAPS_LOCKS: Dict[str, threading.RLock] = {}
+_STORE_MAPS_LOCKS_GUARD = threading.Lock()
+_STORE_MAPS_LOCK_STATE = threading.local()
 
 
 def _windows_extended_length_path(path: Union[str, Path]) -> str:
@@ -134,6 +147,124 @@ def _glob_paths(directory: Union[str, Path], pattern: str) -> List[Path]:
         ),
         key=lambda path: path.name.casefold(),
     )
+
+
+def _serialize_store_maps(func):
+    """Serialize rasmap mutation for one project across threads/processes.
+
+    ``StoreAllMaps`` temporarily edits the project's shared ``.rasmap``.  A
+    re-entrant in-process lock protects threads and nested BenefitArea calls;
+    an atomically created directory extends the same exclusion to other Python
+    processes using the project.  A lock left by a killed process is preserved
+    for diagnosis rather than guessed stale and deleted behind another host.
+    """
+    signature = inspect.signature(func)
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        bound = signature.bind_partial(*args, **kwargs)
+        ras_obj = bound.arguments.get("ras_object") or ras
+        project_folder = getattr(ras_obj, "project_folder", None)
+        project_name = getattr(ras_obj, "project_name", None)
+        if not project_folder or not project_name:
+            return func(*args, **kwargs)
+
+        lock_dir = Path(project_folder) / f".{project_name}.storemaps.lock"
+        lock_key = os.path.normcase(os.path.abspath(lock_dir))
+        with _STORE_MAPS_LOCKS_GUARD:
+            thread_lock = _STORE_MAPS_LOCKS.setdefault(
+                lock_key,
+                threading.RLock(),
+            )
+
+        timeout = max(float(bound.arguments.get("timeout", 600)), 0.0)
+        deadline = time.monotonic() + timeout
+        if not thread_lock.acquire(timeout=timeout):
+            raise TimeoutError(
+                "Timed out waiting for another StoreMaps call in this Python "
+                f"process to release project {project_name!r}"
+            )
+        try:
+            depths = getattr(_STORE_MAPS_LOCK_STATE, "depths", None)
+            if depths is None:
+                depths = {}
+                _STORE_MAPS_LOCK_STATE.depths = depths
+
+            depth = depths.get(lock_key, 0)
+            owns_directory = depth == 0
+            if owns_directory:
+                while True:
+                    try:
+                        os.mkdir(_windows_extended_length_path(lock_dir))
+                        break
+                    except FileExistsError:
+                        if time.monotonic() >= deadline:
+                            owner_path = lock_dir / "owner.txt"
+                            try:
+                                owner = owner_path.read_text(
+                                    encoding="utf-8",
+                                ).strip()
+                            except OSError:
+                                owner = "owner metadata unavailable"
+                            raise TimeoutError(
+                                "Timed out waiting for StoreMaps project lock "
+                                f"{lock_dir} ({owner}). If no mapping process is "
+                                "running, remove this stale lock directory and retry."
+                            )
+                        time.sleep(0.1)
+
+                owner_path = lock_dir / "owner.txt"
+                try:
+                    owner_path.write_text(
+                        f"host={socket.gethostname()} pid={os.getpid()} "
+                        f"thread={threading.get_ident()}",
+                        encoding="utf-8",
+                    )
+                except OSError as exc:
+                    logger.warning(
+                        "Could not write StoreMaps lock owner metadata %s: %s",
+                        owner_path,
+                        exc,
+                    )
+
+            depths[lock_key] = depth + 1
+            try:
+                return func(*args, **kwargs)
+            finally:
+                remaining = depths[lock_key] - 1
+                if remaining:
+                    depths[lock_key] = remaining
+                else:
+                    depths.pop(lock_key, None)
+                    if owns_directory:
+                        try:
+                            os.remove(
+                                _windows_extended_length_path(
+                                    lock_dir / "owner.txt"
+                                )
+                            )
+                        except FileNotFoundError:
+                            pass
+                        except OSError as exc:
+                            logger.warning(
+                                "Could not remove StoreMaps lock metadata %s: %s",
+                                lock_dir / "owner.txt",
+                                exc,
+                            )
+                        try:
+                            os.rmdir(_windows_extended_length_path(lock_dir))
+                        except FileNotFoundError:
+                            pass
+                        except OSError as exc:
+                            logger.warning(
+                                "Could not release StoreMaps project lock %s: %s",
+                                lock_dir,
+                                exc,
+                            )
+        finally:
+            thread_lock.release()
+
+    return wrapper
 
 
 class RasProcess:
@@ -173,6 +304,18 @@ class RasProcess:
         ...     ras_install_dir="/opt/hecras-wine/drive_c/HEC-RAS/6.6"
         ... )
     """
+
+    @staticmethod
+    @log_call
+    def get_store_maps_runtime_provenance(ras_object=None) -> Dict[str, Any]:
+        """Return content identities for the actual StoreMaps runtime."""
+
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        hecras_dir = Path(str(ras_obj.ras_exe_path)).parent
+        if not hecras_dir.is_dir():
+            raise FileNotFoundError(f"HEC-RAS directory not found: {hecras_dir}")
+        return store_maps_runtime_provenance(hecras_dir)
 
     # Map type definitions: (xml_name, display_name, needs_profile)
     MAP_TYPES = {
@@ -1186,6 +1329,8 @@ Step 5: Configure (optional — auto-detection usually works)
 
             terrain_paths: List[Path] = []
             for layer in root.findall("./Terrains/Layer"):
+                if layer.get("Checked", "True").casefold() == "false":
+                    continue
                 filename = layer.get("Filename")
                 if filename:
                     terrain_hdf = rasmap_path.parent / filename.replace(".\\", "").replace("./", "")
@@ -1332,6 +1477,9 @@ Step 5: Configure (optional — auto-detection usually works)
         for map_key, tif_list in list(generated_files.items()):
             readable_tifs: List[Path] = []
             for tif_path in tif_list:
+                if Path(tif_path).suffix.lower() not in {".tif", ".tiff"}:
+                    readable_tifs.append(tif_path)
+                    continue
                 try:
                     with rasterio.open(
                         _windows_extended_length_path(tif_path)
@@ -1355,6 +1503,233 @@ Step 5: Configure (optional — auto-detection usually works)
             generated_files[map_key] = readable_tifs
 
         return generated_files
+
+    @staticmethod
+    def _tif_has_data(tif_path: Union[str, Path]) -> bool:
+        """Return True when a readable TIFF contains at least one valid cell."""
+        if not HAS_RASTERIO:
+            return True
+        try:
+            with rasterio.open(
+                _windows_extended_length_path(tif_path)
+            ) as src:
+                return bool(src.read(1, masked=True).count())
+        except Exception:
+            return False
+
+    @staticmethod
+    def _hdf_has_wet_maximum_depth(
+        hdf_path: Union[str, Path],
+        minimum_depth: float = 1.0e-6,
+    ) -> bool:
+        """Return True when plan-HDF summary results contain a wet cell.
+
+        This distinguishes a legitimate all-dry Depth map from the HEC-RAS
+        mapper failure mode that emits an all-NoData TIFF even though the plan
+        HDF contains positive hydraulic depth.
+        """
+        try:
+            import h5py
+
+            with h5py.File(hdf_path, "r") as hdf:
+                summary_root = (
+                    "Results/Unsteady/Output/Output Blocks/Base Output/"
+                    "Summary Output"
+                )
+                component_specs = (
+                    (
+                        "2D Flow Areas",
+                        "Geometry/2D Flow Areas",
+                        "Cells Minimum Elevation",
+                    ),
+                    (
+                        "Pipe Networks",
+                        "Geometry/Pipe Networks",
+                        "Cells Minimum Elevations",
+                    ),
+                )
+                for component, geometry_root, elevation_name in component_specs:
+                    result_root = f"{summary_root}/{component}"
+                    if result_root not in hdf or geometry_root not in hdf:
+                        continue
+                    for name in hdf[result_root].keys():
+                        wse_path = f"{result_root}/{name}/Maximum Water Surface"
+                        elevation_path = f"{geometry_root}/{name}/{elevation_name}"
+                        if wse_path not in hdf or elevation_path not in hdf:
+                            continue
+                        wse = np.asarray(hdf[wse_path][()], dtype=np.float64)
+                        elevations = np.asarray(
+                            hdf[elevation_path][()], dtype=np.float64
+                        ).reshape(-1)
+                        if wse.ndim > 1:
+                            wse = np.nanmax(wse, axis=0)
+                        wse = wse.reshape(-1)
+                        count = min(len(wse), len(elevations))
+                        if count and np.any(
+                            np.isfinite(wse[:count])
+                            & np.isfinite(elevations[:count])
+                            & ((wse[:count] - elevations[:count]) > minimum_depth)
+                        ):
+                            return True
+        except Exception as exc:
+            logger.debug("Could not audit plan-HDF wet cells: %s", exc)
+        return False
+
+    @staticmethod
+    def _normalize_mapper_geometry_timestamps(hdf_path: Union[str, Path]) -> int:
+        """Normalize HEC-RAS 7.0 PM geometry timestamps in a temporary HDF.
+
+        HEC-RAS 7.0 April 2026 can write embedded geometry timestamps with a
+        24-hour value greater than 12, then fail to parse that same geometry in
+        the headless StoreAllMaps path.  The native mapper reports success but
+        writes an all-NoData or corrupt TIFF.  This method is intentionally
+        private and is only applied to a temporary byte-for-byte plan-HDF copy.
+        Hydraulic and geometry values are not changed.
+        """
+        import h5py
+
+        timestamp_pattern = re.compile(r"(?P<prefix>\b\d{2}[A-Za-z]{3}\d{4} )(?P<hour>\d{2})(?=:)")
+        changed = 0
+        touch_paths: List[str] = []
+
+        with h5py.File(hdf_path, "r+") as hdf:
+            geometry = hdf.get("Geometry")
+            if geometry is None:
+                return 0
+
+            def normalize_attributes(_name: str, obj) -> None:
+                nonlocal changed
+                for attr_name, raw_value in list(obj.attrs.items()):
+                    if isinstance(raw_value, str):
+                        text = raw_value
+                        encoded_value = False
+                    elif isinstance(raw_value, (bytes, np.bytes_)):
+                        text = bytes(raw_value).decode("ascii", errors="ignore")
+                        encoded_value = True
+                    else:
+                        continue
+                    match = timestamp_pattern.search(text)
+                    if match is None:
+                        continue
+                    hour = int(match.group("hour"))
+                    if hour <= 12:
+                        continue
+                    normalized = (
+                        text[:match.start("hour")]
+                        + f"{hour - 12:02d}"
+                        + text[match.end("hour"):]
+                    )
+                    obj.attrs.modify(
+                        attr_name,
+                        normalized.encode("ascii") if encoded_value else normalized,
+                    )
+                    changed += 1
+
+            normalize_attributes("Geometry", geometry)
+            geometry.visititems(normalize_attributes)
+            if not changed:
+                return 0
+
+            def collect_touch_paths(name: str, obj) -> None:
+                if not isinstance(obj, h5py.Dataset) or obj.size == 0:
+                    return
+                full_name = f"Geometry/{name}"
+                if (
+                    full_name.endswith("/Cells Minimum Elevation")
+                    or full_name.endswith("/Cell Property Table")
+                    or full_name in {
+                        "Geometry/Pump Stations/Attributes",
+                        "Geometry/Cross Sections/Attributes",
+                        "Geometry/Storage Areas/Attributes",
+                    }
+                ):
+                    touch_paths.append(full_name)
+
+            geometry.visititems(collect_touch_paths)
+            if not touch_paths:
+                geometry.visititems(
+                    lambda name, obj: touch_paths.append(f"Geometry/{name}")
+                    if not touch_paths
+                    and isinstance(obj, h5py.Dataset)
+                    and obj.size
+                    else None
+                )
+
+            # Rewriting the same values refreshes HDF object metadata consumed
+            # by RasMapperLib.  This occurs only in the disposable copy.
+            for dataset_path in touch_paths:
+                dataset = hdf[dataset_path]
+                dataset[...] = dataset[...]
+
+        return changed
+
+    @staticmethod
+    @contextmanager
+    def _mapper_compatible_result_hdf(
+        hdf_path: Union[str, Path],
+        ras_version: Optional[str],
+    ):
+        """Temporarily swap in a mapper-compatible HDF copy when required."""
+        source = Path(hdf_path)
+        if not str(ras_version or "").startswith("7.0"):
+            yield source
+            return
+
+        working_copy = source.with_name(
+            f".{source.name}.{os.getpid()}.{uuid.uuid4().hex}.mapper-work"
+        )
+        original_backup = source.with_name(
+            f".{source.name}.{os.getpid()}.{uuid.uuid4().hex}.mapper-original"
+        )
+        swapped = False
+        try:
+            shutil.copy2(
+                _windows_extended_length_path(source),
+                _windows_extended_length_path(working_copy),
+            )
+            changed = RasProcess._normalize_mapper_geometry_timestamps(working_copy)
+            if not changed:
+                os.remove(_windows_extended_length_path(working_copy))
+                yield source
+                return
+
+            os.replace(
+                _windows_extended_length_path(source),
+                _windows_extended_length_path(original_backup),
+            )
+            try:
+                os.replace(
+                    _windows_extended_length_path(working_copy),
+                    _windows_extended_length_path(source),
+                )
+                swapped = True
+            except Exception:
+                os.replace(
+                    _windows_extended_length_path(original_backup),
+                    _windows_extended_length_path(source),
+                )
+                raise
+
+            logger.debug(
+                "Applied temporary HEC-RAS 7.0 StoreAllMaps geometry-timestamp "
+                "compatibility to %s (%d attributes)",
+                source.name,
+                changed,
+            )
+            yield source
+        finally:
+            if swapped:
+                source_io = _windows_extended_length_path(source)
+                if os.path.exists(source_io):
+                    os.remove(source_io)
+                os.replace(
+                    _windows_extended_length_path(original_backup),
+                    source_io,
+                )
+            for temporary_path in (working_copy, original_backup):
+                temporary_io = _windows_extended_length_path(temporary_path)
+                if os.path.exists(temporary_io):
+                    os.remove(temporary_io)
 
     @staticmethod
     def _get_plan_short_id(hdf_path: Path) -> Optional[str]:
@@ -1453,13 +1828,15 @@ Step 5: Configure (optional — auto-detection usually works)
                 # Create the plan layer - use output_folder as layer name
                 plan_layer = ET.SubElement(results_elem, "Layer")
                 plan_layer.set("Name", output_folder)
-                plan_layer.set("Type", "RASResults")
                 plan_layer.set("Filename", f".\\{plan_hdf_filename}")
                 logger.debug(
                     "Created plan layer '%s' in rasmap for %s",
                     output_folder,
                     plan_hdf_filename,
                 )
+            plan_layer.set("Type", "RASResults")
+            plan_layer.set("Checked", "True")
+            plan_layer.set("Expanded", "True")
 
             # Determine display name and output filename
             type_info = None
@@ -1572,6 +1949,496 @@ Step 5: Configure (optional — auto-detection usually works)
             return 0
 
     @staticmethod
+    def _select_terrain_for_mapping(
+        rasmap_path: Path,
+        terrain_name: str,
+        ras_object=None,
+    ) -> None:
+        """Validate and exclusively select a registered RAS Mapper terrain."""
+
+        layers = RasMap.list_terrain_layers(rasmap_path, ras_object=ras_object)
+        matches = layers[
+            layers["name"].fillna("").str.casefold() == terrain_name.casefold()
+        ] if not layers.empty else layers
+        if len(matches) != 1:
+            available = layers["name"].tolist() if not layers.empty else []
+            raise ValueError(
+                f"Registered terrain layer {terrain_name!r} was not found uniquely. "
+                f"Available terrains: {available}"
+            )
+
+        layer_type = str(matches.iloc[0].get("type") or "")
+        if layer_type != "TerrainLayer":
+            raise ValueError(
+                f"Registered terrain layer {terrain_name!r} has unsupported Type "
+                f"{layer_type!r}; expected 'TerrainLayer'. "
+                f"{RasBenefits.TERRAIN_REMEDIATION}"
+            )
+
+        resolved_path = matches.iloc[0].get("resolved_path")
+        if not resolved_path or not Path(resolved_path).is_file():
+            raise FileNotFoundError(
+                f"Registered terrain HDF for {terrain_name!r} was not found: "
+                f"{resolved_path}"
+            )
+
+        RasMap.set_terrain_layer_visibility(
+            rasmap_path,
+            terrain_name=terrain_name,
+            checked=True,
+            exclusive=True,
+            surface_on=True,
+            ras_object=ras_object,
+        )
+        selected_layers = RasMap.list_terrain_layers(
+            rasmap_path,
+            ras_object=ras_object,
+        )
+        selected = selected_layers[
+            selected_layers["name"].fillna("").str.casefold()
+            == terrain_name.casefold()
+        ]
+        other_terrains = selected_layers[
+            (selected_layers["type"] == "TerrainLayer")
+            & (
+                selected_layers["name"].fillna("").str.casefold()
+                != terrain_name.casefold()
+            )
+        ]
+        if (
+            len(selected) != 1
+            or not bool(selected.iloc[0]["checked"])
+            or not bool(selected.iloc[0]["surface_on"])
+            or bool(other_terrains["checked"].any())
+        ):
+            raise RuntimeError(
+                f"Failed to select registered terrain {terrain_name!r} exclusively"
+            )
+        logger.debug("Selected terrain layer for stored-map generation: %s", terrain_name)
+
+    @staticmethod
+    def _resolve_benefit_terrain_name(
+        ras_object,
+        terrain_tif: Union[str, Path],
+        terrain_name: Optional[str] = None,
+    ) -> str:
+        """Resolve a single registered terrain for BenefitArea mapping."""
+
+        terrain_path = RasBenefits.validate_terrain_tif(terrain_tif).resolve()
+        rasmap_path = RasMap.get_rasmap_path(ras_object)
+        if rasmap_path is None:
+            raise FileNotFoundError(
+                "Benefit analysis requires a project .rasmap with a registered "
+                f"terrain. {RasBenefits.TERRAIN_REMEDIATION}"
+            )
+
+        layers = RasMap.list_terrain_layers(rasmap_path, ras_object=ras_object)
+        if layers.empty:
+            raise ValueError(
+                "No terrain is registered in the project .rasmap. "
+                f"{RasBenefits.TERRAIN_REMEDIATION}"
+            )
+
+        if terrain_name:
+            matches = layers[
+                layers["name"].fillna("").str.casefold() == terrain_name.casefold()
+            ]
+        else:
+            matched_indexes = []
+            for index, row in layers.iterrows():
+                resolved = row.get("resolved_path")
+                if not resolved or not Path(resolved).is_file():
+                    continue
+                try:
+                    source_path = RasBenefits.get_registered_terrain_source(resolved)
+                except (FileNotFoundError, ValueError):
+                    continue
+                if source_path == terrain_path:
+                    matched_indexes.append(index)
+            matches = layers.loc[matched_indexes]
+
+        if len(matches) != 1:
+            available = layers["name"].tolist()
+            raise ValueError(
+                "Benefit analysis could not match the required single GeoTIFF "
+                "to exactly one registered terrain. Provide terrain_name. "
+                f"Available terrains: {available}. {RasBenefits.TERRAIN_REMEDIATION}"
+            )
+
+        row = matches.iloc[0]
+        selected_name = str(row["name"])
+        resolved_hdf_text = row.get("resolved_path")
+        if not resolved_hdf_text or not Path(resolved_hdf_text).is_file():
+            raise FileNotFoundError(
+                f"Registered terrain HDF for {selected_name!r} was not found: "
+                f"{resolved_hdf_text}. {RasBenefits.TERRAIN_REMEDIATION}"
+            )
+
+        registered_source = RasBenefits.get_registered_terrain_source(
+            Path(resolved_hdf_text)
+        )
+        if registered_source != terrain_path:
+            raise ValueError(
+                "terrain_tif must be the single GeoTIFF recorded by the registered "
+                f"terrain HDF: {registered_source}. "
+                f"{RasBenefits.TERRAIN_REMEDIATION}"
+            )
+        return selected_name
+
+    @staticmethod
+    def _require_common_benefit_terrain_association(
+        ras_object,
+        plan_numbers,
+        terrain_name: str,
+    ) -> Path:
+        """Verify StoreAllMaps will use one selected terrain for both plans."""
+
+        rasmap_path = RasMap.get_rasmap_path(ras_object)
+        if rasmap_path is None:
+            raise FileNotFoundError(
+                "Benefit analysis requires a project .rasmap with a registered "
+                f"terrain. {RasBenefits.TERRAIN_REMEDIATION}"
+            )
+        layers = RasMap.list_terrain_layers(
+            rasmap_path,
+            ras_object=ras_object,
+        )
+        matches = layers[
+            layers["name"].fillna("").str.casefold() == terrain_name.casefold()
+        ] if not layers.empty else layers
+        if len(matches) != 1:
+            raise ValueError(
+                f"Registered terrain layer {terrain_name!r} was not found uniquely. "
+                f"{RasBenefits.TERRAIN_REMEDIATION}"
+            )
+        selected_text = matches.iloc[0].get("resolved_path")
+        if not selected_text or not Path(selected_text).is_file():
+            raise FileNotFoundError(
+                f"Registered terrain HDF for {terrain_name!r} was not found: "
+                f"{selected_text}. {RasBenefits.TERRAIN_REMEDIATION}"
+            )
+        selected_hdf = Path(selected_text).resolve()
+        selected_key = os.path.normcase(os.path.abspath(selected_hdf))
+
+        project_folder = Path(ras_object.project_folder)
+        project_name = str(ras_object.project_name)
+        for plan_number in plan_numbers:
+            plan_num = RasUtils.normalize_ras_number(plan_number)
+            plan_hdf = project_folder / f"{project_name}.p{plan_num}.hdf"
+            if not plan_hdf.is_file():
+                raise FileNotFoundError(f"Plan HDF not found: {plan_hdf}")
+            try:
+                association = RasMap.get_hdf_geometry_association(
+                    plan_hdf,
+                    resolve_paths=True,
+                    include_2d_area_attrs=True,
+                    ras_object=ras_object,
+                )
+            except Exception as exc:
+                raise ValueError(
+                    "Benefit analysis could not verify the terrain association "
+                    f"recorded by plan p{plan_num}. {RasBenefits.TERRAIN_REMEDIATION}"
+                ) from exc
+
+            geometry_terrain = association.get("terrain_hdf_path")
+            if not geometry_terrain:
+                raise ValueError(
+                    f"Plan p{plan_num} does not record a Geometry terrain. "
+                    "BenefitArea requires both plan HDFs to reference the same "
+                    "registered single-TIFF terrain because RAS Mapper uses the "
+                    "plan association when storing Depth maps. "
+                    f"{RasBenefits.TERRAIN_REMEDIATION}"
+                )
+
+            recorded = [("Geometry", geometry_terrain)]
+            recorded.extend(
+                (
+                    f"2D Flow Area {area.get('flow_area')!r}",
+                    area.get("terrain_hdf_path"),
+                )
+                for area in association.get(
+                    "two_d_area_terrain_associations",
+                    [],
+                )
+                if area.get("terrain_hdf_path")
+            )
+            mismatches = [
+                (scope, Path(path).resolve())
+                for scope, path in recorded
+                if os.path.normcase(os.path.abspath(Path(path).resolve()))
+                != selected_key
+            ]
+            if mismatches:
+                observed = ", ".join(
+                    f"{scope}={path}" for scope, path in mismatches
+                )
+                raise ValueError(
+                    "BenefitArea requires both plan HDFs to reference the same "
+                    "registered single-TIFF terrain. "
+                    f"Plan p{plan_num} records {observed}, but the selected terrain "
+                    f"is {selected_hdf}. RAS Mapper uses plan-HDF terrain "
+                    "associations when storing Depth maps; terrain visibility alone "
+                    "does not override them. "
+                    f"{RasBenefits.TERRAIN_REMEDIATION}"
+                )
+        return selected_hdf
+
+    @staticmethod
+    @_serialize_store_maps
+    @log_call
+    def store_benefit_area(
+        post_plan_number: str,
+        config: BenefitAreaConfig,
+        *,
+        output_path: Union[str, Path] = None,
+        profile: str = "Max",
+        render_mode: str = None,
+        terrain_name: Optional[str] = None,
+        include_wse: Optional[bool] = None,
+        post_depth: bool = True,
+        post_velocity: bool = False,
+        post_froude: bool = False,
+        post_shear_stress: bool = False,
+        post_depth_x_velocity: bool = False,
+        post_depth_x_velocity_sq: bool = False,
+        post_inundation_boundary: bool = False,
+        post_arrival_time: bool = False,
+        post_duration: bool = False,
+        post_percent_inundated: bool = False,
+        arrival_depth: float = 0.0,
+        clear_existing: bool = True,
+        fix_georef: bool = True,
+        ras_object=None,
+        ras_version: str = None,
+        timeout: int = 600,
+        _log_summary: bool = True,
+    ) -> Dict[str, List[Path]]:
+        """Generate paired Depth maps and derive one BenefitArea product."""
+
+        if not isinstance(config, BenefitAreaConfig):
+            raise TypeError("config must be a BenefitAreaConfig")
+        if not post_depth:
+            raise ValueError("Depth generation cannot be disabled for BenefitArea")
+
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        pre_plan = RasUtils.normalize_ras_number(config.pre_plan_number)
+        post_plan = RasUtils.normalize_ras_number(post_plan_number)
+        if pre_plan == post_plan:
+            raise ValueError("BenefitArea pre- and post-project plans must be different")
+
+        terrain_path = Path(config.terrain_tif)
+        if terrain_name and config.terrain_name and (
+            terrain_name.casefold() != config.terrain_name.casefold()
+        ):
+            raise ValueError(
+                "terrain_name conflicts with BenefitAreaConfig.terrain_name"
+            )
+        selected_terrain = RasProcess._resolve_benefit_terrain_name(
+            ras_obj,
+            terrain_path,
+            terrain_name or config.terrain_name,
+        )
+        RasProcess._require_common_benefit_terrain_association(
+            ras_obj,
+            (pre_plan, post_plan),
+            selected_terrain,
+        )
+        terrain_path = terrain_path.resolve()
+        effective_wse = config.include_wse if include_wse is None else bool(include_wse)
+
+        if output_path is None:
+            root_output = (
+                Path(ras_obj.project_folder)
+                / "BenefitArea"
+                / f"p{pre_plan}-to-p{post_plan}"
+            )
+        else:
+            root_output = Path(output_path)
+            if not root_output.is_absolute():
+                root_output = Path(ras_obj.project_folder) / root_output
+        root_output.mkdir(parents=True, exist_ok=True)
+        pre_output = root_output / f"p{pre_plan}"
+        post_output = root_output / f"p{post_plan}"
+
+        def map_plan(
+            plan_number: str,
+            plan_output: Path,
+            *,
+            include_post_maps: bool,
+        ) -> Dict[str, List[Path]]:
+            project_name = getattr(ras_obj, "project_name", "")
+            plan_hdf = (
+                Path(ras_obj.project_folder)
+                / f"{project_name}.p{plan_number}.hdf"
+            )
+            last_reason = "stored map was not produced"
+            last_result: Dict[str, List[Path]] = {}
+            for attempt in range(1, 4):
+                result = RasProcess.store_maps(
+                    plan_number=plan_number,
+                    output_path=plan_output,
+                    profile=profile,
+                    render_mode=render_mode,
+                    wse=effective_wse,
+                    depth=True,
+                    velocity=post_velocity if include_post_maps else False,
+                    froude=post_froude if include_post_maps else False,
+                    shear_stress=(
+                        post_shear_stress if include_post_maps else False
+                    ),
+                    depth_x_velocity=(
+                        post_depth_x_velocity if include_post_maps else False
+                    ),
+                    depth_x_velocity_sq=(
+                        post_depth_x_velocity_sq if include_post_maps else False
+                    ),
+                    inundation_boundary=(
+                        post_inundation_boundary if include_post_maps else False
+                    ),
+                    arrival_time=(
+                        post_arrival_time if include_post_maps else False
+                    ),
+                    duration=post_duration if include_post_maps else False,
+                    percent_inundated=(
+                        post_percent_inundated if include_post_maps else False
+                    ),
+                    arrival_depth=arrival_depth,
+                    clear_existing=clear_existing,
+                    terrain_name=selected_terrain,
+                    benefit_area=None,
+                    fix_georef=fix_georef,
+                    ras_object=ras_obj,
+                    ras_version=ras_version,
+                    timeout=timeout,
+                    _log_summary=False,
+                )
+                last_result = result
+
+                depth_paths = [Path(path) for path in result.get("depth", [])]
+                wse_paths = [Path(path) for path in result.get("wse", [])]
+                if len(depth_paths) != 1:
+                    last_reason = f"found {len(depth_paths)} readable Depth TIFFs"
+                elif effective_wse and len(wse_paths) != 1:
+                    last_reason = f"found {len(wse_paths)} readable WSE TIFFs"
+                elif (
+                    not RasProcess._tif_has_data(depth_paths[0])
+                    and RasProcess._hdf_has_wet_maximum_depth(plan_hdf)
+                ):
+                    last_reason = (
+                        "Depth TIFF is all NoData while the plan HDF contains wet cells"
+                    )
+                else:
+                    return result
+
+                if attempt < 3:
+                    logger.warning(
+                        "Retrying BenefitArea source maps for plan p%s "
+                        "(attempt %d of 3): %s",
+                        plan_number,
+                        attempt + 1,
+                        last_reason,
+                    )
+
+            if "all NoData" in last_reason:
+                raise RuntimeError(
+                    f"BenefitArea source-map generation failed for plan p{plan_number} "
+                    f"after 3 attempts: {last_reason}. Confirm the selected terrain "
+                    "is a registered single-TIFF terrain."
+                )
+            # Preserve the established exact-count validation and error text
+            # below after giving transient mapper failures a chance to recover.
+            return last_result
+
+        pre_results = map_plan(
+            pre_plan,
+            pre_output,
+            include_post_maps=False,
+        )
+        post_results = map_plan(
+            post_plan,
+            post_output,
+            include_post_maps=True,
+        )
+
+        def require_one(
+            result: Dict[str, List[Path]],
+            key: str,
+            plan: str,
+        ) -> Path:
+            paths = [Path(item) for item in result.get(key, [])]
+            if len(paths) != 1:
+                raise RuntimeError(
+                    f"BenefitArea requires exactly one {key.replace('_', ' ').title()} "
+                    f"GeoTIFF for plan p{plan}; found {len(paths)}. Confirm the "
+                    "selected terrain is a registered single-TIFF terrain."
+                )
+            return paths[0]
+
+        pre_depth_path = require_one(pre_results, "depth", pre_plan)
+        post_depth_path = require_one(post_results, "depth", post_plan)
+        pre_wse_path: Optional[Path] = None
+        post_wse_path: Optional[Path] = None
+        if effective_wse:
+            # Validate every requested source map before publishing the derived
+            # product so a partial WSE run cannot leave a successful-looking
+            # BenefitArea raster behind.
+            pre_wse_path = require_one(pre_results, "wse", pre_plan)
+            post_wse_path = require_one(post_results, "wse", post_plan)
+        safe_profile = profile.replace(":", " ").replace("/", "_")
+        benefit_path = root_output / (
+            f"Benefit Area ({safe_profile}).p{pre_plan}-to-p{post_plan}.tif"
+        )
+
+        polygon_output = config.polygon_output
+        if polygon_output is True:
+            polygon_output = benefit_path.with_suffix(".gpkg")
+        elif polygon_output:
+            polygon_output = Path(polygon_output)
+            if not polygon_output.is_absolute():
+                polygon_output = root_output / polygon_output
+
+        benefit_result = RasBenefits.create_benefit_area(
+            pre_depth_path,
+            post_depth_path,
+            terrain_path,
+            benefit_path,
+            flood_min_depth=config.flood_min_depth,
+            benefit_min_depth=config.benefit_min_depth,
+            minimum_region_pixels=config.minimum_region_pixels,
+            analysis_boundary=config.analysis_boundary,
+            improvement_boundary=config.improvement_boundary,
+            polygon_output=polygon_output,
+            polygon_simplify_tolerance=config.polygon_simplify_tolerance,
+        )
+
+        generated: Dict[str, List[Path]] = {
+            key: [Path(path) for path in paths]
+            for key, paths in post_results.items()
+        }
+        generated["benefit_source_pre_depth"] = [pre_depth_path]
+        generated["benefit_source_post_depth"] = [post_depth_path]
+        if effective_wse:
+            generated["benefit_source_pre_wse"] = [pre_wse_path]
+            generated["benefit_source_post_wse"] = [post_wse_path]
+        generated["benefit_area"] = [benefit_result.raster_path]
+        if benefit_result.polygon_path is not None:
+            generated["benefit_area_polygon"] = [benefit_result.polygon_path]
+
+        if _log_summary:
+            logger.info(
+                "BenefitArea stored-map workflow complete: pre=p%s; post=p%s; "
+                "wse=%s; filter=%s; polygon=%s",
+                pre_plan,
+                post_plan,
+                effective_wse,
+                config.minimum_region_pixels,
+                benefit_result.polygon_path is not None,
+            )
+        return generated
+
+    @staticmethod
+    @_serialize_store_maps
     @log_call
     def store_maps(
         plan_number: str,
@@ -1579,9 +2446,9 @@ Step 5: Configure (optional — auto-detection usually works)
         output_path: Union[str, Path] = None,
         profile: str = "Max",
         render_mode: str = None,
-        wse: bool = True,
-        depth: bool = True,
-        velocity: bool = True,
+        wse: Optional[bool] = None,
+        depth: Optional[bool] = None,
+        velocity: Optional[bool] = None,
         froude: bool = False,
         shear_stress: bool = False,
         depth_x_velocity: bool = False,
@@ -1597,13 +2464,15 @@ Step 5: Configure (optional — auto-detection usually works)
         ras_version: str = None,
         timeout: int = 600,
         _log_summary: bool = True,
+        terrain_name: Optional[str] = None,
+        benefit_area: Optional[BenefitAreaConfig] = None,
     ) -> Dict[str, List[Path]]:
         """
-        Generate stored maps for a plan using RasProcess.exe StoreAllMaps.
+        Generate stored maps for a plan using RasStoreMapHelper.exe.
 
         This method:
         1. Configures stored maps in the .rasmap file
-        2. Runs RasProcess.exe (StoreAllMaps or individual StoreMap commands)
+        2. Runs the packaged mapper helper and HEC-RAS mapping libraries
         3. Optionally fixes georeferencing on output TIFs
 
         Works on both Windows (native) and Linux (via Wine, auto-detected).
@@ -1622,7 +2491,7 @@ Step 5: Configure (optional — auto-detection usually works)
             plan_number: Plan number (e.g., "01", "06")
             output_folder: Output folder name used in .rasmap StoredFilename
                 paths (default: plan name from rasmap). This does NOT control
-                where RasProcess.exe writes files — see output_path.
+                where the HEC-RAS mapping command writes files — see output_path.
             output_path: Custom output directory for generated rasters (str
                 or Path). If provided, ``StoreAllMaps`` runs to the default
                 Plan ShortID folder, then files are moved to this directory.
@@ -1633,9 +2502,13 @@ Step 5: Configure (optional — auto-detection usually works)
             render_mode: Water surface rendering mode to set before generating
                 maps. Options: "horizontal", "sloping", "slopingPretty".
                 If None (default), uses whatever mode is already in the .rasmap.
-            wse: Generate Water Surface Elevation map (default: True)
-            depth: Generate Depth map (default: True)
-            velocity: Generate Velocity map (default: True)
+            wse: Generate Water Surface Elevation map. Defaults to True for
+                ordinary stored-map generation and False for BenefitArea unless
+                ``BenefitAreaConfig.include_wse`` is True.
+            depth: Generate Depth map (default: True). BenefitArea always
+                requires Depth and rejects False.
+            velocity: Generate Velocity map. Defaults to True for ordinary
+                stored-map generation and False for BenefitArea.
             froude: Generate Froude number map (default: False)
             shear_stress: Generate Shear Stress map (default: False)
             depth_x_velocity: Generate D*V hazard map (default: False)
@@ -1650,10 +2523,17 @@ Step 5: Configure (optional — auto-detection usually works)
             arrival_depth: Wet/dry depth threshold (model vertical units) for
                 arrival_time / duration / percent_inundated maps (default: 0.0).
                 Appears in output filenames, e.g. "Arrival Time (0.1ft hrs)".
+            terrain_name: Registered RAS Mapper terrain to select exclusively
+                while generating maps. BenefitArea requires this terrain to
+                resolve to the single GeoTIFF in its configuration.
+            benefit_area: Optional BenefitArea configuration. When provided,
+                ``plan_number`` is the post-project plan and the configured
+                pre-project plan is mapped separately before the categorical
+                BenefitArea raster is calculated.
             clear_existing: Clear existing stored maps before adding new ones (default: True)
             fix_georef: Apply georeferencing fix to output TIFs (default: True)
             ras_object: Optional RAS object instance
-            ras_version: Optional specific HEC-RAS version for RasProcess.exe
+            ras_version: Optional specific HEC-RAS mapping-runtime version
             timeout: Command timeout in seconds (default: 600)
 
         Returns:
@@ -1663,8 +2543,8 @@ Step 5: Configure (optional — auto-detection usually works)
             folder.
 
         Raises:
-            FileNotFoundError: If RasProcess.exe or required files not found
-            RuntimeError: If RasProcess.exe command fails
+            FileNotFoundError: If the mapper helper or required files are not found
+            RuntimeError: If the HEC-RAS mapping command fails
 
         Example:
             >>> # Default output (writes to ./PlanShortID/)
@@ -1691,6 +2571,53 @@ Step 5: Configure (optional — auto-detection usually works)
         # which ignores RenderMode in HEC-RAS 6.x. Now uses RasStoreMapHelper.exe
         # which sets SharedData render mode via .NET reflection before executing
         # StoreAllMapsCommand, producing pixel-perfect output.
+
+        if benefit_area is not None:
+            if not isinstance(benefit_area, BenefitAreaConfig):
+                raise TypeError("benefit_area must be a BenefitAreaConfig")
+            if depth is False:
+                raise ValueError("Depth generation cannot be disabled for BenefitArea")
+            if output_folder is not None:
+                raise ValueError(
+                    "output_folder is not supported for BenefitArea because two plans "
+                    "are mapped separately; use output_path for the comparison root"
+                )
+
+            effective_wse = (
+                benefit_area.include_wse if wse is None else bool(wse)
+            )
+            return RasProcess.store_benefit_area(
+                post_plan_number=plan_number,
+                config=benefit_area,
+                output_path=output_path,
+                profile=profile,
+                render_mode=render_mode,
+                terrain_name=terrain_name,
+                include_wse=effective_wse,
+                post_depth=True,
+                post_velocity=False if velocity is None else bool(velocity),
+                post_froude=froude,
+                post_shear_stress=shear_stress,
+                post_depth_x_velocity=depth_x_velocity,
+                post_depth_x_velocity_sq=depth_x_velocity_sq,
+                post_inundation_boundary=inundation_boundary,
+                post_arrival_time=arrival_time,
+                post_duration=duration,
+                post_percent_inundated=percent_inundated,
+                arrival_depth=arrival_depth,
+                clear_existing=clear_existing,
+                fix_georef=fix_georef,
+                ras_object=ras_object,
+                ras_version=ras_version,
+                timeout=timeout,
+                _log_summary=_log_summary,
+            )
+
+        # Preserve the long-standing ordinary StoreMaps defaults while allowing
+        # BenefitArea to use a cheaper Depth-only default above.
+        wse = True if wse is None else bool(wse)
+        depth = True if depth is None else bool(depth)
+        velocity = True if velocity is None else bool(velocity)
 
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -1764,13 +2691,22 @@ Step 5: Configure (optional — auto-detection usually works)
                 profile_name = "Max"
 
         # Backup rasmap
-        rasmap_backup = rasmap_path.with_suffix('.rasmap.bak')
+        rasmap_backup = rasmap_path.with_name(
+            f".{rasmap_path.name}.{os.getpid()}.{uuid.uuid4().hex}.bak"
+        )
         shutil.copy2(
             _windows_extended_length_path(rasmap_path),
             _windows_extended_length_path(rasmap_backup),
         )
 
         try:
+            if terrain_name is not None:
+                RasProcess._select_terrain_for_mapping(
+                    rasmap_path,
+                    terrain_name,
+                    ras_object=ras_obj,
+                )
+
             # Set render mode if requested (before modifying stored maps)
             if render_mode is not None:
                 RasMap.set_water_surface_render_mode(
@@ -1892,18 +2828,23 @@ Step 5: Configure (optional — auto-detection usually works)
 
             logger.debug("Running StoreAllMaps for plan %s (mode=%s)", plan_num, helper_mode)
 
-            # Files created by this run have mtime >= now (moves preserve
-            # mtime); 2s slack covers coarse filesystem timestamp granularity.
-            run_started = time.time() - 2
-
-            result = run_store_all_maps_helper(
-                hecras_dir=hecras_dir,
-                render_mode=helper_mode,
-                rasmap_path=rasmap_path,
-                result_hdf_path=plan_hdf_path,
-                timeout=timeout,
-                working_dir=ras_obj.project_folder,
+            effective_ras_version = ras_version or getattr(
+                ras_obj,
+                "ras_version",
+                None,
             )
+            with RasProcess._mapper_compatible_result_hdf(
+                plan_hdf_path,
+                effective_ras_version,
+            ) as mapper_hdf_path:
+                result = run_store_all_maps_helper(
+                    hecras_dir=hecras_dir,
+                    render_mode=helper_mode,
+                    rasmap_path=rasmap_path,
+                    result_hdf_path=mapper_hdf_path,
+                    timeout=timeout,
+                    working_dir=ras_obj.project_folder,
+                )
 
             logger.debug(f"StoreAllMaps stdout: {result.stdout}")
             if result.stderr:
@@ -1912,48 +2853,77 @@ Step 5: Configure (optional — auto-detection usually works)
                 logger.warning("StoreAllMaps reported stderr: %s", stderr_preview)
                 logger.debug("StoreAllMaps full stderr: %s", result.stderr)
             if result.returncode != 0:
-                logger.error(f"StoreAllMaps failed (exit code {result.returncode})")
-                if result.stderr:
-                    logger.debug("StoreAllMaps failure stderr: %s", result.stderr)
+                stderr_detail = next(
+                    (
+                        line.strip()
+                        for line in result.stderr.splitlines()
+                        if line.strip()
+                    ),
+                    "",
+                )
+                detail_suffix = (
+                    f": {stderr_detail[:500]}" if stderr_detail else ""
+                )
+                raise RuntimeError(
+                    "StoreAllMaps failed for plan "
+                    f"{plan_num} (exit code {result.returncode}){detail_suffix}"
+                )
 
             for line in result.stdout.splitlines():
                 if "Maps generated" in line:
                     logger.debug(line.strip())
 
+            # Identify this invocation's outputs before looking up requested
+            # map names.  Filtering every return value through this set keeps
+            # an old TIFF from being reported as fresh output when the helper
+            # succeeds without producing a requested map.
+            fresh_source_files = []
+            for item in _iterdir_paths(output_dir):
+                try:
+                    stat = os.stat(_windows_extended_length_path(item))
+                except FileNotFoundError:
+                    continue
+                if not os.path.isfile(_windows_extended_length_path(item)):
+                    continue
+                previous_signature = pre_existing_files.get(item.name)
+                current_signature = (stat.st_mtime_ns, stat.st_size)
+                if previous_signature != current_signature:
+                    fresh_source_files.append(item)
+
             search_dir = output_dir
+            produced_paths = list(fresh_source_files)
 
             # If output_path was requested, move files from default dir to output_path
-            if resolved_output_path is not None:
+            if (
+                resolved_output_path is not None
+                and os.path.normcase(os.path.abspath(resolved_output_path))
+                != os.path.normcase(os.path.abspath(output_dir))
+            ):
                 logger.debug(
                     "Moving generated files from %s to %s",
                     output_dir,
                     resolved_output_path,
                 )
                 moved_count = 0
+                moved_paths = []
                 # Move files that were created or modified by this call.
-                for item in _iterdir_paths(output_dir):
-                    try:
-                        stat = os.stat(_windows_extended_length_path(item))
-                    except FileNotFoundError:
-                        continue
+                for item in fresh_source_files:
                     # PostProcessing.hdf is RasMapperLib's derived-map cache
                     # (can exceed the plan HDF in size): leave it beside the
                     # plan so reruns reuse it instead of paying a potentially
                     # cross-volume move of a multi-GB scratch file.
                     if item.name == "PostProcessing.hdf":
                         continue
-                    previous_signature = pre_existing_files.get(item.name)
-                    current_signature = (stat.st_mtime_ns, stat.st_size)
-                    if previous_signature != current_signature:
-                        dest = resolved_output_path / item.name
-                        dest_move_path = _windows_extended_length_path(dest)
-                        if os.path.exists(dest_move_path):
-                            os.remove(dest_move_path)
-                        shutil.move(
-                            _windows_extended_length_path(item),
-                            dest_move_path,
-                        )
-                        moved_count += 1
+                    dest = resolved_output_path / item.name
+                    dest_move_path = _windows_extended_length_path(dest)
+                    if os.path.exists(dest_move_path):
+                        os.remove(dest_move_path)
+                    shutil.move(
+                        _windows_extended_length_path(item),
+                        dest_move_path,
+                    )
+                    moved_paths.append(dest)
+                    moved_count += 1
                 logger.debug(
                     "Moved %d generated file(s) to %s",
                     moved_count,
@@ -1961,6 +2931,19 @@ Step 5: Configure (optional — auto-detection usually works)
                 )
 
                 search_dir = resolved_output_path
+                produced_paths = moved_paths
+
+            def fresh_glob(pattern):
+                """Return matching files only when produced by this call."""
+                produced_keys = {
+                    os.path.normcase(os.path.abspath(path))
+                    for path in produced_paths
+                }
+                return [
+                    path
+                    for path in _glob_paths(search_dir, pattern)
+                    if os.path.normcase(os.path.abspath(path)) in produced_keys
+                ]
 
             # Find generated files in the appropriate directory
             generated_files = {}
@@ -1974,11 +2957,11 @@ Step 5: Configure (optional — auto-detection usually works)
 
                 safe_profile = profile_name.replace(":", " ").replace("/", "_")
                 pattern = f"{display_name_used} ({safe_profile})*.tif"
-                tif_files = _glob_paths(search_dir, pattern)
+                tif_files = fresh_glob(pattern)
 
                 if not tif_files:
                     pattern_alt = f"{display_name_used.replace(' ', '_')} ({safe_profile})*.tif"
-                    tif_files = _glob_paths(search_dir, pattern_alt)
+                    tif_files = fresh_glob(pattern_alt)
 
                 if tif_files:
                     generated_files[map_key] = tif_files
@@ -1988,20 +2971,14 @@ Step 5: Configure (optional — auto-detection usually works)
 
             # Whole-simulation types label outputs by threshold, not profile
             # (e.g. "Arrival Time (0.1ft hrs).Terrain.tile.tif") — glob by
-            # display-name prefix, restricted to files produced by this run
-            # (mtime survives shutil.move) so a rerun at a different
-            # arrival_depth never collects the previous threshold's rasters.
+            # display-name prefix, restricted to files produced by this run so
+            # a rerun at a different arrival_depth never collects the previous
+            # threshold's rasters.
             for map_type, map_key in adr_maps_to_add:
                 display_name_used = RasProcess.MAP_TYPES[map_key][1]
 
                 pattern = f"{display_name_used} (*.tif"
-                tif_files = [
-                    path
-                    for path in _glob_paths(search_dir, pattern)
-                    if os.stat(
-                        _windows_extended_length_path(path)
-                    ).st_mtime >= run_started
-                ]
+                tif_files = fresh_glob(pattern)
                 if tif_files:
                     generated_files[map_key] = tif_files
                     logger.info(f"Generated {len(tif_files)} {map_key} TIF(s)")
@@ -2012,10 +2989,10 @@ Step 5: Configure (optional — auto-detection usually works)
             if inundation_boundary:
                 safe_profile = profile_name.replace(":", " ").replace("/", "_")
                 shp_pattern = f"Inundation Boundary ({safe_profile})*.shp"
-                shp_files = _glob_paths(search_dir, shp_pattern)
+                shp_files = fresh_glob(shp_pattern)
                 if not shp_files:
                     shp_pattern_alt = f"Inundation_Boundary*({safe_profile})*.shp"
-                    shp_files = _glob_paths(search_dir, shp_pattern_alt)
+                    shp_files = fresh_glob(shp_pattern_alt)
                 if shp_files:
                     generated_files['inundation_boundary'] = shp_files
                     logger.debug(
@@ -2040,6 +3017,8 @@ Step 5: Configure (optional — auto-detection usually works)
                         )
                     for tif_list in generated_files.values():
                         for tif_path in tif_list:
+                            if Path(tif_path).suffix.lower() not in {".tif", ".tiff"}:
+                                continue
                             terrain_path = RasProcess._terrain_for_stored_map(
                                 tif_path,
                                 terrain_paths,

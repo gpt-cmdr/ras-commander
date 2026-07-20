@@ -69,6 +69,7 @@ from .GeomMetadata import GeomMetadata
 from .GeomReferenceFeatures import GeomReferenceFeatures
 from .GeomBcLines import GeomBcLines
 from .GeomMesh import GeomMesh
+from .GeomPipeNetwork import GeomPipeNetwork
 from .GeomMeshDataclasses import MeshResult, BCConflict, BCFixResult
 
 __all__ = [
@@ -95,6 +96,7 @@ __all__ = [
     'GeomReferenceFeatures',
     'GeomBcLines',
     'GeomMesh',
+    'GeomPipeNetwork',
     'MeshResult',
     'BCConflict',
     'BCFixResult',

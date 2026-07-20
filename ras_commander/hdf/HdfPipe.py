@@ -844,7 +844,11 @@ class HdfPipe:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_pipe_network_timeseries(hdf_path: Path, variable: str) -> xr.DataArray:
+    def get_pipe_network_timeseries(
+        hdf_path: Path,
+        variable: str,
+        pipe_network_name: Optional[str] = None,
+    ) -> xr.DataArray:
         """
         Extracts timeseries data for a pipe network variable.
 
@@ -855,6 +859,9 @@ class HdfPipe:
                 - Face: Flow, Velocity, Water Surface
                 - Pipes: Pipe Flow (DS/US), Vel (DS/US)
                 - Nodes: Depth, Drop Inlet Flow, Water Surface
+            pipe_network_name: Pipe network to read. When omitted, the sole
+                available network is selected automatically. Projects with
+                multiple networks must specify the desired name.
 
         Returns:
             xarray.DataArray with dimensions (time, location)
@@ -870,11 +877,35 @@ class HdfPipe:
             raise ValueError(f"Invalid variable. Must be one of: {', '.join(valid_variables)}")
 
         with h5py.File(hdf_path, 'r') as hdf:
-            network_name = "Davis"
             pipe_networks_path = (
                 "/Results/Unsteady/Output/Output Blocks/DSS Hydrograph Output/"
                 "Unsteady Time Series/Pipe Networks"
             )
+            available_networks = (
+                sorted(str(name) for name in hdf[pipe_networks_path].keys())
+                if pipe_networks_path in hdf
+                else []
+            )
+            if pipe_network_name is None:
+                if len(available_networks) == 1:
+                    network_name = available_networks[0]
+                elif not available_networks:
+                    raise KeyError(
+                        "No pipe-network timeseries groups were found. "
+                        f"{_PIPE_RESULTS_ACTION}"
+                    )
+                else:
+                    raise ValueError(
+                        "Multiple pipe networks are available; pass pipe_network_name. "
+                        f"Available networks: {_format_available_items(available_networks)}"
+                    )
+            else:
+                network_name = str(pipe_network_name)
+                if network_name not in available_networks:
+                    raise ValueError(
+                        f"Pipe network '{network_name}' was not found. Available networks: "
+                        f"{_format_available_items(available_networks)}"
+                    )
             network_path = f"{pipe_networks_path}/{network_name}"
             data_path = f"{network_path}/{variable}"
 
