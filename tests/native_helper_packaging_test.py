@@ -1,3 +1,4 @@
+import hashlib
 import os
 import logging
 from pathlib import Path
@@ -27,6 +28,36 @@ def test_packaged_helper_resources_exist():
     with _native_helper.packaged_helper_source_path() as helper_cs:
         assert helper_cs.exists()
         assert helper_cs.name == "RasStoreMapHelper.cs"
+
+
+def test_store_maps_runtime_provenance_hashes_actual_helper_and_mapper_runtime(
+    monkeypatch,
+    tmp_path,
+):
+    hecras_dir = tmp_path / "HEC-RAS"
+    hecras_dir.mkdir()
+    mapper = hecras_dir / "RasMapperLib.dll"
+    mapper.write_bytes(b"mapper-runtime")
+    optional = hecras_dir / "Geospatial.Core.dll"
+    optional.write_bytes(b"geospatial-runtime")
+    helper = tmp_path / "RasStoreMapHelper.exe"
+    helper.write_bytes(b"packaged-helper")
+    monkeypatch.setenv("RAS_COMMANDER_MAP_HELPER_PATH", str(helper))
+
+    provenance = _native_helper.store_maps_runtime_provenance(hecras_dir)
+
+    assert provenance["runner"] == "RasStoreMapHelper"
+    assert provenance["helper"]["source_file"] == str(helper.resolve())
+    assert provenance["helper"]["sha256"] == hashlib.sha256(
+        b"packaged-helper"
+    ).hexdigest()
+    assert set(provenance["libraries"]) == {
+        "RasMapperLib.dll",
+        "Geospatial.Core.dll",
+    }
+    assert provenance["libraries"]["RasMapperLib.dll"]["sha256"] == (
+        hashlib.sha256(b"mapper-runtime").hexdigest()
+    )
 
 
 def test_normalize_store_map_render_mode_handles_strings_and_dicts():

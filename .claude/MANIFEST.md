@@ -100,6 +100,7 @@ When adding a new component, add it to the appropriate domain group AND the rela
 |-----------|------|------|
 | `qa_repair_geometry` | skill | `.claude/skills/qa_repair_geometry/SKILL.md` |
 | `qa_rasmapper_spatial-review` | skill | `.claude/skills/qa_rasmapper_spatial-review/SKILL.md` |
+| `qa-rasmapper-web-parity` | skill | `.claude/skills/qa-rasmapper-web-parity/SKILL.md` |
 | `qa_review_triple-model` | skill | `.claude/skills/qa_review_triple-model/SKILL.md` |
 | `quality-assurance` | agent | `.claude/agents/quality-assurance/SUBAGENT.md` |
 | `rasmapper-spatial-reviewer` | agent | `.claude/agents/rasmapper-spatial-reviewer.md` |

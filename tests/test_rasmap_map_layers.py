@@ -748,6 +748,18 @@ def test_create_spatial_review_package_writes_audit_bundle(tmp_path):
         layer_type=["RASD2FlowArea", "LateralStructureLayer"],
         feature_index=1,
         terrain_name="TerrainWithChannel",
+        viewport_width=1440,
+        viewport_height=900,
+        dpi=96,
+        expanded_tree_paths=["Results/Plan A", "Geometries/Geometry 04"],
+        ramp_id="ras.depth",
+        range_mode="current-view",
+        selected_layer="depth-max",
+        result_profile="Max",
+        render_mode="slopingPretty",
+        basemap="hybrid",
+        ras_version="7.0",
+        web_manifest_url="https://rascommander.info/data/muncie/viewer/manifest.json",
     )
 
     assert state["passed"] is True
@@ -784,6 +796,20 @@ def test_create_spatial_review_package_writes_audit_bundle(tmp_path):
     assert review_state["view_spec"]["padding_fraction"] == 0.25
     assert review_state["view_spec"]["view_expansion_fraction"] == 0.5
     assert review_state["view_spec"]["snapshot_timeout_seconds"] == 1800.0
+    assert review_state["view_spec"]["viewport"] == {"width": 1440, "height": 900}
+    assert review_state["view_spec"]["dpi"] == 96
+    assert review_state["view_spec"]["expanded_tree_paths"] == [
+        "Geometries/Geometry 04",
+        "Results/Plan A",
+    ]
+    assert review_state["view_spec"]["ramp_id"] == "ras.depth"
+    assert review_state["view_spec"]["range_mode"] == "current-view"
+    assert review_state["view_spec"]["selected_layer"] == "depth-max"
+    assert review_state["view_spec"]["result_profile"] == "Max"
+    assert review_state["view_spec"]["render_mode"] == "slopingPretty"
+    assert review_state["view_spec"]["basemap"] == "hybrid"
+    assert review_state["view_spec"]["ras_version"] == "7.0"
+    assert review_state["view_spec"]["web_manifest_url"].endswith("manifest.json")
     assert any(
         check["code"] == "selected_geometry_layers_found" and check["passed"]
         for check in review_state["preflight"]
@@ -833,6 +859,18 @@ def test_create_spatial_review_package_defaults_to_screenshots_folder(tmp_path):
     assert Path(state["output_dir"]) == expected_dir
     assert Path(state["artifacts"]["review_state"]).parent == expected_dir
     assert expected_dir.exists()
+
+
+def test_spatial_review_requires_complete_viewport_dimensions(tmp_path):
+    project_dir = _make_geometry_project(tmp_path)
+
+    with pytest.raises(ValueError, match="provided together"):
+        RasMap.create_spatial_review_package(
+            project_dir,
+            geometry_number="04",
+            layer_type="RASD2FlowArea",
+            viewport_width=1440,
+        )
 
 
 def test_create_spatial_review_package_can_select_result_and_map_layers(tmp_path):

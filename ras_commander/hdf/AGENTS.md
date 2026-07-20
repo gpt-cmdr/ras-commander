@@ -51,14 +51,32 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - 1D cross section geometry and results: `HdfXsec`, `HdfResultsXsec`
 - 1D river edge lines: `HdfXsec.get_river_edge_lines()` (stored `Geometry/River Edge Lines`);
   `HdfXsec.generate_river_edge_lines()` builds them from XS cut-line end points when none are
-  stored (pure-Python equivalent of RASMapper "Create Edge Lines at XS Limits").
+  stored (pure-Python equivalent of RASMapper "Create Edge Lines at XS Limits") — it returns a
+  GeoDataFrame and does not write to the HDF. To author edge lines that HEC-RAS honors (real
+  bank-line-anchored offset curves, with the group-level `Source Data Hash`), use
+  `RasGeometryCompute.generate_edge_lines()`; there is deliberately no pure-Python writer, since a
+  hand-written approximation carries no valid hash and HEC-RAS may silently recompute it.
+- 1D XS interpolation surface: `HdfXsec.get_xs_interpolation_surface()` reads
+  `Geometry/Cross Section Interpolation Surfaces` — one dissolved (Multi)Polygon per XS-to-XS TIN
+  segment, with `us_xs_id` / `ds_xs_id` / `area` columns (triangle indices are local to each
+  segment's point slice). Generate it with `RasGeometryCompute.generate_interpolation_surface()`.
+- 1D river flow paths: `HdfXsec.get_river_flow_paths()` reads `Geometry/River Flow Paths`
+  (`Flow Path Lines Info/Parts/Points`). Generate/backup with
+  `RasGeometryCompute.generate_flow_paths()`.
 - 1D model footprint polygons: `HdfXsec.get_1d_footprint()` closes left/right edge lines into a
-  per-(River, Reach) polygon (matching end points at the upstream/downstream cross sections);
-  `edge_source='auto'|'stored'|'generate'`, `dissolve=True` for a single (multi)polygon.
+  per-(River, Reach) polygon. Each end cap follows the real cut-line geometry of the end cross
+  section, interior vertices included, so a bent cut line is not chorded straight across; when an
+  edge-line end point does not land on a cut-line limit (possible for stored edge lines) that cap
+  falls back to a straight chord. `edge_source='auto'|'stored'|'generate'`,
+  `close_with_end_xs=False` for the legacy straight-chord closure, `dissolve=True` for a single
+  (multi)polygon.
 - True model extent polygon: `HdfProject.get_project_extent(..., geometry_type='footprint')`
   unions 2D flow-area perimeters with 1D reach footprints (multipart when multiple areas/reaches).
   Use `include_1d=False` / `include_2d=False` for 2D-only / 1D-only extents, and
-  `buffer_percent=0` for the raw footprint. `geometry_type='bbox'` returns the legacy buffered
+  `buffer_percent=0` for the raw footprint. `fill_holes=True` (default, footprint mode) removes the
+  thin interior sliver gaps left where 1D reach footprints and 2D flow areas overlap without
+  aligning exactly — it drops interior rings only, never disconnected parts of a multipart model;
+  pass `fill_holes=False` to keep the raw union. `geometry_type='bbox'` returns the legacy buffered
   bounding box (still used by `get_project_bounds_latlon` for data downloads).
 - Land cover and infiltration preprocessing: `HdfLandCover`, `HdfInfiltration`
 - Infiltration group authoring: `HdfInfiltration.create_infiltration_group()`, `HdfInfiltration.set_infiltration_baseoverrides()`

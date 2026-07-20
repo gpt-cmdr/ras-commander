@@ -2,7 +2,22 @@
 
 ## Version History
 
-### Unreleased
+### Unreleased (target version 0.99.0)
+
+**Raster BenefitArea Analysis**
+
+- Add pair-aware `RasProcess.store_maps(..., benefit_area=...)` orchestration
+  with Depth-only defaults and optional supplemental WSE outputs.
+- Add categorical BenefitArea GeoTIFF generation from aligned pre/post Depth
+  maps, configurable thresholds and boundaries, and optional four-connected
+  component filtering.
+- Add optional exact-cell-edge polygon outputs in GeoPackage, Shapefile,
+  GeoJSON, and GeoParquet formats.
+- Require one readable, projected, one-band single-TIFF terrain and provide
+  actionable terrain creation, registration, and selection guidance.
+- Verify both plan HDFs and populated 2D flow areas reference that same terrain
+  before mapping; RAS Mapper terrain visibility does not override plan-HDF
+  terrain associations.
 
 **HRRR Forecast Timing**
 
@@ -13,7 +28,7 @@
 - Basin-average INFO logging now reports record count, valid-time spacing, and
   the lead-hour range instead of treating every record as one hour.
 
-### v0.96.2 (Current — May 2026)
+### v0.96.2 (Current published release — May 2026)
 
 **Precipitation & Dependencies**
 

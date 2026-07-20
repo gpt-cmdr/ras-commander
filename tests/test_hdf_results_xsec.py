@@ -211,6 +211,82 @@ def test_xsec_timeseries_plan_number_uses_standardize_input(tmp_path, caplog):
     ]
 
 
+def test_xsec_summary_reads_chunks_and_preserves_join_identity(tmp_path):
+    """The summary API should reduce unsteady values without losing XS keys."""
+    from ras_commander.hdf import HdfResultsXsec
+
+    hdf_path = tmp_path / "xsec_summary.p01.hdf"
+    _write_xsec_results_hdf(hdf_path)
+    with h5py.File(hdf_path, "a") as hdf:
+        hdf[f"{XSEC_PATH}/Water Surface"][2, 0] = -3.4028235e38
+        hdf[f"{XSEC_PATH}/Water Surface"].attrs["Units"] = b"ft"
+
+    summary = HdfResultsXsec.get_xsec_summary(hdf_path, chunk_rows=2)
+
+    assert summary[["river", "reach", "node_id", "name"]].to_dict("records") == [
+        {
+            "river": "River A",
+            "reach": "Reach A",
+            "node_id": "1000",
+            "name": "XS 1000",
+        },
+        {
+            "river": "River A",
+            "reach": "Reach A",
+            "node_id": "2000",
+            "name": "XS 2000",
+        },
+    ]
+    assert summary["maximum_water_surface"].tolist() == [3.0, 6.0]
+    assert summary["minimum_water_surface"].tolist() == [1.0, 2.0]
+    assert summary["maximum_water_surface_time_index"].tolist() == [1, 2]
+    assert summary["maximum_water_surface_time"].tolist() == [
+        pd.Timestamp("2020-01-01 01:00:00"),
+        pd.Timestamp("2020-01-01 02:00:00"),
+    ]
+    assert summary.attrs["source_file"] == hdf_path.name
+    assert summary.attrs["units"]["water_surface"] == "ft"
+    assert summary.attrs["native_variables"]["water_surface"] == "Water Surface"
+
+
+def test_xsec_summary_filters_variables_case_insensitively(tmp_path):
+    """Callers may request only the raw variables needed for publication."""
+    from ras_commander.hdf import HdfResultsXsec
+
+    hdf_path = tmp_path / "xsec_summary_filter.p01.hdf"
+    _write_xsec_results_hdf(hdf_path)
+
+    summary = HdfResultsXsec.get_xsec_summary(
+        hdf_path,
+        variables=["water surface", "VELOCITY TOTAL", "missing"],
+        chunk_rows=1,
+    )
+
+    assert "maximum_water_surface" in summary
+    assert "maximum_velocity_total" in summary
+    assert "maximum_flow" not in summary
+
+
+def test_xsec_summary_without_unsteady_cross_sections_is_empty(tmp_path):
+    """Mixed 1D/2D projects should omit absent cross-section result layers."""
+    from ras_commander.hdf import HdfResultsXsec
+
+    hdf_path = tmp_path / "unsteady_no_xs_summary.p01.hdf"
+    _write_unsteady_without_xsec_hdf(hdf_path)
+
+    assert HdfResultsXsec.get_xsec_summary(hdf_path).empty
+
+
+def test_xsec_summary_rejects_nonpositive_chunk_size(tmp_path):
+    from ras_commander.hdf import HdfResultsXsec
+
+    hdf_path = tmp_path / "xsec_summary.p01.hdf"
+    _write_xsec_results_hdf(hdf_path)
+
+    with pytest.raises(ValueError, match="chunk_rows must be at least 1"):
+        HdfResultsXsec.get_xsec_summary(hdf_path, chunk_rows=0)
+
+
 def test_xsec_timeseries_missing_required_dataset_logs_error(tmp_path, caplog):
     """Missing requested cross-section outputs are direct API failures."""
     from ras_commander.hdf import HdfResultsXsec

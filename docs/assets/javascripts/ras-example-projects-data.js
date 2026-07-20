@@ -1,7 +1,7 @@
 window.RAS_EXAMPLE_PROJECTS = {
   "type": "FeatureCollection",
   "name": "ras-commander-example-projects",
-  "generatedAt": "2026-07-14T01:15:00Z",
+  "generatedAt": "2026-07-15T23:00:00Z",
   "fallbackGeometry": "bounding-box",
   "features": [
     {
@@ -15,13 +15,12 @@ window.RAS_EXAMPLE_PROJECTS = {
         "status": "MapLibre pilot",
         "projectId": "muncie-muncie-rerun-7-0-20260628-193916-4120d261",
         "webmap": "../example-project-viewer/",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260703Tidentify02",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260716Tmuncie-contract-v2",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/project.json",
         "viewerType": "MapLibre",
         "notes": "First MapLibre pilot with terrain, geometry, raw HDF vector results, and RASMapper Stored Map rasters.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -85.39413392995574,
@@ -67,14 +66,13 @@ window.RAS_EXAMPLE_PROJECTS = {
         "crsDefinition": "EPSG:3457",
         "status": "MapLibre pilot",
         "projectId": "neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fneworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tneworleans02",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/manifest.json?v=20260714Tneworleans02",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fneworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/viewer/manifest.json?v=20260715Tterrainalpha01",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/neworleansmetro-neworleansmetro-rerun-7-0-20260628-194053-e13b599a/project.json",
         "viewerType": "MapLibre",
         "notes": "Geometry and terrain PMTiles are published. Result layers need join-to-geometry post-processing before tiling.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -90.1686239827324,
@@ -126,8 +124,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only ScienceBase pilot with model extents, river centerline, and cross sections.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -86.04568221655765,
@@ -173,14 +170,13 @@ window.RAS_EXAMPLE_PROJECTS = {
         "crsDefinition": "+proj=aea +lat_0=23 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=NAD83 +units=us-ft +no_defs +type=crs",
         "status": "MapLibre geometry bundle",
         "projectId": "chippewa-2d-chippewa-2d-rerun-7-0-20260628-170311-14e51a07",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fchippewa-2d-chippewa-2d-rerun-7-0-20260628-170311-14e51a07%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/chippewa-2d-chippewa-2d-rerun-7-0-20260628-170311-14e51a07/viewer/manifest.json?v=20260713Tmaplibre02",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fchippewa-2d-chippewa-2d-rerun-7-0-20260628-170311-14e51a07%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/chippewa-2d-chippewa-2d-rerun-7-0-20260628-170311-14e51a07/viewer/manifest.json?v=20260715Tterrainalpha01",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/chippewa-2d-chippewa-2d-rerun-7-0-20260628-170311-14e51a07/project.json",
         "viewerType": "MapLibre",
-        "notes": "Geometry-only 2D HEC instructional example with a verified packaged Albers projection.",
+        "notes": "2D HEC instructional example with mesh geometry, a verified packaged Albers projection, and published terrain.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -92.06462713198664,
@@ -226,14 +222,13 @@ window.RAS_EXAMPLE_PROJECTS = {
         "crsDefinition": "EPSG:2871",
         "status": "MapLibre geometry bundle",
         "projectId": "davis-davis-rerun-7-0-20260628-193602-d666d9cb",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fdavis-davis-rerun-7-0-20260628-193602-d666d9cb%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/davis-davis-rerun-7-0-20260628-193602-d666d9cb/viewer/manifest.json?v=20260713Tmaplibre02",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fdavis-davis-rerun-7-0-20260628-193602-d666d9cb%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/davis-davis-rerun-7-0-20260628-193602-d666d9cb/viewer/manifest.json?v=20260715Tterrainalpha01",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/davis-davis-rerun-7-0-20260628-193602-d666d9cb/project.json",
         "viewerType": "MapLibre",
-        "notes": "Geometry-only HEC example with a 2D mesh and API-derived footprint.",
+        "notes": "HEC 2D storm-drainage example with mesh cells, pipe conduits, pipe nodes, terrain, and an API-derived footprint.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -121.76683266317532,
@@ -279,14 +274,13 @@ window.RAS_EXAMPLE_PROJECTS = {
         "crsDefinition": "EPSG:2274",
         "status": "MapLibre geometry bundle",
         "projectId": "beaverlake-beaverlake-rerun-7-0-20260628-194053-eb3bacd7",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fbeaverlake-beaverlake-rerun-7-0-20260628-194053-eb3bacd7%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/beaverlake-beaverlake-rerun-7-0-20260628-194053-eb3bacd7/viewer/manifest.json?v=20260713Tmaplibre02",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fbeaverlake-beaverlake-rerun-7-0-20260628-194053-eb3bacd7%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/beaverlake-beaverlake-rerun-7-0-20260628-194053-eb3bacd7/viewer/manifest.json?v=20260715Tterrainalpha01",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/beaverlake-beaverlake-rerun-7-0-20260628-194053-eb3bacd7/project.json",
         "viewerType": "MapLibre",
-        "notes": "Geometry-only HEC example with two geometry configurations and high-zoom mesh delivery.",
+        "notes": "HEC example with two geometry configurations, published terrain, and high-zoom mesh delivery.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -89.90794513968532,
@@ -338,8 +332,7 @@ window.RAS_EXAMPLE_PROJECTS = {
         "viewerType": "MapLibre",
         "notes": "Geometry-only 1D HEC example with centerline, cross-section, and structure review layers.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -77.75116831220302,
@@ -385,14 +378,13 @@ window.RAS_EXAMPLE_PROJECTS = {
         "crsDefinition": "EPSG:6499",
         "status": "MapLibre geometry bundle",
         "projectId": "kalamazoo-kalamazoo-trowbridg-b2c7eef6",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fkalamazoo-kalamazoo-trowbridg-b2c7eef6%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/kalamazoo-kalamazoo-trowbridg-b2c7eef6/viewer/manifest.json?v=20260713Tmaplibre02",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fkalamazoo-kalamazoo-trowbridg-b2c7eef6%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/kalamazoo-kalamazoo-trowbridg-b2c7eef6/viewer/manifest.json?v=20260715Tterrainalpha01",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/kalamazoo-kalamazoo-trowbridg-b2c7eef6/project.json",
         "viewerType": "MapLibre",
-        "notes": "Geometry-only ScienceBase bundle with five geometry configurations and detail-only mesh tiles.",
+        "notes": "ScienceBase bundle with five geometry configurations, published terrain, and detail-only mesh tiles.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -85.86086342073826,
@@ -438,14 +430,13 @@ window.RAS_EXAMPLE_PROJECTS = {
         "crsDefinition": "EPSG:3433",
         "status": "MapLibre geometry bundle",
         "projectId": "spring-river-ras-model-spring-ble-prj-15b882a5",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-river-ras-model-spring-ble-prj-15b882a5%2Fviewer%2Fmanifest.json%3Fv%3D20260713Tmaplibre02",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-river-ras-model-spring-ble-prj-15b882a5/viewer/manifest.json?v=20260713Tmaplibre02",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-river-ras-model-spring-ble-prj-15b882a5%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-river-ras-model-spring-ble-prj-15b882a5/viewer/manifest.json?v=20260715Tterrainalpha01",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-river-ras-model-spring-ble-prj-15b882a5/project.json",
         "viewerType": "MapLibre",
-        "notes": "Geometry-only FEMA eBFE/BLE bundle with large 2D mesh cells delivered only at detail zoom.",
+        "notes": "FEMA eBFE/BLE bundle with published terrain and large 2D mesh cells delivered only at detail zoom.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -91.98582726238398,
@@ -491,14 +482,13 @@ window.RAS_EXAMPLE_PROJECTS = {
         "crsDefinition": "EPSG:2271",
         "status": "MapLibre geometry bundle",
         "projectId": "baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fbaldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tbaldeagle01",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab/viewer/manifest.json?v=20260714Tbaldeagle01",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fbaldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab/viewer/manifest.json?v=20260715Tterrainalpha01",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab/project.json",
         "viewerType": "MapLibre",
-        "notes": "Geometry-only HEC instructional example with ten geometry configurations and high-zoom 2D mesh tiles.",
+        "notes": "HEC instructional example with ten geometry configurations, published terrain, and high-zoom 2D mesh tiles.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -77.75911860853455,
@@ -544,14 +534,13 @@ window.RAS_EXAMPLE_PROJECTS = {
         "crsDefinition": "EPSG:2278",
         "status": "MapLibre geometry bundle",
         "projectId": "spring-creek-spring-c61c5625",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-creek-spring-c61c5625%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-creek-spring-c61c5625/viewer/manifest.json?v=20260714Tebfe02",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-creek-spring-c61c5625%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-creek-spring-c61c5625/viewer/manifest.json?v=20260715Tterrainalpha01",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-creek-spring-c61c5625/project.json",
         "viewerType": "MapLibre",
-        "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle. Stored-map output is withheld pending validation of the all-cells-NoData warnings.",
+        "notes": "2D-unsteady FEMA eBFE/BLE bundle with published terrain. Stored-map output is withheld pending validation of the all-cells-NoData warnings.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -95.99108122653325,
@@ -597,14 +586,13 @@ window.RAS_EXAMPLE_PROJECTS = {
         "crsDefinition": "EPSG:2278",
         "status": "MapLibre geometry bundle",
         "projectId": "upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a/viewer/manifest.json?v=20260714Tebfe02",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a/viewer/manifest.json?v=20260715Tterrainalpha01",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a/project.json",
         "viewerType": "MapLibre",
-        "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle with high-zoom mesh delivery.",
+        "notes": "2D-unsteady FEMA eBFE/BLE bundle with published terrain and high-zoom mesh delivery.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -99.69714999942667,
@@ -650,14 +638,13 @@ window.RAS_EXAMPLE_PROJECTS = {
         "crsDefinition": "EPSG:2278",
         "status": "MapLibre geometry bundle",
         "projectId": "upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b/viewer/manifest.json?v=20260714Tebfe02",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b/viewer/manifest.json?v=20260715Tterrainalpha01",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b/project.json",
         "viewerType": "MapLibre",
-        "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle with high-zoom mesh delivery.",
+        "notes": "2D-unsteady FEMA eBFE/BLE bundle with published terrain and high-zoom mesh delivery.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -99.32670834487111,
@@ -703,14 +690,13 @@ window.RAS_EXAMPLE_PROJECTS = {
         "crsDefinition": "EPSG:2278",
         "status": "MapLibre geometry bundle",
         "projectId": "upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4/viewer/manifest.json?v=20260714Tebfe02",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4/viewer/manifest.json?v=20260715Tterrainalpha01",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4/project.json",
         "viewerType": "MapLibre",
-        "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle with high-zoom mesh delivery.",
+        "notes": "2D-unsteady FEMA eBFE/BLE bundle with published terrain and high-zoom mesh delivery.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -98.93222243990395,
@@ -756,14 +742,13 @@ window.RAS_EXAMPLE_PROJECTS = {
         "crsDefinition": "EPSG:2278",
         "status": "MapLibre geometry bundle",
         "projectId": "upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f",
-        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f%2Fviewer%2Fmanifest.json%3Fv%3D20260714Tebfe02",
-        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f/viewer/manifest.json?v=20260714Tebfe02",
+        "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+        "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f/viewer/manifest.json?v=20260715Tterrainalpha01",
         "projectManifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f/project.json",
         "viewerType": "MapLibre",
-        "notes": "Geometry-only 2D-unsteady FEMA eBFE/BLE bundle and large-model streaming validation case with high-zoom mesh delivery.",
+        "notes": "2D-unsteady FEMA eBFE/BLE bundle with published terrain and a large-model streaming validation case with high-zoom mesh delivery.",
         "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
-        "landingExtentSource": "Exact model footprint",
-        "fallbackGeometry": "bounding-box"
+        "landingExtentSource": "Exact model footprint"
       },
       "bbox": [
         -98.71760442029861,
