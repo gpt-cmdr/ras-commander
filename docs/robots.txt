@@ -1,8 +1,8 @@
-# robots.txt for https://rascommander.info/
+# robots.txt for https://rascommander.info/ras/
 #
 # AI agents welcome. A curated, machine-readable index of this documentation
-# is available at https://rascommander.info/llms.txt
-# (and the full concatenated corpus at https://rascommander.info/llms-full.txt).
+# is available at https://rascommander.info/ras/llms.txt
+# (and the full concatenated corpus at https://rascommander.info/ras/llms-full.txt).
 
 User-agent: *
 Allow: /
@@ -20,4 +20,4 @@ Allow: /
 User-agent: Google-Extended
 Allow: /
 
-Sitemap: https://rascommander.info/sitemap.xml
+Sitemap: https://rascommander.info/ras/sitemap.xml

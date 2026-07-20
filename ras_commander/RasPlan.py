@@ -413,7 +413,7 @@ class RasPlan:
         if not plan_file_path:
             raise FileNotFoundError(
                 f"Plan file not found: {plan_number}. "
-                f"See: https://rascommander.info/user-guide/plan-execution/"
+                f"See: https://rascommander.info/ras/user-guide/plan-execution/"
             )
         
         try:
@@ -481,7 +481,7 @@ class RasPlan:
         if not plan_file_path:
             raise FileNotFoundError(
                 f"Plan file not found: {plan_number}. "
-                f"See: https://rascommander.info/user-guide/plan-execution/"
+                f"See: https://rascommander.info/ras/user-guide/plan-execution/"
             )
         
         try:
@@ -568,7 +568,7 @@ class RasPlan:
         if not plan_file_path:
             raise FileNotFoundError(
                 f"Plan file not found: {plan_number}. Please provide a valid plan number or path. "
-                f"See: https://rascommander.info/user-guide/plan-execution/"
+                f"See: https://rascommander.info/ras/user-guide/plan-execution/"
             )
         
         def update_num_cores(lines):

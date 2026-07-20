@@ -557,7 +557,12 @@ def execute_docker_plan(
             from ..RasPreprocess import RasPreprocess
             from ..RasPrj import RasPrj, init_ras_project
             temp_ras = RasPrj()
-            init_ras_project(str(local_input_staging), ras_obj.ras_version, ras_object=temp_ras)
+            init_ras_project(
+                str(local_input_staging),
+                ras_obj.ras_version,
+                ras_object=temp_ras,
+                hide_intro=True,
+            )
             preprocess_result = RasPreprocess.preprocess_plan(plan_number, ras_object=temp_ras)
             if not preprocess_result:
                 logger.error(f"Windows preprocessing failed: {preprocess_result.error}")
@@ -891,7 +896,10 @@ def execute_docker_plan_linux(
             from ..RasPrj import RasPrj, init_ras_project
             temp_ras = RasPrj()
             init_ras_project(
-                str(local_input_staging), ras_obj.ras_version, ras_object=temp_ras
+                str(local_input_staging),
+                ras_obj.ras_version,
+                ras_object=temp_ras,
+                hide_intro=True,
             )
             preprocess_result = RasPreprocess.preprocess_plan(
                 plan_number, ras_object=temp_ras
