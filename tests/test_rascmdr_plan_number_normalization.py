@@ -79,7 +79,9 @@ class FakeRasProject:
         return None
 
 
-def fake_init_ras_project(ras_project_folder, ras_version, ras_object):
+def fake_init_ras_project(
+    ras_project_folder, ras_version, ras_object, hide_intro=False
+):
     ras_object.initialize(ras_project_folder, ras_version)
     return ras_object
 
@@ -149,6 +151,42 @@ def test_compute_parallel_normalizes_list_plan_numbers_before_filtering(
     assert result.execution_results == {"01": True, "02": True}
     assert result.results_df["plan_number"].tolist() == ["01", "02"]
     assert ras_object.plan_df["plan_number"].tolist() == ["01", "02", "03"]
+
+
+def test_compute_parallel_preserves_per_plan_error(monkeypatch, tmp_path):
+    project_folder = tmp_path / "parallel-error-project"
+    project_folder.mkdir()
+    (project_folder / "TestProject.prj").write_text(
+        "Proj Title=TestProject\n",
+        encoding="utf-8",
+    )
+    ras_object = FakeRasProject(
+        project_folder=project_folder,
+        plan_numbers=["01"],
+    )
+
+    monkeypatch.setattr(rascmdr_module, "RasPrj", FakeRasProject)
+    monkeypatch.setattr(rascmdr_module, "init_ras_project", fake_init_ras_project)
+    monkeypatch.setattr(rascmdr_module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(
+        RasCmdr,
+        "compute_plan",
+        staticmethod(
+            lambda *_args, **_kwargs: ComputeResult(
+                success=False,
+                error="unsafe modal blocked without interaction",
+            )
+        ),
+    )
+
+    result = RasCmdr.compute_parallel(
+        plan_number="01",
+        max_workers=1,
+        ras_object=ras_object,
+    )
+
+    assert result.execution_results == {"01": False}
+    assert result.errors == {"01": "unsafe modal blocked without interaction"}
 
 
 def test_compute_test_mode_normalizes_list_plan_numbers_before_filtering(

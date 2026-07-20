@@ -29,6 +29,7 @@ class ComputeResult:
         results_df_row: Single row from results_df for the executed plan,
             or None if unavailable (e.g., failed execution, dest_folder used,
             or results_df extraction error).
+        error: Structured execution diagnostic when available.
 
     Examples:
         # Old usage (still works):
@@ -42,6 +43,7 @@ class ComputeResult:
     """
     success: bool
     results_df_row: Optional[pd.Series] = None
+    error: Optional[str] = None
 
     def __bool__(self) -> bool:
         return self.success
@@ -64,6 +66,7 @@ class ComputeParallelResult:
         execution_results: Dict mapping plan numbers to success booleans.
         results_df: DataFrame containing results_df rows for executed plans only.
             May be empty if no results could be extracted.
+        errors: Per-plan structured diagnostics for failed executions.
 
     Examples:
         # Old usage (still works):
@@ -81,6 +84,7 @@ class ComputeParallelResult:
     """
     execution_results: Dict[str, bool] = field(default_factory=dict)
     results_df: pd.DataFrame = field(default_factory=lambda: pd.DataFrame())
+    errors: Dict[str, str] = field(default_factory=dict)
 
     def __getitem__(self, key: str) -> bool:
         return self.execution_results[key]
@@ -112,7 +116,10 @@ class ComputeParallelResult:
     def __repr__(self) -> str:
         n_success = sum(1 for v in self.execution_results.values() if v)
         n_total = len(self.execution_results)
-        return f"ComputeParallelResult({n_success}/{n_total} succeeded, results_df={len(self.results_df)} rows)"
+        return (
+            f"ComputeParallelResult({n_success}/{n_total} succeeded, "
+            f"results_df={len(self.results_df)} rows, errors={len(self.errors)})"
+        )
 
 
 @dataclass
@@ -226,6 +233,18 @@ class GeometryPreprocessResult:
     elapsed_seconds: float = 0.0
     command: str = ""
     return_code: Optional[int] = None
+    executable_path: Optional[Path] = None
+    executable_sha256: Optional[str] = None
+    input_hdf_path: Optional[Path] = None
+    x_file_path: Optional[Path] = None
+    input_hdf_sha256_before: Optional[str] = None
+    input_hdf_sha256_after: Optional[str] = None
+    output_changed: bool = False
+    hdf_readable: bool = False
+    geometry_group_present: bool = False
+    timed_out: bool = False
+    stdout: str = ""
+    stderr: str = ""
     signal_detected: Optional[str] = None
     compute_message_paths: List[Path] = field(default_factory=list)
     artifact_paths: List[Path] = field(default_factory=list)

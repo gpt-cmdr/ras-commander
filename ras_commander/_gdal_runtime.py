@@ -214,17 +214,45 @@ def ensure_python_gdal_junction(
             ok = False
             continue
 
-        if result.returncode == 0:
+        if result.returncode == 0 and python_gdal_bridge_is_usable(target_python_dir):
             logger.info("Created GDAL junction for HEC-RAS GDAL bridge")
             logger.debug("Created GDAL junction: %s -> %s", gdal_junction, paths.gdal_root)
             ok = python_gdal_bridge_is_usable(target_python_dir) and ok
             continue
 
-        logger.error(
-            "GDAL junction creation failed for %s: %s",
-            gdal_junction,
-            result.stderr.strip(),
-        )
+        # Wine's PowerShell stub can report success for ``New-Item -ItemType
+        # Junction`` without creating a usable filesystem entry.  CPython's
+        # directory-symlink API maps correctly to Wine's host filesystem, and
+        # is also a safe fallback on native Windows when junction creation is
+        # unavailable but symbolic-link privileges are enabled.
+        try:
+            if gdal_junction.is_symlink():
+                gdal_junction.unlink()
+            elif gdal_junction.exists():
+                raise RuntimeError(
+                    f"refusing to replace non-usable existing path {gdal_junction}"
+                )
+            os.symlink(paths.gdal_root, gdal_junction, target_is_directory=True)
+        except (OSError, RuntimeError) as exc:
+            detail = result.stderr.strip() or result.stdout.strip()
+            logger.error(
+                "GDAL bridge creation failed for %s (junction: %s; symlink: %s)",
+                gdal_junction,
+                detail or f"exit code {result.returncode}",
+                exc,
+            )
+            ok = False
+            continue
+
+        if python_gdal_bridge_is_usable(target_python_dir):
+            logger.info(
+                "Created GDAL directory symlink: %s -> %s",
+                gdal_junction,
+                paths.gdal_root,
+            )
+            continue
+
+        logger.error("GDAL directory symlink is not usable: %s", gdal_junction)
         ok = False
 
     return ok

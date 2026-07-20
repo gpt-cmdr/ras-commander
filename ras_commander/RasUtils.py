@@ -169,9 +169,32 @@ class RasUtils:
                 f"Mapped drive detected: {original_str} would resolve to UNC {resolved}. "
                 f"Using absolute() to preserve drive letter."
             )
-            return path.absolute()
+            # ``Path.absolute()`` preserves a mapped drive but does not collapse
+            # ``.`` / ``..`` on Windows.  Normalize lexically so long/space path
+            # staging cannot retain traversal components while still avoiding a
+            # UNC conversion that HEC-RAS cannot consume.
+            return Path(os.path.normpath(str(path.absolute())))
 
         return resolved
+
+    @staticmethod
+    def windows_extended_path(path: Path) -> Path:
+        """Return a Windows extended-length I/O path when MAX_PATH is exceeded.
+
+        The returned path is for filesystem operations only. User-facing and
+        HEC-RAS paths should retain their normal drive-letter form.
+        """
+        path = Path(path)
+        if os.name != "nt":
+            return path
+        value = os.path.abspath(str(path))
+        if value.startswith("\\\\?\\"):
+            return Path(value)
+        if len(value) < 248:
+            return Path(value)
+        if value.startswith("\\\\"):
+            return Path("\\\\?\\UNC\\" + value.lstrip("\\"))
+        return Path("\\\\?\\" + value)
 
     # Windows reserved device names (case-insensitive, without extensions)
     _WINDOWS_RESERVED_NAMES = frozenset({
@@ -1988,6 +2011,217 @@ class RasUtils:
 
     @staticmethod
     @log_call
+    def normalize_ras_version(version: Any) -> str:
+        """Normalize HEC-RAS folder, plan-file, and executable version strings.
+
+        HEC-RAS plan files historically use compact dotted versions such as
+        ``6.60`` and ``7.01`` while executable resources commonly use four-part
+        versions such as ``7.0.1.0``.  This helper converts those forms to the
+        install-facing versions used by ras-commander (``6.6`` and ``7.0.1``).
+        Beta folder labels are preserved verbatim.
+        """
+        value = str(version or "").strip()
+        if not value:
+            return ""
+
+        value = re.sub(r"^(?:HEC-RAS|Version)\s+", "", value, flags=re.IGNORECASE)
+        if "beta" in value.lower():
+            return value
+
+        compact_aliases = {
+            "40": "4.0",
+            "41": "4.1.0",
+            "50": "5.0",
+            "501": "5.0.1",
+            "503": "5.0.3",
+            "504": "5.0.4",
+            "505": "5.0.5",
+            "506": "5.0.6",
+            "507": "5.0.7",
+            "60": "6.0",
+            "61": "6.1",
+            "62": "6.2",
+            "63": "6.3",
+            "631": "6.3.1",
+            "64": "6.4.1",
+            "641": "6.4.1",
+            "65": "6.5",
+            "66": "6.6",
+            "67": "6.7",
+            "70": "7.0",
+            "701": "7.0.1",
+        }
+        if value in compact_aliases:
+            return compact_aliases[value]
+
+        # Program Version values encode minor+patch in two digits.  A trailing
+        # zero means there is no patch (6.60 -> 6.6); otherwise it is the patch
+        # component (7.01 -> 7.0.1, 6.31 -> 6.3.1).
+        compact_dotted = re.fullmatch(r"(\d+)\.(\d)(\d)", value)
+        if compact_dotted:
+            major, minor, patch = compact_dotted.groups()
+            if patch == "0":
+                return f"{int(major)}.{int(minor)}"
+            return f"{int(major)}.{int(minor)}.{int(patch)}"
+
+        numeric = re.fullmatch(r"\d+(?:\.\d+){1,3}", value)
+        if numeric:
+            parts = [str(int(part)) for part in value.split(".")]
+            # Several legacy Ras.exe resources place the patch in the fourth
+            # component (6.4.0.1 and 5.0.0.7).  Treat that as 6.4.1 / 5.0.7.
+            if len(parts) == 4 and parts[2] == "0" and parts[3] != "0":
+                parts = [parts[0], parts[1], parts[3]]
+            while len(parts) > 2 and parts[-1] == "0":
+                parts.pop()
+            return ".".join(parts)
+
+        return value
+
+    @staticmethod
+    @log_call
+    def get_pe_architecture(executable_path: Union[str, Path]) -> Dict[str, Any]:
+        """Read the PE machine type without loading or executing the binary."""
+        executable = Path(executable_path)
+        if not executable.is_file():
+            raise FileNotFoundError(f"Executable not found: {executable}")
+
+        result: Dict[str, Any] = {
+            "valid_pe": False,
+            "machine": None,
+            "architecture": None,
+            "error": None,
+        }
+        try:
+            with executable.open("rb") as stream:
+                dos_header = stream.read(64)
+                if len(dos_header) != 64 or dos_header[:2] != b"MZ":
+                    raise ValueError("Missing DOS MZ header")
+                pe_offset = int.from_bytes(dos_header[0x3C:0x40], "little")
+                stream.seek(pe_offset)
+                pe_header = stream.read(6)
+                if len(pe_header) != 6 or pe_header[:4] != b"PE\x00\x00":
+                    raise ValueError("Missing PE signature")
+                machine = int.from_bytes(pe_header[4:6], "little")
+            result.update(
+                {
+                    "valid_pe": True,
+                    "machine": f"0x{machine:04x}",
+                    "architecture": {
+                        0x014C: "x86",
+                        0x8664: "x64",
+                        0xAA64: "arm64",
+                    }.get(machine, "unknown"),
+                }
+            )
+        except (OSError, ValueError) as exc:
+            result["error"] = f"{type(exc).__name__}: {exc}"
+        return result
+
+    @staticmethod
+    @log_call
+    def get_executable_version(executable_path: Union[str, Path]) -> Dict[str, Any]:
+        """Read version metadata from a Windows executable without launching it.
+
+        Windows uses the already-required ``pywin32`` package.  Linux/Wine can
+        use the optional ``pefile`` dependency (included in the ``wine`` extra).
+        The returned SHA-256 remains authoritative when a vendor executable has
+        incomplete version resources.
+        """
+        executable = Path(executable_path)
+        if not executable.is_file():
+            raise FileNotFoundError(f"Executable not found: {executable}")
+
+        result: Dict[str, Any] = {
+            "path": str(executable),
+            "file_version": None,
+            "product_version": None,
+            "normalized_version": None,
+            "source": None,
+            "error": None,
+        }
+        result.update(RasUtils.get_pe_architecture(executable))
+
+        if os.name == "nt":
+            try:
+                import win32api
+
+                fixed = win32api.GetFileVersionInfo(str(executable), "\\")
+                file_ms = fixed["FileVersionMS"]
+                file_ls = fixed["FileVersionLS"]
+                product_ms = fixed["ProductVersionMS"]
+                product_ls = fixed["ProductVersionLS"]
+                result["file_version"] = ".".join(
+                    str(part)
+                    for part in (
+                        file_ms >> 16,
+                        file_ms & 0xFFFF,
+                        file_ls >> 16,
+                        file_ls & 0xFFFF,
+                    )
+                )
+                result["product_version"] = ".".join(
+                    str(part)
+                    for part in (
+                        product_ms >> 16,
+                        product_ms & 0xFFFF,
+                        product_ls >> 16,
+                        product_ls & 0xFFFF,
+                    )
+                )
+                result["source"] = "win32api"
+            # pywin32 raises ``pywintypes.error`` for files without a version
+            # resource; that type is not an OSError subclass on all releases.
+            except Exception as exc:
+                logger.debug(f"Could not read PE version with win32api for {executable}: {exc}")
+                result["error"] = f"{type(exc).__name__}: {exc}"
+        else:
+            try:
+                import pefile
+
+                pe = pefile.PE(str(executable), fast_load=True)
+                try:
+                    pe.parse_data_directories(
+                        directories=[
+                            pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_RESOURCE"]
+                        ]
+                    )
+                    fixed = pe.VS_FIXEDFILEINFO[0]
+                    result["file_version"] = ".".join(
+                        str(part)
+                        for part in (
+                            fixed.FileVersionMS >> 16,
+                            fixed.FileVersionMS & 0xFFFF,
+                            fixed.FileVersionLS >> 16,
+                            fixed.FileVersionLS & 0xFFFF,
+                        )
+                    )
+                    result["product_version"] = ".".join(
+                        str(part)
+                        for part in (
+                            fixed.ProductVersionMS >> 16,
+                            fixed.ProductVersionMS & 0xFFFF,
+                            fixed.ProductVersionLS >> 16,
+                            fixed.ProductVersionLS & 0xFFFF,
+                        )
+                    )
+                    result["source"] = "pefile"
+                finally:
+                    pe.close()
+            # ``pefile.PEFormatError`` inherits directly from ``Exception`` on
+            # supported releases.  Keep malformed/non-versioned fixture files
+            # diagnostic instead of making behavior depend on whether the
+            # optional ``pefile`` package happens to be installed.
+            except Exception as exc:
+                logger.debug(f"Could not read PE version with pefile for {executable}: {exc}")
+                result["error"] = f"{type(exc).__name__}: {exc}"
+
+        raw_version = result["product_version"] or result["file_version"]
+        if raw_version:
+            result["normalized_version"] = RasUtils.normalize_ras_version(raw_version)
+        return result
+
+    @staticmethod
+    @log_call
     def discover_ras_versions() -> Dict[str, Path]:
         """
         Discover installed HEC-RAS versions by scanning Windows Registry,
@@ -2011,7 +2245,7 @@ class RasUtils:
 
         # Version folder names matching RasPrj.get_ras_exe()
         ras_version_folders = [
-            "7.0", "6.7 Beta 5", "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2",
+            "7.0.1", "7.0", "6.7 Beta 5", "6.7 Beta 4a", "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2",
             "6.1", "6.0", "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3",
             "5.0.1", "5.0", "4.1.0", "4.0"
         ]
@@ -2023,7 +2257,7 @@ class RasUtils:
             "60": "6.0", "61": "6.1", "62": "6.2", "63": "6.3",
             "631": "6.3.1", "6.4": "6.4.1", "64": "6.4.1", "641": "6.4.1",
             "65": "6.5", "66": "6.6", "6.7": "6.7 Beta 5", "67": "6.7 Beta 5",
-            "70": "7.0",
+            "70": "7.0", "701": "7.0.1",
         }
 
         def _normalize_version(raw: str, install_dir: Optional[Path] = None) -> str:
@@ -2036,7 +2270,7 @@ class RasUtils:
                     return version_aliases[fn]
                 if fn in ras_version_folders:
                     return fn
-            return v
+            return RasUtils.normalize_ras_version(v)
 
         def _add(version: str, exe_path: Path, source: str) -> None:
             if version in discovered:
@@ -2044,6 +2278,16 @@ class RasUtils:
                 return
             discovered[version] = exe_path
             logger.debug(f"Discovered HEC-RAS {version} at {exe_path} via {source}")
+
+        def _add_executable_versions(exe_path: Path, source: str) -> None:
+            """Register exact PE version metadata in addition to folder aliases."""
+            try:
+                metadata = RasUtils.get_executable_version(exe_path)
+                exact_version = metadata.get("normalized_version")
+                if exact_version:
+                    _add(exact_version, exe_path, f"{source} executable metadata")
+            except (FileNotFoundError, OSError, ValueError) as exc:
+                logger.debug(f"Executable version inspection failed for {exe_path}: {exc}")
 
         def _scan_root(root_dir: Path, source_label: str) -> None:
             """Scan a directory containing versioned HEC-RAS subfolders."""
@@ -2055,11 +2299,13 @@ class RasUtils:
                 if exe.is_file():
                     v = _normalize_version(folder_name, exe.parent)
                     _add(v, exe, source_label)
+                    _add_executable_versions(exe, source_label)
             # Glob for any other folders with Ras.exe
             try:
                 for exe in sorted(root_dir.glob("*/Ras.exe")):
                     v = _normalize_version(exe.parent.name, exe.parent)
                     _add(v, exe, source_label)
+                    _add_executable_versions(exe, source_label)
             except OSError as exc:
                 logger.warning(f"Filesystem scan failed for {root_dir}: {exc}")
 

@@ -43,6 +43,8 @@ class BcoMonitor:
         check_interval: Seconds between .bco file polls (default: 0.5)
         max_wait_seconds: Maximum wait time before timeout (default: 300)
         message_callback: Optional callback for new messages
+        blocking_condition: Optional callback returning a diagnostic when a
+            modal dialog or other known condition prevents progress
 
     Example:
         >>> monitor = BcoMonitor(
@@ -66,11 +68,18 @@ class BcoMonitor:
     # Optional callback for streaming messages
     message_callback: Optional[Callable[[str], None]] = None
 
+    # Optional probe for modal dialogs or other conditions that prevent the
+    # monitored process from making progress.  Return a diagnostic string when
+    # blocked, or None while execution may continue.
+    blocking_condition: Optional[Callable[[], Optional[str]]] = None
+
     # Internal state (initialized in __post_init__)
     bco_file: Path = field(init=False)
     execution_start_time: Optional[float] = field(default=None, init=False)
     _last_file_position: int = field(default=0, init=False)
     _callback_error_logged: bool = field(default=False, init=False)
+    _blocking_probe_error_logged: bool = field(default=False, init=False)
+    blocked_reason: Optional[str] = field(default=None, init=False)
 
     def __post_init__(self):
         """Initialize paths and validate configuration."""
@@ -169,6 +178,22 @@ class BcoMonitor:
                 if self.bco_file.exists():
                     self._read_and_callback_new_content()
                 return False
+
+            # Detect known modal or environmental blockers before waiting for
+            # a .bco signal that can never arrive.  Probe failures are logged
+            # but do not abort preprocessing because detection is advisory.
+            if self.blocking_condition is not None:
+                try:
+                    blocked_reason = self.blocking_condition()
+                except Exception as exc:
+                    if not self._blocking_probe_error_logged:
+                        logger.warning(f"Blocking-condition probe failed: {exc}")
+                        self._blocking_probe_error_logged = True
+                else:
+                    if blocked_reason:
+                        self.blocked_reason = str(blocked_reason)
+                        logger.error(self.blocked_reason)
+                        return False
 
             # Check for .bco file with signal detection
             if self.bco_file.exists():

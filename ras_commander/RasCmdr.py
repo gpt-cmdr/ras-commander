@@ -68,7 +68,7 @@ from .Decorators import log_call
 from .RasBco import BcoMonitor
 from .ComputeResults import ComputeResult, ComputeParallelResult
 import pandas as pd
-from typing import Callable
+from typing import Callable, Mapping
 
 logger = get_logger(__name__)
 
@@ -548,6 +548,73 @@ class RasCmdr:
         return False if observed_async else None
     
     @staticmethod
+    def _kill_process_tree(pid: int) -> None:
+        """Forcibly terminate one launcher process and its descendants."""
+        import sys as _sys
+
+        try:
+            if _sys.platform.startswith("win"):
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(pid)],
+                    capture_output=True,
+                    timeout=120,
+                )
+            else:
+                import signal as _signal
+
+                os.killpg(os.getpgid(pid), _signal.SIGKILL)
+        except Exception as exc:
+            logger.warning(
+                "Failed to kill process tree for PID %s: %s",
+                pid,
+                exc,
+            )
+
+    @staticmethod
+    def _communicate_with_watchdog(
+        process: subprocess.Popen,
+        watchdog,
+        timeout_sec: Optional[int],
+        plan_number,
+    ):
+        """Drain a process while polling modal supervision and wall timeout."""
+        deadline = (
+            time.monotonic() + timeout_sec if timeout_sec is not None else None
+        )
+        while True:
+            blocked_reason = watchdog.blocked_reason if watchdog else None
+            if blocked_reason:
+                RasCmdr._kill_process_tree(process.pid)
+                try:
+                    process.communicate(timeout=5)
+                except Exception:
+                    pass
+                raise RuntimeError(blocked_reason)
+
+            wait_slice = 0.25
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    RasCmdr._kill_process_tree(process.pid)
+                    try:
+                        process.communicate(timeout=5)
+                    except Exception:
+                        pass
+                    blocked_reason = watchdog.blocked_reason if watchdog else None
+                    if blocked_reason:
+                        raise RuntimeError(blocked_reason)
+                    raise RuntimeError(
+                        f"Plan {plan_number}: HEC-RAS execution exceeded "
+                        f"timeout_sec={timeout_sec}s; process tree killed"
+                    )
+                wait_slice = min(wait_slice, remaining)
+
+            try:
+                return process.communicate(timeout=wait_slice)
+            except subprocess.TimeoutExpired:
+                continue
+
+    @staticmethod
     @log_call
     def compute_plan(
         plan_number: Union[str, Number, Path],
@@ -568,6 +635,8 @@ class RasCmdr:
         hdf_output_options: Optional[Dict[str, Any]] = None,
         hdf_output_profile: Optional[str] = None,
         dialog_watchdog: bool = True,
+        timeout_sec: Optional[int] = None,
+        process_environment: Optional[Mapping[str, Any]] = None,
     ) -> 'ComputeResult':
         """
         Execute a single HEC-RAS plan in a specified location.
@@ -626,19 +695,24 @@ class RasCmdr:
                 passed to ``RasPlan.set_hdf_output_options()`` before execution.
             hdf_output_profile (str, optional): Named HDF output profile to apply before
                 execution. Equivalent to ``use_optimal_hdf_settings=True`` with a profile.
+            process_environment (Mapping[str, Any], optional): Environment variables
+                merged into the child HEC-RAS process only. This is intended for
+                controlled runtime compatibility settings such as OpenMP behavior;
+                the parent Python environment is not mutated.
 
         Returns:
-            ComputeResult: Result object with ``success`` bool and ``results_df_row`` (pd.Series or None).
+            ComputeResult: Result object with ``success`` bool,
+                ``results_df_row`` (pd.Series or None), and an optional
+                structured ``error`` diagnostic.
                 Backward compatible with bool: ``if RasCmdr.compute_plan("01"):`` still works.
                 Access execution metrics via ``result.results_df_row`` (e.g., runtime, volume accounting).
                 ``results_df_row`` is None when dest_folder is used, execution fails, or extraction errors.
                 When skip_existing=True and results exist, returns ComputeResult(success=True).
 
-        Raises:
-            ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
-            FileNotFoundError: If the plan file or project file cannot be found.
-            PermissionError: If there are issues accessing or writing to the destination folder.
-            subprocess.CalledProcessError: If the HEC-RAS execution fails.
+        Failure handling:
+            Operational failures are returned as ``ComputeResult(success=False,
+            error=...)``. ``BaseException`` subclasses such as
+            ``KeyboardInterrupt`` still propagate after cleanup.
 
         Examples:
             # Run a plan in the original project folder
@@ -689,6 +763,7 @@ class RasCmdr:
         """
         _success = False
         _results_df_row = None
+        _error = None
         _ras_obj = None
         _did_execute = False  # Track if we actually ran HEC-RAS (vs skip/early exit)
         _watchdog = None
@@ -734,9 +809,14 @@ class RasCmdr:
             compute_plan_path = Path(plan_number) if isinstance(plan_number, (str, Path)) and Path(plan_number).is_file() else RasPlan.get_plan_path(plan_number, compute_ras)
 
             if not compute_prj_path or not compute_plan_path:
-                logger.error(f"Could not find project file or plan file for plan {plan_number}")
+                _error = f"Could not find project file or plan file for plan {plan_number}"
+                logger.error(_error)
                 _success = False
-                return ComputeResult(success=False, results_df_row=None)
+                return ComputeResult(
+                    success=False,
+                    results_df_row=None,
+                    error=_error,
+                )
 
             if use_optimal_hdf_settings or hdf_output_profile:
                 profile_to_apply = hdf_output_profile or hdf_settings_profile
@@ -874,13 +954,29 @@ class RasCmdr:
                 stream_callback.on_exec_start(str(plan_number), cmd)
 
             # Execute the HEC-RAS command
-            _did_execute = True
             start_time = time.time()
             try:
+                child_environment = None
+                if process_environment is not None:
+                    if not isinstance(process_environment, Mapping):
+                        raise TypeError("process_environment must be a mapping")
+                    child_environment = os.environ.copy()
+                    for key, value in process_environment.items():
+                        key_text = str(key).strip()
+                        if not key_text or "=" in key_text or "\x00" in key_text:
+                            raise ValueError(
+                                f"Invalid process environment variable name: {key!r}"
+                            )
+                        value_text = str(value)
+                        if "\x00" in value_text:
+                            raise ValueError(
+                                f"Invalid NUL in process environment variable {key_text!r}"
+                            )
+                        child_environment[key_text] = value_text
                 if dialog_watchdog:
                     from .RasDialogWatchdog import DialogWatchdog
                     _watchdog = DialogWatchdog()
-                    _watchdog.start()
+                    _watchdog.require_available()
 
                 # Choose execution method based on whether callback is provided
                 if stream_callback and bco_monitor:
@@ -895,17 +991,36 @@ class RasCmdr:
                             stdout=_run_log_fh,
                             stderr=subprocess.STDOUT,
                             cwd=str(compute_ras.project_folder),
-                            shell=True
+                            shell=True,
+                            env=child_environment,
                         )
+                        _did_execute = True
                         if _watchdog:
                             _watchdog.add_pid(process.pid)
+                            try:
+                                _watchdog.start()
+                            except Exception:
+                                RasCmdr._kill_process_tree(process.pid)
+                                raise
 
                         # Monitor .bco file until process completes
                         # (BcoMonitor will call on_exec_message callback as messages appear)
+                        if _watchdog:
+                            bco_monitor.blocking_condition = (
+                                lambda: _watchdog.blocked_reason
+                            )
                         bco_monitor.monitor_until_signal(process)
 
-                        # Wait for process to complete
-                        return_code = process.wait()
+                        RasCmdr._communicate_with_watchdog(
+                            process,
+                            _watchdog,
+                            timeout_sec,
+                            plan_number,
+                        )
+                        return_code = process.returncode
+
+                        if _watchdog and _watchdog.blocked_reason:
+                            raise RuntimeError(_watchdog.blocked_reason)
 
                     # Check if subprocess succeeded
                     if return_code != 0:
@@ -916,17 +1031,40 @@ class RasCmdr:
                     # per-plan log file instead of capture_output/PIPE: with
                     # shell=True the PIPE write handle is inherited by the
                     # cmd.exe -> Ras.exe -> RasUnsteady.exe tree, and
-                    # subprocess.run() blocks on pipe EOF until every grandchild
-                    # exits -- the intermittent CLB-880 hang. A file handle has no
-                    # EOF wait, so run() returns as soon as the process exits.
+                    # parent can otherwise block on pipe EOF until every
+                    # grandchild exits. Retain the launcher PID so modal
+                    # supervision and timeout handling stay process-scoped.
                     with open(_run_log_path, "w", encoding="utf-8", errors="ignore") as _run_log_fh:
-                        subprocess.run(
+                        _proc = subprocess.Popen(
                             cmd,
-                            check=True,
-                            shell=True,
                             stdout=_run_log_fh,
                             stderr=subprocess.STDOUT,
+                            cwd=str(compute_ras.project_folder),
+                            shell=True,
+                            text=True,
+                            env=child_environment,
                         )
+                        _did_execute = True
+                        if _watchdog:
+                            _watchdog.add_pid(_proc.pid)
+                            try:
+                                _watchdog.start()
+                            except Exception:
+                                RasCmdr._kill_process_tree(_proc.pid)
+                                raise
+                        RasCmdr._communicate_with_watchdog(
+                            _proc,
+                            _watchdog,
+                            timeout_sec,
+                            plan_number,
+                        )
+                        if _watchdog and _watchdog.blocked_reason:
+                            raise RuntimeError(_watchdog.blocked_reason)
+                        if _proc.returncode != 0:
+                            raise subprocess.CalledProcessError(
+                                _proc.returncode,
+                                cmd,
+                            )
 
                 end_time = time.time()
                 run_time = end_time - start_time
@@ -1006,6 +1144,7 @@ class RasCmdr:
                         stream_callback.on_exec_complete(str(plan_number), True, run_time)
                     _success = True
                 else:
+                    _error = str(e)
                     logger.error(f"Error running plan: {plan_number} (exit code {e.returncode})")
                     logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
 
@@ -1051,6 +1190,7 @@ class RasCmdr:
                     _success = False
         except Exception as e:
             logger.critical(f"Error in compute_plan: {str(e)}")
+            _error = str(e)
             _success = False
         finally:
             if _watchdog:
@@ -1106,7 +1246,11 @@ class RasCmdr:
                                 e_results,
                             )
 
-        return ComputeResult(success=_success, results_df_row=_results_df_row)
+        return ComputeResult(
+            success=_success,
+            results_df_row=_results_df_row,
+            error=_error,
+        )
 
 
 
@@ -1170,6 +1314,7 @@ class RasCmdr:
             ComputeParallelResult: Result object backward compatible with Dict[str, bool].
                 ``execution_results``: Dict of plan numbers to success booleans.
                 ``results_df``: DataFrame with results_df rows for executed plans.
+                ``errors``: Per-plan structured diagnostics for failures.
                 Existing code like ``for plan, ok in results.items():`` still works.
                 When skip_existing=True, skipped plans return True.
                 When verify=True, plans failing verification return False.
@@ -1263,6 +1408,8 @@ class RasCmdr:
             )
             filtered_plan_numbers = list(filtered_plan_entries["plan_number"])
 
+            # Capture per-plan diagnostics without changing mapping truthiness.
+            execution_errors: Dict[str, str] = {}
             # Filter out plans with existing results if skip_existing is True
             if skip_existing:
                 plans_to_skip = []
@@ -1295,7 +1442,11 @@ class RasCmdr:
                             _results_df = ras_obj.results_df[mask].copy()
                 except Exception:
                     pass
-                return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
+                return ComputeParallelResult(
+                    execution_results=execution_results,
+                    results_df=_results_df,
+                    errors=execution_errors,
+                )
 
             max_workers = min(max_workers, num_plans)
             logger.info(f"Adjusted max_workers to {max_workers} based on the number of plans to compute: {num_plans}")
@@ -1354,12 +1505,15 @@ class RasCmdr:
                         compute_result = future.result()
                         # Extract bool from ComputeResult for execution_results dict
                         execution_results[plan_num] = bool(compute_result)
+                        if not compute_result and compute_result.error:
+                            execution_errors[plan_num] = compute_result.error
                         if compute_result:
                             logger.debug(f"Plan {plan_num} executed in worker {worker_id}: Successful")
                         else:
                             logger.warning(f"Plan {plan_num} executed in worker {worker_id}: Failed")
                     except Exception as e:
                         execution_results[plan_num] = False
+                        execution_errors[plan_num] = str(e)
                         logger.error(f"Plan {plan_num} failed in worker {worker_id}: {str(e)}")
 
             # Consolidate results: use dest_folder if provided, otherwise back to original folder
@@ -1493,7 +1647,11 @@ class RasCmdr:
             except Exception as e:
                 logger.debug(f"Could not extract results_df for parallel plans: {e}")
 
-            return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
+            return ComputeParallelResult(
+                execution_results=execution_results,
+                results_df=_results_df,
+                errors=execution_errors,
+            )
 
         except Exception as e:
             logger.critical(f"Error in compute_parallel: {str(e)}")
@@ -1555,6 +1713,7 @@ class RasCmdr:
             ComputeParallelResult: Result object backward compatible with Dict[str, bool].
                 ``execution_results``: Dict of plan numbers to success booleans.
                 ``results_df``: DataFrame with results_df rows for executed plans.
+                ``errors``: Per-plan structured diagnostics for failures.
                 Existing code like ``for plan, ok in results.items():`` still works.
                 When skip_existing=True, skipped plans return True.
                 When verify=True, plans failing verification return False.
@@ -1687,6 +1846,7 @@ class RasCmdr:
             )
 
             execution_results = {}
+            execution_errors = {}
             logger.info("Running selected plans sequentially...")
             for _, plan in ras_compute_plan_entries.iterrows():
                 current_plan_number = plan["plan_number"]
@@ -1704,12 +1864,15 @@ class RasCmdr:
                     )
                     # Extract bool from ComputeResult for execution_results dict
                     execution_results[current_plan_number] = bool(compute_result)
+                    if not compute_result and compute_result.error:
+                        execution_errors[current_plan_number] = compute_result.error
                     if compute_result:
                         logger.debug(f"Successfully computed plan {current_plan_number}")
                     else:
                         logger.error(f"Failed to compute plan {current_plan_number}")
                 except Exception as e:
                     execution_results[current_plan_number] = False
+                    execution_errors[current_plan_number] = str(e)
                     logger.error(f"Error computing plan {current_plan_number}: {str(e)}")
                 finally:
                     end_time = time.time()
@@ -1766,7 +1929,11 @@ class RasCmdr:
             except Exception as e:
                 logger.debug(f"Could not extract results_df for test mode plans: {e}")
 
-            return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
+            return ComputeParallelResult(
+                execution_results=execution_results,
+                results_df=_results_df,
+                errors=execution_errors,
+            )
 
         except Exception as e:
             logger.critical(f"Error in compute_test_mode: {str(e)}")
@@ -1783,6 +1950,7 @@ class RasCmdr:
         num_cores: int = None,
         retry: bool = True,
         retry_delay_sec: int = 30,
+        process_environment: Optional[Mapping[str, Any]] = None,
     ) -> 'ComputeResult':
         """
         Execute a HEC-RAS plan using the native Linux RasUnsteady binary.
@@ -1822,6 +1990,8 @@ class RasCmdr:
         Detection and binary resolution mirror
         :meth:`RasUtils._scan_native_linux_ras` (root ``RasUnsteady`` →
         ``bin_ras/{rasUnsteady64,RasUnsteady,rasUnsteady}``).
+        Compatible with HEC-RAS Linux compute packages through 7.0.1.
+        Auto-detects library subdirectory layout (libs/, libs/mkl/, libs/rhel_8/).
 
         The Linux RasUnsteady binary uses Fortran I/O conventions that require
         files to be accessible with a base name of "io" (e.g., io.b, io.X).
@@ -1838,6 +2008,9 @@ class RasCmdr:
             num_cores (int, optional): Number of cores. If specified, updates plan file.
             retry (bool): Retry once on failure after retry_delay_sec (default True).
             retry_delay_sec (int): Seconds to wait before retry (default 30).
+            process_environment (Mapping[str, Any], optional): Environment
+                variables merged into the native solver process. ``LD_LIBRARY_PATH``
+                remains controlled by the selected HEC-RAS engine package.
 
         Returns:
             ComputeResult: Result object with success bool and results_df_row.
@@ -1972,7 +2145,7 @@ class RasCmdr:
         # Build LD_LIBRARY_PATH — auto-detect library locations per layout:
         #   5.0.7:     libs live alongside the binary in bin_ras/
         #   6.3.1-6.5: libs/, libs/mkl/
-        #   6.6-6.7:   libs/, libs/mkl/, libs/rhel_8/
+        #   6.6-7.0.1: libs/, libs/mkl/, libs/rhel_8/
         ld_path = RasCmdr._build_linux_ld_path(ras_exe_dir, layout)
         logger.info("Configured Linux library path for RasUnsteady")
         logger.debug(f"LD_LIBRARY_PATH: {ld_path}")
@@ -2023,6 +2196,21 @@ class RasCmdr:
                 io_tmp_hdf.unlink()
 
             env = os.environ.copy()
+            if process_environment is not None:
+                if not isinstance(process_environment, Mapping):
+                    raise TypeError("process_environment must be a mapping")
+                for key, value in process_environment.items():
+                    key_text = str(key).strip()
+                    if not key_text or "=" in key_text or "\x00" in key_text:
+                        raise ValueError(
+                            f"Invalid process environment variable name: {key!r}"
+                        )
+                    value_text = str(value)
+                    if "\x00" in value_text:
+                        raise ValueError(
+                            f"Invalid NUL in process environment variable {key_text!r}"
+                        )
+                    env[key_text] = value_text
             env["LD_LIBRARY_PATH"] = ld_path
 
             log_path = project_dir / f"compute_linux_{plan_num_str}.log"

@@ -1,0 +1,342 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ras-commander.invalid/schemas/portable-captured-transfer-matrix.schema.json",
+  "title": "Portable captured-transfer exact-build qualification manifest",
+  "description": "Hash-only private evidence index for the seven qualified exact-build transfer cases.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "qualification_mode",
+    "generated_at_utc",
+    "scope",
+    "policy",
+    "summary",
+    "receipts",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "qualification_mode": {
+      "const": "portable_captured_transfer_exact_build_matrix"
+    },
+    "generated_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exact_builds",
+        "covers_every_historical_release",
+        "cross_version_transfer_allowed"
+      ],
+      "properties": {
+        "exact_builds": {
+          "const": [
+            "6.1",
+            "6.2",
+            "6.3",
+            "6.3.1",
+            "6.4.1",
+            "6.5",
+            "6.6"
+          ]
+        },
+        "covers_every_historical_release": {
+          "const": false
+        },
+        "cross_version_transfer_allowed": {
+          "const": false
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required_restart_count",
+        "minimum_full_duration_seconds",
+        "minimum_restart_cooldown_seconds",
+        "maximum_automated_ui_interactions",
+        "require_process_tree_termination",
+        "require_no_survivors",
+        "require_persisted_exact_state",
+        "require_post_restart_prefix_fingerprint",
+        "require_receipt_bound_prefix_evidence",
+        "require_unique_profile_instances",
+        "hashed_evidence_only"
+      ],
+      "properties": {
+        "required_restart_count": {
+          "const": 2
+        },
+        "minimum_full_duration_seconds": {
+          "type": "number",
+          "minimum": 20
+        },
+        "minimum_restart_cooldown_seconds": {
+          "type": "number",
+          "minimum": 45
+        },
+        "maximum_automated_ui_interactions": {
+          "const": 0
+        },
+        "require_process_tree_termination": {
+          "const": true
+        },
+        "require_no_survivors": {
+          "const": true
+        },
+        "require_persisted_exact_state": {
+          "const": true
+        },
+        "require_post_restart_prefix_fingerprint": {
+          "const": true
+        },
+        "require_receipt_bound_prefix_evidence": {
+          "const": true
+        },
+        "require_unique_profile_instances": {
+          "const": true
+        },
+        "hashed_evidence_only": {
+          "const": true
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "all_passed",
+        "all_safe",
+        "exact_build_count",
+        "critical_skips"
+      ],
+      "properties": {
+        "all_passed": {
+          "const": true
+        },
+        "all_safe": {
+          "const": true
+        },
+        "exact_build_count": {
+          "const": 7
+        },
+        "critical_skips": {
+          "$ref": "#/$defs/noSkips"
+        }
+      }
+    },
+    "receipts": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/receiptEntry"
+      }
+    },
+    "manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "noSkips": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "relativeJsonArtifact": {
+      "type": "string",
+      "pattern": "^(sources|evidence-(6\\.1|6\\.2|6\\.3|6\\.3\\.1|6\\.4\\.1|6\\.5|6\\.6))/[^/\\\\]+\\.json$"
+    },
+    "hashedReceiptArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "filename",
+        "file_sha256",
+        "self_sha256"
+      ],
+      "properties": {
+        "filename": {
+          "$ref": "#/$defs/relativeJsonArtifact"
+        },
+        "file_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "self_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "bundleArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "filename",
+        "file_sha256"
+      ],
+      "properties": {
+        "filename": {
+          "$ref": "#/$defs/relativeJsonArtifact"
+        },
+        "file_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "prefixEvidenceEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "captured_at_utc",
+        "captured_after_verified_restarts",
+        "binding",
+        "fingerprint",
+        "envelope_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 2
+        },
+        "kind": {
+          "const": "post_restart_wine_prefix_evidence"
+        },
+        "captured_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "captured_after_verified_restarts": {
+          "const": true
+        },
+        "binding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "receipt_file_sha256",
+            "receipt_self_sha256",
+            "target_version",
+            "target_executable_sha256",
+            "profile_instance_sha256"
+          ],
+          "properties": {
+            "receipt_file_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "receipt_self_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "target_version": {
+              "enum": [
+                "6.1",
+                "6.2",
+                "6.3",
+                "6.3.1",
+                "6.4.1",
+                "6.5",
+                "6.6"
+              ]
+            },
+            "target_executable_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "profile_instance_sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/winePrefixFingerprint"
+        },
+        "envelope_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "winePrefixFingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "exclude_wine_dosdevices",
+        "root_sha256",
+        "user_reg_sha256",
+        "system_reg_sha256",
+        "userdef_reg_sha256",
+        "dosdevices_sha256",
+        "file_count",
+        "total_bytes"
+      ],
+      "properties": {
+        "schema_version": {"const": 1},
+        "exclude_wine_dosdevices": {"const": true},
+        "root_sha256": {"$ref": "#/$defs/sha256"},
+        "user_reg_sha256": {"$ref": "#/$defs/sha256"},
+        "system_reg_sha256": {"$ref": "#/$defs/sha256"},
+        "userdef_reg_sha256": {"$ref": "#/$defs/sha256"},
+        "dosdevices_sha256": {"$ref": "#/$defs/sha256"},
+        "file_count": {"type": "integer", "minimum": 1},
+        "total_bytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "receiptEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "executable_sha256",
+        "profile_instance_sha256",
+        "transfer_receipt",
+        "source_capture_receipt",
+        "source_bundle",
+        "prefix_evidence",
+        "critical_skips"
+      ],
+      "properties": {
+        "version": {
+          "enum": [
+            "6.1",
+            "6.2",
+            "6.3",
+            "6.3.1",
+            "6.4.1",
+            "6.5",
+            "6.6"
+          ]
+        },
+        "executable_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "profile_instance_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "transfer_receipt": {
+          "$ref": "#/$defs/hashedReceiptArtifact"
+        },
+        "source_capture_receipt": {
+          "$ref": "#/$defs/hashedReceiptArtifact"
+        },
+        "source_bundle": {
+          "$ref": "#/$defs/bundleArtifact"
+        },
+        "prefix_evidence": {
+          "$ref": "#/$defs/hashedReceiptArtifact"
+        },
+        "critical_skips": {
+          "$ref": "#/$defs/noSkips"
+        }
+      }
+    }
+  }
+}

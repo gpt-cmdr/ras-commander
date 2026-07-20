@@ -55,26 +55,35 @@ def test_status_version_unresolved(monkeypatch):
     assert status.reason == "version-unresolved"
 
 
-def test_status_accepted_when_node_has_subkeys(monkeypatch):
+def test_status_accepted_when_sentinel_exists(monkeypatch):
     monkeypatch.setattr("os.name", "nt")
     monkeypatch.setattr(RasTcu, "_resolve_exe", staticmethod(lambda *a, **k: _EXE))
-    # Pretend winreg is importable and the ras.exe node has subkeys.
     monkeypatch.setitem(__import__("sys").modules, "winreg", _FakeWinregModule())
-    monkeypatch.setattr(RasTcu, "_node_has_subkeys", staticmethod(lambda hive, sub: sub.endswith(r"\ras.exe")))
+    monkeypatch.setattr(
+        RasTcu,
+        "_read_acceptance_sentinel",
+        staticmethod(
+            lambda hive, sub: ("opaque", 1) if sub.endswith(r"\ras.exe") else None
+        ),
+    )
     status = RasTcu.status(ras_version="6.6")
     assert status.accepted is True
     assert status.reason == "accepted"
     assert status.registry_key.endswith(r"HEC-RAS\6.6\ras.exe")
 
 
-def test_status_not_accepted_when_no_subtree(monkeypatch):
+def test_status_not_accepted_when_sentinel_is_missing(monkeypatch):
     monkeypatch.setattr("os.name", "nt")
     monkeypatch.setattr(RasTcu, "_resolve_exe", staticmethod(lambda *a, **k: _EXE))
     monkeypatch.setitem(__import__("sys").modules, "winreg", _FakeWinregModule())
-    monkeypatch.setattr(RasTcu, "_node_has_subkeys", staticmethod(lambda hive, sub: False))
+    monkeypatch.setattr(
+        RasTcu,
+        "_read_acceptance_sentinel",
+        staticmethod(lambda hive, sub: None),
+    )
     status = RasTcu.status(ras_version="6.6")
     assert status.accepted is False
-    assert status.reason == "no-vb6-subtree"
+    assert status.reason == "acceptance-sentinel-missing"
     assert status.install_dir == _INSTALL
 
 
@@ -105,21 +114,31 @@ def test_accept_returns_unknown_off_windows(monkeypatch):
 
 def test_accept_warns_when_no_donor(monkeypatch, caplog):
     monkeypatch.setattr(RasTcu, "status", staticmethod(
-        lambda *a, **k: TcuStatus(False, "6.6", _INSTALL, "key", "no-vb6-subtree")))
+        lambda *a, **k: TcuStatus(False, "6.6", _INSTALL, "key", "acceptance-sentinel-missing")))
     monkeypatch.setitem(__import__("sys").modules, "winreg", _FakeWinregModule())
-    monkeypatch.setattr(RasTcu, "_find_donor", staticmethod(lambda install_dir: (None, None)))
+    monkeypatch.setattr(
+        RasTcu,
+        "_find_donor",
+        staticmethod(lambda install_dir, version: (None, None)),
+    )
     with caplog.at_level(logging.WARNING, logger="ras_commander.RasTcu"):
         result = RasTcu.accept(ras_version="6.6")
-    assert result.reason == "no-donor-available"
-    assert any("no already-accepted" in r.getMessage() for r in caplog.records)
+    assert result.reason == "no-exact-version-donor"
+    assert any("exact version" in r.getMessage() for r in caplog.records)
 
 
 def test_accept_dry_run_does_not_write(monkeypatch):
     monkeypatch.setattr(RasTcu, "status", staticmethod(
-        lambda *a, **k: TcuStatus(False, "6.6", _INSTALL, "key", "no-vb6-subtree")))
+        lambda *a, **k: TcuStatus(False, "6.6", _INSTALL, "key", "acceptance-sentinel-missing")))
     fake = _FakeWinregModule()
     monkeypatch.setitem(__import__("sys").modules, "winreg", fake)
-    monkeypatch.setattr(RasTcu, "_find_donor", staticmethod(lambda install_dir: (fake.HKEY_CURRENT_USER, "donor\\path")))
+    monkeypatch.setattr(
+        RasTcu,
+        "_find_donor",
+        staticmethod(
+            lambda install_dir, version: (fake.HKEY_CURRENT_USER, "donor\\path")
+        ),
+    )
 
     copied = {"writes": 0}
 
@@ -128,7 +147,7 @@ def test_accept_dry_run_does_not_write(monkeypatch):
         writes.extend(["a", "b", "c"])
         copied["writes"] = 3
 
-    monkeypatch.setattr(RasTcu, "_copy_key", staticmethod(fake_copy))
+    monkeypatch.setattr(RasTcu, "_copy_acceptance_sentinel", staticmethod(fake_copy))
     result = RasTcu.accept(ras_version="6.6", dry_run=True)
     # dry-run reports not-yet-accepted and performs no real acceptance
     assert result.accepted is False
@@ -136,14 +155,23 @@ def test_accept_dry_run_does_not_write(monkeypatch):
 
 
 def test_accept_success_records_acceptance(monkeypatch):
+    statuses = iter(
+        (
+            TcuStatus(False, "6.6", _INSTALL, "key", "acceptance-sentinel-missing"),
+            TcuStatus(True, "6.6", _INSTALL, "key", "accepted"),
+        )
+    )
     monkeypatch.setattr(RasTcu, "status", staticmethod(
-        lambda *a, **k: TcuStatus(False, "6.6", _INSTALL, "key", "no-vb6-subtree")))
+        lambda *a, **k: next(statuses)))
     fake = _FakeWinregModule()
     monkeypatch.setitem(__import__("sys").modules, "winreg", fake)
-    monkeypatch.setattr(RasTcu, "_find_donor", staticmethod(lambda install_dir: (fake.HKEY_CURRENT_USER, "donor")))
-    monkeypatch.setattr(RasTcu, "_copy_key", staticmethod(
+    monkeypatch.setattr(
+        RasTcu,
+        "_find_donor",
+        staticmethod(lambda install_dir, version: (fake.HKEY_CURRENT_USER, "donor")),
+    )
+    monkeypatch.setattr(RasTcu, "_copy_acceptance_sentinel", staticmethod(
         lambda *a, **k: a[4].append("one")))  # writes list is 5th positional arg
-    monkeypatch.setattr(RasTcu, "_clear_values", staticmethod(lambda *a, **k: None))
     acks = []
     monkeypatch.setattr(RasTcu, "_write_ack", staticmethod(lambda *a, **k: acks.append(a)))
     result = RasTcu.accept(ras_version="6.6")

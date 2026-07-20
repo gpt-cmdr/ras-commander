@@ -45,6 +45,8 @@ setup(
             "resources/templates/*/*",
         ],
         "ras_commander.native": [
+            "RasMapperGeometryHelper.cs",
+            "RasMapperMeshHelper.cs",
             "RasStoreMapHelper.exe",
             "RasStoreMapHelper.cs",
         ],
@@ -125,6 +127,9 @@ setup(
         # polyline profile queries for velocity, WSE, flow, time-series,
         # pipe-network, and plan-difference renderers (Windows HEC-RAS install required)
         'mesh': ['pythonnet>=3.0.5'],
+        # Windows HEC-RAS under Wine qualification. pefile reads the exact
+        # Ras.exe version resource on Linux without launching the application.
+        'wine': ['pefile>=2023.2.7'],
         # DSS file operations (requires Java JRE/JDK 8+)
         'dss': ['pyjnius'],
         # Everything (all optional dependencies)
@@ -146,6 +151,7 @@ setup(
             'pyproj',
             'aiohttp',
             'pythonnet>=3.0.5',
+            'pefile>=2023.2.7',
             'pyjnius',
             'pyarrow>=14.0',
         ],

@@ -5,4 +5,7 @@ build-backend = "setuptools.build_meta:__legacy__"
 [tool.pytest.ini_options]
 markers = [
     "integration: opt-in real-project or external dependency smoke tests",
+    "slow: longer-running test that may be excluded from quick local checks",
+    "hecras_qualification: real HEC-RAS 7.0.1 qualification evidence tests",
+    "qualification_critical: critical qualification test that may not skip on the private runner",
 ]

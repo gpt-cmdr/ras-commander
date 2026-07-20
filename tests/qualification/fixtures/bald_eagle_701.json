@@ -1,0 +1,164 @@
+{
+  "schema_version": "1.0",
+  "id": "bald-eagle-plan06-g09-u03-hecras-701",
+  "description": "Immutable Bald Eagle preparation and fresh-compute qualification contract for HEC-RAS 7.0.1",
+  "source": {
+    "relative_project_path": "example_projects/BaldEagleCrkMulti2D",
+    "tree_sha256": "3871280ea71ad266287f2aa2d3ee6271791caf751b0022f988df10fcb84b8658",
+    "files": {
+      "BaldEagleDamBrk.prj": "a112974c1216382971d60926aaf5f1d0324a4b3da0fe0309bd58e8d13f61a082",
+      "BaldEagleDamBrk.rasmap": "3addd19b8a231a3bdd1ffae41f8cce5059745d5080758c29118da061512bca53",
+      "BaldEagleDamBrk.p06": "b3bd08e6655ad8f57d4fe850a49fff4878dc12e1eb55dff1b91bc61c83934597",
+      "BaldEagleDamBrk.g09": "8666056c38dfc0edfebdd27dcfd165495d37875c25ea034ec814dbd25eabe3d5",
+      "BaldEagleDamBrk.g09.hdf": "2f9a72892816824276efdd12fc758a1c89eba7beac5ec491f15b83b03965173a",
+      "BaldEagleDamBrk.u03": "e98a06ee762681d2414cb34c3e2fd6e9dc999c1baa3eedec3005d9c6ac899f5b",
+      "BaldEagleDamBrk.u03.hdf": "26687966841748cd3da1f68d9a37edc3f450920b27a3dd88e5e760f149a1bdbb",
+      "Terrain/Projection.prj": "2a9f311e4f888ebb17c49fb71d1152dbc9f993378f38eda19f2fb107944a9cc4",
+      "Terrain/Terrain50.baldeagledem.tif": "2765fa3bbb1b031d545e0de919c12277979a6e26cd9e3a70be65e96a39e94938",
+      "Terrain/Terrain50.dtm_20ft.tif": "401c19d58b727976687b157f41553054bd4458dfa9efa069d248624ab2c05aa2",
+      "Terrain/Terrain50.hdf": "b46f8c3e8581975244635e6000af5637bcb771f557d3ce43da0b2644a37cae7b",
+      "Terrain/Terrain50.vrt": "70f0c60510f405d93d7587b994c0cf77ce6394ab626445a61ebfcc4dc4bfc3a8",
+      "Land Classification/LandCover.hdf": "54dcb43231e406ca15c41637ef7c5df29599b86a60d76c22582b28753c558759",
+      "Land Classification/LandCover.tif": "820f6231251a9a1095d6989384b72234c86ef32f050a12dad76776e4712d2b55",
+      "Soils Data/Infiltration.hdf": "e065a2879a6b4ca5e6fc36cbd16711db4025d5f6b67d1247fbdbbfc2d0eab3f4",
+      "Precipitation/precip.2018.09.dss": "ef3af14c1f344dc33fa4b502fad4aaa510b22d5cccde7359827c410e7293f305"
+    }
+  },
+  "projection": {
+    "epsg": 2271,
+    "name": "NAD83 / Pennsylvania North (ftUS)",
+    "rasmap_reference": ".\\Terrain\\Projection.prj"
+  },
+  "plan": {
+    "number": "06",
+    "title": "Gridded Precip - Infiltration",
+    "source_program_version": "6.00",
+    "qualification_program_version": "7.01",
+    "geometry_number": "09",
+    "unsteady_number": "03",
+    "simulation_date": "09SEP2018,0000,14SEP2018,0000",
+    "computation_interval": "20SEC",
+    "compute_cores": 1,
+    "required_flags": {
+      "Run HTab": "-1",
+      "Run UNet": "-1",
+      "Run RASMapper": "0"
+    }
+  },
+  "source_geometry": {
+    "mesh_name": "BaldEagleCr",
+    "cell_count": 18066,
+    "face_count": 37594,
+    "topology_fingerprint": "38b6a20c777c0b0cf477705a5f1c172e12ba8ba19dd10a95368c4c645e536bdd",
+    "geometry_fingerprint": "2299e7ad21e2d23f80ea6b1291ce33792b9cde12e405e220b76b4f5d0a2c2448",
+    "perimeter_bounds": [1965981.77456347, 289578.11400543, 2084790.1384913, 371007.582554372],
+    "boundary_assignments": [
+      {"name": "DS2NormalD", "mesh_name": "BaldEagleCr", "type": "External", "bc_line_id": 1},
+      {"name": "DSNormalDepth", "mesh_name": "BaldEagleCr", "type": "External", "bc_line_id": 0},
+      {"name": "Upstream Inflow", "mesh_name": "BaldEagleCr", "type": "External", "bc_line_id": 2}
+    ]
+  },
+  "staging_variants": {
+    "mapper_preparation": {
+      "clone_source": true,
+      "remove_before_mesh": ["BaldEagleDamBrk.g09.hdf"],
+      "require_source_fingerprint_unchanged": true,
+      "require_property_tables_incomplete_before_preprocess": true
+    },
+    "fresh_compute": {
+      "clone_prepared_geometry": true,
+      "remove_before_preprocess": [
+        "BaldEagleDamBrk.b06",
+        "BaldEagleDamBrk.x09",
+        "BaldEagleDamBrk.p06.tmp.hdf",
+        "BaldEagleDamBrk.p06.hdf"
+      ],
+      "remove_before_compute": [
+        "BaldEagleDamBrk.c06",
+        "BaldEagleDamBrk.IC.O06"
+      ],
+      "require_results_group_absent_before_compute": true
+    }
+  },
+  "mesh_sequence": [
+    {
+      "operation": "mesh.generate_initial",
+      "cell_size": 500.0,
+      "breakline_near": 100.0,
+      "breakline_far": 250.0,
+      "expected_cell_count": 4362,
+      "expected_face_count": 9500,
+      "topology_fingerprint": "35fbcd5c2bb69adc5e53ab7662b2b0d0d8e2a0f241b3f15491dbf3c494d6d916"
+    },
+    {
+      "operation": "mesh.regenerate",
+      "cell_size": 500.0,
+      "breakline_near": 100.0,
+      "breakline_far": 250.0,
+      "expected_cell_count": 4362,
+      "expected_face_count": 9500,
+      "topology_fingerprint": "35fbcd5c2bb69adc5e53ab7662b2b0d0d8e2a0f241b3f15491dbf3c494d6d916"
+    },
+    {
+      "operation": "mesh.refinement_region",
+      "name": "Runner smoke refinement",
+      "polygon": [[2015807.0, 329281.0], [2017807.0, 329281.0], [2017807.0, 331281.0], [2015807.0, 331281.0]],
+      "spacing_dx": 250.0,
+      "spacing_dy": 250.0,
+      "expected_cell_count": 4426,
+      "expected_face_count": 9661,
+      "topology_fingerprint": "4a6c8d73160c57775d91c1ce165f3fe75aae04cb909f2f4babf49a314153ed82"
+    },
+    {
+      "operation": "mesh.breakline",
+      "breakline_fid": 0,
+      "near": 120.0,
+      "far": 300.0,
+      "near_repeats": 2,
+      "protection_radius": 1,
+      "expected_cell_count": 4431,
+      "expected_face_count": 9656,
+      "topology_fingerprint": "a9dba9ab0a147c07ede5820ee51427b7883c59f717c7795f0d2d84832611467d"
+    }
+  ],
+  "result_series": {
+    "outflow": {
+      "kind": "profile_line_flow",
+      "line_name": "Qualification Downstream",
+      "profile_lines_path": "tests/qualification/fixtures/bald_eagle_701_outflow_profile.geojson",
+      "profile_lines_sha256": "85e4aa3dd11667ab1eb4cd3e6d64aaf2fb3b9fe6b41bd01c5a0f8fbedfbaaa5f",
+      "mesh_name": "BaldEagleCr",
+      "direction": "signed"
+    },
+    "wse_cells": {
+      "kind": "mesh_cells",
+      "mesh_name": "BaldEagleCr",
+      "variable": "Water Surface",
+      "cell_ids": [234, 2708, 4081, 4240]
+    }
+  },
+  "acceptance": {
+    "preparation": {
+      "exact_cell_face_counts": true,
+      "exact_topology": true,
+      "exact_boundary_assignments": true,
+      "property_table_coverage": 1.0,
+      "invalid_cell_count": 0
+    },
+    "compute": {
+      "volume_accounting": {
+        "max_abs_error_percent": 1.0,
+        "max_abs_difference_percent": 0.05
+      },
+      "series": {
+        "outflow": {"max_abs": 1.0, "rmse": 0.25, "peak_relative": 0.001},
+        "wse_cells": {"max_abs": 0.01, "rmse": 0.005}
+      },
+      "rasters": {
+        "wse": {"max_abs": 0.02, "rmse": 0.005, "minimum_wet_overlap": 0.995, "minimum_valid_overlap": 0.995},
+        "depth": {"max_abs": 0.05, "rmse": 0.01, "minimum_wet_overlap": 0.995, "minimum_valid_overlap": 0.995},
+        "velocity": {"max_abs": 0.02, "rmse": 0.005, "minimum_wet_overlap": 0.995, "minimum_valid_overlap": 0.995}
+      }
+    }
+  }
+}

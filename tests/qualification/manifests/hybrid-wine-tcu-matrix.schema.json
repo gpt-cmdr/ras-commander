@@ -1,0 +1,933 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ras-commander.invalid/schemas/hybrid-wine-tcu-matrix.schema.json",
+  "title": "Hybrid Wine HEC-RAS TCU exact-build qualification manifest",
+  "description": "Private hash-only index for user-driven or captured_verified exact-version transfer evidence. The capturedTransferReceipt definition intentionally cannot represent a raw acceptance-state value.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "qualification_mode",
+    "generated_at_utc",
+    "scope",
+    "policy",
+    "summary",
+    "stable_receipts",
+    "beta_receipts",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "qualification_mode": {
+      "const": "hybrid_wine_tcu_exact_build_matrix"
+    },
+    "generated_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stable_exact_builds",
+        "optional_beta_builds",
+        "covers_every_historical_release",
+        "betas_in_stable_scope",
+        "betas_require_separate_authorization",
+        "one_disposable_prefix_per_build",
+        "source_evidence_exact_build_bound"
+      ],
+      "properties": {
+        "stable_exact_builds": {
+          "const": [
+            "4.0",
+            "4.1.0",
+            "5.0.3",
+            "5.0.6",
+            "5.0.7",
+            "6.0",
+            "6.1",
+            "6.2",
+            "6.3",
+            "6.3.1",
+            "6.4.1",
+            "6.5",
+            "6.6",
+            "7.0",
+            "7.0.1"
+          ]
+        },
+        "optional_beta_builds": {
+          "const": [
+            "6.7 Beta 4a",
+            "6.7 Beta 5"
+          ]
+        },
+        "covers_every_historical_release": {
+          "const": false
+        },
+        "betas_in_stable_scope": {
+          "const": false
+        },
+        "betas_require_separate_authorization": {
+          "const": true
+        },
+        "one_disposable_prefix_per_build": {
+          "const": true
+        },
+        "source_evidence_exact_build_bound": {
+          "const": true
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_methods",
+        "required_restart_count",
+        "minimum_restart_timeout_seconds",
+        "minimum_restart_cooldown_seconds",
+        "strict_full_duration_restarts",
+        "maximum_automated_ui_interactions",
+        "require_process_tree_termination",
+        "require_no_survivors",
+        "require_post_restart_prefix_fingerprint",
+        "require_explicit_authority_hash",
+        "require_restoring_transfer_diagnostic",
+        "require_persistent_disposable_provisioning",
+        "forbid_raw_acceptance_state"
+      ],
+      "properties": {
+        "allowed_methods": {
+          "const": [
+            "user_driven",
+            "captured_verified_transfer"
+          ]
+        },
+        "required_restart_count": {
+          "const": 2
+        },
+        "minimum_restart_timeout_seconds": {
+          "type": "number",
+          "minimum": 15
+        },
+        "minimum_restart_cooldown_seconds": {
+          "type": "number",
+          "minimum": 45
+        },
+        "strict_full_duration_restarts": {
+          "const": true
+        },
+        "maximum_automated_ui_interactions": {
+          "const": 0
+        },
+        "require_process_tree_termination": {
+          "const": true
+        },
+        "require_no_survivors": {
+          "const": true
+        },
+        "require_post_restart_prefix_fingerprint": {
+          "const": true
+        },
+        "require_explicit_authority_hash": {
+          "const": true
+        },
+        "require_restoring_transfer_diagnostic": {
+          "const": true
+        },
+        "require_persistent_disposable_provisioning": {
+          "const": true
+        },
+        "forbid_raw_acceptance_state": {
+          "const": true
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "all_passed",
+        "all_safe",
+        "stable_build_count",
+        "user_driven_count",
+        "captured_verified_transfer_count",
+        "critical_skips"
+      ],
+      "properties": {
+        "all_passed": {
+          "const": true
+        },
+        "all_safe": {
+          "const": true
+        },
+        "stable_build_count": {
+          "const": 15
+        },
+        "user_driven_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        },
+        "captured_verified_transfer_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        },
+        "critical_skips": {
+          "$ref": "#/$defs/noSkips"
+        }
+      }
+    },
+    "stable_receipts": {
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 15,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/receiptEntry"
+      }
+    },
+    "beta_receipts": {
+      "type": "array",
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/receiptEntry"
+      }
+    },
+    "manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "jsonFilename": {
+      "type": "string",
+      "pattern": "^[^/\\\\]+\\.json$"
+    },
+    "noSkips": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "version",
+        "sha256",
+        "detected_version",
+        "file_version",
+        "product_version",
+        "architecture"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "detected_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "file_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "product_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "architecture": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "status",
+        "started",
+        "visible_window_seen",
+        "visible_titles",
+        "blocked_reason",
+        "blocked_titles",
+        "interactions",
+        "process_tree_terminated",
+        "survivors",
+        "elapsed_seconds",
+        "observed_at_utc",
+        "main_window_signature",
+        "topology_signatures",
+        "observed_process_ids"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/identity"
+        },
+        "status": {
+          "const": "ready"
+        },
+        "started": {
+          "const": true
+        },
+        "visible_window_seen": {
+          "const": true
+        },
+        "visible_titles": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "blocked_reason": {
+          "type": "null"
+        },
+        "blocked_titles": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "interactions": {
+          "const": 0
+        },
+        "process_tree_terminated": {
+          "const": true
+        },
+        "survivors": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "elapsed_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "observed_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "main_window_signature": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "string"
+          }
+        },
+        "topology_signatures": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "observed_process_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "sourceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "artifact_filename",
+        "report_sha256",
+        "case_id",
+        "exact_version",
+        "executable_sha256"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "opaque_native_exact_version_capture",
+            "private_native_exact_version_bundle_capture"
+          ]
+        },
+        "artifact_filename": {
+          "$ref": "#/$defs/jsonFilename"
+        },
+        "report_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "case_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exact_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "executable_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "winePrefixFingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "captured_at_utc",
+        "captured_after_verified_restarts",
+        "dosdevices_excluded_from_root",
+        "root_sha256",
+        "user_reg_sha256",
+        "system_reg_sha256",
+        "userdef_reg_sha256",
+        "dosdevices_sha256",
+        "file_count",
+        "total_bytes"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "captured_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "captured_after_verified_restarts": {
+          "const": true
+        },
+        "dosdevices_excluded_from_root": {
+          "const": true
+        },
+        "root_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "user_reg_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "system_reg_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "userdef_reg_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "dosdevices_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "file_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "total_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "receiptEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "method",
+        "version",
+        "receipt_filename",
+        "receipt_file_sha256",
+        "executable_sha256",
+        "source_evidence",
+        "wine_prefix_fingerprint",
+        "critical_skips"
+      ],
+      "properties": {
+        "scope": {
+          "enum": [
+            "stable",
+            "beta"
+          ]
+        },
+        "method": {
+          "enum": [
+            "user_driven",
+            "captured_verified_transfer"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "receipt_filename": {
+          "$ref": "#/$defs/jsonFilename"
+        },
+        "receipt_file_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "executable_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_evidence": {
+          "$ref": "#/$defs/sourceEvidence"
+        },
+        "wine_prefix_fingerprint": {
+          "$ref": "#/$defs/winePrefixFingerprint"
+        },
+        "critical_skips": {
+          "$ref": "#/$defs/noSkips"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "captured_verified_transfer"
+              }
+            },
+            "required": ["method"]
+          },
+          "then": {
+            "properties": {
+              "scope": {
+                "const": "stable"
+              },
+              "version": {
+                "enum": [
+                  "6.1",
+                  "6.2",
+                  "6.3",
+                  "6.3.1",
+                  "6.4.1",
+                  "6.5",
+                  "6.6"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sourceCaptureReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "candidate_origin",
+        "target",
+        "source_bundle_fingerprint",
+        "bundle_file_sha256",
+        "state_value_sha256",
+        "state_registry_type",
+        "probe",
+        "automated_ui_interactions",
+        "safe_completion",
+        "passed",
+        "created_at_utc",
+        "receipt_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "kind": {
+          "const": "exact_version_acceptance_bundle_capture"
+        },
+        "candidate_origin": {
+          "const": "captured_verified"
+        },
+        "target": {
+          "$ref": "#/$defs/identity"
+        },
+        "source_bundle_fingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bundle_file_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "state_value_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "state_registry_type": {
+          "type": "integer"
+        },
+        "probe": {
+          "$ref": "#/$defs/probe"
+        },
+        "automated_ui_interactions": {
+          "const": 0
+        },
+        "safe_completion": {
+          "const": true
+        },
+        "passed": {
+          "const": true
+        },
+        "created_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "receipt_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "opaqueHash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "opaque_sha256"
+      ],
+      "properties": {
+        "opaque_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "registrySnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "name",
+        "exists",
+        "value",
+        "registry_type"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exists": {
+          "type": "boolean"
+        },
+        "value": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/opaqueHash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "registry_type": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "sanitizedDiagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "source_version",
+        "transition",
+        "candidate_origin",
+        "candidate_value",
+        "candidate_registry_type",
+        "candidate_fingerprint",
+        "source_bundle_fingerprint",
+        "before",
+        "applied",
+        "restored",
+        "after_probe",
+        "registry_restored",
+        "candidate_stayed_exact",
+        "clean_application_subtree_for_probe",
+        "application_subtree_before_fingerprint",
+        "application_subtree_after_probe_fingerprint",
+        "application_subtree_restored_fingerprint",
+        "probe",
+        "passed",
+        "diagnostic_label",
+        "created_at_utc"
+      ],
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/identity"
+        },
+        "source_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transition": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "string"
+          }
+        },
+        "candidate_origin": {
+          "const": "captured_verified"
+        },
+        "candidate_value": {
+          "$ref": "#/$defs/opaqueHash"
+        },
+        "candidate_registry_type": {
+          "type": "integer"
+        },
+        "candidate_fingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_bundle_fingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "before": {
+          "$ref": "#/$defs/registrySnapshot"
+        },
+        "applied": {
+          "$ref": "#/$defs/registrySnapshot"
+        },
+        "restored": {
+          "$ref": "#/$defs/registrySnapshot"
+        },
+        "after_probe": {
+          "$ref": "#/$defs/registrySnapshot"
+        },
+        "registry_restored": {
+          "const": true
+        },
+        "candidate_stayed_exact": {
+          "const": true
+        },
+        "clean_application_subtree_for_probe": {
+          "type": "boolean"
+        },
+        "application_subtree_before_fingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "application_subtree_after_probe_fingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "application_subtree_restored_fingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "probe": {
+          "$ref": "#/$defs/probe"
+        },
+        "passed": {
+          "const": true
+        },
+        "diagnostic_label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "sanitizedProvision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "key",
+        "value_name",
+        "value",
+        "registry_type",
+        "diagnostic_fingerprint",
+        "authorization_reference",
+        "dry_run",
+        "written",
+        "application_subtree_replaced",
+        "created_at_utc"
+      ],
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/identity"
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "$ref": "#/$defs/opaqueHash"
+        },
+        "registry_type": {
+          "type": "integer"
+        },
+        "diagnostic_fingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "authorization_reference": {
+          "$ref": "#/$defs/opaqueHash"
+        },
+        "dry_run": {
+          "const": false
+        },
+        "written": {
+          "const": true
+        },
+        "application_subtree_replaced": {
+          "const": true
+        },
+        "created_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "capturedTransferReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "candidate_origin",
+        "target",
+        "status",
+        "source_bundle_file_sha256",
+        "source_bundle_fingerprint",
+        "destination_is_disposable",
+        "authorization_reference_sha256",
+        "prefix_instance_token_sha256",
+        "automated_ui_interactions",
+        "diagnostic",
+        "provision",
+        "restart_probes",
+        "restart_cooldown_seconds",
+        "persisted_state",
+        "process_trees_terminated",
+        "survivors",
+        "safe_completion",
+        "created_at_utc",
+        "report_sha256",
+        "passed"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "kind": {
+          "const": "exact_version_captured_acceptance_transfer"
+        },
+        "candidate_origin": {
+          "const": "captured_verified"
+        },
+        "target": {
+          "$ref": "#/$defs/identity"
+        },
+        "status": {
+          "const": "accepted_and_restarts_verified"
+        },
+        "source_bundle_file_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_bundle_fingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "destination_is_disposable": {
+          "const": true
+        },
+        "authorization_reference_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "prefix_instance_token_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "automated_ui_interactions": {
+          "const": 0
+        },
+        "diagnostic": {
+          "$ref": "#/$defs/sanitizedDiagnostic"
+        },
+        "provision": {
+          "$ref": "#/$defs/sanitizedProvision"
+        },
+        "restart_probes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/probe"
+          }
+        },
+        "restart_cooldown_seconds": {
+          "type": "number",
+          "minimum": 45
+        },
+        "persisted_state": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exists",
+            "registry_type",
+            "value_sha256",
+            "matches_source_exactly"
+          ],
+          "properties": {
+            "exists": {
+              "const": true
+            },
+            "registry_type": {
+              "type": "integer"
+            },
+            "value_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "matches_source_exactly": {
+              "const": true
+            }
+          }
+        },
+        "process_trees_terminated": {
+          "const": true
+        },
+        "survivors": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "safe_completion": {
+          "const": true
+        },
+        "created_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "report_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "passed": {
+          "const": true
+        }
+      }
+    }
+  }
+}

@@ -1,6 +1,7 @@
 """Focused control-flow regression tests for ``RasCmdr.compute_plan()``."""
 
 import importlib
+import os
 import logging
 import subprocess
 from pathlib import Path
@@ -14,6 +15,7 @@ from ras_commander.RasCmdr import RasCmdr
 
 
 rascmdr_module = importlib.import_module("ras_commander.RasCmdr")
+watchdog_module = importlib.import_module("ras_commander.RasDialogWatchdog")
 
 
 class _DummyRas:
@@ -64,6 +66,7 @@ def test_compute_plan_returns_failed_result_for_regular_exception():
     assert isinstance(result, ComputeResult)
     assert result.success is False
     assert result.results_df_row is None
+    assert result.error == "boom"
     assert ras_obj.refresh_calls == ["plan", "geom", "flow", "unsteady"]
 
 
@@ -80,6 +83,190 @@ def test_compute_plan_does_not_swallow_keyboard_interrupt():
         RasCmdr.compute_plan("01", ras_object=ras_obj)
 
     assert ras_obj.refresh_calls == ["plan", "geom", "flow", "unsteady"]
+
+
+def test_compute_plan_returns_watchdog_block_reason(monkeypatch, tmp_path):
+    plan_path = tmp_path / "test.p01"
+    plan_path.write_text("Plan Title=Test\n", encoding="utf-8")
+
+    ras_obj = _DummyRas()
+    ras_obj.project_folder = str(tmp_path)
+    ras_obj.prj_file = str(tmp_path / "test.prj")
+    ras_obj.project_name = "test"
+
+    class FakeWatchdog:
+        blocked_reason = "unsafe modal blocked without interaction"
+
+        def require_available(self):
+            pass
+
+        def add_pid(self, _pid):
+            pass
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+    class FakeProcess:
+        pid = 12345
+        returncode = 1
+
+        def communicate(self, timeout=None):
+            return "", ""
+
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda *_args, **_kwargs: plan_path),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda _path: None),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: FakeProcess(),
+    )
+    monkeypatch.setattr(watchdog_module, "DialogWatchdog", FakeWatchdog)
+
+    result = RasCmdr.compute_plan(
+        "01",
+        ras_object=ras_obj,
+        force_rerun=True,
+        dialog_watchdog=True,
+    )
+
+    assert result.success is False
+    assert result.error == FakeWatchdog.blocked_reason
+
+
+def test_compute_plan_checks_watchdog_dependency_before_launch(monkeypatch, tmp_path):
+    plan_path = tmp_path / "test.p01"
+    plan_path.write_text("Plan Title=Test\n", encoding="utf-8")
+
+    ras_obj = _DummyRas()
+    ras_obj.project_folder = str(tmp_path)
+    ras_obj.prj_file = str(tmp_path / "test.prj")
+    ras_obj.project_name = "test"
+    popen_calls = []
+
+    class UnavailableWatchdog:
+        def require_available(self):
+            raise RuntimeError("modal supervision unavailable")
+
+        def stop(self):
+            pass
+
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda *_args, **_kwargs: plan_path),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda _path: None),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: popen_calls.append(True),
+    )
+    monkeypatch.setattr(watchdog_module, "DialogWatchdog", UnavailableWatchdog)
+
+    result = RasCmdr.compute_plan(
+        "01",
+        ras_object=ras_obj,
+        force_rerun=True,
+        dialog_watchdog=True,
+    )
+
+    assert result.success is False
+    assert result.error == "modal supervision unavailable"
+    assert popen_calls == []
+
+
+def test_compute_plan_scopes_compatibility_environment_to_child(monkeypatch, tmp_path):
+    plan_path = tmp_path / "test.p01"
+    plan_path.write_text("Plan Title=Test\n", encoding="utf-8")
+    ras_obj = _DummyRas()
+    ras_obj.project_folder = str(tmp_path)
+    ras_obj.prj_file = str(tmp_path / "test.prj")
+    ras_obj.project_name = "test"
+    popen_calls = []
+
+    class FakeProcess:
+        pid = 12345
+        returncode = 0
+
+        def communicate(self, timeout=None):
+            return "", ""
+
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda *_args, **_kwargs: plan_path),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda _path: None),
+    )
+
+    def popen(*args, **kwargs):
+        popen_calls.append((args, kwargs))
+        return FakeProcess()
+
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", popen)
+    before = os.environ.get("KMP_AFFINITY")
+
+    result = RasCmdr.compute_plan(
+        "01",
+        ras_object=ras_obj,
+        force_rerun=True,
+        dialog_watchdog=False,
+        process_environment={"KMP_AFFINITY": "disabled", "OMP_NUM_THREADS": 1},
+    )
+
+    assert result.success is True
+    child_environment = popen_calls[0][1]["env"]
+    assert child_environment["KMP_AFFINITY"] == "disabled"
+    assert child_environment["OMP_NUM_THREADS"] == "1"
+    assert "PATH" in child_environment
+    assert os.environ.get("KMP_AFFINITY") == before
+
+
+def test_communicate_watchdog_block_does_not_wait_indefinitely(monkeypatch):
+    killed = []
+
+    class BlockedWatchdog:
+        blocked_reason = "unsafe modal blocked without interaction"
+
+    class HangingProcess:
+        pid = 9876
+
+        def communicate(self, timeout=None):
+            raise rascmdr_module.subprocess.TimeoutExpired("ras", timeout)
+
+    monkeypatch.setattr(
+        RasCmdr,
+        "_kill_process_tree",
+        staticmethod(lambda pid: killed.append(pid)),
+    )
+
+    with pytest.raises(RuntimeError, match="unsafe modal blocked"):
+        RasCmdr._communicate_with_watchdog(
+            HangingProcess(),
+            BlockedWatchdog(),
+            timeout_sec=None,
+            plan_number="01",
+        )
+
+    assert killed == [9876]
 
 
 def test_compute_plan_uses_cached_plan_entries_when_prj_refresh_fails(
@@ -130,9 +317,13 @@ def test_compute_plan_uses_cached_plan_entries_when_prj_refresh_fails(
             )
             return self.results_df
 
-    def fake_run(*args, **kwargs):
-        hdf_path.write_text("computed\n", encoding="utf-8")
-        return SimpleNamespace(returncode=0, stdout="", stderr="")
+    class FakeProcess:
+        pid = 12345
+        returncode = 0
+
+        def communicate(self, timeout=None):
+            hdf_path.write_text("computed\n", encoding="utf-8")
+            return "", ""
 
     monkeypatch.setattr(
         rascmdr_module.RasPlan,
@@ -144,12 +335,13 @@ def test_compute_plan_uses_cached_plan_entries_when_prj_refresh_fails(
         "enable_detailed_logging",
         staticmethod(lambda plan_path: None),
     )
-    monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", lambda *a, **k: FakeProcess())
 
     result = RasCmdr.compute_plan(
         "01",
         force_rerun=True,
         ras_object=MissingPrjAfterRunRas(),
+        dialog_watchdog=False,
     )
 
     assert result.success is True
@@ -266,10 +458,18 @@ def test_compute_plan_success_logging_is_concise(monkeypatch, tmp_path, caplog):
         "enable_detailed_logging",
         staticmethod(lambda plan_path: None),
     )
+
+    class FakeProcess:
+        pid = 12345
+        returncode = 0
+
+        def communicate(self, timeout=None):
+            return "", ""
+
     monkeypatch.setattr(
         rascmdr_module.subprocess,
-        "run",
-        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="", stderr=""),
+        "Popen",
+        lambda *args, **kwargs: FakeProcess(),
     )
     with caplog.at_level(logging.DEBUG, logger="ras_commander.RasCmdr"):
         result = RasCmdr.compute_plan(

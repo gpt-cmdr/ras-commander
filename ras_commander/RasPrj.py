@@ -2024,7 +2024,7 @@ def init_ras_project(
     ras_object=None,
     load_results_summary=True,
     hide_intro=False,
-    accept_tcu=False
+    accept_tcu=False,
 ) -> 'RasPrj':
     """
     Initialize a RAS project for use with the ras-commander library.
@@ -2058,14 +2058,10 @@ def init_ras_project(
         hide_intro (bool, default=False): If True, suppress the agent intro banner that is
                                           printed after initialization. The banner provides
                                           API guidance for AI agents using the library.
-        accept_tcu (bool, default=False): HEC-RAS shows a modal "Terms and Conditions for
-                                          Use" dialog the first time it runs for a Windows
-                                          user+version, which blocks headless/COM launches.
-                                          When False (default), init only WARNS if the TCU
-                                          has not been accepted. When True, acceptance is
-                                          recorded now for the current user (opt-in registry
-                                          write) so unattended runs do not block. See
-                                          ras_commander.RasTcu.
+        accept_tcu (bool, default=False): If True, explicitly transfer an
+                                          already accepted HEC-RAS state for
+                                          this user/version through RasTcu.
+                                          False is read-only and never writes.
 
     Returns:
         RasPrj: An initialized RasPrj instance.
@@ -2237,6 +2233,26 @@ def init_ras_project(
     # Store version for RasControl (legacy COM interface support)
     ras_object.ras_version = ras_version if ras_version else detected_version
 
+    # Read-only by default.  Acceptance transfer is an explicit caller choice
+    # and requires an already accepted donor state; it is never synthesized.
+    try:
+        from .RasTcu import RasTcu
+
+        tcu_status = RasTcu.status(ras_object=ras_object)
+        if tcu_status.accepted is False:
+            if accept_tcu:
+                tcu_status = RasTcu.accept(ras_object=ras_object)
+            else:
+                logger.warning(
+                    "HEC-RAS %s Terms & Conditions for Use have not been "
+                    "accepted for the current Windows user. Headless launches "
+                    "will remain blocked until an authorized user accepts in "
+                    "the GUI or explicitly requests RasTcu.accept().",
+                    tcu_status.version or "",
+                )
+    except Exception as tcu_exc:
+        logger.debug("TCU acceptance check skipped: %s", tcu_exc)
+
     # NOTE: Removed automatic global ras update for thread-safety
     # When ras_object is explicitly passed, we should NOT modify the global ras object
     # This allows multiple threads to use separate RasPrj instances without conflicts
@@ -2273,31 +2289,6 @@ def init_ras_project(
     else:
         _init_log("Using HEC-RAS version %s", _ras_version_label(ras_version, ras_exe_path))
     logger.debug(f"Using HEC-RAS executable path: {ras_exe_path}")
-
-    # HEC-RAS Terms & Conditions for Use (TCU) check. By default this is read-only:
-    # it warns (once) when the TCU has not been accepted for this Windows user+version,
-    # because the first headless/COM launch would otherwise block on a modal VB6 dialog.
-    # When accept_tcu=True, acceptance is recorded now (opt-in registry write) so the
-    # project is ready for unattended runs. Never raises; never writes unless asked.
-    try:
-        from .RasTcu import RasTcu
-        _tcu = RasTcu.status(ras_object=ras_object)
-        if _tcu.accepted is False:
-            if accept_tcu:
-                RasTcu.accept(ras_object=ras_object)
-            else:
-                logger.warning(
-                    "HEC-RAS %s Terms & Conditions for Use have NOT been accepted for the "
-                    "current Windows user. The first headless/COM launch will block on a modal "
-                    "\"Terms and Conditions for Use\" dialog. Resolve it once by either: "
-                    "(a) opening HEC-RAS %s in the GUI and clicking \"I Agree\", "
-                    "(b) calling ras_commander.RasTcu.accept(), or "
-                    "(c) passing accept_tcu=True to init_ras_project(). "
-                    "Terms: https://www.hec.usace.army.mil/software/hec-ras/",
-                    _tcu.version or "", _tcu.version or "",
-                )
-    except Exception as _tcu_exc:  # never let the check break init
-        logger.debug("TCU acceptance check skipped: %s", _tcu_exc)
 
     if not hide_intro:
         _obj = "ras" if ras_object is ras else "ras_object"
@@ -2361,7 +2352,7 @@ def get_ras_exe(ras_version=None):
     4. As a fallback, return "Ras.exe" but log an error
     
     Args:
-        ras_version (str, optional): Either a version number (e.g., "7.0") or 
+        ras_version (str, optional): Either a version number (e.g., "7.0.1") or
                                      a full path to the HEC-RAS executable 
                                      (e.g., "D:/Programs/HEC/HEC-RAS/6.6/Ras.exe").
     
@@ -2369,7 +2360,7 @@ def get_ras_exe(ras_version=None):
         str: The full path to the HEC-RAS executable or "Ras.exe" if not found.
     
     Note:
-        - HEC-RAS version numbers include: "7.0", "6.6", "6.5", "6.4.1", "6.3", etc.
+        - HEC-RAS version numbers include: "7.0.1", "7.0", "6.6", "6.5", "6.4.1", "6.3", etc.
         - The default installation path follows: C:/Program Files (x86)/HEC/HEC-RAS/{version}/Ras.exe
         - For non-standard installations, provide the full path to Ras.exe
         - Returns "Ras.exe" if no valid path is found, with error logged
@@ -2391,7 +2382,7 @@ def get_ras_exe(ras_version=None):
     # ACTUAL folder names in C:/Program Files (x86)/HEC/HEC-RAS/
     # This list matches the exact folder names on disk (verified 2026-04-19)
     ras_version_folders = [
-        "7.0", "6.7 Beta 5", "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
+        "7.0.1", "7.0", "6.7 Beta 5", "6.7 Beta 4a", "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
         "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
         "4.1.0", "4.0"
     ]
@@ -2430,6 +2421,7 @@ def get_ras_exe(ras_version=None):
         "6.7.0": "6.7 Beta 5", # Legacy dotted normalization rewrites 6.70 to 6.7.0
         "67": "6.7 Beta 5",
         "70": "7.0",
+        "701": "7.0.1",
     }
 
     # Check if input is a direct path to an executable
@@ -2444,10 +2436,13 @@ def get_ras_exe(ras_version=None):
     #   5.03 -> 5.0.3
     #   6.31 -> 6.3.1
     #   4.10 -> 4.1.0
-    legacy_dotted_match = re.fullmatch(r'(\d)\.(\d{2})', version_str)
+    legacy_dotted_match = re.fullmatch(r'(\d+)\.(\d{2})', version_str)
     if legacy_dotted_match:
         major, compact_minor = legacy_dotted_match.groups()
-        version_str = f"{major}.{compact_minor[0]}.{int(compact_minor[1])}"
+        if compact_minor[1] == "0":
+            version_str = f"{int(major)}.{int(compact_minor[0])}"
+        else:
+            version_str = f"{int(major)}.{int(compact_minor[0])}.{int(compact_minor[1])}"
         logger.debug(f"Normalized legacy dotted version '{ras_version}' to '{version_str}'")
 
     # Check if there's an alias for this version

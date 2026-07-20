@@ -1,0 +1,292 @@
+{
+  "schema_version": "1.0",
+  "profile": "windows_native",
+  "expected_version": "7.0.1",
+  "ras_executable": "%RASQ_HECRAS_701_DIR%/Ras.exe",
+  "source_project": "%RASQ_SOURCE_PROJECT%",
+  "workspace_root": "%RASQ_WORKSPACE_ROOT%",
+  "receipt_path": "%RASQ_RECEIPT_ROOT%/native-701.json",
+  "fixture": {
+    "id": "approved-small-2d-701",
+    "description": "Replace placeholder coordinates and filenames with the immutable approved fixture contract"
+  },
+  "stop_on_failure": false,
+  "actions": [
+    {"id": "project.open", "timeout_seconds": 120},
+    {
+      "id": "project.save",
+      "timeout_seconds": 120,
+      "parameters": {"plan_number": "01", "marker": "HEC-RAS 7.0.1 qualification round trip"}
+    },
+    {"id": "path.spaces", "timeout_seconds": 180},
+    {
+      "id": "path.long",
+      "timeout_seconds": 180,
+      "parameters": {"minimum_long_path": 280}
+    },
+    {
+      "id": "projection.select",
+      "timeout_seconds": 180,
+      "parameters": {
+        "projection_prj": "Terrain/Projection.prj",
+        "terrain_hdf": "Terrain/GoldenTerrain.hdf",
+        "layer_name": "Qualification Terrain"
+      }
+    },
+    {
+      "id": "terrain.import",
+      "timeout_seconds": 1800,
+      "parameters": {
+        "input_rasters": ["Inputs/terrain-source.tif"],
+        "output_folder": "Qualification Terrain",
+        "terrain_name": "QualificationTerrain",
+        "units": "Feet"
+      }
+    },
+    {
+      "id": "terrain.build_pyramids",
+      "timeout_seconds": 300,
+      "parameters": {"minimum_levels": 2}
+    },
+    {
+      "id": "terrain.associate",
+      "timeout_seconds": 300,
+      "parameters": {"geometry": "model.g01"}
+    },
+    {
+      "id": "geometry.2d_area_create",
+      "timeout_seconds": 180,
+      "parameters": {
+        "geometry": "model.g01",
+        "flow_area_name": "Qualification Area",
+        "coordinates": [[0, 0], [1000, 0], [1000, 1000], [0, 1000]]
+      }
+    },
+    {
+      "id": "geometry.perimeter_edit",
+      "timeout_seconds": 180,
+      "parameters": {
+        "geometry": "model.g01",
+        "flow_area_name": "Qualification Area",
+        "coordinates": [[0, 0], [1100, 0], [1100, 1000], [0, 1000]]
+      }
+    },
+    {
+      "id": "mesh.generate_initial",
+      "timeout_seconds": 1800,
+      "parameters": {
+        "geometry": "model.g01",
+        "mesh_name": "Qualification Area",
+        "cell_size": 100,
+        "expected_cell_count": "ENGINEERING_GOLDEN_REQUIRED",
+        "expected_face_count": "ENGINEERING_GOLDEN_REQUIRED"
+      }
+    },
+    {
+      "id": "mesh.regenerate",
+      "timeout_seconds": 1800,
+      "parameters": {
+        "geometry": "model.g01",
+        "mesh_name": "Qualification Area",
+        "cell_size": 100,
+        "expected_cell_count": "ENGINEERING_GOLDEN_REQUIRED",
+        "expected_face_count": "ENGINEERING_GOLDEN_REQUIRED"
+      }
+    },
+    {
+      "id": "mesh.refinement_region",
+      "timeout_seconds": 1800,
+      "parameters": {
+        "geometry": "model.g01",
+        "mesh_name": "Qualification Area",
+        "name": "Channel refinement",
+        "spacing_dx": 25,
+        "spacing_dy": 25,
+        "minimum_cell_count_delta": "ENGINEERING_GOLDEN_REQUIRED",
+        "expected_cell_count": "ENGINEERING_GOLDEN_REQUIRED",
+        "expected_face_count": "ENGINEERING_GOLDEN_REQUIRED",
+        "polygon": [[400, 0], [600, 0], [600, 1000], [400, 1000]]
+      }
+    },
+    {
+      "id": "mesh.breakline",
+      "timeout_seconds": 1800,
+      "parameters": {
+        "geometry": "model.g01",
+        "mesh_name": "Qualification Area",
+        "breakline_fid": 0,
+        "near": 25,
+        "far": 75,
+        "near_repeats": 2,
+        "protection_radius": 1,
+        "expected_cell_count": "ENGINEERING_GOLDEN_REQUIRED",
+        "expected_face_count": "ENGINEERING_GOLDEN_REQUIRED"
+      }
+    },
+    {
+      "id": "boundary.associate",
+      "timeout_seconds": 180,
+      "parameters": {
+        "geometry": "model.g01",
+        "unsteady": "model.u01",
+        "boundary_type": "normal_depth",
+        "friction_slope": 0.0005,
+        "line": {
+          "name": "Downstream",
+          "storage_area": "Qualification Area",
+          "coordinates": [[1000, 0], [1000, 1000]]
+        }
+      }
+    },
+    {
+      "id": "boundary.conflict_repair",
+      "timeout_seconds": 300,
+      "parameters": {"geometry_hdf": "model.g01.hdf", "cell_size": 100, "require_conflict": true}
+    },
+    {
+      "id": "properties.mannings",
+      "timeout_seconds": 180,
+      "parameters": {"geometry": "model.g01"}
+    },
+    {
+      "id": "properties.infiltration",
+      "timeout_seconds": 600,
+      "parameters": {
+        "geometry": "model.g01",
+        "layer_hdf": "Soils Data/Infiltration.hdf"
+      }
+    },
+    {
+      "id": "properties.land_cover",
+      "timeout_seconds": 600,
+      "parameters": {
+        "geometry": "model.g01",
+        "layer_hdf": "Land Classification/LandCover.hdf"
+      }
+    },
+    {
+      "id": "plan.preprocess",
+      "timeout_seconds": 900,
+      "parameters": {
+        "plan_number": "01",
+        "max_wait": 600,
+        "geometry": "model.g01",
+        "mesh_name": "Qualification Area",
+        "require_property_table_transition": true,
+        "require_topology_preserved": true
+      }
+    },
+    {
+      "id": "plan.compute_unsteady",
+      "timeout_seconds": 7200,
+      "parameters": {
+        "plan_number": "01",
+        "num_cores": 2,
+        "timeout_sec": 6900,
+        "series": {
+          "outflow": {
+            "kind": "profile_line_flow",
+            "line_name": "ENGINEERING_APPROVED_PROFILE_LINE_REQUIRED",
+            "mesh_name": "Qualification Area",
+            "direction": "signed"
+          },
+          "wse_cells": {
+            "kind": "mesh_cells",
+            "mesh_name": "Qualification Area",
+            "variable": "Water Surface",
+            "cell_ids": ["ENGINEERING_APPROVED_CELL_ID_REQUIRED"],
+            "value_column": "wse"
+          }
+        }
+      }
+    },
+    {
+      "id": "mapper.result_layers",
+      "timeout_seconds": 180,
+      "parameters": {"plan_number": "01"}
+    },
+    {
+      "id": "mapper.export_geotiff",
+      "timeout_seconds": 1800,
+      "parameters": {
+        "plan_number": "01",
+        "profile": "Max",
+        "output_path": "Qualification Maps",
+        "depth": true,
+        "wse": true,
+        "velocity": true
+      }
+    },
+    {
+      "id": "recovery.restart",
+      "timeout_seconds": 7200,
+      "parameters": {
+        "restart_plan_number": "02",
+        "baseline_plan_number": "01",
+        "restart_filename": "model.p01.ENGINEERING_RESTART_FILENAME_REQUIRED.rst",
+        "series": {
+          "outflow": {
+            "kind": "profile_line_flow",
+            "line_name": "ENGINEERING_APPROVED_PROFILE_LINE_REQUIRED",
+            "mesh_name": "Qualification Area",
+            "direction": "signed",
+            "start_time": "ENGINEERING_RESTART_COMPARISON_START_REQUIRED",
+            "end_time": "ENGINEERING_RESTART_COMPARISON_END_REQUIRED"
+          },
+          "wse_cells": {
+            "kind": "mesh_cells",
+            "mesh_name": "Qualification Area",
+            "variable": "Water Surface",
+            "cell_ids": ["ENGINEERING_APPROVED_CELL_ID_REQUIRED"],
+            "value_column": "wse",
+            "start_time": "ENGINEERING_RESTART_COMPARISON_START_REQUIRED",
+            "end_time": "ENGINEERING_RESTART_COMPARISON_END_REQUIRED"
+          }
+        },
+        "series_tolerances": {
+          "outflow": {
+            "key_columns": ["time"],
+            "columns": {
+              "flow": {
+                "max_abs": "ENGINEERING_APPROVAL_REQUIRED",
+                "rmse": "ENGINEERING_APPROVAL_REQUIRED",
+                "peak_relative": "ENGINEERING_APPROVAL_REQUIRED"
+              }
+            }
+          },
+          "wse_cells": {
+            "key_columns": ["time", "cell_id"],
+            "columns": {
+              "wse": {
+                "max_abs": "ENGINEERING_APPROVAL_REQUIRED",
+                "rmse": "ENGINEERING_APPROVAL_REQUIRED"
+              }
+            }
+          }
+        },
+        "max_volume_error_difference_percent": "ENGINEERING_APPROVAL_REQUIRED",
+        "timeout_sec": 6900
+      }
+    },
+    {
+      "id": "diagnostics.failed_run",
+      "timeout_seconds": 1200,
+      "parameters": {
+        "failing_plan_number": "99",
+        "expected_patterns": ["ENGINEERING_APPROVED_FAILURE_SIGNATURE_REQUIRED"],
+        "timeout_sec": 900
+      }
+    },
+    {
+      "id": "locking.project",
+      "timeout_seconds": 1200,
+      "parameters": {"plan_number": "01"}
+    },
+    {
+      "id": "concurrency.prefix_isolation",
+      "worker_runtime": "native",
+      "timeout_seconds": 1800,
+      "parameters": {"task_count": 2, "wine_binary": "wine"}
+    }
+  ]
+}

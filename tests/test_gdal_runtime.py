@@ -13,6 +13,22 @@ from ras_commander.geom.GeomMesh import GeomMesh
 geom_mesh_module = importlib.import_module("ras_commander.geom.GeomMesh")
 
 
+@pytest.fixture(autouse=True)
+def _restore_gdal_process_state():
+    environment = {
+        name: os.environ.get(name)
+        for name in ("GDAL_DATA", "PROJ_LIB", "PROJ_DATA", "PATH")
+    }
+    python_path = list(sys.path)
+    yield
+    for name, value in environment.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+    sys.path[:] = python_path
+
+
 def _make_hecras_gdal_tree(tmp_path: Path) -> Path:
     hecras_dir = tmp_path / "HEC-RAS" / "7.0"
     (hecras_dir / "GDAL" / "bin64").mkdir(parents=True)
@@ -101,6 +117,40 @@ def test_configure_rasmapper_gdal_bridge_creates_python_sibling(
         str(python_dir / "GDAL") in message and str(hecras_dir / "GDAL") in message
         for message in debug_messages
     )
+
+
+def test_configure_rasmapper_gdal_bridge_falls_back_when_powershell_lies(
+    monkeypatch, tmp_path
+):
+    hecras_dir = _make_hecras_gdal_tree(tmp_path)
+    python_dir = tmp_path / "wine-python"
+    python_dir.mkdir()
+
+    monkeypatch.setattr(os, "add_dll_directory", lambda path: object(), raising=False)
+    monkeypatch.setattr(_gdal_runtime.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(
+        _gdal_runtime.subprocess,
+        "run",
+        lambda cmd, **kwargs: CompletedProcess(cmd, 0, "reported success", ""),
+    )
+    symlink_calls = []
+
+    def fake_symlink(source, destination, *, target_is_directory):
+        symlink_calls.append((Path(source), Path(destination), target_is_directory))
+        (Path(destination) / "bin64").mkdir(parents=True)
+        (Path(destination) / "common" / "data").mkdir(parents=True)
+
+    monkeypatch.setattr(_gdal_runtime.os, "symlink", fake_symlink)
+
+    paths = _gdal_runtime.configure_rasmapper_gdal_bridge(
+        hecras_dir,
+        python_dir=python_dir,
+    )
+
+    bridge = python_dir / "GDAL"
+    assert paths.hecras_dir == hecras_dir
+    assert symlink_calls == [(hecras_dir / "GDAL", bridge, True)]
+    assert _gdal_runtime.python_gdal_bridge_is_usable(python_dir)
 
 
 def test_configure_rasmapper_gdal_bridge_creates_venv_and_base_bridges(

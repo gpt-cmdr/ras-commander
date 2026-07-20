@@ -1,0 +1,22 @@
+{
+  "type": "FeatureCollection",
+  "name": "bald_eagle_701_outflow_profile",
+  "crs": {
+    "type": "name",
+    "properties": {"name": "urn:ogc:def:crs:EPSG::2271"}
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {"Name": "Qualification Downstream"},
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [2081010.0, 363690.0],
+          [2082200.0, 364160.0],
+          [2082620.0, 364465.0]
+        ]
+      }
+    }
+  ]
+}

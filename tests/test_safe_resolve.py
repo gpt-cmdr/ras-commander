@@ -192,5 +192,14 @@ class TestSafeResolveIntegration:
         assert "nonexistent_folder" in str(result)
 
 
+@pytest.mark.skipif(os.name != 'nt', reason="Windows-only test")
+def test_windows_extended_path_prefixes_long_drive_and_unc_paths():
+    drive_path = Path("C:/") / ("long-segment/" * 30) / "model.prj"
+    unc_path = Path(r"\\server\share") / ("long-segment/" * 30) / "model.prj"
+
+    assert str(RasUtils.windows_extended_path(drive_path)).startswith("\\\\?\\C:\\")
+    assert str(RasUtils.windows_extended_path(unc_path)).startswith("\\\\?\\UNC\\server\\share\\")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
