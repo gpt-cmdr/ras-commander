@@ -115,6 +115,7 @@ def test_set_2d_flow_area_perimeter_creates_new_block_from_polygon(tmp_path):
     assert updated_text.index("Storage Area=Watershed Area") < updated_text.index("River Reach=")
     assert "Storage Area=Watershed Area,10.0000000,5.0000000" in updated_text
     assert "Storage Area Surface Line= 5" in updated_text
+    assert "Storage Area Type= 0" in updated_text
     assert "Storage Area Is2D=-1" in updated_text
     assert "Storage Area Point Generation Data=,,50,75" in updated_text
     assert "Storage Area Mannings=0.04" in updated_text
@@ -353,6 +354,23 @@ def test_invalid_name_rejected(tmp_path, bad_name):
         GeomStorage.set_2d_flow_area_perimeter(
             geom_file,
             bad_name,
+            coordinates=[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
+            create_backup=False,
+        )
+
+
+def test_name_over_hecras_2d_area_field_width_rejected(tmp_path):
+    geom_file = _write_geom_file(
+        tmp_path,
+        [
+            "Geom Title=Name Width Test\n",
+            "Program Version=7.01\n",
+        ],
+    )
+    with pytest.raises(ValueError, match="16-character"):
+        GeomStorage.set_2d_flow_area_perimeter(
+            geom_file,
+            "SeventeenCharName!",
             coordinates=[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
             create_backup=False,
         )

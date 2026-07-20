@@ -8364,6 +8364,184 @@ class RasUnsteady:
 
     @staticmethod
     @log_call
+    def ensure_2d_boundary_location(
+        unsteady_file: Union[str, Path],
+        area_2d: str,
+        bc_line: str,
+        geometry_file: Union[str, Path],
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Ensure a geometry-backed 2D ``Boundary Location=`` block exists.
+
+        The BC line and its 2D Flow Area association are first verified in the
+        plain-text geometry source of truth.  The method is idempotent: an
+        existing exact unsteady location is retained; otherwise a correctly
+        padded 8- or 9-field location line is inserted at the canonical start
+        of the boundary section.  Boundary type/value authoring remains the
+        responsibility of setters such as :meth:`set_normal_depth_boundary`.
+        """
+        from .geom import GeomBcLines
+
+        clean_area = str(area_2d or "").strip()
+        clean_line = str(bc_line or "").strip()
+        if not clean_area or not clean_line:
+            raise ValueError("area_2d and bc_line are required")
+        if len(clean_area) > 16:
+            raise ValueError("area_2d exceeds the 16-character Boundary Location field")
+        if len(clean_line) > 32:
+            raise ValueError("bc_line exceeds the 32-character Boundary Location field")
+
+        geometry_path = Path(geometry_file)
+        geometry_lines = GeomBcLines.get_bc_lines(geometry_path)
+        exact_geometry = [
+            item
+            for item in geometry_lines
+            if item["name"] == clean_line and item["storage_area"] == clean_area
+        ]
+        if len(exact_geometry) != 1:
+            named = [
+                item["storage_area"]
+                for item in geometry_lines
+                if item["name"] == clean_line
+            ]
+            if named:
+                raise ValueError(
+                    f"Geometry BC line {clean_line!r} belongs to {named}, not {clean_area!r}"
+                )
+            raise ValueError(
+                f"Geometry does not contain BC line {clean_line!r} on 2D area {clean_area!r}"
+            )
+
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.check_initialized()
+            except Exception:
+                pass
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            if ras_obj is None or getattr(ras_obj, "project_folder", None) is None:
+                raise ValueError(
+                    "Cannot resolve unsteady number without an initialized ras_object"
+                )
+            number = unsteady_file.zfill(2)
+            unsteady_path = (
+                Path(ras_obj.project_folder) / f"{ras_obj.project_name}.u{number}"
+            )
+        else:
+            unsteady_path = Path(unsteady_file)
+        if not unsteady_path.is_file():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+
+        with open(
+            unsteady_path,
+            "r",
+            encoding="utf-8",
+            errors="ignore",
+            newline="",
+        ) as stream:
+            lines = stream.readlines()
+        line_ending = "\r\n" if any(line.endswith("\r\n") for line in lines[:1]) else "\n"
+
+        boundary_locations: List[Tuple[int, str, List[str]]] = []
+        for index, line in enumerate(lines):
+            if not line.startswith("Boundary Location="):
+                continue
+            value = line[len("Boundary Location=") :].rstrip("\r\n")
+            fields = [field.strip() for field in value.split(",")]
+            boundary_locations.append((index, value, fields))
+        exact_unsteady = [
+            item
+            for item in boundary_locations
+            if len(item[2]) >= 8
+            and item[2][5] == clean_area
+            and item[2][7] == clean_line
+        ]
+        if len(exact_unsteady) > 1:
+            raise ValueError(
+                f"Duplicate Boundary Location blocks exist for {clean_area!r}/{clean_line!r}"
+            )
+
+        created = not exact_unsteady
+        backup_path: Optional[Path] = None
+        insert_index: Optional[int] = None
+        if created:
+            use_nine_fields = any(len(fields) >= 9 for _, _, fields in boundary_locations)
+            widths = (16, 16, 8, 8, 16, 16, 16, 32)
+            values = ("", "", "", "", "", clean_area, "", clean_line)
+            location_value = ",".join(
+                f"{value:<{width}}" for value, width in zip(values, widths)
+            )
+            if use_nine_fields:
+                location_value += "," + f"{'':<32}"
+            location_line = f"Boundary Location={location_value}{line_ending}"
+
+            if boundary_locations:
+                insert_index = boundary_locations[0][0]
+            else:
+                header_keys = (
+                    "Flow Title=",
+                    "Program Version=",
+                    "Version=",
+                    "Use Restart=",
+                    "Restart Filename=",
+                    "Initial Flow Loc=",
+                    "Initial RRR Elev=",
+                    "Initial Storage Elev=",
+                )
+                insert_index = 0
+                for index, line in enumerate(lines):
+                    if line.startswith(header_keys) or not line.strip():
+                        insert_index = index + 1
+                        continue
+                    break
+
+            backup_path = Path(str(unsteady_path) + ".bak")
+            shutil.copy2(unsteady_path, backup_path)
+            lines.insert(insert_index, location_line)
+            with open(unsteady_path, "w", encoding="utf-8", newline="") as stream:
+                stream.writelines(lines)
+            matched_location = location_value
+        else:
+            insert_index, matched_location, _fields = exact_unsteady[0]
+
+        boundaries_df_refreshed = False
+        dataframe_verified = False
+        if ras_obj is not None:
+            try:
+                ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+                boundaries_df_refreshed = True
+                frame = ras_obj.boundaries_df
+                dataframe_verified = bool(
+                    not frame.empty
+                    and {
+                        "area_2d",
+                        "bc_line_name",
+                    }.issubset(frame.columns)
+                    and (
+                        (frame["area_2d"].astype(str) == clean_area)
+                        & (frame["bc_line_name"].astype(str) == clean_line)
+                    ).sum()
+                    == 1
+                )
+            except Exception as exc:
+                logger.debug(f"boundaries_df refresh skipped: {exc}")
+
+        return {
+            "unsteady_file": str(unsteady_path),
+            "geometry_file": str(geometry_path),
+            "area_2d": clean_area,
+            "bc_line": clean_line,
+            "created": created,
+            "insert_index": insert_index,
+            "matched_location": matched_location,
+            "geometry_coordinate_count": exact_geometry[0]["coordinate_count"],
+            "backup_path": str(backup_path) if backup_path is not None else None,
+            "boundaries_df_refreshed": boundaries_df_refreshed,
+            "dataframe_verified": dataframe_verified,
+        }
+
+    @staticmethod
+    @log_call
     def set_normal_depth_boundary(
         unsteady_file: Union[str, Path],
         friction_slope: float,
@@ -8392,10 +8570,9 @@ class RasUnsteady:
 
         The function ONLY edits a boundary that already exists in the .u## as
         a ``Boundary Location=`` block. If the matched-by-name location is
-        absent, ``ValueError`` is raised. Authoring brand-new boundary blocks
-        from geometry definitions (``create-if-missing`` semantics with
-        geometry-file validation) is tracked separately as a follow-up; see
-        the *See Also* section.
+        absent, ``ValueError`` is raised. Use
+        :meth:`ensure_2d_boundary_location` first when authoring a new
+        geometry-backed 2D boundary.
 
         Format conventions observed in real HEC-RAS .u## files
         ------------------------------------------------------
@@ -8521,6 +8698,8 @@ class RasUnsteady:
 
         See Also
         --------
+        ensure_2d_boundary_location : Validate a geometry BC line and create
+            its missing unsteady-flow location block.
         set_boundary_dss_link : Convert inline BC to DSS-linked.
         set_boundary_inline_hydrograph : Write inline hydrograph table.
         ras_commander.RasPrj.get_boundary_conditions : Parse boundaries to
@@ -8534,12 +8713,9 @@ class RasUnsteady:
         downstream cross section. Do not apply this to upstream 1D
         boundaries — use Flow Hydrograph or Stage Hydrograph instead.
 
-        **Follow-up scope (out of this function)**: validation that the
-        selected boundary actually exists in the geometry file, and creating
-        a brand-new ``Boundary Location=`` block when the boundary exists in
-        geometry but is absent from the .u##. Tracked under a separate Linear
-        ticket so the contracts for placement order, geometry discovery, and
-        1D-vs-2D field padding can be designed end-to-end.
+        Geometry validation and create-if-missing placement are intentionally
+        separate from type conversion; call ``ensure_2d_boundary_location``
+        before this setter for a newly authored BC line.
         """
         # 1) Validate slope. `numbers.Real` accepts Python int/float plus
         # numpy scalars (e.g. np.float64 returned from `boundaries_df`
@@ -8641,8 +8817,8 @@ class RasUnsteady:
             raise ValueError(
                 f"No boundary matched in {unsteady_path.name} for {sel}. "
                 f"This function only edits boundaries that already exist as "
-                f"`Boundary Location=` blocks; create-if-missing semantics "
-                f"are tracked as a follow-up."
+                f"`Boundary Location=` blocks; call "
+                f"ensure_2d_boundary_location() first for geometry-backed 2D BCs."
             )
 
         # 5) Walk the block to identify Friction Slope, other BC type,

@@ -1,12 +1,19 @@
+import importlib
 import os
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 from ras_commander.geom.GeomPreprocessor import (
     GEOMETRY_PREPROCESSOR_GEOMETRY_ONLY_RUN_FLAGS,
     GeomPreprocessor,
 )
 from ras_commander.hdf.HdfResultsPlan import HdfResultsPlan
+
+
+geom_preprocessor_module = importlib.import_module(
+    "ras_commander.geom.GeomPreprocessor"
+)
 
 
 def test_compute_message_paths_include_data_error_files(tmp_path):
@@ -109,3 +116,98 @@ def test_geometry_only_run_flags_disable_unsteady_flow(tmp_path):
     assert "Run UNet= 0" in updated
     assert "Run PostProcess= 0" in updated
     assert "Run RASMapper= 0" in updated
+def test_geometry_only_disables_unsteady_and_restores_plan(tmp_path, monkeypatch):
+    plan_path = tmp_path / "Model.p01"
+    original_plan_text = (
+        "Plan Title=Test\n"
+        "Geom File=g01\n"
+        "Run UNet= 1\n"
+        "Run PostProcess= 1\n"
+        "Run RASMapper= 1\n"
+        "Run Sediment= 1\n"
+        "Run WQNet= 1\n"
+    )
+    plan_path.write_text(original_plan_text, encoding="utf-8")
+
+    prj_path = tmp_path / "Model.prj"
+    prj_path.write_text("Proj Title=Test\n", encoding="utf-8")
+    ras_exe_path = tmp_path / "Ras.exe"
+    ras_exe_path.write_bytes(b"placeholder")
+
+    ras_object = SimpleNamespace(
+        check_initialized=lambda: None,
+        project_folder=tmp_path,
+        project_name="Model",
+        prj_file=prj_path,
+        ras_exe_path=ras_exe_path,
+        plan_df=None,
+    )
+    plan_at_launch = {}
+
+    class CompletedProcess:
+        pid = 12345
+        returncode = 0
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+        def communicate(self, timeout=None):
+            return b"", b""
+
+    def fake_popen(*_args, **_kwargs):
+        plan_at_launch["text"] = plan_path.read_text(encoding="utf-8")
+        return CompletedProcess()
+
+    monkeypatch.setattr(
+        geom_preprocessor_module.BcoMonitor,
+        "enable_detailed_logging",
+        lambda _path: None,
+    )
+    monkeypatch.setattr(geom_preprocessor_module.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(
+        GeomPreprocessor,
+        "_monitor_compute_messages",
+        staticmethod(
+            lambda **_kwargs: {"timed_out": False, "signal_detected": None}
+        ),
+    )
+    monkeypatch.setattr(
+        GeomPreprocessor,
+        "_wait_for_preprocess_child",
+        staticmethod(
+            lambda **_kwargs: {
+                "saw_child": False,
+                "timed_out": False,
+                "tmp_hdf_path": None,
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        GeomPreprocessor,
+        "_read_compute_messages",
+        staticmethod(lambda *_args, **_kwargs: ([], "")),
+    )
+    monkeypatch.setattr(
+        GeomPreprocessor,
+        "_preprocessor_artifacts",
+        staticmethod(lambda *_args, **_kwargs: [tmp_path / "Model.x01"]),
+    )
+
+    result = GeomPreprocessor.run_geometry_preprocessor(
+        plan_path,
+        ras_object=ras_object,
+        force=False,
+        clear_messages=False,
+        geometry_only=True,
+        restore_plan_settings=True,
+        dialog_watchdog=False,
+    )
+
+    assert result.success
+    assert "Run UNet= 0" in plan_at_launch["text"]
+    assert "Run PostProcess= 0" in plan_at_launch["text"]
+    assert "Run RASMapper= 0" in plan_at_launch["text"]
+    assert plan_path.read_text(encoding="utf-8") == original_plan_text
