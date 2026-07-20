@@ -4964,7 +4964,7 @@ class RasUnsteady:
 
         logger.info(
             "Configuring constant precipitation in %s: value=%s, units=%s",
-            unsteady_path, formatted_value, units,
+            unsteady_path.name, formatted_value, units,
         )
 
         RasUnsteady._replace_met_precipitation_keys(
@@ -5006,7 +5006,7 @@ class RasUnsteady:
 
         met_path = "Event Conditions/Meteorology"
         precip_grp_path = f"{met_path}/Precipitation"
-        logger.info(f"Updating constant precipitation HDF attributes: {hdf_path}")
+        logger.info("Updating constant precipitation HDF attributes: %s", hdf_path.name)
         try:
             with h5py.File(hdf_path, "a") as hdf_file:
                 hdf_file.require_group("Event Conditions")
