@@ -35,6 +35,16 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 - Use `RasPrj` instances and the `ras_object=` parameter when a workflow touches more than one project.
 - Avoid relying on the global `ras` object in code paths that are supposed to support multiple concurrent projects.
 
+## Initialization Guidance
+
+- Keep the friendly citation and sharing reminder in the user-facing
+  `init_ras_project()` intro banner, at INFO level and inside the existing
+  `hide_intro` control.
+- Internal worker, staging, validation, and batch calls to
+  `init_ras_project()` should pass `hide_intro=True` so the reminder is not
+  repeated in non-user-facing logs.
+- Keep the canonical citation URL at https://rascommander.info/ras/cite/.
+
 ## Execution Rules
 
 - Preserve originals when practical. Prefer `dest_folder=` for plan execution and isolated working directories for derived artifacts.

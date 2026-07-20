@@ -4,7 +4,7 @@ The `compute_parallel_remote()` function enables distributed HEC-RAS execution a
 
 ## Overview
 
-Remote parallel execution distributes HEC-RAS plans across a pool of worker machines:
+Remote parallel execution distributes queued HEC-RAS plans across a pool of worker machines. A plan is assigned only when a worker has capacity:
 
 ```
                     ┌─────────────────┐
@@ -17,7 +17,7 @@ Remote parallel execution distributes HEC-RAS plans across a pool of worker mach
      ┌──────▼──────┐  ┌──────▼──────┐  ┌──────▼──────┐
      │  Worker 1   │  │  Worker 2   │  │  Worker 3   │
      │  (Local)    │  │  (PsExec)   │  │  (Docker)   │
-     │  Plans 1,4  │  │  Plans 2,5  │  │  Plans 3,6  │
+     │  capacity 2 │  │  capacity 1 │  │  capacity 2 │
      └─────────────┘  └─────────────┘  └─────────────┘
 ```
 
@@ -32,31 +32,39 @@ init_ras_project("/path/to/project", "6.5")
 
 # Create workers
 workers = [
-    init_ras_worker("local", ras_version="6.5", num_cores=8),
+    init_ras_worker(
+        "local",
+        worker_folder=r"C:\RasRemote",
+        cores_total=8,
+        cores_per_plan=4,
+    ),
     init_ras_worker("psexec",
-        host="192.168.1.100",
-        username="domain\\user",
-        password="password",
-        ras_version="6.5",
+        hostname="192.168.1.100",
+        share_path=r"\\192.168.1.100\RasRemote",
+        worker_folder=r"C:\RasRemote",
+        ras_exe_path=r"C:\Program Files\HEC\HEC-RAS\6.5\Ras.exe",
         session_id=2,
-        num_cores=8
+        cores_total=16,
+        cores_per_plan=4,
     ),
 ]
 
 # Execute across workers
 results = compute_parallel_remote(
-    plan_number=["01", "02", "03", "04", "05", "06"],
-    workers=workers
+    plan_numbers=["01", "02", "03", "04", "05", "06"],
+    workers=workers,
+    num_cores=4,
 )
 
 # Check results
 for plan, result in results.items():
-    print(f"Plan {plan}: {result}")
+    print(f"Plan {plan}: {'succeeded' if result.success else 'failed'}")
 ```
 
 ## The init_ras_worker Factory
 
-`init_ras_worker()` creates and validates worker instances:
+`init_ras_worker()` creates worker instances and performs backend-specific
+configuration checks:
 
 ```python
 from ras_commander.remote import init_ras_worker
@@ -64,30 +72,30 @@ from ras_commander.remote import init_ras_worker
 # Local worker - uses current machine
 local = init_ras_worker(
     "local",
-    ras_version="6.5",
-    num_cores=4,
-    max_concurrent=2  # Simultaneous plans
+    worker_folder=r"C:\RasRemote",
+    cores_total=8,
+    cores_per_plan=4,
 )
 
 # PsExec worker - Windows remote via PsExec
 psexec = init_ras_worker(
     "psexec",
-    host="192.168.1.100",
-    username="DOMAIN\\user",
-    password="password",
-    ras_version="6.5",
+    hostname="192.168.1.100",
+    share_path=r"\\192.168.1.100\RasRemote",
+    worker_folder=r"C:\RasRemote",
+    ras_exe_path=r"C:\Program Files\HEC\HEC-RAS\6.5\Ras.exe",
     session_id=2,      # Required: GUI session ID
-    num_cores=8
+    cores_total=16,
+    cores_per_plan=4,
 )
 
 # Docker worker - Container execution
 docker = init_ras_worker(
     "docker",
-    host="docker-host.local",
-    ssh_key="/path/to/key",
-    image="hec-ras:6.5",
-    ras_version="6.5",
-    num_cores=4
+    docker_image="hecras:6.6",
+    staging_directory=r"C:\RasDocker",
+    cores_total=8,
+    cores_per_plan=4,
 )
 ```
 
@@ -100,8 +108,11 @@ def compute_parallel_remote(
     ras_object=None,
     num_cores: int = 4,
     clear_geompre: bool = False,
+    force_geompre: bool = False,
+    force_rerun: bool = False,
     max_concurrent: Optional[int] = None,
-    autoclean: bool = True
+    autoclean: bool = True,
+    copy_geometry_outputs: bool = True,
 ) -> Dict[str, ExecutionResult]:
 ```
 
@@ -110,10 +121,26 @@ def compute_parallel_remote(
 | `plan_numbers` | str or list | Required | Single plan or list of plans to execute |
 | `workers` | list | Required | Worker instances from `init_ras_worker()` |
 | `ras_object` | RasPrj | None | Project object (uses global `ras` if None) |
-| `num_cores` | int | 4 | CPU cores allocated per plan execution |
+| `num_cores` | int | 4 | CPU cores allocated per plan; must be at least 1 |
 | `clear_geompre` | bool | False | Clear geometry preprocessor files before run |
+| `force_geompre` | bool | False | Clear geometry HDF and preprocessor files before run |
+| `force_rerun` | bool | False | Run even when existing results are current |
 | `max_concurrent` | int | None | Max concurrent executions (default: sum of worker slots) |
 | `autoclean` | bool | True | Delete temp worker folders after execution |
+| `copy_geometry_outputs` | bool | True | For local and PsExec workers, copy geometry outputs back with the plan HDF |
+
+!!! warning "Concurrent geometry copyback"
+    `copy_geometry_outputs=True` is backward compatible, but concurrent local or
+    PsExec plans that share a geometry can race while copying the same geometry
+    HDF and preprocessor outputs. For concurrent scenario ensembles using
+    preprocessed shared geometry, set `copy_geometry_outputs=False`.
+
+The effective capacity of each worker is
+`min(max_parallel_plans, cores_total // num_cores)`. A worker configured with
+`cores_total=16` and `cores_per_plan=4` normally has four slots. Calling
+`compute_parallel_remote(..., num_cores=8)` reduces that worker to two slots.
+Workers that cannot provide `num_cores` for one plan are skipped; execution fails
+early if no worker has capacity.
 
 !!! tip "Debugging with autoclean=False"
     Set `autoclean=False` to preserve worker folders for debugging failed executions:
@@ -184,20 +211,49 @@ Plans are distributed using a queue. Workers pull plans as they become available
 ```python
 # 10 plans, 3 workers with different speeds
 workers = [
-    init_ras_worker("local", ...),       # Fast (local SSD)
-    init_ras_worker("psexec", host=A),   # Medium (network)
-    init_ras_worker("psexec", host=B),   # Slow (older hardware)
+    init_ras_worker(
+        "local",
+        worker_folder=r"C:\RasRemote",
+        cores_total=16,
+        cores_per_plan=4,
+    ),
+    init_ras_worker(
+        "psexec",
+        hostname="worker-a",
+        share_path=r"\\worker-a\RasRemote",
+        ras_exe_path=r"C:\Program Files\HEC\HEC-RAS\6.5\Ras.exe",
+        session_id=2,
+        cores_total=8,
+        cores_per_plan=4,
+    ),
+    init_ras_worker(
+        "psexec",
+        hostname="worker-b",
+        share_path=r"\\worker-b\RasRemote",
+        ras_exe_path=r"C:\Program Files\HEC\HEC-RAS\6.5\Ras.exe",
+        session_id=2,
+        cores_total=4,
+        cores_per_plan=4,
+    ),
 ]
 
 results = compute_parallel_remote(
-    plan_number=["01", "02", "03", "04", "05",
-                 "06", "07", "08", "09", "10"],
+    plan_numbers=["01", "02", "03", "04", "05",
+                  "06", "07", "08", "09", "10"],
     workers=workers
 )
 
 # Fast worker completes more plans automatically
 # No manual load balancing required
 ```
+
+The scheduler tracks actual in-flight work per host. A queued plan is submitted
+only after a slot on that worker is released, preventing the executor queue from
+oversubscribing a slow host. Lower `queue_priority` values are preferred whenever
+those workers have free capacity.
+
+For PsExec workers, `num_cores` is written to the staged plan after project copy.
+The source plan and its project dataframes remain unchanged.
 
 ### Wave Scheduling
 
@@ -216,7 +272,7 @@ Wave 2: As workers finish, they pick up plans 4-6
 1. **PsExec installed** on control machine (from [Sysinternals](https://docs.microsoft.com/en-us/sysinternals/downloads/psexec))
 2. **Network share** created on remote machine (`C:\RasRemote` shared as `RasRemote`)
 3. **HEC-RAS installed** on remote machine
-4. **GUI session available** (HEC-RAS requires interactive session - `session_id=2`)
+4. **GUI session available** (use its positive ID as `session_id`)
 5. **Firewall rules** allowing PsExec communication
 
 **Required Ports:**
@@ -276,14 +332,18 @@ query user
 ```
 
 !!! warning "Session ID Required"
-    **Always use `session_id=2`** (typical for workstations). Never use `system_account=True` - HEC-RAS is a GUI application and will hang without a user session.
+    Use the active session ID reported by `query user`; it is often, but not
+    always, `2`. `session_id` must be a positive integer. Normal execution uses
+    `-i <session_id>`. With `system_account=True`, PsExec uses both `-s` and `-i
+    <session_id>`, but SYSTEM is still not recommended for interactive HEC-RAS
+    execution.
 
 ### Docker Worker Requirements
 
-1. **Docker host** accessible via SSH
+1. **Docker daemon** available locally or through `docker_host`
 2. **HEC-RAS Docker image** available (native Linux binaries from HEC)
-3. **SSH key authentication** configured
-4. **Network share** for file transfer between Windows control and Docker host
+3. **Remote Linux hosts** accessible through an `ssh://` Docker host, with SSH authentication configured
+4. **Remote Windows hosts** configured with `share_path` and `remote_staging_path`
 
 See [Worker Types](worker-types.md#dockerworker) for Docker image building details.
 
@@ -298,38 +358,39 @@ init_ras_project("/path/to/project", "6.5")
 # Mix of worker types
 workers = [
     # Local workstation
-    init_ras_worker("local", ras_version="6.5", num_cores=8),
+    init_ras_worker(
+        "local",
+        worker_folder=r"C:\RasRemote",
+        cores_total=8,
+        cores_per_plan=8,
+    ),
 
     # Remote workstation 1
     init_ras_worker("psexec",
-        host="192.168.1.101",
-        username="user",
-        password="pass",
-        ras_version="6.5",
+        hostname="192.168.1.101",
+        share_path=r"\\192.168.1.101\RasRemote",
+        ras_exe_path=r"C:\Program Files\HEC\HEC-RAS\6.5\Ras.exe",
         session_id=2,
-        num_cores=8
+        cores_total=16,
+        cores_per_plan=8,
     ),
 
     # Remote workstation 2
     init_ras_worker("psexec",
-        host="192.168.1.102",
-        username="user",
-        password="pass",
-        ras_version="6.5",
+        hostname="192.168.1.102",
+        share_path=r"\\192.168.1.102\RasRemote",
+        ras_exe_path=r"C:\Program Files\HEC\HEC-RAS\6.5\Ras.exe",
         session_id=2,
-        num_cores=16
+        cores_total=32,
+        cores_per_plan=8,
     ),
 ]
 
-# Validate all workers before execution
-for i, worker in enumerate(workers):
-    if not worker.validate():
-        print(f"Worker {i} validation failed!")
-
 # Execute 20 plans across pool
 results = compute_parallel_remote(
-    plan_number=[f"{i:02d}" for i in range(1, 21)],
-    workers=workers
+    plan_numbers=[f"{i:02d}" for i in range(1, 21)],
+    workers=workers,
+    num_cores=8,
 )
 ```
 
@@ -342,16 +403,18 @@ Store worker configurations in a JSON file:
   "workers": [
     {
       "type": "local",
-      "ras_version": "6.5",
-      "num_cores": 8
+      "worker_folder": "C:\\RasRemote",
+      "cores_total": 8,
+      "cores_per_plan": 4
     },
     {
       "type": "psexec",
-      "host": "192.168.1.100",
-      "username": "DOMAIN\\user",
-      "ras_version": "6.5",
+      "hostname": "192.168.1.100",
+      "share_path": "\\\\192.168.1.100\\RasRemote",
+      "ras_exe_path": "C:\\Program Files\\HEC\\HEC-RAS\\6.5\\Ras.exe",
       "session_id": 2,
-      "num_cores": 8
+      "cores_total": 16,
+      "cores_per_plan": 4
     }
   ]
 }
@@ -379,33 +442,28 @@ for w in config["workers"]:
 ```python
 from ras_commander.remote import init_ras_worker, compute_parallel_remote
 
-workers = [
-    init_ras_worker("local", ras_version="6.5", num_cores=4),
-    init_ras_worker("psexec", host="192.168.1.100", ...),
-]
-
-# Validate before running
-valid_workers = []
-for worker in workers:
-    try:
-        if worker.validate():
-            valid_workers.append(worker)
-        else:
-            print(f"Worker {worker} failed validation")
-    except Exception as e:
-        print(f"Worker error: {e}")
-
-if not valid_workers:
-    raise RuntimeError("No valid workers available")
-
-# Run with valid workers only
-results = compute_parallel_remote(
-    plan_number=["01", "02", "03"],
-    workers=valid_workers
-)
+try:
+    workers = [
+        init_ras_worker("local", cores_total=4, cores_per_plan=4),
+        init_ras_worker(
+            "psexec",
+            hostname="192.168.1.100",
+            share_path=r"\\192.168.1.100\RasRemote",
+            ras_exe_path=r"C:\Program Files\HEC\HEC-RAS\6.5\Ras.exe",
+            session_id=2,
+            cores_total=8,
+            cores_per_plan=4,
+        ),
+    ]
+    results = compute_parallel_remote(
+        plan_numbers=["01", "02", "03"],
+        workers=workers,
+    )
+except (ValueError, FileNotFoundError) as exc:
+    raise RuntimeError(f"Invalid worker pool configuration: {exc}") from exc
 
 # Handle individual plan failures
-failed = {k: v for k, v in results.items() if not v}
+failed = {plan: result for plan, result in results.items() if not result.success}
 if failed:
     print(f"Failed plans: {list(failed.keys())}")
 ```
@@ -424,10 +482,13 @@ from ras_commander.remote import init_ras_worker
 # Secure credential retrieval
 worker = init_ras_worker(
     "psexec",
-    host=os.environ["RAS_WORKER_HOST"],
-    username=os.environ["RAS_WORKER_USER"],
-    password=os.environ["RAS_WORKER_PASS"],
-    ras_version="6.5",
+    hostname=os.environ["RAS_WORKER_HOST"],
+    share_path=rf"\\{os.environ['RAS_WORKER_HOST']}\RasRemote",
+    credentials={
+        "username": os.environ["RAS_WORKER_USER"],
+        "password": os.environ["RAS_WORKER_PASS"],
+    },
+    ras_exe_path=r"C:\Program Files\HEC\HEC-RAS\6.5\Ras.exe",
     session_id=2
 )
 ```
@@ -441,12 +502,12 @@ from ras_commander.remote import compute_parallel_remote
 start = time.time()
 
 results = compute_parallel_remote(
-    plan_number=plans,
+    plan_numbers=plans,
     workers=workers
 )
 
 elapsed = time.time() - start
-successful = sum(1 for v in results.values() if v)
+successful = sum(1 for result in results.values() if result.success)
 
 print(f"Completed {successful}/{len(plans)} plans in {elapsed:.1f}s")
 print(f"Average: {elapsed/len(plans):.1f}s per plan")

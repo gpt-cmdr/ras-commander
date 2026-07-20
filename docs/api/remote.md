@@ -1,20 +1,70 @@
 # Remote Modules
 
-Classes for distributed HEC-RAS execution across multiple machines.
+Classes and functions for distributed HEC-RAS execution across local, PsExec,
+and Docker workers.
 
 ## Factory Function
 
 ### init_ras_worker
 
-Create and validate a remote worker.
+Create workers with `init_ras_worker()` and the options for the selected worker
+type. The factory returns a `LocalWorker`, `PsexecWorker`, or `DockerWorker` for
+the implemented backends.
+
+## Worker Classes
+
+### LocalWorker
+
+Run plans in isolated folders on the control machine:
 
 ```python
 from ras_commander.remote import init_ras_worker
 
-worker = init_ras_worker(
-    worker_type,      # "local", "psexec", or "docker"
-    ras_version,      # HEC-RAS version string
-    **worker_options  # Worker-specific options
+local = init_ras_worker(
+    "local",
+    worker_folder=r"C:\RasRemote",
+    cores_total=8,
+    cores_per_plan=4,
+)
+```
+
+### PsexecWorker
+
+Run plans on a Windows machine through PsExec and an accessible network share:
+
+```python
+from ras_commander.remote import init_ras_worker
+
+remote = init_ras_worker(
+    "psexec",
+    hostname="WORKSTATION-01",
+    share_path=r"\\WORKSTATION-01\RasRemote",
+    worker_folder=r"C:\RasRemote",
+    ras_exe_path=r"C:\Program Files\HEC\HEC-RAS\6.6\Ras.exe",
+    session_id=2,
+    cores_total=16,
+    cores_per_plan=4,
+)
+```
+
+`session_id` must be a positive integer. PsExec always targets that desktop
+session with `-i <session_id>`. When `system_account=True`, the command uses both
+`-s` and `-i <session_id>`; SYSTEM remains unsuitable for most interactive
+HEC-RAS runs.
+
+### DockerWorker
+
+Run plans with a local Docker daemon and an HEC-RAS Linux image:
+
+```python
+from ras_commander.remote import init_ras_worker
+
+docker = init_ras_worker(
+    "docker",
+    docker_image="hecras:6.6",
+    staging_directory=r"C:\RasDocker",
+    cores_total=8,
+    cores_per_plan=4,
 )
 ```
 
@@ -22,105 +72,55 @@ worker = init_ras_worker(
 
 ### compute_parallel_remote
 
-Execute plans across distributed worker pool.
+Execute queued plans across the worker pool:
 
 ```python
 from ras_commander.remote import compute_parallel_remote
 
 results = compute_parallel_remote(
-    plan_number,      # List of plan numbers
-    workers,          # List of worker instances
-    dest_folder=None  # Optional destination folder
+    plan_numbers=["01", "02", "03", "04"],
+    workers=[local, remote],
+    num_cores=4,
+    force_rerun=False,
+    max_concurrent=None,
+    autoclean=True,
+    copy_geometry_outputs=True,
 )
 ```
 
-## Worker Classes
+`num_cores` must be at least 1. The scheduler enforces each worker's effective
+capacity as the smaller of its configured `max_parallel_plans` and
+`cores_total // num_cores`. Plans remain queued until a real worker slot is free,
+so a slow host cannot be oversubscribed and a faster host can accept later plans.
+Workers with lower `queue_priority` values are preferred when capacity is
+available.
 
-### LocalWorker
+For PsExec runs, the staged plan is rewritten to use `num_cores`; the source plan
+and source project dataframes are not changed. For local and PsExec workers, set
+`copy_geometry_outputs=False` to copy the plan-result HDF back without copying
+geometry HDF and preprocessor outputs. The default remains `True`.
 
-Local parallel execution.
+!!! warning "Concurrent geometry copyback"
+    `copy_geometry_outputs=True` preserves the previous behavior, but concurrent
+    local or PsExec plans that share a geometry can race while copying the same
+    geometry outputs. For concurrent scenario ensembles using already-preprocessed
+    shared geometry, set `copy_geometry_outputs=False`.
 
-```python
-worker = init_ras_worker(
-    "local",
-    ras_version="6.5",
-    num_cores=4,        # Cores per plan
-    max_concurrent=2    # Simultaneous plans
-)
-```
+The return value maps each plan number to an `ExecutionResult` with `success`,
+`worker_id`, `hdf_path`, `error_message`, and `execution_time` fields.
 
-### PsexecWorker
-
-Windows remote execution via PsExec.
-
-```python
-worker = init_ras_worker(
-    "psexec",
-    host="192.168.1.100",
-    username="domain\\user",
-    password="password",
-    ras_version="6.5",
-    session_id=2,       # GUI session (required)
-    num_cores=4
-)
-```
-
-### DockerWorker
-
-Container-based execution.
-
-```python
-worker = init_ras_worker(
-    "docker",
-    host="docker-host.local",
-    ssh_key="/path/to/key",
-    image="hec-ras:6.5",
-    ras_version="6.5",
-    num_cores=4
-)
-```
-
-## Worker Interface
-
-All workers implement:
-
-- `validate()` - Test connectivity, returns bool
-- `execute_plan(plan, dest)` - Run plan, returns bool
-- `cleanup()` - Clean up resources
-
-## Usage
-
-```python
-from ras_commander.remote import init_ras_worker, compute_parallel_remote
-
-# Create workers
-workers = [
-    init_ras_worker("local", ras_version="6.5", num_cores=4),
-    init_ras_worker("psexec",
-        host="192.168.1.100",
-        username="user",
-        password="pass",
-        ras_version="6.5",
-        session_id=2
-    ),
-]
-
-# Execute across workers
-results = compute_parallel_remote(
-    plan_number=["01", "02", "03", "04"],
-    workers=workers
-)
-```
+The progress watchdog stops queued submissions when no plan finishes within the
+slowest worker's `max_runtime_minutes` plus a staging/copy-back margin. It then
+waits for already-started worker tasks before returning so those tasks cannot
+continue mutating copied project outputs after the API call has returned.
 
 ## Installation
 
 ```bash
-# Basic (LocalWorker only)
+# Base package, including local and PsExec workers
 pip install ras-commander
 
-# SSH/Docker support
-pip install ras-commander[remote-ssh]
-
-# All backends
+# Docker and all optional remote backends
+pip install ras-commander[remote-docker]
 pip install ras-commander[remote-all]
 ```

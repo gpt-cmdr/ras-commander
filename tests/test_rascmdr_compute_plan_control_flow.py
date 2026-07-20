@@ -2,7 +2,9 @@
 
 import importlib
 import logging
+import os
 import subprocess
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -80,6 +82,93 @@ def test_compute_plan_does_not_swallow_keyboard_interrupt():
         RasCmdr.compute_plan("01", ras_object=ras_obj)
 
     assert ras_obj.refresh_calls == ["plan", "geom", "flow", "unsteady"]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows HEC-RAS process matching")
+def test_cancel_plan_terminates_only_exact_project_process_tree(
+    monkeypatch,
+    tmp_path,
+):
+    """Cancellation must not target another Ras.exe session by name alone."""
+    import psutil
+
+    project_path = tmp_path / "Fox.prj"
+    plan_path = tmp_path / "Fox.p01"
+    tmp_hdf_path = tmp_path / "Fox.p01.tmp.hdf"
+    project_path.write_text("Proj Title=Fox\n", encoding="ascii")
+    plan_path.write_text("Plan Title=Plan 01\n", encoding="ascii")
+
+    class FakeRas:
+        project_folder = tmp_path
+        project_name = "Fox"
+        prj_file = project_path
+
+        @staticmethod
+        def check_initialized():
+            return None
+
+        @staticmethod
+        def get_plan_entries():
+            return pd.DataFrame(
+                [{"plan_number": "01", "full_path": str(plan_path)}]
+            )
+
+    class FakeProcess:
+        def __init__(self, pid, name, command_line):
+            self.pid = pid
+            self.info = {
+                "pid": pid,
+                "name": name,
+                "cmdline": command_line,
+            }
+            self._children = []
+            self.terminated = False
+            self.killed = False
+
+        def children(self, recursive=False):
+            return list(self._children)
+
+        def terminate(self):
+            self.terminated = True
+
+        def kill(self):
+            self.killed = True
+
+    launcher = FakeProcess(
+        100,
+        "Ras.exe",
+        ["Ras.exe", "-c", str(project_path), str(plan_path)],
+    )
+    solver = FakeProcess(
+        101,
+        "RasUnsteady.exe",
+        ["RasUnsteady.exe", str(tmp_hdf_path), "x01"],
+    )
+    plotter = FakeProcess(102, "RasPlotDriver.exe", ["RasPlotDriver.exe"])
+    launcher._children = [solver, plotter]
+    unrelated = FakeProcess(
+        200,
+        "Ras.exe",
+        ["Ras.exe", "-c", r"C:\Other\Other.prj", r"C:\Other\Other.p01"],
+    )
+
+    monkeypatch.setattr(
+        psutil,
+        "process_iter",
+        lambda _attrs: [launcher, solver, plotter, unrelated],
+    )
+    monkeypatch.setattr(
+        psutil,
+        "wait_procs",
+        lambda processes, timeout: (list(processes), []),
+    )
+
+    assert RasCmdr.cancel_plan("01", ras_object=FakeRas()) is True
+    assert launcher.terminated is True
+    assert solver.terminated is True
+    assert plotter.terminated is True
+    assert unrelated.terminated is False
+    assert unrelated.killed is False
 
 
 def test_compute_plan_uses_cached_plan_entries_when_prj_refresh_fails(
@@ -654,6 +743,81 @@ def test_compute_plan_treats_verified_hdf_after_normal_return_as_success(
 
     assert result.success is True
     assert result.results_df_row["plan_number"] == "01"
+
+
+def test_verify_completion_rejects_hdf_older_than_execution(tmp_path):
+    hdf_path = tmp_path / "old.p01.hdf"
+    hdf_path.write_bytes(b"old successful result")
+    old_time = time.time() - 3600
+    os.utime(hdf_path, (old_time, old_time))
+
+    assert RasCmdr._verify_completion(
+        hdf_path,
+        modified_after=time.time(),
+    ) is False
+
+
+def test_compute_plan_does_not_credit_stale_hdf_after_failed_rerun(
+    monkeypatch,
+    tmp_path,
+):
+    prj_path = tmp_path / "TestProject.prj"
+    plan_path = tmp_path / "TestProject.p01"
+    hdf_path = tmp_path / "TestProject.p01.hdf"
+    prj_path.write_text("Proj Title=TestProject\n", encoding="utf-8")
+    plan_path.write_text("Plan Title=Plan 01\n", encoding="utf-8")
+    hdf_path.write_text("old complete result\n", encoding="utf-8")
+
+    ras_obj = _DummyRas()
+    ras_obj.project_folder = tmp_path
+    ras_obj.project_name = "TestProject"
+    ras_obj.prj_file = prj_path
+    ras_obj.ras_exe_path = "Ras.exe"
+
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda plan_number, ras_object: plan_path),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda _plan_path: None),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=0),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_get_hdf_path",
+        staticmethod(lambda *_args, **_kwargs: hdf_path),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_rasunsteady_process_running_for_tmp_hdf",
+        staticmethod(lambda *_args, **_kwargs: False),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_verify_completion",
+        staticmethod(
+            lambda _path, check_errors=True, modified_after=None: (
+                modified_after is None
+            )
+        ),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        ras_object=ras_obj,
+        force_rerun=True,
+        verify=True,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is False
 
 
 def test_compute_plan_keeps_launcher_error_when_final_hdf_not_verified(

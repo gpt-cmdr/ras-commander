@@ -180,8 +180,13 @@ If you contributed code, documentation, bug reports, or testing feedback, thank 
 
 RAS Commander is released under the MIT License. See [LICENSE](https://github.com/gpt-cmdr/ras-commander/blob/main/LICENSE) for details.
 
-The MIT License permits commercial and non-commercial use, modification, and distribution with proper attribution. This aligns with the project's goal of accelerating H&H automation across the engineering community.
+The MIT License permits commercial and non-commercial use, modification, and
+distribution subject to the terms in the repository's `LICENSE` file, including
+retaining its copyright and permission notice in copies or substantial portions
+of the software. Publication citation, product acknowledgment, and social
+sharing are separate, voluntary ways to recognize RAS Commander and its
+contributors. See [Cite and Support RAS Commander](../cite.md).
 
 ---
 
-**Last Updated**: 2025-12-11
+**Last Updated**: 2026-07-19
