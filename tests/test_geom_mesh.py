@@ -29,6 +29,9 @@ _dedupe_seed_points = geom_mesh_module._dedupe_seed_points
 _bad_seed_indexes = geom_mesh_module._bad_seed_indexes
 _remove_seed_indexes = geom_mesh_module._remove_seed_indexes
 _safe_non_virtual_cell_count = geom_mesh_module._safe_non_virtual_cell_count
+_save_mesh = geom_mesh_module._save_mesh
+_generate_seeds_via_net = geom_mesh_module._generate_seeds_via_net
+_resolve_interop_backend = geom_mesh_module._resolve_interop_backend
 
 HECRAS_INTEGRATION_ENV = "RAS_COMMANDER_RUN_HECRAS_INTEGRATION"
 
@@ -224,6 +227,62 @@ def bc_conflict_hdf(tmp_path):
 
 
 @pytest.fixture
+def global_bc_conflict_hdf(tmp_path):
+    """Create the compact global BC-table layout used by HEC-RAS 7.0.1."""
+    hdf_path = tmp_path / "global.g01.hdf"
+    with h5py.File(str(hdf_path), "w") as hf:
+        fa_group = hf.create_group("Geometry/2D Flow Areas")
+        area_grp = fa_group.create_group("MainArea")
+        area_grp.create_dataset(
+            "FacePoints Coordinate",
+            data=np.array(
+                [[90.0, 0.0], [95.0, 0.0], [20.0, 0.0], [25.0, 0.0]],
+                dtype=np.float64,
+            ),
+        )
+        area_grp.create_dataset(
+            "Faces FacePoint Indexes",
+            data=np.array([[0, 1], [2, 3]], dtype=np.int32),
+        )
+        area_grp.create_dataset(
+            "Faces Perimeter Info",
+            data=np.array([[1, 1], [1, 1]], dtype=np.int32),
+        )
+
+        bc_group = hf.create_group("Geometry/Boundary Condition Lines")
+        attributes = np.zeros(
+            2,
+            dtype=np.dtype([("Name", "S32"), ("SA-2D", "S16"), ("Type", "S8")]),
+        )
+        attributes[0] = (b"NormDepth1", b"MainArea", b"External")
+        attributes[1] = (b"USInflow1", b"MainArea", b"External")
+        bc_group.create_dataset("Attributes", data=attributes)
+        bc_group.create_dataset(
+            "Polyline Info",
+            data=np.array([[0, 3, 0, 1], [3, 3, 1, 1]], dtype=np.int32),
+        )
+        bc_group.create_dataset(
+            "Polyline Parts",
+            data=np.array([[0, 3], [0, 3]], dtype=np.int32),
+        )
+        bc_group.create_dataset(
+            "Polyline Points",
+            data=np.array(
+                [
+                    [0.0, 0.0],
+                    [50.0, 0.0],
+                    [100.0, 0.0],
+                    [80.0, 0.0],
+                    [150.0, 0.0],
+                    [200.0, 0.0],
+                ],
+                dtype=np.float64,
+            ),
+        )
+    return hdf_path
+
+
+@pytest.fixture
 def multi_area_bc_conflict_hdf(tmp_path):
     """Create a synthetic HDF where only the second flow area has a BC conflict."""
     hdf_path = tmp_path / "multi_area.g01.hdf"
@@ -388,12 +447,16 @@ def _mock_generate_success(monkeypatch, geom_text_path: Path, *, has_breaklines:
         "_build_breaklines",
         lambda d2fa, ns: "mock_breaklines" if has_breaklines else None,
     )
+    captured["net_seed_calls"] = 0
+
+    def fake_generate_seeds_via_net(hdf_path, ns, fid=0):
+        captured["net_seed_calls"] += 1
+        raise RuntimeError("mock: .NET unavailable")
+
     monkeypatch.setattr(
         geom_mesh_module,
         "_generate_seeds_via_net",
-        lambda hdf_path, ns, fid=0: (_ for _ in ()).throw(
-            RuntimeError("mock: .NET unavailable")
-        ),
+        fake_generate_seeds_via_net,
     )
 
     def fake_generate_seeds_safe(perim, cell_size, ns):
@@ -868,6 +931,19 @@ class TestDetectBcConflicts:
         conflicts = GeomMesh.detect_bc_conflicts(str(bc_conflict_hdf), cell_size=50.0)
         assert conflicts[0].normal_depth_bc == "NormDepth1"
 
+    def test_detects_current_global_bc_table_and_external_type_override(
+        self, global_bc_conflict_hdf
+    ):
+        conflicts = GeomMesh.detect_bc_conflicts(
+            str(global_bc_conflict_hdf),
+            cell_size=50.0,
+            normal_depth_names=["NormDepth1"],
+        )
+        assert len(conflicts) == 1
+        assert conflicts[0].flow_area_name == "MainArea"
+        assert conflicts[0].normal_depth_bc == "NormDepth1"
+        assert conflicts[0].bc_names == ["NormDepth1", "USInflow1"]
+
     def test_detects_conflicts_in_later_flow_area(self, multi_area_bc_conflict_hdf):
         conflicts = GeomMesh.detect_bc_conflicts(
             str(multi_area_bc_conflict_hdf), cell_size=50.0
@@ -901,6 +977,35 @@ class TestFixBcConflicts:
         assert result.modified_hdf is False
         assert result.conflicts_found == 1
 
+    def test_repairs_current_global_bc_table_and_rebuilds_offsets(
+        self, global_bc_conflict_hdf
+    ):
+        result = GeomMesh.fix_bc_conflicts(
+            str(global_bc_conflict_hdf),
+            cell_size=50.0,
+            normal_depth_names=["NormDepth1"],
+        )
+        assert result.conflicts_found == 1
+        assert result.conflicts_fixed == 1
+        assert result.modified_hdf is True
+
+        with h5py.File(str(global_bc_conflict_hdf), "r") as hf:
+            group = hf["Geometry/Boundary Condition Lines"]
+            info = group["Polyline Info"][:]
+            parts = group["Polyline Parts"][:]
+            points = group["Polyline Points"][:]
+            assert list(info[0]) == [0, 2, 0, 1]
+            assert list(info[1]) == [2, 3, 1, 1]
+            assert list(parts[0]) == [0, 2]
+            assert list(parts[1]) == [0, 3]
+            assert len(points) == 5
+
+        assert GeomMesh.detect_bc_conflicts(
+            str(global_bc_conflict_hdf),
+            cell_size=50.0,
+            normal_depth_names=["NormDepth1"],
+        ) == []
+
     def test_repairs_only_conflicted_later_flow_area(self, multi_area_bc_conflict_hdf):
         with h5py.File(str(multi_area_bc_conflict_hdf), "r") as hf:
             before_area1 = hf["Geometry/2D Flow Areas/Area1/BC Lines/UpstreamOnly/Coordinates"][:]
@@ -926,6 +1031,97 @@ class TestFixBcConflicts:
 
 class TestGenerate:
     """Test generate() normalization and persistence semantics."""
+
+    def test_regenerate_mesh_points_activates_every_refinement_region(
+        self, monkeypatch
+    ):
+        class FakeNetList(list):
+            @classmethod
+            def __class_getitem__(cls, _item):
+                return cls
+
+            def Add(self, value):
+                self.append(value)
+
+        class FakeArray:
+            @classmethod
+            def __class_getitem__(cls, _item):
+                return lambda values: values
+
+        system = types.ModuleType("System")
+        system.Int32 = int
+        system.Object = object
+        system.Array = FakeArray
+        reflection = types.ModuleType("System.Reflection")
+        reflection.BindingFlags = type(
+            "BindingFlags", (), {"Instance": 1, "NonPublic": 2}
+        )
+        collections = types.ModuleType("System.Collections")
+        generic = types.ModuleType("System.Collections.Generic")
+        generic.List = FakeNetList
+        monkeypatch.setitem(sys.modules, "System", system)
+        monkeypatch.setitem(sys.modules, "System.Reflection", reflection)
+        monkeypatch.setitem(sys.modules, "System.Collections", collections)
+        monkeypatch.setitem(sys.modules, "System.Collections.Generic", generic)
+
+        captured = {}
+
+        class Method:
+            def Invoke(self, _target, args):
+                captured["args"] = args
+
+        class PointGenerator:
+            def __init__(self, _geometry):
+                pass
+
+            def GetType(self):
+                return MagicMock(GetMethod=MagicMock(return_value=Method()))
+
+        mesh_points = MagicMock()
+        mesh_points.PointMCount.return_value = 2
+        mesh_points.PointM.side_effect = [MockPointM(1.0, 2.0), MockPointM(3.0, 4.0)]
+        geometry = MagicMock()
+        geometry.D2FlowArea.FeatureCount.return_value = 1
+        geometry.D2FlowArea.Geometry.MeshPoints = {0: mesh_points}
+        geometry.BreakLines.FeatureCount.return_value = 2
+        geometry.SA2DStructures.FeatureCount.return_value = 0
+        geometry.MeshRegions.FeatureCount.return_value = 3
+
+        seeds = _generate_seeds_via_net(
+            "fixture.g01.hdf",
+            {
+                "RASGeometry": lambda _path: geometry,
+                "PointGenerator": PointGenerator,
+                "PointMs": MockPointMs,
+            },
+        )
+
+        assert list(captured["args"][0]) == [0, 1]
+        assert list(captured["args"][1]) == [0, 1, 2]
+        assert list(captured["args"][2]) == [0]
+        assert list(captured["args"][3]) == [0]
+        assert seeds.Count == 2
+
+    def test_save_mesh_uses_2d_layer_save_to_preserve_perimeter_table(self):
+        geom = MagicMock()
+        d2fa = MagicMock()
+        d2fa.Save.return_value = True
+        mesh = object()
+
+        _save_mesh(geom, d2fa, 3, mesh, {})
+
+        d2fa.SetMeshHasBeenRecomputed.assert_called_once_with(3, True)
+        d2fa.SetFeature.assert_called_once_with(3, mesh)
+        d2fa.SetMeshUpToDate.assert_called_once_with(3, True)
+        d2fa.Save.assert_called_once_with()
+        geom.Save.assert_not_called()
+
+    def test_save_mesh_fails_when_2d_layer_rejects_save(self):
+        d2fa = MagicMock()
+        d2fa.Save.return_value = False
+
+        with pytest.raises(RuntimeError, match="failed to save"):
+            _save_mesh(MagicMock(), d2fa, 0, object(), {})
 
     def test_safe_cell_count_handles_rasmapper_null_mesh(self):
         assert _safe_non_virtual_cell_count(FakeMeshWithUnavailableCellCount()) is None
@@ -980,6 +1176,9 @@ class TestGenerate:
         assert result.geom_hdf_path
         assert Path(result.geom_hdf_path).exists()
         assert captured["cell_size"] == pytest.approx(50.0)
+        assert captured["net_seed_calls"] == 1
+        assert result.seed_generation_mode == "point_generator_fallback"
+        assert result.seed_count == 2
 
         text = breakline_geom_text.read_text(encoding="utf-8")
         assert "Storage Area Point Generation Data=,,50.000000,50.000000" in text
@@ -1030,8 +1229,246 @@ class TestGenerate:
             "PointGenerator.GeneratePoints" in message for message in debug_messages
         )
 
-    def test_accepts_breakline_spacing_override(self, monkeypatch, breakline_geom_text):
+    def test_point_generator_mode_skips_uninterruptible_regeneration(
+        self, monkeypatch, breakline_geom_text
+    ):
         captured = _mock_generate_success(
+            monkeypatch,
+            breakline_geom_text,
+            has_breaklines=True,
+        )
+
+        result = GeomMesh.generate(
+            breakline_geom_text,
+            seed_generation_mode="point_generator",
+        )
+
+        assert result.ok
+        assert captured["net_seed_calls"] == 0
+        assert result.seed_generation_mode == "point_generator"
+        assert result.seed_count == 2
+
+    def test_auto_backend_selects_managed_host_under_wine(self, monkeypatch):
+        monkeypatch.setattr(geom_mesh_module, "is_wine_runtime", lambda: True)
+        assert _resolve_interop_backend("auto") == "managed_host"
+
+        monkeypatch.setattr(geom_mesh_module, "is_wine_runtime", lambda: False)
+        assert _resolve_interop_backend("auto") == "pythonnet"
+
+    @pytest.mark.parametrize(
+        ("transactional", "timestamp_sync_succeeds"),
+        [
+            (False, True),
+            (True, True),
+            (True, False),
+        ],
+        ids=(
+            "non-persisted-no-timestamp-touch",
+            "transactional-timestamp-coherent",
+            "transactional-timestamp-fails-closed",
+        ),
+    )
+    def test_managed_host_backend_persists_returned_mesh_content(
+        self,
+        monkeypatch,
+        breakline_geom_text,
+        tmp_path,
+        transactional,
+        timestamp_sync_succeeds,
+    ):
+        hdf_path = breakline_geom_text.with_suffix(
+            breakline_geom_text.suffix + ".hdf"
+        )
+        with h5py.File(str(hdf_path), "w") as hf:
+            area = hf.create_group("Geometry/2D Flow Areas/MainArea")
+            area.create_dataset(
+                "Cells Center Coordinate",
+                data=np.array([[10.0, 20.0], [30.0, 40.0]], dtype=np.float64),
+            )
+            attributes_dtype = np.dtype(
+                [
+                    ("Name", "S32"),
+                    ("Cell Count", "<i4"),
+                    ("Spacing dx", "<f4"),
+                    ("Spacing dy", "<f4"),
+                ]
+            )
+            hf["Geometry/2D Flow Areas"].create_dataset(
+                "Attributes",
+                data=np.array([(b"MainArea", 2, 100.0, 100.0)], dtype=attributes_dtype),
+            )
+        hdf_mtime = breakline_geom_text.stat().st_mtime + 1.0
+        os.utime(hdf_path, (hdf_mtime, hdf_mtime))
+
+        hecras_dir = tmp_path / "HEC-RAS"
+        hecras_dir.mkdir()
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_sync_cell_size_to_hdf",
+            lambda *args, **kwargs: None,
+        )
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_sync_breakline_spacing_text_to_hdf",
+            lambda *args, **kwargs: None,
+        )
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_load_dlls",
+            lambda *_args, **_kwargs: pytest.fail("Python.NET should not load"),
+        )
+        host_receipt = {
+            "status": "complete",
+            "mesh_state": "Complete",
+            "mesh_iterations": 2,
+            "fixes_applied": ["MaxFaces:midpoints(+3pts)"],
+            "seed_count": 2,
+            "cell_count": 2,
+            "face_count": 5,
+            "refinement_regions": [
+                {
+                    "fid": 0,
+                    "name": "Qualification",
+                    "spacing_dx": 50.0,
+                    "spacing_dy": 50.0,
+                    "point_count": 5,
+                }
+            ],
+            "cell_centers_extracted": True,
+            "cell_centers": [[11.0, 21.0], [31.0, 41.0]],
+            "hdf_save_requested": False,
+            "mesh_saved": False,
+        }
+        if transactional:
+            host_receipt.update(
+                {
+                    "hdf_persistence_mode": "transactional_direct",
+                    "transactional_replace_completed": True,
+                    "reopened_cell_count": 2,
+                    "reopened_face_count": 5,
+                }
+            )
+        managed_host_call = {}
+
+        def fake_managed_host(*args, **kwargs):
+            managed_host_call.update(kwargs)
+            return host_receipt
+
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "run_managed_mesh_host",
+            fake_managed_host,
+        )
+
+        real_utime = os.utime
+        if transactional:
+            original_patch_text_seeds = _patch_text_seeds
+
+            def patch_text_seeds_with_newer_timestamp(*args, **kwargs):
+                original_patch_text_seeds(*args, **kwargs)
+                text_stat = breakline_geom_text.stat()
+                forced_text_mtime_ns = (
+                    hdf_path.stat().st_mtime_ns + 5_000_000_000
+                )
+                real_utime(
+                    breakline_geom_text,
+                    ns=(text_stat.st_atime_ns, forced_text_mtime_ns),
+                )
+
+            monkeypatch.setattr(
+                geom_mesh_module,
+                "_patch_text_seeds",
+                patch_text_seeds_with_newer_timestamp,
+            )
+            if not timestamp_sync_succeeds:
+                monkeypatch.setattr(
+                    geom_mesh_module.os,
+                    "utime",
+                    lambda *args, **kwargs: None,
+                )
+        else:
+            monkeypatch.setattr(
+                geom_mesh_module,
+                "_synchronize_persisted_hdf_mtime",
+                lambda *args, **kwargs: pytest.fail(
+                    "Non-persisted managed-host results must not touch HDF mtime"
+                ),
+            )
+
+        result = GeomMesh.generate(
+            breakline_geom_text,
+            mesh_name="MainArea",
+            cell_size=100.0,
+            hecras_dir=hecras_dir,
+            interop_backend="managed_host",
+            managed_host_persistence_mode=(
+                "transactional_direct" if transactional else "auto"
+            ),
+            _require_current_hdf=False,
+        )
+
+        if transactional and not timestamp_sync_succeeds:
+            assert result.ok is False
+            assert result.status == "exception"
+            assert "timestamp synchronization failed" in result.error_message
+            assert result.hdf_timestamp_synchronized is False
+            assert result.hdf_timestamp_sync_evidence["attempted"] is True
+            assert result.hdf_timestamp_sync_evidence["verified"] is False
+            assert (
+                result.hdf_timestamp_sync_evidence["hdf_mtime_ns"]
+                < result.hdf_timestamp_sync_evidence["text_mtime_ns"]
+            )
+            return
+
+        assert result.ok
+        assert result.interop_backend == "managed_host"
+        assert result.seed_generation_mode == "managed_host_regenerate"
+        assert managed_host_call["cell_size"] == 100.0
+        assert result.cell_count == 2
+        assert result.face_count == 5
+        assert result.iterations == 2
+        assert result.fixes_applied == ["MaxFaces:midpoints(+3pts)"]
+        assert result.managed_host_receipt["cell_count"] == 2
+        assert "cell_centers" not in result.managed_host_receipt
+        assert result.product_refinement_regions == [
+            {
+                "fid": 0,
+                "name": "Qualification",
+                "spacing_dx": 50.0,
+                "spacing_dy": 50.0,
+                "point_count": 5,
+            }
+        ]
+        assert "Storage Area 2D Points= 2 " in breakline_geom_text.read_text(
+            encoding="utf-8"
+        )
+        assert "11.0000000000" in breakline_geom_text.read_text(encoding="utf-8")
+        if transactional:
+            assert result.hdf_persisted is True
+            assert result.hdf_timestamp_synchronized is True
+            assert result.hdf_timestamp_sync_evidence["verified"] is True
+            assert result.hdf_timestamp_sync_evidence["mtime_updated"] is True
+            assert (
+                hdf_path.stat().st_mtime_ns
+                >= breakline_geom_text.stat().st_mtime_ns
+            )
+            assert _ensure_hdf(breakline_geom_text) == hdf_path
+        else:
+            assert result.hdf_persisted is False
+            assert result.hdf_timestamp_synchronized is False
+            assert result.hdf_timestamp_sync_evidence == {}
+
+    def test_rejects_unknown_seed_generation_mode(
+        self, monkeypatch, breakline_geom_text
+    ):
+        with pytest.raises(ValueError, match="seed_generation_mode"):
+            GeomMesh.generate(
+                breakline_geom_text,
+                seed_generation_mode="guess",
+            )
+
+    def test_accepts_breakline_spacing_override(self, monkeypatch, breakline_geom_text):
+        _mock_generate_success(
             monkeypatch,
             breakline_geom_text,
             has_breaklines=True,
@@ -1048,6 +1485,29 @@ class TestGenerate:
         text = breakline_geom_text.read_text(encoding="utf-8")
         assert "BreakLine CellSize Min=75.000000" in text
         assert "BreakLine CellSize Max=125.000000" in text
+
+    def test_spacing_override_can_target_one_breakline(
+        self, monkeypatch, named_breakline_geom
+    ):
+        _mock_generate_success(
+            monkeypatch,
+            named_breakline_geom,
+            has_breaklines=True,
+        )
+
+        result = GeomMesh.generate(
+            named_breakline_geom,
+            bl_spacing_near=77.0,
+            bl_spacing_far=177.0,
+            breakline_fid=1,
+            _require_current_hdf=False,
+        )
+
+        assert result.ok
+        spacing = GeomMesh.get_breakline_spacing(named_breakline_geom)
+        assert spacing[0][2:4] == pytest.approx((10.0, 50.0))
+        assert spacing[1][2:4] == pytest.approx((77.0, 177.0))
+        assert spacing[2][2:4] == pytest.approx((15.0, 60.0))
 
     def test_perimeter_fix_reports_external_hdf_requirement(
         self, monkeypatch, breakline_geom_text
@@ -1203,6 +1663,123 @@ def named_breakline_geom(tmp_path):
     return geom_text
 
 
+def _write_breakline_add_fixture(tmp_path):
+    geom_text = tmp_path / "breakline_add.g01"
+    geom_text.write_text(
+        "Geom Title=Breakline Add\n"
+        "BreakLine Name=Existing\n"
+        "BreakLine CellSize Min=100.000000\n"
+        "BreakLine CellSize Max=100.000000\n"
+        "BreakLine Near Repeats=0\n"
+        "BreakLine Protection Radius=0\n"
+        "BreakLine Polyline= 2 \n"
+        f"{0.0:16.6f}{0.0:16.6f}{10.0:16.6f}{10.0:16.6f}\n"
+        "Connection=Downstream\n",
+        encoding="utf-8",
+    )
+    hdf_path = Path(str(geom_text) + ".hdf")
+    attr_dtype = np.dtype(
+        [
+            ("Name", "S32"),
+            ("Cell Spacing Near", "<f4"),
+            ("Cell Spacing Far", "<f4"),
+            ("Near Repeats", "<i4"),
+            ("Protection Radius", "u1"),
+        ]
+    )
+    with h5py.File(hdf_path, "w") as hdf:
+        area = hdf.create_group("Geometry/2D Flow Areas/QualArea")
+        area.create_dataset(
+            "Perimeter",
+            data=np.array(
+                [[0.0, 0.0], [100.0, 0.0], [100.0, 100.0], [0.0, 100.0], [0.0, 0.0]],
+                dtype=np.float64,
+            ),
+        )
+        group = hdf.create_group("Geometry/2D Flow Area Break Lines")
+        attrs = np.zeros(1, dtype=attr_dtype)
+        attrs["Name"][0] = b"Existing"
+        attrs["Cell Spacing Near"][0] = 100.0
+        attrs["Cell Spacing Far"][0] = 100.0
+        group.create_dataset("Attributes", data=attrs)
+        group.create_dataset(
+            "Polyline Info", data=np.array([[0, 2, 0, 1]], dtype=np.int32)
+        )
+        group.create_dataset(
+            "Polyline Parts", data=np.array([[0, 2]], dtype=np.int32)
+        )
+        group.create_dataset(
+            "Polyline Points",
+            data=np.array([[0.0, 0.0], [10.0, 10.0]], dtype=np.float64),
+        )
+    return geom_text, hdf_path
+
+
+def test_add_breakline_writes_matching_text_and_complete_hdf_schema(tmp_path):
+    geom_text, hdf_path = _write_breakline_add_fixture(tmp_path)
+
+    fid = GeomMesh.add_breakline(
+        geom_text,
+        [(20.0, 50.0), (50.0, 50.0), (80.0, 50.0)],
+        name="Qualification",
+        near=25.0,
+        far=50.0,
+        near_repeats=2,
+        protection_radius=1,
+        mesh_name="QualArea",
+    )
+
+    assert fid == 1
+    text = geom_text.read_text(encoding="utf-8")
+    assert text.index("BreakLine Name=Qualification") < text.index(
+        "Connection=Downstream"
+    )
+    assert "BreakLine Polyline= 3 " in text
+    assert GeomMesh.get_breakline_spacing(geom_text)[1] == (
+        1,
+        "Qualification",
+        25.0,
+        50.0,
+        2,
+        1,
+    )
+    with h5py.File(hdf_path, "r") as hdf:
+        group = hdf["Geometry/2D Flow Area Break Lines"]
+        assert len(group["Attributes"]) == 2
+        assert group["Attributes"][1]["Name"].rstrip(b"\x00") == b"Qualification"
+        assert group["Polyline Info"][1].tolist() == [2, 3, 1, 1]
+        assert group["Polyline Parts"][1].tolist() == [0, 3]
+        assert group["Polyline Points"][2:].tolist() == [
+            [20.0, 50.0],
+            [50.0, 50.0],
+            [80.0, 50.0],
+        ]
+        assert group["Polyline Info"].attrs["Feature Type"] == b"Polyline"
+        assert group["Polyline Info"].attrs["Row"] == b"Feature"
+        assert group["Polyline Parts"].attrs["Row"] == b"Part"
+        assert group["Polyline Points"].attrs["Row"] == b"Points"
+    assert hdf_path.stat().st_mtime_ns >= geom_text.stat().st_mtime_ns
+
+
+def test_add_breakline_rejects_outside_mesh_without_mutation(tmp_path):
+    geom_text, hdf_path = _write_breakline_add_fixture(tmp_path)
+    text_before = geom_text.read_bytes()
+    hdf_before = hdf_path.read_bytes()
+
+    with pytest.raises(ValueError, match="wholly inside"):
+        GeomMesh.add_breakline(
+            geom_text,
+            [(120.0, 50.0), (130.0, 50.0)],
+            name="Outside",
+            near=25.0,
+            far=50.0,
+            mesh_name="QualArea",
+        )
+
+    assert geom_text.read_bytes() == text_before
+    assert hdf_path.read_bytes() == hdf_before
+
+
 @pytest.fixture
 def refinement_region_hdf(tmp_path):
     """Synthetic HDF with 3 refinement regions (full polygon geometry)."""
@@ -1214,17 +1791,25 @@ def refinement_region_hdf(tmp_path):
         ("Name", "S32"),
         ("Spacing dx", "<f4"),
         ("Spacing dy", "<f4"),
+        ("Shift dx", "<f4"),
+        ("Shift dy", "<f4"),
+        ("Perimeter Spacing", "<f4"),
+        ("Near Spacing Repeats", "<i4"),
+        ("Far Spacing", "<f4"),
+        ("Protection Radius", "u1"),
     ])
     data = np.array([
-        (b"North", 50.0, 50.0),
-        (b"North", 75.0, 75.0),
-        (b"", 100.0, 100.0),
+        (b"North", 50.0, 50.0, np.nan, np.nan, np.nan, 0, np.nan, 0),
+        (b"North", 75.0, 75.0, np.nan, np.nan, np.nan, 0, np.nan, 0),
+        (b"", 100.0, 100.0, np.nan, np.nan, np.nan, 0, np.nan, 0),
     ], dtype=dt)
     # Three simple square polygons (5 pts each, closed rings)
     pts0 = np.array([[0, 0], [100, 0], [100, 100], [0, 100], [0, 0]], dtype=np.float64)
     pts1 = np.array([[200, 0], [300, 0], [300, 100], [200, 100], [200, 0]], dtype=np.float64)
     pts2 = np.array([[400, 0], [500, 0], [500, 100], [400, 100], [400, 0]], dtype=np.float64)
-    all_pts = np.vstack([pts0, pts1, pts2])
+    all_pts = np.column_stack(
+        [np.vstack([pts0, pts1, pts2]), np.full(15, np.nan)]
+    )
     info = np.array([[0, 5, 0, 1], [5, 5, 1, 1], [10, 5, 2, 1]], dtype=np.int32)
     parts = np.array([[0, 5], [0, 5], [0, 5]], dtype=np.int32)
     gzip_kw = dict(compression="gzip", compression_opts=1)
@@ -1498,6 +2083,78 @@ SAMPLE_POLYGON = [
 
 class TestAddRefinementRegion:
 
+    def test_product_geometry_uses_rasmapper_feature_layer(
+        self, empty_geom_hdf, monkeypatch
+    ):
+        geom_text, hdf_path = empty_geom_hdf
+        with h5py.File(str(hdf_path), "r+") as hf:
+            hf.create_dataset(
+                "Geometry/2D Flow Areas/Polygon Points",
+                data=np.array(
+                    [[0.0, 0.0], [500.0, 0.0], [500.0, 500.0], [0.0, 500.0]],
+                    dtype=np.float64,
+                ),
+            )
+
+        captured = {}
+
+        def add_via_mapper(path, coords, dx, dy, name, hecras_dir=None):
+            captured.update(
+                path=path,
+                coords=np.array(coords),
+                dx=dx,
+                dy=dy,
+                name=name,
+                hecras_dir=hecras_dir,
+            )
+            return 4
+
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_add_refinement_region_via_mapper",
+            add_via_mapper,
+        )
+
+        fid = GeomMesh.add_refinement_region(
+            geom_text,
+            SAMPLE_POLYGON,
+            spacing_dx=25.0,
+            name="Product region",
+        )
+
+        assert fid == 4
+        assert captured["path"] == hdf_path
+        assert captured["dx"] == 25.0
+        assert captured["dy"] == 25.0
+        assert captured["name"] == "Product region"
+        assert np.allclose(captured["coords"][0], captured["coords"][-1])
+
+    def test_rejects_region_outside_named_mesh_before_hdf_mutation(
+        self, empty_geom_hdf
+    ):
+        geom_text, hdf_path = empty_geom_hdf
+        with h5py.File(str(hdf_path), "r+") as hf:
+            area = hf["Geometry/2D Flow Areas"].create_group("MainArea")
+            area.create_dataset(
+                "Perimeter",
+                data=np.array(
+                    [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]],
+                    dtype=np.float64,
+                ),
+            )
+
+        with pytest.raises(ValueError, match="wholly inside"):
+            GeomMesh.add_refinement_region(
+                geom_text,
+                SAMPLE_POLYGON,
+                spacing_dx=25.0,
+                name="Outside",
+                mesh_name="MainArea",
+            )
+
+        with h5py.File(str(hdf_path), "r") as hf:
+            assert "Geometry/2D Flow Area Refinement Regions" not in hf
+
     def test_add_first_region_creates_group(self, empty_geom_hdf):
         geom_text, hdf_path = empty_geom_hdf
         fid = GeomMesh.add_refinement_region(
@@ -1527,6 +2184,11 @@ class TestAddRefinementRegion:
             assert hf[f"{rr}/Attributes"].dtype["Spacing dx"] == np.dtype("<f4")
             assert hf[f"{rr}/Attributes"].dtype["Spacing dy"] == np.dtype("<f4")
             assert hf[f"{rr}/Attributes"].dtype["Name"] == np.dtype("S32")
+            assert hf[f"{rr}/Attributes"].dtype.names == (
+                "Name", "Spacing dx", "Spacing dy", "Shift dx", "Shift dy",
+                "Perimeter Spacing", "Near Spacing Repeats", "Far Spacing",
+                "Protection Radius",
+            )
             assert hf[f"{rr}/Polygon Info"].dtype == np.dtype("int32")
             assert hf[f"{rr}/Polygon Parts"].dtype == np.dtype("int32")
             assert hf[f"{rr}/Polygon Points"].dtype == np.dtype("float64")
@@ -1558,6 +2220,12 @@ class TestAddRefinementRegion:
             assert info[0, 2] == 0  # part_start
             assert info[0, 3] == 1  # part_count
             assert points.shape == (5, 2)
+            assert list(hf[f"{rr}/Polygon Points"].attrs["Column"]) == [
+                b"X",
+                b"Y",
+            ]
+            assert hf[f"{rr}/Polygon Points"].attrs["Row"] == b"Points"
+            assert hf[f"{rr}/Polygon Info"].attrs["Feature Type"] == b"Polygon"
             assert parts.shape == (1, 2)
             assert parts[0, 0] == 0
             assert parts[0, 1] == 5
@@ -1608,7 +2276,8 @@ class TestAddRefinementRegion:
         with h5py.File(str(hdf_path), "r") as hf:
             pts = hf["Geometry/2D Flow Area Refinement Regions/Polygon Points"][:]
             assert len(pts) == 5
-            assert np.allclose(pts[0], pts[-1])
+            assert np.allclose(pts[0, :2], pts[-1, :2])
+            assert pts.shape[1] == 2
 
     def test_add_region_spacing_dy_defaults_to_dx(self, empty_geom_hdf):
         geom_text, hdf_path = empty_geom_hdf

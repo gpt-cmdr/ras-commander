@@ -420,6 +420,103 @@ class TestSetNormalDepthBoundary2DSelectors:
 
 class TestSetNormalDepthBoundaryRealProjects:
     @pytest.mark.slow
+    def test_chippewa_geometry_bc_location_creation_and_normal_depth_roundtrip(
+        self,
+        tmp_path,
+    ):
+        """Create a real-format geometry BC, associate it, and type it in .u##."""
+        try:
+            from ras_commander import GeomBcLines, RasExamples, RasPrj, RasUnsteady
+
+            project = RasExamples.extract_project(
+                "Chippewa_2D",
+                output_path=tmp_path,
+                suffix="_new_nd_location",
+            )
+        except Exception as exc:
+            pytest.skip(f"Chippewa_2D example project not available: {exc}")
+        if isinstance(project, list):
+            project = project[0]
+
+        geometry_file = next(
+            (
+                path
+                for path in sorted(Path(project).glob("*.g0*"))
+                if "hdf" not in path.name.lower()
+                and "Storage Area=Perimeter 1" in path.read_text(
+                    encoding="utf-8", errors="ignore"
+                )
+            ),
+            None,
+        )
+        unsteady_file = next(
+            (
+                path
+                for path in sorted(Path(project).glob("*.u0*"))
+                if "hdf" not in path.name.lower()
+                and "Boundary Location=" in path.read_text(
+                    encoding="utf-8", errors="ignore"
+                )
+            ),
+            None,
+        )
+        if geometry_file is None or unsteady_file is None:
+            pytest.skip("Chippewa_2D geometry/unsteady fixtures not present")
+
+        GeomBcLines.add_bc_lines(
+            geometry_file,
+            lines=[{
+                "name": "QualificationND",
+                "storage_area": "Perimeter 1",
+                "coordinates": [
+                    (1027205.96, 7858200.24),
+                    (1025994.94, 7858316.68),
+                ],
+            }],
+        )
+        ras_obj = RasPrj()
+        ras_obj.initialize(Path(project), "ras", suppress_logging=True)
+
+        created = RasUnsteady.ensure_2d_boundary_location(
+            unsteady_file,
+            area_2d="Perimeter 1",
+            bc_line="QualificationND",
+            geometry_file=geometry_file,
+            ras_object=ras_obj,
+        )
+        assert created["created"] is True
+        assert created["geometry_coordinate_count"] == 2
+        assert created["dataframe_verified"] is True
+        assert Path(created["backup_path"]).is_file()
+
+        idempotent = RasUnsteady.ensure_2d_boundary_location(
+            unsteady_file,
+            area_2d="Perimeter 1",
+            bc_line="QualificationND",
+            geometry_file=geometry_file,
+            ras_object=ras_obj,
+        )
+        assert idempotent["created"] is False
+        assert idempotent["backup_path"] is None
+
+        normal_depth = RasUnsteady.set_normal_depth_boundary(
+            unsteady_file,
+            friction_slope=0.0003,
+            area_2d="Perimeter 1",
+            bc_line="QualificationND",
+            ras_object=ras_obj,
+        )
+        assert normal_depth["new_friction_slope"] == 0.0003
+
+        rows = ras_obj.boundaries_df[
+            (ras_obj.boundaries_df["area_2d"].astype(str) == "Perimeter 1")
+            & (ras_obj.boundaries_df["bc_line_name"].astype(str) == "QualificationND")
+        ]
+        assert len(rows) == 1
+        assert rows.iloc[0]["bc_type"] == "Normal Depth"
+        assert rows.iloc[0]["friction_slope_value"] == pytest.approx(0.0003)
+
+    @pytest.mark.slow
     def test_muncie_1d_normal_depth_in_place_update(self, tmp_path):
         """Update the existing 1D Normal Depth in the Muncie example project.
 

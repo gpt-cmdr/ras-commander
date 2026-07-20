@@ -63,6 +63,35 @@ def skeleton_geom(tmp_path):
 
 
 class TestAddBcLines:
+    def test_get_bc_lines_round_trips_geometry_content(self, skeleton_geom):
+        from ras_commander import GeomBcLines
+
+        before = GeomBcLines.get_bc_lines(skeleton_geom)
+        assert before == [
+            {
+                "name": "Existing",
+                "storage_area": "Perimeter 1",
+                "coordinates": [(100.0, 100.0), (200.0, 100.0)],
+                "coordinate_count": 2,
+            }
+        ]
+
+        GeomBcLines.add_bc_lines(
+            skeleton_geom,
+            lines=[{
+                "name": "DSNormalDepth",
+                "storage_area": "Perimeter 1",
+                "coordinates": [(500, 100), (700, 100), (900, 100)],
+            }],
+        )
+        after = GeomBcLines.get_bc_lines(skeleton_geom)
+        assert [item["name"] for item in after] == ["Existing", "DSNormalDepth"]
+        assert after[1]["coordinates"] == [
+            (500.0, 100.0),
+            (700.0, 100.0),
+            (900.0, 100.0),
+        ]
+
     def test_add_single_bc_line(self, skeleton_geom):
         from ras_commander import GeomBcLines
 
