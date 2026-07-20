@@ -2929,6 +2929,32 @@ notebooks:
   excluded: false
   code_cells: 13
   executed_cells: 13
+- id: 730_raster_processing_performance_profiling
+  filename: 730_raster_processing_performance_profiling.ipynb
+  title: Raster Processing Performance Profiling
+  series: 700
+  series_name: Sensitivity & Precipitation
+  summary: Measure stored-map and VRT-to-GeoTIFF configurations, graph CPU, memory, throughput, and IOPS
+    tradeoffs, and write an HTML decision report from a copied HEC-RAS project.
+  tags:
+  - performance
+  - raster
+  - rasmapper
+  - terrain
+  - profiling
+  difficulty: advanced
+  est_runtime: null
+  data_project: null
+  functions_used:
+  - RasMap.store_all_maps
+  - RasProcess.estimate_store_map_resources
+  - RasProcess.profile_store_maps
+  - RasTerrain.profile_vrt_to_tiff
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 14
+  executed_cells: 0
 - id: 800_quality_assurance_rascheck
   filename: 800_quality_assurance_rascheck.ipynb
   title: Quality Assurance with RasCheck

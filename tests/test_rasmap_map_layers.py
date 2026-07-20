@@ -3,14 +3,19 @@ import json
 import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Optional, get_type_hints
 
 import h5py
 import numpy as np
 import pandas as pd
 import pytest
 
-from ras_commander import RasMap
-
+from ras_commander import (
+    BenefitAreaConfig,
+    RasMap,
+    RasProcess,
+    StoreMapPerformanceOptions,
+)
 
 RASMAP_LOGGER = "ras_commander.RasMap"
 RASMAP_LAYER_HELPER_LOGGER = "ras_commander._rasmap_layer_helper"
@@ -27,13 +32,13 @@ def _make_project(tmp_path: Path, name: str = "MapLayerProject") -> Path:
         (
             "<RASMapper>\n"
             "  <Results />\n"
-            "  <MapLayers Checked=\"True\" Expanded=\"True\">\n"
-            "    <Layer Name=\"USGS Topo\" Type=\"WMSLayer\" Checked=\"True\" "
-            "Filename=\"%LocalAppData%\\HEC\\Mapping\\5.1\\XML\\USGS Topo.xml\">\n"
+            '  <MapLayers Checked="True" Expanded="True">\n'
+            '    <Layer Name="USGS Topo" Type="WMSLayer" Checked="True" '
+            'Filename="%LocalAppData%\\HEC\\Mapping\\5.1\\XML\\USGS Topo.xml">\n'
             "      <ResampleMethod>near</ResampleMethod>\n"
             "    </Layer>\n"
-            "    <Layer Name=\"Reference Points\" Type=\"PointFeatureLayer\" "
-            "Checked=\"True\" Filename=\".\\GIS\\points.shp\" />\n"
+            '    <Layer Name="Reference Points" Type="PointFeatureLayer" '
+            'Checked="True" Filename=".\\GIS\\points.shp" />\n'
             "  </MapLayers>\n"
             "</RASMapper>\n"
         ),
@@ -76,54 +81,54 @@ def _make_geometry_project(tmp_path: Path) -> Path:
     (project_dir / "GeometryLayerProject.rasmap").write_text(
         (
             "<RASMapper>\n"
-            "  <Geometries Checked=\"True\" Expanded=\"True\">\n"
-            "    <Layer Name=\"Current Geometry\" Type=\"RASGeometry\" "
-            "Checked=\"True\" Filename=\".\\GeometryLayerProject.g04.hdf\">\n"
-            "      <Layer Type=\"RASRiver\" Checked=\"True\" />\n"
-            "      <Layer Type=\"RASXS\" Checked=\"True\" />\n"
-            "      <Layer Type=\"RASD2FlowArea\" Checked=\"True\" />\n"
-            "      <Layer Type=\"MeshPerimeterLayer\" />\n"
-            "      <Layer Type=\"LateralStructureLayer\" Checked=\"True\" />\n"
-            "      <Layer Type=\"StructureLayer\" Checked=\"False\" />\n"
+            '  <Geometries Checked="True" Expanded="True">\n'
+            '    <Layer Name="Current Geometry" Type="RASGeometry" '
+            'Checked="True" Filename=".\\GeometryLayerProject.g04.hdf">\n'
+            '      <Layer Type="RASRiver" Checked="True" />\n'
+            '      <Layer Type="RASXS" Checked="True" />\n'
+            '      <Layer Type="RASD2FlowArea" Checked="True" />\n'
+            '      <Layer Type="MeshPerimeterLayer" />\n'
+            '      <Layer Type="LateralStructureLayer" Checked="True" />\n'
+            '      <Layer Type="StructureLayer" Checked="False" />\n'
             "    </Layer>\n"
             "  </Geometries>\n"
-            "  <Results Checked=\"True\">\n"
-            "    <Layer Name=\"Plan A\" Type=\"RASResults\" Checked=\"True\">\n"
-            "      <Layer Name=\"Depth\" Type=\"DepthLayer\" Checked=\"True\">\n"
+            '  <Results Checked="True">\n'
+            '    <Layer Name="Plan A" Type="RASResults" Checked="True">\n'
+            '      <Layer Name="Depth" Type="DepthLayer" Checked="True">\n'
             "        <Symbology>\n"
-            "          <SurfaceFill RegenerateForScreen=\"False\" />\n"
+            '          <SurfaceFill RegenerateForScreen="False" />\n'
             "        </Symbology>\n"
-            "        <Surface On=\"True\" />\n"
+            '        <Surface On="True" />\n'
             "      </Layer>\n"
-            "      <Layer Name=\"WSE\" Type=\"WSELayer\" Checked=\"False\" />\n"
+            '      <Layer Name="WSE" Type="WSELayer" Checked="False" />\n'
             "    </Layer>\n"
-            "    <Layer Name=\"Plan B\" Type=\"RASResults\" Checked=\"True\">\n"
-            "      <Layer Name=\"Depth\" Type=\"DepthLayer\" Checked=\"True\" />\n"
+            '    <Layer Name="Plan B" Type="RASResults" Checked="True">\n'
+            '      <Layer Name="Depth" Type="DepthLayer" Checked="True" />\n'
             "    </Layer>\n"
             "  </Results>\n"
-            "  <MapLayers Checked=\"True\" Expanded=\"True\">\n"
-            "    <Layer Name=\"USGS Topo\" Type=\"WMSLayer\" Checked=\"True\" "
-            "Filename=\"%LocalAppData%\\HEC\\Mapping\\5.1\\XML\\USGS Topo.xml\">\n"
+            '  <MapLayers Checked="True" Expanded="True">\n'
+            '    <Layer Name="USGS Topo" Type="WMSLayer" Checked="True" '
+            'Filename="%LocalAppData%\\HEC\\Mapping\\5.1\\XML\\USGS Topo.xml">\n'
             "      <ResampleMethod>near</ResampleMethod>\n"
             "    </Layer>\n"
-            "    <Layer Name=\"Reference Lines\" Type=\"PolylineFeatureLayer\" "
-            "Checked=\"True\" Filename=\".\\GIS\\reference_lines.shp\" />\n"
-            "    <Layer Name=\"Land Cover\" Type=\"LandCoverLayer\" Checked=\"True\" "
-            "Filename=\".\\Land Classification\\landcover.hdf\" />\n"
+            '    <Layer Name="Reference Lines" Type="PolylineFeatureLayer" '
+            'Checked="True" Filename=".\\GIS\\reference_lines.shp" />\n'
+            '    <Layer Name="Land Cover" Type="LandCoverLayer" Checked="True" '
+            'Filename=".\\Land Classification\\landcover.hdf" />\n'
             "  </MapLayers>\n"
-            "  <Terrains Checked=\"True\" Expanded=\"True\">\n"
-            "    <Layer Name=\"Terrain\" Type=\"TerrainLayer\" Filename=\".\\Terrain\\Terrain.hdf\">\n"
+            '  <Terrains Checked="True" Expanded="True">\n'
+            '    <Layer Name="Terrain" Type="TerrainLayer" Filename=".\\Terrain\\Terrain.hdf">\n'
             "      <Symbology>\n"
-            "        <SurfaceFill RegenerateForScreen=\"False\" />\n"
+            '        <SurfaceFill RegenerateForScreen="False" />\n'
             "      </Symbology>\n"
-            "      <Surface On=\"False\" />\n"
+            '      <Surface On="False" />\n'
             "    </Layer>\n"
-            "    <Layer Name=\"TerrainWithChannel\" Type=\"TerrainLayer\" Checked=\"True\" "
-            "Filename=\".\\Terrain\\TerrainWithChannel.hdf\">\n"
+            '    <Layer Name="TerrainWithChannel" Type="TerrainLayer" Checked="True" '
+            'Filename=".\\Terrain\\TerrainWithChannel.hdf">\n'
             "      <Symbology>\n"
-            "        <SurfaceFill RegenerateForScreen=\"False\" />\n"
+            '        <SurfaceFill RegenerateForScreen="False" />\n'
             "      </Symbology>\n"
-            "      <Surface On=\"True\" />\n"
+            '      <Surface On="True" />\n'
             "    </Layer>\n"
             "  </Terrains>\n"
             "  <CurrentView>\n"
@@ -233,9 +238,7 @@ def _rasmap_records(caplog):
 
 def _map_layer_helper_records(caplog):
     return [
-        record
-        for record in caplog.records
-        if record.name == RASMAP_LAYER_HELPER_LOGGER
+        record for record in caplog.records if record.name == RASMAP_LAYER_HELPER_LOGGER
     ]
 
 
@@ -346,10 +349,13 @@ def test_add_reference_map_layer_validates_geojson_wgs84(tmp_path):
     )
     references = RasMap.list_reference_map_layers(project_dir)
     assert "Good GeoJSON" in set(references["name"])
-    assert references.loc[
-        references["name"] == "Good GeoJSON",
-        "type",
-    ].iloc[0] == "PolygonFeatureLayer"
+    assert (
+        references.loc[
+            references["name"] == "Good GeoJSON",
+            "type",
+        ].iloc[0]
+        == "PolygonFeatureLayer"
+    )
 
     with pytest.raises(ValueError, match="WGS84/EPSG:4326"):
         RasMap.add_reference_map_layer(
@@ -479,13 +485,18 @@ def test_list_geometry_layers_exposes_child_elements(tmp_path):
         "LateralStructureLayer",
         "StructureLayer",
     }
-    assert layers.loc[layers["category"] == "geometry", "geometry_number"].iloc[0] == "04"
-    assert bool(
-        elements.loc[
-            elements["layer_type"] == "RASD2FlowArea",
-            "geometry_hdf_exists",
-        ].iloc[0]
-    ) is True
+    assert (
+        layers.loc[layers["category"] == "geometry", "geometry_number"].iloc[0] == "04"
+    )
+    assert (
+        bool(
+            elements.loc[
+                elements["layer_type"] == "RASD2FlowArea",
+                "geometry_hdf_exists",
+            ].iloc[0]
+        )
+        is True
+    )
 
 
 def test_set_geometry_layer_visibility_targets_child_layers(tmp_path):
@@ -991,9 +1002,13 @@ def test_initialize_rasmap_df_logs_missing_file_once_at_info(tmp_path, caplog):
 
     assert len(df) == 1
     records = _rasmap_records(caplog)
-    warnings = [record.getMessage() for record in records if record.levelno == logging.WARNING]
+    warnings = [
+        record.getMessage() for record in records if record.levelno == logging.WARNING
+    ]
     assert warnings == [f"RASMapper file not found: {tmp_path / 'NoRasmap.rasmap'}"]
-    assert all("Creating empty rasmap_df" not in record.getMessage() for record in records)
+    assert all(
+        "Creating empty rasmap_df" not in record.getMessage() for record in records
+    )
 
 
 def test_screenshot_model_success_logs_name_at_info_and_full_path_at_debug(
@@ -1113,29 +1128,420 @@ def test_store_all_maps_uses_aggregate_info_and_debug_details(
     assert result["success"] is False
     records = _rasmap_records(caplog)
     info_messages = [
-        record.getMessage()
-        for record in records
-        if record.levelno == logging.INFO
+        record.getMessage() for record in records if record.levelno == logging.INFO
     ]
     error_messages = [
-        record.getMessage()
-        for record in records
-        if record.levelno == logging.ERROR
+        record.getMessage() for record in records if record.levelno == logging.ERROR
     ]
     debug_messages = [
-        record.getMessage()
-        for record in records
-        if record.levelno == logging.DEBUG
+        record.getMessage() for record in records if record.levelno == logging.DEBUG
     ]
 
     assert info_messages == [
         "Stored map generation complete: 1/2 plans succeeded (mode=horizontal)"
     ]
     assert error_messages == ["Plan 02: StoreAllMaps failed (exit code 2)"]
-    assert any("Generating stored maps for plan 01" in message for message in debug_messages)
-    assert any("Plan 01: StoreAllMaps completed successfully" in message for message in debug_messages)
+    assert any(
+        "Generating stored maps for plan 01" in message for message in debug_messages
+    )
+    assert any(
+        "Plan 01: StoreAllMaps completed successfully" in message
+        for message in debug_messages
+    )
     assert any("verbose stderr" in message for message in debug_messages)
     assert all("verbose stderr" not in message for message in error_messages)
+
+
+def test_store_all_maps_selected_mode_forwards_typed_performance(
+    tmp_path,
+    monkeypatch,
+):
+    class DummyProject:
+        project_folder = tmp_path
+        project_name = "Unified"
+        plan_df = pd.DataFrame([{"plan_number": "01"}])
+
+        @staticmethod
+        def check_initialized():
+            return None
+
+    calls = []
+
+    def fake_store_maps(**kwargs):
+        calls.append(kwargs)
+        output = tmp_path / "chosen" / "Depth (Max).tif"
+        return {"depth": [output], "velocity": []}
+
+    monkeypatch.setattr(RasProcess, "store_maps", staticmethod(fake_store_maps))
+    performance = StoreMapPerformanceOptions(max_workers=2)
+
+    result = RasMap.store_all_maps(
+        "01",
+        mode="selected",
+        output_folder="rasmap-subdir",
+        map_types=("depth", "velocity"),
+        output_path=tmp_path / "chosen",
+        performance=performance,
+        ras_object=DummyProject(),
+    )
+
+    assert result == {
+        "success": True,
+        "mode": "selected",
+        "plans": {
+            "01": {
+                "success": True,
+                "output_dir": str(tmp_path / "chosen"),
+                "files": [str(tmp_path / "chosen" / "Depth (Max).tif")],
+                "files_by_type": {
+                    "depth": [str(tmp_path / "chosen" / "Depth (Max).tif")],
+                    "velocity": [],
+                },
+            }
+        },
+        "render_mode": None,
+    }
+    assert len(calls) == 1
+    assert calls[0]["performance"] is performance
+    assert calls[0]["output_folder"] == "rasmap-subdir"
+    assert calls[0]["output_path"] == tmp_path / "chosen"
+    assert calls[0]["depth"] is True
+    assert calls[0]["velocity"] is True
+    assert calls[0]["wse"] is False
+
+
+def test_store_all_maps_all_plans_and_timesteps_are_canonical_modes(
+    tmp_path,
+    monkeypatch,
+):
+    (tmp_path / "Unified.p01.hdf").write_bytes(b"hdf")
+
+    class DummyProject:
+        project_folder = tmp_path
+        project_name = "Unified"
+        plan_df = pd.DataFrame([{"plan_number": "01"}, {"plan_number": "02"}])
+
+        @staticmethod
+        def check_initialized():
+            return None
+
+    map_calls = []
+    timestep_calls = []
+
+    def fake_store_maps(**kwargs):
+        map_calls.append(kwargs)
+        return {"wse": [tmp_path / "maps" / "WSE.tif"]}
+
+    def fake_timesteps(
+        plan_number,
+        output_path=None,
+        timesteps=None,
+        max_timesteps=None,
+        wse=False,
+        depth=True,
+        velocity=False,
+        froude=False,
+        shear_stress=False,
+        depth_x_velocity=False,
+        depth_x_velocity_sq=False,
+        render_mode=None,
+        clear_existing=True,
+        fix_georef=True,
+        ras_object=None,
+        ras_version=None,
+        timeout=600,
+        *,
+        performance=None,
+    ):
+        timestep_calls.append(
+            {
+                "plan_number": plan_number,
+                "output_path": output_path,
+                "timesteps": timesteps,
+                "max_timesteps": max_timesteps,
+                "wse": wse,
+                "depth": depth,
+                "velocity": velocity,
+                "froude": froude,
+                "shear_stress": shear_stress,
+                "depth_x_velocity": depth_x_velocity,
+                "depth_x_velocity_sq": depth_x_velocity_sq,
+                "render_mode": render_mode,
+                "clear_existing": clear_existing,
+                "fix_georef": fix_georef,
+                "ras_object": ras_object,
+                "ras_version": ras_version,
+                "timeout": timeout,
+                "performance": performance,
+            }
+        )
+        return {"01JAN2026 00:00:00": {"depth": [tmp_path / "Depth.tif"]}}
+
+    monkeypatch.setattr(RasProcess, "store_maps", staticmethod(fake_store_maps))
+    monkeypatch.setattr(
+        RasProcess,
+        "store_maps_at_timesteps",
+        staticmethod(fake_timesteps),
+    )
+    project = DummyProject()
+
+    all_plans = RasMap.store_all_maps(
+        mode="all_plans",
+        output_path=tmp_path / "all",
+        ras_object=project,
+    )
+    timesteps = RasMap.store_all_maps(
+        "01",
+        mode="timesteps",
+        timesteps=[0],
+        map_types=("depth",),
+        ras_object=project,
+    )
+    multi_plan_timesteps = RasMap.store_all_maps(
+        ["01", "02"],
+        mode="timesteps",
+        output_path=tmp_path / "timesteps",
+        timesteps=[0],
+        map_types="depth",
+        ras_object=project,
+    )
+
+    assert all_plans["success"] is True
+    assert list(all_plans["plans"]) == ["01"]
+    assert map_calls[0]["output_path"] == tmp_path / "all" / "plan_01"
+    assert timesteps["plans"]["01"]["timesteps"] == {
+        "01JAN2026 00:00:00": {"depth": [str(tmp_path / "Depth.tif")]}
+    }
+    assert "output_folder" not in timestep_calls[0]
+    assert "profile" not in timestep_calls[0]
+    assert timestep_calls[0]["depth"] is True
+    assert timestep_calls[0]["wse"] is False
+    assert list(multi_plan_timesteps["plans"]) == ["01", "02"]
+    assert timestep_calls[1]["output_path"] == tmp_path / "timesteps" / "plan_01"
+    assert timestep_calls[2]["output_path"] == tmp_path / "timesteps" / "plan_02"
+
+
+def test_store_all_maps_auto_routes_all_modes_and_serializes(
+    tmp_path,
+    monkeypatch,
+):
+    (tmp_path / "Unified.p01.hdf").write_bytes(b"hdf")
+
+    class DummyProject:
+        project_folder = tmp_path
+        project_name = "Unified"
+        plan_df = pd.DataFrame([{"plan_number": "01"}])
+
+        @staticmethod
+        def check_initialized():
+            return None
+
+    native_calls = []
+    configured_calls = []
+    timestep_calls = []
+
+    def fake_native(plan_number, render_mode=None, ras_object=None, timeout=600):
+        native_calls.append((plan_number, render_mode, ras_object, timeout))
+        return {
+            "success": True,
+            "plans": {"01": {"success": True, "files": []}},
+            "render_mode": "horizontal",
+        }
+
+    def fake_store_maps(**kwargs):
+        configured_calls.append(kwargs)
+        return {"depth": [tmp_path / "Depth.tif"]}
+
+    def fake_timesteps(
+        plan_number,
+        output_path=None,
+        timesteps=None,
+        max_timesteps=None,
+        wse=False,
+        depth=True,
+        velocity=False,
+        froude=False,
+        shear_stress=False,
+        depth_x_velocity=False,
+        depth_x_velocity_sq=False,
+        render_mode=None,
+        clear_existing=True,
+        fix_georef=True,
+        ras_object=None,
+        ras_version=None,
+        timeout=600,
+        *,
+        performance=None,
+    ):
+        timestep_calls.append(
+            {
+                "plan_number": plan_number,
+                "max_timesteps": max_timesteps,
+                "depth": depth,
+                "wse": wse,
+                "velocity": velocity,
+            }
+        )
+        return {"01JAN2026 00:00:00": {"depth": [tmp_path / "Depth.tif"]}}
+
+    monkeypatch.setattr(RasMap, "_store_all_maps_native", staticmethod(fake_native))
+    monkeypatch.setattr(RasProcess, "store_maps", staticmethod(fake_store_maps))
+    monkeypatch.setattr(
+        RasProcess,
+        "store_maps_at_timesteps",
+        staticmethod(fake_timesteps),
+    )
+    project = DummyProject()
+
+    native = RasMap.store_all_maps(1, "horizontal", project, 17)
+    selected = RasMap.store_all_maps(
+        "01",
+        output_path=tmp_path / "selected",
+        map_types="depth",
+        ras_object=project,
+    )
+    timesteps = RasMap.store_all_maps(
+        "01",
+        max_timesteps=2,
+        ras_object=project,
+    )
+    all_plans = RasMap.store_all_maps(ras_object=project)
+
+    assert native["mode"] == "native"
+    assert native_calls == [("01", "horizontal", project, 17)]
+    assert selected["mode"] == "selected"
+    assert timesteps["mode"] == "timesteps"
+    assert timestep_calls == [
+        {
+            "plan_number": "01",
+            "max_timesteps": 2,
+            "depth": True,
+            "wse": False,
+            "velocity": False,
+        }
+    ]
+    assert all_plans["mode"] == "all_plans"
+    assert configured_calls[-1]["plan_number"] == "01"
+    for summary in (native, selected, timesteps, all_plans):
+        json.dumps(summary)
+
+
+def test_store_all_maps_type_hints_are_runtime_resolvable():
+    hints = get_type_hints(RasMap.store_all_maps)
+
+    assert hints["benefit_area"] == Optional[BenefitAreaConfig]
+    assert hints["performance"] == Optional[StoreMapPerformanceOptions]
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"output_folder": "maps"}, "output_folder"),
+        ({"profile": "Min"}, "profile"),
+        ({"arrival_depth": 0.1}, "arrival_depth"),
+        ({"terrain_name": "Terrain"}, "terrain_name"),
+        ({"map_types": ("arrival_time",)}, "arrival_time"),
+    ],
+)
+def test_store_all_maps_timesteps_rejects_unsupported_options(
+    tmp_path,
+    kwargs,
+    message,
+):
+    class DummyProject:
+        @staticmethod
+        def check_initialized():
+            return None
+
+    with pytest.raises(ValueError, match=message):
+        RasMap.store_all_maps(
+            "01",
+            mode="timesteps",
+            timesteps=[0],
+            ras_object=DummyProject(),
+            **kwargs,
+        )
+
+
+def test_store_all_maps_rejects_empty_selections_and_misplaced_timestep_cap(
+    tmp_path,
+):
+    class DummyProject:
+        @staticmethod
+        def check_initialized():
+            return None
+
+    project = DummyProject()
+    with pytest.raises(ValueError, match="at least one plan"):
+        RasMap.store_all_maps([], mode="native", ras_object=project)
+    with pytest.raises(ValueError, match="At least one stored-map product"):
+        RasMap.store_all_maps(
+            "01",
+            mode="selected",
+            map_types=(),
+            ras_object=project,
+        )
+    with pytest.raises(ValueError, match="At least one stored-map product"):
+        RasMap.store_all_maps(
+            "01",
+            mode="selected",
+            wse=False,
+            depth=False,
+            velocity=False,
+            ras_object=project,
+        )
+    with pytest.raises(ValueError, match="max_timesteps is only valid"):
+        RasMap.store_all_maps(
+            "01",
+            mode="selected",
+            max_timesteps=2,
+            ras_object=project,
+        )
+
+
+def test_store_all_maps_native_mode_rejects_configured_options(tmp_path):
+    class DummyProject:
+        @staticmethod
+        def check_initialized():
+            return None
+
+    with pytest.raises(ValueError, match="mode='native' only accepts"):
+        RasMap.store_all_maps(
+            "01",
+            mode="native",
+            output_path=tmp_path,
+            ras_object=DummyProject(),
+        )
+
+
+def test_rasprocess_store_all_maps_is_compatibility_forwarder(
+    tmp_path,
+    monkeypatch,
+):
+    calls = []
+
+    def fake_canonical(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {
+            "success": True,
+            "mode": "all_plans",
+            "render_mode": None,
+            "plans": {
+                "01": {
+                    "success": True,
+                    "files_by_type": {"depth": [str(tmp_path / "Depth.tif")]},
+                }
+            },
+        }
+
+    monkeypatch.setattr(RasMap, "store_all_maps", staticmethod(fake_canonical))
+
+    with pytest.warns(DeprecationWarning, match="compatibility alias") as caught:
+        result = RasProcess.store_all_maps(output_path=tmp_path)
+
+    assert result == {"01": {"depth": [tmp_path / "Depth.tif"]}}
+    assert calls[0][1]["mode"] == "all_plans"
+    assert Path(caught[0].filename).resolve() == Path(__file__).resolve()
 
 
 def test_get_results_raster_multiple_matches_raises_without_error_log(

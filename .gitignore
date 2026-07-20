@@ -73,7 +73,10 @@ research/**/temp/
 research/**/.ipynb_checkpoints/
 research/**/*.pyc
 research/**/__pycache__/
-/feature_dev_notes
+/feature_dev_notes/*
+!/feature_dev_notes/README.md
+!/feature_dev_notes/multicore_raster_processing/
+!/feature_dev_notes/multicore_raster_processing/*.md
 /research
 !/research/
 !/research/fixtures/
@@ -175,6 +178,7 @@ check_*.py
 !ras_commander/check/check_*.py
 fix_*.py
 run_*.py
+!scripts/benchmarks/run_raster_profile_matrix.py
 test_*.py
 !tests/test_*.py
 monitor_*.py

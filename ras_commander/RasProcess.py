@@ -33,7 +33,9 @@ Linux/Wine Support:
 
 import fnmatch
 import functools
+import hashlib
 import inspect
+import json
 import ntpath
 import os
 import re
@@ -46,10 +48,11 @@ import time
 import uuid
 import warnings
 import xml.etree.ElementTree as ET
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Union, Optional, List, Dict, Any, Tuple
+from typing import Union, Optional, List, Dict, Any, Sequence, Tuple
 from datetime import datetime
 import shutil
 import platform
@@ -67,6 +70,7 @@ class ProjectionInfo:
         terrain_path: First terrain TIF file if found, None otherwise
         terrain_paths: All terrain TIF files referenced by rasmap terrain layers
     """
+
     prj_path: Optional[Path]
     terrain_path: Optional[Path]
     terrain_paths: Tuple[Path, ...] = ()
@@ -82,6 +86,7 @@ class WineConfig:
         wine_executable: Path to the wine binary (default: 'wine')
         ras_install_dir: Path to HEC-RAS DLLs within the Wine prefix drive_c
     """
+
     wine_prefix: Path
     wine_executable: str = "wine"
     ras_install_dir: Optional[Path] = None
@@ -96,13 +101,23 @@ from .Decorators import log_call
 from ._native_helper import (
     normalize_store_map_render_mode,
     run_store_all_maps_helper,
+    run_store_map_helper,
     store_maps_runtime_provenance,
+)
+from .RasterPerformance import (
+    ProcessTreeProfiler,
+    StoreMapPerformanceOptions,
+    StoreMapProfileResult,
+    StoreMapResourceEstimate,
+    TerrainResourceEstimate,
+    get_system_memory_snapshot,
 )
 
 # Optional rasterio for georeferencing fix
 try:
     import rasterio
     from rasterio.crs import CRS
+
     HAS_RASTERIO = True
 except ImportError:
     HAS_RASTERIO = False
@@ -116,6 +131,314 @@ IS_WINDOWS = platform.system() == "Windows"
 _STORE_MAPS_LOCKS: Dict[str, threading.RLock] = {}
 _STORE_MAPS_LOCKS_GUARD = threading.Lock()
 _STORE_MAPS_LOCK_STATE = threading.local()
+
+_STORE_MAP_HELPER_TYPES = {
+    "elevation": "WSEL",
+    "depth": "Depth",
+    "velocity": "Velocity",
+}
+
+
+class _PerformanceUnset:
+    """Stable repr for omitted deprecated keyword aliases in API signatures."""
+
+    def __repr__(self) -> str:
+        return "UNSET"
+
+
+_PERFORMANCE_UNSET = _PerformanceUnset()
+
+
+def _resolve_store_map_worker_count(
+    max_workers: Optional[int],
+    job_count: int,
+    memory_per_worker_mb: int,
+    reserve_memory_mb: int,
+) -> int:
+    """Return a conservative CPU- and memory-bounded helper count."""
+    if max_workers is not None and max_workers < 1:
+        raise ValueError(f"max_workers must be positive or None, got: {max_workers}")
+    if memory_per_worker_mb < 1:
+        raise ValueError(
+            "memory_per_worker_mb must be positive, got: " f"{memory_per_worker_mb}"
+        )
+    if reserve_memory_mb < 0:
+        raise ValueError(
+            f"reserve_memory_mb must be non-negative, got: {reserve_memory_mb}"
+        )
+    if job_count < 1:
+        return 1
+
+    cpu_limit = max(1, os.cpu_count() or 1)
+    requested_limit = cpu_limit if max_workers is None else max_workers
+    memory_limit = job_count
+
+    try:
+        import psutil
+
+        memory = psutil.virtual_memory()
+        reserve_bytes = max(
+            reserve_memory_mb * 1024 * 1024,
+            int(memory.total * 0.25),
+        )
+        usable_bytes = max(0, int(memory.available) - reserve_bytes)
+        worker_bytes = memory_per_worker_mb * 1024 * 1024
+        memory_limit = max(1, usable_bytes // worker_bytes)
+    except (ImportError, OSError, AttributeError):
+        logger.debug(
+            "Could not inspect available memory; StoreMap worker count will "
+            "use the requested and CPU limits only.",
+            exc_info=True,
+        )
+
+    return max(
+        1,
+        min(job_count, requested_limit, cpu_limit, int(memory_limit)),
+    )
+
+
+def _estimate_store_map_worker_memory_mb(
+    terrain_paths: Tuple[Path, ...],
+    configured_floor_mb: int,
+) -> int:
+    """Estimate per-helper memory from active terrain raster dimensions.
+
+    Compressed TIFF file size substantially understates peak StoreMap memory
+    for large watersheds.  RASMapperLib processes Float32 terrain tiles with
+    up to 32 parallel workers, reusable tile buffers, result/HDF caches, and a
+    queued TIFF writer.  Spring River measurements reached roughly 2.5 times
+    one uncompressed output surface per helper, so use four surfaces plus
+    512 MiB of process overhead as a conservative concurrency budget.  This is
+    an empirical scheduling guard, not a claim that TiffAssist allocates four
+    full-grid arrays.  The caller's configured value remains a minimum for
+    small or unreadable data.
+    """
+    if configured_floor_mb < 1:
+        raise ValueError(
+            "configured_floor_mb must be positive, got: " f"{configured_floor_mb}"
+        )
+    if not HAS_RASTERIO or not terrain_paths:
+        return configured_floor_mb
+
+    uncompressed_surface_bytes = 0
+    inspected_paths = 0
+    for terrain_path in terrain_paths:
+        try:
+            with rasterio.open(_windows_extended_length_path(terrain_path)) as src:
+                # Stored results are Float32 even when terrain storage is narrower.
+                bytes_per_cell = max(4, np.dtype(src.dtypes[0]).itemsize)
+                uncompressed_surface_bytes += src.width * src.height * bytes_per_cell
+                inspected_paths += 1
+        except (OSError, ValueError, TypeError):
+            logger.debug(
+                "Could not inspect terrain dimensions for StoreMap memory "
+                "estimation: %s",
+                terrain_path,
+                exc_info=True,
+            )
+
+    if not inspected_paths:
+        return configured_floor_mb
+
+    overhead_bytes = 512 * 1024 * 1024
+    estimated_bytes = uncompressed_surface_bytes * 4 + overhead_bytes
+    estimated_mb = (estimated_bytes + 1024 * 1024 - 1) // (1024 * 1024)
+    return max(configured_floor_mb, estimated_mb)
+
+
+def _coerce_store_map_performance_options(
+    performance: Optional[StoreMapPerformanceOptions],
+    max_workers: Any = _PERFORMANCE_UNSET,
+    memory_per_worker_mb: Any = _PERFORMANCE_UNSET,
+    reserve_memory_mb: Any = _PERFORMANCE_UNSET,
+) -> Tuple[StoreMapPerformanceOptions, bool]:
+    """Resolve the stable options object and keyword-only migration aliases."""
+    aliases_used = any(
+        value is not _PERFORMANCE_UNSET
+        for value in (max_workers, memory_per_worker_mb, reserve_memory_mb)
+    )
+    if performance is not None and aliases_used:
+        raise ValueError(
+            "performance cannot be combined with max_workers, "
+            "memory_per_worker_mb, or reserve_memory_mb"
+        )
+    if performance is not None:
+        if not isinstance(performance, StoreMapPerformanceOptions):
+            raise TypeError("performance must be a StoreMapPerformanceOptions")
+        return performance, True
+    if not aliases_used:
+        return StoreMapPerformanceOptions(), False
+
+    warnings.warn(
+        "max_workers, memory_per_worker_mb, and reserve_memory_mb are "
+        "deprecated StoreMap keywords; use StoreMapPerformanceOptions via "
+        "performance= instead.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+    return (
+        StoreMapPerformanceOptions(
+            max_workers=(1 if max_workers is _PERFORMANCE_UNSET else max_workers),
+            minimum_worker_memory_mb=(
+                600
+                if memory_per_worker_mb is _PERFORMANCE_UNSET
+                else memory_per_worker_mb
+            ),
+            reserve_memory_mb=(
+                4096 if reserve_memory_mb is _PERFORMANCE_UNSET else reserve_memory_mb
+            ),
+        ),
+        True,
+    )
+
+
+def _terrain_resource_estimates(
+    terrain_paths: Sequence[Path],
+) -> Tuple[Tuple[TerrainResourceEstimate, ...], Tuple[str, ...]]:
+    estimates = []
+    warnings_found = []
+    if not HAS_RASTERIO:
+        return (), ("rasterio is unavailable; terrain dimensions were not inspected",)
+    if not terrain_paths:
+        return (), ("no active terrain rasters were discovered in the .rasmap",)
+    for terrain_path in terrain_paths:
+        try:
+            with rasterio.open(_windows_extended_length_path(terrain_path)) as source:
+                cell_count = int(source.width * source.height)
+                estimates.append(
+                    TerrainResourceEstimate(
+                        path=Path(terrain_path),
+                        width=int(source.width),
+                        height=int(source.height),
+                        dtype=str(source.dtypes[0]),
+                        cell_count=cell_count,
+                        float32_surface_mb=round(
+                            cell_count * 4 / (1024 * 1024),
+                            3,
+                        ),
+                    )
+                )
+        except (OSError, ValueError, TypeError) as exc:
+            warnings_found.append(f"could not inspect terrain {terrain_path}: {exc}")
+    return tuple(estimates), tuple(warnings_found)
+
+
+def _store_map_admission_reasons(
+    estimate: StoreMapResourceEstimate,
+) -> Tuple[str, ...]:
+    snapshot = get_system_memory_snapshot()
+    required_mb = estimate.effective_reserve_mb + estimate.estimated_worker_private_mb
+    reasons = []
+    if snapshot.available_physical_mb < required_mb:
+        reasons.append(
+            "available physical memory "
+            f"{snapshot.available_physical_mb} MiB is below required "
+            f"{required_mb} MiB"
+        )
+    if (
+        snapshot.commit_headroom_mb is not None
+        and snapshot.commit_headroom_mb < required_mb
+    ):
+        reasons.append(
+            f"commit headroom {snapshot.commit_headroom_mb} MiB is below "
+            f"required {required_mb} MiB"
+        )
+    return tuple(reasons)
+
+
+def _wait_for_store_map_admission(
+    estimate: StoreMapResourceEstimate,
+    performance: StoreMapPerformanceOptions,
+) -> None:
+    """Apply the configured policy immediately before one helper launch."""
+    deadline = time.monotonic() + performance.admission_wait_timeout_seconds
+    while True:
+        reasons = _store_map_admission_reasons(estimate)
+        if not reasons or performance.memory_policy == "ignore":
+            return
+        if performance.memory_policy == "warn":
+            logger.warning(
+                "Launching StoreMap helper despite memory warning: %s",
+                "; ".join(reasons),
+            )
+            return
+        if time.monotonic() >= deadline:
+            raise MemoryError(
+                "Timed out waiting for StoreMap memory admission: " + "; ".join(reasons)
+            )
+        time.sleep(performance.admission_poll_interval_seconds)
+
+
+def _run_memory_admitted_store_map_jobs(
+    jobs: Sequence[Tuple[str, str, Path]],
+    worker_count: int,
+    performance: StoreMapPerformanceOptions,
+    estimate: StoreMapResourceEstimate,
+    runner,
+) -> Dict[str, subprocess.CompletedProcess]:
+    """Run helper jobs with a live check immediately before each launch."""
+    pending = list(jobs)
+    active = {}
+    results: Dict[str, subprocess.CompletedProcess] = {}
+    deadline = time.monotonic() + performance.admission_wait_timeout_seconds
+    warning_keys = set()
+
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        while pending or active:
+            while pending and len(active) < worker_count:
+                admission_reasons = _store_map_admission_reasons(estimate)
+                if admission_reasons and performance.memory_policy == "enforce":
+                    if active:
+                        break
+                    if time.monotonic() >= deadline:
+                        raise MemoryError(
+                            "Timed out waiting for StoreMap memory admission: "
+                            + "; ".join(admission_reasons)
+                        )
+                    time.sleep(performance.admission_poll_interval_seconds)
+                    continue
+                if admission_reasons and performance.memory_policy == "warn":
+                    warning_key = tuple(admission_reasons)
+                    if warning_key not in warning_keys:
+                        warning_keys.add(warning_key)
+                        logger.warning(
+                            "Launching StoreMap helper despite memory warning: %s",
+                            "; ".join(admission_reasons),
+                        )
+
+                map_key, helper_map_type, output_base = pending.pop(0)
+                future = executor.submit(
+                    runner,
+                    map_key,
+                    helper_map_type,
+                    output_base,
+                )
+                active[future] = map_key
+
+            if not active:
+                continue
+            completed, _ = wait(
+                active,
+                timeout=performance.admission_poll_interval_seconds,
+                return_when=FIRST_COMPLETED,
+            )
+            for future in completed:
+                map_key = active.pop(future)
+                try:
+                    result = future.result()
+                except Exception:
+                    # Do not admit any further work after an execution failure.
+                    # The executor context still waits for helpers that were already
+                    # launched, preserving their cleanup and result-HDF safeguards.
+                    pending.clear()
+                    raise
+                results[map_key] = result
+                if result.returncode != 0:
+                    # Stop scheduling pending map types after the first native
+                    # helper failure. Already-running helpers are allowed to finish.
+                    pending.clear()
+
+    return results
 
 
 def _windows_extended_length_path(path: Union[str, Path]) -> str:
@@ -239,9 +562,7 @@ def _serialize_store_maps(func):
                     if owns_directory:
                         try:
                             os.remove(
-                                _windows_extended_length_path(
-                                    lock_dir / "owner.txt"
-                                )
+                                _windows_extended_length_path(lock_dir / "owner.txt")
                             )
                         except FileNotFoundError:
                             pass
@@ -319,25 +640,25 @@ class RasProcess:
 
     # Map type definitions: (xml_name, display_name, needs_profile)
     MAP_TYPES = {
-        'wse': ('elevation', 'WSE', True),
-        'depth': ('depth', 'Depth', True),
-        'velocity': ('velocity', 'Velocity', True),
-        'froude': ('froude', 'Froude', True),
-        'shear_stress': ('Shear', 'Shear Stress', True),
-        'depth_x_velocity': ('depth and velocity', 'D * V', True),
-        'depth_x_velocity_sq': ('depth and velocity squared', 'D * V^2', True),
-        'flow': ('flow', 'Flow', True),
+        "wse": ("elevation", "WSE", True),
+        "depth": ("depth", "Depth", True),
+        "velocity": ("velocity", "Velocity", True),
+        "froude": ("froude", "Froude", True),
+        "shear_stress": ("Shear", "Shear Stress", True),
+        "depth_x_velocity": ("depth and velocity", "D * V", True),
+        "depth_x_velocity_sq": ("depth and velocity squared", "D * V^2", True),
+        "flow": ("flow", "Flow", True),
         # XML names verified against the RasMapperLib.dll MapTypes table
         # (identical in 6.6 and 7.0.1): "arrival time" (with space) and
         # "fraction inundated". These types use the ArrivalDepth threshold
         # attribute and label outputs "(<depth><unit> hrs)" instead of the
         # profile name.
-        'arrival_time': ('arrival time', 'Arrival Time', False),
-        'duration': ('duration', 'Duration', False),
-        'percent_inundated': ('fraction inundated', 'Percent Time Inundated', False),
+        "arrival_time": ("arrival time", "Arrival Time", False),
+        "duration": ("duration", "Duration", False),
+        "percent_inundated": ("fraction inundated", "Percent Time Inundated", False),
         # NOTE: RasMapperLib has no 'recession' MapType (verified 6.6/7.0.1).
         # Recession time = arrival_time + duration; derive it downstream.
-        'inundation_boundary': ('depth', 'Inundation Boundary', False),
+        "inundation_boundary": ("depth", "Inundation Boundary", False),
     }
 
     # Standard HEC-RAS installation paths (Windows)
@@ -399,9 +720,9 @@ class RasProcess:
             wine_prefix = RasProcess._find_wine_prefix()
             if wine_prefix is None:
                 raise FileNotFoundError(
-                    "No Wine prefix found. Searched: " +
-                    ", ".join(RasProcess.WINE_PREFIX_PATHS) +
-                    ". Set WINEPREFIX or call configure_wine(wine_prefix=...)"
+                    "No Wine prefix found. Searched: "
+                    + ", ".join(RasProcess.WINE_PREFIX_PATHS)
+                    + ". Set WINEPREFIX or call configure_wine(wine_prefix=...)"
                 )
 
         wine_prefix = Path(wine_prefix)
@@ -422,7 +743,9 @@ class RasProcess:
             wine_executable,
             ras_dir_state,
         )
-        logger.debug("Wine configuration paths: prefix=%s, ras_dir=%s", wine_prefix, ras_dir)
+        logger.debug(
+            "Wine configuration paths: prefix=%s, ras_dir=%s", wine_prefix, ras_dir
+        )
         return config
 
     @staticmethod
@@ -531,11 +854,9 @@ class RasProcess:
             wine_config = RasProcess._get_wine_config()
             if wine_config:
                 try:
-                    winepath_executable = (
-                        RasProcess._resolve_wine_tool_executable(
-                            "winepath",
-                            wine_config,
-                        )
+                    winepath_executable = RasProcess._resolve_wine_tool_executable(
+                        "winepath",
+                        wine_config,
                     )
                     result = subprocess.run(
                         [winepath_executable, "-w", str(linux_path)],
@@ -552,11 +873,13 @@ class RasProcess:
                 except (OSError, subprocess.TimeoutExpired):
                     pass
             # Fallback: return as-is (Wine can sometimes handle Unix paths)
-            logger.warning(f"Cannot convert to Wine path (no drive_c/ found): {linux_path}")
+            logger.warning(
+                f"Cannot convert to Wine path (no drive_c/ found): {linux_path}"
+            )
             return str(linux_path)
 
         # Extract the part after drive_c/
-        relative = path_str[idx + len(drive_c_marker):]
+        relative = path_str[idx + len(drive_c_marker) :]
         # Convert to Windows path format
         win_path = "C:\\" + relative.replace("/", "\\")
         return win_path
@@ -584,7 +907,7 @@ class RasProcess:
         wine_path = wine_path.replace("/", "\\")
 
         # Extract drive letter and path
-        if len(wine_path) >= 2 and wine_path[1] == ':':
+        if len(wine_path) >= 2 and wine_path[1] == ":":
             drive = wine_path[0].lower()
             remainder = wine_path[2:].lstrip("\\").replace("\\", "/")
             return config.wine_prefix / f"drive_{drive}" / remainder
@@ -614,7 +937,9 @@ class RasProcess:
         """
         config = wine_config or RasProcess._get_wine_config()
         if config is None:
-            raise RuntimeError("Wine not configured. Call configure_wine() or set WINEPREFIX.")
+            raise RuntimeError(
+                "Wine not configured. Call configure_wine() or set WINEPREFIX."
+            )
 
         # Convert exe path to Wine path if it's a Linux path
         exe_str = str(exe_path)
@@ -706,8 +1031,18 @@ class RasProcess:
             if drive_c.exists():
                 # Check .NET 4.8
                 dotnet_markers = [
-                    drive_c / "windows" / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "mscorlib.dll",
-                    drive_c / "windows" / "Microsoft.NET" / "Framework" / "v4.0.30319" / "mscorlib.dll",
+                    drive_c
+                    / "windows"
+                    / "Microsoft.NET"
+                    / "Framework64"
+                    / "v4.0.30319"
+                    / "mscorlib.dll",
+                    drive_c
+                    / "windows"
+                    / "Microsoft.NET"
+                    / "Framework"
+                    / "v4.0.30319"
+                    / "mscorlib.dll",
                 ]
                 result["dotnet48"] = any(m.exists() for m in dotnet_markers)
 
@@ -812,7 +1147,9 @@ Step 5: Configure (optional — auto-detection usually works)
     ... )
 """
         print(instructions)
-        logger.debug("Wine setup instructions printed. Follow steps to configure environment.")
+        logger.debug(
+            "Wine setup instructions printed. Follow steps to configure environment."
+        )
 
     # ------------------------------------------------------------------ #
     #  Original Methods (with Wine support integrated)
@@ -839,11 +1176,15 @@ Step 5: Configure (optional — auto-detection usually works)
             # Original Windows behavior
             if ras_version:
                 paths = [
-                    Path(f"C:/Program Files (x86)/HEC/HEC-RAS/{ras_version}/RasProcess.exe"),
+                    Path(
+                        f"C:/Program Files (x86)/HEC/HEC-RAS/{ras_version}/RasProcess.exe"
+                    ),
                     Path(f"C:/Program Files/HEC/HEC-RAS/{ras_version}/RasProcess.exe"),
                 ]
             else:
-                paths = [Path(p) / "RasProcess.exe" for p in RasProcess.RAS_INSTALL_PATHS]
+                paths = [
+                    Path(p) / "RasProcess.exe" for p in RasProcess.RAS_INSTALL_PATHS
+                ]
 
             for path in paths:
                 if path.exists():
@@ -869,12 +1210,18 @@ Step 5: Configure (optional — auto-detection usually works)
             search_dirs = []
 
             if ras_version:
-                search_dirs.extend([
-                    drive_c / "Program Files (x86)" / "HEC" / "HEC-RAS" / ras_version,
-                    drive_c / "Program Files" / "HEC" / "HEC-RAS" / ras_version,
-                    drive_c / "HEC-RAS" / ras_version,
-                    drive_c / "HEC-RAS",
-                ])
+                search_dirs.extend(
+                    [
+                        drive_c
+                        / "Program Files (x86)"
+                        / "HEC"
+                        / "HEC-RAS"
+                        / ras_version,
+                        drive_c / "Program Files" / "HEC" / "HEC-RAS" / ras_version,
+                        drive_c / "HEC-RAS" / ras_version,
+                        drive_c / "HEC-RAS",
+                    ]
+                )
             else:
                 # Search all known version paths
                 for win_path in RasProcess.RAS_INSTALL_PATHS:
@@ -883,10 +1230,12 @@ Step 5: Configure (optional — auto-detection usually works)
                     search_dirs.append(drive_c / relative)
 
                 # Also search common custom locations
-                search_dirs.extend([
-                    drive_c / "HEC-RAS",
-                    drive_c / "hecras",
-                ])
+                search_dirs.extend(
+                    [
+                        drive_c / "HEC-RAS",
+                        drive_c / "hecras",
+                    ]
+                )
 
             for search_dir in search_dirs:
                 exe = search_dir / "RasProcess.exe"
@@ -931,8 +1280,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 )
 
             cmd, env, cwd = RasProcess._build_wine_command(
-                rasprocess_path, args, wine_config,
-                working_dir=working_dir
+                rasprocess_path, args, wine_config, working_dir=working_dir
             )
 
             logger.debug(f"Wine command: {' '.join(cmd[:3])}...")
@@ -948,7 +1296,8 @@ Step 5: Configure (optional — auto-detection usually works)
             # Filter Wine debug noise from stderr
             if result.stderr:
                 filtered_stderr = "\n".join(
-                    line for line in result.stderr.splitlines()
+                    line
+                    for line in result.stderr.splitlines()
                     if not line.startswith(("0", "wine: ")) and "err:" not in line[:20]
                 )
                 result = subprocess.CompletedProcess(
@@ -1177,7 +1526,9 @@ Step 5: Configure (optional — auto-detection usually works)
         if rasmap_path is None:
             ras_obj = ras_object or ras
             try:
-                if getattr(ras_obj, "initialized", False) or getattr(ras_obj, "project_folder", None):
+                if getattr(ras_obj, "initialized", False) or getattr(
+                    ras_obj, "project_folder", None
+                ):
                     rasmap_path = RasMap.get_rasmap_path(ras_obj)
             except Exception as e:
                 logger.debug(f"Could not auto-resolve .rasmap: {e}")
@@ -1192,7 +1543,9 @@ Step 5: Configure (optional — auto-detection usually works)
             f"GeomFilename={RasProcess._resolve_path_for_rasprocess(geom_hdf_path)}",
         ]
         if rasmap_path is not None and rasmap_path.exists():
-            args.append(f"RasMapFilename={RasProcess._resolve_path_for_rasprocess(rasmap_path)}")
+            args.append(
+                f"RasMapFilename={RasProcess._resolve_path_for_rasprocess(rasmap_path)}"
+            )
 
         logger.info(f"Running RasProcess.exe CompleteGeometry on {geom_hdf_path.name}")
         result = RasProcess._run_rasprocess(
@@ -1206,6 +1559,7 @@ Step 5: Configure (optional — auto-detection usually works)
         interp_surface_written = False
         try:
             import h5py
+
             with h5py.File(geom_hdf_path, "r") as hdf:
                 edge_lines_written = "Geometry/River Edge Lines" in hdf
                 interp_surface_written = (
@@ -1215,9 +1569,7 @@ Step 5: Configure (optional — auto-detection usually works)
             logger.debug(f"Post-run HDF inspection failed: {e}")
 
         success = (
-            result.returncode == 0
-            and "Error:" not in stdout
-            and edge_lines_written
+            result.returncode == 0 and "Error:" not in stdout and edge_lines_written
         )
         if not success:
             logger.warning(
@@ -1253,16 +1605,16 @@ Step 5: Configure (optional — auto-detection usually works)
             stacklevel=2,
         )
         return RasProcess.compute_geometry(
-            geom_hdf_path, rasmap_path=rasmap_path, ras_object=ras_object,
-            ras_version=ras_version, timeout=timeout,
+            geom_hdf_path,
+            rasmap_path=rasmap_path,
+            ras_object=ras_object,
+            ras_version=ras_version,
+            timeout=timeout,
         )
 
     @staticmethod
     @log_call
-    def get_plan_timestamps(
-        plan_number: str,
-        ras_object=None
-    ) -> List[str]:
+    def get_plan_timestamps(plan_number: str, ras_object=None) -> List[str]:
         """
         Get available output timestamps for a plan in RASMapper format.
 
@@ -1301,6 +1653,373 @@ Step 5: Configure (optional — auto-detection usually works)
 
     @staticmethod
     @log_call
+    def estimate_store_map_resources(
+        plan_number: str,
+        map_types: Sequence[str] = ("wse", "depth", "velocity"),
+        *,
+        terrain_name: Optional[str] = None,
+        performance: Optional[StoreMapPerformanceOptions] = None,
+        ras_object=None,
+    ) -> StoreMapResourceEstimate:
+        """Estimate StoreMap worker limits without modifying the project.
+
+        The estimate is deliberately conservative and reports its formula and
+        limiters. It does not edit the `.rasmap`, create output directories, or
+        launch HEC-RAS helpers.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        options = performance or StoreMapPerformanceOptions()
+        if not isinstance(options, StoreMapPerformanceOptions):
+            raise TypeError("performance must be a StoreMapPerformanceOptions")
+
+        normalized_plan = RasUtils.normalize_ras_number(plan_number)
+        plan_hdf = (
+            ras_obj.project_folder / f"{ras_obj.project_name}.p{normalized_plan}.hdf"
+        )
+        if not plan_hdf.exists():
+            raise FileNotFoundError(f"Plan HDF not found: {plan_hdf}")
+        rasmap_path = RasMap.get_rasmap_path(ras_obj)
+        if rasmap_path is None:
+            raise FileNotFoundError("No .rasmap file found in project folder")
+
+        normalized_maps = tuple(
+            dict.fromkeys(str(item).strip().casefold() for item in map_types)
+        )
+        if not normalized_maps or any(not item for item in normalized_maps):
+            raise ValueError("map_types must contain at least one non-empty value")
+        supported_maps = {"wse", "depth", "velocity"}
+        fallback_reasons = []
+        unsupported = sorted(set(normalized_maps) - supported_maps)
+        if unsupported:
+            fallback_reasons.append(
+                "parallel helper is unavailable for map types " + ", ".join(unsupported)
+            )
+        if terrain_name is not None:
+            fallback_reasons.append(
+                "parallel helper is unavailable with explicit terrain selection"
+            )
+        if len(normalized_maps) < 2:
+            fallback_reasons.append("fewer than two independent map jobs")
+
+        projection = RasProcess._get_projection_info(Path(rasmap_path))
+        terrain_paths = projection.terrain_paths
+        if not terrain_paths and projection.terrain_path is not None:
+            terrain_paths = (projection.terrain_path,)
+        terrain_estimates, estimate_warnings = _terrain_resource_estimates(
+            terrain_paths
+        )
+        if not terrain_estimates and options.worker_memory_override_mb is None:
+            fallback_reasons.append(
+                "active terrain dimensions are unavailable for memory estimation"
+            )
+
+        raw_surface_mb = sum(item.float32_surface_mb for item in terrain_estimates)
+        if options.worker_memory_override_mb is not None:
+            base_worker_mb = options.worker_memory_override_mb
+            estimate_source = "override"
+        elif terrain_estimates:
+            base_worker_mb = max(
+                options.minimum_worker_memory_mb,
+                int(raw_surface_mb * 4 + 512 + 0.999),
+            )
+            estimate_source = "heuristic"
+        else:
+            base_worker_mb = options.minimum_worker_memory_mb
+            estimate_source = "floor"
+        # GDAL_CACHEMAX is a per-helper cap. Conservatively include an explicit
+        # cap in admission so large per-process caches cannot oversubscribe RAM.
+        estimated_gdal_cache_mb = options.gdal_cachemax_mb or 0
+        estimated_worker_mb = base_worker_mb + estimated_gdal_cache_mb
+
+        memory = get_system_memory_snapshot()
+        effective_reserve_mb = max(
+            options.reserve_memory_mb,
+            int(memory.total_physical_mb * options.reserve_memory_fraction),
+        )
+        physical_budget_mb = max(
+            0,
+            memory.available_physical_mb - effective_reserve_mb,
+        )
+        usable_budget_mb = physical_budget_mb
+        if memory.commit_headroom_mb is not None:
+            usable_budget_mb = min(
+                usable_budget_mb,
+                max(0, memory.commit_headroom_mb - effective_reserve_mb),
+            )
+        raw_memory_limit = usable_budget_mb // estimated_worker_mb
+        memory_limit = max(1, int(raw_memory_limit))
+        cpu_limit = max(1, os.cpu_count() or 1)
+        request_limit = (
+            cpu_limit if options.max_workers is None else options.max_workers
+        )
+        job_limit = len(normalized_maps)
+        parallel_eligible = not fallback_reasons
+        warnings_list = list(estimate_warnings)
+        if raw_memory_limit < 1:
+            warnings_list.append(
+                "current memory headroom is below one estimated worker plus reserve"
+            )
+
+        selection_limits = [job_limit, cpu_limit, request_limit]
+        if options.memory_policy == "enforce":
+            selection_limits.append(memory_limit)
+        selected_workers = max(1, min(selection_limits))
+        if not parallel_eligible:
+            selected_workers = 1
+        if options.memory_policy == "warn" and selected_workers > memory_limit:
+            warnings_list.append(
+                f"requested selection {selected_workers} exceeds memory limit "
+                f"{memory_limit}; memory_policy='warn' permits launch"
+            )
+        if options.memory_policy == "ignore":
+            warnings_list.append("memory limit ignored by explicit policy")
+
+        return StoreMapResourceEstimate(
+            plan_number=normalized_plan,
+            hecras_version=(
+                getattr(ras_obj, "ras_version", None)
+                or getattr(ras_obj, "ras_version_detected", None)
+            ),
+            map_types=normalized_maps,
+            job_count=job_limit,
+            terrain=terrain_estimates,
+            formula_version="float32-surface-v1",
+            estimate_source=estimate_source,
+            surface_multiplier=4.0,
+            fixed_overhead_mb=512,
+            estimated_gdal_cache_mb=estimated_gdal_cache_mb,
+            estimated_worker_private_mb=int(estimated_worker_mb),
+            total_physical_mb=memory.total_physical_mb,
+            available_physical_mb=memory.available_physical_mb,
+            commit_total_mb=memory.commit_total_mb,
+            commit_limit_mb=memory.commit_limit_mb,
+            commit_headroom_mb=memory.commit_headroom_mb,
+            effective_reserve_mb=effective_reserve_mb,
+            cpu_limit=cpu_limit,
+            memory_limit=memory_limit,
+            request_limit=request_limit,
+            job_limit=job_limit,
+            selected_workers=selected_workers,
+            parallel_eligible=parallel_eligible,
+            fallback_reasons=tuple(fallback_reasons),
+            warnings=tuple(warnings_list),
+        )
+
+    @staticmethod
+    @log_call
+    def profile_store_maps(
+        plan_number: str,
+        output_path: Union[str, Path],
+        report_path: Optional[Union[str, Path]] = None,
+        *,
+        map_types: Sequence[str] = ("wse", "depth", "velocity"),
+        performance: Optional[StoreMapPerformanceOptions] = None,
+        profile: str = "Max",
+        render_mode: Optional[str] = None,
+        fix_georef: bool = True,
+        ras_object=None,
+        ras_version: Optional[str] = None,
+        timeout: int = 7200,
+        sample_interval_seconds: float = 0.2,
+        include_output_signatures: bool = True,
+    ) -> StoreMapProfileResult:
+        """Profile one stored-map configuration and write a JSON report.
+
+        The process-tree sampler records CPU, physical/private memory, Windows
+        commit headroom, I/O bytes and I/O operation counts by executable. The
+        report also captures the pre-run resource estimate and blockwise raster
+        signatures so configurations can be compared for output equivalence.
+        """
+        options = performance or StoreMapPerformanceOptions()
+        if not isinstance(options, StoreMapPerformanceOptions):
+            raise TypeError("performance must be a StoreMapPerformanceOptions")
+
+        normalized_maps = tuple(
+            dict.fromkeys(str(item).strip().casefold() for item in map_types)
+        )
+        supported = {"wse", "depth", "velocity"}
+        unsupported = sorted(set(normalized_maps) - supported)
+        if not normalized_maps or unsupported:
+            detail = f": {', '.join(unsupported)}" if unsupported else ""
+            raise ValueError(
+                "profile_store_maps supports wse, depth, and velocity" + detail
+            )
+
+        output_directory = Path(os.path.abspath(output_path))
+        output_directory.mkdir(parents=True, exist_ok=True)
+        resolved_report = (
+            Path(os.path.abspath(report_path))
+            if report_path is not None
+            else output_directory / "store_map_profile.json"
+        )
+        estimate = RasProcess.estimate_store_map_resources(
+            plan_number,
+            map_types=normalized_maps,
+            performance=options,
+            ras_object=ras_object,
+        )
+        ras_obj = ras_object or ras
+        profile_settings = {
+            "project_folder": str(RasUtils.safe_resolve(Path(ras_obj.project_folder))),
+            "output_path": str(output_directory),
+            "plan_number": RasUtils.normalize_ras_number(plan_number),
+            "map_types": list(normalized_maps),
+            "performance": options.to_dict(),
+            "profile": profile,
+            "render_mode": render_mode,
+            "fix_georef": fix_georef,
+            "ras_version": ras_version,
+            "timeout": timeout,
+            "sample_interval_seconds": sample_interval_seconds,
+            "include_output_signatures": include_output_signatures,
+        }
+
+        profiler = ProcessTreeProfiler(
+            sample_interval_seconds,
+            watch_paths=(output_directory,),
+        )
+        profiler.start()
+        started = time.perf_counter()
+        try:
+            generated = RasProcess.store_maps(
+                plan_number=plan_number,
+                output_path=output_directory,
+                profile=profile,
+                render_mode=render_mode,
+                wse="wse" in normalized_maps,
+                depth="depth" in normalized_maps,
+                velocity="velocity" in normalized_maps,
+                clear_existing=True,
+                fix_georef=fix_georef,
+                ras_object=ras_object,
+                ras_version=ras_version,
+                timeout=timeout,
+                performance=options,
+            )
+        except Exception as exc:
+            elapsed = time.perf_counter() - started
+            profiler.stop()
+            resolved_report.parent.mkdir(parents=True, exist_ok=True)
+            failure_report = {
+                "schema": "ras-commander.store-map-profile/1",
+                "status": "failed",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "elapsed_seconds": elapsed,
+                "resource_estimate": estimate.to_dict(),
+                "settings": profile_settings,
+                "samples": [sample.to_dict() for sample in profiler.samples],
+                "performance_summary": profiler.performance_summary(),
+                "phase_summary": profiler.phase_summary(),
+            }
+            resolved_report.write_text(
+                json.dumps(failure_report, indent=2),
+                encoding="utf-8",
+            )
+            raise
+        elapsed = time.perf_counter() - started
+        profiler.stop()
+
+        normalized_generated = {
+            key: tuple(Path(path) for path in paths) for key, paths in generated.items()
+        }
+        signatures: Dict[str, Dict[str, Any]] = {}
+        if include_output_signatures:
+            for paths in normalized_generated.values():
+                for raster_path in paths:
+                    if raster_path.suffix.casefold() in {".tif", ".tiff"}:
+                        signatures[str(raster_path)] = (
+                            RasProcess._stored_map_raster_signature(raster_path)
+                        )
+
+        counters = profiler.grouped_counters()
+        result = StoreMapProfileResult(
+            resource_estimate=estimate,
+            settings=profile_settings,
+            generated_files=normalized_generated,
+            elapsed_seconds=round(elapsed, 3),
+            peak_tree_rss_mb=round(profiler.peak_tree_rss_mb, 3),
+            peak_tree_private_mb=(
+                round(profiler.peak_tree_private_mb, 3)
+                if profiler.peak_tree_private_mb is not None
+                else None
+            ),
+            minimum_available_memory_mb=profiler.minimum_available_memory_mb,
+            minimum_commit_headroom_mb=profiler.minimum_commit_headroom_mb,
+            cpu_seconds_by_process={
+                name: float(values["cpu_seconds"]) for name, values in counters.items()
+            },
+            read_bytes_by_process={
+                name: int(values["read_bytes"]) for name, values in counters.items()
+            },
+            write_bytes_by_process={
+                name: int(values["write_bytes"]) for name, values in counters.items()
+            },
+            read_operations_by_process={
+                name: int(values["read_operations"])
+                for name, values in counters.items()
+            },
+            write_operations_by_process={
+                name: int(values["write_operations"])
+                for name, values in counters.items()
+            },
+            maximum_simultaneous_helpers=profiler.maximum_simultaneous_helpers,
+            samples=tuple(profiler.samples),
+            performance_summary=profiler.performance_summary(),
+            phase_summary=profiler.phase_summary(),
+            output_signatures=signatures,
+            report_path=resolved_report,
+        )
+        result.write_report()
+        return result
+
+    @staticmethod
+    def _stored_map_raster_signature(
+        raster_path: Union[str, Path],
+    ) -> Dict[str, Any]:
+        """Return a blockwise pixel digest and comparison-critical metadata."""
+        if not HAS_RASTERIO:
+            raise RuntimeError("rasterio is required for output signatures")
+        path = Path(raster_path)
+        digest = hashlib.sha256()
+        with rasterio.open(_windows_extended_length_path(path)) as source:
+            for band in range(1, source.count + 1):
+                for row_offset in range(0, source.height, 256):
+                    row_stop = min(source.height, row_offset + 256)
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            "ignore",
+                            message="Setting the shape on a NumPy array.*",
+                            category=DeprecationWarning,
+                        )
+                        block = source.read(
+                            band,
+                            window=((row_offset, row_stop), (0, source.width)),
+                        )
+                    digest.update(memoryview(block))
+            return {
+                "pixel_sha256": digest.hexdigest(),
+                "width": source.width,
+                "height": source.height,
+                "count": source.count,
+                "dtypes": list(source.dtypes),
+                "crs": source.crs.to_wkt() if source.crs else None,
+                "transform": list(source.transform),
+                "nodata": source.nodata,
+                "block_shapes": [list(shape) for shape in source.block_shapes],
+                "compression": (
+                    source.compression.value if source.compression else None
+                ),
+                "overviews": source.overviews(1) if source.count else [],
+                "overviews_by_band": [
+                    source.overviews(band) for band in range(1, source.count + 1)
+                ],
+                "file_size_bytes": os.stat(_windows_extended_length_path(path)).st_size,
+            }
+
+    @staticmethod
+    @log_call
     def _get_projection_info(rasmap_path: Path) -> ProjectionInfo:
         """
         Extract projection file path and terrain raster paths from .rasmap XML.
@@ -1323,7 +2042,9 @@ Step 5: Configure (optional — auto-detection usually works)
             if proj_elem is not None:
                 filename = proj_elem.get("Filename")
                 if filename:
-                    prj_path = rasmap_path.parent / filename.replace(".\\", "").replace("./", "")
+                    prj_path = rasmap_path.parent / filename.replace(".\\", "").replace(
+                        "./", ""
+                    )
                     if not os.path.exists(_windows_extended_length_path(prj_path)):
                         prj_path = None
 
@@ -1333,7 +2054,9 @@ Step 5: Configure (optional — auto-detection usually works)
                     continue
                 filename = layer.get("Filename")
                 if filename:
-                    terrain_hdf = rasmap_path.parent / filename.replace(".\\", "").replace("./", "")
+                    terrain_hdf = rasmap_path.parent / filename.replace(
+                        ".\\", ""
+                    ).replace("./", "")
                     if os.path.exists(_windows_extended_length_path(terrain_hdf)):
                         terrain_dir = terrain_hdf.parent
                         layer_tifs = _glob_paths(
@@ -1382,9 +2105,7 @@ Step 5: Configure (optional — auto-detection usually works)
     @staticmethod
     @log_call
     def _fix_georeferencing(
-        tif_path: Path,
-        prj_path: Optional[Path],
-        terrain_path: Path
+        tif_path: Path, prj_path: Optional[Path], terrain_path: Path
     ) -> bool:
         """
         Apply georeferencing to TIF from projection and terrain files.
@@ -1398,14 +2119,14 @@ Step 5: Configure (optional — auto-detection usually works)
             True if fix was applied, False otherwise
         """
         if not HAS_RASTERIO:
-            logger.warning(f"Skipping georef fix for {tif_path} (rasterio not installed)")
+            logger.warning(
+                f"Skipping georef fix for {tif_path} (rasterio not installed)"
+            )
             return False
 
         try:
             terrain_path = Path(terrain_path)
-            with rasterio.open(
-                _windows_extended_length_path(terrain_path)
-            ) as terrain:
+            with rasterio.open(_windows_extended_length_path(terrain_path)) as terrain:
                 transform = terrain.transform
                 terrain_crs = terrain.crs
 
@@ -1415,8 +2136,8 @@ Step 5: Configure (optional — auto-detection usually works)
             ):
                 with open(
                     _windows_extended_length_path(prj_path),
-                    'r',
-                    encoding='utf-8',
+                    "r",
+                    encoding="utf-8",
                 ) as f:
                     wkt = f.read()
                 crs = CRS.from_wkt(wkt)
@@ -1436,21 +2157,19 @@ Step 5: Configure (optional — auto-detection usually works)
                 return False
 
             tif_path = Path(tif_path)
-            tmp_path = tif_path.with_name(f"{tif_path.stem}.georef_tmp{tif_path.suffix}")
             tif_io_path = _windows_extended_length_path(tif_path)
-            tmp_io_path = _windows_extended_length_path(tmp_path)
-            with rasterio.open(tif_io_path) as src:
-                data = src.read()
-                profile = src.profile.copy()
-                tags = src.tags()
+            # GeoTIFF georeferencing is metadata.  Updating it in place avoids
+            # materializing a multi-gigabyte Float32 raster in Python solely to
+            # rewrite the same pixel blocks.
+            with rasterio.open(tif_io_path, "r+") as dst:
+                dst.crs = crs
+                dst.transform = transform
 
-            profile.update(crs=crs, transform=transform)
-            with rasterio.open(tmp_io_path, "w", **profile) as dst:
-                dst.write(data)
-                if tags:
-                    dst.update_tags(**tags)
-
-            os.replace(tmp_io_path, tif_io_path)
+            with rasterio.open(tif_io_path) as fixed:
+                if fixed.crs != crs or fixed.transform != transform:
+                    raise RuntimeError(
+                        "GeoTIFF metadata did not retain the requested CRS/transform"
+                    )
 
             logger.debug("Fixed georeferencing: %s", tif_path)
             return True
@@ -1481,12 +2200,19 @@ Step 5: Configure (optional — auto-detection usually works)
                     readable_tifs.append(tif_path)
                     continue
                 try:
-                    with rasterio.open(
-                        _windows_extended_length_path(tif_path)
-                    ) as src:
-                        if src.count < 1 or src.width < 1 or src.height < 1:
-                            raise ValueError("GeoTIFF has no readable raster band")
-                        src.read(1)
+                    # Keep GDAL's process-global block cache bounded during
+                    # validation. Its default is a percentage of system RAM,
+                    # which can retain gigabytes after a watershed-scale scan.
+                    with rasterio.Env(GDAL_CACHEMAX=64):
+                        with rasterio.open(
+                            _windows_extended_length_path(tif_path)
+                        ) as src:
+                            if src.count < 1 or src.width < 1 or src.height < 1:
+                                raise ValueError("GeoTIFF has no readable raster band")
+                            # GDAL computes checksums block by block. This validates
+                            # the complete stored map without loading a watershed-
+                            # scale raster into one NumPy array.
+                            src.checksum(1)
                     readable_tifs.append(tif_path)
                 except Exception as exc:
                     logger.warning(
@@ -1510,9 +2236,7 @@ Step 5: Configure (optional — auto-detection usually works)
         if not HAS_RASTERIO:
             return True
         try:
-            with rasterio.open(
-                _windows_extended_length_path(tif_path)
-            ) as src:
+            with rasterio.open(_windows_extended_length_path(tif_path)) as src:
                 return bool(src.read(1, masked=True).count())
         except Exception:
             return False
@@ -1588,7 +2312,9 @@ Step 5: Configure (optional — auto-detection usually works)
         """
         import h5py
 
-        timestamp_pattern = re.compile(r"(?P<prefix>\b\d{2}[A-Za-z]{3}\d{4} )(?P<hour>\d{2})(?=:)")
+        timestamp_pattern = re.compile(
+            r"(?P<prefix>\b\d{2}[A-Za-z]{3}\d{4} )(?P<hour>\d{2})(?=:)"
+        )
         changed = 0
         touch_paths: List[str] = []
 
@@ -1615,9 +2341,9 @@ Step 5: Configure (optional — auto-detection usually works)
                     if hour <= 12:
                         continue
                     normalized = (
-                        text[:match.start("hour")]
+                        text[: match.start("hour")]
                         + f"{hour - 12:02d}"
-                        + text[match.end("hour"):]
+                        + text[match.end("hour") :]
                     )
                     obj.attrs.modify(
                         attr_name,
@@ -1637,7 +2363,8 @@ Step 5: Configure (optional — auto-detection usually works)
                 if (
                     full_name.endswith("/Cells Minimum Elevation")
                     or full_name.endswith("/Cell Property Table")
-                    or full_name in {
+                    or full_name
+                    in {
                         "Geometry/Pump Stations/Attributes",
                         "Geometry/Cross Sections/Attributes",
                         "Geometry/Storage Areas/Attributes",
@@ -1648,11 +2375,13 @@ Step 5: Configure (optional — auto-detection usually works)
             geometry.visititems(collect_touch_paths)
             if not touch_paths:
                 geometry.visititems(
-                    lambda name, obj: touch_paths.append(f"Geometry/{name}")
-                    if not touch_paths
-                    and isinstance(obj, h5py.Dataset)
-                    and obj.size
-                    else None
+                    lambda name, obj: (
+                        touch_paths.append(f"Geometry/{name}")
+                        if not touch_paths
+                        and isinstance(obj, h5py.Dataset)
+                        and obj.size
+                        else None
+                    )
                 )
 
             # Rewriting the same values refreshes HDF object metadata consumed
@@ -1746,13 +2475,14 @@ Step 5: Configure (optional — auto-detection usually works)
         """
         try:
             import h5py
-            with h5py.File(hdf_path, 'r') as hdf:
-                if 'Plan Data' in hdf and 'Plan Information' in hdf['Plan Data']:
-                    info = hdf['Plan Data']['Plan Information']
-                    if 'Plan ShortID' in info.attrs:
-                        short_id = info.attrs['Plan ShortID']
+
+            with h5py.File(hdf_path, "r") as hdf:
+                if "Plan Data" in hdf and "Plan Information" in hdf["Plan Data"]:
+                    info = hdf["Plan Data"]["Plan Information"]
+                    if "Plan ShortID" in info.attrs:
+                        short_id = info.attrs["Plan ShortID"]
                         if isinstance(short_id, bytes):
-                            short_id = short_id.decode('utf-8')
+                            short_id = short_id.decode("utf-8")
                         return short_id.strip()
         except Exception as e:
             logger.debug(f"Could not read Plan ShortID from {hdf_path}: {e}")
@@ -1855,7 +2585,9 @@ Step 5: Configure (optional — auto-detection usually works)
             safe_profile = profile_name.replace(":", " ").replace("/", "_")
             is_polygon = "Polygon" in output_mode
             ext = ".shp" if is_polygon else ".vrt"
-            output_filename = f".\\{output_folder}\\{display_name} ({safe_profile}){ext}"
+            output_filename = (
+                f".\\{output_folder}\\{display_name} ({safe_profile}){ext}"
+            )
 
             # Create the Layer element
             layer_elem = ET.SubElement(plan_layer, "Layer")
@@ -1877,7 +2609,7 @@ Step 5: Configure (optional — auto-detection usually works)
             # Write back
             tree.write(
                 _windows_extended_length_path(rasmap_path),
-                encoding='utf-8',
+                encoding="utf-8",
                 xml_declaration=True,
             )
             logger.debug(f"Added stored map: {display_name} ({profile_name})")
@@ -1890,8 +2622,7 @@ Step 5: Configure (optional — auto-detection usually works)
     @staticmethod
     @log_call
     def _remove_stored_maps_from_rasmap(
-        rasmap_path: Path,
-        plan_hdf_filename: str = None
+        rasmap_path: Path, plan_hdf_filename: str = None
     ) -> int:
         """
         Remove all stored map configurations from .rasmap file.
@@ -1937,7 +2668,7 @@ Step 5: Configure (optional — auto-detection usually works)
             if removed_count > 0:
                 tree.write(
                     _windows_extended_length_path(rasmap_path),
-                    encoding='utf-8',
+                    encoding="utf-8",
                     xml_declaration=True,
                 )
                 logger.debug(f"Removed {removed_count} stored maps from rasmap")
@@ -1957,9 +2688,11 @@ Step 5: Configure (optional — auto-detection usually works)
         """Validate and exclusively select a registered RAS Mapper terrain."""
 
         layers = RasMap.list_terrain_layers(rasmap_path, ras_object=ras_object)
-        matches = layers[
-            layers["name"].fillna("").str.casefold() == terrain_name.casefold()
-        ] if not layers.empty else layers
+        matches = (
+            layers[layers["name"].fillna("").str.casefold() == terrain_name.casefold()]
+            if not layers.empty
+            else layers
+        )
         if len(matches) != 1:
             available = layers["name"].tolist() if not layers.empty else []
             raise ValueError(
@@ -1995,8 +2728,7 @@ Step 5: Configure (optional — auto-detection usually works)
             ras_object=ras_object,
         )
         selected = selected_layers[
-            selected_layers["name"].fillna("").str.casefold()
-            == terrain_name.casefold()
+            selected_layers["name"].fillna("").str.casefold() == terrain_name.casefold()
         ]
         other_terrains = selected_layers[
             (selected_layers["type"] == "TerrainLayer")
@@ -2014,7 +2746,9 @@ Step 5: Configure (optional — auto-detection usually works)
             raise RuntimeError(
                 f"Failed to select registered terrain {terrain_name!r} exclusively"
             )
-        logger.debug("Selected terrain layer for stored-map generation: %s", terrain_name)
+        logger.debug(
+            "Selected terrain layer for stored-map generation: %s", terrain_name
+        )
 
     @staticmethod
     def _resolve_benefit_terrain_name(
@@ -2103,9 +2837,11 @@ Step 5: Configure (optional — auto-detection usually works)
             rasmap_path,
             ras_object=ras_object,
         )
-        matches = layers[
-            layers["name"].fillna("").str.casefold() == terrain_name.casefold()
-        ] if not layers.empty else layers
+        matches = (
+            layers[layers["name"].fillna("").str.casefold() == terrain_name.casefold()]
+            if not layers.empty
+            else layers
+        )
         if len(matches) != 1:
             raise ValueError(
                 f"Registered terrain layer {terrain_name!r} was not found uniquely. "
@@ -2169,9 +2905,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 != selected_key
             ]
             if mismatches:
-                observed = ", ".join(
-                    f"{scope}={path}" for scope, path in mismatches
-                )
+                observed = ", ".join(f"{scope}={path}" for scope, path in mismatches)
                 raise ValueError(
                     "BenefitArea requires both plan HDFs to reference the same "
                     "registered single-TIFF terrain. "
@@ -2225,11 +2959,15 @@ Step 5: Configure (optional — auto-detection usually works)
         pre_plan = RasUtils.normalize_ras_number(config.pre_plan_number)
         post_plan = RasUtils.normalize_ras_number(post_plan_number)
         if pre_plan == post_plan:
-            raise ValueError("BenefitArea pre- and post-project plans must be different")
+            raise ValueError(
+                "BenefitArea pre- and post-project plans must be different"
+            )
 
         terrain_path = Path(config.terrain_tif)
-        if terrain_name and config.terrain_name and (
-            terrain_name.casefold() != config.terrain_name.casefold()
+        if (
+            terrain_name
+            and config.terrain_name
+            and (terrain_name.casefold() != config.terrain_name.casefold())
         ):
             raise ValueError(
                 "terrain_name conflicts with BenefitAreaConfig.terrain_name"
@@ -2269,8 +3007,7 @@ Step 5: Configure (optional — auto-detection usually works)
         ) -> Dict[str, List[Path]]:
             project_name = getattr(ras_obj, "project_name", "")
             plan_hdf = (
-                Path(ras_obj.project_folder)
-                / f"{project_name}.p{plan_number}.hdf"
+                Path(ras_obj.project_folder) / f"{project_name}.p{plan_number}.hdf"
             )
             last_reason = "stored map was not produced"
             last_result: Dict[str, List[Path]] = {}
@@ -2284,9 +3021,7 @@ Step 5: Configure (optional — auto-detection usually works)
                     depth=True,
                     velocity=post_velocity if include_post_maps else False,
                     froude=post_froude if include_post_maps else False,
-                    shear_stress=(
-                        post_shear_stress if include_post_maps else False
-                    ),
+                    shear_stress=(post_shear_stress if include_post_maps else False),
                     depth_x_velocity=(
                         post_depth_x_velocity if include_post_maps else False
                     ),
@@ -2296,9 +3031,7 @@ Step 5: Configure (optional — auto-detection usually works)
                     inundation_boundary=(
                         post_inundation_boundary if include_post_maps else False
                     ),
-                    arrival_time=(
-                        post_arrival_time if include_post_maps else False
-                    ),
+                    arrival_time=(post_arrival_time if include_post_maps else False),
                     duration=post_duration if include_post_maps else False,
                     percent_inundated=(
                         post_percent_inundated if include_post_maps else False
@@ -2321,10 +3054,9 @@ Step 5: Configure (optional — auto-detection usually works)
                     last_reason = f"found {len(depth_paths)} readable Depth TIFFs"
                 elif effective_wse and len(wse_paths) != 1:
                     last_reason = f"found {len(wse_paths)} readable WSE TIFFs"
-                elif (
-                    not RasProcess._tif_has_data(depth_paths[0])
-                    and RasProcess._hdf_has_wet_maximum_depth(plan_hdf)
-                ):
+                elif not RasProcess._tif_has_data(
+                    depth_paths[0]
+                ) and RasProcess._hdf_has_wet_maximum_depth(plan_hdf):
                     last_reason = (
                         "Depth TIFF is all NoData while the plan HDF contains wet cells"
                     )
@@ -2413,8 +3145,7 @@ Step 5: Configure (optional — auto-detection usually works)
         )
 
         generated: Dict[str, List[Path]] = {
-            key: [Path(path) for path in paths]
-            for key, paths in post_results.items()
+            key: [Path(path) for path in paths] for key, paths in post_results.items()
         }
         generated["benefit_source_pre_depth"] = [pre_depth_path]
         generated["benefit_source_post_depth"] = [post_depth_path]
@@ -2466,6 +3197,11 @@ Step 5: Configure (optional — auto-detection usually works)
         _log_summary: bool = True,
         terrain_name: Optional[str] = None,
         benefit_area: Optional[BenefitAreaConfig] = None,
+        *,
+        performance: Optional[StoreMapPerformanceOptions] = None,
+        max_workers: Any = _PERFORMANCE_UNSET,
+        memory_per_worker_mb: Any = _PERFORMANCE_UNSET,
+        reserve_memory_mb: Any = _PERFORMANCE_UNSET,
     ) -> Dict[str, List[Path]]:
         """
         Generate stored maps for a plan using RasStoreMapHelper.exe.
@@ -2478,14 +3214,14 @@ Step 5: Configure (optional — auto-detection usually works)
         Works on both Windows (native) and Linux (via Wine, auto-detected).
 
         Output Path Behavior:
-            The ``StoreAllMaps`` CLI command always writes output to
-            ``<project_folder>/<Plan ShortID>/``. When ``output_path`` is
-            specified, this method runs ``StoreAllMaps`` to the default
-            location, then moves the generated files to the requested
-            directory. This avoids a HEC-RAS 6.6 bug where individual
-            ``StoreMap`` commands with absolute ``OutputBaseFilename``
-            crash with ``NullReferenceException`` in
-            ``SetProjectionInfo()`` on multi-terrain projects.
+            The compatible single-worker path runs ``StoreAllMaps`` in
+            ``<project_folder>/<Plan ShortID>/``. The parallel path uses the
+            packaged helper's headless ``StoreMap`` implementation with unique
+            output bases in that same folder. When ``output_path`` is supplied,
+            this method moves only files created or changed by the current call
+            to the requested directory. The helper initializes terrain SRS
+            state explicitly, avoiding the raw RasProcess.exe ``StoreMap``
+            ``SetProjectionInfo()`` failure on multi-terrain projects.
 
         Args:
             plan_number: Plan number (e.g., "01", "06")
@@ -2535,6 +3271,13 @@ Step 5: Configure (optional — auto-detection usually works)
             ras_object: Optional RAS object instance
             ras_version: Optional specific HEC-RAS mapping-runtime version
             timeout: Command timeout in seconds (default: 600)
+            performance: Keyword-only StoreMap execution and resource policy.
+                The default preserves serial StoreAllMaps behavior. Use
+                ``StoreMapPerformanceOptions(max_workers=None)`` for automatic
+                memory- and CPU-bounded map-level parallelism.
+            max_workers, memory_per_worker_mb, reserve_memory_mb: Deprecated
+                keyword-only migration aliases. Do not combine them with
+                ``performance``.
 
         Returns:
             Dict mapping map type names to lists of generated file paths.
@@ -2566,11 +3309,29 @@ Step 5: Configure (optional — auto-detection usually works)
             ... )
             >>> print(results['wse'])
             [Path('C:/MyProject/CustomMaps/WSE (Max).Terrain.tif')]
+
+            >>> # Automatically use safe map-level process parallelism
+            >>> results = RasProcess.store_maps(
+            ...     plan_number="01",
+            ...     performance=StoreMapPerformanceOptions(max_workers=None),
+            ... )
         """
         # HISTORY: Prior to 2026-03-24, this used RasProcess.exe StoreAllMaps
         # which ignores RenderMode in HEC-RAS 6.x. Now uses RasStoreMapHelper.exe
         # which sets SharedData render mode via .NET reflection before executing
         # StoreAllMapsCommand, producing pixel-perfect output.
+
+        performance_options, performance_was_explicit = (
+            _coerce_store_map_performance_options(
+                performance,
+                max_workers=max_workers,
+                memory_per_worker_mb=memory_per_worker_mb,
+                reserve_memory_mb=reserve_memory_mb,
+            )
+        )
+        max_workers = performance_options.max_workers
+        memory_per_worker_mb = performance_options.minimum_worker_memory_mb
+        reserve_memory_mb = performance_options.reserve_memory_mb
 
         if benefit_area is not None:
             if not isinstance(benefit_area, BenefitAreaConfig):
@@ -2582,10 +3343,16 @@ Step 5: Configure (optional — auto-detection usually works)
                     "output_folder is not supported for BenefitArea because two plans "
                     "are mapped separately; use output_path for the comparison root"
                 )
+            if (
+                performance_was_explicit
+                and performance_options != StoreMapPerformanceOptions()
+            ):
+                raise ValueError(
+                    "Non-default StoreMap performance options are not supported "
+                    "for BenefitArea mapping"
+                )
 
-            effective_wse = (
-                benefit_area.include_wse if wse is None else bool(wse)
-            )
+            effective_wse = benefit_area.include_wse if wse is None else bool(wse)
             return RasProcess.store_benefit_area(
                 post_plan_number=plan_number,
                 config=benefit_area,
@@ -2631,7 +3398,7 @@ Step 5: Configure (optional — auto-detection usually works)
         plan_num = RasUtils.normalize_ras_number(plan_number)
         rasmap_path = RasMap.get_rasmap_path(ras_obj)
         if rasmap_path is None:
-            raise FileNotFoundError(f"No .rasmap file found in project folder")
+            raise FileNotFoundError("No .rasmap file found in project folder")
 
         plan_hdf = f"{ras_obj.project_name}.p{plan_num}.hdf"
         plan_hdf_path = ras_obj.project_folder / plan_hdf
@@ -2686,13 +3453,15 @@ Step 5: Configure (optional — auto-detection usually works)
                 profile_index = timestamps.index(profile)
                 profile_name = profile
             except ValueError:
-                logger.warning(f"Timestamp '{profile}' not found. Available: {timestamps[:5]}...")
+                logger.warning(
+                    f"Timestamp '{profile}' not found. Available: {timestamps[:5]}..."
+                )
                 profile_index = 2147483647
                 profile_name = "Max"
 
         # Backup rasmap
         rasmap_backup = rasmap_path.with_name(
-            f".{rasmap_path.name}.{os.getpid()}.{uuid.uuid4().hex}.bak"
+            f"{rasmap_path.name}.{os.getpid()}.{uuid.uuid4().hex}.bak"
         )
         shutil.copy2(
             _windows_extended_length_path(rasmap_path),
@@ -2722,28 +3491,30 @@ Step 5: Configure (optional — auto-detection usually works)
             # Build list of maps to generate
             maps_to_add = []
             if wse:
-                maps_to_add.append(('elevation', 'wse'))
+                maps_to_add.append(("elevation", "wse"))
             if depth:
-                maps_to_add.append(('depth', 'depth'))
+                maps_to_add.append(("depth", "depth"))
             if velocity:
-                maps_to_add.append(('velocity', 'velocity'))
+                maps_to_add.append(("velocity", "velocity"))
             if froude:
-                maps_to_add.append(('froude', 'froude'))
+                maps_to_add.append(("froude", "froude"))
             if shear_stress:
-                maps_to_add.append(('Shear', 'shear_stress'))
+                maps_to_add.append(("Shear", "shear_stress"))
             if depth_x_velocity:
-                maps_to_add.append(('depth and velocity', 'depth_x_velocity'))
+                maps_to_add.append(("depth and velocity", "depth_x_velocity"))
             if depth_x_velocity_sq:
-                maps_to_add.append(('depth and velocity squared', 'depth_x_velocity_sq'))
+                maps_to_add.append(
+                    ("depth and velocity squared", "depth_x_velocity_sq")
+                )
 
             # Whole-simulation map types: always Max profile, labeled by the
             # ArrivalDepth threshold (e.g. "Arrival Time (0.1ft hrs)") rather
             # than the profile name. XML names come from MAP_TYPES — the
             # single source of truth for RasMapperLib name strings.
             adr_flags = {
-                'arrival_time': arrival_time,
-                'duration': duration,
-                'percent_inundated': percent_inundated,
+                "arrival_time": arrival_time,
+                "duration": duration,
+                "percent_inundated": percent_inundated,
             }
             adr_maps_to_add = [
                 (RasProcess.MAP_TYPES[key][0], key)
@@ -2759,7 +3530,7 @@ Step 5: Configure (optional — auto-detection usually works)
                     map_type,
                     profile_name,
                     output_folder,
-                    profile_index
+                    profile_index,
                 )
 
             for map_type, _ in adr_maps_to_add:
@@ -2778,7 +3549,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 RasProcess._add_stored_map_to_rasmap(
                     rasmap_path,
                     plan_hdf,
-                    'depth',
+                    "depth",
                     profile_name,
                     output_folder,
                     profile_index,
@@ -2790,7 +3561,9 @@ Step 5: Configure (optional — auto-detection usually works)
             if output_path is not None:
                 resolved_output_path = Path(output_path)
                 if not resolved_output_path.is_absolute():
-                    resolved_output_path = (ras_obj.project_folder / resolved_output_path).resolve()
+                    resolved_output_path = RasUtils.safe_resolve(
+                        ras_obj.project_folder / resolved_output_path
+                    )
                 os.makedirs(
                     _windows_extended_length_path(resolved_output_path),
                     exist_ok=True,
@@ -2826,52 +3599,233 @@ Step 5: Configure (optional — auto-detection usually works)
 
             helper_mode = normalize_store_map_render_mode(current_mode)
 
-            logger.debug("Running StoreAllMaps for plan %s (mode=%s)", plan_num, helper_mode)
-
             effective_ras_version = ras_version or getattr(
                 ras_obj,
                 "ras_version",
                 None,
             )
+
+            parallel_requested = max_workers is None or max_workers > 1
+            unsupported_parallel_features = []
+            if adr_maps_to_add:
+                unsupported_parallel_features.append("arrival/duration products")
+            if inundation_boundary:
+                unsupported_parallel_features.append("inundation boundary")
+            if terrain_name is not None:
+                unsupported_parallel_features.append("explicit terrain selection")
+            unsupported_map_types = [
+                map_type
+                for map_type, _ in maps_to_add
+                if map_type not in _STORE_MAP_HELPER_TYPES
+            ]
+            if unsupported_map_types:
+                unsupported_parallel_features.append(
+                    "map types " + ", ".join(unsupported_map_types)
+                )
+
+            if parallel_requested and unsupported_parallel_features:
+                if max_workers is None:
+                    logger.info(
+                        "StoreMap auto parallelism selected the ordered serial path "
+                        "because this request includes: %s",
+                        ", ".join(unsupported_parallel_features),
+                    )
+                    parallel_requested = False
+                else:
+                    raise ValueError(
+                        "StoreMap process parallelism is unavailable for: "
+                        + ", ".join(unsupported_parallel_features)
+                        + ". Use max_workers=1 or remove the incompatible products."
+                    )
+
+            worker_count = 1
+            resource_estimate = None
+            if performance_was_explicit:
+                resource_map_types = [map_key for _, map_key in maps_to_add]
+                resource_map_types.extend(
+                    map_key for _, map_key in adr_maps_to_add
+                )
+                if inundation_boundary:
+                    resource_map_types.append("inundation_boundary")
+                resource_estimate = RasProcess.estimate_store_map_resources(
+                    plan_num,
+                    map_types=resource_map_types,
+                    terrain_name=terrain_name,
+                    performance=performance_options,
+                    ras_object=ras_obj,
+                )
+
+            if parallel_requested and len(maps_to_add) > 1:
+                if resource_estimate is None:
+                    raise RuntimeError(
+                        "StoreMap parallelism requires a resource estimate"
+                    )
+                worker_count = resource_estimate.selected_workers
+                logger.debug(
+                    "StoreMap worker selection: requested=%s; selected=%d; "
+                    "jobs=%d; memory_floor_mb=%d; estimated_memory_mb=%d; "
+                    "reserve_memory_mb=%d; memory_limit=%d; policy=%s",
+                    "auto" if max_workers is None else max_workers,
+                    worker_count,
+                    len(maps_to_add),
+                    memory_per_worker_mb,
+                    resource_estimate.estimated_worker_private_mb,
+                    resource_estimate.effective_reserve_mb,
+                    resource_estimate.memory_limit,
+                    performance_options.memory_policy,
+                )
+
             with RasProcess._mapper_compatible_result_hdf(
                 plan_hdf_path,
                 effective_ras_version,
             ) as mapper_hdf_path:
-                result = run_store_all_maps_helper(
-                    hecras_dir=hecras_dir,
-                    render_mode=helper_mode,
-                    rasmap_path=rasmap_path,
-                    result_hdf_path=mapper_hdf_path,
-                    timeout=timeout,
-                    working_dir=ras_obj.project_folder,
-                )
+                if worker_count > 1:
+                    logger.info(
+                        "Generating %d stored-map types with %d helper processes",
+                        len(maps_to_add),
+                        worker_count,
+                    )
+                    safe_profile = profile_name.replace(":", " ").replace("/", "_")
+                    jobs = []
+                    for map_type, map_key in maps_to_add:
+                        display_name = RasProcess.MAP_TYPES[map_key][1]
+                        jobs.append(
+                            (
+                                map_key,
+                                _STORE_MAP_HELPER_TYPES[map_type],
+                                output_dir / f"{display_name} ({safe_profile})",
+                            )
+                        )
 
-            logger.debug(f"StoreAllMaps stdout: {result.stdout}")
-            if result.stderr:
-                stderr_lines = result.stderr.splitlines()
-                stderr_preview = stderr_lines[0] if stderr_lines else result.stderr[:200]
-                logger.warning("StoreAllMaps reported stderr: %s", stderr_preview)
-                logger.debug("StoreAllMaps full stderr: %s", result.stderr)
-            if result.returncode != 0:
-                stderr_detail = next(
-                    (
-                        line.strip()
-                        for line in result.stderr.splitlines()
-                        if line.strip()
-                    ),
-                    "",
-                )
-                detail_suffix = (
-                    f": {stderr_detail[:500]}" if stderr_detail else ""
-                )
-                raise RuntimeError(
-                    "StoreAllMaps failed for plan "
-                    f"{plan_num} (exit code {result.returncode}){detail_suffix}"
-                )
+                    def run_job(map_key, helper_map_type, output_base):
+                        return run_store_map_helper(
+                            hecras_dir=hecras_dir,
+                            render_mode=helper_mode,
+                            map_type=helper_map_type,
+                            result_hdf_path=mapper_hdf_path,
+                            profile_name=profile_name,
+                            output_base_path=output_base,
+                            timeout=timeout,
+                            working_dir=ras_obj.project_folder,
+                            gdal_num_threads=(
+                                performance_options.gdal_num_threads_per_helper
+                            ),
+                            gdal_cachemax_mb=performance_options.gdal_cachemax_mb,
+                        )
 
-            for line in result.stdout.splitlines():
-                if "Maps generated" in line:
-                    logger.debug(line.strip())
+                    helper_results = _run_memory_admitted_store_map_jobs(
+                        jobs=jobs,
+                        worker_count=worker_count,
+                        performance=performance_options,
+                        estimate=resource_estimate,
+                        runner=run_job,
+                    )
+
+                    failures = []
+                    for map_key, result in helper_results.items():
+                        logger.debug(
+                            "StoreMap %s stdout: %s",
+                            map_key,
+                            result.stdout,
+                        )
+                        if result.stderr:
+                            stderr_lines = result.stderr.splitlines()
+                            stderr_preview = (
+                                stderr_lines[0] if stderr_lines else result.stderr[:200]
+                            )
+                            logger.warning(
+                                "StoreMap %s reported stderr: %s",
+                                map_key,
+                                stderr_preview,
+                            )
+                            logger.debug(
+                                "StoreMap %s full stderr: %s",
+                                map_key,
+                                result.stderr,
+                            )
+                        if result.returncode != 0:
+                            stderr_detail = next(
+                                (
+                                    line.strip()
+                                    for line in result.stderr.splitlines()
+                                    if line.strip()
+                                ),
+                                "",
+                            )
+                            failures.append(
+                                (
+                                    map_key,
+                                    result.returncode,
+                                    stderr_detail[:500],
+                                )
+                            )
+
+                    if failures:
+                        failure_text = "; ".join(
+                            f"{map_key} exit {returncode}"
+                            + (f": {detail}" if detail else "")
+                            for map_key, returncode, detail in failures
+                        )
+                        raise RuntimeError(
+                            f"Parallel StoreMap failed for plan {plan_num}: "
+                            f"{failure_text}"
+                        )
+                else:
+                    if resource_estimate is not None:
+                        _wait_for_store_map_admission(
+                            resource_estimate,
+                            performance_options,
+                        )
+                    logger.debug(
+                        "Running StoreAllMaps for plan %s (mode=%s)",
+                        plan_num,
+                        helper_mode,
+                    )
+                    result = run_store_all_maps_helper(
+                        hecras_dir=hecras_dir,
+                        render_mode=helper_mode,
+                        rasmap_path=rasmap_path,
+                        result_hdf_path=mapper_hdf_path,
+                        timeout=timeout,
+                        working_dir=ras_obj.project_folder,
+                        gdal_num_threads=(
+                            performance_options.gdal_num_threads_per_helper
+                        ),
+                        gdal_cachemax_mb=performance_options.gdal_cachemax_mb,
+                    )
+
+                    logger.debug(f"StoreAllMaps stdout: {result.stdout}")
+                    if result.stderr:
+                        stderr_lines = result.stderr.splitlines()
+                        stderr_preview = (
+                            stderr_lines[0] if stderr_lines else result.stderr[:200]
+                        )
+                        logger.warning(
+                            "StoreAllMaps reported stderr: %s",
+                            stderr_preview,
+                        )
+                        logger.debug("StoreAllMaps full stderr: %s", result.stderr)
+                    if result.returncode != 0:
+                        stderr_detail = next(
+                            (
+                                line.strip()
+                                for line in result.stderr.splitlines()
+                                if line.strip()
+                            ),
+                            "",
+                        )
+                        detail_suffix = (
+                            f": {stderr_detail[:500]}" if stderr_detail else ""
+                        )
+                        raise RuntimeError(
+                            "StoreAllMaps failed for plan "
+                            f"{plan_num} (exit code {result.returncode})"
+                            f"{detail_suffix}"
+                        )
+
+                    for line in result.stdout.splitlines():
+                        if "Maps generated" in line:
+                            logger.debug(line.strip())
 
             # Identify this invocation's outputs before looking up requested
             # map names.  Filtering every return value through this set keeps
@@ -2894,11 +3848,9 @@ Step 5: Configure (optional — auto-detection usually works)
             produced_paths = list(fresh_source_files)
 
             # If output_path was requested, move files from default dir to output_path
-            if (
-                resolved_output_path is not None
-                and os.path.normcase(os.path.abspath(resolved_output_path))
-                != os.path.normcase(os.path.abspath(output_dir))
-            ):
+            if resolved_output_path is not None and os.path.normcase(
+                os.path.abspath(resolved_output_path)
+            ) != os.path.normcase(os.path.abspath(output_dir)):
                 logger.debug(
                     "Moving generated files from %s to %s",
                     output_dir,
@@ -2936,8 +3888,7 @@ Step 5: Configure (optional — auto-detection usually works)
             def fresh_glob(pattern):
                 """Return matching files only when produced by this call."""
                 produced_keys = {
-                    os.path.normcase(os.path.abspath(path))
-                    for path in produced_paths
+                    os.path.normcase(os.path.abspath(path)) for path in produced_paths
                 }
                 return [
                     path
@@ -2960,14 +3911,18 @@ Step 5: Configure (optional — auto-detection usually works)
                 tif_files = fresh_glob(pattern)
 
                 if not tif_files:
-                    pattern_alt = f"{display_name_used.replace(' ', '_')} ({safe_profile})*.tif"
+                    pattern_alt = (
+                        f"{display_name_used.replace(' ', '_')} ({safe_profile})*.tif"
+                    )
                     tif_files = fresh_glob(pattern_alt)
 
                 if tif_files:
                     generated_files[map_key] = tif_files
                     logger.debug("Generated %d %s TIF(s)", len(tif_files), map_key)
                 else:
-                    logger.debug(f"No TIF files found for {map_key} with pattern: {pattern}")
+                    logger.debug(
+                        f"No TIF files found for {map_key} with pattern: {pattern}"
+                    )
 
             # Whole-simulation types label outputs by threshold, not profile
             # (e.g. "Arrival Time (0.1ft hrs).Terrain.tile.tif") — glob by
@@ -2983,7 +3938,9 @@ Step 5: Configure (optional — auto-detection usually works)
                     generated_files[map_key] = tif_files
                     logger.info(f"Generated {len(tif_files)} {map_key} TIF(s)")
                 else:
-                    logger.debug(f"No TIF files found for {map_key} with pattern: {pattern}")
+                    logger.debug(
+                        f"No TIF files found for {map_key} with pattern: {pattern}"
+                    )
 
             # Collect inundation boundary shapefile if requested
             if inundation_boundary:
@@ -2994,13 +3951,15 @@ Step 5: Configure (optional — auto-detection usually works)
                     shp_pattern_alt = f"Inundation_Boundary*({safe_profile})*.shp"
                     shp_files = fresh_glob(shp_pattern_alt)
                 if shp_files:
-                    generated_files['inundation_boundary'] = shp_files
+                    generated_files["inundation_boundary"] = shp_files
                     logger.debug(
                         "Generated %d inundation boundary shapefile(s)",
                         len(shp_files),
                     )
                 else:
-                    logger.debug(f"No inundation boundary shapefiles found with pattern: {shp_pattern}")
+                    logger.debug(
+                        f"No inundation boundary shapefiles found with pattern: {shp_pattern}"
+                    )
 
             # Fix georeferencing if requested
             if fix_georef and generated_files:
@@ -3042,8 +4001,12 @@ Step 5: Configure (optional — auto-detection usually works)
 
             generated_file_count = sum(len(paths) for paths in generated_files.values())
             if _log_summary:
+                operation_name = (
+                    "Parallel StoreMap" if worker_count > 1 else "StoreAllMaps"
+                )
                 logger.info(
-                    "StoreAllMaps complete: plan=%s; mode=%s; map_types=%d; files=%d",
+                    "%s complete: plan=%s; mode=%s; map_types=%d; files=%d",
+                    operation_name,
                     plan_num,
                     helper_mode,
                     len(generated_files),
@@ -3066,7 +4029,9 @@ Step 5: Configure (optional — auto-detection usually works)
     def store_maps_at_timesteps(
         plan_number: str,
         output_path: Union[str, Path] = None,
-        timesteps: Optional[Union[int, str, datetime, List[Union[int, str, datetime]]]] = None,
+        timesteps: Optional[
+            Union[int, str, datetime, List[Union[int, str, datetime]]]
+        ] = None,
         max_timesteps: Optional[int] = None,
         wse: bool = False,
         depth: bool = True,
@@ -3081,6 +4046,11 @@ Step 5: Configure (optional — auto-detection usually works)
         ras_object=None,
         ras_version: str = None,
         timeout: int = 600,
+        *,
+        performance: Optional[StoreMapPerformanceOptions] = None,
+        max_workers: Any = _PERFORMANCE_UNSET,
+        memory_per_worker_mb: Any = _PERFORMANCE_UNSET,
+        reserve_memory_mb: Any = _PERFORMANCE_UNSET,
     ) -> Dict[str, Dict[str, List[Path]]]:
         """
         Generate stored maps for one or more output timesteps.
@@ -3100,6 +4070,10 @@ Step 5: Configure (optional — auto-detection usually works)
                 depth_x_velocity_sq: Map types to export. Defaults to Depth only.
             render_mode, clear_existing, fix_georef, ras_object, ras_version,
                 timeout: Passed through to ``store_maps``.
+            performance: StoreMap execution and memory policy for every
+                timestep.
+            max_workers, memory_per_worker_mb, reserve_memory_mb: Deprecated
+                keyword-only migration aliases.
 
         Returns:
             Dict keyed by RASMapper timestamp string. Each value is the
@@ -3117,6 +4091,18 @@ Step 5: Configure (optional — auto-detection usually works)
             selected = selected[: int(max_timesteps)]
         if not selected:
             raise ValueError("No timesteps selected for stored map export")
+
+        performance_options, performance_was_explicit = (
+            _coerce_store_map_performance_options(
+                performance,
+                max_workers=max_workers,
+                memory_per_worker_mb=memory_per_worker_mb,
+                reserve_memory_mb=reserve_memory_mb,
+            )
+        )
+        forwarded_performance = (
+            performance_options if performance_was_explicit else None
+        )
 
         results: Dict[str, Dict[str, List[Path]]] = {}
         for timestamp in selected:
@@ -3138,8 +4124,11 @@ Step 5: Configure (optional — auto-detection usually works)
                 ras_version=ras_version,
                 timeout=timeout,
                 _log_summary=False,
+                performance=forwarded_performance,
             )
-            timestep_file_count = sum(len(paths) for paths in results[timestamp].values())
+            timestep_file_count = sum(
+                len(paths) for paths in results[timestamp].values()
+            )
             logger.debug(
                 "StoreAllMaps timestep complete: plan=%s; timestep=%s; files=%d",
                 plan_number,
@@ -3201,7 +4190,9 @@ Step 5: Configure (optional — auto-detection usually works)
 
             parsed_text = None
             try:
-                parsed_text = pd.Timestamp(item_text).strftime("%d%b%Y %H:%M:%S").upper()
+                parsed_text = (
+                    pd.Timestamp(item_text).strftime("%d%b%Y %H:%M:%S").upper()
+                )
             except Exception:
                 pass
             if parsed_text in available:
@@ -3230,13 +4221,19 @@ Step 5: Configure (optional — auto-detection usually works)
         fix_georef: bool = True,
         ras_object=None,
         ras_version: str = None,
-        timeout: int = 1800
+        timeout: int = 1800,
+        *,
+        performance: Optional[StoreMapPerformanceOptions] = None,
+        max_workers: Any = _PERFORMANCE_UNSET,
+        memory_per_worker_mb: Any = _PERFORMANCE_UNSET,
+        reserve_memory_mb: Any = _PERFORMANCE_UNSET,
     ) -> Dict[str, Dict[str, List[Path]]]:
         """
-        Generate stored maps for all plans in the project.
+        Compatibility alias for ``RasMap.store_all_maps(mode="all_plans")``.
 
-        This is a convenience wrapper around store_maps() that processes
-        all plans with HDF results.
+        New code should use the canonical ``RasMap.store_all_maps()`` entry
+        point, which exposes native, selected-map, timestep, and all-plan
+        modes. This method preserves the historical RasProcess return shape.
 
         Args:
             output_folder: Base output folder (plan name appended). If None, uses plan titles.
@@ -3254,73 +4251,72 @@ Step 5: Configure (optional — auto-detection usually works)
             ras_object: Optional RAS object instance
             ras_version: Optional specific HEC-RAS version
             timeout: Timeout per plan in seconds (default: 1800)
+            performance: StoreMap execution and memory policy for every plan.
+            max_workers, memory_per_worker_mb, reserve_memory_mb: Deprecated
+                keyword-only migration aliases.
 
         Returns:
             Dict mapping plan numbers to their generated files dict.
 
         Example:
-            >>> all_results = RasProcess.store_all_maps(profile="Max")
-            >>> for plan, files in all_results.items():
-            ...     print(f"Plan {plan}: {len(files.get('wse', []))} WSE files")
+            >>> summary = RasMap.store_all_maps(mode="all_plans", profile="Max")
+            >>> for plan, plan_result in summary["plans"].items():
+            ...     print(plan, plan_result["success"])
         """
-        # HISTORY: Prior to 2026-03-24, this was deprecated because it delegated
-        # to store_maps() which used RasProcess.exe (ignores RenderMode in 6.x).
-        # Now uses RasStoreMapHelper.exe via store_maps().
+        performance_options, performance_was_explicit = (
+            _coerce_store_map_performance_options(
+                performance,
+                max_workers=max_workers,
+                memory_per_worker_mb=memory_per_worker_mb,
+                reserve_memory_mb=reserve_memory_mb,
+            )
+        )
+        forwarded_performance = (
+            performance_options if performance_was_explicit else None
+        )
+        warnings.warn(
+            "RasProcess.store_all_maps() is a compatibility alias; use "
+            "RasMap.store_all_maps(mode='all_plans', ...) instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        from .RasMap import RasMap
 
-        all_results = {}
-
-        # Get plans with HDF results
-        for _, row in ras_obj.plan_df.iterrows():
-            plan_num = row['plan_number']
-            hdf_path = ras_obj.project_folder / f"{ras_obj.project_name}.p{plan_num}.hdf"
-
-            if not hdf_path.exists():
-                logger.debug(f"Skipping plan {plan_num} - no HDF results")
-                continue
-
-            # Determine output folder for this plan
-            if output_folder:
-                plan_output = f"{output_folder}_{plan_num}"
-            else:
-                plan_output = None  # Will use plan title
-
-            # Per-plan output_path subdirectory
-            plan_output_path = None
-            if output_path is not None:
-                plan_output_path = Path(output_path) / f"plan_{plan_num}"
-
-            try:
-                results = RasProcess.store_maps(
-                    plan_number=plan_num,
-                    output_folder=plan_output,
-                    output_path=plan_output_path,
-                    profile=profile,
-                    wse=wse,
-                    depth=depth,
-                    velocity=velocity,
-                    froude=froude,
-                    shear_stress=shear_stress,
-                    depth_x_velocity=depth_x_velocity,
-                    depth_x_velocity_sq=depth_x_velocity_sq,
-                    fix_georef=fix_georef,
-                    ras_object=ras_obj,
-                    ras_version=ras_version,
-                    timeout=timeout
-                )
-                all_results[plan_num] = results
-
-            except Exception as e:
-                logger.error(f"Failed to generate maps for plan {plan_num}: {e}")
-                all_results[plan_num] = {'error': str(e)}
-
-        return all_results
+        summary = RasMap.store_all_maps(
+            plan_number=None,
+            ras_object=ras_object,
+            timeout=timeout,
+            mode="all_plans",
+            output_folder=output_folder,
+            output_path=output_path,
+            profile=profile,
+            wse=wse,
+            depth=depth,
+            velocity=velocity,
+            froude=froude,
+            shear_stress=shear_stress,
+            depth_x_velocity=depth_x_velocity,
+            depth_x_velocity_sq=depth_x_velocity_sq,
+            fix_georef=fix_georef,
+            ras_version=ras_version,
+            performance=forwarded_performance,
+        )
+        return {
+            plan_num: (
+                {
+                    map_type: [Path(path) for path in paths]
+                    for map_type, paths in plan_result.get("files_by_type", {}).items()
+                }
+                if plan_result.get("success")
+                else {"error": plan_result.get("error", "stored map failure")}
+            )
+            for plan_num, plan_result in summary["plans"].items()
+        }
 
     @staticmethod
     @log_call
     def run_command(
-        command_xml: str,
-        ras_version: str = None,
-        timeout: int = 600
+        command_xml: str, ras_version: str = None, timeout: int = 600
     ) -> subprocess.CompletedProcess:
         """
         Run a raw RasProcess.exe command from XML string.
@@ -3337,7 +4333,9 @@ Step 5: Configure (optional — auto-detection usually works)
             which runs ``StoreAllMaps`` then moves files to the requested path.
             Individual ``StoreMap`` commands with absolute ``OutputBaseFilename``
             crash on multi-terrain projects (NullReferenceException in
-            ``SetProjectionInfo``), so ``store_maps()`` avoids that approach.
+            ``SetProjectionInfo``). ``store_maps(max_workers=...)`` uses the
+            packaged mapper helper's separate headless implementation, which
+            initializes SRS state explicitly instead of using this raw command.
 
         Args:
             command_xml: XML command string
@@ -3362,7 +4360,7 @@ Step 5: Configure (optional — auto-detection usually works)
             raise FileNotFoundError("RasProcess.exe not found")
 
         # Warn if StoreAllMaps is used — it cannot write to a custom output path
-        if 'StoreAllMaps' in command_xml:
+        if "StoreAllMaps" in command_xml:
             logger.warning(
                 "StoreAllMaps always writes to <project>/<Plan ShortID>/. "
                 "To write to a custom directory, use store_maps(output_path=...) "
@@ -3377,14 +4375,14 @@ Step 5: Configure (optional — auto-detection usually works)
                 temp_dir = wine_config.wine_prefix / "drive_c" / "temp"
                 temp_dir.mkdir(parents=True, exist_ok=True)
                 xml_path = temp_dir / f"rasprocess_cmd_{os.getpid()}.xml"
-                with open(xml_path, 'w', encoding='utf-8') as f:
+                with open(xml_path, "w", encoding="utf-8") as f:
                     f.write(command_xml)
                 xml_wine_path = RasProcess._linux_to_wine_path(xml_path)
             else:
                 raise RuntimeError("Wine not configured on Linux")
         else:
             f = tempfile.NamedTemporaryFile(
-                mode='w', suffix='.xml', delete=False, encoding='utf-8'
+                mode="w", suffix=".xml", delete=False, encoding="utf-8"
             )
             f.write(command_xml)
             f.close()
@@ -3401,7 +4399,9 @@ Step 5: Configure (optional — auto-detection usually works)
             logger.debug(f"Command output: {result.stdout}")
             if result.stderr:
                 stderr_lines = result.stderr.splitlines()
-                stderr_preview = stderr_lines[0] if stderr_lines else result.stderr[:200]
+                stderr_preview = (
+                    stderr_lines[0] if stderr_lines else result.stderr[:200]
+                )
                 logger.warning("Command reported stderr: %s", stderr_preview)
                 logger.debug("Command full stderr: %s", result.stderr)
 
@@ -3418,7 +4418,7 @@ Step 5: Configure (optional — auto-detection usually works)
         output_tiff: Union[str, Path],
         min_depth: float = 0.0,
         reproject_wgs84: bool = False,
-        ras_object=None
+        ras_object=None,
     ) -> Dict[str, Any]:
         """
         Apply depth threshold to a GeoTIFF and optionally reproject to WGS84.
@@ -3483,14 +4483,19 @@ Step 5: Configure (optional — auto-detection usually works)
             profile.update(nodata=nodata)
 
             if reproject_wgs84:
-                from rasterio.warp import calculate_default_transform, reproject as rio_reproject
+                from rasterio.warp import (
+                    calculate_default_transform,
+                    reproject as rio_reproject,
+                )
                 from rasterio.crs import CRS as RioCRS
 
                 dst_crs = RioCRS.from_epsg(4326)
                 transform, width, height = calculate_default_transform(
                     src.crs, dst_crs, src.width, src.height, *src.bounds
                 )
-                profile.update(crs=dst_crs, transform=transform, width=width, height=height)
+                profile.update(
+                    crs=dst_crs, transform=transform, width=width, height=height
+                )
 
                 dst_data = np.full((height, width), nodata, dtype=data.dtype)
                 rio_reproject(
@@ -3505,7 +4510,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 )
                 data = dst_data
 
-            with rasterio.open(output_path, 'w', **profile) as dst:
+            with rasterio.open(output_path, "w", **profile) as dst:
                 dst.write(data, 1)
 
         logger.debug(
@@ -3514,12 +4519,12 @@ Step 5: Configure (optional — auto-detection usually works)
         )
 
         return {
-            'input': str(input_path),
-            'output': str(output_path),
-            'cells_total': cells_total,
-            'cells_filtered': cells_filtered,
-            'cells_remaining': cells_total - cells_filtered,
-            'reprojected': reproject_wgs84,
+            "input": str(input_path),
+            "output": str(output_path),
+            "cells_total": cells_total,
+            "cells_filtered": cells_filtered,
+            "cells_remaining": cells_total - cells_filtered,
+            "reprojected": reproject_wgs84,
         }
 
     @staticmethod
@@ -3533,7 +4538,7 @@ Step 5: Configure (optional — auto-detection usually works)
         profile: str = "Max",
         ras_object=None,
         ras_version: str = None,
-        timeout: int = 600
+        timeout: int = 600,
     ) -> pd.DataFrame:
         """
         Batch export depth rasters for multiple plans with post-processing.
@@ -3599,18 +4604,20 @@ Step 5: Configure (optional — auto-detection usually works)
                     velocity=False,
                     ras_object=ras_obj,
                     ras_version=ras_version,
-                    timeout=timeout
+                    timeout=timeout,
                 )
             except Exception as e:
                 logger.error(f"store_maps failed for plan {plan_num}: {e}")
-                report_rows.append({
-                    'plan': plan_num,
-                    'map_type': 'all',
-                    'source': None,
-                    'output': None,
-                    'cells_filtered': 0,
-                    'status': f'error: {e}',
-                })
+                report_rows.append(
+                    {
+                        "plan": plan_num,
+                        "map_type": "all",
+                        "source": None,
+                        "output": None,
+                        "cells_filtered": 0,
+                        "status": f"error: {e}",
+                    }
+                )
                 continue
 
             # Post-process each generated TIF
@@ -3620,47 +4627,58 @@ Step 5: Configure (optional — auto-detection usually works)
                     if not tif_path.exists():
                         continue
 
-                    out_name = naming_template.format(
-                        plan=plan_num, map_type=map_type
-                    ) + '.tif'
+                    out_name = (
+                        naming_template.format(plan=plan_num, map_type=map_type)
+                        + ".tif"
+                    )
                     out_path = output_path / out_name
 
                     try:
                         if HAS_RASTERIO and (min_depth > 0 or reproject_wgs84):
                             result = RasProcess.apply_depth_threshold(
-                                tif_path, out_path,
+                                tif_path,
+                                out_path,
                                 min_depth=min_depth,
-                                reproject_wgs84=reproject_wgs84
+                                reproject_wgs84=reproject_wgs84,
                             )
-                            cells_filtered = result['cells_filtered']
+                            cells_filtered = result["cells_filtered"]
                         else:
                             # Just copy the file
                             import shutil
+
                             shutil.copy2(tif_path, out_path)
                             cells_filtered = 0
 
-                        report_rows.append({
-                            'plan': plan_num,
-                            'map_type': map_type,
-                            'source': str(tif_path),
-                            'output': str(out_path),
-                            'cells_filtered': cells_filtered,
-                            'status': 'exported',
-                        })
+                        report_rows.append(
+                            {
+                                "plan": plan_num,
+                                "map_type": map_type,
+                                "source": str(tif_path),
+                                "output": str(out_path),
+                                "cells_filtered": cells_filtered,
+                                "status": "exported",
+                            }
+                        )
                     except Exception as e:
                         logger.error(f"Post-processing failed for {tif_path.name}: {e}")
-                        report_rows.append({
-                            'plan': plan_num,
-                            'map_type': map_type,
-                            'source': str(tif_path),
-                            'output': None,
-                            'cells_filtered': 0,
-                            'status': f'error: {e}',
-                        })
+                        report_rows.append(
+                            {
+                                "plan": plan_num,
+                                "map_type": map_type,
+                                "source": str(tif_path),
+                                "output": None,
+                                "cells_filtered": 0,
+                                "status": f"error: {e}",
+                            }
+                        )
 
         report = pd.DataFrame(report_rows)
-        n_exported = len(report[report['status'] == 'exported']) if not report.empty else 0
-        logger.info(f"Batch export: {n_exported} rasters exported for {len(plan_numbers)} plans")
+        n_exported = (
+            len(report[report["status"] == "exported"]) if not report.empty else 0
+        )
+        logger.info(
+            f"Batch export: {n_exported} rasters exported for {len(plan_numbers)} plans"
+        )
         return report
 
     @staticmethod
@@ -3670,7 +4688,7 @@ Step 5: Configure (optional — auto-detection usually works)
         output_path: Union[str, Path],
         method: str = "max",
         extent_mode: str = "intersection",
-        ras_object=None
+        ras_object=None,
     ) -> Path:
         """
         Composite multiple rasters using max, min, or mean method.
@@ -3730,24 +4748,27 @@ Step 5: Configure (optional — auto-detection usually works)
                 )
 
             # Map method name to rasterio merge method
-            if method == 'max':
-                merge_method = 'max'
-            elif method == 'min':
-                merge_method = 'min'
-            elif method == 'mean':
+            if method == "max":
+                merge_method = "max"
+            elif method == "min":
+                merge_method = "min"
+            elif method == "mean":
                 # rasterio doesn't have built-in mean, use manual approach
-                merge_method = 'max'  # placeholder, we'll handle mean separately
+                merge_method = "max"  # placeholder, we'll handle mean separately
             else:
-                raise ValueError(f"Unknown method '{method}'. Use 'max', 'min', or 'mean'.")
+                raise ValueError(
+                    f"Unknown method '{method}'. Use 'max', 'min', or 'mean'."
+                )
 
-            if method == 'mean':
+            if method == "mean":
                 # Manual mean compositing
                 # Read first raster for reference
                 ref = datasets[0]
                 bounds_list = [ds.bounds for ds in datasets]
 
-                if extent_mode == 'intersection':
+                if extent_mode == "intersection":
                     from rasterio.transform import from_bounds
+
                     min_left = max(b.left for b in bounds_list)
                     min_bottom = max(b.bottom for b in bounds_list)
                     max_right = min(b.right for b in bounds_list)
@@ -3765,12 +4786,14 @@ Step 5: Configure (optional — auto-detection usually works)
                 height = int((max_top - min_bottom) / res_y)
 
                 from rasterio.transform import from_bounds as fb
+
                 transform = fb(min_left, min_bottom, max_right, max_top, width, height)
 
                 sum_data = np.zeros((height, width), dtype=np.float64)
                 count_data = np.zeros((height, width), dtype=np.int32)
 
                 from rasterio.warp import reproject as rio_reproject
+
                 for ds in datasets:
                     temp = np.full((height, width), np.nan, dtype=np.float64)
                     rio_reproject(
@@ -3786,19 +4809,26 @@ Step 5: Configure (optional — auto-detection usually works)
                     sum_data[valid] += temp[valid]
                     count_data[valid] += 1
 
-                mean_data = np.where(count_data > 0, sum_data / count_data, ref.nodata or -9999.0)
+                mean_data = np.where(
+                    count_data > 0, sum_data / count_data, ref.nodata or -9999.0
+                )
 
                 profile = ref.profile.copy()
                 profile.update(
-                    transform=transform, width=width, height=height,
-                    dtype='float64', count=1
+                    transform=transform,
+                    width=width,
+                    height=height,
+                    dtype="float64",
+                    count=1,
                 )
                 out_path.parent.mkdir(parents=True, exist_ok=True)
-                with rasterio.open(out_path, 'w', **profile) as dst:
+                with rasterio.open(out_path, "w", **profile) as dst:
                     dst.write(mean_data, 1)
             else:
                 # Use rasterio merge for max/min
-                bounds_mode = 'intersection' if extent_mode == 'intersection' else 'union'
+                bounds_mode = (
+                    "intersection" if extent_mode == "intersection" else "union"
+                )
                 merged, transform = merge(datasets, method=merge_method, bounds=None)
 
                 profile = datasets[0].profile.copy()
@@ -3806,17 +4836,19 @@ Step 5: Configure (optional — auto-detection usually works)
                     transform=transform,
                     width=merged.shape[2],
                     height=merged.shape[1],
-                    count=1
+                    count=1,
                 )
                 out_path.parent.mkdir(parents=True, exist_ok=True)
-                with rasterio.open(out_path, 'w', **profile) as dst:
+                with rasterio.open(out_path, "w", **profile) as dst:
                     dst.write(merged[0], 1)
 
         finally:
             for ds in datasets:
                 ds.close()
 
-        logger.info(f"Composite raster ({method}): {len(input_paths)} inputs → {out_path.name}")
+        logger.info(
+            f"Composite raster ({method}): {len(input_paths)} inputs → {out_path.name}"
+        )
         return out_path
 
     @staticmethod
@@ -3826,7 +4858,7 @@ Step 5: Configure (optional — auto-detection usually works)
         map_type: str = "depth",
         output_path: Union[str, Path] = None,
         method: str = "max",
-        ras_object=None
+        ras_object=None,
     ) -> Path:
         """
         Composite stored map TIFs from multiple plans.
@@ -3900,7 +4932,5 @@ Step 5: Configure (optional — auto-detection usually works)
             output_path = ras_obj.project_folder / f"composite_{map_type}_{method}.tif"
 
         return RasProcess.composite_rasters(
-            input_tiffs=input_tiffs,
-            output_path=output_path,
-            method=method
+            input_tiffs=input_tiffs, output_path=output_path, method=method
         )

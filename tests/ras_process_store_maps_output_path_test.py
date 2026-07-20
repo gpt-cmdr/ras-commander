@@ -85,10 +85,7 @@ def test_mapper_compatible_hdf_normalizes_temporary_copy_and_restores_source(
             if isinstance(data_date, bytes):
                 data_date = data_date.decode()
             assert geometry_time == "15Jul2026 07:33:14"
-            assert (
-                data_date
-                == "15Jul2026 07:33:21"
-            )
+            assert data_date == "15Jul2026 07:33:21"
 
     assert hdf_path.read_bytes() == original_bytes
     assert not list(tmp_path.glob(".Demo.p01.hdf.*.mapper-*"))
@@ -239,6 +236,403 @@ def _configure_store_maps_test(monkeypatch, tmp_path):
     return ras_obj, output_dir, custom_output_dir
 
 
+def test_store_map_worker_count_respects_memory_and_cpu_limits(monkeypatch):
+    memory = SimpleNamespace(
+        total=32 * 1024**3,
+        available=10 * 1024**3,
+    )
+    monkeypatch.setattr(ras_process_module.os, "cpu_count", lambda: 8)
+    monkeypatch.setattr("psutil.virtual_memory", lambda: memory)
+
+    assert (
+        ras_process_module._resolve_store_map_worker_count(
+            max_workers=None,
+            job_count=6,
+            memory_per_worker_mb=600,
+            reserve_memory_mb=4096,
+        )
+        == 3
+    )
+    assert (
+        ras_process_module._resolve_store_map_worker_count(
+            max_workers=2,
+            job_count=6,
+            memory_per_worker_mb=600,
+            reserve_memory_mb=4096,
+        )
+        == 2
+    )
+
+
+def test_store_map_worker_memory_estimate_uses_uncompressed_terrain_grid(
+    monkeypatch,
+    tmp_path,
+):
+    class FakeRaster:
+        width = 28_916
+        height = 26_316
+        dtypes = ("float32",)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(ras_process_module, "HAS_RASTERIO", True)
+    monkeypatch.setattr(
+        ras_process_module.rasterio,
+        "open",
+        lambda _path: FakeRaster(),
+    )
+
+    surface_bytes = 28_916 * 26_316 * 4
+    expected_mb = (surface_bytes * 4 + 512 * 1024**2 + 1024**2 - 1) // 1024**2
+    assert (
+        ras_process_module._estimate_store_map_worker_memory_mb(
+            (tmp_path / "Terrain.tif",),
+            configured_floor_mb=600,
+        )
+        == expected_mb
+    )
+
+
+def test_store_map_worker_memory_estimate_keeps_configured_floor(monkeypatch):
+    monkeypatch.setattr(ras_process_module, "HAS_RASTERIO", False)
+
+    assert (
+        ras_process_module._estimate_store_map_worker_memory_mb(
+            (Path("Terrain.tif"),),
+            configured_floor_mb=2048,
+        )
+        == 2048
+    )
+
+
+def test_spring_river_memory_estimate_limits_32_gib_host_to_one_worker(
+    monkeypatch,
+    tmp_path,
+):
+    class FakeRaster:
+        width = 28_916
+        height = 26_316
+        dtypes = ("float32",)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+    memory = SimpleNamespace(
+        total=32 * 1024**3,
+        available=24 * 1024**3,
+    )
+    monkeypatch.setattr(ras_process_module, "HAS_RASTERIO", True)
+    monkeypatch.setattr(ras_process_module.os, "cpu_count", lambda: 8)
+    monkeypatch.setattr("psutil.virtual_memory", lambda: memory)
+    monkeypatch.setattr(
+        ras_process_module.rasterio,
+        "open",
+        lambda _path: FakeRaster(),
+    )
+
+    estimated_mb = ras_process_module._estimate_store_map_worker_memory_mb(
+        (tmp_path / "Terrain (2).tif",),
+        configured_floor_mb=600,
+    )
+
+    assert estimated_mb > 12_000
+    assert (
+        ras_process_module._resolve_store_map_worker_count(
+            max_workers=None,
+            job_count=3,
+            memory_per_worker_mb=estimated_mb,
+            reserve_memory_mb=4096,
+        )
+        == 1
+    )
+
+
+def test_store_maps_parallel_runs_individual_helpers_and_moves_outputs(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, output_dir, custom_output_dir = _configure_store_maps_test(
+        monkeypatch,
+        tmp_path,
+    )
+    state_lock = threading.Lock()
+    state = {"active": 0, "maximum": 0, "calls": []}
+
+    monkeypatch.setattr(
+        RasProcess,
+        "estimate_store_map_resources",
+        staticmethod(
+            lambda *_args, **_kwargs: SimpleNamespace(
+                selected_workers=3,
+                estimated_worker_private_mb=600,
+                effective_reserve_mb=4096,
+                memory_limit=3,
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        ras_process_module,
+        "_store_map_admission_reasons",
+        lambda _estimate: (),
+    )
+
+    def fail_store_all_maps(**_kwargs):
+        raise AssertionError("parallel path must not call StoreAllMaps")
+
+    def fake_run_store_map_helper(**kwargs):
+        with state_lock:
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+            state["calls"].append(kwargs)
+        try:
+            time.sleep(0.05)
+            output_base = Path(kwargs["output_base_path"])
+            output_base.with_name(output_base.name + ".Terrain.tif").write_text(
+                kwargs["map_type"],
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(
+                args=["RasStoreMapHelper.exe"],
+                returncode=0,
+                stdout="RESULT_SUCCESS=True",
+                stderr="",
+            )
+        finally:
+            with state_lock:
+                state["active"] -= 1
+
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_all_maps_helper",
+        fail_store_all_maps,
+    )
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_map_helper",
+        fake_run_store_map_helper,
+    )
+
+    results = RasProcess.store_maps(
+        plan_number="01",
+        output_path=custom_output_dir,
+        profile="Max",
+        wse=True,
+        depth=True,
+        velocity=True,
+        fix_georef=False,
+        ras_object=ras_obj,
+        max_workers=None,
+    )
+
+    assert state["maximum"] == 3
+    assert {call["map_type"] for call in state["calls"]} == {
+        "WSEL",
+        "Depth",
+        "Velocity",
+    }
+    assert all(call["gdal_num_threads"] == 1 for call in state["calls"])
+    assert results == {
+        "wse": [custom_output_dir / "WSE (Max).Terrain.tif"],
+        "depth": [custom_output_dir / "Depth (Max).Terrain.tif"],
+        "velocity": [custom_output_dir / "Velocity (Max).Terrain.tif"],
+    }
+    assert not list(output_dir.glob("*.tif"))
+
+
+def test_store_maps_parallel_rejects_shared_postprocessing_products(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, output_dir, _ = _configure_store_maps_test(monkeypatch, tmp_path)
+    calls = []
+
+    def fake_store_all_maps(**kwargs):
+        calls.append(kwargs)
+        (output_dir / "Depth (Max).tif").write_text("depth", encoding="utf-8")
+        return subprocess.CompletedProcess(
+            args=["RasStoreMapHelper.exe"],
+            returncode=0,
+            stdout="Maps generated: 1",
+            stderr="",
+        )
+
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_all_maps_helper",
+        fake_store_all_maps,
+    )
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_map_helper",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("unsupported parallel request must fall back")
+        ),
+    )
+
+    with pytest.raises(ValueError, match="inundation boundary"):
+        RasProcess.store_maps(
+            plan_number="01",
+            profile="Max",
+            wse=False,
+            depth=True,
+            velocity=False,
+            froude=True,
+            inundation_boundary=True,
+            fix_georef=False,
+            ras_object=ras_obj,
+            max_workers=3,
+        )
+
+    assert calls == []
+
+
+def test_store_maps_auto_falls_back_for_shared_postprocessing_products(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, output_dir, _ = _configure_store_maps_test(monkeypatch, tmp_path)
+    calls = []
+
+    def fake_store_all_maps(**kwargs):
+        calls.append(kwargs)
+        (output_dir / "Depth (Max).tif").write_text("depth", encoding="utf-8")
+        return subprocess.CompletedProcess(
+            args=["RasStoreMapHelper.exe"],
+            returncode=0,
+            stdout="Maps generated: 1",
+            stderr="",
+        )
+
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_all_maps_helper",
+        fake_store_all_maps,
+    )
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_map_helper",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("auto mode must use the ordered StoreAllMaps path")
+        ),
+    )
+
+    results = RasProcess.store_maps(
+        plan_number="01",
+        profile="Max",
+        wse=False,
+        depth=True,
+        velocity=False,
+        froude=False,
+        inundation_boundary=True,
+        fix_georef=False,
+        ras_object=ras_obj,
+        max_workers=None,
+    )
+
+    assert len(calls) == 1
+    assert results["depth"] == [output_dir / "Depth (Max).tif"]
+
+
+def test_store_maps_auto_adr_only_uses_nonempty_resource_request(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _, _ = _configure_store_maps_test(monkeypatch, tmp_path)
+    estimated_types = []
+
+    def fake_estimate(_plan_number, map_types, **_kwargs):
+        estimated_types.append(list(map_types))
+        return SimpleNamespace(selected_workers=1)
+
+    monkeypatch.setattr(
+        RasProcess,
+        "estimate_store_map_resources",
+        staticmethod(fake_estimate),
+    )
+    monkeypatch.setattr(
+        ras_process_module,
+        "_store_map_admission_reasons",
+        lambda _estimate: (),
+    )
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_all_maps_helper",
+        lambda **_kwargs: subprocess.CompletedProcess(
+            args=["RasStoreMapHelper.exe"],
+            returncode=0,
+            stdout="Maps generated: 1",
+            stderr="",
+        ),
+    )
+
+    RasProcess.store_maps(
+        plan_number="01",
+        profile="Max",
+        wse=False,
+        depth=False,
+        velocity=False,
+        arrival_time=True,
+        fix_georef=False,
+        ras_object=ras_obj,
+        performance=ras_process_module.StoreMapPerformanceOptions(
+            max_workers=None
+        ),
+    )
+
+    assert estimated_types == [["arrival_time"]]
+
+
+def test_store_maps_explicit_serial_policy_checks_live_admission(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, output_dir, _ = _configure_store_maps_test(monkeypatch, tmp_path)
+    estimate = SimpleNamespace(selected_workers=1)
+    admitted = []
+    monkeypatch.setattr(
+        RasProcess,
+        "estimate_store_map_resources",
+        staticmethod(lambda *_args, **_kwargs: estimate),
+    )
+    monkeypatch.setattr(
+        ras_process_module,
+        "_wait_for_store_map_admission",
+        lambda actual, options: admitted.append((actual, options)),
+    )
+
+    def fake_store_all_maps(**_kwargs):
+        (output_dir / "Depth (Max).tif").write_text("depth", encoding="utf-8")
+        return subprocess.CompletedProcess([], 0, "ok", "")
+
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_all_maps_helper",
+        fake_store_all_maps,
+    )
+    performance = ras_process_module.StoreMapPerformanceOptions(max_workers=1)
+
+    result = RasProcess.store_maps(
+        plan_number="01",
+        profile="Max",
+        wse=False,
+        depth=True,
+        velocity=False,
+        fix_georef=False,
+        ras_object=ras_obj,
+        performance=performance,
+    )
+
+    assert result["depth"] == [output_dir / "Depth (Max).tif"]
+    assert admitted == [(estimate, performance)]
+
+
 def test_store_maps_raises_on_helper_failure_instead_of_returning_stale_output(
     monkeypatch,
     tmp_path,
@@ -383,10 +777,12 @@ def test_store_maps_serializes_concurrent_calls_for_same_project(
     assert results[0]["depth"] == [first_output / "Depth (Max).tif"]
     assert results[1]["depth"] == [second_output / "Depth (Max).tif"]
     assert not (tmp_path / ".Demo.storemaps.lock").exists()
-    assert not list(tmp_path.glob(".*.rasmap.*.bak"))
+    assert not list(tmp_path.glob("*.rasmap.*.bak"))
 
 
-def test_store_maps_moves_overwritten_outputs_to_custom_path(monkeypatch, tmp_path, caplog):
+def test_store_maps_moves_overwritten_outputs_to_custom_path(
+    monkeypatch, tmp_path, caplog
+):
     project_folder = tmp_path
     project_name = "Demo"
     output_dir = project_folder / "PlanShort"
@@ -470,9 +866,7 @@ def test_store_maps_moves_overwritten_outputs_to_custom_path(monkeypatch, tmp_pa
 
     assert results["wse"] == [custom_output_dir / "WSE (Max).tif"]
     assert results["depth"] == [custom_output_dir / "Depth (Max).tif"]
-    assert (custom_output_dir / "WSE (Max).tif").read_text(
-        encoding="utf-8"
-    ) == "newer"
+    assert (custom_output_dir / "WSE (Max).tif").read_text(encoding="utf-8") == "newer"
     assert (custom_output_dir / "Depth (Max).tif").read_text(
         encoding="utf-8"
     ) == "depth-map"
@@ -657,8 +1051,13 @@ def test_add_stored_map_rasmap_setup_logs_debug_not_info(tmp_path, caplog):
         )
 
     debug_messages = _messages(caplog, logging.DEBUG)
-    assert any("Created Results element in rasmap" in message for message in debug_messages)
-    assert any("Created plan layer 'PlanShort' in rasmap" in message for message in debug_messages)
+    assert any(
+        "Created Results element in rasmap" in message for message in debug_messages
+    )
+    assert any(
+        "Created plan layer 'PlanShort' in rasmap" in message
+        for message in debug_messages
+    )
 
 
 def test_projection_info_discovers_all_tiffs_associated_with_terrain_hdf(tmp_path):
@@ -729,14 +1128,20 @@ def test_terrain_for_stored_map_matches_each_stem_and_rejects_unmatched(tmp_path
     west_terrain = tmp_path / "Composite Terrain.West.tif"
     terrain_paths = (east_terrain, west_terrain)
 
-    assert RasProcess._terrain_for_stored_map(
-        tmp_path / "Depth (Max).Composite Terrain.East.tif",
-        terrain_paths,
-    ) == east_terrain
-    assert RasProcess._terrain_for_stored_map(
-        tmp_path / "Depth (Max).Composite Terrain.West.tif",
-        terrain_paths,
-    ) == west_terrain
+    assert (
+        RasProcess._terrain_for_stored_map(
+            tmp_path / "Depth (Max).Composite Terrain.East.tif",
+            terrain_paths,
+        )
+        == east_terrain
+    )
+    assert (
+        RasProcess._terrain_for_stored_map(
+            tmp_path / "Depth (Max).Composite Terrain.West.tif",
+            terrain_paths,
+        )
+        == west_terrain
+    )
     assert (
         RasProcess._terrain_for_stored_map(
             tmp_path / "Depth (Max).Unknown Terrain.tif",
@@ -945,9 +1350,7 @@ def test_drop_unreadable_tifs_removes_corrupt_stored_map(tmp_path):
 
     corrupt_path.write_bytes(b"not a readable tiff")
 
-    results = RasProcess._drop_unreadable_tifs(
-        {"depth": [valid_path, corrupt_path]}
-    )
+    results = RasProcess._drop_unreadable_tifs({"depth": [valid_path, corrupt_path]})
 
     assert results["depth"] == [valid_path]
     assert valid_path.exists()
@@ -958,9 +1361,7 @@ def test_drop_unreadable_tifs_preserves_vector_outputs(tmp_path):
     boundary = tmp_path / "Inundation Boundary.shp"
     boundary.write_bytes(b"vector-output")
 
-    results = RasProcess._drop_unreadable_tifs(
-        {"inundation_boundary": [boundary]}
-    )
+    results = RasProcess._drop_unreadable_tifs({"inundation_boundary": [boundary]})
 
     assert results["inundation_boundary"] == [boundary]
     assert boundary.read_bytes() == b"vector-output"
