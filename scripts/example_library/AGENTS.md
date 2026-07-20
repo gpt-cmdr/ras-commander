@@ -140,6 +140,23 @@ Do not add the 1D steady BLE collection to this landing page. Publish it later
 as a separate consolidated map after its grouping, symbology, and metadata
 contract is established.
 
+## Viewer Template Contract
+
+- All project links use the single shared `example-project-viewer.md` page and
+  its shared MapLibre JavaScript. Do not create project-specific viewer pages.
+- Every generated or published manifest v2 must carry ras2cng's current
+  `viewerTemplate` revision. The manifest revision is the compatibility
+  contract between generated project data and the shared viewer.
+- Before migrating an existing release, run
+  `upgrade_viewer_release.py --release-root <path> --dry-run`. Review the report,
+  then rerun without `--dry-run` only after every selected project passes the
+  layer, asset-reference, compatibility-payload, and schema checks.
+- Template conformance does not waive any terrain, results, CRS, license,
+  performance, or catalog-admission gate. A project may be compatible with the
+  shared viewer while still being ineligible for public publication.
+- Validate the public manifest after restricted publication; do not infer
+  success from the staged or durable copy.
+
 ## Current Expansion Priority
 
 1. Populate terrain and Stored Map results for larger 2D releases.
