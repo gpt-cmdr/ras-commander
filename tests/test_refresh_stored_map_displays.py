@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT = (
     Path(__file__).parents[1]
@@ -117,3 +119,45 @@ def test_refresh_project_rejects_hosted_numeric_source(tmp_path: Path) -> None:
         assert "manifest-relative" in str(error)
     else:
         raise AssertionError("Hosted sourceCog should fail closed")
+
+
+@pytest.mark.parametrize(
+    "source_cog",
+    [
+        "/outside/depth.tif",
+        r"C:\outside\depth.tif",
+        r"\\server\share\depth.tif",
+        "../../outside/depth.tif",
+    ],
+)
+def test_refresh_project_rejects_sources_outside_staged_project(
+    tmp_path: Path, source_cog: str
+) -> None:
+    module = load_script()
+    project = tmp_path / "projects" / "muncie"
+    viewer = project / "viewer"
+    viewer.mkdir(parents=True)
+    (viewer / "manifest.json").write_text(
+        json.dumps(
+            {
+                "tilesets": [
+                    {
+                        "id": "result-p03-depth-max",
+                        "type": "raster",
+                        "sourceKind": "stored-map",
+                        "sourceCog": source_cog,
+                        "storedMap": {"plan": "p03", "mapType": "Depth"},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(module.RefreshError, match="manifest-relative|staged project"):
+        module.refresh_project(
+            project,
+            max_zoom=16,
+            scratch_root=tmp_path / "scratch",
+            packager=lambda *_args, **_kwargs: None,
+        )

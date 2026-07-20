@@ -69,6 +69,25 @@ def layer_ids(manifest: Mapping[str, Any]) -> set[str]:
     return result
 
 
+def content_layer_ids(manifest: Mapping[str, Any]) -> set[str]:
+    """Return publication layers, excluding viewer-managed basemap scaffolding."""
+
+    identifiers = layer_ids(manifest)
+    layers = manifest.get("layers")
+    resources = manifest.get("resources")
+    if not isinstance(layers, Mapping) or not isinstance(resources, Mapping):
+        return identifiers
+    managed = {
+        str(layer_id)
+        for layer_id, layer in layers.items()
+        if isinstance(layer, Mapping)
+        and layer.get("sourceKind") == "map-layer"
+        and isinstance(resources.get(layer.get("resource")), Mapping)
+        and resources[layer["resource"]].get("type") == "viewer-basemap"
+    }
+    return identifiers - managed
+
+
 def asset_references(value: Any) -> Counter[tuple[str, str]]:
     references: Counter[tuple[str, str]] = Counter()
 
@@ -104,7 +123,7 @@ def upgrade_manifest(
     """Return one upgraded manifest after fail-closed preservation checks."""
 
     before = copy.deepcopy(dict(manifest))
-    before_ids = layer_ids(before)
+    before_ids = content_layer_ids(before)
     before_references = asset_references(before)
     preserved = _preserved_payload(before)
     candidate = copy.deepcopy(before)
@@ -112,7 +131,7 @@ def upgrade_manifest(
     apply_template(candidate, archive=archive)
     validate_template(candidate)
 
-    after_ids = layer_ids(candidate)
+    after_ids = content_layer_ids(candidate)
     if before_ids != after_ids:
         missing = sorted(before_ids - after_ids)
         added = sorted(after_ids - before_ids)

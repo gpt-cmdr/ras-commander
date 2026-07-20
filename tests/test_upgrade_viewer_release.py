@@ -62,7 +62,14 @@ def fake_apply(manifest: dict, *, archive=None) -> dict:
         }
     }
     manifest["resources"] = {
-        "geometry": {"type": "vector-pmtiles", "href": "tiles/geometry.pmtiles"}
+        "geometry": {"type": "vector-pmtiles", "href": "tiles/geometry.pmtiles"},
+        "basemap-hybrid": {"type": "viewer-basemap", "provider": "Esri"},
+    }
+    manifest["layers"]["basemap-hybrid"] = {
+        "name": "Hybrid Satellite",
+        "resource": "basemap-hybrid",
+        "role": "basemap",
+        "sourceKind": "map-layer",
     }
     manifest["tree"] = [
         {
@@ -122,6 +129,7 @@ def test_upgrade_release_dry_run_is_idempotent_and_does_not_write(tmp_path: Path
         apply_template=fake_apply,
         validate_template=fake_validate,
     ) == upgraded
+    assert "basemap-hybrid" in upgraded["layers"]
 
 
 def test_upgrade_release_preflights_all_projects_before_writing(tmp_path: Path) -> None:

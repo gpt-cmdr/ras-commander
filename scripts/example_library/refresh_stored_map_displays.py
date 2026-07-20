@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Callable, Mapping, Sequence
 
 
@@ -43,9 +43,22 @@ def stored_map_tilesets(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 def _local_source_cog(viewer_dir: Path, source_cog: Any) -> Path:
     value = str(source_cog or "").strip()
-    if not value or "://" in value:
+    relative = Path(value)
+    if (
+        not value
+        or "://" in value
+        or relative.is_absolute()
+        or PureWindowsPath(value).is_absolute()
+    ):
         raise RefreshError(f"Stored Map sourceCog must be manifest-relative: {value!r}")
-    path = (viewer_dir / value).resolve()
+    project_dir = viewer_dir.parent.resolve()
+    path = (viewer_dir / relative).resolve()
+    try:
+        path.relative_to(project_dir)
+    except ValueError as error:
+        raise RefreshError(
+            f"Stored Map sourceCog must remain inside the staged project: {value!r}"
+        ) from error
     if not path.is_file():
         raise RefreshError(f"Stored Map numeric COG does not exist: {path}")
     return path
