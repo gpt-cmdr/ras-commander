@@ -256,7 +256,7 @@ class HdfBndry:
             return gpd.GeoDataFrame()
 
     @staticmethod
-    @standardize_input(file_type='plan_hdf')
+    @standardize_input(file_type='geom_hdf')
     def get_refinement_regions(hdf_path: Path) -> gpd.GeoDataFrame:
         """
         Return 2D mesh area refinement regions.
