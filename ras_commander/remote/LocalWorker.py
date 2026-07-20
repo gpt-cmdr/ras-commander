@@ -159,7 +159,7 @@ def execute_local_plan(
         ras_obj: RAS project object
         num_cores: Number of cores
         clear_geompre: Clear geompre files (.c## only)
-        force_geompre: Force full geometry reprocessing (clears .g##.hdf AND .c##)
+        force_geompre: Clear cached geometry products in place and force execution
         force_rerun: Force execution even if results are current
         sub_worker_id: Sub-worker ID for parallel execution (default 1)
         autoclean: Delete temporary worker folder after execution (default True)

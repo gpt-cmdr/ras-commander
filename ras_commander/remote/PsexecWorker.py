@@ -377,7 +377,7 @@ def execute_psexec_plan(
         ras_obj: RAS project object
         num_cores: Number of cores
         clear_geompre: Clear geompre files (.c## only)
-        force_geompre: Force full geometry reprocessing (clears .g##.hdf AND .c##)
+        force_geompre: Clear staged geometry caches in place and force execution
         force_rerun: Force execution even if results are current
         sub_worker_id: Sub-worker ID for parallel execution (default 1)
         autoclean: Delete temporary worker folder after execution (default True).
@@ -396,8 +396,9 @@ def execute_psexec_plan(
     project_folder = Path(ras_obj.project_folder)
     project_name = ras_obj.project_name
 
-    # Step 0a: Check if results are current (skip if so, unless force_rerun=True)
-    if not force_rerun:
+    # Step 0a: force_geompre implies execution because the currency check cannot
+    # see changes to cached geometry-HDF tables or their land-cover sidecars.
+    if not force_rerun and not force_geompre:
         is_current, reason = RasCurrency.are_plan_results_current(plan_number, ras_obj)
         if is_current:
             logger.debug(
@@ -408,44 +409,6 @@ def execute_psexec_plan(
             return True
         else:
             logger.debug(f"Plan {plan_number} needs execution: {reason}")
-
-    input_files = RasCurrency.get_plan_input_files(plan_number, ras_obj)
-    plan_path = input_files.get("plan") or project_folder / f"{project_name}.p{plan_number}"
-
-    # Step 0b: Handle geometry preprocessor clearing before copying to remote.
-    # This must run on the source project so the staged worker copy cannot
-    # inherit stale per-cell Manning's n or other cached geometry products.
-    if force_geompre:
-        try:
-            if not RasCurrency.clear_geom_hdf(plan_number, ras_obj):
-                logger.error(f"Could not clear geometry HDF for plan {plan_number}")
-                return False
-            GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
-            logger.debug(
-                "Force-cleared geometry preprocessor products for plan %s "
-                "before remote execution",
-                plan_number,
-            )
-        except Exception as e:
-            logger.error(
-                f"Error force-clearing geometry preprocessor products for "
-                f"plan {plan_number}: {e}"
-            )
-            return False
-    elif clear_geompre:
-        try:
-            GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
-            logger.debug(
-                "Cleared geometry preprocessor products for plan %s "
-                "before remote execution",
-                plan_number,
-            )
-        except Exception as e:
-            logger.error(
-                f"Error clearing geometry preprocessor products for "
-                f"plan {plan_number}: {e}"
-            )
-            return False
 
     # Step 1: Authenticate to network share
     if worker.credentials:
@@ -481,6 +444,24 @@ def execute_psexec_plan(
 
         prj_file = list(worker_project_path.glob("*.prj"))[0]
         plan_file = worker_project_path / f"{project_name}.p{plan_number}"
+
+        # Clear only the staged worker copy. Mutating the source before staging
+        # destroys its land-cover association and makes failed remote runs alter
+        # the caller project. clear_geompre_files() clears .c## plus the cached
+        # in-HDF tables in place, preserving the staged association for rebuild.
+        if force_geompre or clear_geompre:
+            try:
+                GeomPreprocessor.clear_geompre_files(plan_file, ras_object=ras_obj)
+                logger.debug(
+                    "Cleared staged geometry preprocessor products for plan %s",
+                    plan_number,
+                )
+            except Exception as e:
+                logger.error(
+                    f"Error clearing staged geometry preprocessor products for "
+                    f"plan {plan_number}: {e}"
+                )
+                return False
 
         # Enable Write Detailed= 1 to ensure .computeMsgs.txt is written
         # This is critical for results_df fallback on pre-6.4 HEC-RAS versions
