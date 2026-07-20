@@ -707,7 +707,7 @@ class AbmHyetographGrid:
             source='NOAA Atlas 14 CONUS NetCDF + centroid DDF ratios (AbmHyetographGrid)',
         )
 
-        logger.info(f"ABM grid complete → {output_path}")
+        logger.info("ABM grid complete → %s", output_path.name)
         return output_path
 
     @staticmethod

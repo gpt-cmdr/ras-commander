@@ -7,6 +7,7 @@ round-trip through get_met_precipitation_config(), insertion into a minimal
 file, and input validation. They require only h5py + numpy (no HEC-RAS/pyjnius).
 """
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -57,12 +58,15 @@ def davis_style_unsteady(tmp_path):
     return unsteady_path
 
 
-def test_set_constant_precipitation_updates_text_and_hdf(davis_style_unsteady):
+def test_set_constant_precipitation_updates_text_and_hdf(
+    davis_style_unsteady, caplog
+):
     from ras_commander import RasUnsteady
 
-    RasUnsteady.set_constant_precipitation(
-        davis_style_unsteady, value=0.25, units="mm/hr"
-    )
+    with caplog.at_level(logging.INFO, logger="ras_commander.RasUnsteady"):
+        RasUnsteady.set_constant_precipitation(
+            davis_style_unsteady, value=0.25, units="mm/hr"
+        )
 
     lines = davis_style_unsteady.read_text(encoding="utf-8").splitlines()
     assert "Precipitation Mode=Enable" in lines
@@ -79,6 +83,19 @@ def test_set_constant_precipitation_updates_text_and_hdf(davis_style_unsteady):
         # The shared HDF writer also registers the Meteorology attributes index.
         attrs = hdf["Event Conditions/Meteorology/Attributes"][()]
         assert _decode(attrs[0]["Variable"]) == "Precipitation"
+
+    info_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "ras_commander.RasUnsteady"
+        and record.levelno == logging.INFO
+    ]
+    assert any("DavisStormSystem.u01" in message for message in info_messages)
+    assert any("DavisStormSystem.u01.hdf" in message for message in info_messages)
+    assert all(
+        str(davis_style_unsteady.parent) not in message
+        for message in info_messages
+    )
 
 
 def test_round_trips_through_get_met_precipitation_config(davis_style_unsteady):
