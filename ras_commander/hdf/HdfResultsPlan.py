@@ -31,7 +31,7 @@ Note:
     All methods are static and designed to be used without class instantiation.
 """
 
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Optional, Tuple, Union
 from pathlib import Path
 import h5py
 import pandas as pd
@@ -103,7 +103,7 @@ class HdfResultsPlan:
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"HDF file not found: {hdf_path}. "
-                f"See: https://rascommander.info/user-guide/hdf-data-extraction/"
+                f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except Exception as e:
             raise RuntimeError(f"Error reading unsteady attributes: {str(e)}")
@@ -145,7 +145,7 @@ class HdfResultsPlan:
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"HDF file not found: {hdf_path}. "
-                f"See: https://rascommander.info/user-guide/hdf-data-extraction/"
+                f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except Exception as e:
             raise RuntimeError(f"Error reading unsteady summary attributes: {str(e)}")
@@ -186,7 +186,7 @@ class HdfResultsPlan:
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"HDF file not found: {hdf_path}. "
-                f"See: https://rascommander.info/user-guide/hdf-data-extraction/"
+                f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except Exception as e:
             raise RuntimeError(f"Error reading volume accounting attributes: {str(e)}")
@@ -492,12 +492,58 @@ class HdfResultsPlan:
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"HDF file not found: {hdf_path}. "
-                f"See: https://rascommander.info/user-guide/hdf-data-extraction/"
+                f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except KeyError as e:
             raise KeyError(f"Error accessing steady state profile names: {str(e)}")
         except Exception as e:
             raise RuntimeError(f"Error reading steady state profile names: {str(e)}")
+
+    @staticmethod
+    def _get_steady_cross_section_attributes(
+        hdf_file: h5py.File,
+        expected_count: Optional[int] = None,
+    ) -> Tuple[np.ndarray, Dict[str, str]]:
+        """Return steady cross-section identifiers across HEC-RAS HDF versions.
+
+        Newer plan HDFs write identifiers beside steady output.  Several
+        HEC-RAS 6.x files instead retain the equivalent table in geometry,
+        where river station is named ``RS`` rather than ``Station``.
+        """
+        attribute_paths = (
+            "Results/Steady/Output/Geometry Info/Cross Section Attributes",
+            "Geometry/Cross Sections/Attributes",
+        )
+        for attribute_path in attribute_paths:
+            if attribute_path not in hdf_file:
+                continue
+
+            attributes = hdf_file[attribute_path][()]
+            field_names = attributes.dtype.names or ()
+            field_lookup = {name.lower(): name for name in field_names}
+            station_field = field_lookup.get("station") or field_lookup.get("rs")
+            required_fields = {
+                "river": field_lookup.get("river"),
+                "reach": field_lookup.get("reach"),
+                "station": station_field,
+            }
+            missing_fields = [name for name, field in required_fields.items() if field is None]
+            if missing_fields:
+                logger.debug(
+                    "Ignoring steady cross-section attributes at %s because fields are missing: %s",
+                    attribute_path,
+                    ", ".join(missing_fields),
+                )
+                continue
+            if expected_count is not None and len(attributes) != expected_count:
+                raise ValueError(
+                    "Steady cross-section identifier count does not match result values: "
+                    f"{attribute_path} has {len(attributes)} rows; results have {expected_count}."
+                )
+            return attributes, required_fields
+
+        paths = " or ".join(attribute_paths)
+        raise KeyError(f"Cross section attributes not found at: {paths}")
 
     @staticmethod
     @log_call
@@ -547,15 +593,11 @@ class HdfResultsPlan:
 
                 # Paths to data
                 wse_path = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Cross Sections/Water Surface"
-                xs_attrs_path = "Results/Steady/Output/Geometry Info/Cross Section Attributes"
                 profile_names_path = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Profile Names"
 
                 # Check required paths exist
                 if wse_path not in hdf_file:
                     raise KeyError(f"WSE data not found at: {wse_path}")
-                if xs_attrs_path not in hdf_file:
-                    raise KeyError(f"Cross section attributes not found at: {xs_attrs_path}")
-
                 # Get WSE dataset (shape: num_profiles × num_cross_sections)
                 wse_ds = hdf_file[wse_path]
                 wse_data = wse_ds[()]
@@ -573,7 +615,10 @@ class HdfResultsPlan:
                     profile_names = [f"Profile_{i+1}" for i in range(num_profiles)]
 
                 # Get cross section attributes
-                xs_attrs = hdf_file[xs_attrs_path][()]
+                xs_attrs, xs_fields = HdfResultsPlan._get_steady_cross_section_attributes(
+                    hdf_file,
+                    expected_count=num_xs,
+                )
 
                 # Determine which profiles to extract
                 if profile_name is not None:
@@ -606,9 +651,9 @@ class HdfResultsPlan:
                     wse_values = wse_data[prof_idx, :]
 
                     for xs_idx in range(num_xs):
-                        river = xs_attrs[xs_idx]['River']
-                        reach = xs_attrs[xs_idx]['Reach']
-                        station = xs_attrs[xs_idx]['Station']
+                        river = xs_attrs[xs_idx][xs_fields['river']]
+                        reach = xs_attrs[xs_idx][xs_fields['reach']]
+                        station = xs_attrs[xs_idx][xs_fields['station']]
 
                         # Decode byte strings
                         river = river.decode('utf-8') if isinstance(river, bytes) else str(river)
@@ -646,7 +691,7 @@ class HdfResultsPlan:
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"HDF file not found: {hdf_path}. "
-                f"See: https://rascommander.info/user-guide/hdf-data-extraction/"
+                f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except KeyError as e:
             raise KeyError(f"Error accessing steady state WSE data: {str(e)}")
@@ -733,7 +778,7 @@ class HdfResultsPlan:
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"HDF file not found: {hdf_path}. "
-                f"See: https://rascommander.info/user-guide/hdf-data-extraction/"
+                f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except KeyError as e:
             raise KeyError(f"Error accessing steady state info: {str(e)}")
@@ -1074,7 +1119,6 @@ class HdfResultsPlan:
                 base_path = "Results/Steady/Output/Output Blocks/Base Output/Steady Profiles"
                 xs_path = f"{base_path}/Cross Sections"
                 add_vars_path = f"{xs_path}/Additional Variables"
-                xs_attrs_path = "Results/Steady/Output/Geometry Info/Cross Section Attributes"
                 profile_names_path = f"{base_path}/Profile Names"
 
                 # Get profile names
@@ -1087,16 +1131,18 @@ class HdfResultsPlan:
                 else:
                     raise ValueError("Profile names not found in HDF file")
 
-                # Get XS attributes
-                xs_attrs = hdf_file[xs_attrs_path][()]
-                num_xs = len(xs_attrs)
-                num_profiles = len(profile_names)
-
                 # Get main variables (WSE, Flow)
                 wse_data = hdf_file[f"{xs_path}/Water Surface"][()]
                 flow_data = hdf_file[f"{xs_path}/Flow"][()]
+                num_profiles, num_xs = wse_data.shape
+                xs_attrs, xs_fields = HdfResultsPlan._get_steady_cross_section_attributes(
+                    hdf_file,
+                    expected_count=num_xs,
+                )
 
-                # Get additional variables (with graceful fallback for missing)
+                # Missing optional variables are returned as null values. Do
+                # not infer a cross-section join from legacy packed arrays;
+                # their axis ordering and row coverage vary by HEC-RAS version.
                 def get_additional_var(var_name, default=np.nan):
                     path = f"{add_vars_path}/{var_name}"
                     if path in hdf_file:
@@ -1117,9 +1163,9 @@ class HdfResultsPlan:
                 rows = []
                 for prof_idx, prof_name in enumerate(profile_names):
                     for xs_idx in range(num_xs):
-                        river = xs_attrs[xs_idx]['River']
-                        reach = xs_attrs[xs_idx]['Reach']
-                        station = xs_attrs[xs_idx]['Station']
+                        river = xs_attrs[xs_idx][xs_fields['river']]
+                        reach = xs_attrs[xs_idx][xs_fields['reach']]
+                        station = xs_attrs[xs_idx][xs_fields['station']]
 
                         # Decode byte strings
                         river = river.decode('utf-8').strip() if isinstance(river, bytes) else str(river).strip()

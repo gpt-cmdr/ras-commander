@@ -1,0 +1,88 @@
+schema: rascommander.rasmapper-web-parity/v1
+project: 'H:/CLB-Repos/ras-commander (Example Library)/muncie-v2-20260715-native7/map-project/Muncie.prj'
+project_crs: EPSG:2965
+ras_version: "7.0"
+
+web_manifest_url: https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/muncie-muncie-rerun-7-0-20260628-193916-4120d261/viewer/manifest.json?v=20260716Tmuncie-contract-v2
+web_viewer_url: https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fmuncie-muncie-rerun-7-0-20260628-193916-4120d261%2Fviewer%2Fmanifest.json%3Fv%3D20260716Tmuncie-contract-v2&check=20260716Tmuncie-contract-v2
+
+geometry_number: "02"
+geometry_name: Muncie Geometry - 2D 50ft Grid
+geometry_layers:
+  - RASD2FlowArea
+  - MeshPerimeterLayer
+terrain_name: TerrainWithChannel
+plan_name: 2D 50ft Grid
+result_layer_name: Depth (Max)
+result_profile: Max
+rasmapper_result:
+  plan: "03"
+  plan_name: 2D 50ft Grid
+  layer_name: Depth (Max)
+  map_type: Depth
+  terrain_name: TerrainWithChannel
+  profile_index: 2147483647
+  profile_name: Max
+
+selected_web_layer: result-p03-depth-max
+ramp_id: rasmapper.depth
+range_mode: current-view
+extent_color_layers:
+  - terrain
+  - result-p03-depth-max
+render_mode: slopingPretty
+basemap: hybrid
+expanded_tree_paths:
+  - Geometries/Muncie Geometry - 2D 50ft Grid
+  - Results/2D 50ft Grid
+
+desktop: {width: 1440, height: 1100}
+mobile: {width: 390, height: 844}
+rasmapper: {width: 1440, height: 900, dpi: 96, render_delay_seconds: 15, timeout_seconds: 1800}
+rasmapper_regions:
+  map: [440, 84, 1418, 884]
+  tree: [4, 84, 435, 700]
+  legend: [340, 270, 434, 490]
+bounds_wgs84: [-85.39413393105832, 40.189670724640436, -85.36033688844627, 40.20558344178393]
+visible_web_layers:
+  - basemap-hybrid
+  - terrain
+  - ras-geometry-g02-model-extents
+  - ras-geometry-g02-mesh-areas
+  - ras-geometry-g02-breaklines
+  - ras-geometry-g02-mesh-cells
+  - result-p03-depth-max
+
+expected_roots: [features, geometries, results, map-layers, terrains]
+required_web_layers:
+  - terrain
+  - ras-geometry-g02-model-extents
+  - ras-results-p03-maximum-water-surface
+  - result-p03-depth-max
+  - result-p03-wse-max
+  - result-p03-velocity-max
+  - result-p03-inundation-boundary-max
+  - result-p03-depth-over-1ft-max
+
+numeric_probes:
+  - id: p03-depth-fixed-point
+    raster: 'H:/CLB-Repos/ras-commander (Example Library)/muncie-v2-20260715-native7/maps/p03/Depth (Max).Terrain.muncie_clip_cog.tif'
+    x: -85.39079262970466
+    y: 40.203713521278175
+    coordinate_crs: EPSG:4326
+    expected: 4.0286865234375
+    tolerance: 0.0001
+  - id: p03-wse-fixed-point
+    raster: 'H:/CLB-Repos/ras-commander (Example Library)/muncie-v2-20260715-native7/maps/p03/WSE (Max).Terrain.muncie_clip_cog.tif'
+    x: -85.39079262970466
+    y: 40.203713521278175
+    coordinate_crs: EPSG:4326
+    expected: 941.8724365234375
+    tolerance: 0.0001
+  - id: p03-velocity-fixed-point
+    raster: 'H:/CLB-Repos/ras-commander (Example Library)/muncie-v2-20260715-native7/maps/p03/Velocity (Max).Terrain.muncie_clip_cog.tif'
+    x: -85.39079262970466
+    y: 40.203713521278175
+    coordinate_crs: EPSG:4326
+    expected: 6.649202346801758
+    tolerance: 0.0001

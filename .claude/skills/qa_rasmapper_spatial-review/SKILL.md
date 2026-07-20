@@ -50,6 +50,10 @@ Do not use this skill for:
 - Mutating hydraulic geometry or results
 - Treating a screenshot as a substitute for numerical QA where numerical APIs exist
 
+For deterministic RASMapper-to-MapLibre comparison, including matching desktop/mobile
+captures, semantic tree assertions, legend checks, and fixed-point COG probes, use the
+`qa-rasmapper-web-parity` skill after creating the native spatial review package.
+
 ## Safety Notes
 
 - These workflows edit `.rasmap` layer, terrain, legend, and viewport state.

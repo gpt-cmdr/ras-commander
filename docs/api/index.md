@@ -19,6 +19,15 @@ Primary classes for project management and execution:
 - [`RasProcess`](core.md#rasprocess) - RasProcess.exe CLI automation, stored maps, and native reference validators
 - [`RasControl`](core.md#rascontrol) - Legacy COM interface
 
+## Benefits Analysis
+
+Rasterized depth-comparison benefits and mesh-based WSE comparison:
+
+- [`RasBenefits`](benefits.md) - Categorical BenefitArea GeoTIFF generation from aligned pre/post Depth rasters
+- [`BenefitAreaConfig`](benefits.md#generate-prepost-maps-and-benefitarea) - Pair-aware configuration for `RasProcess.store_maps()`
+- [`BenefitAreaResult`](benefits.md#calculate-from-existing-depth-rasters) - Raster paths, thresholds, and class-area statistics
+- [`HdfBenefitAreas`](benefits.md#raster-benefitarea-versus-hdfbenefitareas) - Separate 2D mesh/WSE benefit and rise analysis
+
 ## HDF Modules
 
 Classes for reading HDF result files:

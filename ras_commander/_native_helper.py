@@ -22,6 +22,13 @@ _NATIVE_PACKAGE = "ras_commander.native"
 _HELPER_EXE_NAME = "RasStoreMapHelper.exe"
 _HELPER_CS_NAME = "RasStoreMapHelper.cs"
 _IS_LINUX = platform.system() == "Linux"
+_MAPPING_RUNTIME_LIBRARIES = (
+    "RasMapperLib.dll",
+    "Geospatial.Core.dll",
+    "Geospatial.GDALAssist.dll",
+    "HDF.PInvoke.dll",
+    "H5Assist.dll",
+)
 
 
 def _env_flag(name: str) -> bool:
@@ -55,6 +62,56 @@ def _resource(filename: str):
 
 def _helper_has_sibling_gdal(helper_path: Path) -> bool:
     return (helper_path.parent / "GDAL").is_dir()
+
+
+def _file_identity(path: Path) -> dict:
+    """Return a reproducible content identity plus audit path for one file."""
+
+    path = Path(path).resolve()
+    digest = hashlib.sha256()
+    size_bytes = 0
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+            size_bytes += len(chunk)
+            digest.update(chunk)
+    return {
+        "source_file": str(path),
+        "sha256": digest.hexdigest(),
+        "size_bytes": size_bytes,
+    }
+
+
+def store_maps_runtime_provenance(hecras_dir: Union[str, Path]) -> dict:
+    """Identify the helper and HEC mapping libraries used by StoreMaps.
+
+    Paths are retained for auditability. Consumers that need portable cache
+    keys should hash the content fields and omit ``source_file`` and
+    ``hecras_dir``.
+    """
+
+    hecras_dir = Path(hecras_dir).resolve()
+    mapper_library = hecras_dir / "RasMapperLib.dll"
+    if not mapper_library.is_file():
+        raise FileNotFoundError(
+            f"HEC-RAS mapping library not found: {mapper_library}"
+        )
+
+    libraries = {}
+    for filename in _MAPPING_RUNTIME_LIBRARIES:
+        candidate = hecras_dir / filename
+        if candidate.is_file():
+            libraries[filename] = _file_identity(candidate)
+
+    with packaged_helper_executable_path() as helper_path:
+        helper = _file_identity(Path(helper_path))
+
+    return {
+        "runner": "RasStoreMapHelper",
+        "helper": helper,
+        "hecras_dir": str(hecras_dir),
+        "libraries": libraries,
+        "ras_commander_version": _package_version(),
+    }
 
 
 def _bundle_name(helper_path: Path, hecras_dir: Optional[Path] = None) -> str:

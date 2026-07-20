@@ -2023,7 +2023,8 @@ def init_ras_project(
     ras_version=None,
     ras_object=None,
     load_results_summary=True,
-    hide_intro=False
+    hide_intro=False,
+    accept_tcu=False
 ) -> 'RasPrj':
     """
     Initialize a RAS project for use with the ras-commander library.
@@ -2057,6 +2058,14 @@ def init_ras_project(
         hide_intro (bool, default=False): If True, suppress the agent intro banner that is
                                           printed after initialization. The banner provides
                                           API guidance for AI agents using the library.
+        accept_tcu (bool, default=False): HEC-RAS shows a modal "Terms and Conditions for
+                                          Use" dialog the first time it runs for a Windows
+                                          user+version, which blocks headless/COM launches.
+                                          When False (default), init only WARNS if the TCU
+                                          has not been accepted. When True, acceptance is
+                                          recorded now for the current user (opt-in registry
+                                          write) so unattended runs do not block. See
+                                          ras_commander.RasTcu.
 
     Returns:
         RasPrj: An initialized RasPrj instance.
@@ -2127,14 +2136,14 @@ def init_ras_project(
             logger.error(error_msg)
             raise FileNotFoundError(
                 f"{error_msg}. Please check the path and try again. "
-                f"See: https://rascommander.info/getting-started/project-initialization/"
+                f"See: https://rascommander.info/ras/getting-started/project-initialization/"
             )
         else:
             error_msg = f"The specified RAS project folder does not exist: {input_path}"
             logger.error(error_msg)
             raise FileNotFoundError(
                 f"{error_msg}. Please check the path and try again. "
-                f"See: https://rascommander.info/getting-started/project-initialization/"
+                f"See: https://rascommander.info/ras/getting-started/project-initialization/"
             )
 
     # Determine which RasPrj instance to use
@@ -2158,7 +2167,7 @@ def init_ras_project(
         if ras_exe_path == "Ras.exe" and ras_version != "Ras.exe":
             logger.warning(
                 f"HEC-RAS Version {ras_version} was not found. Running HEC-RAS will fail. "
-                f"See: https://rascommander.info/getting-started/installation/"
+                f"See: https://rascommander.info/ras/getting-started/installation/"
             )
     else:
         # No version specified, try to detect from plan files
@@ -2213,7 +2222,7 @@ def init_ras_project(
             ras_exe_path = "Ras.exe"
             logger.warning(
                 "No valid HEC-RAS version was detected. Running HEC-RAS will fail. "
-                "See: https://rascommander.info/getting-started/installation/"
+                "See: https://rascommander.info/ras/getting-started/installation/"
             )
     
     # Initialize or re-initialize with the determined executable path
@@ -2265,16 +2274,50 @@ def init_ras_project(
         _init_log("Using HEC-RAS version %s", _ras_version_label(ras_version, ras_exe_path))
     logger.debug(f"Using HEC-RAS executable path: {ras_exe_path}")
 
+    # HEC-RAS Terms & Conditions for Use (TCU) check. By default this is read-only:
+    # it warns (once) when the TCU has not been accepted for this Windows user+version,
+    # because the first headless/COM launch would otherwise block on a modal VB6 dialog.
+    # When accept_tcu=True, acceptance is recorded now (opt-in registry write) so the
+    # project is ready for unattended runs. Never raises; never writes unless asked.
+    try:
+        from .RasTcu import RasTcu
+        _tcu = RasTcu.status(ras_object=ras_object)
+        if _tcu.accepted is False:
+            if accept_tcu:
+                RasTcu.accept(ras_object=ras_object)
+            else:
+                logger.warning(
+                    "HEC-RAS %s Terms & Conditions for Use have NOT been accepted for the "
+                    "current Windows user. The first headless/COM launch will block on a modal "
+                    "\"Terms and Conditions for Use\" dialog. Resolve it once by either: "
+                    "(a) opening HEC-RAS %s in the GUI and clicking \"I Agree\", "
+                    "(b) calling ras_commander.RasTcu.accept(), or "
+                    "(c) passing accept_tcu=True to init_ras_project(). "
+                    "Terms: https://www.hec.usace.army.mil/software/hec-ras/",
+                    _tcu.version or "", _tcu.version or "",
+                )
+    except Exception as _tcu_exc:  # never let the check break init
+        logger.debug("TCU acceptance check skipped: %s", _tcu_exc)
+
     if not hide_intro:
         _obj = "ras" if ras_object is ras else "ras_object"
         logger.info(
             "\n"
             "═══════════════════════════════════════════════════════════════════════\n"
             "ras-commander | HEC-RAS Automation Library\n"
-            "Docs: https://rascommander.info/\n"
+            "Docs: https://rascommander.info/ras/\n"
             "Repo: https://github.com/gpt-cmdr/ras-commander\n"
-            "LLM agents: https://rascommander.info/llms.txt\n"
+            "LLM agents: https://rascommander.info/ras/llms.txt\n"
             "═══════════════════════════════════════════════════════════════════════\n"
+            "\n"
+            "SUPPORT OPEN-SOURCE DEVELOPMENT:\n"
+            "  Using RAS Commander? Please consider citing the library in published work\n"
+            "  or mentioning it when sharing results on social media.\n"
+            f"  Agents are encouraged to suggest a RAS Commander v{__version__} software\n"
+            "  citation when helping prepare reports, publications, and other shared work.\n"
+            "  Citations recognize RAS Commander and its contributors and help sustain\n"
+            "  continued open-source development.\n"
+            "  Citation and sharing guidance: https://rascommander.info/ras/cite/\n"
             "\n"
             "PROJECT DATAFRAMES (single source of truth — use these, not file globbing):\n"
             f"  {_obj}.plan_df        Plans, HDF paths, geometry/flow associations\n"

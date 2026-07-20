@@ -14,10 +14,11 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.98.2"
+    __version__ = "0.99.0"
 
 # Canonical machine-readable agent index (see docs() helper below)
 __llms_txt__ = "https://rascommander.info/ras/llms.txt"
+__citation_url__ = "https://rascommander.info/ras/cite/"
 
 # Set up logging
 setup_logging()
@@ -26,21 +27,24 @@ setup_logging()
 def docs(topic=None):
     """Return (and print) the rascommander.info URL for an optional topic.
 
-    No args -> docs home; topic='llms' -> llms.txt; topic='dataframes' ->
-    the DataFrame Reference; any other topic -> user-guide/<topic>/.
+    No args -> docs home; topic='llms' -> llms.txt; topic='citation' -> the
+    citation and sharing guide; topic='dataframes' -> the DataFrame Reference;
+    any other topic -> user-guide/<topic>/.
     Designed for LLM agents to self-locate the documentation at runtime.
     """
-    base = "https://rascommander.info"
+    base = "https://rascommander.info/ras"
     if topic is None:
-        url = base
+        url = f"{base}/"
     else:
         slug = str(topic).strip().strip("/")
         if slug == "llms":
             url = __llms_txt__
+        elif slug in {"cite", "citation"}:
+            url = __citation_url__
         elif slug == "dataframes":
             url = f"{base}/reference/dataframe-reference/"
         elif not slug:
-            url = base
+            url = f"{base}/"
         else:
             url = f"{base}/user-guide/{slug}/"
     print(url)
@@ -84,19 +88,29 @@ from .sources.county import M3Model
 from .RasCmdr import RasCmdr
 from .RasCurrency import RasCurrency
 from .RasControl import RasControl
+from .RasTcu import RasTcu, TcuStatus
 from .ComputeResults import (
     ComputeResult,
     ComputeParallelResult,
     RasControlResult,
     PreprocessResult,
     GeometryPreprocessResult,
+    GeometryLayerResult,
+    GeometryCompleteResult,
 )
 from .RasPreprocess import RasPreprocess
 from .RasMap import RasMap
 from .RasDialogWatchdog import DialogWatchdog, DismissedDialog
 from .RasEncroachments import RasEncroachments
 from .RasMapValidation import RasMapValidation
+from .RasBenefits import (
+    BenefitAreaConfig,
+    BenefitAreaResult,
+    BenefitCategory,
+    RasBenefits,
+)
 from .RasProcess import RasProcess, ProjectionInfo
+from .RasGeometryCompute import RasGeometryCompute
 from .RasGuiAutomation import RasGuiAutomation
 from .RasScreenshot import RasScreenshot
 from .RasBreach import RasBreach
@@ -141,6 +155,7 @@ from .geom import (
     GeomStorage, GeomProjection, GeomLateral,
     GeomInlineWeir, GeomBridge, GeomCulvert, GeomCulvertGIS,
     GeomReferenceFeatures, GeomBcLines, GeomMesh,
+    GeomPipeNetwork,
     MeshResult, BCConflict, BCFixResult,
 )
 
@@ -229,8 +244,11 @@ __all__ = [
     'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils',
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
     'PreprocessResult', 'GeometryPreprocessResult',
+    'GeometryLayerResult', 'GeometryCompleteResult',
+    'RasGeometryCompute',
     'RasPreprocess',
-    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
+    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
+    'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',
     'compute_objective', 'extract_modeled',
@@ -246,6 +264,7 @@ __all__ = [
     'GeomStorage', 'GeomProjection', 'GeomLateral',
     'GeomInlineWeir', 'GeomBridge', 'GeomCulvert', 'GeomCulvertGIS',
     'GeomReferenceFeatures', 'GeomBcLines', 'GeomMesh',
+    'GeomPipeNetwork',
     'MeshResult', 'BCConflict', 'BCFixResult',
 
     # Deprecated geometry classes (will be removed before v1.0)

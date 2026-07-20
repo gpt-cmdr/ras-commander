@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*127 notebooks indexed - 118 with runtime data, 9 without.*
+*129 notebooks indexed - 120 with runtime data, 9 without.*
 
 ## 100s - Initialization & Execution
 
@@ -66,11 +66,12 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [226 - 2D Connection Culvert Invert Validation (Terrain Cell Minimum)](../notebooks/226_2d_connection_culvert_invert_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/226_2d_connection_culvert_invert_validation.ipynb) | 32 s |
 | [227 - Authoring a 2D Connection Culvert (`Connection Culv=`)](../notebooks/227_2d_connection_culvert_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/227_2d_connection_culvert_authoring.ipynb) | 22 s |
 | [228 - Manning's n from NLCD Validation](../notebooks/228_mannings_n_from_nlcd.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/228_mannings_n_from_nlcd.ipynb) | 2.3 min |
-| [229 - Model Extent Polygons (1D, 2D, and Overall Footprints)](../notebooks/229_model_extent_polygons.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/229_model_extent_polygons.ipynb) | 18.2 min |
+| [229 - Model Extent Polygons (1D, 2D, and Overall Footprints)](../notebooks/229_model_extent_polygons.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/229_model_extent_polygons.ipynb) | 7 s |
 | [230 - 2D Mesh Cell-Size Sensitivity for Sediment Transport](../notebooks/230_mesh_sensitivity_analysis.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/230_mesh_sensitivity_analysis.ipynb) | 6.9 min |
 | [231 - Pipe Network Mesh Generation](../notebooks/231_pipe_network_mesh_generation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/231_pipe_network_mesh_generation.ipynb) | 10 s |
 | [232 - 2D Mesh Cell-Size Sensitivity for Sediment Transport - Second Case: Weise Flume](../notebooks/232_weise_2d_sediment_mesh_sensitivity.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/232_weise_2d_sediment_mesh_sensitivity.ipynb) | 16.7 min |
 | [233 - Manning's n Region Polygon Authoring](../notebooks/233_mannings_region_polygon_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/233_mannings_region_polygon_authoring.ipynb) | 3 s |
+| [234 - Headless RASMapper Geometry Completion (Edge Lines, Interpolation Surface, Flow Paths)](../notebooks/234_rasmapper_geometry_completion.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/234_rasmapper_geometry_completion.ipynb) | 29 s |
 
 ## 300s - Unsteady Flow & DSS
 
@@ -122,6 +123,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [601 - Headless Stored Map Generation Using RasMapper](../notebooks/601_headless_stored_map_generation_rasmapper.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/601_headless_stored_map_generation_rasmapper.ipynb) | 6.1 min |
 | [610 - Generate Fluvial Pluvial Delineations using Max WSE Arrival Time](../notebooks/610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.ipynb) | 1.0 h |
 | [611 - Validating RAS Mapper Layers and Terrain Files](../notebooks/611_validating_map_layers.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/611_validating_map_layers.ipynb) | 9 s |
+| [612 - Benefit-area mapping for storm-system alternatives](../notebooks/612_benefit_area_analysis.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/612_benefit_area_analysis.ipynb) | 1.3 min |
 
 ## 700s - Sensitivity & Precipitation
 

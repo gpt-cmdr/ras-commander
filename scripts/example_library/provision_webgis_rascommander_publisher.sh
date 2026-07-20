@@ -47,19 +47,21 @@ fi
 if ! id "$PUBLISH_USER" >/dev/null 2>&1; then
     useradd --system --gid "$PUBLISH_USER" --home-dir "$PUBLISH_HOME" --shell /bin/sh --no-create-home "$PUBLISH_USER"
 fi
-passwd -l "$PUBLISH_USER" >/dev/null
+# Public-key authentication still needs an account that is not shadow-locked.
+# sshd rejects empty passwords, so this account remains key-only.
+passwd -d "$PUBLISH_USER" >/dev/null
 
 install -d -o root -g root -m 0755 "$PUBLISH_HOME"
-install -d -o root -g root -m 0700 "$PUBLISH_HOME/.ssh"
+install -d -o "$PUBLISH_USER" -g "$PUBLISH_USER" -m 0700 "$PUBLISH_HOME/.ssh"
 printf 'from="%s",restrict,command="%s -wo %s" %s\n' \
     "$PUBLISH_SOURCE" "$rrsync" "$PUBLISH_ROOT" "$public_key" \
-    | install -o root -g root -m 0600 /dev/stdin "$PUBLISH_HOME/.ssh/authorized_keys"
+    | install -o "$PUBLISH_USER" -g "$PUBLISH_USER" -m 0600 /dev/stdin "$PUBLISH_HOME/.ssh/authorized_keys"
 
 # The service remains read-only to the public CT; only this identity gains
 # group write access under the RAS example subtree.
 chgrp -R "$PUBLISH_USER" "$PUBLISH_ROOT"
-chmod -R g+rwX "$PUBLISH_ROOT"
-find "$PUBLISH_ROOT" -type d -exec chmod g+s {} +
+find "$PUBLISH_ROOT" -type f -exec chmod 0664 {} +
+find "$PUBLISH_ROOT" -type d -exec chmod 2775 {} +
 
 sshd -t
 printf 'Provisioned %s for rsync writes from %s to %s\n' \

@@ -1,0 +1,4 @@
+interface:
+  display_name: "RASMapper Web Parity"
+  short_description: "Capture and compare matched RASMapper and web model views"
+  default_prompt: "Create a deterministic paired RASMapper and web viewer evidence bundle for this HEC-RAS project."

@@ -5,6 +5,34 @@
   }
 
   const DEFAULT_BOUNDS = [-125, 24, -66, 50];
+  const LANDING_GEOMETRY_KINDS = new Set([
+    "bank_lines",
+    "bc_lines",
+    "breaklines",
+    "centerlines",
+    "edge_lines",
+    "flow_paths",
+    "junctions",
+    "mesh_areas",
+    "model_extents",
+    "pipe_conduits",
+    "pipe_inlets",
+    "pipe_nodes",
+    "pump_stations",
+    "refinement_regions",
+    "river_reaches",
+    "storage_areas",
+    "structures",
+  ]);
+
+  function registerPmtilesProtocol() {
+    if (!window.pmtiles || window.RAS_EXAMPLE_LIBRARY_PMTILES_PROTOCOL) {
+      return;
+    }
+    const protocol = new window.pmtiles.Protocol();
+    maplibregl.addProtocol("pmtiles", protocol.tile);
+    window.RAS_EXAMPLE_LIBRARY_PMTILES_PROTOCOL = protocol;
+  }
 
   function escapeHtml(value) {
     return String(value || "")
@@ -64,6 +92,58 @@
     ];
   }
 
+  function safeId(value) {
+    return String(value || "layer")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "layer";
+  }
+
+  function geometryFamily(layer) {
+    const types = layer.geometryTypes || [];
+    if (types.some((type) => String(type).includes("Polygon"))) {
+      return "polygon";
+    }
+    if (types.some((type) => String(type).includes("Point"))) {
+      return "point";
+    }
+    return "line";
+  }
+
+  function geometryPaint(layer, family) {
+    const style = layer.style || {};
+    if (family === "polygon") {
+      return {
+        fill: {
+          "fill-color": style.fill || "#2a9d8f",
+          "fill-opacity": Math.min(Number(style.fillOpacity ?? 0.16), 0.24),
+        },
+        line: {
+          "line-color": style.line || "#155e75",
+          "line-width": Math.max(Number(style.lineWidth || 1.2), 1.2),
+          "line-opacity": 0.9,
+        },
+      };
+    }
+    if (family === "point") {
+      return {
+        circle: {
+          "circle-color": style.fill || style.line || "#b45309",
+          "circle-radius": 4,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 1,
+        },
+      };
+    }
+    return {
+      line: {
+        "line-color": style.line || "#155e75",
+        "line-width": Math.max(Number(style.lineWidth || 1.3), 1.3),
+        "line-opacity": 0.92,
+      },
+    };
+  }
+
   function projectLocations(features) {
     return {
       type: "FeatureCollection",
@@ -93,7 +173,6 @@
   function popupHtml(feature) {
     const props = feature.properties || {};
     const webmap = props.webmap ? resolveHref(props.webmap) : "";
-    const manifest = props.manifest ? resolveHref(props.manifest) : "";
     return [
       '<div class="ras-library-popup">',
       `<h3>${escapeHtml(props.title || feature.id || "Example Project")}</h3>`,
@@ -101,42 +180,52 @@
       `<dt>Source</dt><dd>${escapeHtml(props.sourceFamily || "Unknown")}</dd>`,
       `<dt>CRS</dt><dd>${escapeHtml(props.crs || "Unknown")}</dd>`,
       `<dt>Status</dt><dd>${escapeHtml(props.status || "Published")}</dd>`,
+      props.landingExtentSource
+        ? `<dt>Map extent</dt><dd>${escapeHtml(props.landingExtentSource)}</dd>`
+        : "",
       "</dl>",
       props.notes ? `<p>${escapeHtml(props.notes)}</p>` : "",
       '<div class="ras-library-popup__actions">',
       webmap ? `<a href="${escapeHtml(webmap)}">Open webmap</a>` : "",
-      manifest ? `<a href="${escapeHtml(manifest)}">Manifest</a>` : "",
       "</div>",
       "</div>",
     ].join("");
   }
 
-  function projectCard(feature) {
+  function projectRow(feature) {
     const props = feature.properties || {};
-    const article = document.createElement("article");
-    article.className = "ras-library-project";
-    article.dataset.projectId = feature.id || "";
+    const row = document.createElement("tr");
+    row.dataset.projectId = feature.id || "";
 
-    const title = document.createElement("h3");
-    title.textContent = props.title || feature.id || "Example Project";
-    const meta = document.createElement("p");
-    meta.textContent = [props.sourceFamily, props.crs, props.status].filter(Boolean).join(" | ");
+    const project = document.createElement("td");
     const link = document.createElement("a");
     link.href = props.webmap ? resolveHref(props.webmap) : "#";
-    link.textContent = "Open webmap";
+    link.textContent = props.title || feature.id || "Example Project";
     if (!props.webmap) {
       link.setAttribute("aria-disabled", "true");
     }
-    article.append(title, meta, link);
-    return article;
+    project.append(link);
+
+    const information = document.createElement("td");
+    information.className = "ras-library-project-information";
+    information.textContent = props.notes || "Published MapLibre project bundle.";
+
+    const source = document.createElement("td");
+    source.textContent = props.sourceFamily || "Unknown";
+
+    const crs = document.createElement("td");
+    crs.textContent = props.crs || "Unknown";
+
+    row.append(project, information, source, crs);
+    return row;
   }
 
-  function renderProjectList(root, features) {
-    const list = root.querySelector("[data-project-list]");
-    if (!list) {
+  function renderProjectTable(root, features) {
+    const table = root.querySelector("[data-project-table]");
+    if (!table) {
       return;
     }
-    list.replaceChildren(...features.map(projectCard));
+    table.replaceChildren(...features.map(projectRow));
   }
 
   async function loadProjectIndex(dataUrl) {
@@ -160,6 +249,7 @@
       return;
     }
 
+    registerPmtilesProtocol();
     const dataUrl = root.dataset.index ||
       "https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson";
     const collection = await loadProjectIndex(dataUrl);
@@ -170,7 +260,11 @@
         [String(feature.properties?.projectId || feature.id), feature],
       ])
     );
-    renderProjectList(root, features);
+    renderProjectTable(root, features);
+    const status = root.querySelector("[data-library-status]");
+    if (status) {
+      status.textContent = `${features.length} published MapLibre project extents`;
+    }
 
     const bounds = mergeBounds(features);
     const map = new maplibregl.Map({
@@ -187,6 +281,10 @@
           projects: {
             type: "geojson",
             data: collection,
+          },
+          "selected-project": {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
           },
         },
         layers: [
@@ -210,8 +308,38 @@
             type: "line",
             source: "projects",
             paint: {
-              "line-color": "#1d4ed8",
-              "line-width": 2.5,
+              "line-color": "#163ea5",
+              "line-width": 3,
+              "line-opacity": 0.94,
+            },
+          },
+          {
+            id: "selected-project-extent-fill",
+            type: "fill",
+            source: "selected-project",
+            paint: {
+              "fill-color": "#f97316",
+              "fill-opacity": 0.3,
+            },
+          },
+          {
+            id: "selected-project-extent-halo",
+            type: "line",
+            source: "selected-project",
+            paint: {
+              "line-color": "#ffffff",
+              "line-width": 9,
+              "line-opacity": 0.9,
+            },
+          },
+          {
+            id: "selected-project-extent",
+            type: "line",
+            source: "selected-project",
+            paint: {
+              "line-color": "#d94801",
+              "line-width": 5,
+              "line-opacity": 1,
             },
           },
         ],
@@ -223,6 +351,90 @@
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
+
+    let selectedGeometry = { layers: [], sources: [] };
+    let selectedGeometryRequest = 0;
+
+    function clearSelectedGeometry() {
+      for (const layerId of [...selectedGeometry.layers].reverse()) {
+        if (map.getLayer(layerId)) {
+          map.removeLayer(layerId);
+        }
+      }
+      for (const sourceId of selectedGeometry.sources) {
+        if (map.getSource(sourceId)) {
+          map.removeSource(sourceId);
+        }
+      }
+      selectedGeometry = { layers: [], sources: [] };
+    }
+
+    async function showSelectedProjectGeometry(feature) {
+      const manifestHref = feature.properties?.manifest;
+      const request = ++selectedGeometryRequest;
+      clearSelectedGeometry();
+      if (!manifestHref || !window.pmtiles) {
+        return;
+      }
+      if (!map.isStyleLoaded()) {
+        await new Promise((resolve) => map.once("load", resolve));
+      }
+      const manifestUrl = resolveHref(manifestHref);
+      const response = await fetch(manifestUrl, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Project manifest request failed: ${response.status}`);
+      }
+      const manifest = await response.json();
+      if (request !== selectedGeometryRequest) {
+        return;
+      }
+      const projectId = safeId(feature.id || feature.properties?.projectId);
+      const beforeId = map.getLayer("selected-project-extent-fill")
+        ? "selected-project-extent-fill"
+        : undefined;
+      for (const tileset of manifest.tilesets || []) {
+        if (tileset.type !== "vector" || tileset.id === "geometry-detail") {
+          continue;
+        }
+        const layers = (tileset.layers || []).filter((layer) => (
+          LANDING_GEOMETRY_KINDS.has(layer.kind)
+          && layer.kind !== "model_extents"
+          && layer.sourceKind !== "raw-hdf"
+          && layer.sourceKind !== "stored-map"
+        ));
+        if (!layers.length || !tileset.href) {
+          continue;
+        }
+        const sourceId = `selected-model-${projectId}-${safeId(tileset.id)}`;
+        const tileUrl = new URL(tileset.href, manifestUrl).toString();
+        map.addSource(sourceId, {
+          type: "vector",
+          url: `pmtiles://${tileUrl}`,
+        });
+        selectedGeometry.sources.push(sourceId);
+        for (const layer of layers) {
+          const family = geometryFamily(layer);
+          const paint = geometryPaint(layer, family);
+          const baseId = `${sourceId}-${safeId(layer.id)}`;
+          const common = {
+            source: sourceId,
+            "source-layer": layer.sourceLayer,
+            minzoom: Number(tileset.minzoom || 0),
+          };
+          if (family === "polygon") {
+            const fillId = `${baseId}-fill`;
+            const lineId = `${baseId}-line`;
+            map.addLayer({ id: fillId, type: "fill", ...common, paint: paint.fill }, beforeId);
+            map.addLayer({ id: lineId, type: "line", ...common, paint: paint.line }, beforeId);
+            selectedGeometry.layers.push(fillId, lineId);
+          } else {
+            const layerId = `${baseId}-${family}`;
+            map.addLayer({ id: layerId, type: family === "point" ? "circle" : "line", ...common, paint: paint[family === "point" ? "circle" : "line"] }, beforeId);
+            selectedGeometry.layers.push(layerId);
+          }
+        }
+      }
+    }
 
     function openProjectPopup(lngLat, feature) {
       if (!feature) {
@@ -239,13 +451,20 @@
       if (!projectBounds) {
         return;
       }
+      map.getSource("selected-project").setData({
+        type: "FeatureCollection",
+        features: [feature],
+      });
       map.fitBounds(
         [
           [projectBounds[0], projectBounds[1]],
           [projectBounds[2], projectBounds[3]],
         ],
-        { padding: 64, maxZoom: 12, duration: 600 }
+        { padding: 64, maxZoom: 15, duration: 600 }
       );
+      showSelectedProjectGeometry(feature).catch(() => {
+        clearSelectedGeometry();
+      });
     }
 
     function renderedFeatures(event, layerIds) {
@@ -275,11 +494,15 @@
     }
 
     map.on("click", (event) => {
-      openProjectPopup(event.lngLat, renderedFeatures(event, ["project-extents-fill"])[0]);
+      const feature = renderedFeatures(event, ["project-extents-fill", "project-extents-line"])[0];
+      if (feature) {
+        zoomToProject(feature);
+        openProjectPopup(event.lngLat, feature);
+      }
     });
 
     map.on("mousemove", (event) => {
-      const interactive = renderedFeatures(event, ["project-extents-fill"]);
+      const interactive = renderedFeatures(event, ["project-extents-fill", "project-extents-line"]);
       map.getCanvas().style.cursor = interactive.length ? "pointer" : "";
     });
   }

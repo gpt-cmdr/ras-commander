@@ -184,6 +184,30 @@ def test_execute_local_plan_paths_are_debug_not_info(monkeypatch, tmp_path, capl
     assert "HDF file created successfully for plan 07" in debug_text
 
 
+def test_execute_local_plan_geometry_copyback_can_be_disabled(monkeypatch, tmp_path):
+    ras_obj = _seed_project(tmp_path / "project")
+    worker = _local_worker(tmp_path / "workers")
+    _patch_local_execution(monkeypatch)
+    geometry_copy_calls = []
+    monkeypatch.setattr(
+        local_worker_module,
+        "copy_geometry_outputs_back",
+        lambda **kwargs: geometry_copy_calls.append(kwargs),
+    )
+
+    assert local_worker_module.execute_local_plan(
+        worker=worker,
+        plan_number="07",
+        ras_obj=ras_obj,
+        num_cores=2,
+        clear_geompre=False,
+        force_rerun=True,
+        copy_geometry_outputs=False,
+    )
+
+    assert geometry_copy_calls == []
+
+
 def test_execute_local_plan_preserve_folder_info_is_concise(
     monkeypatch,
     tmp_path,

@@ -1452,7 +1452,7 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
                         break
 
                 if first_reach is not None:
-                    init_ras_project(first_reach, "7.0")
+                    init_ras_project(first_reach, "7.0", hide_intro=True)
                     RasEbfeModels._emit(f"  ✓ init_ras_project succeeded for: {first_reach.name}")
                 else:
                     RasEbfeModels._emit("  ⚠ No reach with .prj file found for validation")
@@ -1676,7 +1676,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             try:
                 from ras_commander import init_ras_project
                 first_project = next(folders['ras'].rglob("*.prj")).parent
-                init_ras_project(first_project, "7.0")
+                init_ras_project(first_project, "7.0", hide_intro=True)
                 RasEbfeModels._emit(f"  init_ras_project succeeded for: {first_project.name}")
             except Exception as exc:
                 RasEbfeModels._emit(f"  Validation failed: {exc}")
@@ -4174,6 +4174,7 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 ras_version or "",
                 ras_object=ras_object,
                 load_results_summary=False,
+                hide_intro=True,
             )
             prj_file = getattr(ras_object, "prj_file", None)
             if prj_file:

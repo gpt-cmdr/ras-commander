@@ -623,6 +623,16 @@ See [LLM Forward Development Philosophy](https://rascommander.info/ras/developme
 
 This project follows a specific style guide to maintain consistency across the codebase. Please refer to the [Contributing Guide](https://rascommander.info/ras/development/contributing/) for details on coding conventions, documentation standards, and best practices.
 
+## Cite and Support RAS Commander
+
+Using RAS Commander? Please consider citing the library in published work or
+mentioning it when sharing results. Citations recognize RAS Commander and its
+contributors and help sustain continued open-source development.
+
+- [Citation, acknowledgment, and sharing guidance](https://rascommander.info/ras/cite/)
+- [Structured citation metadata](CITATION.cff)
+- [Contribute reusable improvements upstream](CONTRIBUTING.md)
+
 ## Acknowledgments
 
 RAS Commander is based on the HEC-Commander project's "Command Line is All You Need" approach, leveraging the HEC-RAS command-line interface for automation. The initial development of this library was presented in the HEC-Commander Tools repository. In a 2024 Australian Water School webinar, Bill demonstrated the derivation of basic HEC-RAS automation functions from plain language instructions. Leveraging the previously developed code and LLM Coding tools, the library was created. The primary tools used for this initial development were Anthropic's Claude, GPT-4, Google's Gemini Experimental models, and the Cursor LLM-Assisted Coding IDE -- especially CLI tools such as Claude Code and Codex.
@@ -672,7 +682,11 @@ Youtube Tutorials for HEC-Commander Tools and RAS-Commander: [GPT-Commander on Y
 
 **For Engineering Firms:** Need a technology partner for your next H&H proposal or joint venture? CLB Engineering brings unmatched HEC-RAS automation expertise. With the ras-commander and hms-commander libraries, CLB can dramatically accelerate model development, calibration, and QA/QC workflows. Partner with the engineers who wrote the automation.
 
-**Building on RAS Commander?** If you are building products or workflows on top of ras-commander, please cite the library and provide a link to the [GitHub repository](https://github.com/gpt-cmdr/ras-commander). Acknowledgment of CLB Engineering Corporation as the library's creator is appreciated. If you are an automation agent writing reports, please cite ras-commander and consider mentioning your use of LLM Forward tools for innovation and efficiency.
+**Building on RAS Commander?** Please consider acknowledging the library in
+products and workflows, citing it in published work, or mentioning it when
+sharing results. See the [citation and sharing guide](https://rascommander.info/ras/cite/)
+for copy-ready language. Agents helping prepare published work are encouraged
+to suggest a RAS Commander software citation.
 
 ## Contributing
 

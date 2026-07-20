@@ -102,6 +102,7 @@ class HdfProject:
         buffer_x_percent: Optional[float] = None,
         buffer_y_percent: Optional[float] = None,
         geometry_type: str = "footprint",
+        fill_holes: bool = True,
     ) -> Tuple['GeoDataFrame', Tuple[float, float, float, float]]:
         """
         Calculate the combined project extent from all model elements.
@@ -142,6 +143,14 @@ class HdfProject:
         geometry_type : {'footprint', 'bbox'}, default 'footprint'
             'footprint' returns the true extent polygon; 'bbox' returns the
             legacy buffered bounding box.
+        fill_holes : bool, default True
+            Footprint mode only. Remove interior sliver gaps (holes) from the
+            combined 1D + 2D footprint. Unioning 1D reach footprints with 2D
+            flow-area perimeters leaves thin interior rings wherever the two
+            boundaries overlap without aligning exactly (clearly visible on
+            Muncie). Set False to keep those holes. Ignored in 'bbox' mode. Only
+            interior rings are dropped; disconnected parts of a genuinely
+            multipart model (e.g. separate 2D flow areas) are always preserved.
 
         Returns
         -------
@@ -177,6 +186,7 @@ class HdfProject:
                 include_2d=include_2d,
                 include_storage=include_storage,
                 buffer_percent=buffer_percent,
+                fill_holes=fill_holes,
             )
 
         # Lazy imports
@@ -318,12 +328,47 @@ class HdfProject:
         return extent_gdf, (buffered_minx, buffered_miny, buffered_maxx, buffered_maxy)
 
     @staticmethod
+    def _count_holes(geometry) -> int:
+        """Count interior rings across a (Multi)Polygon."""
+        from shapely.geometry import Polygon, MultiPolygon
+
+        if isinstance(geometry, Polygon):
+            return len(geometry.interiors)
+        if isinstance(geometry, MultiPolygon):
+            return sum(len(p.interiors) for p in geometry.geoms)
+        return 0
+
+    @staticmethod
+    def _fill_polygon_holes(geometry):
+        """Drop interior rings (holes) from a (Multi)Polygon.
+
+        Unioning 1D reach footprints with 2D flow-area perimeters leaves thin
+        sliver gaps where the two boundaries overlap without aligning exactly;
+        these show up as interior rings. Rebuilding each polygon from its exterior
+        ring removes them. Non-polygonal geometry is returned unchanged.
+        """
+        from shapely.geometry import Polygon, MultiPolygon
+
+        if isinstance(geometry, Polygon):
+            return Polygon(geometry.exterior) if geometry.interiors else geometry
+        if isinstance(geometry, MultiPolygon):
+            filled = [
+                Polygon(part.exterior) if part.interiors else part
+                for part in geometry.geoms
+            ]
+            # Re-dissolve so any exterior that grew into a neighbor stays merged.
+            from shapely.ops import unary_union
+            return unary_union(filled)
+        return geometry
+
+    @staticmethod
     def _get_project_footprint(
         hdf_path: Path,
         include_1d: bool = True,
         include_2d: bool = True,
         include_storage: bool = True,
         buffer_percent: float = 0.0,
+        fill_holes: bool = True,
     ) -> Tuple['GeoDataFrame', Tuple[float, float, float, float]]:
         """
         Build the true model extent as a footprint (multi)polygon.
@@ -394,6 +439,13 @@ class HdfProject:
             logger.warning("Combined footprint geometry is empty")
             empty_gdf = GeoDataFrame(geometry=[], crs=crs)
             return empty_gdf, (0.0, 0.0, 0.0, 0.0)
+
+        # Remove interior sliver gaps left where 1D and 2D boundaries overlap.
+        if fill_holes:
+            n_holes_before = HdfProject._count_holes(combined)
+            if n_holes_before:
+                combined = HdfProject._fill_polygon_holes(combined)
+                logger.debug(f"Footprint: filled {n_holes_before} interior hole(s)")
 
         # Optional isotropic buffer (0 => raw footprint).
         if buffer_percent and buffer_percent > 0:

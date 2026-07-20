@@ -245,3 +245,86 @@ class GeometryPreprocessResult:
             f"{status}, plan={self.plan_number}, geom={self.geometry_number}, "
             f"flow_type={self.flow_type}, time={time_str})"
         )
+
+
+@dataclass
+class GeometryLayerResult:
+    """
+    Result of a single RasGeometryCompute layer-generation call.
+
+    Returned by RasGeometryCompute.generate_edge_lines() /
+    generate_interpolation_surface() / generate_flow_paths(). Backward compatible
+    with bool via __bool__.
+
+    Attributes:
+        success: Whether the layer was generated (or already present when skipped).
+        layer: Native HDF group written, e.g. "River Edge Lines".
+        geom_hdf_path: Geometry HDF that was operated on.
+        skipped: True when the layer already existed and overwrite=False.
+        backup_path: Path to the dated GeoJSON backup of pre-existing features,
+            when one was written before overwriting.
+        elapsed_seconds: Wall-clock time for the generation call.
+        error: Error message on failure, else None.
+    """
+    success: bool
+    layer: str
+    geom_hdf_path: Path
+    skipped: bool = False
+    backup_path: Optional[Path] = None
+    elapsed_seconds: float = 0.0
+    error: Optional[str] = None
+
+    def __bool__(self) -> bool:
+        return self.success
+
+    def __repr__(self) -> str:
+        if self.skipped:
+            status = 'SKIPPED'
+        elif self.success:
+            status = 'SUCCESS'
+        else:
+            status = 'FAILED'
+        time_str = f"{self.elapsed_seconds:.1f}s" if self.elapsed_seconds > 0 else "N/A"
+        return f"GeometryLayerResult({status}, layer={self.layer!r}, time={time_str})"
+
+
+@dataclass
+class GeometryCompleteResult:
+    """
+    Result of RasGeometryCompute.compute_geometry() (RASGeometry.CompleteForComputations).
+
+    Backward compatible with bool via __bool__. Distinct from
+    GeometryPreprocessResult, which wraps HEC-RAS's numerical geometry
+    preprocessor (a different pipeline).
+
+    Attributes:
+        success: Whether the geometry-completion pipeline succeeded.
+        geom_hdf_path: Geometry HDF that was completed.
+        edge_lines_written: River Edge Lines present after the run.
+        interpolation_surface_written: XS Interpolation Surfaces present after the run.
+        flow_paths_written: River Flow Paths present after the run.
+        backup_path: Path to a dated GeoJSON backup written before overwriting, if any.
+        elapsed_seconds: Wall-clock time for the call.
+        error: Error message on failure, else None.
+    """
+    success: bool
+    geom_hdf_path: Path
+    edge_lines_written: bool = False
+    interpolation_surface_written: bool = False
+    flow_paths_written: bool = False
+    backup_path: Optional[Path] = None
+    elapsed_seconds: float = 0.0
+    error: Optional[str] = None
+
+    def __bool__(self) -> bool:
+        return self.success
+
+    def __repr__(self) -> str:
+        status = 'SUCCESS' if self.success else 'FAILED'
+        time_str = f"{self.elapsed_seconds:.1f}s" if self.elapsed_seconds > 0 else "N/A"
+        return (
+            f"GeometryCompleteResult({status}, "
+            f"edge_lines={self.edge_lines_written}, "
+            f"interp_surface={self.interpolation_surface_written}, "
+            f"flow_paths={self.flow_paths_written}, time={time_str})"
+        )
