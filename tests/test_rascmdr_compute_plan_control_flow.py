@@ -285,6 +285,215 @@ def test_compute_plan_same_dest_folder_does_not_remove_active_project(
     assert plan_path.exists()
 
 
+def _make_skip_scenario(monkeypatch, tmp_path, rebuild_error=None):
+    """Build a project whose results are current, so the smart skip would fire.
+
+    Returns (ras_obj, calls) where calls records whether HEC-RAS was launched, whether
+    the geometry preprocessor caches were cleared, and whether the RasProcess.exe
+    rebuild was invoked. Pass rebuild_error to simulate RasProcess.exe being absent.
+    """
+    from ras_commander.RasCurrency import RasCurrency
+    from ras_commander.RasProcess import RasProcess
+    from ras_commander.geom import GeomPreprocessor
+
+    prj_path = tmp_path / "TestProject.prj"
+    plan_path = tmp_path / "TestProject.p01"
+    geom_hdf_path = tmp_path / "TestProject.g01.hdf"
+    prj_path.write_text("Proj Title=TestProject\n", encoding="utf-8")
+    plan_path.write_text("Plan Title=Plan 01\n", encoding="utf-8")
+    geom_hdf_path.write_bytes(b"fake hdf")
+
+    ras_obj = _DummyRas()
+    ras_obj.project_folder = tmp_path
+    ras_obj.project_name = "TestProject"
+    ras_obj.prj_file = prj_path
+    ras_obj.ras_exe_path = "Ras.exe"
+
+    calls = {
+        "ran": False,
+        "cleared_hdf_tables": False,
+        "cleared_geompre": False,
+        "rebuilt": False,
+    }
+
+    def fake_run(*args, **kwargs):
+        calls["ran"] = True
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    def fake_rebuild(geom_hdf, **kwargs):
+        calls["rebuilt"] = True
+        if rebuild_error is not None:
+            raise rebuild_error
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda plan_number, ras_object: plan_path),
+    )
+    # Results are current: without an override, compute_plan must skip.
+    monkeypatch.setattr(
+        RasCurrency,
+        "are_plan_results_current",
+        staticmethod(lambda plan_number, ras_object: (True, "already current")),
+    )
+    monkeypatch.setattr(
+        RasCurrency,
+        "get_geom_hdf_path",
+        staticmethod(lambda plan_number, ras_object: geom_hdf_path),
+    )
+    monkeypatch.setattr(
+        GeomPreprocessor,
+        "clear_geompre_hdf",
+        staticmethod(
+            lambda geom_hdf_path: calls.__setitem__("cleared_hdf_tables", True) or []
+        ),
+    )
+    monkeypatch.setattr(
+        GeomPreprocessor,
+        "clear_geompre_files",
+        staticmethod(
+            lambda plan_files=None, ras_object=None: calls.__setitem__(
+                "cleared_geompre", True
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        RasProcess, "compute_geometry", staticmethod(fake_rebuild)
+    )
+    monkeypatch.setattr(
+        rascmdr_module.BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda plan_path: None),
+    )
+    monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
+
+    return ras_obj, calls
+
+
+def test_compute_plan_smart_skip_fires_when_results_are_current(monkeypatch, tmp_path):
+    """Baseline: current results skip execution when no override is requested."""
+    ras_obj, calls = _make_skip_scenario(monkeypatch, tmp_path)
+
+    result = RasCmdr.compute_plan("01", ras_object=ras_obj, dialog_watchdog=False)
+
+    assert result.success is True
+    assert calls["ran"] is False
+
+
+def test_compute_plan_force_geompre_bypasses_smart_skip(monkeypatch, tmp_path):
+    """force_geompre must execute even when results look current.
+
+    are_plan_results_current() only compares .p##/.g##/.u## mtimes against the results
+    HDF, so it cannot see the inputs force_geompre exists to invalidate (the cached
+    .g##.hdf, and the land cover sidecars feeding it). If the skip wins, the request is
+    dropped silently and compute_plan still reports success -- the caller has no signal
+    that reprocessing never happened.
+    """
+    ras_obj, calls = _make_skip_scenario(monkeypatch, tmp_path)
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_geompre=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is True
+    assert calls["ran"] is True, "force_geompre was skipped: HEC-RAS never launched"
+    assert calls["cleared_hdf_tables"] is True, "in-HDF preprocessor tables were not cleared"
+    assert calls["cleared_geompre"] is True, "preprocessor files were not cleared"
+
+
+def test_compute_plan_clear_geompre_is_skipped_when_results_are_current(
+    monkeypatch, tmp_path
+):
+    """Documents a sharp edge: clear_geompre does NOT override the smart skip.
+
+    The skip is evaluated before the clearing branch, so when results look current
+    nothing is cleared and HEC-RAS never runs. That matters for land cover sweeps: a
+    perturbed sidecar leaves the .g## mtime untouched, so the results still look
+    current and the perturbation silently never reaches the solver. Use force_geompre
+    (or force_rerun) for those ensembles.
+    """
+    ras_obj, calls = _make_skip_scenario(monkeypatch, tmp_path)
+
+    result = RasCmdr.compute_plan(
+        "01",
+        clear_geompre=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is True
+    assert calls["ran"] is False
+    assert calls["cleared_geompre"] is False, (
+        "clear_geompre ran despite the skip -- if this now bypasses the skip, update "
+        "the land cover rule and this test's premise together"
+    )
+
+
+def test_compute_plan_force_geompre_clears_in_place_then_rebuilds(monkeypatch, tmp_path):
+    """force_geompre must clear the cached tables in place, then rebuild them.
+
+    Clearing must NOT delete the whole .g##.hdf: that destroys the land cover / terrain
+    association, and per-cell Manning's n then collapses to the uniform default instead
+    of being re-derived from the land cover source.
+    """
+    from ras_commander.RasCurrency import RasCurrency
+
+    ras_obj, calls = _make_skip_scenario(monkeypatch, tmp_path)
+
+    deleted_whole_hdf = {"called": False}
+    monkeypatch.setattr(
+        RasCurrency,
+        "clear_geom_hdf",
+        staticmethod(
+            lambda plan_number, ras_object: deleted_whole_hdf.__setitem__("called", True)
+        ),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_geompre=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is True
+    assert calls["cleared_hdf_tables"] is True
+    assert calls["rebuilt"] is True, "RasProcess.exe rebuild was not invoked"
+    assert deleted_whole_hdf["called"] is False, (
+        "force_geompre deleted the whole geometry HDF, destroying the land cover association"
+    )
+
+
+def test_compute_plan_force_geompre_survives_missing_rasprocess(monkeypatch, tmp_path):
+    """The RasProcess.exe rebuild is best effort and must not fail the compute.
+
+    The tables are already cleared at that point, so the solver-time preprocessor
+    re-derives them during the run. This keeps force_geompre working on HEC-RAS
+    versions where the CompleteGeometry verb is unavailable.
+    """
+    ras_obj, calls = _make_skip_scenario(
+        monkeypatch,
+        tmp_path,
+        rebuild_error=FileNotFoundError("RasProcess.exe not found"),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_geompre=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is True, "a missing RasProcess.exe must not fail the compute"
+    assert calls["rebuilt"] is True
+    assert calls["cleared_hdf_tables"] is True
+    assert calls["ran"] is True, "HEC-RAS must still run so the solver re-derives the tables"
+
+
 def test_windows_path_to_wsl_decodes_utf8(monkeypatch):
     calls = []
 

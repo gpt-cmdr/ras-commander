@@ -10,6 +10,7 @@ the platform and the pythonnet-touching internals so they run anywhere.
 import inspect
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -154,6 +155,68 @@ def test_parse_feature_name():
 def test_complete_geometry_alias_signature_preserved():
     assert (inspect.signature(RasProcess.complete_geometry)
             == inspect.signature(RasProcess.compute_geometry))
+
+
+def test_rasprocess_compute_geometry_prefers_project_executable(monkeypatch, tmp_path):
+    geom = tmp_path / "model.g01.hdf"
+    geom.write_bytes(b"not a real hdf")
+    ras_dir = tmp_path / "HEC-RAS"
+    ras_dir.mkdir()
+    ras_exe = ras_dir / "Ras.exe"
+    rasprocess_exe = ras_dir / "RasProcess.exe"
+    ras_exe.touch()
+    rasprocess_exe.touch()
+    project = SimpleNamespace(
+        ras_exe_path=ras_exe, initialized=False, project_folder=None
+    )
+    captured = {}
+
+    def fake_run(executable, args, **kwargs):
+        captured["executable"] = Path(executable)
+        captured["args"] = args
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(
+        RasProcess,
+        "find_rasprocess",
+        staticmethod(lambda version=None: (_ for _ in ()).throw(
+            AssertionError("version discovery should not run")
+        )),
+    )
+    monkeypatch.setattr(RasProcess, "_run_rasprocess", staticmethod(fake_run))
+
+    result = RasProcess.compute_geometry(geom, ras_object=project)
+
+    assert captured["executable"] == rasprocess_exe
+    assert captured["args"][0] == "CompleteGeometry"
+    assert result["return_code"] == 0
+
+
+def test_rasprocess_compute_geometry_rejects_stderr_error(monkeypatch, tmp_path):
+    import h5py
+
+    geom = tmp_path / "model.g01.hdf"
+    with h5py.File(geom, "w") as hdf:
+        hdf.create_group("Geometry/River Edge Lines")
+    rasprocess_exe = tmp_path / "RasProcess.exe"
+    rasprocess_exe.touch()
+
+    monkeypatch.setattr(
+        RasProcess, "find_rasprocess", staticmethod(lambda version=None: rasprocess_exe)
+    )
+    monkeypatch.setattr(
+        RasProcess,
+        "_run_rasprocess",
+        staticmethod(lambda *args, **kwargs: SimpleNamespace(
+            returncode=0, stdout="", stderr="Error: invalid argument"
+        )),
+    )
+
+    result = RasProcess.compute_geometry(geom, ras_version="7.0")
+
+    assert result["edge_lines_written"] is True
+    assert result["return_code"] == 0
+    assert result["success"] is False
 
 
 def _diff_frames(left, channel, right):
