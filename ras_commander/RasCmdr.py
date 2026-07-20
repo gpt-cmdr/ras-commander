@@ -29,6 +29,7 @@ All of the methods in this class are static and are designed to be used without 
 
 List of Functions in RasCmdr:
 - compute_plan()
+- cancel_plan()
 - compute_parallel()
 - compute_test_mode()
         
@@ -390,7 +391,11 @@ class RasCmdr:
         return True
 
     @staticmethod
-    def _verify_completion(hdf_path: Path, check_errors: bool = True) -> bool:
+    def _verify_completion(
+        hdf_path: Path,
+        check_errors: bool = True,
+        modified_after: Optional[float] = None,
+    ) -> bool:
         """
         Verify that a HEC-RAS computation completed successfully (HDF-only).
 
@@ -403,6 +408,10 @@ class RasCmdr:
             hdf_path: Path to plan HDF file
             check_errors: If True, also fail verification if errors detected
                          in compute messages (default: True)
+            modified_after: Optional execution start timestamp. When provided,
+                reject an otherwise valid HDF whose modification time predates
+                this execution. This prevents a failed forced rerun from being
+                credited with a copied or stale successful result.
 
         Returns:
             bool: True if verification passed
@@ -410,6 +419,16 @@ class RasCmdr:
         if not hdf_path.exists():
             logger.debug(f"HDF file does not exist: {hdf_path}")
             return False
+
+        if modified_after is not None:
+            # A two-second tolerance accommodates filesystems with coarse
+            # timestamp resolution while still excluding pre-existing HDFs.
+            if hdf_path.stat().st_mtime < float(modified_after) - 2.0:
+                logger.debug(
+                    "Verification rejected stale HDF %s (modified before this run)",
+                    hdf_path.name,
+                )
+                return False
 
         try:
             import h5py
@@ -478,6 +497,7 @@ class RasCmdr:
         check_errors: bool = True,
         poll_interval: float = 5.0,
         timeout_seconds: float = 7200.0,
+        modified_after: Optional[float] = None,
     ) -> Optional[bool]:
         """
         Wait for a solver child process that outlives ``Ras.exe -c``.
@@ -505,7 +525,11 @@ class RasCmdr:
             / f"{ras_object.project_name}.p{plan_num}.tmp.hdf"
         )
 
-        if RasCmdr._verify_completion(hdf_path, check_errors=check_errors):
+        if RasCmdr._verify_completion(
+            hdf_path,
+            check_errors=check_errors,
+            modified_after=modified_after,
+        ):
             return True
 
         active = RasCmdr._rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path)
@@ -521,7 +545,11 @@ class RasCmdr:
         observed_async = True
 
         while time.time() < deadline:
-            if RasCmdr._verify_completion(hdf_path, check_errors=check_errors):
+            if RasCmdr._verify_completion(
+                hdf_path,
+                check_errors=check_errors,
+                modified_after=modified_after,
+            ):
                 return True
 
             active = RasCmdr._rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path)
@@ -533,7 +561,11 @@ class RasCmdr:
                 # Give HEC-RAS a short grace window to rename/close files after
                 # the solver process exits, then verify one final time.
                 time.sleep(min(poll_interval, 2.0))
-                if RasCmdr._verify_completion(hdf_path, check_errors=check_errors):
+                if RasCmdr._verify_completion(
+                    hdf_path,
+                    check_errors=check_errors,
+                    modified_after=modified_after,
+                ):
                     return True
                 if not RasCmdr._rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path):
                     return False
@@ -546,6 +578,119 @@ class RasCmdr:
             timeout_seconds,
         )
         return False if observed_async else None
+
+    @staticmethod
+    @log_call
+    def cancel_plan(
+        plan_number: Union[str, Number],
+        ras_object=None,
+        timeout_seconds: float = 10.0,
+    ) -> bool:
+        """Stop only the active Windows process tree for one project plan.
+
+        Process matching is deliberately strict: a ``Ras.exe`` launcher must
+        contain both the initialized project path and resolved plan path, while
+        a solver must contain the exact plan ``.tmp.hdf`` path. Unrelated RAS
+        sessions are never selected by executable name alone.
+
+        Args:
+            plan_number: Plan number to cancel (for example, ``"01"``).
+            ras_object: Initialized :class:`RasPrj` object. Uses the global
+                project when omitted.
+            timeout_seconds: Grace period before force-killing only the already
+                matched processes.
+
+        Returns:
+            ``True`` when a matching process tree was found and stopped;
+            ``False`` when no matching active process existed.
+        """
+        if os.name != "nt":
+            raise NotImplementedError(
+                "RasCmdr.cancel_plan() currently supports Windows HEC-RAS "
+                "process trees only."
+            )
+
+        import psutil
+
+        ras_obj = ras_object if ras_object is not None else ras
+        ras_obj.check_initialized()
+        plan_num = RasUtils.normalize_ras_number(plan_number)
+        project_path = Path(ras_obj.prj_file).resolve(strict=False)
+        resolved_plan_path = RasPlan.get_plan_path(plan_num, ras_obj)
+        if resolved_plan_path is None:
+            raise FileNotFoundError(f"Plan file not found: {plan_num}")
+        plan_path = Path(resolved_plan_path).resolve(strict=False)
+        tmp_hdf_path = (
+            Path(ras_obj.project_folder)
+            / f"{ras_obj.project_name}.p{plan_num}.tmp.hdf"
+        ).resolve(strict=False)
+
+        def command_needle(path: Path) -> str:
+            return str(path).replace("/", "\\").lower()
+
+        project_needle = command_needle(project_path)
+        plan_needle = command_needle(plan_path)
+        tmp_hdf_needle = command_needle(tmp_hdf_path)
+        roots = []
+
+        for process in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                name = str(process.info.get("name") or "").lower()
+                command_line = " ".join(
+                    str(part) for part in (process.info.get("cmdline") or [])
+                ).replace("/", "\\").lower()
+                is_launcher = (
+                    name == "ras.exe"
+                    and project_needle in command_line
+                    and plan_needle in command_line
+                )
+                is_solver = (
+                    name == "rasunsteady.exe"
+                    and tmp_hdf_needle in command_line
+                )
+                if is_launcher or is_solver:
+                    roots.append(process)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        if not roots:
+            logger.info("No active HEC-RAS process found for plan %s", plan_num)
+            return False
+
+        targets = {}
+        for root in roots:
+            try:
+                for child in root.children(recursive=True):
+                    targets[child.pid] = child
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+            targets[root.pid] = root
+
+        ordered_targets = list(targets.values())
+        for process in reversed(ordered_targets):
+            try:
+                process.terminate()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        _, alive = psutil.wait_procs(
+            ordered_targets,
+            timeout=max(0.1, float(timeout_seconds)),
+        )
+        for process in alive:
+            try:
+                process.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        if alive:
+            psutil.wait_procs(alive, timeout=3.0)
+
+        logger.info(
+            "Stopped HEC-RAS process tree for plan %s (%s matched process(es))",
+            plan_num,
+            len(targets),
+        )
+        return True
     
     @staticmethod
     @log_call
@@ -939,6 +1084,7 @@ class RasCmdr:
                     plan_number,
                     compute_ras,
                     check_errors=verify,
+                    modified_after=start_time,
                 )
                 if async_verified is True:
                     logger.debug(
@@ -969,7 +1115,10 @@ class RasCmdr:
                         hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
                         verified = (
                             async_verified is True
-                            or RasCmdr._verify_completion(hdf_path)
+                            or RasCmdr._verify_completion(
+                                hdf_path,
+                                modified_after=start_time,
+                            )
                         )
 
                         # Callback: verification result
@@ -995,6 +1144,7 @@ class RasCmdr:
                     plan_number,
                     compute_ras,
                     check_errors=True,
+                    modified_after=start_time,
                 )
                 if async_verified is True:
                     logger.info(

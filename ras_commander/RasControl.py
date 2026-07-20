@@ -795,7 +795,8 @@ class RasControl:
     @staticmethod
     @log_call
     def run_plan(plan: Union[str, Path], ras_object=None, force_recompute: bool = False,
-                 use_watchdog: bool = True, max_runtime: int = 86400) -> 'RasControlResult':
+                 use_watchdog: bool = True, max_runtime: int = 86400,
+                 refresh_results: bool = True) -> 'RasControlResult':
         """
         Run a plan (steady or unsteady) and wait for completion.
 
@@ -816,7 +817,10 @@ class RasControl:
                 protection against orphaned processes in Jupyter notebooks.
                 Defaults to True (recommended). Set to False to disable.
             max_runtime: Maximum runtime in seconds before watchdog terminates the
-                process. Only used if use_watchdog=True. Defaults to 3600 (1 hour).
+                process. Only used if use_watchdog=True. Defaults to 86400 (24 hours).
+            refresh_results: Refresh ``plan_df`` and ``results_df`` after the
+                controller returns. Disable for compute-only validation when
+                detailed legacy result extraction is unnecessary. Defaults to True.
 
         Returns:
             RasControlResult: Result object backward compatible with Tuple[bool, List[str]].
@@ -960,7 +964,7 @@ class RasControl:
         _results_df_row = None
 
         # Refresh DataFrames and capture results_df row (even on failure for diagnostics)
-        if info.plan_number and hasattr(_ras_obj, 'update_results_df'):
+        if refresh_results and info.plan_number and hasattr(_ras_obj, 'update_results_df'):
             try:
                 _ras_obj.plan_df = _ras_obj.get_plan_entries()
                 _ras_obj.update_results_df(plan_numbers=[info.plan_number])

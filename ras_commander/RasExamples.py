@@ -32,6 +32,11 @@ List of Functions in RasExamples:
 - get_example_projects()
 - list_categories()
 - list_projects()
+- list_sciencebase_models()
+- get_sciencebase_model_info()
+- inspect_sciencebase_model()
+- validate_sciencebase_model()
+- download_sciencebase_model()
 - extract_project()
 - is_project_extracted()
 - clean_projects_directory()
@@ -552,6 +557,139 @@ class RasExamples:
             logger.debug(f"All available projects: {', '.join(all_projects)}")
             return all_projects
         return projects.tolist()
+
+    @classmethod
+    @log_call(logger)
+    def list_sciencebase_models(cls):
+        """List validated HEC-RAS archives in the ScienceBase catalog.
+
+        This catalog is intentionally separate from :meth:`list_projects`.
+        It returns archives explicitly promoted as runnable after portable-path
+        inspection. Promotion normally follows a fresh verified compute; any
+        curator-accepted exception retains its incomplete-compute evidence in
+        the returned metadata. Candidate and rejected releases remain available
+        only through the lower-level curator API.
+
+        Returns:
+            List of ``ModelMetadata`` records from the reviewed ScienceBase
+            registry. No network request or large download is performed.
+        """
+        from ras_commander.sources.federal.usgs_sciencebase import UsgsScienceBase
+
+        return UsgsScienceBase.list_catalog_models(validated_only=True)
+
+    @classmethod
+    @log_call(logger)
+    def get_sciencebase_model_info(cls, model_key: str) -> dict:
+        """Return registry metadata for a ScienceBase model slug or alias."""
+        from ras_commander.sources.federal.usgs_sciencebase import UsgsScienceBase
+
+        return UsgsScienceBase.get_model_info(model_key)
+
+    @classmethod
+    @log_call(logger)
+    def inspect_sciencebase_model(
+        cls,
+        model_key: str,
+        base_dir: Union[str, Path],
+        *,
+        project_file: Union[str, Path, None] = None,
+        ras_version: Optional[str] = None,
+    ) -> dict:
+        """Inspect a local ScienceBase candidate before promotion."""
+        from ras_commander.sources.federal.usgs_sciencebase import UsgsScienceBase
+
+        return UsgsScienceBase.inspect_local_model(
+            model_key,
+            Path(base_dir),
+            project_file=Path(project_file) if project_file is not None else None,
+            ras_version=ras_version,
+        )
+
+    @classmethod
+    @log_call(logger)
+    def validate_sciencebase_model(
+        cls,
+        model_key: str,
+        base_dir: Union[str, Path],
+        plan_number: str,
+        output_dir: Union[str, Path],
+        *,
+        project_file: Union[str, Path, None] = None,
+        ras_version: Optional[str] = None,
+        num_cores: int = 4,
+    ) -> dict:
+        """Run a fresh verified plan and return its promotion report."""
+        from ras_commander.sources.federal.usgs_sciencebase import UsgsScienceBase
+
+        return UsgsScienceBase.run_validation_plan(
+            model_key,
+            Path(base_dir),
+            plan_number,
+            Path(output_dir),
+            project_file=Path(project_file) if project_file is not None else None,
+            ras_version=ras_version,
+            num_cores=num_cores,
+        )
+
+    @classmethod
+    @log_call(logger)
+    def download_sciencebase_model(
+        cls,
+        model_key: str,
+        output_path: Union[str, Path] = None,
+        required_only: bool = False,
+        extract: bool = True,
+        show_progress: bool = False,
+        signed_download_urls: Optional[dict[str, str]] = None,
+    ) -> Path:
+        """Download a reviewed ScienceBase archive through ``RasExamples``.
+
+        Archives are stored below ``output_path/<model-slug>``. If
+        ``output_path`` is omitted, :attr:`projects_dir` is used. ScienceBase
+        routes some large S3-backed archives through a public browser CAPTCHA;
+        no ScienceBase account is required. For those entries this method
+        raises an ``ScienceBaseInteractiveDownloadRequired`` message containing
+        the official CAPTCHA page and exact placement path unless a temporary
+        URL is supplied through ``signed_download_urls``.
+
+        Args:
+            model_key: Registry slug, common alias, or DOI suffix.
+            output_path: Parent directory for the downloaded model folder.
+            required_only: Skip optional metadata and result products.
+            extract: Extract ZIP archives after download.
+            show_progress: Display download progress when true.
+            signed_download_urls: Optional mapping of attachment filename to a
+                temporary URL issued by ScienceBase after its public CAPTCHA.
+
+        Returns:
+            Path to the ScienceBase model directory.
+        """
+        from ras_commander.sources.federal.usgs_sciencebase import UsgsScienceBase
+
+        base_output_path = cls.projects_dir if output_path is None else Path(output_path)
+        if not base_output_path.is_absolute():
+            base_output_path = Path.cwd() / base_output_path
+        base_output_path.mkdir(parents=True, exist_ok=True)
+
+        info = UsgsScienceBase.get_model_info(model_key)
+        if not info.get("runnable", False):
+            raise RuntimeError(
+                f"ScienceBase archive '{model_key}' has not been promoted to "
+                "RasExamples. It must pass portable-path inspection and receive "
+                "explicit promotion after a verified compute or documented "
+                "curator acceptance. Use UsgsScienceBase directly for curator "
+                "download and validation."
+            )
+
+        return UsgsScienceBase.download_model(
+            model_key,
+            base_output_path,
+            required_only=required_only,
+            extract=extract,
+            show_progress=show_progress,
+            signed_download_urls=signed_download_urls,
+        )
 
     @classmethod
     @log_call(logger)

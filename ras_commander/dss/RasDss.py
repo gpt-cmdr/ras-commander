@@ -742,7 +742,8 @@ class RasDss:
         Check DSS pathname format validity.
 
         Validates against DSS pathname specification:
-        - Format: /A/B/C/D/E/F/ (common) or //A/B/C/D/E/F/ (accepted)
+        - Format: /A/B/C/D/E/F/
+        - A blank A-part is represented as //B/C/D/E/F/
         - Parts: A (basin/project), B (location), C (parameter),
                  D (date), E (interval), F (scenario)
 
@@ -766,7 +767,7 @@ class RasDss:
             if (
                 pathname.startswith('/')
                 and pathname.endswith('/')
-                and pathname.strip('/').count('/') == 5
+                and len(pathname[1:-1].split('/')) == 6
             ):
                 return {'passed': True, 'message': 'Format appears valid (validation framework not available)'}
             else:
@@ -791,20 +792,13 @@ class RasDss:
                 details={"pathname": pathname}
             )
 
-        # Split and validate parts
-        # DSS path format is typically: /A/B/C/D/E/F/
-        # Split by '/' gives: ['', 'A', 'B', 'C', 'D', 'E', 'F', '']
-        # Some tools use: //A/B/C/D/E/F/
-        # Split by '/' gives: ['', '', 'A', 'B', 'C', 'D', 'E', 'F', '']
-        parts = pathname.split('/')
-        if pathname.startswith('//'):
-            expected_len = 9
-            part_values = parts[2:-1]  # skip two empties + trailing empty
-        else:
-            expected_len = 8
-            part_values = parts[1:-1]  # skip leading empty + trailing empty
+        # Preserve empty components while removing only the required outer
+        # separators.  ``//B/C/D/E/F/`` is a normal six-part DSS pathname with
+        # an empty A-part; stripping all slashes would incorrectly reduce it to
+        # five parts.
+        part_values = pathname[1:-1].split('/')
 
-        if len(parts) != expected_len:
+        if len(part_values) != 6:
             return ValidationResult(
                 check_name="path_format",
                 severity=ValidationSeverity.ERROR,
@@ -812,12 +806,12 @@ class RasDss:
                 message=(
                     "DSS path must have 6 parts "
                     "(/A/B/C/D/E/F/), got "
-                    f"{len(pathname.strip('/').split('/'))}: {pathname}"
+                    f"{len(part_values)}: {pathname}"
                 ),
                 details={
                     "pathname": pathname,
                     "expected_parts": 6,
-                    "actual_parts": len(pathname.strip('/').split('/'))
+                    "actual_parts": len(part_values)
                 }
             )
 
