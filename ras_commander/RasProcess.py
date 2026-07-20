@@ -1141,6 +1141,15 @@ Step 5: Configure (optional — auto-detection usually works)
         to complete the original geometry. On models with large 2D flow areas the
         pipeline also (re)builds 2D property tables and can take minutes.
 
+        Notes
+        -----
+        HEC-RAS 7.0 exposes a ``ComputePropertyTables`` command, but its
+        ``ExecuteWith`` implementation raises ``NotImplementedException``.
+        ``CompleteGeometry`` is the working command. Its CLI key is
+        ``GeomFilename`` (not the .NET property name ``GeometryFilename``).
+        RasProcess.exe can report argument errors on stderr while returning zero,
+        so this wrapper treats a leading ``Error:`` there as unsuccessful.
+
         Parameters
         ----------
         geom_hdf_path : str or Path
@@ -1150,7 +1159,8 @@ Step 5: Configure (optional — auto-detection usually works)
             ``ras_object`` is available, it is discovered via
             ``RasMap.get_rasmap_path``.
         ras_object : RasPrj, optional
-            RAS project object used to locate the ``.rasmap`` and version-matched RasProcess.exe when not supplied.
+            RAS project object used to locate the ``.rasmap`` and version-matched
+            RasProcess.exe when not supplied.
         ras_version : str, optional
             Specific HEC-RAS version for the RasProcess.exe lookup.
         timeout : int, optional
