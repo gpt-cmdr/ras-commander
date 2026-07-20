@@ -28,7 +28,8 @@ Only projects with a verified coordinate reference system are eligible for the
 web map viewer. Projects without a CRS can remain useful for notebook examples,
 but they are not published as map-review targets until their CRS is resolved.
 
-## ScienceBase Model Archives
+<details class="ras-library-details" markdown="1">
+<summary>ScienceBase model acquisition and validation details</summary>
 
 `RasExamples` exposes only ScienceBase HEC-RAS archives explicitly promoted as
 runnable. Every execution dependency must exist and be portable. Promotion
@@ -137,6 +138,8 @@ facade.
 
 SRH-2D, CE-QUAL-W2, and derived raster inundation collections are outside this
 catalog regardless of whether their source archives are otherwise useful.
+
+</details>
 
 ## Project Explorer
 
