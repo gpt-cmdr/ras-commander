@@ -14,7 +14,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.99.0"
+    __version__ = "0.99.1"
 
 # Canonical machine-readable agent index (see docs() helper below)
 __llms_txt__ = "https://rascommander.info/ras/llms.txt"
