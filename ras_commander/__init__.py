@@ -18,6 +18,7 @@ except PackageNotFoundError:
 
 # Canonical machine-readable agent index (see docs() helper below)
 __llms_txt__ = "https://rascommander.info/ras/llms.txt"
+__citation_url__ = "https://rascommander.info/ras/cite/"
 
 # Set up logging
 setup_logging()
@@ -26,21 +27,24 @@ setup_logging()
 def docs(topic=None):
     """Return (and print) the rascommander.info URL for an optional topic.
 
-    No args -> docs home; topic='llms' -> llms.txt; topic='dataframes' ->
-    the DataFrame Reference; any other topic -> user-guide/<topic>/.
+    No args -> docs home; topic='llms' -> llms.txt; topic='citation' -> the
+    citation and sharing guide; topic='dataframes' -> the DataFrame Reference;
+    any other topic -> user-guide/<topic>/.
     Designed for LLM agents to self-locate the documentation at runtime.
     """
-    base = "https://rascommander.info"
+    base = "https://rascommander.info/ras"
     if topic is None:
-        url = base
+        url = f"{base}/"
     else:
         slug = str(topic).strip().strip("/")
         if slug == "llms":
             url = __llms_txt__
+        elif slug in {"cite", "citation"}:
+            url = __citation_url__
         elif slug == "dataframes":
             url = f"{base}/reference/dataframe-reference/"
         elif not slug:
-            url = base
+            url = f"{base}/"
         else:
             url = f"{base}/user-guide/{slug}/"
     print(url)

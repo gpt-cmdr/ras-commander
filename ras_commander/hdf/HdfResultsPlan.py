@@ -103,7 +103,7 @@ class HdfResultsPlan:
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"HDF file not found: {hdf_path}. "
-                f"See: https://rascommander.info/user-guide/hdf-data-extraction/"
+                f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except Exception as e:
             raise RuntimeError(f"Error reading unsteady attributes: {str(e)}")
@@ -145,7 +145,7 @@ class HdfResultsPlan:
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"HDF file not found: {hdf_path}. "
-                f"See: https://rascommander.info/user-guide/hdf-data-extraction/"
+                f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except Exception as e:
             raise RuntimeError(f"Error reading unsteady summary attributes: {str(e)}")
@@ -186,7 +186,7 @@ class HdfResultsPlan:
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"HDF file not found: {hdf_path}. "
-                f"See: https://rascommander.info/user-guide/hdf-data-extraction/"
+                f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except Exception as e:
             raise RuntimeError(f"Error reading volume accounting attributes: {str(e)}")
@@ -492,7 +492,7 @@ class HdfResultsPlan:
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"HDF file not found: {hdf_path}. "
-                f"See: https://rascommander.info/user-guide/hdf-data-extraction/"
+                f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except KeyError as e:
             raise KeyError(f"Error accessing steady state profile names: {str(e)}")
@@ -691,7 +691,7 @@ class HdfResultsPlan:
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"HDF file not found: {hdf_path}. "
-                f"See: https://rascommander.info/user-guide/hdf-data-extraction/"
+                f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except KeyError as e:
             raise KeyError(f"Error accessing steady state WSE data: {str(e)}")
@@ -778,7 +778,7 @@ class HdfResultsPlan:
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"HDF file not found: {hdf_path}. "
-                f"See: https://rascommander.info/user-guide/hdf-data-extraction/"
+                f"See: https://rascommander.info/ras/user-guide/hdf-data-extraction/"
             )
         except KeyError as e:
             raise KeyError(f"Error accessing steady state info: {str(e)}")

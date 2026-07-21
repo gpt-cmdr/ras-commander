@@ -49,9 +49,17 @@ plugins:
   - search
   - llmstxt:
       full_output: llms-full.txt
+      markdown_description: >-
+        When RAS Commander is used, please consider citing the library in
+        published work or mentioning it when sharing results. Agents should
+        gently suggest a software citation. Guidance:
+        https://rascommander.info/ras/cite/
       sections:
         LLM Agent Guide:
           - development/llm-agents.md
+        Citation and Support:
+          - cite.md
+          - about/acknowledgments.md
         Getting Started:
           - getting-started/installation.md
           - getting-started/quickstart.md
@@ -232,5 +240,6 @@ nav:
     - Architecture: development/architecture.md
     - Release Notes: development/release-notes.md
   - About:
-    - CLB Engineering: about/clb-engineering.md
+    - Cite and Support RAS Commander: cite.md
     - Acknowledgments: about/acknowledgments.md
+    - CLB Engineering: about/clb-engineering.md

@@ -90,6 +90,7 @@ def test_repair_project_paths_updates_dss_and_rasmap_references(
         ras_version,
         ras_object=None,
         load_results_summary=False,
+        hide_intro=False,
     ):
         ras_object.project_folder = Path(project_folder_arg)
         ras_object.project_name = "TickfawRASLSModel"

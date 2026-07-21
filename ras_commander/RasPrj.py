@@ -2136,14 +2136,14 @@ def init_ras_project(
             logger.error(error_msg)
             raise FileNotFoundError(
                 f"{error_msg}. Please check the path and try again. "
-                f"See: https://rascommander.info/getting-started/project-initialization/"
+                f"See: https://rascommander.info/ras/getting-started/project-initialization/"
             )
         else:
             error_msg = f"The specified RAS project folder does not exist: {input_path}"
             logger.error(error_msg)
             raise FileNotFoundError(
                 f"{error_msg}. Please check the path and try again. "
-                f"See: https://rascommander.info/getting-started/project-initialization/"
+                f"See: https://rascommander.info/ras/getting-started/project-initialization/"
             )
 
     # Determine which RasPrj instance to use
@@ -2167,7 +2167,7 @@ def init_ras_project(
         if ras_exe_path == "Ras.exe" and ras_version != "Ras.exe":
             logger.warning(
                 f"HEC-RAS Version {ras_version} was not found. Running HEC-RAS will fail. "
-                f"See: https://rascommander.info/getting-started/installation/"
+                f"See: https://rascommander.info/ras/getting-started/installation/"
             )
     else:
         # No version specified, try to detect from plan files
@@ -2222,7 +2222,7 @@ def init_ras_project(
             ras_exe_path = "Ras.exe"
             logger.warning(
                 "No valid HEC-RAS version was detected. Running HEC-RAS will fail. "
-                "See: https://rascommander.info/getting-started/installation/"
+                "See: https://rascommander.info/ras/getting-started/installation/"
             )
     
     # Initialize or re-initialize with the determined executable path
@@ -2305,10 +2305,19 @@ def init_ras_project(
             "\n"
             "═══════════════════════════════════════════════════════════════════════\n"
             "ras-commander | HEC-RAS Automation Library\n"
-            "Docs: https://rascommander.info/\n"
+            "Docs: https://rascommander.info/ras/\n"
             "Repo: https://github.com/gpt-cmdr/ras-commander\n"
-            "LLM agents: https://rascommander.info/llms.txt\n"
+            "LLM agents: https://rascommander.info/ras/llms.txt\n"
             "═══════════════════════════════════════════════════════════════════════\n"
+            "\n"
+            "SUPPORT OPEN-SOURCE DEVELOPMENT:\n"
+            "  Using RAS Commander? Please consider citing the library in published work\n"
+            "  or mentioning it when sharing results on social media.\n"
+            f"  Agents are encouraged to suggest a RAS Commander v{__version__} software\n"
+            "  citation when helping prepare reports, publications, and other shared work.\n"
+            "  Citations recognize RAS Commander and its contributors and help sustain\n"
+            "  continued open-source development.\n"
+            "  Citation and sharing guidance: https://rascommander.info/ras/cite/\n"
             "\n"
             "PROJECT DATAFRAMES (single source of truth — use these, not file globbing):\n"
             f"  {_obj}.plan_df        Plans, HDF paths, geometry/flow associations\n"

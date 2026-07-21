@@ -71,6 +71,7 @@ Core classes for HEC-RAS project management and execution.
       heading_level: 3
       members:
         - compute_plan
+        - cancel_plan
         - compute_parallel
         - compute_test_mode
 
@@ -464,6 +465,11 @@ indices = RasUtils.perform_kdtree_query(
       members:
         - list_projects
         - list_categories
+        - list_sciencebase_models
+        - get_sciencebase_model_info
+        - inspect_sciencebase_model
+        - validate_sciencebase_model
+        - download_sciencebase_model
         - extract_project
         - get_project_path
 

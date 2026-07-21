@@ -53,6 +53,7 @@ import shutil
 import uuid
 import time
 from dataclasses import dataclass, field
+from numbers import Real
 from pathlib import Path
 from typing import Dict, Optional, Any
 
@@ -161,6 +162,12 @@ class DockerWorker(RasWorker):
 
         if not self.docker_image:
             raise ValueError("docker_image is required for DockerWorker")
+        if (
+            isinstance(self.max_runtime_minutes, bool)
+            or not isinstance(self.max_runtime_minutes, Real)
+            or self.max_runtime_minutes <= 0
+        ):
+            raise ValueError("max_runtime_minutes must be a positive number")
 
         # Check if this is a remote Docker host
         self._is_remote = bool(self.docker_host and not self.docker_host.startswith("unix:"))
@@ -557,7 +564,12 @@ def execute_docker_plan(
             from ..RasPreprocess import RasPreprocess
             from ..RasPrj import RasPrj, init_ras_project
             temp_ras = RasPrj()
-            init_ras_project(str(local_input_staging), ras_obj.ras_version, ras_object=temp_ras)
+            init_ras_project(
+                str(local_input_staging),
+                ras_obj.ras_version,
+                ras_object=temp_ras,
+                hide_intro=True,
+            )
             preprocess_result = RasPreprocess.preprocess_plan(plan_number, ras_object=temp_ras)
             if not preprocess_result:
                 logger.error(f"Windows preprocessing failed: {preprocess_result.error}")
@@ -891,7 +903,10 @@ def execute_docker_plan_linux(
             from ..RasPrj import RasPrj, init_ras_project
             temp_ras = RasPrj()
             init_ras_project(
-                str(local_input_staging), ras_obj.ras_version, ras_object=temp_ras
+                str(local_input_staging),
+                ras_obj.ras_version,
+                ras_object=temp_ras,
+                hide_intro=True,
             )
             preprocess_result = RasPreprocess.preprocess_plan(
                 plan_number, ras_object=temp_ras

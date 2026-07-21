@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: >-
+  If you use RAS Commander, please consider citing the library. Citations
+  recognize RAS Commander and its contributors and support continued
+  open-source development.
+title: RAS Commander
+type: software
+authors:
+  - family-names: Katzenmeyer
+    given-names: William M.
+    affiliation: CLB Engineering Corporation
+    orcid: https://orcid.org/0009-0003-2907-1906
+abstract: >-
+  RAS Commander is an open-source Python library for reproducible HEC-RAS
+  automation, project inspection, execution, and results analysis.
+version: 0.99.0
+license: MIT
+repository-code: https://github.com/gpt-cmdr/ras-commander
+url: https://rascommander.info/ras/
+keywords:
+  - HEC-RAS
+  - hydraulic modeling
+  - Python
+  - automation
+  - reproducible workflows
