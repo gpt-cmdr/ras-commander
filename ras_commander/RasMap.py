@@ -3317,9 +3317,13 @@ class RasMap:
         ``mode`` selects the operation without requiring a second
         ``store_all_maps`` implementation:
 
-        - ``"native"`` runs HEC-RAS ``StoreAllMapsCommand`` for every map
-          already configured in the ``.rasmap``. This is the compatibility
-          behavior of historic ``RasMap.store_all_maps(plan_number)`` calls.
+        - ``"configured"`` runs ras-commander's packaged RAS Mapper helper
+          for every stored map already configured in the ``.rasmap``. This is
+          the compatibility behavior of historic
+          ``RasMap.store_all_maps(plan_number)`` calls.
+        - ``"native"`` is a deprecated alias for ``"configured"``. It does
+          not invoke ``RasProcess.exe``: that executable does not honor the
+          required stored-map interpolation/render-mode behavior.
         - ``"selected"`` configures and generates selected map products for
           one or more plans. ``performance=StoreMapPerformanceOptions(...)``
           enables memory-admitted map-level parallelism.
@@ -3327,8 +3331,8 @@ class RasMap:
           timesteps.
         - ``"all_plans"`` applies the selected-map configuration to every
           project plan with an HDF result.
-        - ``"auto"`` preserves a plain historic call as ``"native"``, uses
-          ``"all_plans"`` when ``plan_number`` is omitted, and otherwise
+        - ``"auto"`` preserves a plain historic call as ``"configured"``,
+          uses ``"all_plans"`` when ``plan_number`` is omitted, and otherwise
           selects ``"selected"`` or ``"timesteps"`` when advanced options are
           supplied.
 
@@ -3339,13 +3343,14 @@ class RasMap:
 
         Args:
             plan_number: One flexible plan number (for example ``1`` or
-                ``"01"``) or a plan sequence for ``native``/``selected``/
+                ``"01"``) or a plan sequence for ``configured``/``selected``/
                 ``timesteps``. Omit it for ``all_plans``.
             render_mode: Optional water-surface rendering override.
             ras_object: Initialized project object; defaults to the active project.
             timeout: Per-helper timeout in seconds.
-            mode: ``auto``, ``native``, ``selected``, ``timesteps``, or
-                ``all_plans``.
+            mode: ``auto``, ``configured``, ``selected``, ``timesteps``, or
+                ``all_plans``. ``native`` remains a deprecated compatibility
+                alias for ``configured``.
             output_folder: Relative ``.rasmap`` StoredFilename folder name for
                 configured non-timestep modes. It is not an output destination.
             output_path: Destination directory to which generated products are
@@ -3377,19 +3382,29 @@ class RasMap:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
+        requested_mode = str(mode).strip().casefold().replace("-", "_")
+        if requested_mode == "native":
+            warnings.warn(
+                "mode='native' is deprecated because stored maps are generated "
+                "by ras-commander's packaged RAS Mapper helper, not "
+                "RasProcess.exe. Use mode='configured'.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         mode_aliases = {
-            "legacy": "native",
-            "native_all": "native",
+            "legacy": "configured",
+            "native": "configured",
+            "native_all": "configured",
             "plan": "selected",
             "project": "all_plans",
             "all": "all_plans",
         }
-        resolved_mode = str(mode).strip().casefold().replace("-", "_")
-        resolved_mode = mode_aliases.get(resolved_mode, resolved_mode)
-        valid_modes = {"auto", "native", "selected", "timesteps", "all_plans"}
+        resolved_mode = mode_aliases.get(requested_mode, requested_mode)
+        valid_modes = {"auto", "configured", "selected", "timesteps", "all_plans"}
         if resolved_mode not in valid_modes:
             raise ValueError(
-                "mode must be auto, native, selected, timesteps, or all_plans"
+                "mode must be auto, configured, selected, timesteps, or all_plans"
             )
 
         requested_flags = {
@@ -3432,35 +3447,35 @@ class RasMap:
             elif advanced_requested:
                 resolved_mode = "selected"
             else:
-                resolved_mode = "native"
+                resolved_mode = "configured"
 
-        if resolved_mode == "native":
+        if resolved_mode == "configured":
             if plan_number is None:
-                raise ValueError("plan_number is required for mode='native'")
+                raise ValueError("plan_number is required for mode='configured'")
             if not isinstance(plan_number, (str, int, float)) and not list(plan_number):
-                raise ValueError("mode='native' requires at least one plan")
+                raise ValueError("mode='configured' requires at least one plan")
             if advanced_requested:
                 raise ValueError(
-                    "mode='native' only accepts plan_number, render_mode, "
+                    "mode='configured' only accepts plan_number, render_mode, "
                     "ras_object, and timeout; use mode='selected' for output, "
                     "map, terrain, or performance options"
                 )
-            native_plan_numbers = (
+            configured_plan_numbers = (
                 [RasUtils.normalize_ras_number(plan_number)]
                 if isinstance(plan_number, (str, int, float))
                 else [RasUtils.normalize_ras_number(value) for value in plan_number]
             )
-            result = RasMap._store_all_maps_native(
+            result = RasMap._store_all_maps_configured(
                 (
-                    native_plan_numbers[0]
-                    if len(native_plan_numbers) == 1
-                    else native_plan_numbers
+                    configured_plan_numbers[0]
+                    if len(configured_plan_numbers) == 1
+                    else configured_plan_numbers
                 ),
                 render_mode=render_mode,
                 ras_object=ras_obj,
                 timeout=timeout,
             )
-            result["mode"] = "native"
+            result["mode"] = "configured"
             return result
 
         if resolved_mode == "all_plans" and plan_number is not None:
@@ -3684,7 +3699,7 @@ class RasMap:
         return summary
 
     @staticmethod
-    def _store_all_maps_native(
+    def _store_all_maps_configured(
         plan_number: Union[str, List[str]],
         render_mode: str = None,
         ras_object: Optional[Any] = None,

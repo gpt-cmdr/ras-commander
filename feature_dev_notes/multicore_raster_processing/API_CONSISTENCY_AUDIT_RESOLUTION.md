@@ -28,12 +28,20 @@ output under `.claude/outputs/` is intentionally gitignored.
 
 The canonical public entry point is `RasMap.store_all_maps()`. It preserves the
 historic four positional slots and adds keyword-only `mode=` and tuning
-arguments. `mode="native"` retains the original `StoreAllMapsCommand` behavior;
+arguments. `mode="configured"` retains the historic all-configured-map behavior
+through the packaged RAS Mapper helper; `mode="native"` is a deprecated alias
+because `RasProcess.exe` does not honor the required interpolation/render mode.
 `selected`, `timesteps`, and `all_plans` route through the configurable
 stored-map APIs and accept `performance=`. `mode="auto"` keeps a plain historic
-call native while selecting a configured mode when advanced arguments are
-present. `RasProcess.store_all_maps()` is a deprecated compatibility forwarder,
-not a second implementation.
+call configured while selecting a product-configured mode when advanced
+arguments are present. `RasProcess.store_all_maps()` is a deprecated
+compatibility forwarder, not a second implementation.
+
+Wine is a documented runtime fallback: stored-map requests are capped to the
+aggregate serial helper, the helper inherits one CPU while it runs, and the
+parent affinity is restored afterward. The independent-helper terrain memory
+model is not used to admit this aggregate path because it materially
+overestimated the demonstrated Muncie StoreAllMaps requirement.
 
 Mode validation is fail-fast: timestep-only selectors cannot leak into other
 modes, timestep mode rejects options its underlying wrapper cannot honor, empty

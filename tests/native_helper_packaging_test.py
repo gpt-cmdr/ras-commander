@@ -8,6 +8,7 @@ from subprocess import CalledProcessError, CompletedProcess
 from types import SimpleNamespace
 
 import pytest
+import psutil
 
 from ras_commander import _native_helper
 
@@ -162,6 +163,7 @@ def test_gdal_junction_fallback_warning_is_concise_debug_has_paths(
     (source / "common").mkdir(parents=True)
     (source / "common" / "gdal-data.txt").write_text("gdal", encoding="utf-8")
     dest = tmp_path / "stage" / "GDAL"
+    monkeypatch.setattr(_native_helper, "_IS_LINUX", False)
     monkeypatch.setattr(_native_helper.platform, "system", lambda: "Windows")
 
     def fake_run(*_args, **_kwargs):
@@ -189,6 +191,7 @@ def test_gdal_junction_race_accepts_runtime_created_by_other_process(
     source = tmp_path / "hecras" / "GDAL"
     source.mkdir(parents=True)
     dest = tmp_path / "stage" / "GDAL"
+    monkeypatch.setattr(_native_helper, "_IS_LINUX", False)
     monkeypatch.setattr(_native_helper.platform, "system", lambda: "Windows")
 
     def fake_run(*_args, **_kwargs):
@@ -235,6 +238,41 @@ def test_run_store_all_maps_helper_honors_disable_flag(monkeypatch):
             rasmap_path=Path("C:/Project/Test.rasmap"),
             result_hdf_path=Path("C:/Project/Test.p01.hdf"),
         )
+
+
+def test_wine_helper_single_cpu_affinity_is_scoped_and_restored(monkeypatch):
+    class FakeProcess:
+        def __init__(self):
+            self.current = [2, 4, 6]
+            self.set_calls = []
+
+        def cpu_affinity(self, cpus=None):
+            if cpus is None:
+                return list(self.current)
+            self.current = list(cpus)
+            self.set_calls.append(list(cpus))
+
+    process = FakeProcess()
+    monkeypatch.setattr(_native_helper, "_is_wine_helper_runtime", lambda: True)
+    monkeypatch.setattr(psutil, "Process", lambda: process)
+
+    with _native_helper._wine_helper_single_cpu_affinity():
+        assert process.current == [2]
+
+    assert process.current == [2, 4, 6]
+    assert process.set_calls == [[2], [2, 4, 6]]
+
+
+def test_native_windows_helper_does_not_change_cpu_affinity(monkeypatch):
+    monkeypatch.setattr(_native_helper, "_is_wine_helper_runtime", lambda: False)
+    monkeypatch.setattr(
+        psutil,
+        "Process",
+        lambda: (_ for _ in ()).throw(AssertionError("affinity must be untouched")),
+    )
+
+    with _native_helper._wine_helper_single_cpu_affinity():
+        pass
 
 
 def test_run_store_map_once_builds_individual_command_and_caps_gdal_threads(

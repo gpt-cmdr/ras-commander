@@ -18,6 +18,16 @@ RasProcess = ras_process_module.RasProcess
 LOGGER_NAME = "ras_commander.RasProcess"
 
 
+@pytest.fixture(autouse=True)
+def _default_to_native_helper_runtime(monkeypatch):
+    """Keep generic StoreMap unit tests independent of their test host."""
+    monkeypatch.setattr(
+        ras_process_module,
+        "_is_wine_helper_runtime",
+        lambda: False,
+    )
+
+
 def _messages(caplog, level):
     return [
         record.getMessage()
@@ -493,6 +503,76 @@ def test_store_maps_parallel_rejects_shared_postprocessing_products(
     assert calls == []
 
 
+def test_store_maps_caps_wine_parallel_request_to_serial(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, output_dir, _ = _configure_store_maps_test(monkeypatch, tmp_path)
+    estimated_workers = []
+    aggregate_calls = []
+
+    def fake_estimate(_plan_number, *, map_types, performance, **_kwargs):
+        assert map_types == ["wse", "depth", "velocity"]
+        estimated_workers.append(performance.max_workers)
+        return SimpleNamespace(selected_workers=1)
+
+    def fake_store_all_maps(**kwargs):
+        aggregate_calls.append(kwargs)
+        for name in ("WSE", "Depth", "Velocity"):
+            (output_dir / f"{name} (Max).Terrain.tif").write_text(
+                name,
+                encoding="utf-8",
+            )
+        return subprocess.CompletedProcess(
+            args=["RasStoreMapHelper.exe"],
+            returncode=0,
+            stdout="Maps generated: 3",
+            stderr="",
+        )
+
+    monkeypatch.setattr(ras_process_module, "_is_wine_helper_runtime", lambda: True)
+    monkeypatch.setattr(
+        RasProcess,
+        "estimate_store_map_resources",
+        staticmethod(fake_estimate),
+    )
+    monkeypatch.setattr(
+        ras_process_module,
+        "_wait_for_store_map_admission",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_all_maps_helper",
+        fake_store_all_maps,
+    )
+    monkeypatch.setattr(
+        ras_process_module,
+        "run_store_map_helper",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("Wine must use the serialized StoreAllMaps path")
+        ),
+    )
+
+    with pytest.warns(RuntimeWarning, match="under Wine is serialized"):
+        results = RasProcess.store_maps(
+            plan_number="01",
+            profile="Max",
+            wse=True,
+            depth=True,
+            velocity=True,
+            fix_georef=False,
+            ras_object=ras_obj,
+            max_workers=3,
+        )
+
+    # The terrain-sized estimate models independent StoreMap helpers, not the
+    # aggregate StoreAllMaps helper used by the Wine fallback.
+    assert estimated_workers == []
+    assert len(aggregate_calls) == 1
+    assert set(results) == {"wse", "depth", "velocity"}
+
+
 def test_store_maps_auto_falls_back_for_shared_postprocessing_products(
     monkeypatch,
     tmp_path,
@@ -521,6 +601,11 @@ def test_store_maps_auto_falls_back_for_shared_postprocessing_products(
         lambda **_kwargs: (_ for _ in ()).throw(
             AssertionError("auto mode must use the ordered StoreAllMaps path")
         ),
+    )
+    monkeypatch.setattr(
+        ras_process_module,
+        "_wait_for_store_map_admission",
+        lambda *_args, **_kwargs: None,
     )
 
     results = RasProcess.store_maps(

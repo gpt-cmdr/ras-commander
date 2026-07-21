@@ -31,6 +31,7 @@ _MAPPING_RUNTIME_LIBRARIES = (
     "H5Assist.dll",
 )
 _HELPER_STAGE_LOCK = threading.Lock()
+_WINE_HELPER_AFFINITY_LOCK = threading.RLock()
 
 
 def _env_flag(name: str) -> bool:
@@ -38,6 +39,80 @@ def _env_flag(name: str) -> bool:
     if value is None:
         return False
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_wine_helper_runtime() -> bool:
+    """Return whether helper execution will occur through Wine."""
+    if _IS_LINUX:
+        return True
+    if platform.system() != "Windows":
+        return False
+
+    # Windows Python running inside Wine reports itself as Windows. Wine's
+    # ntdll export is the reliable discriminator and is absent on native
+    # Windows.
+    try:
+        import ctypes
+
+        getattr(ctypes.windll.ntdll, "wine_get_version")
+    except (AttributeError, OSError):
+        return False
+    return True
+
+
+@contextmanager
+def _wine_helper_single_cpu_affinity() -> Iterator[None]:
+    """Serialize Wine mapper helpers on one inherited CPU.
+
+    RasMapperLib's stored-map path is nondeterministic under Wine when the
+    helper can schedule across multiple CPUs: calls can remain in
+    ``poll_schedule_timeout`` or terminate with CLR exception 0xe0434352.
+    Constraining the parent while the child runs makes the helper inherit a
+    one-CPU mask. The process-wide lock is required because affinity belongs
+    to the Python process, not to the calling thread.
+    """
+    if not _is_wine_helper_runtime():
+        yield
+        return
+
+    import psutil
+
+    with _WINE_HELPER_AFFINITY_LOCK:
+        process = psutil.Process()
+        previous_affinity = process.cpu_affinity()
+        if not previous_affinity:
+            raise RuntimeError(
+                "Wine stored-map helper requires a non-empty CPU affinity mask"
+            )
+        selected_cpu = previous_affinity[0]
+        try:
+            process.cpu_affinity([selected_cpu])
+        except (OSError, psutil.Error) as exc:
+            raise RuntimeError(
+                "Wine stored-map helper requires single-CPU affinity, but the "
+                "current process affinity could not be constrained"
+            ) from exc
+
+        logger.debug(
+            "Constrained Wine stored-map helper to CPU %s (available=%s)",
+            selected_cpu,
+            previous_affinity,
+        )
+        try:
+            yield
+        finally:
+            try:
+                process.cpu_affinity(previous_affinity)
+            except (OSError, psutil.Error):
+                logger.warning(
+                    "Could not restore the Python process CPU affinity after "
+                    "Wine stored-map execution."
+                )
+                logger.debug(
+                    "Failed restoring CPU affinity to %s",
+                    previous_affinity,
+                    exc_info=True,
+                )
 
 
 def _package_version() -> str:
@@ -412,14 +487,15 @@ def _run_store_all_maps_once(
             gdal_num_threads,
             gdal_cachemax_mb,
         )
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=str(working_dir) if working_dir else None,
-            env=env,
-        )
+        with _wine_helper_single_cpu_affinity():
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=str(working_dir) if working_dir else None,
+                env=env,
+            )
         return _filter_helper_stderr(result)
 
     cmd = [
@@ -435,14 +511,15 @@ def _run_store_all_maps_once(
         gdal_num_threads,
         gdal_cachemax_mb,
     )
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        cwd=str(working_dir) if working_dir else None,
-        env=env,
-    )
+    with _wine_helper_single_cpu_affinity():
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=str(working_dir) if working_dir else None,
+            env=env,
+        )
     return _filter_helper_stderr(result)
 
 
@@ -508,14 +585,15 @@ def _run_store_map_once(
         gdal_cachemax_mb,
     )
 
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        cwd=str(working_dir) if working_dir else None,
-        env=env,
-    )
+    with _wine_helper_single_cpu_affinity():
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=str(working_dir) if working_dir else None,
+            env=env,
+        )
     return _filter_helper_stderr(result)
 
 

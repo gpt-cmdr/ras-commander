@@ -2467,6 +2467,32 @@ notebooks:
   excluded: false
   code_cells: 8
   executed_cells: 0
+- id: 511_headless_linux_wine_ras2cng
+  filename: 511_headless_linux_wine_ras2cng.ipynb
+  title: Headless Linux/Wine/Ras2Cng Setup and Qualification
+  series: 500
+  series_name: Remote Execution
+  summary: Set up an isolated Linux task that uses official HEC-RAS Linux executables where supported
+    and the same Windows HEC-RAS version under Wine only for RasProcess/RASMapper gaps and ras2cng stored-map
+    export. This is a qualification workflow...
+  tags:
+  - cloud-native
+  - execution
+  - linux
+  - ras2cng
+  - wine
+  difficulty: advanced
+  est_runtime: null
+  data_project: null
+  functions_used:
+  - RasProcess.check_wine_environment
+  - RasProcess.configure_wine
+  - RasTcu.status
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 4
+  executed_cells: 0
 - id: 560_modpuls_routing_extraction
   filename: 560_modpuls_routing_extraction.ipynb
   title: Modified Puls Routing Extraction from HEC-RAS 2D Models

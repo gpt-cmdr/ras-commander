@@ -1,0 +1,4 @@
+interface:
+  display_name: "HEC-RAS Linux/Wine Setup"
+  short_description: "Set up and qualify headless HEC-RAS and ras2cng on Linux"
+  default_prompt: "Set up and qualify this Linux host for isolated headless HEC-RAS, Wine, RasProcess, and ras2cng workflows."

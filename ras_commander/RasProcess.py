@@ -50,7 +50,7 @@ import warnings
 import xml.etree.ElementTree as ET
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Union, Optional, List, Dict, Any, Sequence, Tuple
 from datetime import datetime
@@ -99,6 +99,7 @@ from .RasUtils import RasUtils
 from .LoggingConfig import get_logger
 from .Decorators import log_call
 from ._native_helper import (
+    _is_wine_helper_runtime,
     normalize_store_map_render_mode,
     run_store_all_maps_helper,
     run_store_map_helper,
@@ -1914,7 +1915,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 "phase_summary": profiler.phase_summary(),
             }
             resolved_report.write_text(
-                json.dumps(failure_report, indent=2),
+                json.dumps(failure_report, indent=2, default=str),
                 encoding="utf-8",
             )
             raise
@@ -3380,6 +3381,33 @@ Step 5: Configure (optional — auto-detection usually works)
                 _log_summary=_log_summary,
             )
 
+        # RasMapperLib's stored-map commands are not reliable when multiple
+        # Wine-hosted CLR helpers execute concurrently.  The helper launcher
+        # also constrains each child to one CPU, which removes a second Wine
+        # scheduling failure mode observed even for a single helper.  Preserve
+        # process parallelism on native Windows, but make Wine explicitly and
+        # predictably serial until that runtime is qualified for concurrency.
+        wine_serial_runtime = _is_wine_helper_runtime()
+        if wine_serial_runtime and max_workers != 1:
+            warnings.warn(
+                "Stored-map processing under Wine is serialized because "
+                "concurrent RasMapperLib helper processes are not qualified; "
+                "the requested max_workers setting has been capped at 1.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            logger.warning(
+                "Capping Wine stored-map processing from max_workers=%s to 1",
+                "auto" if max_workers is None else max_workers,
+            )
+            performance_options = replace(performance_options, max_workers=1)
+            max_workers = 1
+        if wine_serial_runtime and performance_was_explicit:
+            logger.info(
+                "Wine aggregate StoreAllMaps does not use the independent-helper "
+                "memory admission model"
+            )
+
         # Preserve the long-standing ordinary StoreMaps defaults while allowing
         # BenefitArea to use a cheaper Depth-only default above.
         wse = True if wse is None else bool(wse)
@@ -3640,7 +3668,11 @@ Step 5: Configure (optional — auto-detection usually works)
 
             worker_count = 1
             resource_estimate = None
-            if performance_was_explicit:
+            # This terrain-sized estimate describes each independent StoreMap
+            # helper.  Wine uses the aggregate StoreAllMaps command, so applying
+            # that parallel-helper model to its serial path creates false
+            # admission failures on otherwise qualified hosts.
+            if performance_was_explicit and not wine_serial_runtime:
                 resource_map_types = [map_key for _, map_key in maps_to_add]
                 resource_map_types.extend(
                     map_key for _, map_key in adr_maps_to_add

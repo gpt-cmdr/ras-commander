@@ -136,7 +136,10 @@ Rules:
 
 `RasMap.store_all_maps()` is the one canonical orchestration function:
 
-- `mode="native"` invokes the historic all-configured-map command;
+- `mode="configured"` invokes the packaged RAS Mapper helper for every stored
+  map already configured in the `.rasmap`;
+- `mode="native"` is a deprecated alias for `configured`; `RasProcess.exe`
+  cannot provide the required stored-map interpolation/render-mode behavior;
 - `mode="selected"` generates selected products for one or more plans;
 - `mode="timesteps"` generates selected timestep products;
 - `mode="all_plans"` runs the selected-product pipeline for every plan with a
@@ -150,15 +153,23 @@ All modes return a consistent summary with `success`, `mode`, `plans`, and
 
 | Mode | Plan selection | Product defaults | Output controls | Rejected controls |
 |---|---|---|---|---|
-| `native` | one or more explicit plans | existing `.rasmap` configuration | existing native Plan ShortID paths | every configured-map keyword |
+| `configured` | one or more explicit plans | existing `.rasmap` configuration | existing Plan ShortID paths | every selected-map keyword |
 | `selected` | one or more explicit plans | WSE, Depth, Velocity | `output_folder` is the relative `.rasmap` StoredFilename name; `output_path` is the real destination | timestep selectors |
 | `timesteps` | one or more explicit plans | Depth only | `output_path` only; multiple plans receive `plan_XX` children | `output_folder`, `profile`, `arrival_depth`, `terrain_name`, `benefit_area`, and whole-simulation products |
 | `all_plans` | omit `plan_number`; plans without result HDF are skipped | WSE, Depth, Velocity | one `plan_XX` destination child per plan | timestep selectors and an explicit `plan_number` |
-| `auto` | inferred | historic plain calls stay native; advanced calls route as above | follows the resolved mode | follows the resolved mode |
+| `auto` | inferred | historic plain calls use `configured`; advanced calls route as above | follows the resolved mode | follows the resolved mode |
 
 An explicit product selection must contain at least one enabled product. Empty
-native plan sequences and empty configured selections raise before any project
+configured plan sequences and empty selected-product selections raise before any project
 mutation. Every successful mode summary is directly `json.dumps()` compatible.
+
+Wine stored-map helper execution is serialized and constrained to one CPU.
+Without inherited single-CPU affinity, RasMapperLib can remain in
+`poll_schedule_timeout` or terminate with CLR exception `0xe0434352`. The
+terrain-sized admission formula applies to independent `StoreMap` helpers and
+is therefore not applied to Wine's aggregate `StoreAllMaps` fallback; applying
+it there produced a false 4.8 GiB admission requirement for the qualified
+Muncie serial run.
 
 ### StoreMapResourceEstimate
 

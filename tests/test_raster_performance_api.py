@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import psutil
 import pytest
 import rasterio
 from rasterio.transform import from_origin
@@ -643,6 +644,18 @@ def test_process_tree_profiler_records_interval_cpu_io_and_host_load(tmp_path):
     assert "average_host_disk_busy_equivalent_percent" in phases["python_or_idle"]
 
 
+def test_process_tree_profiler_tolerates_unavailable_private_memory(monkeypatch):
+    def unavailable_private_memory(_process):
+        raise OSError(87, "NtQueryVirtualMemory is unavailable")
+
+    monkeypatch.setattr(psutil.Process, "memory_full_info", unavailable_private_memory)
+
+    counters = ProcessTreeProfiler._process_counters(psutil.Process())
+
+    assert counters["rss"] > 0
+    assert counters["private"] is None or counters["private"] >= 0
+
+
 @pytest.mark.parametrize(
     ("process_counts", "output_growing", "expected"),
     [
@@ -727,6 +740,37 @@ def test_profile_vrt_to_tiff_writes_failure_report(monkeypatch, tmp_path):
     assert payload["error_type"] == "RuntimeError"
     assert payload["settings"]["write_options"]["compression"] == "LZW"
     assert payload["settings"]["hecras_version"] == "7.0"
+
+
+def test_profile_store_maps_failure_report_serializes_paths(monkeypatch, tmp_path):
+    estimate = SimpleNamespace(to_dict=lambda: {"terrain_path": tmp_path / "terrain.tif"})
+    monkeypatch.setattr(
+        RasProcess,
+        "estimate_store_map_resources",
+        staticmethod(lambda *args, **kwargs: estimate),
+    )
+
+    def fail_store_maps(**_kwargs):
+        raise MemoryError("insufficient memory")
+
+    monkeypatch.setattr(RasProcess, "store_maps", staticmethod(fail_store_maps))
+    report = tmp_path / "store-maps-failed.json"
+
+    with pytest.raises(MemoryError, match="insufficient memory"):
+        RasProcess.profile_store_maps(
+            "03",
+            tmp_path / "maps",
+            report,
+            map_types=("depth",),
+            sample_interval_seconds=0.01,
+            ras_object=SimpleNamespace(project_folder=tmp_path),
+        )
+
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    assert payload["status"] == "failed"
+    assert payload["resource_estimate"]["terrain_path"] == str(
+        tmp_path / "terrain.tif"
+    )
 
 
 def test_raster_performance_notebook_is_safe_and_uses_public_profilers():

@@ -499,7 +499,18 @@ class ProcessTreeProfiler:
             memory = process.memory_info()
             try:
                 private_bytes = process.memory_full_info().private
-            except (AttributeError, psutil.AccessDenied, psutil.NoSuchProcess):
+            except (
+                AttributeError,
+                OSError,
+                psutil.AccessDenied,
+                psutil.NoSuchProcess,
+            ):
+                # Wine does not implement the Windows
+                # NtQueryVirtualMemory(MemoryWorkingSetInformation) query used
+                # by psutil for USS/private-memory details and reports
+                # WinError 87. RSS and any basic private counter remain useful
+                # for profiling, so degrade gracefully instead of preventing
+                # the raster operation from running.
                 private_bytes = getattr(memory, "private", None)
             io = process.io_counters()
             cpu = process.cpu_times()

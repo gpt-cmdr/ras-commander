@@ -1336,12 +1336,12 @@ def test_store_all_maps_auto_routes_all_modes_and_serializes(
         def check_initialized():
             return None
 
-    native_calls = []
+    configured_layer_calls = []
     configured_calls = []
     timestep_calls = []
 
-    def fake_native(plan_number, render_mode=None, ras_object=None, timeout=600):
-        native_calls.append((plan_number, render_mode, ras_object, timeout))
+    def fake_configured(plan_number, render_mode=None, ras_object=None, timeout=600):
+        configured_layer_calls.append((plan_number, render_mode, ras_object, timeout))
         return {
             "success": True,
             "plans": {"01": {"success": True, "files": []}},
@@ -1384,7 +1384,11 @@ def test_store_all_maps_auto_routes_all_modes_and_serializes(
         )
         return {"01JAN2026 00:00:00": {"depth": [tmp_path / "Depth.tif"]}}
 
-    monkeypatch.setattr(RasMap, "_store_all_maps_native", staticmethod(fake_native))
+    monkeypatch.setattr(
+        RasMap,
+        "_store_all_maps_configured",
+        staticmethod(fake_configured),
+    )
     monkeypatch.setattr(RasProcess, "store_maps", staticmethod(fake_store_maps))
     monkeypatch.setattr(
         RasProcess,
@@ -1393,7 +1397,7 @@ def test_store_all_maps_auto_routes_all_modes_and_serializes(
     )
     project = DummyProject()
 
-    native = RasMap.store_all_maps(1, "horizontal", project, 17)
+    configured = RasMap.store_all_maps(1, "horizontal", project, 17)
     selected = RasMap.store_all_maps(
         "01",
         output_path=tmp_path / "selected",
@@ -1407,8 +1411,8 @@ def test_store_all_maps_auto_routes_all_modes_and_serializes(
     )
     all_plans = RasMap.store_all_maps(ras_object=project)
 
-    assert native["mode"] == "native"
-    assert native_calls == [("01", "horizontal", project, 17)]
+    assert configured["mode"] == "configured"
+    assert configured_layer_calls == [("01", "horizontal", project, 17)]
     assert selected["mode"] == "selected"
     assert timesteps["mode"] == "timesteps"
     assert timestep_calls == [
@@ -1422,8 +1426,36 @@ def test_store_all_maps_auto_routes_all_modes_and_serializes(
     ]
     assert all_plans["mode"] == "all_plans"
     assert configured_calls[-1]["plan_number"] == "01"
-    for summary in (native, selected, timesteps, all_plans):
+    for summary in (configured, selected, timesteps, all_plans):
         json.dumps(summary)
+
+
+def test_store_all_maps_native_is_deprecated_configured_alias(monkeypatch):
+    class DummyProject:
+        @staticmethod
+        def check_initialized():
+            return None
+
+    monkeypatch.setattr(
+        RasMap,
+        "_store_all_maps_configured",
+        staticmethod(
+            lambda *_args, **_kwargs: {
+                "success": True,
+                "plans": {},
+                "render_mode": "horizontal",
+            }
+        ),
+    )
+
+    with pytest.warns(DeprecationWarning, match="Use mode='configured'"):
+        result = RasMap.store_all_maps(
+            "01",
+            mode="native",
+            ras_object=DummyProject(),
+        )
+
+    assert result["mode"] == "configured"
 
 
 def test_store_all_maps_type_hints_are_runtime_resolvable():
@@ -1473,7 +1505,7 @@ def test_store_all_maps_rejects_empty_selections_and_misplaced_timestep_cap(
 
     project = DummyProject()
     with pytest.raises(ValueError, match="at least one plan"):
-        RasMap.store_all_maps([], mode="native", ras_object=project)
+        RasMap.store_all_maps([], mode="configured", ras_object=project)
     with pytest.raises(ValueError, match="At least one stored-map product"):
         RasMap.store_all_maps(
             "01",
@@ -1499,16 +1531,16 @@ def test_store_all_maps_rejects_empty_selections_and_misplaced_timestep_cap(
         )
 
 
-def test_store_all_maps_native_mode_rejects_configured_options(tmp_path):
+def test_store_all_maps_configured_mode_rejects_selected_options(tmp_path):
     class DummyProject:
         @staticmethod
         def check_initialized():
             return None
 
-    with pytest.raises(ValueError, match="mode='native' only accepts"):
+    with pytest.raises(ValueError, match="mode='configured' only accepts"):
         RasMap.store_all_maps(
             "01",
-            mode="native",
+            mode="configured",
             output_path=tmp_path,
             ras_object=DummyProject(),
         )
