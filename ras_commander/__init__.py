@@ -110,6 +110,15 @@ from .RasBenefits import (
     RasBenefits,
 )
 from .RasProcess import RasProcess, ProjectionInfo
+from .RasterPerformance import (
+    GeoTiffWriteOptions,
+    RasterOperationProfileResult,
+    StoreMapPerformanceOptions,
+    StoreMapProfileResult,
+    StoreMapResourceEstimate,
+    StoreMapResourceSample,
+    TerrainResourceEstimate,
+)
 from .RasGeometryCompute import RasGeometryCompute
 from .RasGuiAutomation import RasGuiAutomation
 from .RasScreenshot import RasScreenshot
@@ -247,7 +256,7 @@ __all__ = [
     'GeometryLayerResult', 'GeometryCompleteResult',
     'RasGeometryCompute',
     'RasPreprocess',
-    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
+    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',

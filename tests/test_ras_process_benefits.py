@@ -137,7 +137,17 @@ def test_store_maps_benefit_keywords_do_not_shift_legacy_positional_parameters()
         "timeout",
         "_log_summary",
     ]
-    assert parameters[-2:] == ["terrain_name", "benefit_area"]
+    assert parameters[23:25] == ["terrain_name", "benefit_area"]
+    signature = inspect.signature(RasProcess.store_maps)
+    assert all(
+        signature.parameters[name].kind is inspect.Parameter.KEYWORD_ONLY
+        for name in (
+            "performance",
+            "max_workers",
+            "memory_per_worker_mb",
+            "reserve_memory_mb",
+        )
+    )
 
 
 def test_store_maps_benefit_mode_rejects_ambiguous_output_folder(tmp_path):
@@ -153,10 +163,12 @@ def test_store_maps_benefit_mode_rejects_ambiguous_output_folder(tmp_path):
         )
 
 
-def test_store_benefit_area_orchestrates_separate_plan_outputs(
-    monkeypatch, tmp_path
-):
-    from ras_commander.RasBenefits import BenefitAreaConfig, BenefitAreaResult, RasBenefits
+def test_store_benefit_area_orchestrates_separate_plan_outputs(monkeypatch, tmp_path):
+    from ras_commander.RasBenefits import (
+        BenefitAreaConfig,
+        BenefitAreaResult,
+        RasBenefits,
+    )
     from ras_commander.RasProcess import RasProcess
 
     terrain = _terrain_tif(tmp_path / "terrain.tif")
@@ -249,7 +261,11 @@ def test_store_benefit_area_orchestrates_separate_plan_outputs(
 
 
 def test_store_benefit_area_generates_wse_only_when_requested(monkeypatch, tmp_path):
-    from ras_commander.RasBenefits import BenefitAreaConfig, BenefitAreaResult, RasBenefits
+    from ras_commander.RasBenefits import (
+        BenefitAreaConfig,
+        BenefitAreaResult,
+        RasBenefits,
+    )
     from ras_commander.RasProcess import RasProcess
 
     terrain = _terrain_tif(tmp_path / "terrain.tif")
@@ -268,8 +284,15 @@ def test_store_benefit_area_generates_wse_only_when_requested(monkeypatch, tmp_p
     def fake_create(pre_depth, post_depth, terrain_tif, output_tif, **kwargs):
         Path(output_tif).touch()
         return BenefitAreaResult(
-            Path(output_tif), None, Path(pre_depth), Path(post_depth), Path(terrain_tif),
-            {}, 0.05, 0.25, 16,
+            Path(output_tif),
+            None,
+            Path(pre_depth),
+            Path(post_depth),
+            Path(terrain_tif),
+            {},
+            0.05,
+            0.25,
+            16,
         )
 
     monkeypatch.setattr(RasProcess, "store_maps", staticmethod(fake_store_maps))
@@ -432,9 +455,7 @@ def test_direct_store_benefit_area_serializes_the_complete_pair_workflow(
     assert not (tmp_path / ".Model.storemaps.lock").exists()
 
 
-def test_store_benefit_area_requires_exactly_one_depth_per_plan(
-    monkeypatch, tmp_path
-):
+def test_store_benefit_area_requires_exactly_one_depth_per_plan(monkeypatch, tmp_path):
     from ras_commander.RasBenefits import BenefitAreaConfig
     from ras_commander.RasProcess import RasProcess
 
@@ -452,7 +473,9 @@ def test_store_benefit_area_requires_exactly_one_depth_per_plan(
     monkeypatch.setattr(
         RasProcess,
         "store_maps",
-        staticmethod(lambda *args, **kwargs: {"depth": [tmp_path / "a.tif", tmp_path / "b.tif"]}),
+        staticmethod(
+            lambda *args, **kwargs: {"depth": [tmp_path / "a.tif", tmp_path / "b.tif"]}
+        ),
     )
     ras = SimpleNamespace(project_folder=tmp_path, check_initialized=lambda: None)
 

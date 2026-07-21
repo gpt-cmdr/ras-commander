@@ -1,0 +1,39 @@
+{
+  "schema": "ras-commander.store-maps-fixture/1",
+  "id": "spring-river-large-watershed",
+  "title": "Spring River",
+  "source_family": "fema_ebfe_ble",
+  "source_id": "spring-river",
+  "viewer_url": "https://rascommander.info/ras/examples/example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fspring-river-ras-model-spring-ble-prj-15b882a5%2Fviewer%2Fmanifest.json%3Fv%3D20260715Tterrainalpha01",
+  "viewer_manifest_url": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-river-ras-model-spring-ble-prj-15b882a5/viewer/manifest.json?v=20260715Tterrainalpha01",
+  "project_manifest_url": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/spring-river-ras-model-spring-ble-prj-15b882a5/project.json",
+  "project_file": "RAS Model/Spring_BLE.prj",
+  "default_local_source": "H:/Testing/eBFE Model Organization/Organized/SpringRiver_11010010/RAS Model",
+  "native_ras_version": "6.1",
+  "mapping_ras_version": "7.0",
+  "default_plan_number": "02",
+  "default_plan_title": "100Yr",
+  "terrain": {
+    "name": "Terrain (2)",
+    "hdf": "Terrain/Terrain (2).hdf",
+    "vrt": "Terrain/Terrain (2).vrt",
+    "source_count": 1,
+    "source_raster": "Terrain/Terrain (2).ep_extend.tif",
+    "width": 28916,
+    "height": 26316,
+    "cell_size_feet": 10,
+    "source_bytes": 1007387276
+  },
+  "model": {
+    "crs": "EPSG:3433",
+    "mesh_cells": 422715,
+    "mesh_faces": 941879,
+    "breaklines": 6011,
+    "completed_plan_count": 7
+  },
+  "benchmark_maps": [
+    "wse",
+    "depth",
+    "velocity"
+  ]
+}

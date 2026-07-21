@@ -22,7 +22,9 @@ def _text(caplog, level):
     return "\n".join(_messages(caplog, level))
 
 
-def test_create_terrain_hdf_info_is_concise_and_debug_keeps_command(monkeypatch, tmp_path, caplog):
+def test_create_terrain_hdf_info_is_concise_and_debug_keeps_command(
+    monkeypatch, tmp_path, caplog
+):
     input_raster = tmp_path / "dem.tif"
     input_raster.write_text("dem", encoding="utf-8")
     projection_prj = tmp_path / "Projection.prj"
@@ -79,7 +81,9 @@ def test_create_terrain_hdf_info_is_concise_and_debug_keeps_command(monkeypatch,
     assert "terrain stderr details" in debug_text
 
 
-def test_vrt_to_tiff_info_uses_filenames_and_debug_keeps_paths(monkeypatch, tmp_path, caplog):
+def test_vrt_to_tiff_info_uses_filenames_and_debug_keeps_paths(
+    monkeypatch, tmp_path, caplog
+):
     vrt_path = tmp_path / "input.vrt"
     vrt_path.write_text("<VRTDataset />", encoding="utf-8")
     output_path = tmp_path / "output.tif"
@@ -91,7 +95,10 @@ def test_vrt_to_tiff_info_uses_filenames_and_debug_keeps_paths(monkeypatch, tmp_
     gdal_translate.write_text("", encoding="utf-8")
     gdaladdo.write_text("", encoding="utf-8")
 
-    def fake_run(cmd, capture_output, text, timeout):
+    commands = []
+
+    def fake_run(cmd, capture_output, text, timeout, cwd, env):
+        commands.append((cmd, cwd, env))
         if cmd[0] == str(gdal_translate):
             output_path.write_bytes(b"tiff")
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
@@ -119,6 +126,9 @@ def test_vrt_to_tiff_info_uses_filenames_and_debug_keeps_paths(monkeypatch, tmp_
     )
 
     assert result == output_path
+    assert not any(item.startswith("NUM_THREADS=") for item in commands[0][0])
+    assert "GDAL_NUM_THREADS" not in commands[0][2]
+    assert commands[0][1] == str(tmp_path)
     info_text = _text(caplog, logging.INFO)
     warning_text = _text(caplog, logging.WARNING)
     debug_text = _text(caplog, logging.DEBUG)
