@@ -81,7 +81,12 @@ def test_list_projects_logs_summary_and_projects_at_debug(monkeypatch, caplog):
     monkeypatch.setattr(
         Usgs3depAws,
         "find_tiles_for_bbox",
-        staticmethod(lambda bbox, resolution, cache_folder=None: projects.copy()),
+        staticmethod(
+            lambda bbox,
+            resolution,
+            cache_folder=None,
+            buffer_distance=0.0: projects.copy()
+        ),
     )
     caplog.set_level(logging.DEBUG, logger=usgs_module.logger.name)
 

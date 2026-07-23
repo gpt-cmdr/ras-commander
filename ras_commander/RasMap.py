@@ -748,10 +748,20 @@ class RasMap:
         output_hdf_path: Optional[Union[str, Path]] = None,
         restrict_to_extent: Optional[Any] = None,
         layer_name: str = "LandCover",
+        buffer_distance: float = 0.0,
         ras_object=None,
     ) -> Path:
         """
         Create and register a land-cover classification layer for a RAS project.
+
+        ``restrict_to_extent`` may be a valid Shapely ``Polygon``, a
+        ``MultiPolygon`` containing exactly one non-empty polygonal part, a
+        one-effective-geometry GeoSeries/GeoDataFrame, a four-value bounds
+        tuple/list, a bounds dict/object, or ``RasMapperLib.Extent``.
+        ``buffer_distance`` is applied before raster bounds are derived, in
+        project CRS units, and defaults to ``0.0``. Callers are responsible for
+        supplying geometry in the project CRS. Empty, invalid, non-polygon, and
+        true multipart geometry inputs raise ``ValueError``.
         """
         ras_project_path = Path(ras_project_path)
         source_path = Path(source_path)
@@ -767,6 +777,7 @@ class RasMap:
             output_hdf_path=output_hdf_path,
             restrict_to_extent=restrict_to_extent,
             layer_name=layer_name,
+            buffer_distance=buffer_distance,
         )
 
     @staticmethod
@@ -777,10 +788,16 @@ class RasMap:
         cell_size: float,
         output_hdf_path: Optional[Union[str, Path]] = None,
         restrict_to_extent: Optional[Any] = None,
+        buffer_distance: float = 0.0,
         ras_object=None,
     ) -> Path:
         """
         Create and register a soils layer from direct GSSURGO input.
+
+        ``restrict_to_extent`` accepts the same polygon and legacy bounds inputs
+        as :meth:`add_landcover_layer`. ``buffer_distance`` is applied in project
+        CRS units before raster bounds are derived and defaults to ``0.0``.
+        Multipart, empty, invalid, and non-polygon geometry inputs fail closed.
         """
         ras_project_path = Path(ras_project_path)
         gssurgo_path = Path(gssurgo_path)
@@ -793,6 +810,7 @@ class RasMap:
             cell_size=cell_size,
             output_hdf_path=output_hdf_path,
             restrict_to_extent=restrict_to_extent,
+            buffer_distance=buffer_distance,
         )
 
     @staticmethod
