@@ -262,3 +262,6 @@ terminal-logs/
 .env.local
 .pypirc
 /agent_tasks/plans
+
+# Data directory
+/data/
