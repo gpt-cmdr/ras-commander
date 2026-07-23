@@ -67,8 +67,12 @@ applicable result family populated:
 
 A pure 1D source project that contains no RASMapper terrain must still publish
 its computed raw cross-section results, but continuous Stored Map rasters are
-not applicable. Record that capability explicitly in manifest v2; do not add a
-substitute terrain or mislabel a derived surface as a RASMapper Stored Map.
+not applicable. Record that capability explicitly in manifest v2; do not
+mislabel a derived surface as a RASMapper Stored Map. A related project's
+terrain may be linked only as a shared display resource when the projects have
+the same study area and CRS. Mark it `modelOwned: false`, identify the source
+project, and do not use it to make Stored Maps appear applicable to the 1D
+model.
 
 Treat either of these public viewer messages as a failed publication:
 

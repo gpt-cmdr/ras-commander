@@ -1,53 +1,28 @@
 # Example Project Library
 
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
-<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260717Tviewer-v2-library01">
+<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260723Ttechnical-library01">
 
-RAS Commander uses repeatable HEC-RAS project fixtures for examples, tests,
-documentation, and regression checks. The library combines several source
-families rather than treating one archive as the entire example set:
-
-- HEC tutorial and example projects
-- HEC special sample datasets
-- publicly available USGS ScienceBase model releases
-- organized FEMA eBFE/BLE deliveries
-- other public state, county, and federal model catalogs as they are reviewed
-
-HEC's example projects are instructional fixtures, not production studies. They
-are still useful because they are the same projects that HEC-RAS tutorials and
-manual examples are based on. Public ScienceBase and eBFE/BLE sources play a
-different role: they expose real delivery structure, metadata, scale, path
-issues, and model packaging details.
-
-Only projects with a verified coordinate reference system are eligible for the
-web map viewer. Projects without a CRS can remain useful for notebook examples,
-but they are not published as map-review targets until their CRS is resolved.
+Explore HEC tutorial projects and organized public model releases used throughout
+the RAS Commander examples. Select a model area on the map or open a project
+below to review its geometry, terrain, and results.
 
 ## Project Explorer
 
-The explorer shows one model-limit polygon per published MapLibre project.
-Click a polygon to review source metadata and open that project's webmap. The
-table below is the same published catalog: each project name is linked once to
-its viewer and the Project Information column summarizes the current bundle.
-Projects stay out of this map until they have a valid CRS, a WGS84 model limit,
-and a published MapLibre webmap.
-
-<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260717Tviewer-v2-library01">
+<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260723Ttechnical-library01">
   <div class="ras-library-map-shell">
     <div class="ras-library-map" data-library-map></div>
   </div>
   <div class="ras-library-map-footer">
-    <span data-library-status>Published MapLibre project extents</span>
-    <span>Click a model extent to open its webmap.</span>
+    <span data-library-status>Select a model extent for project details.</span>
   </div>
   <div class="ras-library-table-wrap">
     <table class="ras-library-table">
       <thead>
         <tr>
           <th scope="col">Project</th>
-          <th scope="col">Project Information</th>
-          <th scope="col">Source</th>
-          <th scope="col">CRS</th>
+          <th scope="col">Technical Description</th>
+          <th scope="col">HEC-RAS Version</th>
         </tr>
       </thead>
       <tbody data-project-table></tbody>
@@ -57,8 +32,9 @@ and a published MapLibre webmap.
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
-<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260717Tviewer-v2-library01"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260717Tviewer-v2-library01"></script>
+<script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260723Ttechnical-library01"></script>
+<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260723Ttechnical-library01"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260723Ttechnical-library01"></script>
 
 ## Related Workflows
 

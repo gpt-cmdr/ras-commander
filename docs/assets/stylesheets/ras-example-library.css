@@ -21,23 +21,6 @@
   height: 100%;
 }
 
-.ras-library-project-marker {
-  width: 20px;
-  height: 20px;
-  box-sizing: border-box;
-  border: 2px solid #1d4ed8;
-  border-radius: 50%;
-  background: #ffffff;
-  box-shadow: inset 0 0 0 4px #2563eb, 0 1px 3px rgb(15 23 42 / 0.25);
-  cursor: pointer;
-  padding: 0;
-}
-
-.ras-library-project-marker:focus-visible {
-  outline: 2px solid #172033;
-  outline-offset: 2px;
-}
-
 .ras-library-map-footer {
   display: flex;
   align-items: center;
@@ -58,7 +41,7 @@
 
 .ras-library-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 700px;
   margin: 0;
   border: 0;
   border-collapse: collapse;
@@ -88,20 +71,37 @@
 }
 
 .ras-library-table td:first-child {
-  min-width: 10rem;
+  width: 24%;
+  min-width: 12rem;
   font-weight: 700;
 }
 
 .ras-library-table td:nth-child(3) {
-  min-width: 11rem;
-}
-
-.ras-library-table td:nth-child(4) {
-  min-width: 8rem;
+  width: 18%;
+  min-width: 9rem;
 }
 
 .ras-library-project-information {
-  min-width: 25rem;
+  color: #344258;
+}
+
+.ras-library-project-meta {
+  display: block;
+  margin-top: 0.22rem;
+  color: var(--ras-library-muted);
+  font-size: 0.66rem;
+  line-height: 1.3;
+  font-weight: 500;
+}
+
+.ras-library-project-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.65rem;
+  margin-top: 0.35rem;
+}
+
+.ras-library-project-version {
   color: var(--ras-library-muted);
 }
 
@@ -127,22 +127,22 @@
   line-height: 1.2;
 }
 
-.ras-library-popup dl {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 0.2rem 0.55rem;
+.ras-library-popup > h2 {
   margin: 0 0 0.45rem;
-  font-size: 0.7rem;
-  line-height: 1.25;
+  font-size: 0.78rem;
+  line-height: 1.2;
 }
 
-.ras-library-popup dt {
-  color: var(--ras-library-muted);
+.ras-library-popup__project + .ras-library-popup__project {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--ras-library-border);
+}
+
+.ras-library-popup__type,
+.ras-library-popup__version {
+  color: #344258 !important;
   font-weight: 700;
-}
-
-.ras-library-popup dd {
-  margin: 0;
 }
 
 .ras-library-popup p {
@@ -150,13 +150,6 @@
   color: var(--ras-library-muted);
   font-size: 0.68rem;
   line-height: 1.35;
-}
-
-.ras-library-popup__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.65rem;
-  font-size: 0.72rem;
 }
 
 @media (max-width: 760px) {

@@ -5,7 +5,7 @@
   }
 
   const DEFAULT_BOUNDS = [-85.3942, 40.1896, -85.3601, 40.2057];
-  const VIEWER_MANIFEST_REFRESH = "20260716Tmuncie-contract-v2";
+  const VIEWER_MANIFEST_REFRESH = "20260723Tvector-results01";
   const SATELLITE_ATTRIBUTION = "Tiles &copy; Esri";
   const SATELLITE_IMAGERY_TILES = [
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -76,6 +76,7 @@
       serviceAsset: numericResource.serviceAsset || legacyLayer?.serviceAsset,
       serviceRevision: numericResource.serviceRevision || legacyLayer?.serviceRevision,
       rasterService: manifest.services?.numericRaster || legacyLayer?.rasterService,
+      renderer: layer.renderer || legacyLayer?.renderer,
       rawResult: layer.sourceKind === "raw-hdf" ? provenance : legacyLayer?.rawResult,
       storedMap: ["stored-map", "calculated", "terrain"].includes(layer.sourceKind)
         ? provenance
@@ -232,13 +233,87 @@
     } else if (name.includes("velocity")) {
       fallback = DEFAULT_STYLES.velocity;
     }
-    const style = Object.assign({}, fallback, raw);
-    if (isVectorResultLayer(layer) && geometryTypes(layer).has("multipolygon")) {
-      style.fillOpacity = Number.isFinite(style.fillOpacity) ? Math.min(style.fillOpacity, 0.1) : 0.08;
-    } else if (isVectorResultLayer(layer) && geometryTypes(layer).has("polygon")) {
-      style.fillOpacity = Number.isFinite(style.fillOpacity) ? Math.min(style.fillOpacity, 0.1) : 0.08;
+    return Object.assign({}, fallback, raw);
+  }
+
+  function rendererFor(layer) {
+    const renderer = layer.renderer || layer.rawResult?.renderer;
+    return renderer?.type === "graduated" && renderer.valueField ? renderer : null;
+  }
+
+  function rendererDomain(renderer) {
+    const domain = renderer?.domain;
+    if (!Array.isArray(domain) || domain.length !== 2) {
+      return null;
     }
-    return style;
+    const minimum = Number(domain[0]);
+    const maximum = Number(domain[1]);
+    return Number.isFinite(minimum) && Number.isFinite(maximum) && maximum > minimum
+      ? [minimum, maximum]
+      : null;
+  }
+
+  function rendererColorExpression(renderer) {
+    const domain = rendererDomain(renderer);
+    const colors = Array.isArray(renderer?.colors)
+      ? renderer.colors.filter((color) => typeof color === "string")
+      : [];
+    if (!domain || colors.length < 2) {
+      return null;
+    }
+    const [minimum, maximum] = domain;
+    const stops = colors.flatMap((color, index) => [
+      minimum + ((maximum - minimum) * index) / (colors.length - 1),
+      color,
+    ]);
+    return [
+      "case",
+      ["all", ["has", renderer.valueField], ["!=", ["get", renderer.valueField], null]],
+      ["interpolate", ["linear"], ["to-number", ["get", renderer.valueField], minimum], ...stops],
+      "rgba(0,0,0,0)",
+    ];
+  }
+
+  function resultGeometryPaint(layer, family) {
+    const renderer = rendererFor(layer);
+    const color = rendererColorExpression(renderer);
+    if (!renderer || !color) {
+      return null;
+    }
+    const mode = renderer.geometryMode || "feature";
+    if (family === "polygon") {
+      return {
+        fill: {
+          "fill-color": color,
+          "fill-opacity": 0.68,
+        },
+        outline: {
+          "line-color": "rgba(30,41,59,0.5)",
+          "line-width": mode === "cell-fill" ? 0.3 : 0.8,
+          "line-opacity": 0.65,
+        },
+      };
+    }
+    if (family === "line") {
+      return {
+        line: {
+          "line-color": color,
+          "line-width": mode === "face-line" ? 2 : 2.6,
+          "line-opacity": 0.96,
+        },
+        hitWidth: mode === "face-line" ? 10 : 12,
+      };
+    }
+    return {
+      circle: {
+        "circle-color": color,
+        "circle-radius": mode === "element-point" ? 5.5 : 5,
+        "circle-opacity": 0.96,
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 1,
+      },
+      hitRadius: 10,
+    };
   }
 
   function layerVisibility(layer) {
@@ -301,7 +376,14 @@
     const is2D = vectorLayers.some((layer) => (
       ["mesh_areas", "mesh_cells", "mesh_faces", "breaklines", "refinement_regions"].includes(layer.kind)
     ));
-    const terrain = tilesets.some((tileset) => tileset.type === "raster" && isTerrainTileset(tileset));
+    const terrainTilesets = tilesets.filter(
+      (tileset) => tileset.type === "raster" && isTerrainTileset(tileset)
+    );
+    const terrain = terrainTilesets.length > 0;
+    const sharedTerrain = terrainTilesets.find((tileset) => (
+      tileset.sharedDisplayResource?.modelOwned === false
+      || tileset.storedMap?.modelOwned === false
+    ));
     const storedMaps = tilesets.filter(isStoredMapRasterTileset);
     const rawResultLayers = tilesets
       .filter((tileset) => tileset.type === "vector")
@@ -326,8 +408,14 @@
       },
       {
         label: "Terrain",
-        detail: terrain
-          ? "Project terrain is published."
+        detail: sharedTerrain
+          ? `Shared display terrain from ${
+            sharedTerrain.sharedDisplayResource?.sourceProjectTitle
+            || sharedTerrain.storedMap?.sharedFromProject
+            || "a related project"
+          }; it is not terrain owned by this model.`
+          : terrain
+            ? "Project terrain is published."
           : terrainApplicable
             ? "No project terrain was provided or published for this model."
             : "Not applicable: this source is a pure 1D model and does not include a RASMapper terrain.",
@@ -551,6 +639,7 @@
     const ids = [];
 
     if (types.has("polygon") || types.has("multipolygon")) {
+      const resultPaint = resultGeometryPaint(layer, "polygon");
       const fillId = `${layer.id}-fill`;
       map.addLayer({
         id: fillId,
@@ -560,8 +649,9 @@
         minzoom,
         layout,
         paint: {
-          "fill-color": paint.fill || "#60a5fa",
-          "fill-opacity": Number.isFinite(paint.fillOpacity) ? paint.fillOpacity : 0.15,
+          "fill-color": resultPaint?.fill["fill-color"] || paint.fill || "#60a5fa",
+          "fill-opacity": resultPaint?.fill["fill-opacity"]
+            ?? (Number.isFinite(paint.fillOpacity) ? paint.fillOpacity : 0.15),
         },
       });
       ids.push(fillId);
@@ -577,9 +667,10 @@
         minzoom,
         layout,
         paint: {
-          "line-color": paint.line || paint.fill || "#2563eb",
-          "line-width": Number.isFinite(paint.lineWidth) ? paint.lineWidth : 0.75,
-          "line-opacity": 0.92,
+          "line-color": resultPaint?.outline["line-color"] || paint.line || paint.fill || "#2563eb",
+          "line-width": resultPaint?.outline["line-width"]
+            ?? (Number.isFinite(paint.lineWidth) ? paint.lineWidth : 0.75),
+          "line-opacity": resultPaint?.outline["line-opacity"] ?? 0.92,
         },
       });
       ids.push(outlineId);
@@ -588,6 +679,7 @@
     }
 
     if (types.has("linestring") || types.has("multilinestring")) {
+      const resultPaint = resultGeometryPaint(layer, "line");
       const lineId = `${layer.id}-line`;
       map.addLayer({
         id: lineId,
@@ -597,17 +689,38 @@
         minzoom,
         layout,
         paint: {
-          "line-color": paint.line || paint.fill || "#2563eb",
-          "line-width": Number.isFinite(paint.lineWidth) ? paint.lineWidth : 1,
-          "line-opacity": 0.92,
+          "line-color": resultPaint?.line["line-color"] || paint.line || paint.fill || "#2563eb",
+          "line-width": resultPaint?.line["line-width"]
+            ?? (Number.isFinite(paint.lineWidth) ? paint.lineWidth : 1),
+          "line-opacity": resultPaint?.line["line-opacity"] ?? 0.92,
         },
       });
       ids.push(lineId);
       mapLayerLookup.set(lineId, layer);
       bindFeatureHover(map, lineId, layer, popup);
+      if (resultPaint) {
+        const hitId = `${layer.id}-line-hit`;
+        map.addLayer({
+          id: hitId,
+          type: "line",
+          source: sourceId,
+          "source-layer": layer.sourceLayer,
+          minzoom,
+          layout,
+          paint: {
+            "line-color": "#000000",
+            "line-width": resultPaint.hitWidth,
+            "line-opacity": 0.01,
+          },
+        });
+        ids.push(hitId);
+        mapLayerLookup.set(hitId, layer);
+        bindFeatureHover(map, hitId, layer, popup);
+      }
     }
 
     if (types.has("point") || types.has("multipoint")) {
+      const resultPaint = resultGeometryPaint(layer, "point");
       const pointId = `${layer.id}-point`;
       map.addLayer({
         id: pointId,
@@ -617,14 +730,35 @@
         minzoom,
         layout,
         paint: {
-          "circle-color": paint.fill || paint.line || "#dc2626",
-          "circle-radius": 3,
-          "circle-opacity": 0.9,
+          "circle-color": resultPaint?.circle["circle-color"] || paint.fill || paint.line || "#dc2626",
+          "circle-radius": resultPaint?.circle["circle-radius"] || 3,
+          "circle-opacity": resultPaint?.circle["circle-opacity"] || 0.9,
+          "circle-stroke-color": resultPaint?.circle["circle-stroke-color"] || "rgba(0,0,0,0)",
+          "circle-stroke-width": resultPaint?.circle["circle-stroke-width"] || 0,
         },
       });
       ids.push(pointId);
       mapLayerLookup.set(pointId, layer);
       bindFeatureHover(map, pointId, layer, popup);
+      if (resultPaint) {
+        const hitId = `${layer.id}-point-hit`;
+        map.addLayer({
+          id: hitId,
+          type: "circle",
+          source: sourceId,
+          "source-layer": layer.sourceLayer,
+          minzoom,
+          layout,
+          paint: {
+            "circle-color": "#000000",
+            "circle-radius": resultPaint.hitRadius,
+            "circle-opacity": 0.01,
+          },
+        });
+        ids.push(hitId);
+        mapLayerLookup.set(hitId, layer);
+        bindFeatureHover(map, hitId, layer, popup);
+      }
     }
 
     registry.set(layer.id, ids);
@@ -681,7 +815,7 @@
   function setLayerOpacity(map, registry, layerId, opacity) {
     const mapLayerIds = registry.get(layerId) || [];
     for (const mapLayerId of mapLayerIds) {
-      if (!map.getLayer(mapLayerId)) {
+      if (!map.getLayer(mapLayerId) || mapLayerId.endsWith("-hit")) {
         continue;
       }
       const layer = map.getLayer(mapLayerId);
@@ -1970,6 +2104,43 @@
       rasterStyleController?.visibilityChanged(layerId);
     }
 
+    function renderVectorLegend(parent, layer) {
+      const renderer = rendererFor(layer);
+      const domain = rendererDomain(renderer);
+      const colors = Array.isArray(renderer?.colors) ? renderer.colors : [];
+      if (!renderer || !domain || colors.length < 2) {
+        return;
+      }
+      const legend = document.createElement("div");
+      legend.className = "ras-vector-legend";
+
+      const heading = document.createElement("div");
+      heading.className = "ras-vector-legend__heading";
+      const field = document.createElement("strong");
+      field.textContent = formatFieldName(renderer.valueField);
+      const units = document.createElement("span");
+      units.textContent = renderer.units || "";
+      heading.append(field, units);
+
+      const bar = document.createElement("div");
+      bar.className = "ras-vector-legend__bar";
+      bar.style.background = `linear-gradient(90deg, ${colors.join(", ")})`;
+
+      const labels = document.createElement("div");
+      labels.className = "ras-vector-legend__labels";
+      const minimum = document.createElement("span");
+      minimum.textContent = formatFieldValue(domain[0]);
+      const maximum = document.createElement("span");
+      maximum.textContent = formatFieldValue(domain[1]);
+      labels.append(minimum, maximum);
+
+      const note = document.createElement("p");
+      note.className = "ras-vector-legend__note";
+      note.textContent = "Raw HDF computation values; click an element for its source value.";
+      legend.append(heading, bar, labels, note);
+      parent.append(legend);
+    }
+
     function renderLayerInspector(parent, layerId, layer) {
       const inspector = document.createElement("div");
       inspector.className = "ras-layer-inspector";
@@ -2030,7 +2201,9 @@
         actions.append(open);
       }
 
-      inspector.append(source, actions);
+      inspector.append(source);
+      renderVectorLegend(inspector, layer);
+      inspector.append(actions);
       rasterStyleController?.renderInspector(inspector, layerId);
       parent.append(inspector);
     }
@@ -2067,6 +2240,10 @@
       const swatch = document.createElement("span");
       swatch.className = `ras-tree-leaf__swatch ras-tree-leaf__swatch--${slugify(layer.sourceKind || layer.role)}`;
       swatch.setAttribute("aria-hidden", "true");
+      const renderer = rendererFor(layer);
+      if (Array.isArray(renderer?.colors) && renderer.colors.length > 1) {
+        swatch.style.background = `linear-gradient(90deg, ${renderer.colors.join(", ")})`;
+      }
 
       const select = document.createElement("button");
       select.type = "button";
