@@ -6,11 +6,29 @@ from pathlib import Path
 from subprocess import CompletedProcess
 
 import pytest
+from rasterio._env import PROJDataFinder, set_proj_data_search_path
 
 from ras_commander import _gdal_runtime
 from ras_commander.geom.GeomMesh import GeomMesh
 
 geom_mesh_module = importlib.import_module("ras_commander.geom.GeomMesh")
+RASTERIO_PROJ_DATA = PROJDataFinder().search()
+
+
+@pytest.fixture(autouse=True)
+def _restore_rasterio_proj_search_path():
+    """Keep synthetic HEC-RAS data paths from leaking to later tests."""
+    environment_names = ("PATH", "GDAL_DATA", "PROJ_LIB", "PROJ_DATA")
+    original_environment = {name: os.environ.get(name) for name in environment_names}
+    original_sys_path = list(sys.path)
+    yield
+    for name, value in original_environment.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+    sys.path[:] = original_sys_path
+    set_proj_data_search_path(RASTERIO_PROJ_DATA)
 
 
 def _make_hecras_gdal_tree(tmp_path: Path) -> Path:
@@ -126,7 +144,9 @@ def test_configure_rasmapper_gdal_bridge_creates_venv_and_base_bridges(
         str(base_python_dir / "python.exe"),
         raising=False,
     )
-    monkeypatch.setattr(_gdal_runtime.sys, "prefix", str(tmp_path / "project" / ".venv"))
+    monkeypatch.setattr(
+        _gdal_runtime.sys, "prefix", str(tmp_path / "project" / ".venv")
+    )
     monkeypatch.setattr(_gdal_runtime.sys, "base_prefix", str(base_python_dir))
     monkeypatch.setattr(
         _gdal_runtime.sys,
@@ -154,7 +174,9 @@ def test_configure_rasmapper_gdal_bridge_creates_venv_and_base_bridges(
     assert len(commands) == 2
 
 
-def test_geom_mesh_setup_gdal_bridge_creates_python_gdal_by_default(monkeypatch, tmp_path):
+def test_geom_mesh_setup_gdal_bridge_creates_python_gdal_by_default(
+    monkeypatch, tmp_path
+):
     hecras_dir = _make_hecras_gdal_tree(tmp_path)
     python_dir = tmp_path / "uv-python"
     python_dir.mkdir()

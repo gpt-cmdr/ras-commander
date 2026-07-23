@@ -17,7 +17,9 @@ This file is the canonical local instruction file for `ras_commander/remote/`.
 ## Critical Rules
 
 - HEC-RAS requires a desktop session on Windows remote hosts.
-- For PsExec execution, use `session_id=2` style desktop access and avoid `system_account=True` for HEC-RAS runs.
+- For PsExec execution, always target a verified interactive desktop session with
+  `session_id`. When `system_account=True` is required, preserve both PsExec
+  flags (`-s -i <session_id>`) and validate HEC-RAS in that exact session.
 - Keep optional backend dependencies lazy-loaded and guarded with explicit dependency-check functions.
 - Use relative imports inside the subpackage.
 - Keep the worker factory routing centralized in `init_ras_worker()`.

@@ -14,10 +14,11 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.99.0"
+    __version__ = "0.99.1"
 
 # Canonical machine-readable agent index (see docs() helper below)
 __llms_txt__ = "https://rascommander.info/ras/llms.txt"
+__citation_url__ = "https://rascommander.info/ras/cite/"
 
 # Set up logging
 setup_logging()
@@ -26,21 +27,24 @@ setup_logging()
 def docs(topic=None):
     """Return (and print) the rascommander.info URL for an optional topic.
 
-    No args -> docs home; topic='llms' -> llms.txt; topic='dataframes' ->
-    the DataFrame Reference; any other topic -> user-guide/<topic>/.
+    No args -> docs home; topic='llms' -> llms.txt; topic='citation' -> the
+    citation and sharing guide; topic='dataframes' -> the DataFrame Reference;
+    any other topic -> user-guide/<topic>/.
     Designed for LLM agents to self-locate the documentation at runtime.
     """
-    base = "https://rascommander.info"
+    base = "https://rascommander.info/ras"
     if topic is None:
-        url = base
+        url = f"{base}/"
     else:
         slug = str(topic).strip().strip("/")
         if slug == "llms":
             url = __llms_txt__
+        elif slug in {"cite", "citation"}:
+            url = __citation_url__
         elif slug == "dataframes":
             url = f"{base}/reference/dataframe-reference/"
         elif not slug:
-            url = base
+            url = f"{base}/"
         else:
             url = f"{base}/user-guide/{slug}/"
     print(url)
@@ -106,6 +110,15 @@ from .RasBenefits import (
     RasBenefits,
 )
 from .RasProcess import RasProcess, ProjectionInfo
+from .RasterPerformance import (
+    GeoTiffWriteOptions,
+    RasterOperationProfileResult,
+    StoreMapPerformanceOptions,
+    StoreMapProfileResult,
+    StoreMapResourceEstimate,
+    StoreMapResourceSample,
+    TerrainResourceEstimate,
+)
 from .RasGeometryCompute import RasGeometryCompute
 from .RasGuiAutomation import RasGuiAutomation
 from .RasScreenshot import RasScreenshot
@@ -243,7 +256,7 @@ __all__ = [
     'GeometryLayerResult', 'GeometryCompleteResult',
     'RasGeometryCompute',
     'RasPreprocess',
-    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
+    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',

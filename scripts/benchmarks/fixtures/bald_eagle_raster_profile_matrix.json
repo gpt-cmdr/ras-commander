@@ -1,0 +1,223 @@
+{
+  "schema": "ras-commander.raster-profile-matrix/1",
+  "description": "Matched local/network profiling of every modified raster entry point on the disposable Bald Eagle fixture.",
+  "variables": {
+    "local_project": "C:\\Users\\billk_clb\\.config\\superpowers\\worktrees\\ras-commander\\feature-multicore-raster-processing\\working\\raster_profile_matrix_20260719\\fixtures\\bald_eagle_project",
+    "network_project": "H:\\Testing\\eBFE Model Organization\\Validation\\multicore_mapping\\raster_profile_matrix_20260719\\fixtures\\bald_eagle_project",
+    "local_terrain": "C:\\Users\\billk_clb\\.config\\superpowers\\worktrees\\ras-commander\\feature-multicore-raster-processing\\working\\raster_profile_matrix_20260719\\fixtures\\bald_eagle_terrain",
+    "network_terrain": "H:\\Testing\\eBFE Model Organization\\Validation\\multicore_mapping\\raster_profile_matrix_20260719\\fixtures\\bald_eagle_terrain",
+    "local_data": "C:\\Users\\billk_clb\\.config\\superpowers\\worktrees\\ras-commander\\feature-multicore-raster-processing\\working\\raster_profile_matrix_20260719\\data_clean_v2",
+    "network_data": "H:\\Testing\\eBFE Model Organization\\Validation\\multicore_mapping\\raster_profile_matrix_20260719\\data_clean_v2"
+  },
+  "runs": [
+    {
+      "id": "store_depth_serial_local",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{local_project}", "plan_number": "15", "maps": "depth", "max_workers": "1", "output_path": "{local_data}\\{instance_id}\\maps", "label": "depth serial local"}
+    },
+    {
+      "id": "store_depth_serial_network",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{network_project}", "plan_number": "15", "maps": "depth", "max_workers": "1", "output_path": "{network_data}\\{instance_id}\\maps", "label": "depth serial network"}
+    },
+    {
+      "id": "store_all3_serial_local",
+      "runner": "store_maps",
+      "repeat": 2,
+      "args": {"operation": "store_maps", "project_folder": "{local_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "1", "output_path": "{local_data}\\{instance_id}\\maps", "label": "all three serial local"}
+    },
+    {
+      "id": "store_all3_serial_network",
+      "runner": "store_maps",
+      "repeat": 2,
+      "args": {"operation": "store_maps", "project_folder": "{network_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "1", "output_path": "{network_data}\\{instance_id}\\maps", "label": "all three serial network"}
+    },
+    {
+      "id": "store_all3_workers2_local",
+      "runner": "store_maps",
+      "repeat": 2,
+      "args": {"operation": "store_maps", "project_folder": "{local_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "2", "output_path": "{local_data}\\{instance_id}\\maps", "label": "all three workers2 local"}
+    },
+    {
+      "id": "store_all3_workers2_network",
+      "runner": "store_maps",
+      "repeat": 2,
+      "args": {"operation": "store_maps", "project_folder": "{network_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "2", "output_path": "{network_data}\\{instance_id}\\maps", "label": "all three workers2 network"}
+    },
+    {
+      "id": "store_all3_auto_local",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{local_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "auto", "output_path": "{local_data}\\{instance_id}\\maps", "label": "all three auto local"}
+    },
+    {
+      "id": "store_all3_auto_network",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{network_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "auto", "output_path": "{network_data}\\{instance_id}\\maps", "label": "all three auto network"}
+    },
+    {
+      "id": "store_serial_cache64_gdal1_local",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{local_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "1", "gdal_cachemax_mb": "64", "gdal_num_threads": "1", "output_path": "{local_data}\\{instance_id}\\maps", "label": "serial cache64 gdal1 local"}
+    },
+    {
+      "id": "store_serial_cache64_gdal1_network",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{network_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "1", "gdal_cachemax_mb": "64", "gdal_num_threads": "1", "output_path": "{network_data}\\{instance_id}\\maps", "label": "serial cache64 gdal1 network"}
+    },
+    {
+      "id": "store_serial_cache256_gdalall_local",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{local_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "1", "gdal_cachemax_mb": "256", "gdal_num_threads": "ALL_CPUS", "output_path": "{local_data}\\{instance_id}\\maps", "label": "serial cache256 gdalall local"}
+    },
+    {
+      "id": "store_serial_cache256_gdalall_network",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{network_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "1", "gdal_cachemax_mb": "256", "gdal_num_threads": "ALL_CPUS", "output_path": "{network_data}\\{instance_id}\\maps", "label": "serial cache256 gdalall network"}
+    },
+    {
+      "id": "store_workers2_memory4g_reserve8g_local",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{local_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "2", "memory_per_worker_mb": "4096", "reserve_memory_mb": "8192", "output_path": "{local_data}\\{instance_id}\\maps", "label": "workers2 memory4g reserve8g local"}
+    },
+    {
+      "id": "store_workers2_memory8g_reserve8g_local",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{local_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "2", "memory_per_worker_mb": "8192", "reserve_memory_mb": "8192", "output_path": "{local_data}\\{instance_id}\\maps", "label": "workers2 memory8g reserve8g local"}
+    },
+    {
+      "id": "store_all3_serial_no_georef_local",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{local_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "1", "fix_georef": false, "output_path": "{local_data}\\{instance_id}\\maps", "label": "serial no georef local"}
+    },
+    {
+      "id": "timesteps_depth_serial_local",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps_at_timesteps", "project_folder": "{local_project}", "plan_number": "15", "maps": "depth", "max_timesteps": "1", "max_workers": "1", "output_path": "{local_data}\\{instance_id}\\maps", "label": "one timestep depth serial local"}
+    },
+    {
+      "id": "timesteps_depth_serial_network",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps_at_timesteps", "project_folder": "{network_project}", "plan_number": "15", "maps": "depth", "max_timesteps": "1", "max_workers": "1", "output_path": "{network_data}\\{instance_id}\\maps", "label": "one timestep depth serial network"}
+    },
+    {
+      "id": "timesteps_all3_workers2_local",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps_at_timesteps", "project_folder": "{local_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_timesteps": "1", "max_workers": "2", "output_path": "{local_data}\\{instance_id}\\maps", "label": "one timestep all three workers2 local"}
+    },
+    {
+      "id": "timesteps_all3_workers2_network",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps_at_timesteps", "project_folder": "{network_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_timesteps": "1", "max_workers": "2", "output_path": "{network_data}\\{instance_id}\\maps", "label": "one timestep all three workers2 network"}
+    },
+    {
+      "id": "store_all_plans_depth_serial_local",
+      "runner": "store_maps",
+      "args": {"operation": "store_all_maps", "project_folder": "{local_project}", "plan_number": "15", "maps": "depth", "max_workers": "1", "output_path": "{local_data}\\{instance_id}\\maps", "label": "all plans depth serial local", "skip_hdf_hash": true}
+    },
+    {
+      "id": "store_all_plans_depth_serial_network",
+      "runner": "store_maps",
+      "args": {"operation": "store_all_maps", "project_folder": "{network_project}", "plan_number": "15", "maps": "depth", "max_workers": "1", "output_path": "{network_data}\\{instance_id}\\maps", "label": "all plans depth serial network", "skip_hdf_hash": true}
+    },
+    {
+      "id": "store_all_plans_all3_workers2_local",
+      "runner": "store_maps",
+      "args": {"operation": "store_all_maps", "project_folder": "{local_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "2", "output_path": "{local_data}\\{instance_id}\\maps", "label": "all plans all three workers2 local", "skip_hdf_hash": true}
+    },
+    {
+      "id": "store_all_plans_all3_workers2_network",
+      "runner": "store_maps",
+      "args": {"operation": "store_all_maps", "project_folder": "{network_project}", "plan_number": "15", "maps": "wse,depth,velocity", "max_workers": "2", "output_path": "{network_data}\\{instance_id}\\maps", "label": "all plans all three workers2 network", "skip_hdf_hash": true}
+    },
+    {
+      "id": "terrain_hdf_threads1_local",
+      "runner": "terrain",
+      "args": {"operation": "create_terrain_hdf", "input": ["{local_terrain}\\Terrain50.baldeagledem.tif", "{local_terrain}\\Terrain50.dtm_20ft.tif"], "projection": "{local_terrain}\\Projection.prj", "output": "{local_data}\\{instance_id}\\Terrain50.hdf", "threads": "1", "label": "terrain hdf threads1 local"}
+    },
+    {
+      "id": "terrain_hdf_allcpus_local",
+      "runner": "terrain",
+      "args": {"operation": "create_terrain_hdf", "input": ["{local_terrain}\\Terrain50.baldeagledem.tif", "{local_terrain}\\Terrain50.dtm_20ft.tif"], "projection": "{local_terrain}\\Projection.prj", "output": "{local_data}\\{instance_id}\\Terrain50.hdf", "threads": "ALL_CPUS", "label": "terrain hdf allcpus local"}
+    },
+    {
+      "id": "terrain_hdf_threads1_network",
+      "runner": "terrain",
+      "args": {"operation": "create_terrain_hdf", "input": ["{network_terrain}\\Terrain50.baldeagledem.tif", "{network_terrain}\\Terrain50.dtm_20ft.tif"], "projection": "{network_terrain}\\Projection.prj", "output": "{network_data}\\{instance_id}\\Terrain50.hdf", "threads": "1", "label": "terrain hdf threads1 network"}
+    },
+    {
+      "id": "terrain_hdf_allcpus_network",
+      "runner": "terrain",
+      "args": {"operation": "create_terrain_hdf", "input": ["{network_terrain}\\Terrain50.baldeagledem.tif", "{network_terrain}\\Terrain50.dtm_20ft.tif"], "projection": "{network_terrain}\\Projection.prj", "output": "{network_data}\\{instance_id}\\Terrain50.hdf", "threads": "ALL_CPUS", "label": "terrain hdf allcpus network"}
+    },
+    {
+      "id": "terrain_convenience_threads1_local",
+      "runner": "terrain",
+      "args": {"operation": "create_terrain_from_rasters", "input": ["{local_terrain}\\Terrain50.baldeagledem.tif", "{local_terrain}\\Terrain50.dtm_20ft.tif"], "output": "{local_data}\\{instance_id}\\terrain", "terrain_name": "Terrain50", "threads": "1", "label": "terrain convenience threads1 local"}
+    },
+    {
+      "id": "terrain_convenience_allcpus_local",
+      "runner": "terrain",
+      "args": {"operation": "create_terrain_from_rasters", "input": ["{local_terrain}\\Terrain50.baldeagledem.tif", "{local_terrain}\\Terrain50.dtm_20ft.tif"], "output": "{local_data}\\{instance_id}\\terrain", "terrain_name": "Terrain50", "threads": "ALL_CPUS", "label": "terrain convenience allcpus local"}
+    },
+    {
+      "id": "terrain_convenience_threads1_network",
+      "runner": "terrain",
+      "args": {"operation": "create_terrain_from_rasters", "input": ["{network_terrain}\\Terrain50.baldeagledem.tif", "{network_terrain}\\Terrain50.dtm_20ft.tif"], "output": "{network_data}\\{instance_id}\\terrain", "terrain_name": "Terrain50", "threads": "1", "label": "terrain convenience threads1 network"}
+    },
+    {
+      "id": "terrain_convenience_allcpus_network",
+      "runner": "terrain",
+      "args": {"operation": "create_terrain_from_rasters", "input": ["{network_terrain}\\Terrain50.baldeagledem.tif", "{network_terrain}\\Terrain50.dtm_20ft.tif"], "output": "{network_data}\\{instance_id}\\terrain", "terrain_name": "Terrain50", "threads": "ALL_CPUS", "label": "terrain convenience allcpus network"}
+    },
+    {
+      "id": "vrt_lzw_threads1_overviews_local",
+      "runner": "terrain",
+      "args": {"operation": "vrt_to_tiff", "input": "{local_terrain}\\Terrain50.vrt", "output": "{local_data}\\{instance_id}\\Terrain50.tif", "compression": "LZW", "threads": "1", "overviews": true, "label": "vrt lzw threads1 overviews local"}
+    },
+    {
+      "id": "vrt_lzw_allcpus_overviews_local",
+      "runner": "terrain",
+      "args": {"operation": "vrt_to_tiff", "input": "{local_terrain}\\Terrain50.vrt", "output": "{local_data}\\{instance_id}\\Terrain50.tif", "compression": "LZW", "threads": "ALL_CPUS", "overviews": true, "label": "vrt lzw allcpus overviews local"}
+    },
+    {
+      "id": "vrt_lzw_threads1_no_overviews_local",
+      "runner": "terrain",
+      "args": {"operation": "vrt_to_tiff", "input": "{local_terrain}\\Terrain50.vrt", "output": "{local_data}\\{instance_id}\\Terrain50.tif", "compression": "LZW", "threads": "1", "overviews": false, "label": "vrt lzw threads1 no overviews local"}
+    },
+    {
+      "id": "vrt_deflate_allcpus_overviews_local",
+      "runner": "terrain",
+      "args": {"operation": "vrt_to_tiff", "input": "{local_terrain}\\Terrain50.vrt", "output": "{local_data}\\{instance_id}\\Terrain50.tif", "compression": "DEFLATE", "threads": "ALL_CPUS", "overviews": true, "label": "vrt deflate allcpus overviews local"}
+    },
+    {
+      "id": "vrt_lzw_allcpus_cache64_local",
+      "runner": "terrain",
+      "args": {"operation": "vrt_to_tiff", "input": "{local_terrain}\\Terrain50.vrt", "output": "{local_data}\\{instance_id}\\Terrain50.tif", "compression": "LZW", "threads": "ALL_CPUS", "gdal_cachemax_mb": "64", "overviews": true, "label": "vrt lzw allcpus cache64 local"}
+    },
+    {
+      "id": "vrt_lzw_allcpus_cache256_local",
+      "runner": "terrain",
+      "args": {"operation": "vrt_to_tiff", "input": "{local_terrain}\\Terrain50.vrt", "output": "{local_data}\\{instance_id}\\Terrain50.tif", "compression": "LZW", "threads": "ALL_CPUS", "gdal_cachemax_mb": "256", "overviews": true, "label": "vrt lzw allcpus cache256 local"}
+    },
+    {
+      "id": "vrt_lzw_threads1_overviews_network",
+      "runner": "terrain",
+      "args": {"operation": "vrt_to_tiff", "input": "{network_terrain}\\Terrain50.vrt", "output": "{network_data}\\{instance_id}\\Terrain50.tif", "compression": "LZW", "threads": "1", "overviews": true, "label": "vrt lzw threads1 overviews network"}
+    },
+    {
+      "id": "vrt_lzw_allcpus_overviews_network",
+      "runner": "terrain",
+      "args": {"operation": "vrt_to_tiff", "input": "{network_terrain}\\Terrain50.vrt", "output": "{network_data}\\{instance_id}\\Terrain50.tif", "compression": "LZW", "threads": "ALL_CPUS", "overviews": true, "label": "vrt lzw allcpus overviews network"}
+    },
+    {
+      "id": "vrt_lzw_threads1_no_overviews_network",
+      "runner": "terrain",
+      "args": {"operation": "vrt_to_tiff", "input": "{network_terrain}\\Terrain50.vrt", "output": "{network_data}\\{instance_id}\\Terrain50.tif", "compression": "LZW", "threads": "1", "overviews": false, "label": "vrt lzw threads1 no overviews network"}
+    },
+    {
+      "id": "vrt_deflate_allcpus_overviews_network",
+      "runner": "terrain",
+      "args": {"operation": "vrt_to_tiff", "input": "{network_terrain}\\Terrain50.vrt", "output": "{network_data}\\{instance_id}\\Terrain50.tif", "compression": "DEFLATE", "threads": "ALL_CPUS", "overviews": true, "label": "vrt deflate allcpus overviews network"}
+    }
+  ]
+}
