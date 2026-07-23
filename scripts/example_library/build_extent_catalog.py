@@ -126,23 +126,38 @@ def _landing_project_feature(
 
 
 def _project_feature(project: dict[str, Any], source_root: Path) -> dict[str, Any]:
-    configured_hdfs = project.get("geometry_hdfs") or [project["geometry_hdf"]]
     footprint_geometries = []
-    for relative_hdf_path in configured_hdfs:
-        hdf_path = source_root / relative_hdf_path
-        if not hdf_path.is_file():
-            raise FileNotFoundError(f"Geometry HDF does not exist: {hdf_path}")
-
-        extent_gdf, _ = HdfProject.get_project_extent(
-            hdf_path,
-            geometry_type="footprint",
-            buffer_percent=0,
+    extent_geojson = project.get("extent_geojson")
+    if extent_geojson:
+        extent_path = source_root / extent_geojson
+        if not extent_path.is_file():
+            raise FileNotFoundError(f"Model extent GeoJSON does not exist: {extent_path}")
+        payload = json.loads(extent_path.read_text(encoding="utf-8"))
+        footprint_geometries.extend(
+            shape(feature["geometry"])
+            for feature in payload.get("features", [])
+            if feature.get("geometry")
         )
-        if extent_gdf.empty:
-            raise ValueError(f"No footprint was produced for {project['id']}: {hdf_path}")
-        if extent_gdf.crs is None:
-            extent_gdf = extent_gdf.set_crs(project["crs"])
-        footprint_geometries.extend(extent_gdf.geometry)
+        source_crs = project.get("extent_geojson_crs", "EPSG:4326")
+    else:
+        configured_hdfs = project.get("geometry_hdfs") or [project["geometry_hdf"]]
+        for relative_hdf_path in configured_hdfs:
+            hdf_path = source_root / relative_hdf_path
+            if not hdf_path.is_file():
+                raise FileNotFoundError(f"Geometry HDF does not exist: {hdf_path}")
+
+            extent_gdf, _ = HdfProject.get_project_extent(
+                hdf_path,
+                geometry_type="footprint",
+                buffer_percent=0,
+                fill_holes=True,
+            )
+            if extent_gdf.empty:
+                raise ValueError(f"No footprint was produced for {project['id']}: {hdf_path}")
+            if extent_gdf.crs is None:
+                extent_gdf = extent_gdf.set_crs(project["crs"])
+            footprint_geometries.extend(extent_gdf.geometry)
+        source_crs = project["crs"]
 
     geometry = unary_union(footprint_geometries)
     if geometry.is_empty or geometry.geom_type not in {"Polygon", "MultiPolygon"}:
@@ -150,7 +165,7 @@ def _project_feature(project: dict[str, Any], source_root: Path) -> dict[str, An
             f"Expected a non-empty polygon footprint for {project['id']}, "
             f"got {geometry.geom_type}"
         )
-    wgs84 = gpd.GeoSeries([geometry], crs=project["crs"]).to_crs("EPSG:4326")
+    wgs84 = gpd.GeoSeries([geometry], crs=source_crs).to_crs("EPSG:4326")
     geometry = wgs84.iloc[0]
     if geometry.is_empty or geometry.geom_type not in {"Polygon", "MultiPolygon"}:
         raise ValueError(
@@ -172,7 +187,10 @@ def _project_feature(project: dict[str, Any], source_root: Path) -> dict[str, An
         "projectManifest": project["project_manifest"],
         "viewerType": "MapLibre",
         "notes": project["notes"],
-        "extentSource": "HdfProject.get_project_extent(geometry_type='footprint')",
+        "extentSource": (
+            "HdfProject.get_project_extent(geometry_type='footprint', "
+            "fill_holes=True)"
+        ),
     }
     return {
         "type": "Feature",
