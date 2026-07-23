@@ -25,6 +25,7 @@ import pandas as pd
 
 from .LoggingConfig import get_logger
 from .RasUtils import RasUtils
+from ._spatial_extent import _normalize_extent_bounds
 
 logger = get_logger(__name__)
 
@@ -556,44 +557,22 @@ def require_projection_path(
 def normalize_restrict_to_extent(
     restrict_to_extent: Any,
     extent_cls: Any = None,
+    buffer_distance: float = 0.0,
 ) -> Any:
-    """Normalize restrict_to_extent to bounds tuple or RasMapperLib.Extent."""
+    """Normalize an authoritative raster extent to bounds or RasMapperLib.Extent.
+
+    ``buffer_distance`` is applied in the input/project CRS units before bounds
+    are derived. Polygon inputs must resolve to exactly one valid, non-empty
+    polygonal part.
+    """
     if restrict_to_extent is None:
         return None
-
-    if hasattr(restrict_to_extent, "MinX") and hasattr(restrict_to_extent, "MaxX"):
-        return restrict_to_extent
-
-    bounds: Optional[tuple[float, float, float, float]] = None
-
-    if isinstance(restrict_to_extent, dict):
-        left = restrict_to_extent.get("left", restrict_to_extent.get("xmin"))
-        bottom = restrict_to_extent.get("bottom", restrict_to_extent.get("ymin"))
-        right = restrict_to_extent.get("right", restrict_to_extent.get("xmax"))
-        top = restrict_to_extent.get("top", restrict_to_extent.get("ymax"))
-        bounds = (left, bottom, right, top)
-    elif isinstance(restrict_to_extent, (list, tuple)) and len(restrict_to_extent) == 4:
-        bounds = tuple(restrict_to_extent)
-    else:
-        for attrs in (
-            ("left", "bottom", "right", "top"),
-            ("xmin", "ymin", "xmax", "ymax"),
-            ("minx", "miny", "maxx", "maxy"),
-        ):
-            if all(hasattr(restrict_to_extent, attr) for attr in attrs):
-                bounds = tuple(getattr(restrict_to_extent, attr) for attr in attrs)
-                break
-
-    if bounds is None:
-        raise ValueError(
-            "restrict_to_extent must be a 4-tuple/list, a dict with xmin/ymin/xmax/ymax "
-            "or left/bottom/right/top, or an object exposing those attributes."
-        )
-
-    left, bottom, right, top = (float(value) for value in bounds)
-    if extent_cls is None:
-        return (left, bottom, right, top)
-    return extent_cls(left, bottom, right, top)
+    return _normalize_extent_bounds(
+        restrict_to_extent,
+        buffer_distance=buffer_distance,
+        extent_cls=extent_cls,
+        parameter_name="restrict_to_extent",
+    )
 
 
 def normalize_gssurgo_path(gssurgo_path: Union[str, Path]) -> Path:
@@ -952,6 +931,7 @@ def _rasterize_landcover_source(
     cell_size: float,
     project_crs: Any,
     restrict_to_extent: Optional[Any],
+    buffer_distance: float,
     source_field: Optional[str],
 ) -> tuple[np.ndarray, Any, list[tuple[int, str]], list[tuple[str, float, float]]]:
     try:
@@ -965,7 +945,10 @@ def _rasterize_landcover_source(
             "Install the geospatial dependencies before calling this API."
         ) from exc
 
-    restrict_bounds = normalize_restrict_to_extent(restrict_to_extent)
+    restrict_bounds = normalize_restrict_to_extent(
+        restrict_to_extent,
+        buffer_distance=buffer_distance,
+    )
 
     raster_map_rows = [(0, "NoData")] + [
         (int(row.class_id), str(row.class_name))
@@ -1209,6 +1192,7 @@ def _rasterize_soils_source(
     cell_size: float,
     project_crs: Any,
     restrict_to_extent: Optional[Any],
+    buffer_distance: float,
 ) -> tuple[np.ndarray, Any, list[tuple[int, str]]]:
     try:
         import geopandas as gpd
@@ -1225,7 +1209,10 @@ def _rasterize_soils_source(
 
     gdf = gdf.to_crs(project_crs)
     bounds = tuple(gdf.total_bounds.tolist())
-    restrict_bounds = normalize_restrict_to_extent(restrict_to_extent)
+    restrict_bounds = normalize_restrict_to_extent(
+        restrict_to_extent,
+        buffer_distance=buffer_distance,
+    )
     if restrict_bounds is not None:
         bounds = restrict_bounds
 
@@ -2721,8 +2708,14 @@ def add_landcover_layer(
     output_hdf_path: Optional[Union[str, Path]] = None,
     restrict_to_extent: Optional[Any] = None,
     layer_name: str = "LandCover",
+    buffer_distance: float = 0.0,
 ) -> Path:
-    """Create and register a land-cover classification layer."""
+    """Create and register a land-cover classification layer.
+
+    ``restrict_to_extent`` accepts one valid Polygon, a single-effective-part
+    MultiPolygon, or a legacy bounds-shaped input. ``buffer_distance`` is in
+    project CRS units and defaults to no buffer.
+    """
     project_paths = resolve_project_paths(ras_project_path)
     source_path = RasUtils.safe_resolve(Path(source_path))
     if not source_path.exists():
@@ -2749,6 +2742,7 @@ def add_landcover_layer(
         cell_size=float(cell_size),
         project_crs=project_crs,
         restrict_to_extent=restrict_to_extent,
+        buffer_distance=buffer_distance,
         source_field=source_field,
     )
 
@@ -2780,8 +2774,14 @@ def add_soils_layer(
     cell_size: float,
     output_hdf_path: Optional[Union[str, Path]] = None,
     restrict_to_extent: Optional[Any] = None,
+    buffer_distance: float = 0.0,
 ) -> Path:
-    """Create and register a hydrologic soil group layer from direct GSSURGO input."""
+    """Create and register a hydrologic soil group layer from direct GSSURGO input.
+
+    ``restrict_to_extent`` accepts one valid Polygon, a single-effective-part
+    MultiPolygon, or a legacy bounds-shaped input. ``buffer_distance`` is in
+    project CRS units and defaults to no buffer.
+    """
     project_paths = resolve_project_paths(ras_project_path)
     gssurgo_path = normalize_gssurgo_path(gssurgo_path)
 
@@ -2804,6 +2804,7 @@ def add_soils_layer(
         cell_size=float(cell_size),
         project_crs=project_crs,
         restrict_to_extent=restrict_to_extent,
+        buffer_distance=buffer_distance,
     )
 
     _create_output_raster(

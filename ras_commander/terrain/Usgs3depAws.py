@@ -45,11 +45,17 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Union, List, Tuple, Optional
-import geopandas as gpd
-from shapely.geometry import box, Polygon
-import requests
+from typing import Any, List, Optional, Tuple, Union
 from urllib.parse import urlparse
+
+import geopandas as gpd
+import requests
+from shapely.geometry import box
+
+from .._spatial_extent import (
+    _normalize_extent_bounds,
+    _normalize_extent_geometry,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -143,8 +149,9 @@ class Usgs3depAws:
 
     @staticmethod
     def query_tiles_api(
-        bbox: Union[Polygon, Tuple[float, float, float, float]],
-        resolution: int
+        bbox: Any,
+        resolution: int,
+        buffer_distance: float = 0.0,
     ) -> gpd.GeoDataFrame:
         """
         Query USGS 3DEP Tile Index API for tiles intersecting a bounding box.
@@ -152,17 +159,18 @@ class Usgs3depAws:
         Uses the National Map ArcGIS REST API to get tile information.
 
         Args:
-            bbox: Bounding box as (minx, miny, maxx, maxy) in WGS84 or Polygon
+            bbox: One valid Polygon or a legacy bounds-shaped input in WGS84.
             resolution: DEM resolution in meters (1, 3, 10, or 30)
+            buffer_distance: Optional buffer in WGS84 degrees. Default is 0.0.
 
         Returns:
             GeoDataFrame with tile information including download URLs
         """
-        # Convert bbox to tuple if Polygon
-        if isinstance(bbox, Polygon):
-            bbox_tuple = bbox.bounds
-        else:
-            bbox_tuple = bbox
+        bbox_tuple = _normalize_extent_bounds(
+            bbox,
+            buffer_distance=buffer_distance,
+            parameter_name="bbox",
+        )
 
         # Get layer ID for resolution
         if resolution not in Usgs3depAws.LAYER_IDS:
@@ -208,9 +216,10 @@ class Usgs3depAws:
 
     @staticmethod
     def find_tiles_for_bbox(
-        bbox: Union[Polygon, Tuple[float, float, float, float]],
+        bbox: Any,
         resolution: int,
-        cache_folder: Optional[Union[str, Path]] = None
+        cache_folder: Optional[Union[str, Path]] = None,
+        buffer_distance: float = 0.0,
     ) -> gpd.GeoDataFrame:
         """
         Find all tiles that intersect with a bounding box.
@@ -218,16 +227,19 @@ class Usgs3depAws:
         Uses GeoPackage tile index (more reliable than API).
 
         Args:
-            bbox: Bounding box as (minx, miny, maxx, maxy) in WGS84 or Polygon
+            bbox: One valid Polygon or a legacy bounds-shaped input in WGS84.
             resolution: DEM resolution in meters (1, 10, or 30)
             cache_folder: Optional folder to cache tile index
+            buffer_distance: Optional buffer in WGS84 degrees. Default is 0.0.
 
         Returns:
             GeoDataFrame with intersecting projects
         """
-        # Convert bbox to Polygon if tuple
-        if isinstance(bbox, tuple):
-            bbox = box(*bbox)
+        bbox = _normalize_extent_geometry(
+            bbox,
+            buffer_distance=buffer_distance,
+            parameter_name="bbox",
+        )
 
         # Download tile index (GeoPackage)
         tile_index = Usgs3depAws.download_tile_index(resolution, cache_folder)
@@ -253,9 +265,10 @@ class Usgs3depAws:
 
     @staticmethod
     def list_projects_for_bbox(
-        bbox: Union[Polygon, Tuple[float, float, float, float]],
+        bbox: Any,
         resolution: int,
-        cache_folder: Optional[Union[str, Path]] = None
+        cache_folder: Optional[Union[str, Path]] = None,
+        buffer_distance: float = 0.0,
     ) -> gpd.GeoDataFrame:
         """
         List all USGS 3DEP projects that intersect with a bounding box.
@@ -264,9 +277,10 @@ class Usgs3depAws:
         specific projects by name or year.
 
         Args:
-            bbox: Bounding box as (minx, miny, maxx, maxy) in WGS84 or Polygon
+            bbox: One valid Polygon or a legacy bounds-shaped input in WGS84.
             resolution: DEM resolution in meters (1, 10, or 30)
             cache_folder: Optional folder to cache tile index
+            buffer_distance: Optional buffer in WGS84 degrees. Default is 0.0.
 
         Returns:
             GeoDataFrame with project information including:
@@ -286,12 +300,13 @@ class Usgs3depAws:
         """
         import re
 
-        # Convert bbox to Polygon if tuple
-        if isinstance(bbox, tuple):
-            bbox = box(*bbox)
-
         # Find intersecting projects (from tile index)
-        projects = Usgs3depAws.find_tiles_for_bbox(bbox, resolution, cache_folder)
+        projects = Usgs3depAws.find_tiles_for_bbox(
+            bbox,
+            resolution,
+            cache_folder,
+            buffer_distance=buffer_distance,
+        )
 
         if len(projects) == 0:
             logger.debug("No USGS 3DEP projects found for bbox")
@@ -589,14 +604,15 @@ class Usgs3depAws:
 
     @staticmethod
     def download_tiles(
-        bbox: Union[Polygon, Tuple[float, float, float, float]],
+        bbox: Any,
         resolution: int,
         output_folder: Union[str, Path],
         cache_folder: Optional[Union[str, Path]] = None,
         overwrite_dest: bool = False,
         max_workers: int = 3,
         project_name: Optional[str] = None,
-        min_year: Optional[int] = None
+        min_year: Optional[int] = None,
+        buffer_distance: float = 0.0,
     ) -> List[Path]:
         """
         Download all DEM tiles for a bounding box with concurrent downloads.
@@ -609,7 +625,7 @@ class Usgs3depAws:
         performance (default 3 concurrent downloads).
 
         Args:
-            bbox: Bounding box as (minx, miny, maxx, maxy) in WGS84 or Polygon
+            bbox: One valid Polygon or a legacy bounds-shaped input in WGS84.
             resolution: DEM resolution in meters (1, 10, or 30)
             output_folder: Folder to save downloaded tiles
             cache_folder: Optional folder to cache tile index
@@ -623,6 +639,8 @@ class Usgs3depAws:
             min_year: Optional minimum year filter (e.g., 2019).
                      Only considers projects from this year or newer.
                      Ignored if project_name is specified.
+            buffer_distance: Optional buffer in WGS84 degrees, applied before
+                tile discovery and intersection. Default is 0.0.
 
         Returns:
             List of paths to downloaded TIFF files
@@ -659,11 +677,11 @@ class Usgs3depAws:
         output_folder = Path(output_folder)
         output_folder.mkdir(parents=True, exist_ok=True)
 
-        # Convert bbox to Polygon if tuple
-        if isinstance(bbox, tuple):
-            bbox_poly = box(*bbox)
-        else:
-            bbox_poly = bbox
+        bbox_poly = _normalize_extent_geometry(
+            bbox,
+            buffer_distance=buffer_distance,
+            parameter_name="bbox",
+        )
 
         # Find intersecting projects (from tile index)
         projects = Usgs3depAws.find_tiles_for_bbox(bbox_poly, resolution, cache_folder)

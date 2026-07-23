@@ -35,12 +35,13 @@ Example Usage:
     >>> print(f"Downloaded to: {output}")
 """
 
-from pathlib import Path
-from typing import Tuple, Optional, Union, List
 from datetime import datetime
 import logging
+from pathlib import Path
+from typing import Any, List, Optional, Union
 
 from ..LoggingConfig import get_logger
+from .._spatial_extent import _normalize_extent_bounds
 
 logger = get_logger(__name__)
 
@@ -97,13 +98,14 @@ class PrecipAorc:
 
     @staticmethod
     def download(
-        bounds: Tuple[float, float, float, float],
+        bounds: Any,
         start_time: Union[str, datetime],
         end_time: Union[str, datetime],
         output_path: Union[str, Path],
         variable: str = "APCP_surface",
         target_crs: Optional[str] = "EPSG:5070",
-        resolution: Optional[float] = 2000.0
+        resolution: Optional[float] = 2000.0,
+        buffer_distance: float = 0.0,
     ) -> Path:
         """
         Download AORC precipitation data for specified bounds and time range.
@@ -113,9 +115,10 @@ class PrecipAorc:
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float, float]
-            Bounding box in WGS84 as (west, south, east, north) in decimal degrees.
-            Use HdfProject.get_project_bounds_latlon() to get these from a HEC-RAS model.
+        bounds : extent-like
+            One valid Polygon, a single-effective-part MultiPolygon, or a legacy
+            bounds-shaped input in WGS84. Use
+            HdfProject.get_project_bounds_latlon() to get bounds from a HEC-RAS model.
         start_time : str or datetime
             Start of time window. String format: "YYYY-MM-DD" or "YYYY-MM-DD HH:MM"
         end_time : str or datetime
@@ -131,6 +134,8 @@ class PrecipAorc:
         resolution : float, optional, default 2000.0
             Grid cell resolution in target CRS units (meters for EPSG:5070).
             Standard HEC SHG resolution is 2000m. Only used if target_crs is set.
+        buffer_distance : float, default 0.0
+            Buffer applied before bounds are derived, in WGS84 degrees.
 
         Returns
         -------
@@ -177,6 +182,11 @@ class PrecipAorc:
         - Default output is reprojected to SHG (EPSG:5070) for HEC-RAS compatibility
         - SHG (Standard Hydrologic Grid) is required for HEC-RAS GDAL Raster import
         """
+        bounds = _normalize_extent_bounds(
+            bounds,
+            buffer_distance=buffer_distance,
+            parameter_name="bounds",
+        )
         _check_precip_dependencies()
 
         import xarray as xr
@@ -348,21 +358,25 @@ class PrecipAorc:
 
     @staticmethod
     def check_availability(
-        bounds: Tuple[float, float, float, float],
+        bounds: Any,
         start_time: Union[str, datetime],
-        end_time: Union[str, datetime]
+        end_time: Union[str, datetime],
+        buffer_distance: float = 0.0,
     ) -> dict:
         """
         Check if AORC data is available for the specified region and time.
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float, float]
-            Bounding box as (west, south, east, north)
+        bounds : extent-like
+            One valid Polygon, a single-effective-part MultiPolygon, or a legacy
+            bounds-shaped input in WGS84.
         start_time : str or datetime
             Start of time window
         end_time : str or datetime
             End of time window
+        buffer_distance : float, default 0.0
+            Buffer applied before bounds are derived, in WGS84 degrees.
 
         Returns
         -------
@@ -373,6 +387,12 @@ class PrecipAorc:
             - message: str with details
         """
         import pandas as pd
+
+        bounds = _normalize_extent_bounds(
+            bounds,
+            buffer_distance=buffer_distance,
+            parameter_name="bounds",
+        )
 
         if isinstance(start_time, str):
             start_dt = pd.to_datetime(start_time)
@@ -456,13 +476,14 @@ class PrecipAorc:
 
     @staticmethod
     def get_storm_catalog(
-        bounds: Tuple[float, float, float, float],
+        bounds: Any,
         year: int,
         inter_event_hours: float = 8.0,
         min_depth_inches: float = 0.5,
         min_wet_hours: int = 1,
         buffer_hours: int = 48,
-        percentile_threshold: Optional[float] = None
+        percentile_threshold: Optional[float] = None,
+        buffer_distance: float = 0.0,
     ) -> 'pd.DataFrame':
         """
         Analyze AORC precipitation data and generate a catalog of storm events.
@@ -473,9 +494,10 @@ class PrecipAorc:
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float, float]
-            Bounding box in WGS84 as (west, south, east, north) in decimal degrees.
-            Use HdfProject.get_project_bounds_latlon() to get from HEC-RAS model.
+        bounds : extent-like
+            One valid Polygon, a single-effective-part MultiPolygon, or a legacy
+            bounds-shaped input in WGS84. Use
+            HdfProject.get_project_bounds_latlon() to get bounds from a HEC-RAS model.
         year : int
             Year to analyze (1979+).
         inter_event_hours : float, default 8.0
@@ -493,6 +515,8 @@ class PrecipAorc:
         percentile_threshold : float, optional
             If specified (0-100), only return storms above this percentile
             by total depth. E.g., 95 returns only top 5% storms. Default: None
+        buffer_distance : float, default 0.0
+            Buffer applied before bounds are derived, in WGS84 degrees.
 
         Returns
         -------
@@ -543,6 +567,11 @@ class PrecipAorc:
         - Inter-event period of 8 hours is USGS standard for storm separation
         - Buffer of 48 hours allows hydraulic model spin-up and recession
         """
+        bounds = _normalize_extent_bounds(
+            bounds,
+            buffer_distance=buffer_distance,
+            parameter_name="bounds",
+        )
         _check_precip_dependencies()
 
         import xarray as xr
@@ -735,13 +764,14 @@ class PrecipAorc:
     @staticmethod
     def create_storm_plans(
         storm_catalog: 'pd.DataFrame',
-        bounds: Tuple[float, float, float, float],
+        bounds: Any,
         template_plan: str,
         precip_folder: Union[str, Path] = "Precipitation",
         ras_object: Optional['RasPrj'] = None,
         download_data: bool = True,
         max_storms: Optional[int] = None,
-        enable_timeseries: bool = True
+        enable_timeseries: bool = True,
+        buffer_distance: float = 0.0,
     ) -> 'pd.DataFrame':
         """
         Create HEC-RAS plan and unsteady files for each storm in a catalog.
@@ -758,9 +788,10 @@ class PrecipAorc:
         storm_catalog : pd.DataFrame
             Storm catalog from get_storm_catalog() with columns:
             storm_id, start_time, end_time, sim_start, sim_end, etc.
-        bounds : Tuple[float, float, float, float]
-            Bounding box in WGS84 as (west, south, east, north).
-            Same bounds used for get_storm_catalog().
+        bounds : extent-like
+            One valid Polygon, a single-effective-part MultiPolygon, or a legacy
+            bounds-shaped input in WGS84. Use the same extent passed to
+            get_storm_catalog().
         template_plan : str
             Plan number to use as template (e.g., "06").
             Must be an unsteady plan with precipitation enabled.
@@ -777,6 +808,8 @@ class PrecipAorc:
         enable_timeseries : bool, default True
             If True, enable HDF time series output (HDF Write Time Slices=-1).
             Required for extracting cell-level time series from results.
+        buffer_distance : float, default 0.0
+            Buffer applied before bounds are derived, in WGS84 degrees.
 
         Returns
         -------
@@ -816,6 +849,12 @@ class PrecipAorc:
         - All files are created in the project folder
         """
         import pandas as pd
+
+        bounds = _normalize_extent_bounds(
+            bounds,
+            buffer_distance=buffer_distance,
+            parameter_name="bounds",
+        )
 
         # Import RAS modules (avoid circular imports)
         from ..RasPlan import RasPlan
