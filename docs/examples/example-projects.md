@@ -14,7 +14,7 @@ below to review its geometry, terrain, and results.
     <div class="ras-library-map" data-library-map></div>
   </div>
   <div class="ras-library-map-footer">
-    <span data-library-status>Select a model extent for project details.</span>
+    <span data-library-status>Select a project pin or model extent.</span>
   </div>
   <div class="ras-library-table-wrap">
     <table class="ras-library-table">
@@ -34,7 +34,7 @@ below to review its geometry, terrain, and results.
 <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
 <script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260723Ttechnical-library01"></script>
 <script src="../../assets/javascripts/ras-example-projects-data.js?v=20260723Ttechnical-library01"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260723Ttechnical-library01"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260723Tscale-aware-pins01"></script>
 
 ## Related Workflows
 
