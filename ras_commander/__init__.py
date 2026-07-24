@@ -86,6 +86,12 @@ from .RasExamples import RasExamples
 from .sources.federal import RasEbfeModels
 from .sources.county import M3Model
 from .RasCmdr import RasCmdr
+from .RasScenario import (
+    RasBoundaryLink,
+    RasRunArtifact,
+    RasScenario,
+    RasScenarioWorkspace,
+)
 from .RasCurrency import RasCurrency
 from .RasControl import RasControl
 from .RasTcu import RasTcu, TcuStatus
@@ -257,6 +263,7 @@ __all__ = [
     'RasGeometryCompute',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
+    'RasBoundaryLink', 'RasRunArtifact', 'RasScenario', 'RasScenarioWorkspace',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',
