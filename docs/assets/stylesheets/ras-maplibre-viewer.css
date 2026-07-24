@@ -795,9 +795,12 @@ details[open] > summary > .ras-tree-node__disclosure::before {
 
 .ras-layer-status {
   flex: 0 0 auto;
+  max-width: 18rem;
+  overflow: hidden;
   color: var(--ras-muted);
   font-size: 0.7rem;
   line-height: 1.25;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -952,6 +955,25 @@ details[open] > summary > .ras-tree-node__disclosure::before {
   justify-content: space-between;
   gap: 0.45rem;
   font-weight: 700;
+}
+
+.ras-identify-popup dl.ras-identify-raster-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.08rem;
+}
+
+.ras-identify-raster-list dt:not(:first-child) {
+  margin-top: 0.32rem;
+}
+
+.ras-identify-raster-list dd > span:first-child {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.ras-identify-raster-list dd .ras-identify-source {
+  min-width: 0;
+  overflow-wrap: normal;
 }
 
 .ras-identify-source {
