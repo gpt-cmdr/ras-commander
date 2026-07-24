@@ -5,6 +5,8 @@
   }
 
   const DEFAULT_BOUNDS = [-125, 24, -66, 50];
+  const PIN_REPLACEMENT_PIXEL_SIZE = 44;
+  const PROJECT_PIN_IMAGE_ID = "ras-project-pin";
   const PROFILE_CONFIG = window.RAS_EXAMPLE_PROJECT_PROFILES || { projects: {}, groups: {} };
   const LANDING_GEOMETRY_KINDS = new Set([
     "bank_lines",
@@ -76,6 +78,100 @@
       return null;
     }
     return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  }
+
+  function projectId(feature) {
+    return String(feature.id || feature.properties?.projectId || "");
+  }
+
+  function projectBounds(feature) {
+    return normalizeBounds(feature.bbox) || geometryBounds(feature.geometry);
+  }
+
+  function projectPinFeature(feature) {
+    const bounds = projectBounds(feature);
+    if (!bounds) {
+      return null;
+    }
+    return {
+      type: "Feature",
+      id: feature.id,
+      geometry: {
+        type: "Point",
+        coordinates: [
+          (bounds[0] + bounds[2]) / 2,
+          (bounds[1] + bounds[3]) / 2,
+        ],
+      },
+      properties: {
+        projectId: projectId(feature),
+        title: feature.properties?.title || feature.id || "Example Project",
+      },
+    };
+  }
+
+  function projectedExtentSize(map, feature) {
+    const bounds = projectBounds(feature);
+    if (!bounds) {
+      return 0;
+    }
+    const southwest = map.project([bounds[0], bounds[1]]);
+    const northeast = map.project([bounds[2], bounds[3]]);
+    return Math.max(
+      Math.abs(northeast.x - southwest.x),
+      Math.abs(northeast.y - southwest.y)
+    );
+  }
+
+  function projectDisplayCollections(map, features) {
+    const extents = [];
+    const pins = [];
+    const extentIds = new Set();
+    for (const feature of features) {
+      if (projectedExtentSize(map, feature) >= PIN_REPLACEMENT_PIXEL_SIZE) {
+        extents.push(feature);
+        extentIds.add(projectId(feature));
+      } else {
+        const pin = projectPinFeature(feature);
+        if (pin) {
+          pins.push(pin);
+        }
+      }
+    }
+    return {
+      extents: { type: "FeatureCollection", features: extents },
+      pins: { type: "FeatureCollection", features: pins },
+      extentIds,
+    };
+  }
+
+  function createProjectPinImage() {
+    const scale = 2;
+    const canvas = document.createElement("canvas");
+    canvas.width = 36 * scale;
+    canvas.height = 48 * scale;
+    const context = canvas.getContext("2d");
+    context.scale(scale, scale);
+
+    context.beginPath();
+    context.moveTo(18, 47);
+    context.bezierCurveTo(14.5, 40.5, 4, 29.5, 4, 18);
+    context.bezierCurveTo(4, 10.3, 10.3, 4, 18, 4);
+    context.bezierCurveTo(25.7, 4, 32, 10.3, 32, 18);
+    context.bezierCurveTo(32, 29.5, 21.5, 40.5, 18, 47);
+    context.closePath();
+    context.fillStyle = "#1d4ed8";
+    context.fill();
+    context.lineWidth = 2;
+    context.strokeStyle = "#ffffff";
+    context.stroke();
+
+    context.beginPath();
+    context.arc(18, 18, 5.5, 0, Math.PI * 2);
+    context.fillStyle = "#ffffff";
+    context.fill();
+
+    return context.getImageData(0, 0, canvas.width, canvas.height);
   }
 
   function mergeBounds(features) {
@@ -314,17 +410,21 @@
     const features = (sourceCollection.features || [])
       .filter((feature) => feature.geometry)
       .map(enrichFeature);
-    const collection = { ...sourceCollection, features };
+    const emptyCollection = { type: "FeatureCollection", features: [] };
+    const initialPins = {
+      type: "FeatureCollection",
+      features: features.map(projectPinFeature).filter(Boolean),
+    };
     const featuresById = new Map(
       features.flatMap((feature) => [
-        [String(feature.id), feature],
+        [projectId(feature), feature],
         [String(feature.properties?.projectId || feature.id), feature],
       ])
     );
     renderProjectTable(root, features);
     const status = root.querySelector("[data-library-status]");
     if (status) {
-      status.textContent = "Select a model extent for project details.";
+      status.textContent = "Select a project pin or model extent.";
     }
 
     const bounds = mergeBounds(features);
@@ -341,7 +441,11 @@
           },
           projects: {
             type: "geojson",
-            data: collection,
+            data: emptyCollection,
+          },
+          "project-pins": {
+            type: "geojson",
+            data: initialPins,
           },
           "selected-project": {
             type: "geojson",
@@ -415,6 +519,7 @@
 
     let selectedGeometry = { layers: [], sources: [] };
     let selectedGeometryRequest = 0;
+    let selectedFeature = null;
 
     function clearSelectedGeometry() {
       for (const layerId of [...selectedGeometry.layers].reverse()) {
@@ -429,6 +534,47 @@
       }
       selectedGeometry = { layers: [], sources: [] };
     }
+
+    function updateProjectDisplay() {
+      const display = projectDisplayCollections(map, features);
+      map.getSource("projects")?.setData(display.extents);
+      map.getSource("project-pins")?.setData(display.pins);
+      if (selectedFeature && !display.extentIds.has(projectId(selectedFeature))) {
+        selectedFeature = null;
+        map.getSource("selected-project")?.setData(emptyCollection);
+        clearSelectedGeometry();
+      }
+    }
+
+    map.on("load", () => {
+      if (!map.hasImage(PROJECT_PIN_IMAGE_ID)) {
+        map.addImage(PROJECT_PIN_IMAGE_ID, createProjectPinImage(), { pixelRatio: 2 });
+      }
+      map.addLayer({
+        id: "project-pins-hit",
+        type: "circle",
+        source: "project-pins",
+        paint: {
+          "circle-color": "#000000",
+          "circle-radius": 18,
+          "circle-opacity": 0.01,
+        },
+      });
+      map.addLayer({
+        id: "project-pins",
+        type: "symbol",
+        source: "project-pins",
+        layout: {
+          "icon-image": PROJECT_PIN_IMAGE_ID,
+          "icon-anchor": "bottom",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+      });
+      updateProjectDisplay();
+    });
+    map.on("moveend", updateProjectDisplay);
+    map.on("resize", updateProjectDisplay);
 
     async function showSelectedProjectGeometry(feature) {
       const manifestHref = feature.properties?.manifest;
@@ -508,18 +654,19 @@
     }
 
     function zoomToProject(feature) {
-      const projectBounds = normalizeBounds(feature.bbox) || geometryBounds(feature.geometry);
-      if (!projectBounds) {
+      const bounds = projectBounds(feature);
+      if (!bounds) {
         return;
       }
+      selectedFeature = feature;
       map.getSource("selected-project").setData({
         type: "FeatureCollection",
         features: [feature],
       });
       map.fitBounds(
         [
-          [projectBounds[0], projectBounds[1]],
-          [projectBounds[2], projectBounds[3]],
+          [bounds[0], bounds[1]],
+          [bounds[2], bounds[3]],
         ],
         { padding: 64, maxZoom: 15, duration: 600 }
       );
@@ -529,11 +676,19 @@
     }
 
     function renderedFeatures(event, layerIds) {
-      return map.queryRenderedFeatures(event.point, { layers: layerIds });
+      const existingLayers = layerIds.filter((layerId) => map.getLayer(layerId));
+      return existingLayers.length
+        ? map.queryRenderedFeatures(event.point, { layers: existingLayers })
+        : [];
     }
 
     map.on("click", (event) => {
-      const hits = renderedFeatures(event, ["project-extents-fill", "project-extents-line"]);
+      const hits = renderedFeatures(event, [
+        "project-pins-hit",
+        "project-pins",
+        "project-extents-fill",
+        "project-extents-line",
+      ]);
       const hitFeatures = [];
       const seen = new Set();
       for (const hit of hits) {
@@ -551,7 +706,12 @@
     });
 
     map.on("mousemove", (event) => {
-      const interactive = renderedFeatures(event, ["project-extents-fill", "project-extents-line"]);
+      const interactive = renderedFeatures(event, [
+        "project-pins-hit",
+        "project-pins",
+        "project-extents-fill",
+        "project-extents-line",
+      ]);
       map.getCanvas().style.cursor = interactive.length ? "pointer" : "";
     });
   }

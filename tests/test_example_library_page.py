@@ -29,3 +29,20 @@ def test_example_library_groups_suites_and_reports_overlapping_projects() -> Non
     assert "catalogEntries(features)" in source
     assert "projects at this location" in source
     assert "project-extents-fill" in source
+
+
+def test_example_library_replaces_pins_with_readable_model_extents() -> None:
+    source = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-library.js"
+    ).read_text(encoding="utf-8")
+    page = (ROOT / "docs" / "examples" / "example-projects.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'PROJECT_PIN_IMAGE_ID = "ras-project-pin"' in source
+    assert "PIN_REPLACEMENT_PIXEL_SIZE" in source
+    assert "projectDisplayCollections(map, features)" in source
+    assert 'id: "project-pins"' in source
+    assert 'id: "project-pins-hit"' in source
+    assert 'map.on("moveend", updateProjectDisplay)' in source
+    assert "Select a project pin or model extent." in page
