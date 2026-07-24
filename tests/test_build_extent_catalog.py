@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import geopandas as gpd
-from shapely.geometry import MultiPolygon, box, shape
+from shapely.geometry import MultiPolygon, box, mapping, shape
 
 SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "example_library" / "build_extent_catalog.py"
 CATALOG_CONFIG_PATH = Path(__file__).parents[1] / "agent_tasks" / "rasexamples_extent_catalog.json"
@@ -65,6 +65,34 @@ def test_write_javascript_catalog_assigns_a_compact_bbox_fallback(tmp_path: Path
         "type": "Polygon",
         "coordinates": [[[-85.0, 40.0], [-84.0, 40.0], [-84.0, 41.0], [-85.0, 41.0], [-85.0, 40.0]]],
     }
+
+
+def test_write_javascript_catalog_derives_missing_bbox_from_geometry(tmp_path: Path) -> None:
+    output = tmp_path / "ras-example-projects-data.js"
+    catalog = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {
+                    "title": "Model without bbox",
+                    "projectId": "model-without-bbox",
+                },
+                "geometry": mapping(box(-111.5, 40.1, -111.4, 40.2)),
+            }
+        ],
+    }
+
+    builder._write_javascript_catalog(output, catalog)
+
+    prefix = "window.RAS_EXAMPLE_PROJECTS = "
+    fallback = json.loads(
+        output.read_text(encoding="utf-8")
+        .removeprefix(prefix)
+        .removesuffix(";\n")
+    )
+    assert fallback["features"][0]["id"] == "model-without-bbox"
+    assert fallback["features"][0]["bbox"] == [-111.5, 40.1, -111.4, 40.2]
 
 
 def test_project_feature_uses_display_crs_without_losing_definition(monkeypatch, tmp_path: Path) -> None:
