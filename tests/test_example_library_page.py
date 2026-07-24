@@ -19,6 +19,8 @@ def test_example_library_is_a_technical_model_catalog() -> None:
     assert "Upper Guadalupe Model Suite" in profiles
     assert "two diversions" in profiles
     assert "shared display context" in profiles
+    assert "ether-hollow-post-fire-debris-flow-1227955d" in profiles
+    assert "2,500 psf yield stress" in profiles
 
 
 def test_example_library_groups_suites_and_reports_overlapping_projects() -> None:

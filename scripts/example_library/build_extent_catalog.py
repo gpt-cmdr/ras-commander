@@ -38,15 +38,26 @@ def _docs_fallback_catalog(payload: dict[str, Any]) -> dict[str, Any]:
     """
     features: list[dict[str, Any]] = []
     for feature in payload["features"]:
-        min_x, min_y, max_x, max_y = feature["bbox"]
         properties = dict(feature["properties"])
+        feature_id = feature.get("id") or properties.get("projectId")
+        if not feature_id:
+            raise ValueError("Catalog feature has neither id nor properties.projectId")
+        bounds = feature.get("bbox")
+        if not isinstance(bounds, list) or len(bounds) != 4:
+            geometry = feature.get("geometry")
+            if not geometry:
+                raise ValueError(
+                    f"Catalog feature {feature_id!r} has neither bbox nor geometry"
+                )
+            bounds = list(shape(geometry).bounds)
+        min_x, min_y, max_x, max_y = bounds
         properties["fallbackGeometry"] = "bounding-box"
         features.append(
             {
                 "type": "Feature",
-                "id": feature["id"],
+                "id": feature_id,
                 "properties": properties,
-                "bbox": feature["bbox"],
+                "bbox": bounds,
                 "geometry": {
                     "type": "Polygon",
                     "coordinates": [
