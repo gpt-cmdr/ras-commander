@@ -58,6 +58,7 @@ RAS2CNG_RASTER_ROUTE_PREFIX=/ras-raster
 RAS2CNG_RASTER_MAX_VIEW_PIXELS=2097152
 RAS2CNG_RASTER_MAX_VIEW_DIMENSION=4096
 RAS2CNG_RASTER_CACHE_ENTRIES=512
+RAS2CNG_RASTER_MAX_COG_RANGE_BYTES=67108864
 MPLCONFIGDIR=/tmp/matplotlib
 XDG_CACHE_HOME=/tmp/cache
 EOF
@@ -99,6 +100,14 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 source = path.read_text(encoding="utf-8")
+cache_header = 'add_header Cache-Control "public, max-age=3600" always;'
+range_safe_cache_header = (
+    'add_header Cache-Control "public, max-age=3600, no-transform" always;'
+)
+if range_safe_cache_header not in source:
+    if cache_header not in source:
+        raise SystemExit(f"Expected the artifact cache header in {path}")
+    source = source.replace(cache_header, range_safe_cache_header, 1)
 marker = "# ras2cng numeric raster service"
 if marker not in source:
     needle = "    location / {\n"

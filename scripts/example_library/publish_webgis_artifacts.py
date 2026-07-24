@@ -9,13 +9,15 @@ promote that release.
 
 The CLB03 publisher is responsible for authenticating to WebGIS with its
 dedicated key.  This script never carries deployment keys, never uses a remote
-shell on WebGIS, and deliberately does not pass ``--delete`` to rsync.
+shell on WebGIS, and deliberately does not pass ``--delete`` to rsync. Release
+inventories validate file sizes by default so large COGs and PMTiles are not
+reread unnecessarily; ``--integrity sha256`` is available for untrusted
+transfers.
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 import subprocess
@@ -68,6 +70,8 @@ def validate_remote_path(path: str, *, label: str) -> str:
 
 
 def file_sha256(path: Path) -> str:
+    import hashlib
+
     digest = hashlib.sha256()
     with path.open("rb") as file_handle:
         for block in iter(lambda: file_handle.read(1024 * 1024), b""):
@@ -75,27 +79,35 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def build_manifest(webgis_root: Path, release_id: str) -> dict[str, Any]:
+def build_manifest(
+    webgis_root: Path,
+    release_id: str,
+    *,
+    integrity: str = "size",
+) -> dict[str, Any]:
     """Describe every regular file in the immutable candidate release."""
+    if integrity not in {"size", "sha256"}:
+        raise ValueError(f"Unsupported manifest integrity mode: {integrity!r}")
     files: list[dict[str, Any]] = []
     for path in sorted(webgis_root.rglob("*")):
         if path.is_symlink():
             raise ValueError(f"Symlinks are not publishable WebGIS artifacts: {path}")
         if path.is_file():
             relative_path = (Path("data") / "rasexamples" / webgis_root.name / path.relative_to(webgis_root)).as_posix()
-            files.append(
-                {
-                    "path": relative_path,
-                    "bytes": path.stat().st_size,
-                    "sha256": file_sha256(path),
-                }
-            )
+            entry: dict[str, Any] = {
+                "path": relative_path,
+                "bytes": path.stat().st_size,
+            }
+            if integrity == "sha256":
+                entry["sha256"] = file_sha256(path)
+            files.append(entry)
     if not files:
         raise ValueError(f"No files found beneath WebGIS release root: {webgis_root}")
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "releaseId": validate_release_id(release_id),
         "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "integrity": integrity,
         "files": files,
     }
 
@@ -136,6 +148,15 @@ def parse_args() -> argparse.Namespace:
         help="Root-owned CLB03 command that validates and promotes one release directory.",
     )
     parser.add_argument(
+        "--integrity",
+        choices=("size", "sha256"),
+        default="size",
+        help=(
+            "Staging inventory validation mode. Size avoids rereading large COGs and PMTiles; "
+            "sha256 is available for untrusted transfers."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Validate and print commands without changing either remote host.",
@@ -153,7 +174,7 @@ def main() -> None:
         args.release_id
         or f"rasexamples-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     )
-    manifest = build_manifest(webgis_root, release_id)
+    manifest = build_manifest(webgis_root, release_id, integrity=args.integrity)
     remote_release = f"{clb03_stage_root}/{release_id}"
     with tempfile.TemporaryDirectory(prefix="rascommander-webgis-") as temporary_directory:
         manifest_path = Path(temporary_directory) / "manifest.json"
