@@ -5,6 +5,7 @@ internal helpers that touch winreg, so they run on any platform.
 """
 
 import logging
+import sys
 
 import pytest
 
@@ -55,12 +56,15 @@ def test_status_version_unresolved(monkeypatch):
     assert status.reason == "version-unresolved"
 
 
-def test_status_accepted_when_node_has_subkeys(monkeypatch):
+def test_status_accepted_when_node_has_acceptance_state(monkeypatch):
     monkeypatch.setattr("os.name", "nt")
     monkeypatch.setattr(RasTcu, "_resolve_exe", staticmethod(lambda *a, **k: _EXE))
-    # Pretend winreg is importable and the ras.exe node has subkeys.
-    monkeypatch.setitem(__import__("sys").modules, "winreg", _FakeWinregModule())
-    monkeypatch.setattr(RasTcu, "_node_has_subkeys", staticmethod(lambda hive, sub: sub.endswith(r"\ras.exe")))
+    monkeypatch.setitem(sys.modules, "winreg", _FakeWinregModule())
+    monkeypatch.setattr(
+        RasTcu,
+        "_node_has_acceptance_state",
+        staticmethod(lambda hive, sub: sub.endswith(r"\ras.exe")),
+    )
     status = RasTcu.status(ras_version="6.6")
     assert status.accepted is True
     assert status.reason == "accepted"
@@ -70,12 +74,55 @@ def test_status_accepted_when_node_has_subkeys(monkeypatch):
 def test_status_not_accepted_when_no_subtree(monkeypatch):
     monkeypatch.setattr("os.name", "nt")
     monkeypatch.setattr(RasTcu, "_resolve_exe", staticmethod(lambda *a, **k: _EXE))
-    monkeypatch.setitem(__import__("sys").modules, "winreg", _FakeWinregModule())
-    monkeypatch.setattr(RasTcu, "_node_has_subkeys", staticmethod(lambda hive, sub: False))
+    monkeypatch.setitem(sys.modules, "winreg", _FakeWinregModule())
+    monkeypatch.setattr(RasTcu, "_node_has_acceptance_state", staticmethod(lambda hive, sub: False))
+    monkeypatch.setattr(RasTcu, "_node_exists", staticmethod(lambda hive, sub: False))
     status = RasTcu.status(ras_version="6.6")
     assert status.accepted is False
     assert status.reason == "no-vb6-subtree"
     assert status.install_dir == _INSTALL
+
+
+def test_status_rejects_personal_only_subtree(monkeypatch):
+    monkeypatch.setattr("os.name", "nt")
+    monkeypatch.setattr(RasTcu, "_resolve_exe", staticmethod(lambda *a, **k: _EXE))
+    monkeypatch.setitem(sys.modules, "winreg", _FakeWinregModule())
+    monkeypatch.setattr(RasTcu, "_node_has_acceptance_state", staticmethod(lambda hive, sub: False))
+    monkeypatch.setattr(RasTcu, "_node_exists", staticmethod(lambda hive, sub: sub.endswith(r"\ras.exe")))
+    status = RasTcu.status(ras_version="6.6")
+    assert status.accepted is False
+    assert status.reason == "personal-only-vb6-subtree"
+    assert status.registry_key.endswith(r"HEC-RAS\6.6\ras.exe")
+
+
+def test_node_has_acceptance_state_ignores_projects_only(monkeypatch):
+    fake = _FakeWinregModule(
+        {
+            (1, "node"): {"values": [], "subkeys": ["Projects", "Form Position"]},
+        }
+    )
+    monkeypatch.setitem(sys.modules, "winreg", fake)
+    assert RasTcu._node_has_acceptance_state(fake.HKEY_CURRENT_USER, "node") is False
+
+
+def test_node_has_acceptance_state_accepts_root_values(monkeypatch):
+    fake = _FakeWinregModule(
+        {
+            (1, "node"): {"values": [("Accepted", "1", 1)], "subkeys": ["Projects"]},
+        }
+    )
+    monkeypatch.setitem(sys.modules, "winreg", fake)
+    assert RasTcu._node_has_acceptance_state(fake.HKEY_CURRENT_USER, "node") is True
+
+
+def test_node_has_acceptance_state_accepts_non_personal_child(monkeypatch):
+    fake = _FakeWinregModule(
+        {
+            (1, "node"): {"values": [], "subkeys": ["Projects", "TCU"]},
+        }
+    )
+    monkeypatch.setitem(sys.modules, "winreg", fake)
+    assert RasTcu._node_has_acceptance_state(fake.HKEY_CURRENT_USER, "node") is True
 
 
 def test_is_accepted_wrapper(monkeypatch):
@@ -106,7 +153,7 @@ def test_accept_returns_unknown_off_windows(monkeypatch):
 def test_accept_warns_when_no_donor(monkeypatch, caplog):
     monkeypatch.setattr(RasTcu, "status", staticmethod(
         lambda *a, **k: TcuStatus(False, "6.6", _INSTALL, "key", "no-vb6-subtree")))
-    monkeypatch.setitem(__import__("sys").modules, "winreg", _FakeWinregModule())
+    monkeypatch.setitem(sys.modules, "winreg", _FakeWinregModule())
     monkeypatch.setattr(RasTcu, "_find_donor", staticmethod(lambda install_dir: (None, None)))
     with caplog.at_level(logging.WARNING, logger="ras_commander.RasTcu"):
         result = RasTcu.accept(ras_version="6.6")
@@ -118,7 +165,7 @@ def test_accept_dry_run_does_not_write(monkeypatch):
     monkeypatch.setattr(RasTcu, "status", staticmethod(
         lambda *a, **k: TcuStatus(False, "6.6", _INSTALL, "key", "no-vb6-subtree")))
     fake = _FakeWinregModule()
-    monkeypatch.setitem(__import__("sys").modules, "winreg", fake)
+    monkeypatch.setitem(sys.modules, "winreg", fake)
     monkeypatch.setattr(RasTcu, "_find_donor", staticmethod(lambda install_dir: (fake.HKEY_CURRENT_USER, "donor\\path")))
 
     copied = {"writes": 0}
@@ -139,11 +186,12 @@ def test_accept_success_records_acceptance(monkeypatch):
     monkeypatch.setattr(RasTcu, "status", staticmethod(
         lambda *a, **k: TcuStatus(False, "6.6", _INSTALL, "key", "no-vb6-subtree")))
     fake = _FakeWinregModule()
-    monkeypatch.setitem(__import__("sys").modules, "winreg", fake)
+    monkeypatch.setitem(sys.modules, "winreg", fake)
     monkeypatch.setattr(RasTcu, "_find_donor", staticmethod(lambda install_dir: (fake.HKEY_CURRENT_USER, "donor")))
     monkeypatch.setattr(RasTcu, "_copy_key", staticmethod(
         lambda *a, **k: a[4].append("one")))  # writes list is 5th positional arg
     monkeypatch.setattr(RasTcu, "_clear_values", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(RasTcu, "_node_has_acceptance_state", staticmethod(lambda *a, **k: True))
     acks = []
     monkeypatch.setattr(RasTcu, "_write_ack", staticmethod(lambda *a, **k: acks.append(a)))
     result = RasTcu.accept(ras_version="6.6")
@@ -152,11 +200,64 @@ def test_accept_success_records_acceptance(monkeypatch):
     assert len(acks) == 1  # audit record written
 
 
+def test_accept_does_not_report_success_when_seeded_state_is_unverified(monkeypatch):
+    monkeypatch.setattr(RasTcu, "status", staticmethod(
+        lambda *a, **k: TcuStatus(False, "6.6", _INSTALL, "key", "personal-only-vb6-subtree")))
+    fake = _FakeWinregModule()
+    monkeypatch.setitem(sys.modules, "winreg", fake)
+    monkeypatch.setattr(RasTcu, "_find_donor", staticmethod(lambda install_dir: (fake.HKEY_CURRENT_USER, "donor")))
+    monkeypatch.setattr(RasTcu, "_copy_key", staticmethod(
+        lambda *a, **k: a[4].append("one")))  # writes list is 5th positional arg
+    monkeypatch.setattr(RasTcu, "_clear_values", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(RasTcu, "_node_has_acceptance_state", staticmethod(lambda *a, **k: False))
+    acks = []
+    monkeypatch.setattr(RasTcu, "_write_ack", staticmethod(lambda *a, **k: acks.append(a)))
+    result = RasTcu.accept(ras_version="6.6")
+    assert result.accepted is None
+    assert result.reason == "seeded-unverified"
+    assert acks == []
+
+
 # --------------------------------------------------------------------------- #
 # Minimal fake winreg (only what RasTcu references at import points)
 # --------------------------------------------------------------------------- #
+class _FakeKey:
+    def __init__(self, data):
+        self.data = data
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+
 class _FakeWinregModule:
     HKEY_CURRENT_USER = 1
     HKEY_USERS = 2
     KEY_SET_VALUE = 0x0002
     KEY_ALL_ACCESS = 0xF003F
+
+    def __init__(self, registry=None):
+        self.registry = registry or {}
+
+    def OpenKey(self, hive, subkey, *_args):
+        try:
+            return _FakeKey(self.registry[(hive, subkey)])
+        except KeyError as exc:
+            raise OSError(subkey) from exc
+
+    def QueryInfoKey(self, key):
+        return (len(key.data.get("subkeys", [])), len(key.data.get("values", [])), None)
+
+    def EnumKey(self, key, index):
+        try:
+            return key.data.get("subkeys", [])[index]
+        except IndexError as exc:
+            raise OSError(index) from exc
+
+    def EnumValue(self, key, index):
+        try:
+            return key.data.get("values", [])[index]
+        except IndexError as exc:
+            raise OSError(index) from exc
