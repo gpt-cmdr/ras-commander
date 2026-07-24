@@ -6631,12 +6631,15 @@ class RasUnsteady:
 
         boundaries = []
         i = 0
+        boundary_index = -1
         while i < len(lines):
             line = lines[i]
 
             if line.startswith('Boundary Location='):
+                boundary_index += 1
                 bc = RasUnsteady._parse_boundary_block_dss(lines, i)
                 if bc.get('use_dss') == 'True':
+                    bc['boundary_index'] = boundary_index
                     bc['line_number'] = i + 1  # 1-indexed for user reference
                     boundaries.append(bc)
             i += 1
@@ -6652,6 +6655,10 @@ class RasUnsteady:
             'river': '',
             'reach': '',
             'station': '',
+            'downstream_station': '',
+            'sa_2d_name': '',
+            'bc_line': '',
+            'boundary_name': '',
             'bc_type': '',
             'interval': '',
             'dss_file': '',
@@ -6675,6 +6682,12 @@ class RasUnsteady:
             bc['reach'] = parts[1]
         if len(parts) >= 3:
             bc['station'] = parts[2]
+        if len(parts) >= 4:
+            bc['downstream_station'] = parts[3]
+        if len(parts) >= 6:
+            bc['sa_2d_name'] = parts[5]
+        if len(parts) >= 8:
+            bc['bc_line'] = parts[7]
 
         # Scan following lines for DSS info
         i = start_idx + 1
@@ -6683,6 +6696,10 @@ class RasUnsteady:
 
             if line.startswith('Boundary Location='):
                 break
+            elif line.startswith('Boundary Name='):
+                bc['boundary_name'] = line.replace(
+                    'Boundary Name=', ''
+                ).strip()
             elif line.startswith('Interval='):
                 bc['interval'] = line.replace('Interval=', '').strip()
             elif line.startswith('Flow Hydrograph='):
@@ -6696,6 +6713,16 @@ class RasUnsteady:
                 try:
                     bc['data_count'] = int(line.replace('Lateral Inflow Hydrograph=', '').strip())
                 except:
+                    pass
+            elif line.startswith('Uniform Lateral Inflow Hydrograph='):
+                bc['bc_type'] = 'Uniform Lateral Inflow Hydrograph'
+                try:
+                    bc['data_count'] = int(
+                        line.replace(
+                            'Uniform Lateral Inflow Hydrograph=', ''
+                        ).strip()
+                    )
+                except ValueError:
                     pass
             elif line.startswith('Uniform Lateral Inflow='):
                 bc['bc_type'] = 'Uniform Lateral Inflow'
@@ -6742,22 +6769,18 @@ class RasUnsteady:
             'dss_part_f': ''
         }
 
-        # Remove leading slashes and split
-        clean_path = dss_path.strip('/')
-        segments = clean_path.split('/')
+        # Preserve an empty A-part when only B-F are present.  Some RAS files
+        # serialize all six populated parts with a double leading slash, while
+        # HMS output commonly uses ``//LOCATION/FLOW/D/E/F/`` (five populated
+        # parts, intentionally empty A).  The populated-part count resolves
+        # those two conventions without shifting B-F.
+        segments = dss_path.strip('/').split('/') if dss_path else []
+        if dss_path.startswith('//') and len(segments) == 5:
+            segments.insert(0, '')
+        segments = (segments + [''] * 6)[:6]
 
-        if len(segments) >= 1:
-            parts['dss_part_a'] = segments[0]
-        if len(segments) >= 2:
-            parts['dss_part_b'] = segments[1]
-        if len(segments) >= 3:
-            parts['dss_part_c'] = segments[2]
-        if len(segments) >= 4:
-            parts['dss_part_d'] = segments[3]
-        if len(segments) >= 5:
-            parts['dss_part_e'] = segments[4]
-        if len(segments) >= 6:
-            parts['dss_part_f'] = segments[5]
+        for key, value in zip(parts, segments):
+            parts[key] = value
 
         return parts
 
@@ -7076,13 +7099,18 @@ class RasUnsteady:
     @log_call
     def set_boundary_dss_link(
         unsteady_file: Union[str, Path],
-        river: str,
-        reach: str,
-        station: str,
+        river: Optional[str],
+        reach: Optional[str],
+        station: Optional[str],
         dss_file: str,
         dss_path: str,
         interval: str = "5MIN",
-        ras_object: Optional[Any] = None
+        ras_object: Optional[Any] = None,
+        *,
+        sa_2d_name: Optional[str] = None,
+        bc_line: Optional[str] = None,
+        boundary_index: Optional[int] = None,
+        expected_bc_type: Optional[str] = None,
     ) -> bool:
         """
         Convert an inline hydrograph boundary to use DSS linkage.
@@ -7110,6 +7138,17 @@ class RasUnsteady:
             Time interval for the boundary condition
         ras_object : optional
             Custom RAS object to use instead of the global one
+        sa_2d_name, bc_line : str, optional
+            Exact 2D/storage-area boundary selectors. ``sa_2d_name`` matches
+            field index 5 and ``bc_line`` matches field index 7 of the
+            ``Boundary Location=`` record. Pass ``river``, ``reach``, and
+            ``station`` as ``None`` when using these selectors.
+        boundary_index : int, optional
+            Zero-based boundary block index used alone or to disambiguate a
+            partial selector.
+        expected_bc_type : str, optional
+            Require the selected block to have this boundary type before
+            changing it.
 
         Returns
         -------
@@ -7143,22 +7182,97 @@ class RasUnsteady:
         with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
             lines = f.readlines()
 
-        # Find the boundary location
-        boundary_idx = None
-        for i, line in enumerate(lines):
-            if line.startswith('Boundary Location='):
-                loc_line = line.replace('Boundary Location=', '')
-                parts = [p.strip() for p in loc_line.split(',')]
-                if (len(parts) >= 3 and
-                    parts[0] == river and
-                    parts[1] == reach and
-                    parts[2] == station):
-                    boundary_idx = i
-                    break
+        river = RasUnsteady._clean_boundary_selector(river)
+        reach = RasUnsteady._clean_boundary_selector(reach)
+        station = RasUnsteady._clean_boundary_selector(station)
+        sa_2d_name = RasUnsteady._clean_boundary_selector(sa_2d_name)
+        bc_line = RasUnsteady._clean_boundary_selector(bc_line)
 
-        if boundary_idx is None:
-            logger.warning(f"Boundary not found: {river}/{reach}/{station}")
-            return False
+        has_1d_selector = any(
+            selector is not None for selector in (river, reach, station)
+        )
+        has_2d_selector = any(
+            selector is not None for selector in (sa_2d_name, bc_line)
+        )
+        if has_1d_selector and has_2d_selector:
+            raise ValueError(
+                "Provide either 1D selectors (river, reach, station) "
+                "or 2D selectors (sa_2d_name, bc_line), not both"
+            )
+        if boundary_index is not None:
+            if isinstance(boundary_index, bool) or not isinstance(boundary_index, int):
+                raise ValueError("boundary_index must be a zero-based integer")
+            if boundary_index < 0:
+                raise ValueError("boundary_index must be >= 0")
+        if boundary_index is None and not (has_1d_selector or has_2d_selector):
+            raise ValueError(
+                "Provide a boundary selector or boundary_index"
+            )
+
+        blocks = RasUnsteady._find_boundary_blocks(lines)
+        matches = [
+            block
+            for block in blocks
+            if RasUnsteady._boundary_block_matches(
+                block,
+                river,
+                reach,
+                station,
+                sa_2d_name,
+                bc_line,
+            )
+        ] if (has_1d_selector or has_2d_selector) else blocks
+
+        if boundary_index is not None:
+            selected = next(
+                (
+                    block
+                    for block in blocks
+                    if block["boundary_index"] == boundary_index
+                ),
+                None,
+            )
+            if selected is None:
+                raise ValueError(
+                    f"boundary_index {boundary_index} is out of range; "
+                    f"{len(blocks)} boundary blocks found"
+                )
+            if (has_1d_selector or has_2d_selector) and selected not in matches:
+                raise ValueError(
+                    f"boundary_index {boundary_index} does not match the "
+                    "provided boundary selectors"
+                )
+            target_block = selected
+        else:
+            if not matches:
+                logger.warning(
+                    "Boundary not found for selectors: "
+                    "river=%r, reach=%r, station=%r, sa_2d_name=%r, bc_line=%r",
+                    river,
+                    reach,
+                    station,
+                    sa_2d_name,
+                    bc_line,
+                )
+                return False
+            if len(matches) > 1:
+                choices = ", ".join(
+                    f"{block['boundary_index']}:"
+                    f"{RasUnsteady._boundary_block_name(block)}"
+                    for block in matches
+                )
+                raise ValueError(
+                    "Boundary selector is ambiguous. Provide boundary_index "
+                    f"to disambiguate one of: {choices}"
+                )
+            target_block = matches[0]
+
+        if expected_bc_type is not None and target_block["bc_type"] != expected_bc_type:
+            raise ValueError(
+                f"Selected boundary type is {target_block['bc_type']!r}, "
+                f"expected {expected_bc_type!r}"
+            )
+        boundary_idx = target_block["start_idx"]
 
         # Inline table type keywords that may have data to remove
         TABLE_KEYWORDS = [
@@ -7284,8 +7398,11 @@ class RasUnsteady:
         with open(unsteady_path, 'w', encoding='utf-8') as f:
             f.writelines(lines)
 
-        logger.info(f"Updated boundary {river}/{reach}/{station} to use DSS link "
-                     f"(removed {lines_removed} inline data lines)")
+        logger.info(
+            "Updated boundary %s to use DSS link (removed %d inline data lines)",
+            RasUnsteady._boundary_block_name(target_block),
+            lines_removed,
+        )
         return True
 
     @staticmethod
