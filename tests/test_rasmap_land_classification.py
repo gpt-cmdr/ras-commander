@@ -358,6 +358,7 @@ class TestLayerCreation:
         with rasterio.open(output_hdf.with_suffix(".tif")) as raster:
             assert tuple(raster.bounds) == (0.0, 0.0, 30.0, 30.0)
             assert raster.nodata is None
+            assert 0 not in np.unique(raster.read(1))
 
         with h5py.File(output_hdf, "r") as hdf_file:
             raster_map = hdf_file["Raster Map"][()]

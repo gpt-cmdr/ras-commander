@@ -915,6 +915,37 @@ def _build_nodata_mask(array: np.ndarray, nodata_value: Any) -> np.ndarray:
     return array == nodata_value
 
 
+def _fill_classification_nodata_with_nearest(
+    array: np.ndarray,
+    *,
+    nodata_class: int = 0,
+) -> np.ndarray:
+    """Fill categorical NoData cells from the nearest valid class.
+
+    Native HEC-RAS land-cover rasters retain a ``NoData`` lookup row but do
+    not leave class-zero pixels in the rectangular raster surface. Polygon
+    clipping otherwise leaves zero-valued edge pixels that can make
+    RasMapperLib classify the complete mesh as NoData. Nearest-neighbor
+    filling preserves categorical IDs without inventing interpolated values.
+    """
+    nodata_mask = array == int(nodata_class)
+    if not np.any(nodata_mask):
+        return array
+    if np.all(nodata_mask):
+        raise ValueError("Land-cover raster contains no valid classification cells.")
+
+    from scipy.ndimage import distance_transform_edt
+
+    nearest_indices = distance_transform_edt(
+        nodata_mask,
+        return_distances=False,
+        return_indices=True,
+    )
+    filled = array.copy()
+    filled[nodata_mask] = array[tuple(nearest_indices[:, nodata_mask])]
+    return filled
+
+
 def _coerce_raster_lookup_value(value: Any, array: np.ndarray) -> Any:
     if np.issubdtype(array.dtype, np.integer):
         return int(float(value))
@@ -1010,7 +1041,8 @@ def _rasterize_landcover_source(
             fill=0,
             dtype="int32",
         )
-        return array.astype(np.int32), transform, raster_map_rows, variable_rows
+        array = _fill_classification_nodata_with_nearest(array.astype(np.int32))
+        return array, transform, raster_map_rows, variable_rows
 
     with rasterio.open(source_path) as src:
         if src.crs is None:
@@ -1068,6 +1100,7 @@ def _rasterize_landcover_source(
                     f"classification_table.source_value: {preview}"
                 )
 
+        output_array = _fill_classification_nodata_with_nearest(output_array)
         return output_array, transform, raster_map_rows, variable_rows
 
 
