@@ -5,7 +5,7 @@
   }
 
   const DEFAULT_BOUNDS = [-85.3942, 40.1896, -85.3601, 40.2057];
-  const VIEWER_MANIFEST_REFRESH = "20260723Tvector-results01";
+  const VIEWER_MANIFEST_REFRESH = "20260724Tlibrary-final03";
   const SATELLITE_ATTRIBUTION = "Tiles &copy; Esri";
   const SATELLITE_IMAGERY_TILES = [
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -16,6 +16,11 @@
   const HYBRID_TRANSPORTATION_TILES = [
     "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
   ];
+  const OPTIONAL_BASEMAP_SOURCE_IDS = new Set([
+    "satellite-imagery",
+    "hybrid-boundaries",
+    "hybrid-transportation",
+  ]);
   const DEFAULT_STYLES = {
     model_extents: { fill: "#f59e0b", fillOpacity: 0.08, line: "#ea580c", lineWidth: 2 },
     mesh_areas: { fill: "#60a5fa", fillOpacity: 0.1, line: "#1d4ed8", lineWidth: 1 },
@@ -2082,6 +2087,21 @@
       return semanticTreeLayerIds(node).includes(interactionState.activeLayerId);
     }
 
+    function shouldOpenNode(node, isRoot) {
+      if (openNodeIds.has(node.id)) {
+        return true;
+      }
+      if (!containsActive(node)) {
+        return false;
+      }
+      if (!isRoot || !window.matchMedia("(max-width: 760px)").matches) {
+        return true;
+      }
+      return !Array.from(rootIds).some((rootId) => (
+        rootId !== node.id && openNodeIds.has(rootId)
+      ));
+    }
+
     function initializeOpenState(node, depth) {
       if (containsActive(node) || (depth === 0 && node.id === "geometries")) {
         openNodeIds.add(node.id);
@@ -2279,7 +2299,8 @@
       const details = document.createElement("details");
       details.className = isRoot ? "ras-tree-root" : "ras-tree-branch";
       details.dataset.treeNodeId = node.id;
-      details.open = openNodeIds.has(node.id) || containsActive(node);
+      details.dataset.treeCurrent = "true";
+      details.open = shouldOpenNode(node, isRoot);
 
       const summary = document.createElement("summary");
       const disclosure = document.createElement("span");
@@ -2328,13 +2349,33 @@
         children.append(renderBranch(child, depth + 1, false));
       }
       details.append(summary, children);
+      summary.addEventListener("click", () => {
+        if (details.open) {
+          openNodeIds.delete(node.id);
+          return;
+        }
+        openNodeIds.add(node.id);
+        if (isRoot && window.matchMedia("(max-width: 760px)").matches) {
+          for (const sibling of list.querySelectorAll("details.ras-tree-root[open]")) {
+            if (sibling !== details && sibling.dataset.treeNodeId) {
+              openNodeIds.delete(sibling.dataset.treeNodeId);
+            }
+          }
+        }
+      });
       details.addEventListener("toggle", () => {
+        if (details.dataset.treeCurrent !== "true" || !details.isConnected) {
+          return;
+        }
         if (details.open) {
           openNodeIds.add(node.id);
           if (isRoot && window.matchMedia("(max-width: 760px)").matches) {
             for (const sibling of list.querySelectorAll("details.ras-tree-root[open]")) {
               if (sibling !== details) {
                 sibling.open = false;
+                if (sibling.dataset.treeNodeId) {
+                  openNodeIds.delete(sibling.dataset.treeNodeId);
+                }
               }
             }
           }
@@ -2357,6 +2398,9 @@
     }
 
     function render() {
+      for (const details of list.querySelectorAll("details[data-tree-node-id]")) {
+        details.dataset.treeCurrent = "false";
+      }
       list.replaceChildren();
       const modelColumn = makeColumn("model", "Model Data");
       const resultColumn = makeColumn("results", "Surfaces and Results");
@@ -2637,6 +2681,10 @@
 
     map.on("error", (event) => {
       const message = event && event.error ? event.error.message : "Map error";
+      if (OPTIONAL_BASEMAP_SOURCE_IDS.has(event?.sourceId)) {
+        console.warn(`Optional basemap tile unavailable: ${event.sourceId}`, event.error);
+        return;
+      }
       status(root, message);
     });
   }

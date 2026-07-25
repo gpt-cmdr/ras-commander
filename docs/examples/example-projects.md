@@ -1,7 +1,7 @@
 # Example Project Library
 
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
-<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260723Ttechnical-library01">
+<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260724Tlibrary-final03">
 
 Explore HEC tutorial projects and organized public model releases used throughout
 the RAS Commander examples. Select a model area on the map or open a project
@@ -9,7 +9,7 @@ below to review its geometry, terrain, and results.
 
 ## Project Explorer
 
-<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260723Ttechnical-library01">
+<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260724Tlibrary-final03">
   <div class="ras-library-map-shell">
     <div class="ras-library-map" data-library-map></div>
   </div>
@@ -32,9 +32,9 @@ below to review its geometry, terrain, and results.
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
-<script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260723Ttechnical-library01"></script>
-<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260723Ttechnical-library01"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260723Tscale-aware-pins01"></script>
+<script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260724Tlibrary-final03"></script>
+<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260724Tlibrary-final03"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260724Tlibrary-final03"></script>
 
 ## Related Workflows
 

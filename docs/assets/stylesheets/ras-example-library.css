@@ -162,4 +162,62 @@
     align-items: flex-start;
     flex-direction: column;
   }
+
+  .ras-library-table-wrap {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .ras-library-table,
+  .ras-library-table tbody,
+  .ras-library-table tr,
+  .ras-library-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ras-library-table {
+    min-width: 0;
+  }
+
+  .ras-library-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .ras-library-table tbody tr {
+    margin-bottom: 0.65rem;
+    padding: 0.65rem 0.7rem;
+    border: 1px solid var(--ras-library-border);
+    border-radius: 6px;
+  }
+
+  .ras-library-table th,
+  .ras-library-table td,
+  .ras-library-table td:first-child,
+  .ras-library-table td:nth-child(3) {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .ras-library-table td + td {
+    margin-top: 0.45rem;
+  }
+
+  .ras-library-table td:nth-child(3)::before {
+    content: "HEC-RAS version: ";
+    font-weight: 700;
+  }
 }
