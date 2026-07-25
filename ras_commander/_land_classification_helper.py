@@ -67,7 +67,6 @@ _INFILTRATION_DEFAULT_RELATIVE_PATH = Path("Soils Data") / "Infiltration.hdf"
 
 _DEFAULT_LANDCOVER_NODATA_MANNINGS_N = 0.035
 _DEFAULT_LANDCOVER_NODATA_PERCENT_IMPERVIOUS = 0.0
-_LANDCOVER_RASTER_NODATA = -9999
 _DEFAULT_SCS_RESET_TIME_HOURS = 24.0
 _DEFAULT_SCS_MIN_INFILTRATION_RATE = 0.12
 _DEFAULT_DEFICIT_CONSTANT_NO_DATA = {
@@ -894,7 +893,7 @@ def _create_output_raster(
         dtype=array.dtype,
         crs=crs,
         transform=transform,
-        nodata=_LANDCOVER_RASTER_NODATA,
+        nodata=None,
         compress="lzw",
     ) as dst:
         dst.write(array, 1)
@@ -1008,7 +1007,7 @@ def _rasterize_landcover_source(
             shapes=shapes,
             out_shape=(height, width),
             transform=transform,
-            fill=_LANDCOVER_RASTER_NODATA,
+            fill=0,
             dtype="int32",
         )
         return array.astype(np.int32), transform, raster_map_rows, variable_rows
@@ -1041,11 +1040,7 @@ def _rasterize_landcover_source(
 
         nodata_mask = _build_nodata_mask(raw_array, -2147483648.0)
         valid_values = raw_array[~nodata_mask]
-        output_array = np.full(
-            (height, width),
-            _LANDCOVER_RASTER_NODATA,
-            dtype=np.int32,
-        )
+        output_array = np.zeros((height, width), dtype=np.int32)
 
         mapping: dict[Any, int] = {}
         for row in classification_table.itertuples():
