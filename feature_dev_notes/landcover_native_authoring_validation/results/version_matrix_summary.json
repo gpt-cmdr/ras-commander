@@ -1,0 +1,122 @@
+{
+  "fixture": "Muncie p04/g04; 2D Interior Area",
+  "scenarios_per_version": [
+    "native author/associate/recompute/solve",
+    "geometry Urban n 0.10 -> 0.11/recompute/solve",
+    "Qualification Probe n 0.070 -> 0.077/recompute/solve"
+  ],
+  "all_passed": true,
+  "versions": [
+    {
+      "version": "5.0.7",
+      "host": "CLB08",
+      "cell_count": 0,
+      "face_row_count": 46505,
+      "base_edit_cell_delta": 0,
+      "base_edit_face_delta": 11248,
+      "sidecar_edit_cell_delta": 0,
+      "sidecar_edit_face_delta": 314,
+      "non_mannings_face_delta": 0
+    },
+    {
+      "version": "6.0",
+      "host": "CLB08",
+      "cell_count": 5765,
+      "face_row_count": 46505,
+      "base_edit_cell_delta": 1418,
+      "base_edit_face_delta": 11248,
+      "sidecar_edit_cell_delta": 36,
+      "sidecar_edit_face_delta": 314,
+      "non_mannings_face_delta": 0
+    },
+    {
+      "version": "6.1",
+      "host": "CLB08",
+      "cell_count": 5765,
+      "face_row_count": 46505,
+      "base_edit_cell_delta": 1418,
+      "base_edit_face_delta": 11248,
+      "sidecar_edit_cell_delta": 36,
+      "sidecar_edit_face_delta": 314,
+      "non_mannings_face_delta": 0
+    },
+    {
+      "version": "6.2",
+      "host": "CLB08",
+      "cell_count": 5765,
+      "face_row_count": 46505,
+      "base_edit_cell_delta": 1418,
+      "base_edit_face_delta": 11248,
+      "sidecar_edit_cell_delta": 36,
+      "sidecar_edit_face_delta": 314,
+      "non_mannings_face_delta": 0
+    },
+    {
+      "version": "6.3.1",
+      "host": "CLB08",
+      "cell_count": 5765,
+      "face_row_count": 46505,
+      "base_edit_cell_delta": 1418,
+      "base_edit_face_delta": 11248,
+      "sidecar_edit_cell_delta": 36,
+      "sidecar_edit_face_delta": 314,
+      "non_mannings_face_delta": 0
+    },
+    {
+      "version": "6.4.1",
+      "host": "CLB12",
+      "cell_count": 5765,
+      "face_row_count": 47055,
+      "base_edit_cell_delta": 1418,
+      "base_edit_face_delta": 11374,
+      "sidecar_edit_cell_delta": 36,
+      "sidecar_edit_face_delta": 307,
+      "non_mannings_face_delta": 0
+    },
+    {
+      "version": "6.5",
+      "host": "CLB12",
+      "cell_count": 5765,
+      "face_row_count": 47055,
+      "base_edit_cell_delta": 1418,
+      "base_edit_face_delta": 11374,
+      "sidecar_edit_cell_delta": 36,
+      "sidecar_edit_face_delta": 307,
+      "non_mannings_face_delta": 0
+    },
+    {
+      "version": "6.6",
+      "host": "CLB08",
+      "cell_count": 5765,
+      "face_row_count": 47055,
+      "base_edit_cell_delta": 1418,
+      "base_edit_face_delta": 11374,
+      "sidecar_edit_cell_delta": 36,
+      "sidecar_edit_face_delta": 307,
+      "non_mannings_face_delta": 0
+    },
+    {
+      "version": "6.7 Beta 5",
+      "host": "CLB08",
+      "cell_count": 5765,
+      "face_row_count": 47055,
+      "base_edit_cell_delta": 1418,
+      "base_edit_face_delta": 11374,
+      "sidecar_edit_cell_delta": 36,
+      "sidecar_edit_face_delta": 307,
+      "non_mannings_face_delta": 0,
+      "supplemental": true
+    },
+    {
+      "version": "7.0",
+      "host": "CLB08",
+      "cell_count": 5765,
+      "face_row_count": 47055,
+      "base_edit_cell_delta": 1418,
+      "base_edit_face_delta": 11374,
+      "sidecar_edit_cell_delta": 36,
+      "sidecar_edit_face_delta": 307,
+      "non_mannings_face_delta": 0
+    }
+  ]
+}

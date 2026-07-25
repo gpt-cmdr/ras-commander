@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "hecras_version": "6.0",
+  "started_at_utc": "2026-07-25T08:53:47.597963+00:00",
+  "source_project": "G:\\RasProcess Testing\\wine_compare\\Muncie_simple_test\\Muncie.prj",
+  "probe_raster": "C:\\Users\\bill\\.config\\superpowers\\worktrees\\ras-commander\\codex-clb903-landcover-pipeline\\feature_dev_notes\\landcover_native_authoring_validation\\fixtures\\muncie_landcover_probe.tif",
+  "probe_manifest": "C:\\Users\\bill\\.config\\superpowers\\worktrees\\ras-commander\\codex-clb903-landcover-pipeline\\feature_dev_notes\\landcover_native_authoring_validation\\fixtures\\muncie_landcover_probe.json",
+  "run_root": "C:\\CLB\\landcover-version-matrix\\6.0-20260725T045347",
+  "passed": false,
+  "error": {
+    "type": "RuntimeError",
+    "message": "HEC-RAS compute failed: {'success': False, 'completion_verified': False, 'artifact_verification_passed': False, 'verification_failures': ['C:\\\\CLB\\\\landcover-version-matrix\\\\6.0-20260725T045347\\\\baseline\\\\Muncie.p04.hdf: file missing']}",
+    "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\bill\\.config\\superpowers\\worktrees\\ras-commander\\codex-clb903-landcover-pipeline\\feature_dev_notes\\landcover_native_authoring_validation\\scripts\\run_version_qualification.py\", line 839, in main\n    baseline, baseline_arrays = _author_associate_compute(\n                                ~~~~~~~~~~~~~~~~~~~~~~~~~^\n        project_file=baseline_project,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<2 lines>...\n        version=version,\n        ^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"C:\\Users\\bill\\.config\\superpowers\\worktrees\\ras-commander\\codex-clb903-landcover-pipeline\\feature_dev_notes\\landcover_native_authoring_validation\\scripts\\run_version_qualification.py\", line 439, in _author_associate_compute\n    compute = _compute(\n        ras_object=ras_object,\n        project_paths=paths,\n        version=version,\n    )\n  File \"C:\\Users\\bill\\.config\\superpowers\\worktrees\\ras-commander\\codex-clb903-landcover-pipeline\\feature_dev_notes\\landcover_native_authoring_validation\\scripts\\run_version_qualification.py\", line 384, in _compute\n    raise RuntimeError(f\"HEC-RAS compute failed: {payload}\")\nRuntimeError: HEC-RAS compute failed: {'success': False, 'completion_verified': False, 'artifact_verification_passed': False, 'verification_failures': ['C:\\\\CLB\\\\landcover-version-matrix\\\\6.0-20260725T045347\\\\baseline\\\\Muncie.p04.hdf: file missing']}\n"
+  },
+  "finished_at_utc": "2026-07-25T09:31:33.565024+00:00"
+}

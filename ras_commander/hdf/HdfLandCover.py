@@ -28,7 +28,7 @@ Example:
 
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, Union
 
 import h5py
 import numpy as np
@@ -666,14 +666,13 @@ class HdfLandCover:
 
     @staticmethod
     @log_call
-    def set_landcover_raster_map(
-        hdf_path: Union[str, Path],
-        class_mapping: Dict[str, float],
-        ras_object: Any = None,
-        *,
+    def set_landcover_mannings_n(
+        landcover_hdf_path: Union[str, Path],
+        class_mapping: Mapping[str, float],
         hecras_version: Optional[str] = None,
+        ras_object: Any = None,
     ) -> dict:
-        """Update Manning values through RASMapper's native table API.
+        """Update Manning values through RASMapper's native table editor.
 
         Direct h5py edits of ``Variables``/``ManningsN`` are intentionally not
         supported: HEC-RAS owns the sidecar schema and may maintain additional
@@ -684,12 +683,14 @@ class HdfLandCover:
         layer with :meth:`RasMap.add_landcover_layer`.
 
         Args:
-            hdf_path: Native RASMapper land-cover sidecar.
+            landcover_hdf_path: Native RASMapper land-cover sidecar.
             class_mapping: Class-name to Manning-value mapping.
-            ras_object: Initialized project object used to infer ``ras_version``.
             hecras_version: Explicit HEC-RAS version. Required when
                 ``ras_object`` does not provide ``ras_version``.
+            ras_object: Initialized project object used to infer ``ras_version``.
         """
+        if ras_object is None:
+            from ..RasPrj import ras as ras_object
         version = hecras_version or getattr(ras_object, "ras_version", None)
         if not version:
             raise ValueError(
@@ -698,19 +699,44 @@ class HdfLandCover:
         from .._landcover_native import set_landcover_parameters
 
         result = set_landcover_parameters(
-            hdf_path,
+            landcover_hdf_path,
             class_mapping,
             hecras_version=str(version),
         )
         logger.info(
             "Updated land cover sidecar %s through RASMapper %s: "
             "changed=%d, unchanged=%d",
-            Path(hdf_path).name,
+            Path(landcover_hdf_path).name,
             version,
             result["changed"],
             result["unchanged"],
         )
         return result
+
+    @staticmethod
+    @log_call
+    def set_landcover_raster_map(
+        hdf_path: Union[str, Path],
+        class_mapping: Dict[str, float],
+        ras_object: Any = None,
+        *,
+        hecras_version: Optional[str] = None,
+    ) -> dict:
+        """Deprecated compatibility alias for ``set_landcover_mannings_n``."""
+        warnings.warn(
+            "set_landcover_raster_map() edits Manning parameters, not a raster "
+            "map. Use set_landcover_mannings_n(); the alias is retained through "
+            "the v1.1.x compatibility window and will be removed no earlier "
+            "than v1.2.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return HdfLandCover.set_landcover_mannings_n(
+            hdf_path,
+            class_mapping,
+            hecras_version=hecras_version,
+            ras_object=ras_object,
+        )
 
 
     # ---- Phase 3: Comparison and Statistics ----
@@ -896,7 +922,9 @@ class HdfLandCover:
             "compute_final_mannings_raster() is a Python estimate, not the "
             "HEC-RAS Final Manning's N layer. Use "
             "estimate_final_mannings_raster() for visualization or "
-            "audit_final_mannings_n() for solver-authoritative validation.",
+            "audit_final_mannings_n() for solver-authoritative validation. "
+            "The alias remains available through v1.1.x and will not be "
+            "removed before v1.2.0.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -940,8 +968,8 @@ class HdfLandCover:
             None if inputs cannot be resolved.
 
         Example:
-            >>> arr = HdfLandCover.compute_final_mannings_raster("01")  # auto-resolves LC
-            >>> arr = HdfLandCover.compute_final_mannings_raster(
+            >>> arr = HdfLandCover.estimate_final_mannings_raster("01")
+            >>> arr = HdfLandCover.estimate_final_mannings_raster(
             ...     "project.g01.hdf",
             ...     landcover_hdf_path="custom_landcover.hdf",  # override
             ...     output_tif_path="final_mannings_n.tif"

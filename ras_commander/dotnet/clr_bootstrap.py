@@ -119,7 +119,10 @@ def load_clr(hecras_dir: Path | None = None) -> None:
     root = _normalize_install_root(hecras_dir)
     resolved_root = root.resolve(strict=False)
 
-    if importlib.util.find_spec("clr") is None:
+    # pythonnet replaces ``clr`` with a native module whose ``__spec__`` is
+    # ``None`` after first import. ``find_spec("clr")`` then raises
+    # ``ValueError`` even though the module is available and usable.
+    if "clr" not in sys.modules and importlib.util.find_spec("clr") is None:
         raise ImportError(
             "pythonnet is required for RasMapperLib interop. Install the "
             "ras-commander 'mesh' extra or add pythonnet>=3.0.5."
@@ -159,7 +162,7 @@ def load_clr(hecras_dir: Path | None = None) -> None:
 
 def is_hecras_available() -> bool:
     """Return True when HEC-RAS and pythonnet are available for interop."""
-    if importlib.util.find_spec("clr") is None:
+    if "clr" not in sys.modules and importlib.util.find_spec("clr") is None:
         return False
     try:
         find_hecras_install()

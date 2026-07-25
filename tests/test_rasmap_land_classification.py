@@ -15,6 +15,10 @@ import pandas as pd
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+NATIVE_TEST_HECRAS_VERSION = os.environ.get(
+    "RAS_COMMANDER_TEST_HECRAS_VERSION",
+    "6.6",
+)
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -44,7 +48,9 @@ def _make_temp_project(tmp_path: Path, project_name: str = "TestModel") -> Path:
         "Proj Title=Temp Project\nCurrent Plan=\n",
         encoding="utf-8",
     )
-    (project_dir / "Projection.prj").write_text(_read_projection_wkt(), encoding="utf-8")
+    (project_dir / "Projection.prj").write_text(
+        _read_projection_wkt(), encoding="utf-8"
+    )
     (project_dir / f"{project_name}.rasmap").write_text(
         (
             "<RASMapper>\n"
@@ -122,16 +128,66 @@ class TestPublicAPISurface:
         assert hasattr(RasMap, method_name)
         signature = inspect.signature(getattr(RasMap, method_name))
         assert "self" not in signature.parameters
+        if method_name in {
+            "add_land_classification_polygon",
+            "update_land_classification_polygon",
+            "delete_land_classification_polygon",
+        }:
+            assert list(signature.parameters)[-2:] == [
+                "hecras_version",
+                "ras_object",
+            ]
+            assert signature.parameters["hecras_version"].default is None
         assert list(signature.parameters)[-1] == "ras_object"
 
 
-class TestPackagedResources:
-    """Remaining packaged classification resources should stay valid."""
+class TestNativeVersionResolution:
+    @pytest.mark.parametrize(
+        ("explicit", "object_version", "expected"),
+        [
+            ("7.0", "6.6", "7.0"),
+            (None, "6.6", "6.6"),
+        ],
+    )
+    def test_explicit_then_supplied_object_precedence(
+        self,
+        explicit,
+        object_version,
+        expected,
+    ):
+        from ras_commander.RasMap import _resolve_native_hecras_version
 
-    def test_packaged_soils_template_opens_with_h5py(self):
-        template_path = _lch._RESOURCE_DIR / "soils_template.hdf"
-        with h5py.File(template_path, "r") as hdf_file:
-            assert len(hdf_file.keys()) > 0
+        project = type("Project", (), {"ras_version": object_version})()
+        assert _resolve_native_hecras_version(explicit, project) == expected
+
+    def test_initialized_global_is_third_precedence(self, monkeypatch):
+        import importlib
+
+        module = importlib.import_module("ras_commander.RasMap")
+        monkeypatch.setattr(
+            module.ras,
+            "ras_version",
+            "6.3.1",
+            raising=False,
+        )
+        assert module._resolve_native_hecras_version(None, None) == "6.3.1"
+
+    def test_missing_version_fails_instead_of_defaulting(self, monkeypatch):
+        import importlib
+
+        module = importlib.import_module("ras_commander.RasMap")
+        monkeypatch.setattr(
+            module.ras,
+            "ras_version",
+            None,
+            raising=False,
+        )
+        with pytest.raises(ValueError, match="hecras_version is required"):
+            module._resolve_native_hecras_version(None, None)
+
+
+class TestPackagedResources:
+    """Native dependencies should remain available in optional installs."""
 
     def test_all_extra_includes_pythonnet(self, monkeypatch):
         captured = {}
@@ -255,8 +311,12 @@ class TestRasmapPathResolution:
         project_dir = tmp_path / "project"
         project_dir.mkdir()
 
-        dot_slash = _lch.resolve_rasmap_relative_path(project_dir, "./Terrain/Projection.prj")
-        dot_backslash = _lch.resolve_rasmap_relative_path(project_dir, ".\\Terrain\\Projection.prj")
+        dot_slash = _lch.resolve_rasmap_relative_path(
+            project_dir, "./Terrain/Projection.prj"
+        )
+        dot_backslash = _lch.resolve_rasmap_relative_path(
+            project_dir, ".\\Terrain\\Projection.prj"
+        )
 
         assert dot_slash == project_dir / "Terrain" / "Projection.prj"
         assert dot_backslash == project_dir / "Terrain" / "Projection.prj"
@@ -275,7 +335,9 @@ class TestRasmapPathResolution:
 
         assert resolved == target_path
 
-    def test_expands_windows_style_environment_variable_paths(self, tmp_path, monkeypatch):
+    def test_expands_windows_style_environment_variable_paths(
+        self, tmp_path, monkeypatch
+    ):
         local_app_data = tmp_path / "LocalAppData"
         monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
 
@@ -346,6 +408,7 @@ class TestLayerCreation:
             cell_size=10.0,
             restrict_to_extent=box(10, 10, 20, 20),
             buffer_distance=10.0,
+            hecras_version=NATIVE_TEST_HECRAS_VERSION,
         )
 
         assert output_hdf.exists()
@@ -363,10 +426,11 @@ class TestLayerCreation:
             assert hdf_file["Variables"].chunks == (100,)
             assert hdf_file["Variables"].maxshape == (None,)
             assert {int(row["ID"]) for row in raster_map} == {0, 11, 21}
-            assert {
-                row["Name"].decode("utf-8").strip()
-                for row in variables
-            } == {"NoData", "Open Water", "Developed"}
+            assert {row["Name"].decode("utf-8").strip() for row in variables} == {
+                "NoData",
+                "Open Water",
+                "Developed",
+            }
 
         layers = RasMap.list_land_classification_layers(project_dir)
         assert set(layers["classification_kind"]) == {"landcover"}
@@ -384,6 +448,7 @@ class TestLayerCreation:
             output_hdf_path=tmp_path / "legacy_landcover.hdf",
             restrict_to_extent=(10, 10, 30, 30),
             layer_name="Legacy Bounds",
+            hecras_version=NATIVE_TEST_HECRAS_VERSION,
         )
         with rasterio.open(legacy_output.with_suffix(".tif")) as raster:
             assert tuple(raster.bounds) == (10.0, 10.0, 30.0, 30.0)
@@ -429,6 +494,7 @@ class TestLayerCreation:
             cell_size=10.0,
             restrict_to_extent=box(10, 0, 20, 10),
             buffer_distance=10.0,
+            hecras_version=NATIVE_TEST_HECRAS_VERSION,
         )
 
         assert output_hdf.exists()
@@ -438,10 +504,11 @@ class TestLayerCreation:
 
         with h5py.File(output_hdf, "r") as hdf_file:
             raster_map = hdf_file["Raster Map"][()]
-            assert {
-                row["Name"].decode("utf-8").strip()
-                for row in raster_map
-            } == {"NoData", "A", "B"}
+            assert {row["Name"].decode("utf-8").strip() for row in raster_map} == {
+                "NoData",
+                "A",
+                "B",
+            }
 
         layers = RasMap.list_land_classification_layers(project_dir)
         assert set(layers["classification_kind"]) == {"soils"}
@@ -454,6 +521,7 @@ class TestLayerCreation:
             cell_size=10.0,
             output_hdf_path=tmp_path / "legacy_soils.hdf",
             restrict_to_extent=[0, 0, 40, 20],
+            hecras_version=NATIVE_TEST_HECRAS_VERSION,
         )
         with rasterio.open(legacy_output.with_suffix(".tif")) as raster:
             assert tuple(raster.bounds) == (0.0, 0.0, 40.0, 20.0)
@@ -510,7 +578,9 @@ class TestLayerCreation:
             / "Hydrologic Soil Groups.hdf"
         )
         if not landcover_hdf_path.exists() or not soil_layer_path.exists():
-            pytest.skip("BaldEagleCrkMulti2D land-classification sidecars are not available")
+            pytest.skip(
+                "BaldEagleCrkMulti2D land-classification sidecars are not available"
+            )
 
         output_hdf = RasMap.add_infiltration_layer(
             project_dir,
@@ -518,6 +588,7 @@ class TestLayerCreation:
             landcover_hdf_path=landcover_hdf_path,
             soil_layer_path=soil_layer_path,
             scs_reset_time_hours=24.0,
+            hecras_version=NATIVE_TEST_HECRAS_VERSION,
         )
 
         assert output_hdf.exists()
@@ -533,7 +604,7 @@ class TestLayerCreation:
 
 
 class TestClassificationPolygonAuthoring:
-    """Unqualified custom-HDF polygon mutation must fail closed."""
+    """Public polygon methods must delegate to the native RASMapper editor."""
 
     @pytest.mark.parametrize(
         "method_name,kwargs",
@@ -552,8 +623,89 @@ class TestClassificationPolygonAuthoring:
             ),
         ],
     )
-    def test_mutation_apis_are_disabled(self, tmp_path, method_name, kwargs):
+    def test_mutation_apis_delegate_to_native_editor(
+        self,
+        tmp_path,
+        monkeypatch,
+        method_name,
+        kwargs,
+    ):
+        import ras_commander._land_classification_polygon_native as native
+
+        expected = object()
+        captured = {}
+
+        def fake_editor(**call_kwargs):
+            captured.update(call_kwargs)
+            return expected
+
+        monkeypatch.setattr(native, method_name, fake_editor)
         method = getattr(RasMap, method_name)
 
-        with pytest.raises(NotImplementedError, match="hand-authored"):
-            method(tmp_path / "LandCover.hdf", **kwargs)
+        result = method(
+            tmp_path / "LandCover.hdf",
+            **kwargs,
+            hecras_version="6.6",
+        )
+
+        assert result is expected
+        assert captured["hecras_version"] == "6.6"
+
+
+def test_classification_polygon_reader_uses_feature_relative_part_offsets(
+    tmp_path: Path,
+):
+    sidecar = tmp_path / "LandCover.hdf"
+    attributes_dtype = np.dtype([("Classification", "S16")])
+    first_points = np.asarray(
+        [(20, 20), (24, 20), (24, 24), (20, 24), (20, 20)],
+        dtype=np.float64,
+    )
+    second_points = np.asarray(
+        [
+            (0, 0),
+            (0, 10),
+            (10, 10),
+            (10, 0),
+            (0, 0),
+            (2, 2),
+            (4, 2),
+            (4, 4),
+            (2, 4),
+            (2, 2),
+        ],
+        dtype=np.float64,
+    )
+    with h5py.File(sidecar, "w") as hdf:
+        group = hdf.create_group("Classification Polygons")
+        group.create_dataset(
+            "Attributes",
+            data=np.asarray(
+                [(b"First",), (b"With Hole",)],
+                dtype=attributes_dtype,
+            ),
+        )
+        group.create_dataset(
+            "Polygon Info",
+            data=np.asarray(
+                [(0, 5, 0, 1), (5, 10, 1, 2)],
+                dtype=np.int32,
+            ),
+        )
+        # RAS stores each part's point offset relative to its feature.
+        group.create_dataset(
+            "Polygon Parts",
+            data=np.asarray([(0, 5), (0, 5), (5, 5)], dtype=np.int32),
+        )
+        group.create_dataset(
+            "Polygon Points",
+            data=np.vstack([first_points, second_points]),
+        )
+
+    records = _lch.read_land_classification_polygon_records(sidecar)
+
+    assert len(records) == 2
+    assert records[1]["class_name"] == "With Hole"
+    assert len(records[1]["geometry"].interiors) == 1
+    assert records[1]["geometry"].bounds == (0.0, 0.0, 10.0, 10.0)
+    assert records[1]["geometry"].area == pytest.approx(96.0)

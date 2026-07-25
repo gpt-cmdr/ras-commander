@@ -28,7 +28,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 
 DATAFRAME_SCHEMAS = {
     "plan_df": {
@@ -128,6 +128,39 @@ DATAFRAME_SCHEMAS = {
             "schemas at call time, so their exact columns depend on the model and plan and are not "
             "statically enumerable. See the HdfResultsMesh / HdfResultsXsec / HdfResultsPlan / "
             "HdfResultsBreach API pages for per-method return shapes."
+        ),
+    },
+    "infiltration_override_table_df": {
+        "description": (
+            "Class-ordered geometry infiltration parameter table for either "
+            "the geometry-wide base fallback or one selected native region."
+        ),
+        "accessor": (
+            "HdfInfiltration.get_infiltration_baseoverrides(...) or "
+            "HdfInfiltration.get/set/scale_infiltration_region_overrides(...)"
+        ),
+        "source": (
+            "HdfInfiltration and _infiltration_override_native "
+            "(native ParameterSet class order)"
+        ),
+        "extra_columns": True,
+        "dynamic": True,
+        "columns": [
+            {
+                "name": "Land Cover Name",
+                "dtype": "str",
+                "description": (
+                    "Native combined land-cover/soil classification name."
+                ),
+            },
+        ],
+        "note": (
+            "Remaining numeric parameter columns are supplied by the active "
+            "HEC-RAS infiltration ParameterSet and vary by method/version "
+            "(for SCS Curve Number these include Curve Number, Abstraction "
+            "Ratio, and Minimum Infiltration Rate). Regional native reads add "
+            "geometry_hdf_path, region_name, and zero-based region_id attrs; "
+            "mutations also add backup_path and recompute_required."
         ),
     },
 }

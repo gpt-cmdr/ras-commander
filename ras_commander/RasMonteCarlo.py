@@ -2184,7 +2184,7 @@ class RasMonteCarlo:
                     zone_name: float(param_row[column_name])
                     for zone_name, column_name in normalized_map.items()
                 }
-                HdfLandCover.set_landcover_raster_map(
+                HdfLandCover.set_landcover_mannings_n(
                     landcover_hdf,
                     class_mapping,
                     ras_object=ras_object,

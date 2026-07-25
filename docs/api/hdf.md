@@ -37,6 +37,29 @@ Mesh geometry data.
 - `get_mesh_cell_count(hdf_path)` - Get number of cells
 - `get_nearest_cell(hdf_path, point)` - Find nearest cell to point
 - `get_nearest_face(hdf_path, point)` - Find nearest face to point
+- `get_mesh_face_property_tables(hdf_path)` - Read face elevation/area/wetted-perimeter/Manning tables
+
+Guarded direct writes are limited to the HEC-RAS 7.0 Linux two-phase
+`*.p##.tmp.hdf` workflow. They require
+`acknowledge_unsupported=True`, validate the exact temporary-result role and
+schema, retain a unique full-file backup, and verify readback:
+
+- `write_linux_tmp_face_property_tables(...)` - Replace selected temporary face tables
+- `extend_linux_tmp_face_property_tables(...)` - Extend temporary tables and return a structured report
+- `transform_linux_tmp_face_mannings_n(...)` - Transform only the temporary-table Manning column
+- `sample_linux_tmp_face_mannings_n_from_landcover_curves(...)` - Apply the documented equal-class land-cover sampling heuristic
+- `set_mesh_pinned_attribute(...)` - Set informational `Pinned` metadata; this does not protect edits from Windows preprocessing
+
+The former names remain compatibility wrappers through v1.1.x and will not be
+removed before v1.2.0:
+
+| Compatibility name | Canonical replacement |
+|---|---|
+| `set_mesh_face_property_tables()` | `write_linux_tmp_face_property_tables()` |
+| `extend_face_property_tables()` | `extend_linux_tmp_face_property_tables()` |
+| `set_face_mannings_n_values()` | `transform_linux_tmp_face_mannings_n()` |
+| `recompute_face_mannings_n_from_landcover_curves()` | `sample_linux_tmp_face_mannings_n_from_landcover_curves()` |
+| `pin_property_tables()` | `set_mesh_pinned_attribute()` |
 
 ### HdfResultsMesh
 
@@ -167,19 +190,41 @@ Fluvial-pluvial boundary analysis.
 
 ### HdfInfiltration
 
-Infiltration parameter management from HDF geometry files.
+Native infiltration authoring and read-only inspection.
 
 **Geometry File Operations:**
 
-- `get_infiltration_baseoverrides(hdf_path)` - Retrieve infiltration parameters from geometry HDF
-- `set_infiltration_baseoverrides(hdf_path, data)` - Set infiltration parameters
+- `get_preprocessed_infiltration(hdf_path, mesh_name=None, variable=...)` - Read solver-owned per-cell infiltration arrays
+- `get_infiltration_baseoverrides(hdf_path)` - Retrieve the geometry-wide class-to-parameter fallback table
+- `get_infiltration_calibration_regions(hdf_path)` - Read every region table in the bulk variable-oriented HDF view
+- `get_infiltration_region_overrides(hdf_path, region_name=..., hecras_version=...)` - Read one selected region in the class-ordered native view
+- `get_infiltration_region_names(hdf_path)` - Read stable region names
+- `get_infiltration_region_polygons(hdf_path)` - Read stable region IDs, names, and polygon geometry
+- `create_infiltration_override_regions(hdf_path, region_names, hecras_version=...)` - Create native geometry override regions from existing Manning-region polygons
+- `set_infiltration_base_overrides(hdf_path, data, hecras_version=...)` - Set the native geometry-wide Base Overrides fallback
+- `scale_infiltration_base_overrides(hdf_path, data, scale_factors, hecras_version=...)` - Scale active geometry-wide Base Overrides while preserving sentinel values
+- `set_infiltration_region_overrides(hdf_path, data, region_name=..., hecras_version=...)` - Set one native region's parameter table without changing Base Overrides or other regions
+- `scale_infiltration_region_overrides(hdf_path, data, scale_factors, region_name=..., hecras_version=...)` - Scale one selected region while preserving sentinel values
 
 **Raster and Layer Operations:**
 
 - `get_infiltration_layer_data(hdf_path)` - Get infiltration layer data from HDF
+- `set_infiltration_sidecar_parameters(hdf_path, data, hecras_version=...)` - Set sidecar parameters through native RASMapper serialization
+- `scale_infiltration_sidecar_parameters(hdf_path, data, scale_factors, hecras_version=...)` - Scale and save sidecar parameters natively
 - `get_classification_polygons(hdf_path)` - Read infiltration sidecar classification polygon overrides
 - `get_infiltration_map(hdf_path)` - Read infiltration raster map
 - `calculate_soil_statistics(hdf_path)` - Process zonal statistics for soil analysis
+
+The compatibility names `create_infiltration_group()`,
+`set_infiltration_baseoverrides()`, `set_infiltration_layer_data()`, and
+`scale_infiltration_baseoverrides()` delegate to the canonical native APIs
+through the v1.1.x compatibility window. The historical
+`scale_infiltration_data()` name was ambiguous between a geometry HDF and an
+infiltration sidecar and now fails closed with three explicit choices: the
+geometry-wide, selected-region, or sidecar scaler.
+These compatibility names will not be removed before v1.2.0.
+Ras Commander never hand-authors or selectively deletes
+`/Geometry/Infiltration` datasets.
 
 **Soil Analysis:**
 
@@ -197,8 +242,19 @@ Infiltration parameter management from HDF geometry files.
 Land-cover sidecar and final Manning's n extraction.
 
 - `get_landcover_raster_map(hdf_path)` - Read land-cover class IDs, names, and Manning's n values
+- `set_landcover_mannings_n(hdf_path, mapping, hecras_version=...)` - Set sidecar Manning's n through native RASMapper serialization
 - `get_classification_polygons(hdf_path)` - Read land-cover sidecar classification polygon overrides
 - `get_preprocessed_mannings_n(hdf_path)` - Read preprocessed cell-center Manning's n values from geometry HDF
+- `audit_final_mannings_n(hdf_path, ...)` - Strictly audit solver-owned final cell/face Manning arrays
+- `estimate_final_mannings_raster(hdf_path, ...)` - Build a non-authoritative visualization estimate
+
+Compatibility mappings are retained through v1.1.x and will not be removed
+before v1.2.0:
+
+| Compatibility name | Canonical replacement |
+|---|---|
+| `set_landcover_raster_map()` | `set_landcover_mannings_n()` |
+| `compute_final_mannings_raster()` | `estimate_final_mannings_raster()` for visualization, or `audit_final_mannings_n()` for solver evidence |
 
 ### HdfBndry
 

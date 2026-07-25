@@ -14,7 +14,8 @@ List of Functions:
 - get_region_mannings_n() - Read Manning's n region overrides
 - set_region_mannings_n() - Write regional Manning's n overrides
 - set_mannings_region_polygons() - Write regional Manning's n polygon geometry
-- override_2d_mannings_n() - EXPERIMENTAL: Override preprocessed Manning's n in geometry HDF
+- override_2d_mannings_n() - Fail-closed legacy name; use durable text
+  setters, native property-table recomputation, and final-result auditing
 
 Example Usage:
     >>> from ras_commander import GeomLandCover, RasPlan

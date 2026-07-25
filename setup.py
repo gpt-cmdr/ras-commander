@@ -41,7 +41,6 @@ setup(
         "ras_commander": [
             "LLM_GUIDE.md",
             "resources/*.json",
-            "resources/land_classification/*.hdf",
             "resources/templates/*/*",
         ],
         "ras_commander.native": [

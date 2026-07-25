@@ -2120,6 +2120,15 @@ class RasCmdr:
 
         if run_via_wsl:
             ras_exe = f"{ras_exe_dir_posix}/RasUnsteady"
+            # WSL supports the canonical 6.x/7.x layout. Keep the same adapter
+            # shape used by native Linux so prerequisite checks below do not
+            # depend on which host launches RasUnsteady.
+            layout = {
+                "ras_exe": ras_exe,
+                "needs_c_file": False,
+                "lib_dirs": [],
+                "label": "canonical (WSL)",
+            }
             probe = subprocess.run(
                 ["wsl", "test", "-x", ras_exe],
                 capture_output=True,
@@ -2833,36 +2842,62 @@ LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 
                 rc = proc.returncode
 
             if rc == 0:
-                subprocess.run(
-                    ["wsl", "bash", "-lc", cleanup_script],
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
+                ok, reason = RasCmdr._validate_linux_solve(
+                    log_path,
+                    tmp_hdf,
+                    plan_number,
                 )
-                if tmp_hdf.exists():
+                if ok:
+                    subprocess.run(
+                        ["wsl", "bash", "-lc", cleanup_script],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                    )
                     plan_hdf = RasCmdr._get_hdf_path(plan_number, ras_obj)
                     shutil.move(str(tmp_hdf), str(plan_hdf))
-                    logger.debug(f"Renamed {tmp_hdf.name} -> {plan_hdf.name}")
+                    logger.debug(
+                        f"Renamed {tmp_hdf.name} -> {plan_hdf.name}"
+                    )
 
+                    try:
+                        ras_obj.plan_df = ras_obj.get_plan_entries()
+                        ras_obj.update_results_df(plan_numbers=[plan_number])
+                        mask = ras_obj.results_df['plan_number'] == plan_number
+                        results_row = (
+                            ras_obj.results_df[mask].iloc[0].copy()
+                            if mask.any()
+                            else None
+                        )
+                    except Exception as e:
+                        logger.debug(
+                            f"Could not extract results_df_row: {e}"
+                        )
+                        results_row = None
+
+                    return ComputeResult(
+                        success=True,
+                        results_df_row=results_row,
+                    )
+
+                logger.error(
+                    f"Plan {plan_number}: WSL RasUnsteady exited 0 but the "
+                    f"solve did not produce a valid result: {reason}"
+                )
+            else:
                 try:
-                    ras_obj.plan_df = ras_obj.get_plan_entries()
-                    ras_obj.update_results_df(plan_numbers=[plan_number])
-                    mask = ras_obj.results_df['plan_number'] == plan_number
-                    results_row = ras_obj.results_df[mask].iloc[0].copy() if mask.any() else None
-                except Exception as e:
-                    logger.debug(f"Could not extract results_df_row: {e}")
-                    results_row = None
-
-                return ComputeResult(success=True, results_df_row=results_row)
-
-            try:
-                tail = log_path.read_text(errors='replace')[-800:] if log_path.exists() else ""
-            except OSError:
-                tail = "(log unreadable)"
-            logger.error(
-                f"Plan {plan_number}: WSL RasUnsteady exited with code {rc}. "
-                f"stdout={stdout.strip()} stderr={stderr.strip()} log tail={tail}"
-            )
+                    tail = (
+                        log_path.read_text(errors='replace')[-800:]
+                        if log_path.exists()
+                        else ""
+                    )
+                except OSError:
+                    tail = "(log unreadable)"
+                logger.error(
+                    f"Plan {plan_number}: WSL RasUnsteady exited with code "
+                    f"{rc}. stdout={stdout.strip()} stderr={stderr.strip()} "
+                    f"log tail={tail}"
+                )
 
             if attempt < max_attempts:
                 logger.info(f"Retrying in {retry_delay_sec}s...")

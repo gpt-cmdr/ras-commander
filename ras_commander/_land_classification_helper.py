@@ -11,9 +11,9 @@ import math
 import os
 import platform
 import re
-import shutil
 import sys
-import uuid
+import tempfile
+import warnings
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
@@ -54,11 +54,6 @@ _REQUIRED_CLASSIFICATION_COLUMNS = [
 _OPTIONAL_CLASSIFICATION_COLUMNS = [
     "percent_impervious",
 ]
-
-_RESOURCE_DIR = (
-    Path(__file__).resolve().parent / "resources" / "land_classification"
-)
-_SOILS_TEMPLATE_FILENAME = "soils_template.hdf"
 
 _LANDCOVER_DEFAULT_RELATIVE_PATH = Path("Land Classification") / "LandCover.hdf"
 _SOILS_DEFAULT_RELATIVE_PATH = Path("Soils Data") / "Hydrologic Soil Groups.hdf"
@@ -1079,20 +1074,6 @@ def _rasterize_soils_source(
     return array.astype(np.int32), transform, raster_map_rows
 
 
-def _resource_template_path(filename: str) -> Path:
-    template_path = _RESOURCE_DIR / filename
-    if not template_path.exists():
-        raise FileNotFoundError(f"Missing packaged land-classification resource: {template_path}")
-    return template_path
-
-
-def _set_hdf_string_attr(hdf_file: h5py.File, key: str, value: str) -> None:
-    payload = np.bytes_(value)
-    if key in hdf_file.attrs:
-        del hdf_file.attrs[key]
-    hdf_file.attrs[key] = payload
-
-
 def _decode_hdf_string(value: Any) -> str:
     """Decode RAS fixed-width HDF strings to normal Python text."""
     if isinstance(value, (bytes, np.bytes_)):
@@ -1104,52 +1085,6 @@ def _read_hdf_string_attr(hdf_file: h5py.File, key: str) -> Optional[str]:
     if key not in hdf_file.attrs:
         return None
     return _decode_hdf_string(hdf_file.attrs[key])
-
-
-def _build_raster_map_array(rows: list[tuple[int, str]]) -> np.ndarray:
-    max_name_len = max(len(str(name).encode("utf-8")) for _, name in rows)
-    dtype = np.dtype(
-        [
-            ("ID", "<i4"),
-            ("Name", f"S{max_name_len}"),
-        ]
-    )
-    data = np.zeros(len(rows), dtype=dtype)
-    for index, (class_id, class_name) in enumerate(rows):
-        data[index]["ID"] = int(class_id)
-        data[index]["Name"] = str(class_name).encode("utf-8")
-    return data
-
-
-def _rewrite_soils_sidecar(
-    output_hdf_path: Path,
-    raster_map_rows: list[tuple[int, str]],
-    projection_wkt: str,
-) -> Path:
-    output_hdf_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(_resource_template_path(_SOILS_TEMPLATE_FILENAME), output_hdf_path)
-
-    with h5py.File(output_hdf_path, "a") as hdf_file:
-        for key in ("Raster Map", "Variables", "Classification Polygons"):
-            if key in hdf_file:
-                del hdf_file[key]
-
-        hdf_file.create_dataset(
-            "Raster Map",
-            data=_build_raster_map_array(raster_map_rows),
-            compression="gzip",
-            compression_opts=1,
-            chunks=(100,),
-            maxshape=(None,),
-        )
-
-        _set_hdf_string_attr(hdf_file, "File Type", "HEC Land Cover")
-        _set_hdf_string_attr(hdf_file, "GUID", str(uuid.uuid4()))
-        _set_hdf_string_attr(hdf_file, "LC Type", "Soils")
-        _set_hdf_string_attr(hdf_file, "Projection", projection_wkt)
-        _set_hdf_string_attr(hdf_file, "Version", "2.0")
-
-    return RasUtils.safe_resolve(output_hdf_path)
 
 
 def _read_raster_map_rows(hdf_path: Union[str, Path]) -> list[tuple[int, str]]:
@@ -1306,9 +1241,11 @@ def read_land_classification_polygon_records(
                 rings = []
                 for part_row in polygon_parts[part_start : part_start + part_count]:
                     part_point_start, part_point_count = (int(value) for value in part_row)
+                    absolute_part_start = point_start + part_point_start
                     rings.append(
                         polygon_points[
-                            part_point_start : part_point_start + part_point_count
+                            absolute_part_start : absolute_part_start
+                            + part_point_count
                         ]
                     )
                 geometry = Polygon(rings[0], rings[1:])
@@ -1695,14 +1632,18 @@ def _create_infiltration_shell(
     landcover_hdf_path: Optional[Path],
     soil_layer_path: Optional[Path],
     scs_reset_time_hours: Optional[float],
+    hecras_version: str,
 ) -> Any:
-    ns = get_interop_namespace()
-    landcover_layer_cls = ns["LandCoverLayer"]
-    dotnet_dictionary_cls = ns["DotNetDictionary"]
+    from .dotnet.clr_bootstrap import find_hecras_install, load_clr
+
+    install = find_hecras_install(hecras_version)
+    load_clr(install)
+    from RasMapperLib import LandCoverLayer as landcover_layer_cls  # type: ignore
+    from System.Collections.Generic import Dictionary  # type: ignore
 
     from System import Single  # type: ignore
 
-    properties = dotnet_dictionary_cls[str, Single]()
+    properties = Dictionary[str, Single]()
     if infiltration_method == "scs_curve_number":
         reset_time = (
             float(scs_reset_time_hours)
@@ -1754,11 +1695,14 @@ def _populate_scs_infiltration_defaults(
     infiltration_hdf_path: Path,
     landcover_hdf_path: Optional[Path],
     soil_layer_path: Optional[Path],
+    hecras_version: str,
 ) -> pd.DataFrame:
-    from .hdf.HdfInfiltration import HdfInfiltration
+    from .dotnet.clr_bootstrap import find_hecras_install, load_clr
 
-    ns = get_interop_namespace()
-    landcover_layer_cls = ns["LandCoverLayer"]
+    install = find_hecras_install(hecras_version)
+    load_clr(install)
+    from RasMapperLib import LandCoverLayer as landcover_layer_cls  # type: ignore
+
     shell_layer = landcover_layer_cls(str(infiltration_hdf_path))
     ids = [int(value) for value in shell_layer.GetIDs()]
     names = [str(value) for value in shell_layer.GetNames()]
@@ -1798,12 +1742,18 @@ def _populate_scs_infiltration_defaults(
         )
 
     infiltration_df = pd.DataFrame(rows).drop(columns=["ID"])
-    result = HdfInfiltration.set_infiltration_layer_data(
+    from ._landcover_native import set_classification_parameters
+
+    result = set_classification_parameters(
         infiltration_hdf_path,
         infiltration_df,
+        layer_type="infiltration_scs",
+        hecras_version=hecras_version,
     )
-    if result is None:
-        raise RuntimeError(f"Failed to populate SCS infiltration variables: {infiltration_hdf_path}")
+    if result.empty:
+        raise RuntimeError(
+            f"Failed to populate SCS infiltration variables: {infiltration_hdf_path}"
+        )
     return infiltration_df
 
 
@@ -1819,25 +1769,16 @@ def _read_infiltration_variable_rows(
     return data, names
 
 
-def _write_infiltration_variable_rows(
-    infiltration_hdf_path: Path,
-    data: np.ndarray,
-) -> None:
-    with h5py.File(infiltration_hdf_path, "a") as hdf_file:
-        if "Variables" not in hdf_file:
-            raise KeyError(f"No Variables dataset found in {infiltration_hdf_path}")
-        hdf_file["Variables"][...] = data
-
-
 def _populate_deficit_constant_defaults(
     infiltration_hdf_path: Path,
     landcover_hdf_path: Optional[Path],
     soil_layer_path: Optional[Path],
+    hecras_version: str,
 ) -> pd.DataFrame:
     data, names = _read_infiltration_variable_rows(infiltration_hdf_path)
 
     rows = []
-    for index, combined_name in enumerate(names):
+    for combined_name in names:
         _, soil_group = _split_infiltration_class_name(
             combined_name,
             has_landcover=landcover_hdf_path is not None,
@@ -1849,9 +1790,6 @@ def _populate_deficit_constant_defaults(
             _DEFICIT_CONSTANT_DEFAULTS_BY_SOIL_GROUP,
             _DEFAULT_DEFICIT_CONSTANT_NO_DATA,
         )
-        for field_name, value in defaults.items():
-            if field_name in data.dtype.names:
-                data[field_name][index] = float(value)
         rows.append(
             {
                 "Name": combined_name,
@@ -1859,19 +1797,29 @@ def _populate_deficit_constant_defaults(
             }
         )
 
-    _write_infiltration_variable_rows(infiltration_hdf_path, data)
-    return pd.DataFrame(rows)
+    del data
+    result = pd.DataFrame(rows)
+    from ._landcover_native import set_classification_parameters
+
+    set_classification_parameters(
+        infiltration_hdf_path,
+        result,
+        layer_type="infiltration_deficit_constant",
+        hecras_version=hecras_version,
+    )
+    return result
 
 
 def _populate_green_ampt_defaults(
     infiltration_hdf_path: Path,
     landcover_hdf_path: Optional[Path],
     soil_layer_path: Optional[Path],
+    hecras_version: str,
 ) -> pd.DataFrame:
     data, names = _read_infiltration_variable_rows(infiltration_hdf_path)
 
     rows = []
-    for index, combined_name in enumerate(names):
+    for combined_name in names:
         _, soil_group = _split_infiltration_class_name(
             combined_name,
             has_landcover=landcover_hdf_path is not None,
@@ -1883,9 +1831,6 @@ def _populate_green_ampt_defaults(
             _GREEN_AMPT_DEFAULTS_BY_SOIL_GROUP,
             _DEFAULT_GREEN_AMPT_NO_DATA,
         )
-        for field_name, value in defaults.items():
-            if field_name in data.dtype.names:
-                data[field_name][index] = float(value)
         rows.append(
             {
                 "Name": combined_name,
@@ -1893,8 +1838,17 @@ def _populate_green_ampt_defaults(
             }
         )
 
-    _write_infiltration_variable_rows(infiltration_hdf_path, data)
-    return pd.DataFrame(rows)
+    del data
+    result = pd.DataFrame(rows)
+    from ._landcover_native import set_classification_parameters
+
+    set_classification_parameters(
+        infiltration_hdf_path,
+        result,
+        layer_type="infiltration_green_ampt",
+        hecras_version=hecras_version,
+    )
+    return result
 
 
 def add_landcover_layer(
@@ -1907,7 +1861,8 @@ def add_landcover_layer(
     restrict_to_extent: Optional[Any] = None,
     layer_name: str = "LandCover",
     buffer_distance: float = 0.0,
-    hecras_version: str = "7.0",
+    *,
+    hecras_version: str,
 ) -> Path:
     """Create and register a land-cover classification layer.
 
@@ -1972,6 +1927,8 @@ def add_soils_layer(
     output_hdf_path: Optional[Union[str, Path]] = None,
     restrict_to_extent: Optional[Any] = None,
     buffer_distance: float = 0.0,
+    *,
+    hecras_version: str,
 ) -> Path:
     """Create and register a hydrologic soil group layer from direct GSSURGO input.
 
@@ -1983,8 +1940,6 @@ def add_soils_layer(
     gssurgo_path = normalize_gssurgo_path(gssurgo_path)
 
     project_crs = _get_project_crs(project_paths)
-    projection_wkt = _get_project_projection_wkt(project_paths)
-
     output_hdf_path = (
         RasUtils.safe_resolve(Path(output_hdf_path))
         if output_hdf_path is not None
@@ -2004,17 +1959,26 @@ def add_soils_layer(
         buffer_distance=buffer_distance,
     )
 
-    _create_output_raster(
-        output_hdf_path.with_suffix(".tif"),
-        raster_array,
-        transform,
-        project_crs,
-    )
-    _rewrite_soils_sidecar(
-        output_hdf_path,
-        raster_map_rows,
-        projection_wkt,
-    )
+    from ._landcover_native import create_soils
+
+    with tempfile.TemporaryDirectory(
+        prefix="ras-commander-soils-",
+        dir=output_hdf_path.parent,
+    ) as temp_dir:
+        source_raster_path = _create_output_raster(
+            Path(temp_dir) / "gssurgo_soils_source.tif",
+            raster_array,
+            transform,
+            project_crs,
+        )
+        create_soils(
+            rasmap_path=project_paths.rasmap_path,
+            source_raster_path=source_raster_path,
+            raster_map_rows=raster_map_rows,
+            cell_size=float(cell_size),
+            output_hdf_path=output_hdf_path,
+            hecras_version=hecras_version,
+        )
     upsert_land_classification_layer(
         project_paths,
         output_hdf_path,
@@ -2032,6 +1996,8 @@ def add_infiltration_layer(
     soil_layer_path: Optional[Union[str, Path]] = None,
     output_hdf_path: Optional[Union[str, Path]] = None,
     scs_reset_time_hours: Optional[float] = None,
+    *,
+    hecras_version: str,
 ) -> Path:
     """Create and register an infiltration layer, with provisional starter defaults populated."""
     valid_methods = {
@@ -2081,6 +2047,7 @@ def add_infiltration_layer(
         landcover_hdf_path=resolved_landcover_path,
         soil_layer_path=resolved_soil_path,
         scs_reset_time_hours=scs_reset_time_hours,
+        hecras_version=hecras_version,
     )
 
     if infiltration_method == "scs_curve_number":
@@ -2088,18 +2055,21 @@ def add_infiltration_layer(
             output_hdf_path,
             resolved_landcover_path,
             resolved_soil_path,
+            hecras_version,
         )
     elif infiltration_method == "deficit_constant":
         _populate_deficit_constant_defaults(
             output_hdf_path,
             resolved_landcover_path,
             resolved_soil_path,
+            hecras_version,
         )
     else:
         _populate_green_ampt_defaults(
             output_hdf_path,
             resolved_landcover_path,
             resolved_soil_path,
+            hecras_version,
         )
 
     if infiltration_method in {"deficit_constant", "green_ampt"}:
@@ -2129,7 +2099,8 @@ def associate_geometry_layers(
     infiltration_hdf_path: Optional[Union[str, Path]] = None,
     terrain_hdf_path: Optional[Union[str, Path]] = None,
     sediment_soils_hdf_path: Optional[Union[str, Path]] = None,
-    hecras_version: str = "7.0",
+    *,
+    hecras_version: str,
     ras_object: Any = None,
 ) -> Path:
     """Associate project terrain / classification layers to a geometry HDF."""
@@ -2145,11 +2116,25 @@ def associate_geometry_layers(
         if landcover_hdf_path is not None
         else resolve_registered_land_classification_path(project_paths, "landcover")
     )
-    resolved_soil_path = (
-        RasUtils.safe_resolve(Path(soil_layer_path))
-        if soil_layer_path is not None
-        else resolve_registered_land_classification_path(project_paths, "soils")
-    )
+    if soil_layer_path is not None:
+        resolved_soil_path = RasUtils.safe_resolve(Path(soil_layer_path))
+        if not resolved_soil_path.exists():
+            raise FileNotFoundError(resolved_soil_path)
+        warnings.warn(
+            "associate_geometry_layers(soil_layer_path=...) is deprecated "
+            "through v1.1.x and will be removed no earlier than v1.2.0. "
+            "Hydrologic soils are inputs to RasMap.add_infiltration_layer(), "
+            "not geometry associations; associate the resulting "
+            "infiltration_hdf_path instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        logger.warning(
+            "Hydrologic soils %s were validated but are not a geometry "
+            "association. Create an infiltration sidecar with "
+            "RasMap.add_infiltration_layer() and associate that sidecar.",
+            resolved_soil_path.name,
+        )
     resolved_infiltration_path = (
         RasUtils.safe_resolve(Path(infiltration_hdf_path))
         if infiltration_hdf_path is not None
@@ -2165,14 +2150,6 @@ def associate_geometry_layers(
         if sediment_soils_hdf_path is not None
         else None
     )
-
-    if resolved_soil_path is not None:
-        logger.debug(
-            "Hydrologic soils layer resolved for association but not passed to "
-            "SedimentSoilsFilename because that geometry attribute is for sediment "
-            "bed material, not infiltration soils. Use sediment_soils_hdf_path "
-            "to write the SedimentSoilsFilename association explicitly."
-        )
 
     from ._landcover_native import associate_landcover_to_geometry
 
@@ -2220,7 +2197,7 @@ def recompute_property_tables(
     geom_file: Union[str, Path],
     ras_object: Any = None,
     *,
-    hecras_version: str = "7.0",
+    hecras_version: str,
     audit_mannings: bool = False,
 ) -> Path:
     """Run the selected RASMapper generation's native property-table command."""

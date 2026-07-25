@@ -1,0 +1,629 @@
+{
+  "schema_version": 1,
+  "hecras_version": "6.2",
+  "started_at_utc": "2026-07-25T09:51:31.828780+00:00",
+  "source_project": "G:\\RasProcess Testing\\wine_compare\\Muncie_simple_test\\Muncie.prj",
+  "probe_raster": "C:\\Users\\bill\\.config\\superpowers\\worktrees\\ras-commander\\codex-clb903-landcover-pipeline\\feature_dev_notes\\landcover_native_authoring_validation\\fixtures\\muncie_landcover_probe.tif",
+  "probe_manifest": "C:\\Users\\bill\\.config\\superpowers\\worktrees\\ras-commander\\codex-clb903-landcover-pipeline\\feature_dev_notes\\landcover_native_authoring_validation\\fixtures\\muncie_landcover_probe.json",
+  "run_root": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131",
+  "passed": true,
+  "baseline": {
+    "project": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\baseline\\Muncie.prj",
+    "paths": {
+      "project": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\baseline\\Muncie.prj",
+      "geometry_text": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\baseline\\Muncie.g04",
+      "geometry_hdf": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\baseline\\Muncie.g04.hdf",
+      "plan_hdf": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\baseline\\Muncie.p04.hdf",
+      "terrain_hdf": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\baseline\\Terrain\\Terrain.hdf",
+      "landcover_hdf": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\baseline\\LandCover\\LandCover.hdf",
+      "landcover_tif": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\baseline\\LandCover\\LandCover.tif"
+    },
+    "compute": {
+      "success": true,
+      "completion_verified": true,
+      "compute_message_parse": {
+        "completed": true,
+        "has_errors": false,
+        "has_warnings": false,
+        "error_count": 0,
+        "warning_count": 0,
+        "first_error_line": null
+      },
+      "artifact_verification_passed": true,
+      "verification_failures": []
+    },
+    "audit": [
+      {
+        "hdf_path": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\baseline\\Muncie.p04.hdf",
+        "mesh_name": "2D Interior Area",
+        "complete_geometry": true,
+        "landcover_filename": ".\\LandCover\\LandCover.hdf",
+        "landcover_layer_name": "LandCover",
+        "cell_value_count": 5765,
+        "cell_distinct_count": 11,
+        "cell_distinct_values": [
+          0.035999998450279236,
+          0.03999999910593033,
+          0.05400000140070915,
+          0.05999999865889549,
+          0.07000000029802322,
+          0.07199999690055847,
+          0.07999999821186066,
+          0.09000000357627869,
+          0.10000000149011612,
+          0.11999999731779099,
+          100.0
+        ],
+        "face_value_count": 46505,
+        "face_distinct_count": 11,
+        "face_distinct_values": [
+          0.035999998450279236,
+          0.03999999910593033,
+          0.05400000140070915,
+          0.05999999865889549,
+          0.07000000029802322,
+          0.07199999690055847,
+          0.07999999821186066,
+          0.09000000357627869,
+          0.10000000149011612,
+          0.11999999731779099,
+          100.0
+        ],
+        "missing_expected_values": [],
+        "passed": true,
+        "failure_reason": ""
+      }
+    ],
+    "arrays": {
+      "cell_count": 5765,
+      "cell_material_values": [
+        0.035999998450279236,
+        0.03999999910593033,
+        0.05400000140070915,
+        0.05999999865889549,
+        0.07000000029802322,
+        0.07199999690055847,
+        0.07999999821186066,
+        0.09000000357627869,
+        0.10000000149011612,
+        0.11999999731779099,
+        100.0
+      ],
+      "face_profile_row_count": 46505,
+      "face_material_values": [
+        0.035999998450279236,
+        0.03999999910593033,
+        0.05400000140070915,
+        0.05999999865889549,
+        0.07000000029802322,
+        0.07199999690055847,
+        0.07999999821186066,
+        0.09000000357627869,
+        0.10000000149011612,
+        0.11999999731779099,
+        100.0
+      ]
+    },
+    "raster": {
+      "width": 1941,
+      "height": 1398,
+      "dtype": "int32",
+      "nodata": null,
+      "tiled": true,
+      "compression": "deflate",
+      "overviews": [
+        2,
+        4,
+        8
+      ],
+      "class_counts": {
+        "0": 1925774,
+        "1": 23560,
+        "2": 314956,
+        "3": 54559,
+        "4": 90767,
+        "5": 83645,
+        "6": 216657,
+        "7": 3600
+      },
+      "sha256": "929b1353405ccf158b8851a1337ab8666f290a729f4e56ae268c3db803884057"
+    },
+    "sidecar": {
+      "keys": [
+        "Percent Impervious",
+        "Raster Map",
+        "Variables"
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "names": [
+        "NoData",
+        "Building",
+        "Medium Density Residential",
+        "Open Space",
+        "Park",
+        "Trees",
+        "Urban",
+        "Qualification Probe"
+      ],
+      "mannings_n": [
+        -9999.0,
+        10.0,
+        0.07999999821186066,
+        0.03999999910593033,
+        0.05999999865889549,
+        0.11999999731779099,
+        0.10000000149011612,
+        0.07000000029802322
+      ],
+      "root_attributes": {
+        "File Type": "HEC Land Cover",
+        "GUID": "3f2f9b57-0b32-4cd3-9e5d-4189454dea65",
+        "LC Type": "LandCover",
+        "Projection": "PROJCS[\"NAD_1983_StatePlane_Indiana_East_FIPS_1301_Feet\",GEOGCS[\"GCS_North_American_1983\",DATUM[\"D_North_American_1983\",SPHEROID[\"GRS_1980\",6378137.0,298.257222101]],PRIMEM[\"Greenwich\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"False_Easting\",328083.3333333333],PARAMETER[\"False_Northing\",820208.3333333333],PARAMETER[\"Central_Meridian\",-85.66666666666667],PARAMETER[\"Scale_Factor\",0.9999666666666667],PARAMETER[\"Latitude_Of_Origin\",37.5],UNIT[\"Foot_US\",0.3048006096012192]]",
+        "Version": "2.0"
+      },
+      "sha256": "c56c9a54bb0149bd417e863afb78fe8f697758cfd5db4083dda9ba134c0ec0f6"
+    },
+    "association": {
+      "terrain_raw_filename": ".\\Terrain\\Terrain.hdf",
+      "terrain_hdf_path": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\baseline\\Terrain\\Terrain.hdf",
+      "terrain_layer_name": "Terrain",
+      "terrain_file_date": "14JAN2026 15:55:14",
+      "landcover_raw_filename": ".\\LandCover\\LandCover.hdf",
+      "landcover_hdf_path": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\baseline\\LandCover\\LandCover.hdf",
+      "landcover_layer_name": "LandCover",
+      "landcover_file_date": "25JUL2026 05:51:34",
+      "landcover_date_last_modified": "25JUL2026 05:51:34",
+      "infiltration_raw_filename": null,
+      "infiltration_hdf_path": null,
+      "infiltration_layer_name": null,
+      "infiltration_file_date": null,
+      "sediment_soils_raw_filename": null,
+      "sediment_soils_hdf_path": null,
+      "sediment_soils_layer_name": null,
+      "sediment_soils_file_date": null,
+      "si_units": "False",
+      "hdf_attrs": {
+        "SI Units": "False",
+        "Terrain Filename": ".\\Terrain\\Terrain.hdf",
+        "Terrain Layername": "Terrain",
+        "Terrain File Date": "14JAN2026 15:55:14",
+        "Land Cover Filename": ".\\LandCover\\LandCover.hdf",
+        "Land Cover Layername": "LandCover",
+        "Land Cover File Date": "25JUL2026 05:51:34",
+        "Land Cover Date Last Modified": "25JUL2026 05:51:34"
+      },
+      "two_d_area_terrain_associations": [
+        {
+          "flow_area": "2D Interior Area",
+          "terrain_raw_filename": ".\\Terrain\\Terrain.hdf",
+          "terrain_layer_name": null,
+          "terrain_file_date": "14JAN2026 15:55:14",
+          "terrain_hdf_path": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\baseline\\Terrain\\Terrain.hdf"
+        },
+        {
+          "flow_area": "Attributes",
+          "terrain_raw_filename": null,
+          "terrain_layer_name": null,
+          "terrain_file_date": null,
+          "terrain_hdf_path": null
+        },
+        {
+          "flow_area": "Cell Info",
+          "terrain_raw_filename": null,
+          "terrain_layer_name": null,
+          "terrain_file_date": null,
+          "terrain_hdf_path": null
+        },
+        {
+          "flow_area": "Cell Points",
+          "terrain_raw_filename": null,
+          "terrain_layer_name": null,
+          "terrain_file_date": null,
+          "terrain_hdf_path": null
+        },
+        {
+          "flow_area": "Polygon Info",
+          "terrain_raw_filename": null,
+          "terrain_layer_name": null,
+          "terrain_file_date": null,
+          "terrain_hdf_path": null
+        },
+        {
+          "flow_area": "Polygon Parts",
+          "terrain_raw_filename": null,
+          "terrain_layer_name": null,
+          "terrain_file_date": null,
+          "terrain_hdf_path": null
+        },
+        {
+          "flow_area": "Polygon Points",
+          "terrain_raw_filename": null,
+          "terrain_layer_name": null,
+          "terrain_file_date": null,
+          "terrain_hdf_path": null
+        }
+      ]
+    },
+    "geometry_root_attributes": {
+      "Complete Geometry": "True",
+      "Extents": [
+        404112.085287251,
+        413818.78591839003,
+        1799678.66049907,
+        1806670.07015604
+      ],
+      "Geometry Time": "14Jan2026 16:55:14",
+      "Land Cover Date Last Modified": "25JUL2026 05:51:34",
+      "Land Cover File Date": "25JUL2026 05:51:34",
+      "Land Cover Filename": ".\\LandCover\\LandCover.hdf",
+      "Land Cover Layername": "LandCover",
+      "SI Units": "False",
+      "Terrain File Date": "14JAN2026 15:55:14",
+      "Terrain Filename": ".\\Terrain\\Terrain.hdf",
+      "Terrain Layername": "Terrain",
+      "Title": "Muncie Geometry - 50ft User n Value Regi",
+      "Version": "1.0.17 (13Jan2021)"
+    },
+    "plan_root_attributes": {
+      "File Type": "HEC-RAS Results",
+      "File Version": "HEC-RAS 6.2 March 2022",
+      "Projection": "PROJCS[\"NAD_1983_StatePlane_Indiana_East_FIPS_1301_Feet\",GEOGCS[\"GCS_North_American_1983\",DATUM[\"D_North_American_1983\",SPHEROID[\"GRS_1980\",6378137.0,298.257222101]],PRIMEM[\"Greenwich\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"False_Easting\",328083.3333333333],PARAMETER[\"False_Northing\",820208.3333333333],PARAMETER[\"Central_Meridian\",-85.66666666666667],PARAMETER[\"Scale_Factor\",0.9999666666666667],PARAMETER[\"Latitude_Of_Origin\",37.5],UNIT[\"Foot_US\",0.3048006096012192]]",
+      "Units System": "US Customary"
+    },
+    "plan_geometry_attributes": {
+      "Complete Geometry": "True",
+      "Extents": [
+        404112.085287251,
+        413818.78591839003,
+        1799678.66049907,
+        1806670.07015604
+      ],
+      "Geometry Time": "14Jan2026 16:55:14",
+      "Land Cover Date Last Modified": "25JUL2026 05:51:34",
+      "Land Cover File Date": "25JUL2026 05:51:34",
+      "Land Cover Filename": ".\\LandCover\\LandCover.hdf",
+      "Land Cover Layername": "LandCover",
+      "SI Units": "False",
+      "Terrain File Date": "14JAN2026 15:55:14",
+      "Terrain Filename": ".\\Terrain\\Terrain.hdf",
+      "Terrain Layername": "Terrain",
+      "Title": "Muncie Geometry - 50ft User n Value Regi",
+      "Version": "1.0.17 (13Jan2021)"
+    },
+    "hashes": {
+      "geometry_text": "131e283cbdf7df171f477546948f34b2548306f18c7f57bfc2a3a47c11146884",
+      "geometry_hdf": "810ba73dae338529bb4027c9b4e0521bf83fa9f93fc5306f683e68b2e649bd6a",
+      "plan_hdf": "5e29026dca275b705f4e81f96b36f44136cbaa0e0ffaced4c585868b18318be3",
+      "landcover_hdf": "c56c9a54bb0149bd417e863afb78fe8f697758cfd5db4083dda9ba134c0ec0f6",
+      "landcover_tif": "929b1353405ccf158b8851a1337ab8666f290a729f4e56ae268c3db803884057",
+      "region_block": "67eb022dd7bd76f923b61f94c7e7d288978f74919c1c03ce2b9a83f8e5a38127"
+    }
+  },
+  "geometry_base_edit": {
+    "project": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\geometry-base-edit\\Muncie.prj",
+    "compute": {
+      "success": true,
+      "completion_verified": true,
+      "compute_message_parse": {
+        "completed": true,
+        "has_errors": false,
+        "has_warnings": false,
+        "error_count": 0,
+        "warning_count": 0,
+        "first_error_line": null
+      },
+      "artifact_verification_passed": true,
+      "verification_failures": []
+    },
+    "arrays": {
+      "cell_count": 5765,
+      "cell_material_values": [
+        0.035999998450279236,
+        0.03999999910593033,
+        0.05400000140070915,
+        0.05999999865889549,
+        0.07000000029802322,
+        0.07199999690055847,
+        0.07999999821186066,
+        0.09000000357627869,
+        0.10999999940395355,
+        0.11999999731779099,
+        100.0
+      ],
+      "face_profile_row_count": 46505,
+      "face_material_values": [
+        0.035999998450279236,
+        0.03999999910593033,
+        0.05400000140070915,
+        0.05999999865889549,
+        0.07000000029802322,
+        0.07199999690055847,
+        0.07999999821186066,
+        0.09000000357627869,
+        0.10999999940395355,
+        0.11999999731779099,
+        100.0
+      ]
+    },
+    "delta": {
+      "cells": {
+        "same_shape": true,
+        "before_shape": [
+          5765
+        ],
+        "after_shape": [
+          5765
+        ],
+        "changed_count": 1418,
+        "max_abs_delta": 0.009999997913837433
+      },
+      "face_mannings": {
+        "same_shape": true,
+        "before_shape": [
+          46505
+        ],
+        "after_shape": [
+          46505
+        ],
+        "changed_count": 11248,
+        "max_abs_delta": 0.009999997913837433
+      },
+      "face_non_mannings": {
+        "same_shape": true,
+        "before_shape": [
+          46505,
+          3
+        ],
+        "after_shape": [
+          46505,
+          3
+        ],
+        "changed_count": 0,
+        "max_abs_delta": 0.0
+      }
+    },
+    "target_counts": {
+      "before_cell_urban_0.10": 1418,
+      "after_cell_urban_0.11": 1418,
+      "after_cell_region_urban_0.09": 44,
+      "before_face_urban_0.10": 11248,
+      "after_face_urban_0.11": 11248,
+      "after_face_region_urban_0.09": 370
+    },
+    "hashes": {
+      "geometry_text": "4dc20a116d8053149c5fd1a761c7eb8615a02b29511f0dcc9c0e705dd6c2bb92",
+      "geometry_hdf": "cb5246db94a86c981a9a081ac0621f7b9bb873c6c32748716c68671467818e4f",
+      "plan_hdf": "3d8013ea2161df784d29f6c365095fa9e9ad87aedacb8cff09deae3e3c4162fe",
+      "landcover_hdf": "c56c9a54bb0149bd417e863afb78fe8f697758cfd5db4083dda9ba134c0ec0f6",
+      "landcover_tif": "929b1353405ccf158b8851a1337ab8666f290a729f4e56ae268c3db803884057",
+      "region_block": "67eb022dd7bd76f923b61f94c7e7d288978f74919c1c03ce2b9a83f8e5a38127"
+    }
+  },
+  "sidecar_edit": {
+    "project": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\sidecar-edit\\Muncie.prj",
+    "edit": {
+      "changed": 1,
+      "unchanged": 7,
+      "format": "native-v6+",
+      "backup_path": "C:\\CLB\\landcover-version-matrix\\6.2-20260725T055131\\sidecar-edit\\LandCover\\LandCover.backup.hdf",
+      "class_details": [
+        {
+          "class_name": "NoData",
+          "old_mannings_n": NaN,
+          "new_mannings_n": NaN,
+          "changed": false,
+          "value_changed": false
+        },
+        {
+          "class_name": "Building",
+          "old_mannings_n": 10.0,
+          "new_mannings_n": 10.0,
+          "changed": false,
+          "value_changed": false
+        },
+        {
+          "class_name": "Medium Density Residential",
+          "old_mannings_n": 0.07999999821186066,
+          "new_mannings_n": 0.07999999821186066,
+          "changed": false,
+          "value_changed": false
+        },
+        {
+          "class_name": "Open Space",
+          "old_mannings_n": 0.03999999910593033,
+          "new_mannings_n": 0.03999999910593033,
+          "changed": false,
+          "value_changed": false
+        },
+        {
+          "class_name": "Park",
+          "old_mannings_n": 0.05999999865889549,
+          "new_mannings_n": 0.05999999865889549,
+          "changed": false,
+          "value_changed": false
+        },
+        {
+          "class_name": "Trees",
+          "old_mannings_n": 0.11999999731779099,
+          "new_mannings_n": 0.11999999731779099,
+          "changed": false,
+          "value_changed": false
+        },
+        {
+          "class_name": "Urban",
+          "old_mannings_n": 0.10000000149011612,
+          "new_mannings_n": 0.10000000149011612,
+          "changed": false,
+          "value_changed": false
+        },
+        {
+          "class_name": "Qualification Probe",
+          "old_mannings_n": 0.07000000029802322,
+          "new_mannings_n": 0.077,
+          "changed": true,
+          "value_changed": true
+        }
+      ],
+      "mode": "native-parameter-table"
+    },
+    "compute": {
+      "success": true,
+      "completion_verified": true,
+      "compute_message_parse": {
+        "completed": true,
+        "has_errors": false,
+        "has_warnings": false,
+        "error_count": 0,
+        "warning_count": 0,
+        "first_error_line": null
+      },
+      "artifact_verification_passed": true,
+      "verification_failures": []
+    },
+    "arrays": {
+      "cell_count": 5765,
+      "cell_material_values": [
+        0.035999998450279236,
+        0.03999999910593033,
+        0.05400000140070915,
+        0.05999999865889549,
+        0.07199999690055847,
+        0.07699999958276749,
+        0.07999999821186066,
+        0.09000000357627869,
+        0.10000000149011612,
+        0.11999999731779099,
+        100.0
+      ],
+      "face_profile_row_count": 46505,
+      "face_material_values": [
+        0.035999998450279236,
+        0.03999999910593033,
+        0.05400000140070915,
+        0.05999999865889549,
+        0.07199999690055847,
+        0.07699999958276749,
+        0.07999999821186066,
+        0.09000000357627869,
+        0.10000000149011612,
+        0.11999999731779099,
+        100.0
+      ]
+    },
+    "delta": {
+      "cells": {
+        "same_shape": true,
+        "before_shape": [
+          5765
+        ],
+        "after_shape": [
+          5765
+        ],
+        "changed_count": 36,
+        "max_abs_delta": 0.006999999284744263
+      },
+      "face_mannings": {
+        "same_shape": true,
+        "before_shape": [
+          46505
+        ],
+        "after_shape": [
+          46505
+        ],
+        "changed_count": 314,
+        "max_abs_delta": 0.006999999284744263
+      },
+      "face_non_mannings": {
+        "same_shape": true,
+        "before_shape": [
+          46505,
+          3
+        ],
+        "after_shape": [
+          46505,
+          3
+        ],
+        "changed_count": 0,
+        "max_abs_delta": 0.0
+      }
+    },
+    "target_counts": {
+      "before_cell_probe_0.070": 36,
+      "after_cell_probe_0.077": 36,
+      "before_face_probe_0.070": 314,
+      "after_face_probe_0.077": 314
+    },
+    "sidecar": {
+      "keys": [
+        "Percent Impervious",
+        "Raster Map",
+        "Variables"
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "names": [
+        "NoData",
+        "Building",
+        "Medium Density Residential",
+        "Open Space",
+        "Park",
+        "Trees",
+        "Urban",
+        "Qualification Probe"
+      ],
+      "mannings_n": [
+        -9999.0,
+        10.0,
+        0.07999999821186066,
+        0.03999999910593033,
+        0.05999999865889549,
+        0.11999999731779099,
+        0.10000000149011612,
+        0.07699999958276749
+      ],
+      "root_attributes": {
+        "File Type": "HEC Land Cover",
+        "GUID": "3f2f9b57-0b32-4cd3-9e5d-4189454dea65",
+        "LC Type": "LandCover",
+        "Projection": "PROJCS[\"NAD_1983_StatePlane_Indiana_East_FIPS_1301_Feet\",GEOGCS[\"GCS_North_American_1983\",DATUM[\"D_North_American_1983\",SPHEROID[\"GRS_1980\",6378137.0,298.257222101]],PRIMEM[\"Greenwich\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"False_Easting\",328083.3333333333],PARAMETER[\"False_Northing\",820208.3333333333],PARAMETER[\"Central_Meridian\",-85.66666666666667],PARAMETER[\"Scale_Factor\",0.9999666666666667],PARAMETER[\"Latitude_Of_Origin\",37.5],UNIT[\"Foot_US\",0.3048006096012192]]",
+        "Version": "2.0"
+      },
+      "sha256": "aee78b90903a6a56922668076c770085d85c92da0bb54da402c1ce0f07c0562f"
+    },
+    "hashes": {
+      "geometry_text": "131e283cbdf7df171f477546948f34b2548306f18c7f57bfc2a3a47c11146884",
+      "geometry_hdf": "56474d6e1c2c45a997e185075b3dcaed456fce4731e814346628e31223c6b5a2",
+      "plan_hdf": "72e1b0fb33aa75ce72c704b1e084682cd9361b141801331335dd4471f9b6be61",
+      "landcover_hdf": "aee78b90903a6a56922668076c770085d85c92da0bb54da402c1ce0f07c0562f",
+      "landcover_tif": "929b1353405ccf158b8851a1337ab8666f290a729f4e56ae268c3db803884057",
+      "region_block": "67eb022dd7bd76f923b61f94c7e7d288978f74919c1c03ce2b9a83f8e5a38127"
+    },
+    "baseline_hashes": {
+      "geometry_text": "131e283cbdf7df171f477546948f34b2548306f18c7f57bfc2a3a47c11146884",
+      "geometry_hdf": "810ba73dae338529bb4027c9b4e0521bf83fa9f93fc5306f683e68b2e649bd6a",
+      "plan_hdf": "5e29026dca275b705f4e81f96b36f44136cbaa0e0ffaced4c585868b18318be3",
+      "landcover_hdf": "c56c9a54bb0149bd417e863afb78fe8f697758cfd5db4083dda9ba134c0ec0f6",
+      "landcover_tif": "929b1353405ccf158b8851a1337ab8666f290a729f4e56ae268c3db803884057",
+      "region_block": "67eb022dd7bd76f923b61f94c7e7d288978f74919c1c03ce2b9a83f8e5a38127"
+    }
+  },
+  "finished_at_utc": "2026-07-25T09:56:45.157653+00:00"
+}

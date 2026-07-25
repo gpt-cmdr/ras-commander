@@ -233,7 +233,7 @@ def test_missing_polygon_parts_warning_is_collapsed(
     ]
 
 
-def test_set_landcover_raster_map_info_is_concise(
+def test_set_landcover_mannings_n_info_is_concise(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
@@ -259,7 +259,7 @@ def test_set_landcover_raster_map_info_is_concise(
         native_set,
     )
     with caplog.at_level("INFO", logger=LOGGER_NAME):
-        result = HdfLandCover.set_landcover_raster_map(
+        result = HdfLandCover.set_landcover_mannings_n(
             sidecar,
             {"Open Water": 0.04},
             hecras_version="6.6",
@@ -272,6 +272,22 @@ def test_set_landcover_raster_map_info_is_concise(
         "changed=1, unchanged=1"
     ]
     assert str(tmp_path) not in "\n".join(messages)
+
+
+def test_set_landcover_raster_map_is_working_deprecated_alias(monkeypatch):
+    expected = {"changed": 1}
+    monkeypatch.setattr(
+        HdfLandCover,
+        "set_landcover_mannings_n",
+        staticmethod(lambda *args, **kwargs: expected),
+    )
+    with pytest.deprecated_call(match="set_landcover_mannings_n"):
+        result = HdfLandCover.set_landcover_raster_map(
+            "LandCover.hdf",
+            {"Open Water": 0.04},
+            hecras_version="6.6",
+        )
+    assert result is expected
 
 
 def test_compute_final_mannings_raster_info_is_concise(

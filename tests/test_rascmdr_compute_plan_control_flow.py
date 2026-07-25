@@ -796,3 +796,132 @@ def test_wsl_linux_retry_script_uses_utf8_and_cleans_io_tmp(monkeypatch, tmp_pat
     )
     assert run_calls[0][0] == ["wsl", "bash", "-lc", expected_cleanup]
     assert run_calls[0][1]["encoding"] == "utf-8"
+
+
+def test_compute_plan_linux_wsl_uses_canonical_layout_without_c_file(
+    monkeypatch,
+    tmp_path,
+):
+    """The /mnt WSL branch must reach its adapter without an unbound layout."""
+    project_name = "Demo"
+    plan_path = tmp_path / f"{project_name}.p01"
+    plan_path.write_text("Geom File=g01\n", encoding="utf-8")
+    (tmp_path / f"{project_name}.p01.tmp.hdf").write_bytes(b"tmp")
+    (tmp_path / f"{project_name}.b01").write_bytes(b"boundary")
+    (tmp_path / f"{project_name}.x01").write_bytes(b"geometry")
+
+    ras_obj = SimpleNamespace(
+        project_folder=tmp_path,
+        project_name=project_name,
+        check_initialized=lambda: None,
+    )
+    captured = {}
+
+    def fake_wsl_compute(**kwargs):
+        captured.update(kwargs)
+        return ComputeResult(success=True)
+
+    monkeypatch.setattr(rascmdr_module, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda plan_number, ras_object: plan_path),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="",
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_compute_plan_linux_via_wsl",
+        staticmethod(fake_wsl_compute),
+    )
+
+    result = RasCmdr.compute_plan_linux(
+        "01",
+        ras_exe_dir="/mnt/c/HEC-RAS/7.0.1/Linux/Linux",
+        ras_object=ras_obj,
+        retry=False,
+    )
+
+    assert result.success is True
+    assert captured["geom_num"] == "01"
+    assert captured["tmp_hdf"] == tmp_path / f"{project_name}.p01.tmp.hdf"
+    assert not (tmp_path / f"{project_name}.c01").exists()
+
+
+def test_wsl_linux_exit_zero_does_not_promote_incomplete_hdf(
+    monkeypatch,
+    tmp_path,
+):
+    """Exit code zero is insufficient when the temporary HDF lacks results."""
+
+    class FakePopen:
+        returncode = 0
+
+        def __init__(self, args, **kwargs):
+            pass
+
+        def communicate(self, timeout=None):
+            return "", ""
+
+        def kill(self):
+            pass
+
+    tmp_hdf = tmp_path / "Demo.p01.tmp.hdf"
+    with h5py.File(tmp_hdf, "w") as hdf_file:
+        hdf_file.create_group("Geometry")
+    (tmp_path / "compute_linux_01.log").write_text(
+        "Finished Unsteady Flow Simulation\n",
+        encoding="utf-8",
+    )
+    plan_hdf = tmp_path / "Demo.p01.hdf"
+
+    monkeypatch.setattr(
+        RasCmdr,
+        "_windows_path_to_wsl",
+        staticmethod(lambda path: f"/mnt/test/{Path(path).name}"),
+    )
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="",
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_get_hdf_path",
+        staticmethod(
+            lambda *args, **kwargs: pytest.fail(
+                "Incomplete WSL result must not be promoted"
+            )
+        ),
+    )
+
+    result = RasCmdr._compute_plan_linux_via_wsl(
+        ras_exe="/mnt/c/HEC-RAS/RasUnsteady",
+        ras_exe_dir="/mnt/c/HEC-RAS",
+        plan_number="01",
+        geom_num="01",
+        project_dir=tmp_path,
+        project_name="Demo",
+        tmp_hdf=tmp_hdf,
+        timeout_sec=30,
+        dos2unix=False,
+        retry=False,
+        retry_delay_sec=0,
+        ras_obj=SimpleNamespace(),
+    )
+
+    assert result.success is False
+    assert tmp_hdf.exists()
+    assert not plan_hdf.exists()

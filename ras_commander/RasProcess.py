@@ -1356,8 +1356,9 @@ Step 5: Configure (optional — auto-detection usually works)
             This method runs RasProcess.exe ``SetGeometryAssociation`` in-place
             and mutates the supplied geometry HDF. It is a reference/validation
             path only. Normal workflows should call
-            ``RasMap.associate_geometry_layers(...)``, which writes the same
-            ``/Geometry`` association attributes through Python-native h5py.
+            ``RasMap.associate_geometry_layers(...)``, which delegates to the
+            selected HEC-RAS generation's native geometry-association API and
+            validates its readback.
 
         Args:
             hdf_path: Existing geometry HDF to mutate and validate.

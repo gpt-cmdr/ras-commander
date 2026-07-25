@@ -310,12 +310,21 @@ def read_geometry_association(
 
 
 def _read_two_d_area_terrain_associations(hdf_file, hdf_path: Path, resolve_paths: bool):
+    import h5py
+
     area_records = []
     flow_areas = hdf_file.get("Geometry/2D Flow Areas")
     if flow_areas is None:
         return area_records
 
     for area_name, area_group in flow_areas.items():
+        # HEC-RAS stores collection-level tables (Attributes, Cell Info,
+        # Polygon Points, and related arrays) beside the named flow-area
+        # groups.  Only groups represent individual 2D flow areas.  Filtering
+        # by HDF object type also retains legitimate areas whose optional
+        # terrain-association attributes have not yet been populated.
+        if not isinstance(area_group, h5py.Group):
+            continue
         raw_filename = decode_hdf_attr(area_group.attrs.get("Terrain Filename"))
         record = {
             "flow_area": area_name,

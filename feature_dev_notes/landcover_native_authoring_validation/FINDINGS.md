@@ -31,7 +31,7 @@ Class IDs are bytes and therefore cannot exceed 255. The native sidecar has the
 root arrays `IDs`, `Names`, and `ManningsN`. The geometry association points to
 the TIFF, not the HDF.
 
-### HEC-RAS 6.6 and newer
+### HEC-RAS 6.0 and newer
 
 1. Load the selected RasMapperLib with pythonnet and initialize the project SRS.
 2. Create `LandCoverFile`, populate `ValueToOutput`, and call `SetNameIDMap`.
@@ -61,8 +61,9 @@ RAS also depends on native raster/resampler and serialization conventions.
 
 ## End-to-end proof
 
-The compact Muncie project was copied into disposable directories and processed
-through the public ras-commander APIs:
+The compact Muncie project is copied into a new disposable directory for every
+version and processed through the public ras-commander APIs in a fresh Python
+process:
 
 - source:
   `G:\RasProcess Testing\wine_compare\Muncie_simple_test\Muncie.prj`
@@ -70,13 +71,22 @@ through the public ras-commander APIs:
 - flow area: `2D Interior Area`
 - native authoring: `RasMap.add_landcover_layer`
 - native association: `RasMap.associate_geometry_layers`
-- final computation: `RasCmdr.compute_plan(..., force_rerun=True, verify=True)`
+- final computation: `RasCmdr.compute_plan(..., force_rerun=True,
+  required_hdf_datasets=...)`
 - final audit: `HdfLandCover.audit_final_mannings_n`
 
-| Version | Association | Final cell values | Final face rows | Final face values |
-|---|---|---:|---:|---:|
-| 5.0.7 | `NativeAPI507.tif` | not emitted | 46,505 | 10 |
-| 6.6 | `NativeAPI66.hdf` | 5,765 cells / 10 values | 47,055 | 10 |
+Every row includes three completed plans:
+
+1. native authoring and association baseline;
+2. geometry base `Urban` Manning change from `0.10` to `0.11`;
+3. `Qualification Probe` sidecar Manning change from `0.070` to `0.077`
+   (native rebuild on 5.0.7).
+
+The expected modern deltas are 1,418 cells / 11,248 face rows for the base
+change and 36 cells / 314 face rows for the sidecar change. HEC-RAS 5.0.7 does
+not emit the cell-center array, so its authoritative proof uses the same face
+row deltas. Non-Manning face-table columns must remain byte-for-byte equal in
+both edit scenarios.
 
 The material values in both outputs are approximately `0.036`, `0.040`,
 `0.054`, `0.060`, `0.072`, `0.080`, `0.090`, `0.100`, `0.120`, and `100`.
@@ -84,8 +94,8 @@ The value `100` is expected for this fixture: its source Building class uses
 `n=10` and the existing regional calibration multiplies it by ten.
 
 The result HDFs are marked `Complete Geometry=True`; exact hashes, raster class
-counts, and values are in `results/muncie_5.0.7.json` and
-`results/muncie_6.6.json`.
+counts, associations, message parsing, and cell/face deltas are recorded in the
+version-matrix JSON evidence.
 
 ## Validation semantics
 
@@ -102,7 +112,9 @@ both datasets.
 Notebooks 212 and 213 are excluded from the published notebook catalog pending
 replacement. Notebook 212's prior diversity assertion accepted floating noise,
 and notebook 213 exercised a custom-HDF classification-polygon writer that is
-now disabled.
+now disabled pending a native `PolygonFeatureLayer` implementation. Notebook
+213 did prove a narrow 6.6 simple-box workflow; it should not be described as a
+complete failure. See `OPEN_QUESTIONS.md`.
 
 ## Geometry associations and overrides
 
@@ -111,3 +123,7 @@ The repaired base-table writer correctly preserves/updates that count. Native
 geometry associations and existing regional overrides were present in both
 qualified runs and explain the final scaled values. Neither the association
 label nor the base override table caused the prior class-zero collapse.
+
+Every version-matrix result uses the native association layer name
+`LandCover`. HEC-RAS 5.0.7 associates the `.tif`; HEC-RAS 6.0 through 7.0
+associate the `.hdf`. The former Python label `NLCD Land Cover` is not used.

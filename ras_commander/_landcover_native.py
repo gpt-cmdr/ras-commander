@@ -15,9 +15,11 @@ import platform
 import shutil
 import subprocess
 import tempfile
+import threading
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Mapping, Optional, Union
 
 import h5py
 import numpy as np
@@ -37,6 +39,63 @@ _RAS5_GEOMETRY_SCRIPT = (
 _NODATA_NAME = "NoData"
 _NODATA_ID = 0
 _NODATA_MANNINGS = float(np.finfo(np.float32).max)
+_SIDECAR_EDIT_LOCK = threading.RLock()
+
+
+@contextmanager
+def _sidecar_transaction(sidecar_hdf_path: Path):
+    """Back up and restore one RAS-owned sidecar around a native edit."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    durable_backup_path = sidecar_hdf_path.with_name(
+        f"{sidecar_hdf_path.stem}.native_parameters."
+        f"{timestamp}.backup{sidecar_hdf_path.suffix}"
+    )
+    native_backup_path = sidecar_hdf_path.with_name(
+        f"{sidecar_hdf_path.stem}.backup.hdf"
+    )
+
+    with _SIDECAR_EDIT_LOCK:
+        shutil.copy2(sidecar_hdf_path, durable_backup_path)
+        with tempfile.NamedTemporaryFile(
+            prefix=f".{sidecar_hdf_path.stem}.native_parameters.",
+            suffix=sidecar_hdf_path.suffix,
+            dir=sidecar_hdf_path.parent,
+            delete=False,
+        ) as snapshot_file:
+            snapshot_path = Path(snapshot_file.name)
+        shutil.copy2(sidecar_hdf_path, snapshot_path)
+
+        native_backup_snapshot: Optional[Path] = None
+        if native_backup_path.exists():
+            with tempfile.NamedTemporaryFile(
+                prefix=f".{sidecar_hdf_path.stem}.native_backup.",
+                suffix=sidecar_hdf_path.suffix,
+                dir=sidecar_hdf_path.parent,
+                delete=False,
+            ) as native_snapshot_file:
+                native_backup_snapshot = Path(native_snapshot_file.name)
+            shutil.copy2(native_backup_path, native_backup_snapshot)
+
+        try:
+            yield durable_backup_path
+        except BaseException:
+            try:
+                shutil.copy2(snapshot_path, sidecar_hdf_path)
+                if native_backup_snapshot is not None:
+                    shutil.copy2(native_backup_snapshot, native_backup_path)
+                elif native_backup_path.exists():
+                    native_backup_path.unlink()
+            except Exception as restore_error:
+                raise RuntimeError(
+                    "Native sidecar edit failed and automatic rollback also "
+                    f"failed. Restore {sidecar_hdf_path} from "
+                    f"{durable_backup_path}: {restore_error}"
+                ) from restore_error
+            raise
+        finally:
+            snapshot_path.unlink(missing_ok=True)
+            if native_backup_snapshot is not None:
+                native_backup_snapshot.unlink(missing_ok=True)
 
 
 def _major_version(version: str) -> int:
@@ -44,6 +103,80 @@ def _major_version(version: str) -> int:
         return int(str(version).strip().split(".", 1)[0])
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Invalid HEC-RAS version: {version!r}") from exc
+
+
+def _decode_hdf_attribute(value: Any) -> str:
+    """Return a normalized text representation of an HDF attribute."""
+    if value is None:
+        return ""
+    if isinstance(value, (bytes, np.bytes_)):
+        return value.decode("utf-8", errors="replace").strip("\x00").strip()
+    return str(value).strip("\x00").strip()
+
+
+def _attribute_is_true(value: Any) -> bool:
+    """Interpret the scalar encodings HEC-RAS uses for boolean attributes."""
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    return _decode_hdf_attribute(value).lower() in {"1", "true", "yes"}
+
+
+def _validate_property_tables_postcondition(
+    geometry_hdf_path: Union[str, Path],
+) -> None:
+    """Require complete, structurally paired native property-table outputs."""
+    geometry_hdf_path = RasUtils.safe_resolve(Path(geometry_hdf_path))
+    with h5py.File(geometry_hdf_path, "r") as hdf:
+        geometry = hdf.get("Geometry")
+        if not isinstance(geometry, h5py.Group):
+            raise RuntimeError(
+                "Native property-table computation did not leave a /Geometry group."
+            )
+        if not _attribute_is_true(geometry.attrs.get("Complete Geometry")):
+            raise RuntimeError(
+                "Native property-table computation did not mark geometry complete."
+            )
+
+        flow_areas = geometry.get("2D Flow Areas")
+        if flow_areas is None:
+            return
+        if not isinstance(flow_areas, h5py.Group):
+            raise RuntimeError(
+                "Native property-table computation left /Geometry/2D Flow Areas "
+                "as a non-group object."
+            )
+
+        incomplete: list[str] = []
+        checked_areas = 0
+        required_pairs = (
+            ("Cells Volume Elevation Info", "Cells Volume Elevation Values"),
+            ("Faces Area Elevation Info", "Faces Area Elevation Values"),
+        )
+        for area_name, area in flow_areas.items():
+            if not isinstance(area, h5py.Group):
+                continue
+            checked_areas += 1
+            for info_name, values_name in required_pairs:
+                info = area.get(info_name)
+                values = area.get(values_name)
+                base = f"Geometry/2D Flow Areas/{area_name}"
+                if not isinstance(info, h5py.Dataset):
+                    incomplete.append(f"{base}/{info_name}")
+                if not isinstance(values, h5py.Dataset):
+                    incomplete.append(f"{base}/{values_name}")
+                if (
+                    isinstance(info, h5py.Dataset)
+                    and isinstance(values, h5py.Dataset)
+                    and (info.size == 0 or values.size == 0)
+                ):
+                    incomplete.append(f"{base}/{info_name}|{values_name} (empty)")
+
+        if checked_areas and incomplete:
+            raise RuntimeError(
+                "Native property-table computation returned without required "
+                "2D hydraulic arrays: "
+                + ", ".join(incomplete)
+            )
 
 
 def _native_extent(
@@ -253,6 +386,158 @@ def _create_modern_landcover(
     # layout and writes the attributes RASMapper later consumes.
     layer.Save()
     return RasUtils.safe_resolve(output_hdf_path)
+
+
+def create_soils(
+    *,
+    rasmap_path: Union[str, Path],
+    source_raster_path: Union[str, Path],
+    raster_map_rows: list[tuple[int, str]],
+    cell_size: float,
+    output_hdf_path: Union[str, Path],
+    hecras_version: str,
+) -> Path:
+    """Author a hydrologic-soils sidecar through the target RasMapperLib.
+
+    The input raster may be prepared with normal GIS tooling, but HEC-RAS owns
+    creation and serialization of the output TIFF/HDF pair.
+    """
+    if _major_version(hecras_version) <= 5:
+        raise NotImplementedError(
+            "HEC-RAS 5.x has no hydrologic soils sidecar system. "
+            "Use HEC-RAS 6.0 or newer for soils/infiltration authoring."
+        )
+
+    rasmap_path = RasUtils.safe_resolve(Path(rasmap_path))
+    source_raster_path = RasUtils.safe_resolve(Path(source_raster_path))
+    output_hdf_path = RasUtils.safe_resolve(Path(output_hdf_path))
+    if not rasmap_path.exists():
+        raise FileNotFoundError(rasmap_path)
+    if not source_raster_path.exists():
+        raise FileNotFoundError(source_raster_path)
+    if not math.isfinite(float(cell_size)) or float(cell_size) <= 0:
+        raise ValueError("cell_size must be positive and finite.")
+
+    normalized_rows: list[dict[str, Any]] = []
+    seen_ids: set[int] = set()
+    seen_names: set[str] = set()
+    for class_id, class_name in raster_map_rows:
+        class_id = int(class_id)
+        class_name = str(class_name).strip()
+        if class_id < 0:
+            raise ValueError("Soils class IDs cannot be negative.")
+        if not class_name:
+            raise ValueError("Soils class names cannot be empty.")
+        if class_id in seen_ids:
+            raise ValueError(f"Duplicate soils class ID: {class_id}")
+        if class_name in seen_names:
+            raise ValueError(f"Duplicate soils class name: {class_name!r}")
+        seen_ids.add(class_id)
+        seen_names.add(class_name)
+        normalized_rows.append(
+            {
+                "source_value": class_id,
+                "class_id": class_id,
+                "class_name": class_name,
+            }
+        )
+    if not normalized_rows or 0 not in seen_ids:
+        raise ValueError("Soils classes must include ID 0 for NoData.")
+
+    install = find_hecras_install(hecras_version)
+    load_clr(install)
+    from RasMapperLib import (  # type: ignore
+        LandCoverComputable,
+        LandCoverFile,
+        LandCoverLayer,
+        LandCoverLayerHelper,
+        SharedData,
+    )
+    from RasMapperLib.Progress import ConsoleDisplayProgress  # type: ignore
+    from System import Array, Int32, Single  # type: ignore
+    from System.Collections.Generic import List  # type: ignore
+    from Utility.Progress import ProgressReporter  # type: ignore
+
+    _initialize_shared_projection(rasmap_path)
+    source = LandCoverFile(
+        str(source_raster_path),
+        None,
+        SharedData.SRSProjection,
+    )
+    names, ids = _populate_modern_input_mapping(
+        source,
+        normalized_rows,
+        source_field=None,
+    )
+    inputs = List[LandCoverFile]()
+    inputs.Add(source)
+    extras = List[Array[Single]]()
+    payload_columns = List[Int32]()
+    computable = LandCoverComputable(
+        str(output_hdf_path),
+        float(cell_size),
+        None,
+        inputs,
+        names,
+        ids,
+        LandCoverLayerHelper.DefaultSoils(),
+        extras,
+        payload_columns,
+    )
+    display = ConsoleDisplayProgress()
+    computable.Initialize(display)
+    computable.Run(getattr(ProgressReporter, "None")())
+    computable.Complete()
+    if not bool(computable.Success()):
+        raise RuntimeError("RASMapper soils LandCoverComputable reported failure.")
+
+    loaded, layer, error = LandCoverLayer.TryLoadLayer(
+        str(output_hdf_path),
+        None,
+        "",
+        LandCoverLayer.LandCoverType.Soils,
+    )
+    if not loaded or layer is None:
+        raise RuntimeError(
+            "RASMapper could not load its generated soils layer: "
+            f"{error or '<no diagnostic>'}"
+        )
+    if layer.Classification is None or layer.Resampler is None:
+        raise RuntimeError(
+            "RASMapper generated an incomplete soils layer "
+            "(classification or resampler is missing)."
+        )
+    layer.Save()
+
+    loaded, saved_layer, error = LandCoverLayer.TryLoadLayer(
+        str(output_hdf_path),
+        None,
+        "",
+        LandCoverLayer.LandCoverType.Soils,
+    )
+    if not loaded or saved_layer is None:
+        raise RuntimeError(
+            "RASMapper could not reload its saved soils layer: "
+            f"{error or '<no diagnostic>'}"
+        )
+    saved = {
+        int(class_id): str(class_name)
+        for class_id, class_name in zip(
+            saved_layer.GetIDs(),
+            saved_layer.GetNames(),
+            strict=False,
+        )
+    }
+    expected = {
+        int(row["class_id"]): str(row["class_name"])
+        for row in normalized_rows
+    }
+    if saved != expected:
+        raise RuntimeError(
+            "RASMapper soils classification did not round-trip exactly: "
+            f"expected {expected!r}, got {saved!r}"
+        )
+    return output_hdf_path
 
 
 def _create_junction(junction: Path, target: Path) -> None:
@@ -492,9 +777,9 @@ def validate_native_landcover(
     }
 
 
-def set_landcover_parameters(
+def _set_landcover_parameters_native(
     landcover_hdf_path: Union[str, Path],
-    class_mapping: dict[str, float],
+    class_mapping: Mapping[str, float],
     *,
     hecras_version: str,
 ) -> dict[str, Any]:
@@ -582,7 +867,7 @@ def set_landcover_parameters(
                 "class_name": name,
                 "old_mannings_n": old_value,
                 "new_mannings_n": new_value,
-                "changed": name in normalized_mapping,
+                "requested": name in normalized_mapping,
                 "value_changed": bool(changed),
             }
         )
@@ -627,16 +912,310 @@ def set_landcover_parameters(
             + ", ".join(sorted(mismatches))
         )
 
-    backup_path = landcover_hdf_path.with_name(
-        f"{landcover_hdf_path.stem}.backup.hdf"
+    changed_count = sum(detail["value_changed"] for detail in details)
+    requested_unchanged_count = sum(
+        detail["requested"] and not detail["value_changed"]
+        for detail in details
+    )
+    not_requested_count = sum(
+        not detail["requested"]
+        for detail in details
     )
     return {
-        "changed": sum(detail["value_changed"] for detail in details),
-        "unchanged": len(details) - len(normalized_mapping),
+        "changed": changed_count,
+        "requested_unchanged": requested_unchanged_count,
+        "not_requested": not_requested_count,
+        "unchanged": len(details) - changed_count,
         "format": "native-v6+",
-        "backup_path": backup_path,
         "class_details": details,
     }
+
+
+def set_landcover_parameters(
+    landcover_hdf_path: Union[str, Path],
+    class_mapping: Mapping[str, float],
+    *,
+    hecras_version: str,
+) -> dict[str, Any]:
+    """Transactionally update a native land-cover parameter table."""
+    path = RasUtils.safe_resolve(Path(landcover_hdf_path))
+    if not path.exists():
+        raise FileNotFoundError(path)
+    if _major_version(hecras_version) <= 5:
+        raise NotImplementedError(
+            "HEC-RAS 5.x has no native land-cover parameter-table writer. "
+            "Use GeomLandCover.set_base_mannings_n() for geometry-specific "
+            "Manning overrides, or rebuild the layer with "
+            "RasMap.add_landcover_layer()."
+        )
+
+    with _sidecar_transaction(path) as backup_path:
+        report = _set_landcover_parameters_native(
+            path,
+            class_mapping,
+            hecras_version=hecras_version,
+        )
+    report.update(
+        {
+            "landcover_hdf_path": path,
+            "backup_path": backup_path,
+            "recompute_required": True,
+        }
+    )
+    return report
+
+
+def _set_classification_parameters_native(
+    layer_hdf_path: Union[str, Path],
+    parameter_table: pd.DataFrame,
+    *,
+    layer_type: str,
+    hecras_version: str,
+    properties: Optional[Mapping[str, float]] = None,
+) -> pd.DataFrame:
+    """Update a modern classification sidecar through RASMapper's table API.
+
+    ``layer_type`` identifies the native layer schema and must be one of
+    ``soils``, ``infiltration_scs``, ``infiltration_deficit_constant``, or
+    ``infiltration_green_ampt``. The supplied rows update existing native
+    classes by ``Name``; classification IDs and row membership are preserved.
+    """
+    if _major_version(hecras_version) <= 5:
+        raise NotImplementedError(
+            "HEC-RAS 5.x has no native soils/infiltration sidecar editor."
+        )
+    if not isinstance(parameter_table, pd.DataFrame):
+        raise TypeError("parameter_table must be a pandas DataFrame.")
+    if "Name" not in parameter_table.columns:
+        raise ValueError("parameter_table must contain a Name column.")
+
+    layer_hdf_path = RasUtils.safe_resolve(Path(layer_hdf_path))
+    if not layer_hdf_path.exists():
+        raise FileNotFoundError(layer_hdf_path)
+
+    normalized_type = str(layer_type).strip().lower()
+    type_names = {
+        "soils": "Soils",
+        "infiltration_scs": "InfiltrationSCSCurveNumber",
+        "infiltration_scs_curve_number": "InfiltrationSCSCurveNumber",
+        "scs_curve_number": "InfiltrationSCSCurveNumber",
+        "infiltration_deficit_constant": "InfiltrationDeficitConstantLoss",
+        "deficit_constant": "InfiltrationDeficitConstantLoss",
+        "infiltration_green_ampt": "InfiltrationGreenAmpt",
+        "green_ampt": "InfiltrationGreenAmpt",
+    }
+    if normalized_type not in type_names:
+        raise ValueError(
+            "layer_type must be soils, infiltration_scs, "
+            "infiltration_deficit_constant, or infiltration_green_ampt."
+        )
+
+    updates = parameter_table.copy()
+    updates["Name"] = updates["Name"].astype(str).str.strip()
+    if (updates["Name"] == "").any():
+        raise ValueError("Classification names cannot be empty.")
+    if updates["Name"].duplicated().any():
+        duplicates = sorted(
+            updates.loc[updates["Name"].duplicated(keep=False), "Name"].unique()
+        )
+        raise ValueError(
+            "parameter_table contains duplicate class names: "
+            + ", ".join(duplicates)
+        )
+    parameter_columns = [
+        str(column)
+        for column in updates.columns
+        if str(column) not in {"Name", "ID"}
+    ]
+    if not parameter_columns and not properties:
+        raise ValueError("No classification parameters or properties were supplied.")
+    for column in parameter_columns:
+        numeric = pd.to_numeric(updates[column], errors="raise").astype(float)
+        if not np.isfinite(numeric.to_numpy()).all():
+            raise ValueError(f"{column} values must be finite.")
+        updates[column] = numeric
+    normalized_properties = {
+        str(name).strip(): float(value)
+        for name, value in (properties or {}).items()
+    }
+    for name, value in normalized_properties.items():
+        if not name:
+            raise ValueError("Property names cannot be empty.")
+        if not math.isfinite(value):
+            raise ValueError(f"Property {name!r} must be finite.")
+
+    install = find_hecras_install(hecras_version)
+    load_clr(install)
+    from RasMapperLib import LandCoverLayer  # type: ignore
+
+    native_type = getattr(
+        LandCoverLayer.LandCoverType,
+        type_names[normalized_type],
+    )
+    loaded, layer, error = LandCoverLayer.TryLoadLayer(
+        str(layer_hdf_path),
+        None,
+        "",
+        native_type,
+    )
+    if not loaded or layer is None:
+        raise RuntimeError(
+            "RASMapper could not load the classification layer for editing: "
+            f"{error or '<no diagnostic>'}"
+        )
+    table = LandCoverLayer.GetClassificationVariablesAsDataTable(
+        layer.Classification,
+        layer.Parameters,
+    )
+    native_columns = {
+        str(table.Columns[index].ColumnName)
+        for index in range(table.Columns.Count)
+    }
+    unknown_columns = sorted(set(parameter_columns).difference(native_columns))
+    if unknown_columns:
+        raise ValueError(
+            "Parameters are not present in the native layer schema: "
+            + ", ".join(unknown_columns)
+        )
+
+    native_rows = {
+        str(row["Name"]).strip(): row
+        for row in table.Rows
+    }
+    missing_names = sorted(set(updates["Name"]).difference(native_rows))
+    if missing_names:
+        raise ValueError(
+            "Class names not found in the native classification table: "
+            + ", ".join(missing_names)
+        )
+    for update in updates.to_dict(orient="records"):
+        native_row = native_rows[update["Name"]]
+        for column in parameter_columns:
+            native_row[column] = float(update[column])
+
+    if parameter_columns and not bool(
+        layer.TryAssigningNewParamtersUsingTable(table, True)
+    ):
+        raise RuntimeError(
+            "RASMapper rejected the updated classification parameter table."
+        )
+    for name, value in normalized_properties.items():
+        if not bool(layer.TrySetPropertyValue(name, value)):
+            raise ValueError(
+                f"Native layer does not expose property {name!r}."
+            )
+    if normalized_properties:
+        save_result = layer.Save()
+        if save_result is not None and not bool(save_result):
+            raise RuntimeError(
+                "RASMapper rejected the classification-layer save."
+            )
+
+    loaded, saved_layer, error = LandCoverLayer.TryLoadLayer(
+        str(layer_hdf_path),
+        None,
+        "",
+        native_type,
+    )
+    if not loaded or saved_layer is None:
+        raise RuntimeError(
+            "RASMapper could not reload its saved classification layer: "
+            f"{error or '<no diagnostic>'}"
+        )
+    saved_table = LandCoverLayer.GetClassificationVariablesAsDataTable(
+        saved_layer.Classification,
+        saved_layer.Parameters,
+    )
+    saved_rows = {
+        str(row["Name"]).strip(): row
+        for row in saved_table.Rows
+    }
+    mismatches: list[str] = []
+    for update in updates.to_dict(orient="records"):
+        saved_row = saved_rows.get(update["Name"])
+        if saved_row is None:
+            mismatches.append(update["Name"])
+            continue
+        for column in parameter_columns:
+            if not np.isclose(
+                float(saved_row[column]),
+                float(update[column]),
+                rtol=1.0e-6,
+                atol=1.0e-7,
+            ):
+                mismatches.append(f"{update['Name']}:{column}")
+    if mismatches:
+        raise RuntimeError(
+            "RASMapper did not persist classification parameters for: "
+            + ", ".join(mismatches)
+        )
+    property_mismatches: list[str] = []
+    for name, expected in normalized_properties.items():
+        try:
+            property_loaded, observed = saved_layer.TryGetPropertyValue(
+                name,
+                0.0,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"RASMapper could not reload property {name!r}."
+            ) from exc
+        if not bool(property_loaded) or not np.isclose(
+            float(observed),
+            expected,
+            rtol=1.0e-6,
+            atol=1.0e-7,
+        ):
+            property_mismatches.append(name)
+    if property_mismatches:
+        raise RuntimeError(
+            "RASMapper did not persist classification properties for: "
+            + ", ".join(property_mismatches)
+        )
+
+    records: list[dict[str, Any]] = []
+    for row in saved_table.Rows:
+        record = {
+            str(saved_table.Columns[index].ColumnName): row[index]
+            for index in range(saved_table.Columns.Count)
+        }
+        records.append(record)
+    return pd.DataFrame.from_records(records)
+
+
+def set_classification_parameters(
+    layer_hdf_path: Union[str, Path],
+    parameter_table: pd.DataFrame,
+    *,
+    layer_type: str,
+    hecras_version: str,
+    properties: Optional[Mapping[str, float]] = None,
+) -> pd.DataFrame:
+    """Transactionally update a native soils or infiltration sidecar."""
+    path = RasUtils.safe_resolve(Path(layer_hdf_path))
+    if not path.exists():
+        raise FileNotFoundError(path)
+    if _major_version(hecras_version) <= 5:
+        raise NotImplementedError(
+            "HEC-RAS 5.x has no native soils/infiltration sidecar editor."
+        )
+
+    with _sidecar_transaction(path) as backup_path:
+        result = _set_classification_parameters_native(
+            path,
+            parameter_table,
+            layer_type=layer_type,
+            hecras_version=hecras_version,
+            properties=properties,
+        )
+    result.attrs.update(
+        {
+            "classification_hdf_path": str(path),
+            "backup_path": str(backup_path),
+            "recompute_required": True,
+        }
+    )
+    return result
 
 
 def recompute_property_tables(
@@ -679,6 +1258,7 @@ def recompute_property_tables(
 
         command = ComputePropertyTablesCommand(str(geometry_hdf_path))
         command.Execute(None)
+    _validate_property_tables_postcondition(geometry_hdf_path)
     return geometry_hdf_path
 
 
@@ -752,6 +1332,9 @@ def associate_landcover_to_geometry(
             command = ComputePropertyTablesCommand(str(geometry_hdf_path))
             command.Execute(None)
         expected_path = landcover_hdf_path
+
+    if compute_property_tables:
+        _validate_property_tables_postcondition(geometry_hdf_path)
 
     with h5py.File(geometry_hdf_path, "r") as hdf:
         if "Geometry" not in hdf:
