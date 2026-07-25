@@ -1,5 +1,5 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import h5py
 import pytest
@@ -9,6 +9,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from ras_commander import RasMap
+from ras_commander._geometry_association import (
+    validate_geometry_extents_for_2d_classification,
+)
 
 
 def _make_project(tmp_path: Path) -> Path:
@@ -84,9 +87,11 @@ def test_rasmap_associate_geometry_layers_writes_hdf_attrs_with_layer_names(tmp_
     assert Path(association["landcover_hdf_path"]) == landcover
     assert Path(association["infiltration_hdf_path"]) == infiltration
     assert Path(association["sediment_soils_hdf_path"]) == sediment
-    assert association["terrain_layer_name"] == "Custom Terrain"
-    assert association["landcover_layer_name"] == "Custom Land"
-    assert association["infiltration_layer_name"] == "Custom Infiltration"
+    # Native HEC-RAS association names come from each HDF filename stem, not
+    # the independently configurable RASMapper display labels above.
+    assert association["terrain_layer_name"] == "TerrainA"
+    assert association["landcover_layer_name"] == "cover"
+    assert association["infiltration_layer_name"] == "infiltration"
     assert association["sediment_soils_layer_name"] == "bed_material"
     assert association["hdf_attrs"]["Terrain Filename"] == ".\\Terrain\\TerrainA.hdf"
     assert association["hdf_attrs"]["Land Cover File Date"] is not None
@@ -164,3 +169,31 @@ def test_missing_geometry_group_rejected_for_read(tmp_path):
 
     with pytest.raises(RuntimeError, match="/Geometry"):
         RasMap.get_hdf_geometry_association(hdf_path)
+
+
+def test_pathological_global_extents_rejected_for_2d_classification(tmp_path):
+    hdf_path = tmp_path / "Pathological.g01.hdf"
+    with h5py.File(hdf_path, "w") as hdf_file:
+        geometry = hdf_file.create_group("Geometry")
+        geometry.attrs["Extents"] = [
+            -45000000.0,
+            950000000.0,
+            -2000000000.0,
+            43000000000.0,
+        ]
+        area = hdf_file.create_group("Geometry/2D Flow Areas/MainArea")
+        area.attrs["Extents"] = [506895.0, 538612.0, 1866585.0, 1885172.0]
+
+    with pytest.raises(RuntimeError, match="invalid or pathological"):
+        validate_geometry_extents_for_2d_classification(hdf_path)
+
+
+def test_reasonable_broad_global_extents_accepted_for_2d_classification(tmp_path):
+    hdf_path = tmp_path / "Valid.g01.hdf"
+    with h5py.File(hdf_path, "w") as hdf_file:
+        geometry = hdf_file.create_group("Geometry")
+        geometry.attrs["Extents"] = [500000.0, 550000.0, 1850000.0, 1900000.0]
+        area = hdf_file.create_group("Geometry/2D Flow Areas/MainArea")
+        area.attrs["Extents"] = [506895.0, 538612.0, 1866585.0, 1885172.0]
+
+    validate_geometry_extents_for_2d_classification(hdf_path)

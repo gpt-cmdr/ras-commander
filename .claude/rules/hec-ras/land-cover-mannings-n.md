@@ -44,7 +44,10 @@ Grassland-Herbaceous,0.03125
 ...
 ```
 
-- `LCMann Table=0` means **no overrides defined** (empty table)
+- The integer in `LCMann Table=N` is the number of following override rows
+- `LCMann Table=0` means **no overrides defined** and must not be followed by rows
+- A non-empty block whose header count does not match its emitted rows is invalid;
+  HEC-RAS 7.0 ignores those rows
 - Class names must match the sidecar's `Raster Map` names exactly
 - These override the sidecar base values; they do NOT replace them
 
@@ -72,7 +75,10 @@ HEC-RAS does **NOT** have a 16-class limit. Verified with production models:
 | Lower Calcasieu (NLCD) | 16 | 16 | All NaN (no overrides, uses sidecar) |
 | Bayou Pierre (NLCD) | 18 | 16 | All NaN (no overrides, uses sidecar) |
 
-Models with `LCMann Table=0` show all-NaN calibration entries because no overrides are defined. This is normal -- HEC-RAS reads the sidecar `Variables` directly.
+Models with an actually empty `LCMann Table=0` show all-NaN calibration entries
+because no overrides are defined. This is normal -- HEC-RAS reads the sidecar
+`Variables` directly. A zero header followed by override rows is not equivalent:
+HEC-RAS 7.0 ignores the inconsistent rows.
 
 ## Special Characters in Class Names
 

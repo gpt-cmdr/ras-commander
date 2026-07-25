@@ -36,40 +36,30 @@ List of Functions in RasCmdr:
         
         
 """
+import logging
 import os
-import subprocess
-import shutil
 import shlex
-from collections import defaultdict
-from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from .RasPrj import ras, RasPrj, init_ras_project, get_ras_exe
-from .RasPlan import RasPlan
-from .RasGeo import RasGeo
-from .RasUtils import RasUtils
-import logging
-import time
-import queue
-from threading import Thread, Lock
-from typing import Union, List, Optional, Dict, Any
-from pathlib import Path
 import shutil
-import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock, Thread
-from itertools import cycle
-from ras_commander.RasPrj import RasPrj  # Ensure RasPrj is imported
-from threading import Lock, Thread, current_thread
+import subprocess
+import time
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import cycle
-from typing import Union, List, Optional, Dict, Any
 from numbers import Number
-from .LoggingConfig import get_logger
-from .Decorators import log_call
-from .RasBco import BcoMonitor
-from .ComputeResults import ComputeResult, ComputeParallelResult
+from pathlib import Path
+from threading import Lock, Thread
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Union
+
 import pandas as pd
-from typing import Callable
+
+from .ComputeResults import ComputeParallelResult, ComputeResult
+from .Decorators import log_call
+from .LoggingConfig import get_logger
+from .RasBco import BcoMonitor
+from .RasGeo import RasGeo
+from .RasPlan import RasPlan
+from .RasPrj import RasPrj, init_ras_project, ras
+from .RasUtils import RasUtils
 
 logger = get_logger(__name__)
 
@@ -104,6 +94,83 @@ class RasCmdr:
         plan_num_str = RasUtils.normalize_ras_number(plan_number)
 
         return Path(ras_object.project_folder) / f"{ras_object.project_name}.p{plan_num_str}.hdf"
+
+    @staticmethod
+    def _verify_required_hdf_datasets(
+        required_hdf_datasets: Optional[
+            Mapping[Union[str, Path], Sequence[str]]
+        ],
+        base_folder: Union[str, Path],
+    ) -> tuple[Optional[bool], List[str]]:
+        """Verify that requested HDF datasets exist, are datasets, and are nonempty."""
+        if required_hdf_datasets is None:
+            return None, []
+
+        import h5py
+
+        failures: List[str] = []
+        base_folder = Path(base_folder)
+        for file_value, dataset_paths in required_hdf_datasets.items():
+            hdf_path = Path(file_value)
+            if not hdf_path.is_absolute():
+                hdf_path = base_folder / hdf_path
+            if not hdf_path.exists():
+                failures.append(f"{hdf_path}: file missing")
+                continue
+
+            try:
+                with h5py.File(hdf_path, "r") as hdf_file:
+                    for dataset_path in dataset_paths:
+                        normalized = str(dataset_path).strip().strip("/")
+                        if not normalized:
+                            failures.append(f"{hdf_path}: empty dataset path")
+                            continue
+                        obj = hdf_file.get(normalized)
+                        if obj is None:
+                            failures.append(
+                                f"{hdf_path}:{normalized}: dataset missing"
+                            )
+                        elif not isinstance(obj, h5py.Dataset):
+                            failures.append(
+                                f"{hdf_path}:{normalized}: expected dataset, found group"
+                            )
+                        elif obj.size == 0:
+                            failures.append(
+                                f"{hdf_path}:{normalized}: dataset empty"
+                            )
+            except (OSError, RuntimeError, ValueError) as exc:
+                failures.append(f"{hdf_path}: unreadable HDF ({exc})")
+
+        return not failures, failures
+
+    @staticmethod
+    def _build_compute_result(
+        *,
+        success: bool,
+        results_df_row: Optional[pd.Series],
+        verify: bool,
+        required_hdf_datasets: Optional[
+            Mapping[Union[str, Path], Sequence[str]]
+        ],
+        base_folder: Union[str, Path],
+    ) -> ComputeResult:
+        """Apply requested artifact checks and return a qualified result."""
+        artifact_passed, failures = RasCmdr._verify_required_hdf_datasets(
+            required_hdf_datasets,
+            base_folder,
+        )
+        final_success = bool(success)
+        if artifact_passed is False:
+            final_success = False
+            for failure in failures:
+                logger.error("Required HDF artifact verification failed: %s", failure)
+        return ComputeResult(
+            success=final_success,
+            results_df_row=results_df_row,
+            completion_verified=bool(success) if verify else None,
+            artifact_verification_passed=artifact_passed,
+            verification_failures=failures,
+        )
 
     @staticmethod
     def _plan_entries_with_expected_hdf_paths(
@@ -712,6 +779,9 @@ class RasCmdr:
         hdf_output_variables: Optional[List[str]] = None,
         hdf_output_options: Optional[Dict[str, Any]] = None,
         hdf_output_profile: Optional[str] = None,
+        required_hdf_datasets: Optional[
+            Mapping[Union[str, Path], Sequence[str]]
+        ] = None,
         dialog_watchdog: bool = True,
     ) -> 'ComputeResult':
         """
@@ -771,6 +841,13 @@ class RasCmdr:
                 passed to ``RasPlan.set_hdf_output_options()`` before execution.
             hdf_output_profile (str, optional): Named HDF output profile to apply before
                 execution. Equivalent to ``use_optimal_hdf_settings=True`` with a profile.
+            required_hdf_datasets: Optional mapping of HDF filenames/paths to
+                required dataset paths. Relative HDF paths resolve inside the
+                compute project folder. Every requested object must be a
+                nonempty HDF dataset; otherwise ``ComputeResult.success`` is
+                false even when the HEC-RAS process exits successfully. This
+                check is independent of ``verify`` so geometry-only workflows
+                can state their exact artifact contract.
 
         Returns:
             ComputeResult: Result object with ``success`` bool and ``results_df_row`` (pd.Series or None).
@@ -778,6 +855,9 @@ class RasCmdr:
                 Access execution metrics via ``result.results_df_row`` (e.g., runtime, volume accounting).
                 ``results_df_row`` is None when dest_folder is used, execution fails, or extraction errors.
                 When skip_existing=True and results exist, returns ComputeResult(success=True).
+                ``completion_verified`` is None unless ``verify=True``.
+                Requested artifact failures are listed in
+                ``verification_failures`` and always make ``success`` false.
 
         Raises:
             ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
@@ -926,7 +1006,13 @@ class RasCmdr:
                 if RasCmdr._verify_completion(hdf_path, check_errors=False):
                     logger.info(f"Skipping plan {plan_number}: HDF results already exist with 'Complete Process'")
                     _success = True
-                    return ComputeResult(success=True, results_df_row=None)
+                    return RasCmdr._build_compute_result(
+                        success=True,
+                        results_df_row=None,
+                        verify=verify,
+                        required_hdf_datasets=required_hdf_datasets,
+                        base_folder=compute_ras.project_folder,
+                    )
 
             # Smart skip: check file modification times (unless force_rerun or skip_existing)
             # Note: Smart skip is bypassed when skip_existing=True since that provides explicit skip logic
@@ -936,7 +1022,13 @@ class RasCmdr:
                 if is_current:
                     logger.info(f"Skipping plan {plan_number}: {reason}")
                     _success = True
-                    return ComputeResult(success=True, results_df_row=None)
+                    return RasCmdr._build_compute_result(
+                        success=True,
+                        results_df_row=None,
+                        verify=verify,
+                        required_hdf_datasets=required_hdf_datasets,
+                        base_folder=compute_ras.project_folder,
+                    )
                 else:
                     logger.debug(f"Plan {plan_number} needs execution: {reason}")
 
@@ -1256,7 +1348,18 @@ class RasCmdr:
                                 e_results,
                             )
 
-        return ComputeResult(success=_success, results_df_row=_results_df_row)
+        base_folder = (
+            compute_ras.project_folder
+            if "compute_ras" in locals()
+            else Path(".")
+        )
+        return RasCmdr._build_compute_result(
+            success=_success,
+            results_df_row=_results_df_row,
+            verify=verify,
+            required_hdf_datasets=required_hdf_datasets,
+            base_folder=base_folder,
+        )
 
 
 

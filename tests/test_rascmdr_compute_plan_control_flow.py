@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import h5py
 import pandas as pd
 import pytest
 
@@ -67,6 +68,51 @@ def test_compute_plan_returns_failed_result_for_regular_exception():
     assert result.success is False
     assert result.results_df_row is None
     assert ras_obj.refresh_calls == ["plan", "geom", "flow", "unsteady"]
+
+
+def test_required_hdf_datasets_fail_closed_for_missing_final_array(tmp_path):
+    hdf_path = tmp_path / "partial.p01.hdf"
+    with h5py.File(hdf_path, "w") as hdf_file:
+        hdf_file.create_group("Geometry")
+
+    result = RasCmdr._build_compute_result(
+        success=True,
+        results_df_row=None,
+        verify=False,
+        required_hdf_datasets={
+            hdf_path.name: [
+                "Geometry/2D Flow Areas/MainArea/Cells Center Manning's n"
+            ]
+        },
+        base_folder=tmp_path,
+    )
+
+    assert result.success is False
+    assert result.completion_verified is None
+    assert result.artifact_verification_passed is False
+    assert "dataset missing" in result.verification_failures[0]
+
+
+def test_required_hdf_datasets_pass_only_for_nonempty_datasets(tmp_path):
+    hdf_path = tmp_path / "complete.g01.hdf"
+    dataset_path = (
+        "Geometry/2D Flow Areas/MainArea/Cells Center Manning's n"
+    )
+    with h5py.File(hdf_path, "w") as hdf_file:
+        hdf_file.create_dataset(dataset_path, data=[0.03, 0.04])
+
+    result = RasCmdr._build_compute_result(
+        success=True,
+        results_df_row=None,
+        verify=True,
+        required_hdf_datasets={hdf_path: [dataset_path]},
+        base_folder=tmp_path,
+    )
+
+    assert result.success is True
+    assert result.completion_verified is True
+    assert result.artifact_verification_passed is True
+    assert result.verification_failures == []
 
 
 def test_compute_plan_does_not_swallow_keyboard_interrupt():

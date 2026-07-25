@@ -119,16 +119,8 @@ class GeomLandCover:
                 "Manning's n data must include land-cover name and n-value columns"
             )
 
-        if table_number is None:
-            if 'Table Number' in df.columns and not df['Table Number'].dropna().empty:
-                table_number = str(df['Table Number'].dropna().iloc[0])
-            else:
-                table_number = "16"
-        table_number = str(table_number)
-
         normalized = pd.DataFrame(
             {
-                'Table Number': table_number,
                 'Land Cover Name': df[name_col].astype(str).str.strip(),
                 'Base Mannings n Value': pd.to_numeric(df[value_col], errors='coerce'),
             }
@@ -139,7 +131,22 @@ class GeomLandCover:
         ].copy()
         if normalized.empty:
             raise ValueError("Manning's n table has no writable rows")
-        return table_number, normalized
+
+        row_count = len(normalized)
+        if table_number is not None:
+            try:
+                expected_count = int(table_number)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("table_number must be an integer row count") from exc
+            if expected_count != row_count:
+                raise ValueError(
+                    "table_number must equal the number of writable Manning's n "
+                    f"rows ({row_count}), got {expected_count}"
+                )
+
+        row_count_text = str(row_count)
+        normalized.insert(0, 'Table Number', row_count_text)
+        return row_count_text, normalized
 
     @staticmethod
     def _region_polygon_count(line: str) -> int:
@@ -677,9 +684,10 @@ class GeomLandCover:
                 n-values. Accepted name columns include ``Land Cover Name`` and
                 ``class_name``; accepted n-value columns include
                 ``Base Mannings n Value``, ``mannings_n``, and ``n_value``.
-            table_number: Optional ``LCMann Table`` number. Defaults to the
-                first table in the file, the input ``Table Number`` column, or
-                ``16`` for new tables.
+            table_number: Deprecated compatibility argument interpreted as the
+                expected number of writable rows. When provided, it must match
+                the normalized input row count. ``LCMann Table=`` is always
+                authored from the actual emitted row count.
             backup: If True, write ``.bak`` beside the geometry file first.
 
         Returns:
@@ -689,7 +697,7 @@ class GeomLandCover:
         import shutil
 
         geom_file_path = Path(geom_file_path)
-        requested_table_number, normalized = GeomLandCover._normalize_base_table(
+        row_count, normalized = GeomLandCover._normalize_base_table(
             mannings_data,
             table_number=table_number,
         )
@@ -701,20 +709,12 @@ class GeomLandCover:
         with open(geom_file_path, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
-        start_idx, end_idx, existing_table_number = GeomLandCover._find_lcmann_table_bounds(
+        start_idx, end_idx, _ = GeomLandCover._find_lcmann_table_bounds(
             lines,
-            table_number=str(table_number) if table_number is not None else None,
+            table_number=None,
         )
-        # If exact table_number wasn't found but one was specified, replace ANY
-        # existing LCMann Table (e.g. disabled "=0") instead of appending a duplicate.
-        if start_idx is None and table_number is not None:
-            start_idx, end_idx, _ = GeomLandCover._find_lcmann_table_bounds(
-                lines, table_number=None,
-            )
-        resolved_table_number = existing_table_number or requested_table_number
-        normalized['Table Number'] = str(resolved_table_number)
 
-        new_content = [f"LCMann Table={resolved_table_number}\n"]
+        new_content = [f"LCMann Table={row_count}\n"]
         for _, row in normalized.iterrows():
             n_value = float(row['Base Mannings n Value'])
             new_content.append(f"{row['Land Cover Name']},{n_value:g}\n")

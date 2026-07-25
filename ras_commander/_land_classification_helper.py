@@ -2714,7 +2714,10 @@ def add_landcover_layer(
 
     ``restrict_to_extent`` accepts one valid Polygon, a single-effective-part
     MultiPolygon, or a legacy bounds-shaped input. ``buffer_distance`` is in
-    project CRS units and defaults to no buffer.
+    project CRS units and defaults to no buffer. HEC-RAS derives the native
+    association layer name from the output HDF filename stem. A different
+    ``layer_name`` is accepted for source compatibility but normalized to that
+    native name so preprocessing cannot reintroduce a display-label mismatch.
     """
     project_paths = resolve_project_paths(ras_project_path)
     source_path = RasUtils.safe_resolve(Path(source_path))
@@ -2758,10 +2761,18 @@ def add_landcover_layer(
         variable_rows,
         projection_wkt,
     )
+    native_layer_name = output_hdf_path.stem
+    if layer_name != native_layer_name:
+        logger.warning(
+            "Ignoring land-cover display name %r for geometry compatibility; "
+            "HEC-RAS uses the associated HDF filename stem %r",
+            layer_name,
+            native_layer_name,
+        )
     upsert_land_classification_layer(
         project_paths,
         output_hdf_path,
-        layer_name=layer_name,
+        layer_name=native_layer_name,
         selected_parameter="ManningsN",
         alpha=128,
     )

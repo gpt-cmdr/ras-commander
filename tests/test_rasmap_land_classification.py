@@ -370,6 +370,7 @@ class TestLayerCreation:
         layers = RasMap.list_land_classification_layers(project_dir)
         assert set(layers["classification_kind"]) == {"landcover"}
         assert layers.iloc[0]["resolved_path"] == str(output_hdf)
+        assert layers.iloc[0]["name"] == "LandCover"
 
         parsed = RasMap.parse_rasmap(project_dir / "LandcoverProject.rasmap")
         assert parsed.at[0, "landcover_hdf_path"] == [str(output_hdf)]
@@ -385,6 +386,11 @@ class TestLayerCreation:
         )
         with rasterio.open(legacy_output.with_suffix(".tif")) as raster:
             assert tuple(raster.bounds) == (10.0, 10.0, 30.0, 30.0)
+        legacy_layers = RasMap.list_land_classification_layers(project_dir)
+        legacy_record = legacy_layers.loc[
+            legacy_layers["resolved_path"] == str(legacy_output)
+        ].iloc[0]
+        assert legacy_record["name"] == "legacy_landcover"
 
     def test_add_soils_layer_creates_outputs_and_registers_rasmap(self, tmp_path):
         pytest.importorskip("geopandas")
