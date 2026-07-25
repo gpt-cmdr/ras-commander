@@ -362,6 +362,10 @@ class TestLayerCreation:
         with h5py.File(output_hdf, "r") as hdf_file:
             raster_map = hdf_file["Raster Map"][()]
             variables = hdf_file["Variables"][()]
+            assert hdf_file["Raster Map"].chunks == (100,)
+            assert hdf_file["Raster Map"].maxshape == (None,)
+            assert hdf_file["Variables"].chunks == (100,)
+            assert hdf_file["Variables"].maxshape == (None,)
             assert {int(row["ID"]) for row in raster_map} == {0, 11, 21}
             assert {
                 row["Name"].decode("utf-8").strip()

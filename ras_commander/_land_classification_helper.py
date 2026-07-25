@@ -1332,14 +1332,16 @@ def _rewrite_landcover_sidecar(
             data=_build_raster_map_array(raster_map_rows),
             compression="gzip",
             compression_opts=1,
-            chunks=True,
+            chunks=(100,),
+            maxshape=(None,),
         )
         hdf_file.create_dataset(
             "Variables",
             data=_build_landcover_variables_array(variable_rows),
             compression="gzip",
             compression_opts=1,
-            chunks=True,
+            chunks=(100,),
+            maxshape=(None,),
         )
 
         _set_hdf_string_attr(hdf_file, "File Type", "HEC Land Cover")
@@ -1369,7 +1371,8 @@ def _rewrite_soils_sidecar(
             data=_build_raster_map_array(raster_map_rows),
             compression="gzip",
             compression_opts=1,
-            chunks=True,
+            chunks=(100,),
+            maxshape=(None,),
         )
 
         _set_hdf_string_attr(hdf_file, "File Type", "HEC Land Cover")
