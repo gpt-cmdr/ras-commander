@@ -16,6 +16,13 @@ be copied onto the public Example Project Library page.
 - Publish artifacts to the dedicated RAS Commander WebGIS service, then link the
   docs viewer to its hosted catalog and manifest.
 - The public artifact namespace is `/data/rasexamples/hec-ras-7.0/`.
+- Publish complete snapshots beneath
+  `/data/rasexamples/hec-ras-7.0/releases/<release-id>/`. Never overwrite a
+  completed release. The mutable `current` symlink is the only active-release
+  pointer and must be switched atomically after validation.
+- Project manifests and all absolute artifact URLs must reference their
+  immutable release path. Numeric-service asset IDs are release-qualified so
+  cached or already-open viewers remain valid across publication.
 - `rascommander.info` reverse-proxies `/data/*` to the isolated WebGIS artifact
   service. Do not put local file paths in public manifests.
 
@@ -134,6 +141,9 @@ Add projects one at a time only after all checks pass:
 - each 2D model has a consolidated, validated terrain COG;
 - manifests use hosted URLs and contain no local paths;
 - PMTiles and COG endpoints support HTTP range requests;
+- successful immutable release artifacts use a one-year immutable cache policy,
+  mutable current/catalog paths revalidate, and every `4xx` or `5xx` response
+  uses `Cache-Control: no-store`;
 - large layers have sensible default visibility;
 - desktop and mobile viewers open from the public docs URL;
 - Identify distinguishes raw HDF values from RASMapper raster values;
@@ -175,7 +185,13 @@ After publishing a manifest v2 release with numeric COGs, install or upgrade the
 bounded runtime inside CT230 with `provision_webgis_raster_service.sh`. Keep its
 application listener on `127.0.0.1:8087`; CT230 Nginx and the docs-origin proxy
 are the only public route to `/ras-raster/`.
-Run `provision_rasdocs_raster_proxy.sh` inside CLB-Web01 CT210 and the active
-serve-only rasdocs replica CT213 only after the CT230 health check passes. It
-adds the path-scoped Caddy proxy without changing the existing `/data/*`
-artifact route.
+The service readiness response must identify the active release and catalog,
+must be non-cacheable, and must report zero missing assets. The publisher must
+run `validate_public_webgis_release.py` after switching `current`; this validates
+public PMTiles and COG ranges, numeric sample/statistics/tile routes, cache
+headers, and non-cacheable API/static errors.
+Run `provision_rasdocs_raster_proxy.sh` inside the active CT210 `clb-rasdocs`
+guest on CLB-WebGIS and the serve-only rasdocs replica CT213 only after the
+CT230 readiness check passes. Former CLB-Web01 was retired on 2026-07-24. The
+script adds the path-scoped Caddy proxy without changing the existing
+`/data/*` artifact route.
