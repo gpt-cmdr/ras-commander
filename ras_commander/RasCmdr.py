@@ -98,7 +98,7 @@ class RasCmdr:
     @staticmethod
     def _verify_required_hdf_datasets(
         required_hdf_datasets: Optional[
-            Mapping[Union[str, Path], Sequence[str]]
+            Mapping[Union[str, Path], Union[str, Sequence[str]]]
         ],
         base_folder: Union[str, Path],
     ) -> tuple[Optional[bool], List[str]]:
@@ -111,6 +111,8 @@ class RasCmdr:
         failures: List[str] = []
         base_folder = Path(base_folder)
         for file_value, dataset_paths in required_hdf_datasets.items():
+            if isinstance(dataset_paths, str):
+                dataset_paths = [dataset_paths]
             hdf_path = Path(file_value)
             if not hdf_path.is_absolute():
                 hdf_path = base_folder / hdf_path
