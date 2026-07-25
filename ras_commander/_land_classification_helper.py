@@ -58,15 +58,12 @@ _OPTIONAL_CLASSIFICATION_COLUMNS = [
 _RESOURCE_DIR = (
     Path(__file__).resolve().parent / "resources" / "land_classification"
 )
-_LANDCOVER_TEMPLATE_FILENAME = "landcover_template.hdf"
 _SOILS_TEMPLATE_FILENAME = "soils_template.hdf"
 
 _LANDCOVER_DEFAULT_RELATIVE_PATH = Path("Land Classification") / "LandCover.hdf"
 _SOILS_DEFAULT_RELATIVE_PATH = Path("Soils Data") / "Hydrologic Soil Groups.hdf"
 _INFILTRATION_DEFAULT_RELATIVE_PATH = Path("Soils Data") / "Infiltration.hdf"
 
-_DEFAULT_LANDCOVER_NODATA_MANNINGS_N = 0.035
-_DEFAULT_LANDCOVER_NODATA_PERCENT_IMPERVIOUS = 0.0
 _DEFAULT_SCS_RESET_TIME_HOURS = 24.0
 _DEFAULT_SCS_MIN_INFILTRATION_RATE = 0.12
 _DEFAULT_DEFICIT_CONSTANT_NO_DATA = {
@@ -766,6 +763,7 @@ def build_land_classification_record(
     """Build a semantic layer record for list_land_classification_layers()."""
     filename = layer_elem.attrib.get("Filename")
     selected_parameter = get_selected_parameter(layer_elem)
+    legacy_landcover = layer_elem.attrib.get("Type") == "LandCover"
     classification_layers = [
         child
         for child in layer_elem.findall("Layer")
@@ -781,9 +779,10 @@ def build_land_classification_record(
         "filename": filename,
         "resolved_path": str(resolved_path) if resolved_path is not None else None,
         "selected_parameter": selected_parameter,
-        "classification_kind": infer_land_classification_kind(
-            filename,
-            selected_parameter,
+        "classification_kind": (
+            "landcover"
+            if legacy_landcover
+            else infer_land_classification_kind(filename, selected_parameter)
         ),
         "classification_layer_count": len(classification_layers),
         "classification_layer_filenames": [
@@ -898,210 +897,6 @@ def _create_output_raster(
     ) as dst:
         dst.write(array, 1)
     return RasUtils.safe_resolve(output_tif_path)
-
-
-def _build_nodata_mask(array: np.ndarray, nodata_value: Any) -> np.ndarray:
-    if nodata_value is None:
-        if np.issubdtype(array.dtype, np.floating):
-            return np.isnan(array)
-        return np.zeros(array.shape, dtype=bool)
-
-    try:
-        if np.isnan(nodata_value):
-            return np.isnan(array)
-    except TypeError:
-        pass
-
-    return array == nodata_value
-
-
-def _fill_classification_nodata_with_nearest(
-    array: np.ndarray,
-    *,
-    nodata_class: int = 0,
-) -> np.ndarray:
-    """Fill categorical NoData cells from the nearest valid class.
-
-    Native HEC-RAS land-cover rasters retain a ``NoData`` lookup row but do
-    not leave class-zero pixels in the rectangular raster surface. Polygon
-    clipping otherwise leaves zero-valued edge pixels that can make
-    RasMapperLib classify the complete mesh as NoData. Nearest-neighbor
-    filling preserves categorical IDs without inventing interpolated values.
-    """
-    nodata_mask = array == int(nodata_class)
-    if not np.any(nodata_mask):
-        return array
-    if np.all(nodata_mask):
-        raise ValueError("Land-cover raster contains no valid classification cells.")
-
-    from scipy.ndimage import distance_transform_edt
-
-    nearest_indices = distance_transform_edt(
-        nodata_mask,
-        return_distances=False,
-        return_indices=True,
-    )
-    filled = array.copy()
-    filled[nodata_mask] = array[tuple(nearest_indices[:, nodata_mask])]
-    return filled
-
-
-def _coerce_raster_lookup_value(value: Any, array: np.ndarray) -> Any:
-    if np.issubdtype(array.dtype, np.integer):
-        return int(float(value))
-    if np.issubdtype(array.dtype, np.floating):
-        return float(value)
-    raise ValueError(
-        "Raster classification source values must be numeric for raster inputs"
-    )
-
-
-def _rasterize_landcover_source(
-    source_path: Path,
-    classification_table: pd.DataFrame,
-    cell_size: float,
-    project_crs: Any,
-    restrict_to_extent: Optional[Any],
-    buffer_distance: float,
-    source_field: Optional[str],
-) -> tuple[np.ndarray, Any, list[tuple[int, str]], list[tuple[str, float, float]]]:
-    try:
-        import geopandas as gpd
-        import rasterio
-        from rasterio import features
-        from rasterio.warp import Resampling, reproject, transform_bounds
-    except ImportError as exc:  # pragma: no cover - depends on local env
-        raise ImportError(
-            "rasterio and geopandas are required for land-cover generation. "
-            "Install the geospatial dependencies before calling this API."
-        ) from exc
-
-    restrict_bounds = normalize_restrict_to_extent(
-        restrict_to_extent,
-        buffer_distance=buffer_distance,
-    )
-
-    raster_map_rows = [(0, "NoData")] + [
-        (int(row.class_id), str(row.class_name))
-        for row in classification_table.sort_values("class_id").itertuples()
-    ]
-    variable_rows = [("NoData", _DEFAULT_LANDCOVER_NODATA_MANNINGS_N, 0.0)] + [
-        (
-            str(row.class_name),
-            float(row.mannings_n),
-            float(row.percent_impervious),
-        )
-        for row in classification_table.sort_values("class_id").itertuples()
-    ]
-
-    if source_path.suffix.lower() == ".shp":
-        if not source_field:
-            raise ValueError(
-                "source_field is required when add_landcover_layer() uses polygon input"
-            )
-
-        gdf = gpd.read_file(source_path)
-        if source_field not in gdf.columns:
-            raise ValueError(f"source_field not found in polygon source: {source_field}")
-        if gdf.crs is None:
-            raise ValueError(f"Polygon source has no CRS: {source_path}")
-
-        gdf = gdf.loc[gdf.geometry.notna() & ~gdf.geometry.is_empty].copy()
-        if gdf.empty:
-            raise ValueError(f"Polygon source has no valid geometries: {source_path}")
-
-        gdf = gdf.to_crs(project_crs)
-        bounds = tuple(gdf.total_bounds.tolist())
-        if restrict_bounds is not None:
-            bounds = restrict_bounds
-
-        transform, width, height = _bounds_to_grid(bounds, cell_size)
-        lookup = {
-            str(row.source_value).strip(): int(row.class_id)
-            for row in classification_table.itertuples()
-        }
-
-        source_values = gdf[source_field].astype(str).str.strip()
-        unmatched = sorted(set(source_values.unique()) - set(lookup))
-        if unmatched:
-            raise ValueError(
-                "Polygon source contains values not found in classification_table.source_value: "
-                + ", ".join(unmatched[:10])
-            )
-
-        gdf["_class_id"] = source_values.map(lookup).astype(int)
-        shapes = (
-            (geom, int(class_id))
-            for geom, class_id in zip(gdf.geometry, gdf["_class_id"], strict=False)
-        )
-        array = features.rasterize(
-            shapes=shapes,
-            out_shape=(height, width),
-            transform=transform,
-            fill=0,
-            dtype="int32",
-        )
-        array = _fill_classification_nodata_with_nearest(array.astype(np.int32))
-        return array, transform, raster_map_rows, variable_rows
-
-    with rasterio.open(source_path) as src:
-        if src.crs is None:
-            raise ValueError(f"Raster source has no CRS: {source_path}")
-
-        source_bounds = transform_bounds(
-            src.crs,
-            project_crs,
-            *src.bounds,
-            densify_pts=21,
-        )
-        bounds = restrict_bounds if restrict_bounds is not None else source_bounds
-        transform, width, height = _bounds_to_grid(bounds, cell_size)
-
-        raw_array = np.full((height, width), -2147483648.0, dtype=np.float64)
-        reproject(
-            source=rasterio.band(src, 1),
-            destination=raw_array,
-            src_transform=src.transform,
-            src_crs=src.crs,
-            src_nodata=src.nodata,
-            dst_transform=transform,
-            dst_crs=project_crs,
-            dst_nodata=-2147483648.0,
-            resampling=Resampling.nearest,
-        )
-
-        nodata_mask = _build_nodata_mask(raw_array, -2147483648.0)
-        valid_values = raw_array[~nodata_mask]
-        output_array = np.zeros((height, width), dtype=np.int32)
-
-        mapping: dict[Any, int] = {}
-        for row in classification_table.itertuples():
-            mapped_value = _coerce_raster_lookup_value(row.source_value, raw_array)
-            mapping[mapped_value] = int(row.class_id)
-            if np.issubdtype(raw_array.dtype, np.floating):
-                output_array[np.isclose(raw_array, mapped_value)] = int(row.class_id)
-            else:
-                output_array[raw_array == mapped_value] = int(row.class_id)
-
-        if valid_values.size:
-            unmatched = []
-            for unique_value in np.unique(valid_values):
-                matched = False
-                for mapped_value in mapping:
-                    if np.isclose(unique_value, mapped_value):
-                        matched = True
-                        break
-                if not matched:
-                    unmatched.append(unique_value)
-            if unmatched:
-                preview = ", ".join(str(value) for value in unmatched[:10])
-                raise ValueError(
-                    "Raster source contains values not found in "
-                    f"classification_table.source_value: {preview}"
-                )
-
-        output_array = _fill_classification_nodata_with_nearest(output_array)
-        return output_array, transform, raster_map_rows, variable_rows
 
 
 def _normalize_soil_group(value: Any) -> Optional[str]:
@@ -1228,11 +1023,10 @@ def _rasterize_soils_source(
     buffer_distance: float,
 ) -> tuple[np.ndarray, Any, list[tuple[int, str]]]:
     try:
-        import geopandas as gpd
         from rasterio import features
     except ImportError as exc:  # pragma: no cover - depends on local env
         raise ImportError(
-            "geopandas and rasterio are required for soils generation. "
+            "rasterio is required for soils generation. "
             "Install the geospatial dependencies before calling this API."
         ) from exc
 
@@ -1327,65 +1121,6 @@ def _build_raster_map_array(rows: list[tuple[int, str]]) -> np.ndarray:
     return data
 
 
-def _build_landcover_variables_array(
-    rows: list[tuple[str, float, float]],
-) -> np.ndarray:
-    max_name_len = max(len(str(name).encode("utf-8")) for name, _, _ in rows)
-    dtype = np.dtype(
-        [
-            ("Name", f"S{max_name_len}"),
-            ("ManningsN", "<f4"),
-            ("Percent Impervious", "<f4"),
-        ]
-    )
-    data = np.zeros(len(rows), dtype=dtype)
-    for index, (class_name, mannings_n, percent_impervious) in enumerate(rows):
-        data[index]["Name"] = str(class_name).encode("utf-8")
-        data[index]["ManningsN"] = np.float32(mannings_n)
-        data[index]["Percent Impervious"] = np.float32(percent_impervious)
-    return data
-
-
-def _rewrite_landcover_sidecar(
-    output_hdf_path: Path,
-    raster_map_rows: list[tuple[int, str]],
-    variable_rows: list[tuple[str, float, float]],
-    projection_wkt: str,
-) -> Path:
-    output_hdf_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(_resource_template_path(_LANDCOVER_TEMPLATE_FILENAME), output_hdf_path)
-
-    with h5py.File(output_hdf_path, "a") as hdf_file:
-        for key in ("Raster Map", "Variables", "Classification Polygons"):
-            if key in hdf_file:
-                del hdf_file[key]
-
-        hdf_file.create_dataset(
-            "Raster Map",
-            data=_build_raster_map_array(raster_map_rows),
-            compression="gzip",
-            compression_opts=1,
-            chunks=(100,),
-            maxshape=(None,),
-        )
-        hdf_file.create_dataset(
-            "Variables",
-            data=_build_landcover_variables_array(variable_rows),
-            compression="gzip",
-            compression_opts=1,
-            chunks=(100,),
-            maxshape=(None,),
-        )
-
-        _set_hdf_string_attr(hdf_file, "File Type", "HEC Land Cover")
-        _set_hdf_string_attr(hdf_file, "GUID", str(uuid.uuid4()))
-        _set_hdf_string_attr(hdf_file, "LC Type", "LandCover")
-        _set_hdf_string_attr(hdf_file, "Projection", projection_wkt)
-        _set_hdf_string_attr(hdf_file, "Version", "2.0")
-
-    return RasUtils.safe_resolve(output_hdf_path)
-
-
 def _rewrite_soils_sidecar(
     output_hdf_path: Path,
     raster_map_rows: list[tuple[int, str]],
@@ -1437,6 +1172,8 @@ def _read_layer_ids_for_symbology(hdf_path: Union[str, Path]) -> list[int]:
     with h5py.File(hdf_path, "r") as hdf_file:
         if "Raster Map" in hdf_file:
             return [class_id for class_id, _ in _read_raster_map_rows(hdf_path)]
+        if "IDs" in hdf_file:
+            return [int(value) for value in hdf_file["IDs"][()]]
         if "Variables" in hdf_file:
             return list(range(len(hdf_file["Variables"])))
     return []
@@ -1494,39 +1231,6 @@ def _coerce_polygon_geometry(polygon: Any) -> Any:
     if not geometry.is_valid:
         raise ValueError("classification polygon geometry is not valid")
     return geometry
-
-
-def _closed_xy_array(coords: Any) -> np.ndarray:
-    points = [(float(x), float(y)) for x, y, *_ in coords]
-    if len(points) < 3:
-        raise ValueError("classification polygon rings need at least three points")
-    if points[0] != points[-1]:
-        points.append(points[0])
-    if len(points) < 4:
-        raise ValueError("classification polygon rings need at least four closed points")
-    return np.asarray(points, dtype=np.float64)
-
-
-def _polygon_geometry_to_rings(polygon: Any) -> list[np.ndarray]:
-    """Convert shapely Polygon/MultiPolygon to HEC-RAS polygon ring arrays."""
-    try:
-        from shapely.geometry import MultiPolygon, Polygon
-    except ImportError as exc:  # pragma: no cover - depends on local env
-        raise ImportError(
-            "shapely is required for classification polygon authoring."
-        ) from exc
-
-    geometry = _coerce_polygon_geometry(polygon)
-    polygons = list(geometry.geoms) if isinstance(geometry, MultiPolygon) else [geometry]
-    rings: list[np.ndarray] = []
-    for part in polygons:
-        if not isinstance(part, Polygon):
-            continue
-        rings.append(_closed_xy_array(part.exterior.coords))
-        rings.extend(_closed_xy_array(interior.coords) for interior in part.interiors)
-    if not rings:
-        raise ValueError("classification polygon has no writable rings")
-    return rings
 
 
 def _classification_sidecar_crs(hdf_path: Union[str, Path]) -> Optional[Any]:
@@ -1619,410 +1323,6 @@ def read_land_classification_polygon_records(
     return records
 
 
-def _write_land_classification_polygon_records(
-    layer_hdf_path: Union[str, Path],
-    records: list[dict[str, Any]],
-) -> None:
-    layer_hdf_path = Path(layer_hdf_path)
-    with h5py.File(layer_hdf_path, "a") as hdf_file:
-        if "Classification Polygons" in hdf_file:
-            del hdf_file["Classification Polygons"]
-
-        if not records:
-            return
-
-        group = hdf_file.create_group("Classification Polygons")
-        max_class_name_len = max(
-            1,
-            max(len(str(record["class_name"]).encode("utf-8")) for record in records),
-        )
-        attributes = np.zeros(
-            len(records),
-            dtype=np.dtype([("Classification", f"S{max_class_name_len}")]),
-        )
-
-        all_points: list[np.ndarray] = []
-        polygon_parts: list[tuple[int, int]] = []
-        polygon_info: list[tuple[int, int, int, int]] = []
-        point_start = 0
-        part_start = 0
-
-        for index, record in enumerate(records):
-            class_name = str(record["class_name"]).strip()
-            attributes[index]["Classification"] = class_name.encode("utf-8")
-            rings = _polygon_geometry_to_rings(record["geometry"])
-
-            feature_point_start = point_start
-            feature_part_start = part_start
-            feature_point_count = 0
-            for ring in rings:
-                all_points.append(ring)
-                ring_count = int(ring.shape[0])
-                polygon_parts.append((point_start, ring_count))
-                point_start += ring_count
-                feature_point_count += ring_count
-                part_start += 1
-
-            polygon_info.append(
-                (
-                    feature_point_start,
-                    feature_point_count,
-                    feature_part_start,
-                    len(rings),
-                )
-            )
-
-        points_array = np.vstack(all_points).astype(np.float64)
-        info_dataset = group.create_dataset(
-            "Polygon Info",
-            data=np.asarray(polygon_info, dtype=np.int32),
-            compression="gzip",
-            compression_opts=1,
-            chunks=True,
-        )
-        info_dataset.attrs["Column"] = np.asarray(
-            [
-                "Point Starting Index",
-                "Point Count",
-                "Part Starting Index",
-                "Part Count",
-            ],
-            dtype="S20",
-        )
-        info_dataset.attrs["Feature Type"] = np.bytes_("Polygon")
-        info_dataset.attrs["Row"] = np.bytes_("Feature")
-
-        parts_dataset = group.create_dataset(
-            "Polygon Parts",
-            data=np.asarray(polygon_parts, dtype=np.int32),
-            compression="gzip",
-            compression_opts=1,
-            chunks=True,
-        )
-        parts_dataset.attrs["Column"] = np.asarray(
-            ["Point Starting Index", "Point Count"],
-            dtype="S20",
-        )
-        parts_dataset.attrs["Row"] = np.bytes_("Part")
-
-        points_dataset = group.create_dataset(
-            "Polygon Points",
-            data=points_array,
-            compression="gzip",
-            compression_opts=1,
-            chunks=True,
-        )
-        points_dataset.attrs["Column"] = np.asarray(["X", "Y"], dtype="S1")
-        points_dataset.attrs["Row"] = np.bytes_("Points")
-
-        group.create_dataset(
-            "Attributes",
-            data=attributes,
-            compression="gzip",
-            compression_opts=1,
-            chunks=True,
-        )
-
-
-def _structured_dataset_to_rows(dataset: h5py.Dataset) -> list[dict[str, Any]]:
-    data = dataset[()]
-    fields = data.dtype.names or ()
-    rows: list[dict[str, Any]] = []
-    for row in data:
-        row_dict: dict[str, Any] = {}
-        for field_name in fields:
-            value = row[field_name]
-            if data.dtype[field_name].kind == "S":
-                value = _decode_hdf_string(value)
-            elif isinstance(value, np.generic):
-                value = value.item()
-            row_dict[field_name] = value
-        rows.append(row_dict)
-    return rows
-
-
-def _build_structured_dataset_array(
-    rows: list[dict[str, Any]],
-    dtype: np.dtype,
-) -> np.ndarray:
-    fields = dtype.names or ()
-    output_dtype = []
-    for field_name in fields:
-        field_dtype = dtype[field_name]
-        if field_dtype.kind == "S":
-            max_len = max(
-                int(field_dtype.itemsize),
-                1,
-                max(
-                    (
-                        len(str(row.get(field_name, "")).encode("utf-8"))
-                        for row in rows
-                    ),
-                    default=1,
-                ),
-            )
-            output_dtype.append((field_name, f"S{max_len}"))
-        else:
-            output_dtype.append((field_name, field_dtype))
-
-    data = np.zeros(len(rows), dtype=np.dtype(output_dtype))
-    for index, row in enumerate(rows):
-        for field_name in fields:
-            if data.dtype[field_name].kind == "S":
-                data[index][field_name] = str(row.get(field_name, "")).encode("utf-8")
-            else:
-                data[index][field_name] = row.get(field_name, 0)
-    return data
-
-
-def _replace_structured_dataset(
-    hdf_file: h5py.File,
-    dataset_name: str,
-    rows: list[dict[str, Any]],
-    dtype: np.dtype,
-) -> None:
-    if dataset_name in hdf_file:
-        del hdf_file[dataset_name]
-    hdf_file.create_dataset(
-        dataset_name,
-        data=_build_structured_dataset_array(rows, dtype),
-        compression="gzip",
-        compression_opts=1,
-        chunks=True,
-    )
-
-
-_VARIABLE_VALUE_ALIASES = {
-    "mannings_n": "ManningsN",
-    "manning_n": "ManningsN",
-    "manningsn": "ManningsN",
-    "percent_impervious": "Percent Impervious",
-    "curve_number": "Curve Number",
-    "abstraction_ratio": "Abstraction Ratio",
-    "minimum_infiltration_rate": "Minimum Infiltration Rate",
-    "maximum_deficit": "Maximum Deficit",
-    "initial_deficit": "Initial Deficit",
-    "potential_percolation_rate": "Potential Percolation Rate",
-    "wetting_front_suction": "Wetting Front Suction",
-    "saturated_hydraulic_conductivity": "Saturated Hydraulic Conductivity",
-    "initial_soil_water_content": "Initial Soil Water Content",
-    "saturated_soil_water_content": "Saturated Soil Water Content",
-}
-
-
-def _normalize_variable_values(
-    variable_values: Optional[dict[str, Any]],
-) -> dict[str, float]:
-    if not variable_values:
-        return {}
-    normalized: dict[str, float] = {}
-    for key, value in variable_values.items():
-        lookup_key = str(key).strip()
-        canonical_key = _VARIABLE_VALUE_ALIASES.get(
-            lookup_key.lower().replace(" ", "_"),
-            lookup_key,
-        )
-        normalized[canonical_key] = float(value)
-    return normalized
-
-
-def _infer_land_classification_hdf_kind(hdf_file: h5py.File) -> str:
-    lc_type = (_read_hdf_string_attr(hdf_file, "LC Type") or "").lower()
-    if "infiltration" in lc_type:
-        return "infiltration"
-    if "soil" in lc_type:
-        return "soils"
-    if "landcover" in lc_type or "land cover" in lc_type:
-        return "landcover"
-    if "Variables" in hdf_file:
-        fields = set(hdf_file["Variables"].dtype.names or ())
-        if "ManningsN" in fields:
-            return "landcover"
-        if fields & {
-            "Curve Number",
-            "Maximum Deficit",
-            "Wetting Front Suction",
-        }:
-            return "infiltration"
-    if "Raster Map" in hdf_file:
-        return "soils"
-    return "unknown"
-
-
-def _upsert_raster_map_class(
-    hdf_file: h5py.File,
-    class_name: str,
-    class_id: Optional[int],
-) -> Optional[int]:
-    if "Raster Map" not in hdf_file:
-        return class_id
-
-    dataset = hdf_file["Raster Map"]
-    rows = _structured_dataset_to_rows(dataset)
-    dtype = dataset.dtype
-    fields = dtype.names or ()
-    if "ID" not in fields or "Name" not in fields:
-        raise ValueError("Raster Map dataset must contain ID and Name fields")
-
-    resolved_class_id = int(class_id) if class_id is not None else None
-    name_to_index = {
-        str(row["Name"]).strip(): index
-        for index, row in enumerate(rows)
-    }
-    id_to_name = {int(row["ID"]): str(row["Name"]).strip() for row in rows}
-
-    if resolved_class_id is not None:
-        duplicate_name = id_to_name.get(resolved_class_id)
-        if duplicate_name is not None and duplicate_name != class_name:
-            raise ValueError(
-                f"class_id {resolved_class_id} already maps to {duplicate_name!r}"
-            )
-
-    if class_name in name_to_index:
-        index = name_to_index[class_name]
-        if resolved_class_id is None:
-            resolved_class_id = int(rows[index]["ID"])
-        rows[index]["ID"] = resolved_class_id
-    else:
-        if resolved_class_id is None:
-            positive_ids = [int(row["ID"]) for row in rows if int(row["ID"]) > 0]
-            resolved_class_id = (max(positive_ids) + 1) if positive_ids else 1
-        rows.append({"ID": resolved_class_id, "Name": class_name})
-
-    rows = sorted(rows, key=lambda row: int(row["ID"]))
-    _replace_structured_dataset(hdf_file, "Raster Map", rows, dtype)
-    return resolved_class_id
-
-
-def _default_variable_row(
-    rows: list[dict[str, Any]],
-    dtype: np.dtype,
-    class_name: str,
-    layer_kind: str,
-) -> dict[str, Any]:
-    fields = dtype.names or ()
-    source_row = next(
-        (
-            row
-            for row in rows
-            if str(row.get("Name", "")).strip().lower() == "nodata"
-        ),
-        rows[0].copy() if rows else {},
-    )
-    row = {}
-    for field_name in fields:
-        if field_name == "Name":
-            row[field_name] = class_name
-        elif field_name in source_row:
-            row[field_name] = source_row[field_name]
-        elif dtype[field_name].kind == "S":
-            row[field_name] = ""
-        else:
-            row[field_name] = -9999.0
-
-    if layer_kind == "landcover":
-        if "ManningsN" in fields:
-            row["ManningsN"] = _DEFAULT_LANDCOVER_NODATA_MANNINGS_N
-        if "Percent Impervious" in fields:
-            row["Percent Impervious"] = _DEFAULT_LANDCOVER_NODATA_PERCENT_IMPERVIOUS
-    return row
-
-
-def _upsert_variable_class(
-    hdf_file: h5py.File,
-    class_name: str,
-    variable_values: dict[str, float],
-    layer_kind: str,
-) -> bool:
-    if "Variables" not in hdf_file:
-        return False
-
-    dataset = hdf_file["Variables"]
-    dtype = dataset.dtype
-    fields = dtype.names or ()
-    if "Name" not in fields:
-        raise ValueError("Variables dataset must contain a Name field")
-
-    rows = _structured_dataset_to_rows(dataset)
-    name_to_index = {
-        str(row["Name"]).strip(): index
-        for index, row in enumerate(rows)
-    }
-    if class_name in name_to_index:
-        row = rows[name_to_index[class_name]]
-    else:
-        row = _default_variable_row(rows, dtype, class_name, layer_kind)
-        rows.append(row)
-
-    for field_name, value in variable_values.items():
-        if field_name not in fields:
-            raise ValueError(
-                f"Variables dataset does not contain field {field_name!r}"
-            )
-        if field_name == "Name":
-            continue
-        row[field_name] = value
-
-    _replace_structured_dataset(hdf_file, "Variables", rows, dtype)
-    return True
-
-
-def _remove_class_from_sidecar_tables(
-    hdf_file: h5py.File,
-    class_name: str,
-) -> None:
-    for dataset_name in ("Raster Map", "Variables"):
-        if dataset_name not in hdf_file:
-            continue
-        dataset = hdf_file[dataset_name]
-        fields = dataset.dtype.names or ()
-        name_field = "Name"
-        if name_field not in fields:
-            continue
-        rows = [
-            row
-            for row in _structured_dataset_to_rows(dataset)
-            if str(row.get(name_field, "")).strip() != class_name
-        ]
-        _replace_structured_dataset(hdf_file, dataset_name, rows, dataset.dtype)
-
-
-def _update_sidecar_classification_tables(
-    layer_hdf_path: Union[str, Path],
-    class_name: str,
-    class_id: Optional[int],
-    variable_values: Optional[dict[str, Any]],
-) -> dict[str, Any]:
-    normalized_variables = _normalize_variable_values(variable_values)
-    with h5py.File(layer_hdf_path, "a") as hdf_file:
-        layer_kind = _infer_land_classification_hdf_kind(hdf_file)
-        resolved_class_id = _upsert_raster_map_class(
-            hdf_file,
-            class_name,
-            class_id,
-        )
-        variables_updated = _upsert_variable_class(
-            hdf_file,
-            class_name,
-            normalized_variables,
-            layer_kind,
-        )
-
-    return {
-        "class_name": class_name,
-        "class_id": resolved_class_id,
-        "variables_updated": variables_updated,
-        "variable_values": normalized_variables,
-    }
-
-
-def _backup_hdf_file(layer_hdf_path: Union[str, Path]) -> Path:
-    layer_hdf_path = Path(layer_hdf_path)
-    backup_path = Path(str(layer_hdf_path) + ".bak")
-    shutil.copy2(layer_hdf_path, backup_path)
-    return backup_path
-
-
 def list_land_classification_polygons(
     layer_hdf_path: Union[str, Path],
 ) -> Any:
@@ -2041,167 +1341,6 @@ def list_land_classification_polygons(
     if not records:
         return gpd.GeoDataFrame(columns=columns, geometry="geometry", crs=crs)
     return gpd.GeoDataFrame(records, columns=columns, geometry="geometry", crs=crs)
-
-
-def add_land_classification_polygon(
-    layer_hdf_path: Union[str, Path],
-    polygon: Any,
-    class_name: str,
-    class_id: Optional[int] = None,
-    variable_values: Optional[dict[str, Any]] = None,
-    backup: bool = True,
-) -> Any:
-    """Add one classification polygon to a land-cover, soils, or infiltration HDF."""
-    layer_hdf_path = RasUtils.safe_resolve(Path(layer_hdf_path))
-    if not layer_hdf_path.exists():
-        raise FileNotFoundError(f"Land-classification HDF not found: {layer_hdf_path}")
-    class_name = str(class_name).strip()
-    if not class_name:
-        raise ValueError("class_name cannot be blank")
-
-    geometry = _coerce_polygon_geometry(polygon)
-    backup_path = _backup_hdf_file(layer_hdf_path) if backup else None
-    table_update = _update_sidecar_classification_tables(
-        layer_hdf_path,
-        class_name=class_name,
-        class_id=class_id,
-        variable_values=variable_values,
-    )
-    records = read_land_classification_polygon_records(layer_hdf_path)
-    records.append(
-        {
-            "polygon_index": len(records),
-            "class_name": class_name,
-            "geometry": geometry,
-        }
-    )
-    _write_land_classification_polygon_records(layer_hdf_path, records)
-
-    result = list_land_classification_polygons(layer_hdf_path)
-    result.attrs.update(
-        {
-            "classification_hdf_path": str(layer_hdf_path),
-            "backup_path": str(backup_path) if backup_path is not None else None,
-            "class_update": table_update,
-            "recompute_required": True,
-        }
-    )
-    return result
-
-
-def update_land_classification_polygon(
-    layer_hdf_path: Union[str, Path],
-    polygon_index: int,
-    polygon: Optional[Any] = None,
-    class_name: Optional[str] = None,
-    class_id: Optional[int] = None,
-    variable_values: Optional[dict[str, Any]] = None,
-    backup: bool = True,
-) -> Any:
-    """Update a classification polygon geometry and/or class assignment."""
-    layer_hdf_path = RasUtils.safe_resolve(Path(layer_hdf_path))
-    if not layer_hdf_path.exists():
-        raise FileNotFoundError(f"Land-classification HDF not found: {layer_hdf_path}")
-    records = read_land_classification_polygon_records(layer_hdf_path)
-    if polygon_index < 0 or polygon_index >= len(records):
-        raise IndexError(f"polygon_index out of range: {polygon_index}")
-
-    backup_path = _backup_hdf_file(layer_hdf_path) if backup else None
-    current = records[polygon_index]
-    updated_class_name = (
-        str(class_name).strip() if class_name is not None else current["class_name"]
-    )
-    if not updated_class_name:
-        raise ValueError("class_name cannot be blank")
-    updated_geometry = (
-        _coerce_polygon_geometry(polygon)
-        if polygon is not None
-        else current["geometry"]
-    )
-    records[polygon_index] = {
-        "polygon_index": polygon_index,
-        "class_name": updated_class_name,
-        "geometry": updated_geometry,
-    }
-    table_update = _update_sidecar_classification_tables(
-        layer_hdf_path,
-        class_name=updated_class_name,
-        class_id=class_id,
-        variable_values=variable_values,
-    )
-    _write_land_classification_polygon_records(layer_hdf_path, records)
-
-    result = list_land_classification_polygons(layer_hdf_path)
-    result.attrs.update(
-        {
-            "classification_hdf_path": str(layer_hdf_path),
-            "backup_path": str(backup_path) if backup_path is not None else None,
-            "class_update": table_update,
-            "recompute_required": True,
-        }
-    )
-    return result
-
-
-def delete_land_classification_polygon(
-    layer_hdf_path: Union[str, Path],
-    polygon_index: Optional[int] = None,
-    class_name: Optional[str] = None,
-    remove_unused_class: bool = False,
-    backup: bool = True,
-) -> Any:
-    """Delete classification polygons by index or class name."""
-    layer_hdf_path = RasUtils.safe_resolve(Path(layer_hdf_path))
-    if not layer_hdf_path.exists():
-        raise FileNotFoundError(f"Land-classification HDF not found: {layer_hdf_path}")
-    if polygon_index is None and class_name is None:
-        raise ValueError("Provide polygon_index or class_name")
-    if polygon_index is not None and class_name is not None:
-        raise ValueError("Provide only one of polygon_index or class_name")
-
-    records = read_land_classification_polygon_records(layer_hdf_path)
-    backup_path = _backup_hdf_file(layer_hdf_path) if backup else None
-
-    removed_class_names: set[str] = set()
-    if polygon_index is not None:
-        if polygon_index < 0 or polygon_index >= len(records):
-            raise IndexError(f"polygon_index out of range: {polygon_index}")
-        removed = records.pop(polygon_index)
-        removed_class_names.add(str(removed["class_name"]))
-    else:
-        target_class_name = str(class_name).strip()
-        remaining = []
-        for record in records:
-            if str(record["class_name"]).strip() == target_class_name:
-                removed_class_names.add(target_class_name)
-            else:
-                remaining.append(record)
-        if len(remaining) == len(records):
-            raise ValueError(
-                f"No classification polygons found for class_name={target_class_name!r}"
-            )
-        records = remaining
-
-    for new_index, record in enumerate(records):
-        record["polygon_index"] = new_index
-
-    if remove_unused_class:
-        remaining_class_names = {str(record["class_name"]) for record in records}
-        with h5py.File(layer_hdf_path, "a") as hdf_file:
-            for removed_class_name in removed_class_names - remaining_class_names:
-                _remove_class_from_sidecar_tables(hdf_file, removed_class_name)
-
-    _write_land_classification_polygon_records(layer_hdf_path, records)
-    result = list_land_classification_polygons(layer_hdf_path)
-    result.attrs.update(
-        {
-            "classification_hdf_path": str(layer_hdf_path),
-            "backup_path": str(backup_path) if backup_path is not None else None,
-            "removed_class_names": sorted(removed_class_names),
-            "recompute_required": True,
-        }
-    )
-    return result
 
 
 def _signed_argb(color: tuple[int, int, int], alpha: int = 160) -> int:
@@ -2282,7 +1421,7 @@ def _remove_existing_landcover_layers(
 ) -> None:
     target_path = RasUtils.safe_resolve(target_path)
     for layer in list(map_layers.findall("Layer")):
-        if layer.attrib.get("Type") != "LandCoverLayer":
+        if layer.attrib.get("Type") not in {"LandCover", "LandCoverLayer"}:
             continue
         resolved = resolve_rasmap_relative_path(
             project_folder,
@@ -2298,63 +1437,86 @@ def upsert_land_classification_layer(
     layer_name: str,
     selected_parameter: str,
     alpha: int,
+    legacy_landcover: bool = False,
 ) -> Path:
     """Register or replace a land-classification layer entry in the project .rasmap."""
     layer_path = RasUtils.safe_resolve(Path(layer_path))
+    registration_path = (
+        layer_path.with_suffix(".tif") if legacy_landcover else layer_path
+    )
     tree, root = _load_rasmap_tree(project_paths)
     map_layers = _ensure_map_layers(root)
-    _remove_existing_landcover_layers(map_layers, project_paths.project_folder, layer_path)
+    _remove_existing_landcover_layers(
+        map_layers,
+        project_paths.project_folder,
+        registration_path,
+    )
 
     ids = _read_layer_ids_for_symbology(layer_path)
     values_string, colors_string = _generate_color_map(ids, alpha=alpha)
-    relative_filename = to_rasmap_relative_path(project_paths.project_folder, layer_path)
+    relative_filename = to_rasmap_relative_path(
+        project_paths.project_folder,
+        registration_path,
+    )
 
     layer_elem = ET.SubElement(
         map_layers,
         "Layer",
         {
             "Name": layer_name,
-            "Type": "LandCoverLayer",
+            "Type": "LandCover" if legacy_landcover else "LandCoverLayer",
             "Filename": relative_filename,
-            "SelectedParameterForSurfaceFillLabel": selected_parameter,
         },
     )
+    if legacy_landcover:
+        ET.SubElement(layer_elem, "Alpha").text = str(alpha)
+        ET.SubElement(layer_elem, "ResampleMethod").text = "near"
+    else:
+        layer_elem.attrib["SelectedParameterForSurfaceFillLabel"] = selected_parameter
 
     if values_string and colors_string:
-        symbology = ET.SubElement(layer_elem, "Symbology")
-        ET.SubElement(
-            symbology,
-            "ColorByteMap",
-            {
-                "Type": "System.Int32",
-                "Alpha": str(alpha),
-                "Values": values_string,
-                "Colors": colors_string,
-                "ValuesExcludeLegend": "0",
-            },
-        )
+        if not legacy_landcover:
+            symbology = ET.SubElement(layer_elem, "Symbology")
+            ET.SubElement(
+                symbology,
+                "ColorByteMap",
+                {
+                    "Type": "System.Int32",
+                    "Alpha": str(alpha),
+                    "Values": values_string,
+                    "Colors": colors_string,
+                    "ValuesExcludeLegend": "0",
+                },
+            )
+        color_map_attributes = {
+            "Alpha": str(alpha),
+            "Values": values_string,
+            "Colors": colors_string,
+        }
+        if not legacy_landcover:
+            color_map_attributes.update(
+                {
+                    "Type": "System.Int32",
+                    "ValuesExcludeLegend": "0",
+                }
+            )
         ET.SubElement(
             layer_elem,
             "ColorByteMap",
-            {
-                "Type": "System.Int32",
-                "Alpha": str(alpha),
-                "Values": values_string,
-                "Colors": colors_string,
-                "ValuesExcludeLegend": "0",
-            },
+            color_map_attributes,
         )
 
-    ET.SubElement(
-        layer_elem,
-        "Layer",
-        {
-            "Name": "Classification Polygons",
-            "Type": "LandCoverClassificationLayer",
-            "Checked": "True",
-            "Filename": relative_filename,
-        },
-    )
+    if not legacy_landcover:
+        ET.SubElement(
+            layer_elem,
+            "Layer",
+            {
+                "Name": "Classification Polygons",
+                "Type": "LandCoverClassificationLayer",
+                "Checked": "True",
+                "Filename": relative_filename,
+            },
+        )
 
     tree.write(project_paths.rasmap_path, encoding="utf-8", xml_declaration=False)
     return layer_path
@@ -2385,7 +1547,7 @@ def _list_land_classification_records(
 
     records = []
     for layer in map_layers.findall("Layer"):
-        if layer.attrib.get("Type") != "LandCoverLayer":
+        if layer.attrib.get("Type") not in {"LandCover", "LandCoverLayer"}:
             continue
         records.append(
             build_land_classification_record(
@@ -2745,6 +1907,7 @@ def add_landcover_layer(
     restrict_to_extent: Optional[Any] = None,
     layer_name: str = "LandCover",
     buffer_distance: float = 0.0,
+    hecras_version: str = "7.0",
 ) -> Path:
     """Create and register a land-cover classification layer.
 
@@ -2761,8 +1924,6 @@ def add_landcover_layer(
         raise FileNotFoundError(f"Land-cover source not found: {source_path}")
 
     classification_df = normalize_classification_table(classification_table)
-    project_crs = _get_project_crs(project_paths)
-    projection_wkt = _get_project_projection_wkt(project_paths)
 
     output_hdf_path = (
         RasUtils.safe_resolve(Path(output_hdf_path))
@@ -2772,30 +1933,18 @@ def add_landcover_layer(
             _LANDCOVER_DEFAULT_RELATIVE_PATH,
         )
     )
-    output_hdf_path.parent.mkdir(parents=True, exist_ok=True)
-    _remove_output_artifacts(output_hdf_path)
+    from ._landcover_native import create_landcover
 
-    raster_array, transform, raster_map_rows, variable_rows = _rasterize_landcover_source(
+    validation = create_landcover(
+        rasmap_path=project_paths.rasmap_path,
         source_path=source_path,
-        classification_table=classification_df,
+        classification_df=classification_df,
         cell_size=float(cell_size),
-        project_crs=project_crs,
+        source_field=source_field,
+        output_hdf_path=output_hdf_path,
         restrict_to_extent=restrict_to_extent,
         buffer_distance=buffer_distance,
-        source_field=source_field,
-    )
-
-    _create_output_raster(
-        output_hdf_path.with_suffix(".tif"),
-        raster_array,
-        transform,
-        project_crs,
-    )
-    _rewrite_landcover_sidecar(
-        output_hdf_path,
-        raster_map_rows,
-        variable_rows,
-        projection_wkt,
+        hecras_version=hecras_version,
     )
     native_layer_name = output_hdf_path.stem
     if layer_name != native_layer_name:
@@ -2811,6 +1960,7 @@ def add_landcover_layer(
         layer_name=native_layer_name,
         selected_parameter="ManningsN",
         alpha=128,
+        legacy_landcover=bool(validation["legacy_schema"]),
     )
     return output_hdf_path
 
@@ -2979,6 +2129,7 @@ def associate_geometry_layers(
     infiltration_hdf_path: Optional[Union[str, Path]] = None,
     terrain_hdf_path: Optional[Union[str, Path]] = None,
     sediment_soils_hdf_path: Optional[Union[str, Path]] = None,
+    hecras_version: str = "7.0",
     ras_object: Any = None,
 ) -> Path:
     """Associate project terrain / classification layers to a geometry HDF."""
@@ -3023,16 +2174,44 @@ def associate_geometry_layers(
             "to write the SedimentSoilsFilename association explicitly."
         )
 
-    from ._geometry_association import write_geometry_association
+    from ._landcover_native import associate_landcover_to_geometry
 
-    return write_geometry_association(
+    major_version = int(str(hecras_version).split(".", 1)[0])
+    if major_version <= 5:
+        unsupported = {
+            "infiltration_hdf_path": resolved_infiltration_path,
+            "sediment_soils_hdf_path": resolved_sediment_soils_path,
+        }
+        supplied_unsupported = [
+            name for name, path in unsupported.items() if path is not None
+        ]
+        if supplied_unsupported:
+            raise RuntimeError(
+                "HEC-RAS 5.x native association currently supports land cover "
+                "only; refusing to hand-write solver associations for: "
+                + ", ".join(supplied_unsupported)
+            )
+        if resolved_landcover_path is None:
+            raise ValueError("Provide a land-cover layer for HEC-RAS 5.x association.")
+        return associate_landcover_to_geometry(
+            rasmap_path=project_paths.rasmap_path,
+            geometry_hdf_path=geom_hdf_path,
+            landcover_hdf_path=resolved_landcover_path,
+            terrain_hdf_path=resolved_terrain_path,
+            hecras_version=hecras_version,
+        )
+
+    from .dotnet.clr_bootstrap import find_hecras_install
+    from .geom.GeomMesh import GeomMesh
+
+    return GeomMesh.set_geometry_association(
         geom_hdf_path,
         terrain_hdf_path=resolved_terrain_path,
         landcover_hdf_path=resolved_landcover_path,
         infiltration_hdf_path=resolved_infiltration_path,
         sediment_soils_hdf_path=resolved_sediment_soils_path,
-        project_folder=project_paths.project_folder,
-        rasmap_path=project_paths.rasmap_path,
+        hecras_dir=find_hecras_install(hecras_version),
+        validate=True,
     )
 
 
@@ -3040,8 +2219,11 @@ def recompute_property_tables(
     ras_project_path: Union[str, Path],
     geom_file: Union[str, Path],
     ras_object: Any = None,
+    *,
+    hecras_version: str = "7.0",
+    audit_mannings: bool = False,
 ) -> Path:
-    """Run CompleteGeometry + ComputePropertyTables for a compiled geometry HDF."""
+    """Run the selected RASMapper generation's native property-table command."""
     project_paths = resolve_project_paths(ras_project_path)
     geom_hdf_path = resolve_geometry_hdf_path(
         project_paths,
@@ -3049,14 +2231,15 @@ def recompute_property_tables(
         ras_object=ras_object,
     )
 
-    ns = get_interop_namespace()
-    complete_geometry_command = ns["CompleteGeometryCommand"]()
-    complete_geometry_command.GeometryFilename = str(geom_hdf_path)
-    complete_geometry_command.RasmapFilename = str(project_paths.rasmap_path)
-    complete_geometry_command.Execute(None)
+    from ._landcover_native import recompute_property_tables as native_recompute
 
-    compute_property_tables_command = ns["ComputePropertyTablesCommand"]()
-    compute_property_tables_command.Geometry = str(geom_hdf_path)
-    compute_property_tables_command.Execute(None)
+    native_recompute(
+        rasmap_path=project_paths.rasmap_path,
+        geometry_hdf_path=geom_hdf_path,
+        hecras_version=hecras_version,
+    )
+    if audit_mannings:
+        from .hdf.HdfLandCover import HdfLandCover
 
+        HdfLandCover.audit_final_mannings_n(geom_hdf_path)
     return geom_hdf_path

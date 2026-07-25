@@ -2090,12 +2090,11 @@ class RasMonteCarlo:
         1. ``run_ensemble(..., clone_geom=True)`` — clone the geometry PER sample
            so each ``.g##`` is independent; otherwise all samples share one
            geometry and the apply_fn writes collide.
-        2. ``run_ensemble(..., clear_geompre=True)`` — the per-cell ``Cells Center
-           Manning's n`` is a geometry-preprocessing product cached in the
-           ``.g##.hdf``; ``clear_geompre`` (now including the in-HDF preprocessor
-           tables, association preserved) forces HEC-RAS to re-derive it from the
-           perturbed ``LCMann`` on each sample. ``force_geompre`` is NOT needed and
-           would collapse per-cell n to the uniform default.
+        2. Run a native HEC-RAS geometry/plan computation after changing the
+           text geometry. ``clear_geompre=True`` may be used to remove the
+           corresponding ``.c##`` cache, but ras-commander no longer deletes
+           selected datasets inside ``.g##.hdf``. ``force_geompre`` is not
+           needed for a Manning-table change.
 
         Without both, the ensemble runs but shows ZERO roughness sensitivity
         (identical per-cell n / WSE across all samples).

@@ -236,23 +236,40 @@ def test_missing_polygon_parts_warning_is_collapsed(
 def test_set_landcover_raster_map_info_is_concise(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ):
-    """Successful sidecar writes should summarize without full paths at INFO."""
+    """The public setter must delegate to RASMapper, not edit HDF directly."""
     sidecar = tmp_path / "LandCover.hdf"
     _write_landcover_sidecar(sidecar)
 
+    def native_set(path, mapping, *, hecras_version):
+        assert Path(path) == sidecar
+        assert mapping == {"Open Water": 0.04}
+        assert hecras_version == "6.6"
+        return {
+            "changed": 1,
+            "unchanged": 1,
+            "format": "native-v6+",
+            "backup_path": sidecar.with_name("LandCover.backup.hdf"),
+            "class_details": [],
+        }
+
+    monkeypatch.setattr(
+        "ras_commander._landcover_native.set_landcover_parameters",
+        native_set,
+    )
     with caplog.at_level("INFO", logger=LOGGER_NAME):
         result = HdfLandCover.set_landcover_raster_map(
             sidecar,
             {"Open Water": 0.04},
+            hecras_version="6.6",
         )
 
     assert result["changed"] == 1
-    assert Path(result["backup_path"]).exists()
     messages = _hdf_landcover_messages(caplog)
     assert messages == [
-        "Updated land cover sidecar LandCover.hdf: "
-        "format=v6_modern, changed=1, unchanged=1"
+        "Updated land cover sidecar LandCover.hdf through RASMapper 6.6: "
+        "changed=1, unchanged=1"
     ]
     assert str(tmp_path) not in "\n".join(messages)
 

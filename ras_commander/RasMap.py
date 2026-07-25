@@ -35,9 +35,7 @@ List of Functions in RasMap:
 - list_geometry_layers(): List top-level geometries and child geometry elements
 - list_geometry_features(): List HDF geometry features inside a layer
 - list_land_classification_polygons(): List sidecar classification polygon overrides
-- add_land_classification_polygon(): Add sidecar classification polygon override
-- update_land_classification_polygon(): Update sidecar classification polygon override
-- delete_land_classification_polygon(): Delete sidecar classification polygon override
+- add/update/delete_land_classification_polygon(): Disabled pending a native RASMapper writer
 - set_geometry_layer_visibility(): Toggle child geometry elements such as mesh, XS, and structures
 - list_result_layers(): List RASMapper result plan and child layers
 - set_result_layer_visibility(): Toggle result plan and result child layers
@@ -71,7 +69,6 @@ List of Functions in RasMap:
 - add_wse_comparison_layers(): Batch add WSE comparison layers for existing/proposed plan pairs
 """
 
-import os
 import re
 import subprocess
 import warnings
@@ -82,11 +79,8 @@ import pandas as pd
 import shutil
 from typing import Union, Optional, Dict, List, Any, Sequence, Tuple, TYPE_CHECKING
 
-import numpy as np
-
 from .RasPrj import ras
 from .RasPlan import RasPlan
-from .RasCmdr import RasCmdr
 from .RasUtils import RasUtils
 from .RasGuiAutomation import RasGuiAutomation
 from .RasBenefits import BenefitAreaConfig
@@ -462,9 +456,10 @@ class RasMap:
         """
         List semantic land-classification layers from a project .rasmap file.
 
-        Classifies each ``Type="LandCoverLayer"`` entry as ``landcover``,
-        ``soils``, ``infiltration``, or ``unknown`` using filename and selected
-        parameter semantics rather than exact display names.
+        Classifies each modern ``Type="LandCoverLayer"`` and legacy
+        ``Type="LandCover"`` entry as ``landcover``, ``soils``,
+        ``infiltration``, or ``unknown`` using filename and selected parameter
+        semantics rather than exact display names.
 
         Args:
             ras_project_path: Project folder, .prj file, or .rasmap file.
@@ -508,7 +503,7 @@ class RasMap:
 
         records = []
         for layer in map_layers.findall("Layer"):
-            if layer.attrib.get("Type") != "LandCoverLayer":
+            if layer.attrib.get("Type") not in {"LandCover", "LandCoverLayer"}:
                 continue
             records.append(
                 _lch.build_land_classification_record(
@@ -661,23 +656,24 @@ class RasMap:
         backup: bool = True,
         ras_object=None,
     ) -> "GeoDataFrame":
-        """
-        Add a classification polygon override to a land-cover, soils, or infiltration HDF.
+        """Reject custom-HDF classification polygon authoring.
 
-        The method writes the RAS Mapper ``/Classification Polygons`` group and
-        upserts the affected ``/Raster Map`` and/or ``/Variables`` class rows.
-        Existing compiled geometry HDFs should be preprocessed again before
-        simulation so HEC-RAS consumes the new override.
+        Read-only extraction remains available. Mutation will be restored only
+        after it is implemented through RASMapper's native feature-layer save
+        path and qualified against completed plan HDFs.
         """
-        from . import _land_classification_helper as _lch
-
-        return _lch.add_land_classification_polygon(
-            layer_hdf_path=layer_hdf_path,
-            polygon=polygon,
-            class_name=class_name,
-            class_id=class_id,
-            variable_values=variable_values,
-            backup=backup,
+        del (
+            layer_hdf_path,
+            polygon,
+            class_name,
+            class_id,
+            variable_values,
+            backup,
+            ras_object,
+        )
+        raise NotImplementedError(
+            "Classification polygon mutation is disabled because the former "
+            "implementation hand-authored RAS-owned HDF datasets."
         )
 
     @staticmethod
@@ -692,22 +688,20 @@ class RasMap:
         backup: bool = True,
         ras_object=None,
     ) -> "GeoDataFrame":
-        """
-        Update a classification polygon's geometry, class name, or class values.
-
-        ``polygon_index`` is the zero-based index returned by
-        :meth:`list_land_classification_polygons`.
-        """
-        from . import _land_classification_helper as _lch
-
-        return _lch.update_land_classification_polygon(
-            layer_hdf_path=layer_hdf_path,
-            polygon_index=polygon_index,
-            polygon=polygon,
-            class_name=class_name,
-            class_id=class_id,
-            variable_values=variable_values,
-            backup=backup,
+        """Reject custom-HDF classification polygon mutation."""
+        del (
+            layer_hdf_path,
+            polygon_index,
+            polygon,
+            class_name,
+            class_id,
+            variable_values,
+            backup,
+            ras_object,
+        )
+        raise NotImplementedError(
+            "Classification polygon mutation is disabled because the former "
+            "implementation hand-authored RAS-owned HDF datasets."
         )
 
     @staticmethod
@@ -720,21 +714,18 @@ class RasMap:
         backup: bool = True,
         ras_object=None,
     ) -> "GeoDataFrame":
-        """
-        Delete classification polygon overrides by index or class name.
-
-        By default this removes only the polygon records. Set
-        ``remove_unused_class=True`` to also remove class rows from ``Raster Map``
-        and ``Variables`` when no remaining polygon uses that class.
-        """
-        from . import _land_classification_helper as _lch
-
-        return _lch.delete_land_classification_polygon(
-            layer_hdf_path=layer_hdf_path,
-            polygon_index=polygon_index,
-            class_name=class_name,
-            remove_unused_class=remove_unused_class,
-            backup=backup,
+        """Reject custom-HDF classification polygon mutation."""
+        del (
+            layer_hdf_path,
+            polygon_index,
+            class_name,
+            remove_unused_class,
+            backup,
+            ras_object,
+        )
+        raise NotImplementedError(
+            "Classification polygon mutation is disabled because the former "
+            "implementation hand-authored RAS-owned HDF datasets."
         )
 
     @staticmethod
@@ -749,6 +740,7 @@ class RasMap:
         restrict_to_extent: Optional[Any] = None,
         layer_name: str = "LandCover",
         buffer_distance: float = 0.0,
+        hecras_version: str = "7.0",
         ras_object=None,
     ) -> Path:
         """
@@ -762,6 +754,11 @@ class RasMap:
         project CRS units, and defaults to ``0.0``. Callers are responsible for
         supplying geometry in the project CRS. Empty, invalid, non-polygon, and
         true multipart geometry inputs raise ``ValueError``.
+
+        HEC-RAS authors the output TIFF and HDF through RasMapperLib. Version
+        5.x uses its byte-class legacy schema in a 32-bit helper process;
+        versions 6.x and newer use ``LandCoverComputable`` followed by
+        ``LandCoverLayer.Save()`` for native V2 normalization.
         """
         ras_project_path = Path(ras_project_path)
         source_path = Path(source_path)
@@ -778,6 +775,7 @@ class RasMap:
             restrict_to_extent=restrict_to_extent,
             layer_name=layer_name,
             buffer_distance=buffer_distance,
+            hecras_version=hecras_version,
         )
 
     @staticmethod
@@ -854,15 +852,15 @@ class RasMap:
         infiltration_hdf_path: Optional[Union[str, Path]] = None,
         terrain_hdf_path: Optional[Union[str, Path]] = None,
         sediment_soils_hdf_path: Optional[Union[str, Path]] = None,
+        hecras_version: str = "7.0",
         ras_object=None,
     ) -> Path:
         """
         Associate terrain / classification layers to a compiled geometry HDF.
 
-        This public workflow writes HEC-RAS ``/Geometry`` association
-        attributes directly with h5py. Use
-        ``RasProcess.validate_geometry_association_cli()`` only as an optional
-        native-reference validator on disposable or intentionally mutated HDFs.
+        This workflow delegates association writes to the selected HEC-RAS
+        RasMapperLib generation. It does not hand-write ``/Geometry``
+        attributes.
 
         ``soil_layer_path`` is retained for compatibility with the
         land-classification workflow. Use ``sediment_soils_hdf_path`` for the
@@ -895,6 +893,7 @@ class RasMap:
             infiltration_hdf_path=infiltration_hdf_path,
             terrain_hdf_path=terrain_hdf_path,
             sediment_soils_hdf_path=sediment_soils_hdf_path,
+            hecras_version=hecras_version,
             ras_object=ras_object,
         )
 
@@ -974,10 +973,15 @@ class RasMap:
     def recompute_property_tables(
         ras_project_path: Union[str, Path],
         geom_file: Union[str, Path],
+        hecras_version: str = "7.0",
+        audit_mannings: bool = False,
         ras_object=None,
     ) -> Path:
         """
-        Recompute geometry preprocessing and property tables for a compiled geometry.
+        Recompute property tables with the selected native RASMapper version.
+
+        Set ``audit_mannings=True`` to require materially diverse, associated
+        final Manning values after the native command.
         """
         ras_project_path = Path(ras_project_path)
         geom_file = Path(geom_file)
@@ -987,6 +991,8 @@ class RasMap:
             ras_project_path,
             geom_file,
             ras_object=ras_object,
+            hecras_version=hecras_version,
+            audit_mannings=audit_mannings,
         )
 
     @staticmethod
@@ -2743,7 +2749,7 @@ class RasMap:
                             window_title = win32gui.GetWindowText(hwnd)
                             if "RAS Mapper" in window_title:
                                 windows.append((hwnd, window_title))
-                        except:
+                        except Exception:
                             pass
                     return True
 
@@ -2771,7 +2777,7 @@ class RasMap:
                         win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
                         logger.debug(f"Sent WM_CLOSE to RASMapper window: {title}")
                         return True
-                    except:
+                    except Exception:
                         pass
                 return False
 
@@ -2813,7 +2819,7 @@ class RasMap:
                                         )
                                         rasmapper_found = True
                                         break
-                            except:
+                            except Exception:
                                 continue
                         if rasmapper_found:
                             break
@@ -2892,7 +2898,7 @@ class RasMap:
             try:
                 process.wait(timeout=10)
                 logger.debug("HEC-RAS closed")
-            except:
+            except Exception:
                 logger.warning("HEC-RAS did not close cleanly, may still be running")
 
             # Re-parse .rasmap to verify upgrade
@@ -4781,7 +4787,7 @@ class RasMap:
         except ValueError:
             # If terrain is not relative to rasmap dir, use absolute path
             logger.warning(
-                f"Terrain HDF is not under rasmap directory. Using absolute path."
+                "Terrain HDF is not under rasmap directory. Using absolute path."
             )
             rel_path_str = str(terrain_hdf_resolved).replace("/", "\\")
 

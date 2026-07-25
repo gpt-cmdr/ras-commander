@@ -1,0 +1,23 @@
+{
+  "install": "C:\\Program Files (x86)\\HEC\\HEC-RAS\\5.0.7",
+  "rasmap": "G:\\RasProcess Testing\\wine_compare\\Muncie_simple_test\\Muncie.rasmap",
+  "source": "G:\\RasProcess Testing\\wine_compare\\Muncie_simple_test\\LandCover\\LandCoverUserShapefile.tif",
+  "source_field": "",
+  "output_hdf": "C:\\CLB\\landcover-native-proof-507\\MuncieNative.hdf",
+  "cell_size": 5.0,
+  "extent": {
+    "min_x": 404112.085287251,
+    "min_y": 1799680.07015604,
+    "max_x": 413817.085287251,
+    "max_y": 1806670.07015604
+  },
+  "classes": [
+    {"source_value": 0, "class_id": 0, "class_name": "NoData", "mannings_n": 3.4028235e38},
+    {"source_value": 1, "class_id": 1, "class_name": "Building", "mannings_n": 10.0},
+    {"source_value": 2, "class_id": 2, "class_name": "Medium Density Residential", "mannings_n": 0.08},
+    {"source_value": 3, "class_id": 3, "class_name": "Open Space", "mannings_n": 0.04},
+    {"source_value": 4, "class_id": 4, "class_name": "Park", "mannings_n": 0.06},
+    {"source_value": 5, "class_id": 5, "class_name": "Trees", "mannings_n": 0.12},
+    {"source_value": 6, "class_id": 6, "class_name": "Urban", "mannings_n": 0.10}
+  ]
+}

@@ -1,0 +1,38 @@
+[
+  {
+    "project": "G:\\RasProcess Testing\\wine_compare\\Muncie_simple_test\\Muncie.prj",
+    "role": "compact disposable native authoring and completed-plan proof",
+    "plan": "04",
+    "geometry": "04",
+    "flow_area": "2D Interior Area",
+    "versions_exercised": ["5.0.7", "6.6"],
+    "status": "qualified"
+  },
+  {
+    "project": "G:\\RasProcess Testing\\ebfe_organized\\SpringCreek_12040102_5.07\\RAS Model\\Spring.prj",
+    "role": "native HEC-RAS 5.0.7 association and Manning reference",
+    "plan": "01",
+    "geometry": "01",
+    "flow_area": "SPR_Mesh",
+    "versions_exercised": ["5.0.7"],
+    "status": "reference inspected"
+  },
+  {
+    "project": "G:\\GH\\ras-commander\\feature_dev_notes\\.old\\RasMapper_Interpolation_investigation\\archived_data\\Test Data\\BaldEagleCrkMulti2D - Horizontal\\BaldEagleDamBrk.prj",
+    "role": "small compiled HEC-RAS 6.6 land-cover reference",
+    "plan": "19",
+    "geometry": "12",
+    "flow_area": "BaldEagleCr",
+    "versions_exercised": ["6.6"],
+    "status": "reference inspected"
+  },
+  {
+    "project": "G:\\Testing\\USGS Sciencebase Models\\ScienceBase Validation Runs\\silver-creek-plan10-hecras66-20260719\\SAFB_RAS2D.prj",
+    "role": "controlled plus/minus ten-percent final Manning reference",
+    "plans": ["12", "13"],
+    "geometry": "03",
+    "flow_area": "Scott_AFB_2D",
+    "versions_exercised": ["6.6"],
+    "status": "reference inspected"
+  }
+]

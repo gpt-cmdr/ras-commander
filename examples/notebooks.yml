@@ -905,7 +905,7 @@ notebooks:
   executed_cells: 9
 - id: 212_landcover_mannings_n_write
   filename: 212_landcover_mannings_n_write.ipynb
-  title: NLCD Land Cover Layer Authoring for RASMapper
+  title: NLCD Land Cover Layer Authoring (Superseded Validation)
   series: 200
   series_name: Geometry & Calibration
   summary: Create a RASMapper land-cover sidecar HDF from an NLCD-coded raster, register it in `.rasmap`,
@@ -934,12 +934,12 @@ notebooks:
   - ras.plan_df
   hec_refs: []
   learning_paths: []
-  excluded: false
+  excluded: true
   code_cells: 9
   executed_cells: 8
 - id: 213_land_classification_polygon_authoring
   filename: 213_land_classification_polygon_authoring.ipynb
-  title: Land Classification Polygon Authoring
+  title: Land Classification Polygon Authoring (Unqualified)
   series: 200
   series_name: Geometry & Calibration
   summary: When editing ras-commander locally, run this notebook from the repository root with `PYTHONPATH`
@@ -963,7 +963,7 @@ notebooks:
   - RasPlan.set_geom_preprocessor
   hec_refs: []
   learning_paths: []
-  excluded: false
+  excluded: true
   code_cells: 9
   executed_cells: 8
 - id: 214_connection_authoring
