@@ -39,10 +39,15 @@ Mesh geometry data.
 - `get_nearest_face(hdf_path, point)` - Find nearest face to point
 - `get_mesh_face_property_tables(hdf_path)` - Read face elevation/area/wetted-perimeter/Manning tables
 
-Guarded direct writes are limited to the HEC-RAS 7.0 Linux two-phase
-`*.p##.tmp.hdf` workflow. They require
-`acknowledge_unsupported=True`, validate the exact temporary-result role and
-schema, retain a unique full-file backup, and verify readback:
+> **EXPERIMENTAL — not recommended for production or any other
+> non-experimental use.** These direct writes have been tested only with
+> HEC-RAS 7.0 April 2026 in one Windows-preprocess/Linux-solve
+> `*.p##.tmp.hdf` workflow. All other HEC-RAS versions and workflows are
+> untested. They are not general land-cover or geometry-authoring APIs.
+
+The methods require `acknowledge_unsupported=True`, validate the exact
+temporary-result role and schema, retain a unique full-file backup, emit a
+runtime warning, and verify readback:
 
 - `write_linux_tmp_face_property_tables(...)` - Replace selected temporary face tables
 - `extend_linux_tmp_face_property_tables(...)` - Extend temporary tables and return a structured report

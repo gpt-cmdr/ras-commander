@@ -144,6 +144,11 @@ parameter-table setters, or geometry infiltration-region APIs above.
 
 ## Direct `HdfMesh` solver-array writers
 
+**EXPERIMENTAL — not recommended for production or any other
+non-experimental use.** The only tested contract is HEC-RAS 7.0 April 2026 in
+notebook 414's Windows-preprocess/Linux-solve temporary-HDF workflow. All other
+versions and workflows are untested.
+
 These utilities are not all “broken.” Executed notebook 414 proved a narrow,
 important workflow in HEC-RAS 7.0:
 

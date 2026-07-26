@@ -370,6 +370,34 @@ def test_geometry_transaction_rolls_back_failed_edit(tmp_path):
     assert backups[0].read_bytes() == b"original"
 
 
+def test_geometry_transactions_create_distinct_backups_at_same_timestamp(
+    tmp_path,
+    monkeypatch,
+):
+    geometry = tmp_path / "project.g01.hdf"
+    geometry.write_bytes(b"original")
+    monkeypatch.setattr(
+        native,
+        "datetime",
+        SimpleNamespace(
+            now=lambda: SimpleNamespace(
+                strftime=lambda _format: "20260726_140409_423519"
+            )
+        ),
+    )
+
+    with native._geometry_transaction(geometry):
+        pass
+    with native._geometry_transaction(geometry):
+        pass
+
+    backups = list(
+        tmp_path.glob("project.g01.infiltration_override.*.backup.hdf")
+    )
+    assert len(backups) == 2
+    assert all(path.read_bytes() == b"original" for path in backups)
+
+
 class _FakePoints:
     def __init__(self, coordinates):
         self._points = [

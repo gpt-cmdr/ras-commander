@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Optional, Union
+from uuid import uuid4
 
 import h5py
 import numpy as np
@@ -46,9 +47,10 @@ _SIDECAR_EDIT_LOCK = threading.RLock()
 def _sidecar_transaction(sidecar_hdf_path: Path):
     """Back up and restore one RAS-owned sidecar around a native edit."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    unique_suffix = uuid4().hex[:8]
     durable_backup_path = sidecar_hdf_path.with_name(
         f"{sidecar_hdf_path.stem}.native_parameters."
-        f"{timestamp}.backup{sidecar_hdf_path.suffix}"
+        f"{timestamp}_{unique_suffix}.backup{sidecar_hdf_path.suffix}"
     )
     native_backup_path = sidecar_hdf_path.with_name(
         f"{sidecar_hdf_path.stem}.backup.hdf"

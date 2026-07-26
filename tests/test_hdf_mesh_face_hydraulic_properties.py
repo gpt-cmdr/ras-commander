@@ -406,7 +406,10 @@ def test_extend_linux_tmp_face_property_tables_rejects_nonpositive_step(tmp_path
 def test_linux_tmp_writer_requires_explicit_acknowledgement(tmp_path):
     hdf_path = _write_face_property_hdf(tmp_path / "mesh.p01.tmp.hdf")
 
-    with pytest.raises(RuntimeError, match="acknowledge_unsupported=True"):
+    with pytest.raises(
+        RuntimeError,
+        match="EXPERIMENTAL / NOT RECOMMENDED.*acknowledge_unsupported=True",
+    ):
         HdfMesh.write_linux_tmp_face_property_tables(
             hdf_path,
             "MainArea",
@@ -414,6 +417,16 @@ def test_linux_tmp_writer_requires_explicit_acknowledgement(tmp_path):
         )
 
     assert not list(tmp_path.glob("*.pre-write.*.bak.hdf"))
+
+
+def test_linux_tmp_writer_logs_experimental_notice_after_acknowledgement(
+    caplog,
+):
+    with caplog.at_level("WARNING"):
+        HdfMesh._require_linux_tmp_write_acknowledgement(True)
+
+    assert "EXPERIMENTAL / NOT RECOMMENDED" in caplog.text
+    assert "all other versions and workflows are untested" in caplog.text
 
 
 def test_linux_tmp_writer_rejects_non_tmp_file_role_before_backup(tmp_path):

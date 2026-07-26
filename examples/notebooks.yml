@@ -2321,9 +2321,9 @@ notebooks:
   title: Controlled Depth-Varying Manning's n for HEC-RAS 2D Linux Solves
   series: 400
   series_name: HDF Results
-  summary: Compare baseline, table-extension control, and depth-varying-Manning scenarios through the
-    guarded HEC-RAS 7.0 Linux temporary-HDF workflow, proving identical non-Manning face tables, active-cell
-    hydraulic response, conservation, and polygon-selective edits.
+  summary: Experimental, non-production comparison of baseline, table-extension control, and depth-varying-Manning
+    scenarios in the single tested HEC-RAS 7.0 April 2026 Windows-preprocess/Linux-solve temporary-HDF
+    workflow; all other versions and workflows are untested.
   tags:
   - 2d
   - hdf

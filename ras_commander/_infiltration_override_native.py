@@ -23,6 +23,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, Optional, Sequence, Union
+from uuid import uuid4
 
 import h5py
 import pandas as pd
@@ -130,9 +131,10 @@ def _geometry_path(path: Union[str, Path]) -> Path:
 
 def _backup_path(geometry_hdf_path: Path) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    unique_suffix = uuid4().hex[:8]
     return geometry_hdf_path.with_name(
         f"{geometry_hdf_path.stem}.infiltration_override."
-        f"{timestamp}.backup{geometry_hdf_path.suffix}"
+        f"{timestamp}_{unique_suffix}.backup{geometry_hdf_path.suffix}"
     )
 
 

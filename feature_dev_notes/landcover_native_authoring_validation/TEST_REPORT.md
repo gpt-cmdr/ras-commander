@@ -55,10 +55,10 @@ python -m pytest tests/test_landcover_native.py \
   tests/test_rascmdr_compute_plan_control_flow.py -q
 ```
 
-Final result: 263 passed. The three emitted warnings are intentional
+Final result: 265 passed. The three emitted warnings are intentional
 deprecation warnings for the renamed non-authoritative Python raster estimate.
 The durable terminal record is
-`H:\Symphony\ras-commander\CLB-903\terminal-logs\20260725_155904_final-focused-regression-green.terminal.log`.
+`H:\Symphony\ras-commander\CLB-903\terminal-logs\20260726_140521_experimental-labeling-regression-green.terminal.log`.
 
 `git diff --check`, Python compilation, and Ruff checks on the changed API and
 test modules pass. Repository-wide format modernization is intentionally

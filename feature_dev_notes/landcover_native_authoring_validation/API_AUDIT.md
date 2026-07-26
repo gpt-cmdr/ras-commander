@@ -49,6 +49,11 @@ native replacements.
 
 ## Advanced solver-artifact utilities
 
+**EXPERIMENTAL — not recommended for production or any other
+non-experimental use.** These utilities have been tested only with HEC-RAS 7.0
+April 2026 in the exact Windows-preprocess/Linux-solve workflow exercised by
+notebook 414. Every other HEC-RAS version and execution workflow is untested.
+
 The following canonical `HdfMesh` methods directly edit only the exact
 HEC-RAS 7.0 Linux solver-temporary `HEC-RAS Results` `*.p##.tmp.hdf` artifact.
 They are not land-cover authoring or general production-preprocessing

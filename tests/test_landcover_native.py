@@ -560,11 +560,21 @@ def test_classification_reload_mismatch_restores_partial_native_save(
 
 def test_native_sidecar_transactions_are_unique_and_restore_base_exception(
     tmp_path: Path,
+    monkeypatch,
 ):
     sidecar = tmp_path / "LandCover.hdf"
     sidecar.write_bytes(b"original sidecar")
     native_backup = tmp_path / "LandCover.backup.hdf"
     native_backup.write_bytes(b"original native backup")
+    monkeypatch.setattr(
+        landcover_native,
+        "datetime",
+        SimpleNamespace(
+            now=lambda: SimpleNamespace(
+                strftime=lambda _format: "20260726_140409_423519"
+            )
+        ),
+    )
 
     with landcover_native._sidecar_transaction(sidecar):
         pass

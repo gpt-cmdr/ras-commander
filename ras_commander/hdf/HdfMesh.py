@@ -33,13 +33,15 @@ get_reference_line_internal_faces()
 get_mesh_cell_property_tables()
     Returns Cell Property Tables for each Cell in all 2D Flow Areas
 
-Write API (Face Property Tables) — GUARDED EXPERIMENTAL:
----------------------------------------------------------
-The clearly named write methods accept only HEC-RAS 7.0 ``*.p##.tmp.hdf``
-artifacts from the proven Linux two-phase execution workflow. They require
-explicit acknowledgement, create a full-file backup, validate the HDF role and
-schema, and verify the write by reopening the file. Windows preprocessing
-overwrites these edits.
+Write API (Face Property Tables) — EXPERIMENTAL / NOT RECOMMENDED:
+------------------------------------------------------------------
+These methods are not recommended for production or any other
+non-experimental use. They have been tested only with HEC-RAS 7.0 April 2026
+``*.p##.tmp.hdf`` artifacts in one Windows-preprocess/Linux-solve workflow;
+all other versions and workflows are untested. They require explicit
+acknowledgement, create a full-file backup, validate the HDF role and schema,
+and verify the write by reopening the file. Windows preprocessing overwrites
+these edits.
 
 write_linux_tmp_face_property_tables()
     Write complete face property tables to a guarded Linux ``.tmp.hdf``
@@ -81,6 +83,7 @@ import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, TYPE_CHECKING, Union
+from uuid import uuid4
 
 import h5py
 import numpy as np
@@ -1692,6 +1695,12 @@ class HdfMesh:
     )
     _LINUX_TMP_HDF_FILE_TYPE = "HEC-RAS Results"
     _LINUX_TMP_HDF_FILE_VERSION = "HEC-RAS 7.0 April 2026"
+    _LINUX_TMP_EXPERIMENTAL_NOTICE = (
+        "EXPERIMENTAL / NOT RECOMMENDED FOR PRODUCTION OR OTHER "
+        "NON-EXPERIMENTAL USE. Tested only with HEC-RAS 7.0 April 2026 "
+        "in the Windows-preprocess/Linux-solve '*.p##.tmp.hdf' workflow; "
+        "all other versions and workflows are untested."
+    )
     _FACE_PROPERTY_COLUMNS = (
         "Elevation",
         "Area",
@@ -1717,10 +1726,11 @@ class HdfMesh:
         """Require an explicit acknowledgement before direct HDF mutation."""
         if not acknowledge_unsupported:
             raise RuntimeError(
-                "Direct face-property HDF writes require "
-                "acknowledge_unsupported=True and are restricted to the "
-                "HEC-RAS 7.0 Linux two-phase '*.p##.tmp.hdf' workflow."
+                f"{HdfMesh._LINUX_TMP_EXPERIMENTAL_NOTICE} Direct "
+                "face-property HDF writes require "
+                "acknowledge_unsupported=True."
             )
+        logger.warning(HdfMesh._LINUX_TMP_EXPERIMENTAL_NOTICE)
 
     @staticmethod
     def _validate_linux_tmp_face_table_schema(
@@ -1906,8 +1916,9 @@ class HdfMesh:
     def _create_linux_tmp_hdf_backup(hdf_path: Path) -> Path:
         """Create a unique full-file backup immediately before a direct write."""
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        unique_suffix = uuid4().hex[:8]
         backup_path = hdf_path.with_name(
-            f"{hdf_path.stem}.pre-write.{timestamp}.bak.hdf"
+            f"{hdf_path.stem}.pre-write.{timestamp}_{unique_suffix}.bak.hdf"
         )
         shutil.copy2(hdf_path, backup_path)
         logger.debug(
@@ -1927,6 +1938,12 @@ class HdfMesh:
         acknowledge_unsupported: bool = False,
     ) -> Path:
         """Write face tables to a guarded HEC-RAS 7.0 Linux ``.tmp.hdf``.
+
+        Warning:
+            EXPERIMENTAL. Not recommended for production or any other
+            non-experimental use. Tested only with HEC-RAS 7.0 April 2026 in
+            the Windows-preprocess/Linux-solve temporary-HDF workflow; all
+            other versions and workflows are untested.
 
         This API is limited to the proven two-phase workflow: preprocess a plan
         into ``*.p##.tmp.hdf``, modify that temporary result, then pass it to
@@ -2219,15 +2236,17 @@ class HdfMesh:
         ``mannings_n_func``.
 
         .. warning::
-            Edits written by this method are overwritten by the Windows
-            HEC-RAS geometry preprocessor on the next plan execution. To
-            preserve edits through a solver run, use the Linux two-phase
-            workflow: (1) preprocess on Windows via
+            EXPERIMENTAL. Not recommended for production or any other
+            non-experimental use. Tested only with HEC-RAS 7.0 April 2026 in
+            the workflow below; all other versions and workflows are untested.
+            Edits are overwritten by the Windows HEC-RAS geometry preprocessor
+            on the next plan execution. The tested Linux two-phase workflow is:
+            (1) preprocess on Windows via
             ``RasPreprocess.preprocess_plan()`` to generate the ``.tmp.hdf``,
             (2) apply edits to the ``.tmp.hdf``, (3) execute with
-            ``RasCmdr.compute_plan_linux()``. This is an undocumented and unsupported method
-            of injecting modified HDF inputs into the solver and may produce
-            erroneous results. Use with caution.
+            ``RasCmdr.compute_plan_linux()``. This is an undocumented and
+            unsupported method of injecting modified HDF inputs into the
+            solver and may produce erroneous results.
 
         Parameters
         ----------
@@ -2443,15 +2462,17 @@ class HdfMesh:
         Manning's n column is recomputed.
 
         .. warning::
-            Edits written by this method are overwritten by the Windows
-            HEC-RAS geometry preprocessor on the next plan execution. To
-            preserve edits through a solver run, use the Linux two-phase
-            workflow: (1) preprocess on Windows via
+            EXPERIMENTAL. Not recommended for production or any other
+            non-experimental use. Tested only with HEC-RAS 7.0 April 2026 in
+            the workflow below; all other versions and workflows are untested.
+            Edits are overwritten by the Windows HEC-RAS geometry preprocessor
+            on the next plan execution. The tested Linux two-phase workflow is:
+            (1) preprocess on Windows via
             ``RasPreprocess.preprocess_plan()`` to generate the ``.tmp.hdf``,
             (2) apply edits to the ``.tmp.hdf``, (3) execute with
-            ``RasCmdr.compute_plan_linux()``. This is an undocumented and unsupported method
-            of injecting modified HDF inputs into the solver and may produce
-            erroneous results. Use with caution.
+            ``RasCmdr.compute_plan_linux()``. This is an undocumented and
+            unsupported method of injecting modified HDF inputs into the
+            solver and may produce erroneous results.
 
         Parameters
         ----------
@@ -2612,15 +2633,17 @@ class HdfMesh:
         values.
 
         .. warning::
-            Edits written by this method are overwritten by the Windows
-            HEC-RAS geometry preprocessor on the next plan execution. To
-            preserve edits through a solver run, use the Linux two-phase
-            workflow: (1) preprocess on Windows via
+            EXPERIMENTAL. Not recommended for production or any other
+            non-experimental use. Tested only with HEC-RAS 7.0 April 2026 in
+            the workflow below; all other versions and workflows are untested.
+            Edits are overwritten by the Windows HEC-RAS geometry preprocessor
+            on the next plan execution. The tested Linux two-phase workflow is:
+            (1) preprocess on Windows via
             ``RasPreprocess.preprocess_plan()`` to generate the ``.tmp.hdf``,
             (2) apply edits to the ``.tmp.hdf``, (3) execute with
-            ``RasCmdr.compute_plan_linux()``. This is an undocumented and unsupported method
-            of injecting modified HDF inputs into the solver and may produce
-            erroneous results. Use with caution.
+            ``RasCmdr.compute_plan_linux()``. This is an undocumented and
+            unsupported method of injecting modified HDF inputs into the
+            solver and may produce erroneous results.
 
         Parameters
         ----------
@@ -2882,6 +2905,12 @@ class HdfMesh:
         acknowledge_unsupported: bool = False,
     ) -> Path:
         """Set or clear guarded Linux temporary-HDF ``Pinned`` metadata.
+
+        Warning:
+            EXPERIMENTAL. Not recommended for production or any other
+            non-experimental use. Tested only with HEC-RAS 7.0 April 2026 in
+            the Windows-preprocess/Linux-solve temporary-HDF workflow; all
+            other versions and workflows are untested.
 
         ``Pinned`` is informational metadata that may be recognized by
         RASMapper. It is ignored by Windows HEC-RAS preprocessing and does not
