@@ -856,6 +856,69 @@ class RasUtils:
         logger.debug(f"Calculated error metrics: {metrics}")
         return metrics
 
+    @staticmethod
+    def _detect_text_newline(file_path: Path) -> str:
+        """Return the one newline convention used by a RAS text file.
+
+        HEC-RAS project text files can become unreadable in the GUI when an
+        editor introduces mixed LF and CRLF records. Mutators use this helper
+        to preserve the source convention and fail closed on mixed input.
+        """
+        content = Path(file_path).read_bytes()
+        without_crlf = content.replace(b"\r\n", b"")
+        styles = []
+        if b"\r\n" in content:
+            styles.append("\r\n")
+        if b"\n" in without_crlf:
+            styles.append("\n")
+        if b"\r" in without_crlf:
+            styles.append("\r")
+        if len(styles) > 1:
+            raise ValueError(
+                f"Mixed newline conventions in HEC-RAS text file: {file_path}"
+            )
+        return styles[0] if styles else "\r\n"
+
+    @staticmethod
+    def _read_text_lines_preserving_newline(
+        file_path: Path,
+    ) -> tuple[list[str], str]:
+        """Read a RAS text file without translating its newline characters."""
+        newline = RasUtils._detect_text_newline(file_path)
+        with open(
+            file_path,
+            "r",
+            encoding="utf-8",
+            errors="replace",
+            newline="",
+        ) as handle:
+            return handle.readlines(), newline
+
+    @staticmethod
+    def _write_text_lines_with_newline(
+        file_path: Path,
+        lines: list[str],
+        newline: str,
+    ) -> None:
+        """Write lines using one explicit newline convention."""
+        normalized = []
+        for line in lines:
+            had_newline = line.endswith(("\r\n", "\n", "\r"))
+            value = line.rstrip("\r\n")
+            normalized.append(value + newline if had_newline else value)
+        with open(
+            file_path,
+            "w",
+            encoding="utf-8",
+            errors="replace",
+            newline="",
+        ) as handle:
+            handle.writelines(normalized)
+        if RasUtils._detect_text_newline(file_path) != newline:
+            raise RuntimeError(
+                f"Failed to preserve newline convention in {file_path}"
+            )
+
     
     @staticmethod
     @log_call
@@ -878,13 +941,15 @@ class RasUtils:
         >>> RasUtils.update_file(Path("example.txt"), update_content, "Hello")
         """
         try:
-            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-                lines = f.readlines()
+            lines, newline = RasUtils._read_text_lines_preserving_newline(
+                file_path
+            )
 
             updated_lines = update_function(lines, *args) if args else update_function(lines)
 
-            with open(file_path, 'w', encoding='utf-8', errors='replace') as f:
-                f.writelines(updated_lines)
+            RasUtils._write_text_lines_with_newline(
+                file_path, updated_lines, newline
+            )
             logger.debug("Successfully updated file: %s", Path(file_path).name)
             logger.debug(f"Successfully updated file path: {file_path}")
         except Exception as e:
@@ -961,14 +1026,16 @@ class RasUtils:
         ras_obj.check_initialized()
         
         try:
-            with open(prj_file, 'r', encoding='utf-8', errors='replace') as f:
-                lines = f.readlines()
+            lines, newline = RasUtils._read_text_lines_preserving_newline(
+                prj_file
+            )
 
-            new_line = f"{file_type} File={file_type[0].lower()}{new_num}\n"
+            new_line = (
+                f"{file_type} File={file_type[0].lower()}{new_num}{newline}"
+            )
             lines.append(new_line)
 
-            with open(prj_file, 'w', encoding='utf-8', errors='replace') as f:
-                f.writelines(lines)
+            RasUtils._write_text_lines_with_newline(prj_file, lines, newline)
             logger.debug(f"Project file updated with new {file_type} entry: {new_num}")
         except Exception as e:
             logger.exception(f"Failed to update project file {prj_file}")

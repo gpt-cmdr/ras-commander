@@ -1889,19 +1889,29 @@ class RasPlan:
             if plan_file_path is None or not Path(plan_file_path).exists():
                 raise ValueError(f"Plan file not found for plan number: {plan_number_or_path!r}")
 
-        # Format the dates
-        formatted_date = f"{start_date.strftime('%d%b%Y').upper()},{start_date.strftime('%H%M')},{end_date.strftime('%d%b%Y').upper()},{end_date.strftime('%H%M')}"
-
         try:
-            # Read the file
-            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
-                lines = file.readlines()
+            lines, newline = RasUtils._read_text_lines_preserving_newline(
+                plan_file_path
+            )
 
             # Update the Simulation Date line
             updated = False
             for i, line in enumerate(lines):
                 if line.startswith("Simulation Date="):
-                    lines[i] = f"Simulation Date={formatted_date}\n"
+                    existing = line.rstrip("\r\n").split("=", 1)[1]
+                    time_tokens = existing.split(",")[1::2]
+                    time_format = (
+                        "%H:%M"
+                        if any(":" in token for token in time_tokens)
+                        else "%H%M"
+                    )
+                    formatted_date = (
+                        f"{start_date:%d%b%Y},"
+                        f"{start_date.strftime(time_format)},"
+                        f"{end_date:%d%b%Y},"
+                        f"{end_date.strftime(time_format)}"
+                    ).upper()
+                    lines[i] = f"Simulation Date={formatted_date}{newline}"
                     updated = True
                     break
 
@@ -1912,9 +1922,9 @@ class RasPlan:
                     "Cannot update simulation date."
                 )
 
-            # Write the updated content back to the file
-            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
-                file.writelines(lines)
+            RasUtils._write_text_lines_with_newline(
+                plan_file_path, lines, newline
+            )
 
             logger.info("Updated simulation date in plan file: %s", plan_file_path.name)
             logger.debug("Updated simulation date in plan file path: %s", plan_file_path)

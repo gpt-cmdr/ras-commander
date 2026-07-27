@@ -265,3 +265,6 @@ terminal-logs/
 
 # Data directory
 /data/
+
+# test temp
+.test-tmp/
