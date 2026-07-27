@@ -1,8 +1,8 @@
 # Example Library Publishing Contract
 
-This file is the canonical agent-facing runbook for building and publishing the
-RAS Commander Example Project Library. It is operational guidance and must not
-be copied onto the public Example Project Library page.
+This file is the canonical agent-facing contract for building Example Project
+Library content and reusable WebGIS artifacts. It is implementation guidance
+and must not be copied onto the public Example Project Library page.
 
 ## Publication Architecture
 
@@ -16,13 +16,13 @@ be copied onto the public Example Project Library page.
 - Publish artifacts to the dedicated RAS Commander WebGIS service, then link the
   docs viewer to its hosted catalog and manifest.
 - The public artifact namespace is `/data/rasexamples/hec-ras-7.0/`.
-- Publish complete snapshots beneath
-  `/data/rasexamples/hec-ras-7.0/releases/<release-id>/`. Never overwrite a
-  completed release. The mutable `current` symlink is the only active-release
-  pointer and must be switched atomically after validation.
-- Project manifests and all absolute artifact URLs must reference their
-  immutable release path. Numeric-service asset IDs are release-qualified so
-  cached or already-open viewers remain valid across publication.
+- Produce portable candidate trees rooted at `hec-ras-7.0`. The private
+  `CLB-Engineering-Corporation/ras-commander-docs` repository owns immutable
+  release IDs, inventories, URL versioning, restricted publication, public
+  validation, activation, recovery, and host provisioning.
+- Generated project manifests must remain valid when the private release
+  pipeline rewrites their artifact URLs and numeric-service base URL to an
+  immutable release.
 - `rascommander.info` reverse-proxies `/data/*` to the isolated WebGIS artifact
   service. Do not put local file paths in public manifests.
 
@@ -31,8 +31,9 @@ be copied onto the public Example Project Library page.
 - Run HEC-RAS, `ras2cng`, terrain consolidation, COG generation, and other heavy
   processing on the designated numbered processing hosts or workstations, not
   on CLB-WebGIS.
-- Use CLB03 as the trusted publication source and the restricted publisher path
-  implemented by `publish_webgis_artifacts.py`.
+- Do not add host addresses, SSH keys, release promotion, public validation, or
+  WebGIS provisioning code to this public repository. Those mechanisms belong
+  in the private `ras-commander-docs/webgis/` directory.
 - Keep the RAS Commander artifact service isolated from the other
   `gis.clbengineering.com` containers and services, even when they share the
   CLB-WebGIS physical host.
@@ -177,21 +178,7 @@ contract is established.
 2. Add eligible public model releases after CRS, license, result, terrain, and
    viewer validation.
 
-Use the scripts in this directory for catalog creation, terrain preparation,
-staging, and restricted WebGIS publication. Do not bypass the CLB03 staging and
-publisher controls embedded in `publish_webgis_artifacts.py`.
-
-After publishing a manifest v2 release with numeric COGs, install or upgrade the
-bounded runtime inside CT230 with `provision_webgis_raster_service.sh`. Keep its
-application listener on `127.0.0.1:8087`; CT230 Nginx and the docs-origin proxy
-are the only public route to `/ras-raster/`.
-The service readiness response must identify the active release and catalog,
-must be non-cacheable, and must report zero missing assets. The publisher must
-run `validate_public_webgis_release.py` after switching `current`; this validates
-public PMTiles and COG ranges, numeric sample/statistics/tile routes, cache
-headers, and non-cacheable API/static errors.
-Run `provision_rasdocs_raster_proxy.sh` inside the active CT210 `clb-rasdocs`
-guest on CLB-WebGIS and the serve-only rasdocs replica CT213 only after the
-CT230 readiness check passes. Former CLB-Web01 was retired on 2026-07-24. The
-script adds the path-scoped Caddy proxy without changing the existing
-`/data/*` artifact route.
+Use the scripts in this directory for extraction, catalog content, terrain
+preparation, viewer packaging, and reusable candidate generation only. Hand a
+validated candidate tree to the private `ras-commander-docs/webgis/` pipeline
+for publication. Do not duplicate that pipeline here.
