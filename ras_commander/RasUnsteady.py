@@ -5252,6 +5252,19 @@ class RasUnsteady:
         paths under the unsteady file folder are converted to project-relative
         paths; absolute paths elsewhere are preserved.
         """
+        return RasUnsteady._format_dss_filename(dss_filename, unsteady_path)
+
+    @staticmethod
+    def _format_dss_filename(
+        dss_filename: Union[str, Path],
+        unsteady_path: Path,
+    ) -> str:
+        """Normalize a DSS filename for an HEC-RAS unsteady-flow file.
+
+        HEC-RAS requires project-relative DSS references to begin with ``.\\``
+        or ``..\\``. A bare relative directory such as ``hydrology\\input.dss``
+        is resolved as only ``input.dss`` in the project folder by HEC-RAS 6.6.
+        """
         raw_filename = str(dss_filename).strip()
         if not raw_filename:
             raise ValueError("dss_filename must not be empty")
@@ -7178,6 +7191,10 @@ class RasUnsteady:
         unsteady_path = Path(unsteady_file)
         if not unsteady_path.exists():
             raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+        dss_file = RasUnsteady._format_dss_filename(
+            dss_file,
+            unsteady_path,
+        )
 
         with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
             lines = f.readlines()
