@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Run inside CT210 (builder) and active CT213 (serve-only replica) as root
-# after CT230 is healthy.
+# Run inside CT210 (builder on CLB-WebGIS) and active CT213 (serve-only
+# replica) as root after CT230 is ready.
 set -euo pipefail
 
 readonly CADDYFILE="/etc/caddy/Caddyfile"
@@ -16,7 +16,9 @@ if [[ ! -f $CADDYFILE ]]; then
     exit 1
 fi
 
-curl -fsS "${WEBGIS_ORIGIN}/ras-raster/health" >/dev/null
+curl -fsS "${WEBGIS_ORIGIN}/ras-raster/ready" >/dev/null
+curl -fsS -D - -o /dev/null "${WEBGIS_ORIGIN}/ras-raster/health" \
+    | grep -qi '^cache-control: no-store'
 
 python3 - "$CADDYFILE" "$MARKER" <<'PY'
 import os
@@ -58,5 +60,8 @@ caddy validate --config "$CADDYFILE"
 # This origin intentionally has Caddy's admin endpoint disabled, so reload
 # cannot reach localhost:2019. A validated restart is the supported path.
 systemctl restart caddy
-curl -fsS -H 'Host: rascommander.info' http://127.0.0.1/ras-raster/health
+curl -fsS -D - -o /dev/null -H 'Host: rascommander.info' \
+    http://127.0.0.1/ras-raster/health \
+    | grep -qi '^cache-control: no-store'
+curl -fsS -H 'Host: rascommander.info' http://127.0.0.1/ras-raster/ready
 printf '\nProvisioned the rasdocs numeric raster reverse proxy.\n'

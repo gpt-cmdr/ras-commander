@@ -405,7 +405,7 @@
 
     registerPmtilesProtocol();
     const dataUrl = root.dataset.index ||
-      "https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson";
+      "https://rascommander.info/data/rasexamples/hec-ras-7.0/current/example-projects.geojson";
     const sourceCollection = await loadProjectIndex(dataUrl);
     const features = (sourceCollection.features || [])
       .filter((feature) => feature.geometry)

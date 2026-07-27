@@ -8,6 +8,9 @@ readonly KEY_PATH="/root/.ssh/rascommander-webgis-publish-ed25519"
 readonly KNOWN_HOSTS="/root/.ssh/rascommander-webgis-known_hosts"
 readonly WEBGIS_HOST="192.168.3.3"
 readonly INSTALL_PATH="/usr/local/sbin/rascommander-webgis-publish"
+readonly LIBEXEC_ROOT="/usr/local/libexec"
+readonly VERSIONER_INSTALL_PATH="${LIBEXEC_ROOT}/rascommander-version-webgis-release.py"
+readonly VALIDATOR_INSTALL_PATH="${LIBEXEC_ROOT}/rascommander-validate-public-webgis-release.py"
 
 usage() {
     printf 'Usage: %s --publisher-script /absolute/path/to/clb03_rascommander_webgis_publisher.sh\n' "$0" >&2
@@ -20,6 +23,14 @@ if [[ $EUID -ne 0 ]]; then
 fi
 if [[ $# -ne 2 || $1 != "--publisher-script" || $2 != /* || ! -f $2 ]]; then
     usage
+fi
+publisher_script="$(realpath -e "$2")"
+script_root="$(dirname "$publisher_script")"
+versioner_script="${script_root}/version_webgis_release.py"
+validator_script="${script_root}/validate_public_webgis_release.py"
+if [[ ! -f $versioner_script || ! -f $validator_script ]]; then
+    printf 'Publisher helpers must be located beside %s.\n' "$publisher_script" >&2
+    exit 1
 fi
 
 install -d -o root -g root -m 0750 "$STAGE_ROOT"
@@ -35,7 +46,10 @@ if ! ssh-keygen -F "$WEBGIS_HOST" -f /root/.ssh/known_hosts > "$KNOWN_HOSTS"; th
     exit 1
 fi
 
-install -o root -g root -m 0750 "$2" "$INSTALL_PATH"
+install -d -o root -g root -m 0755 "$LIBEXEC_ROOT"
+install -o root -g root -m 0750 "$publisher_script" "$INSTALL_PATH"
+install -o root -g root -m 0750 "$versioner_script" "$VERSIONER_INSTALL_PATH"
+install -o root -g root -m 0750 "$validator_script" "$VALIDATOR_INSTALL_PATH"
 printf 'Installed CLB03 publisher bridge. Public-key fingerprint: '
 ssh-keygen -lf "${KEY_PATH}.pub" | awk '{print $2}'
 printf 'WebGIS host authorization remains required before the bridge can publish.\n'
