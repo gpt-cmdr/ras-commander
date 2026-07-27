@@ -132,25 +132,57 @@ preprocessor re-derives it.
 compute time** — a Monte Carlo ensemble that perturbed the `LCMann Table` across 30 samples produced
 **byte-identical per-cell n and identical WSE** in every sample.
 
-**Resolved:** `GeomPreprocessor.clear_geompre_files()` now also calls
+**Resolved (layer 1 — the cache):** `GeomPreprocessor.clear_geompre_files()` now also calls
 `GeomPreprocessor.clear_geompre_hdf()`, which deletes the cached `Cells Center Manning's n` +
 property tables **inside the `.g##.hdf` in place** (mirroring HEC-RAS's own `CleanPropertyTables`)
-while **preserving** the mesh topology and the land-cover association. So
-`RasCmdr.compute_plan(clear_geompre=True)` now forces HEC-RAS to re-derive per-cell n from the
-(perturbed) land-cover source on the next compute — a perturbed `LCMann Table` / sidecar **does**
-reach the solver. This is what makes the `RasMonteCarlo.make_mannings_apply_fn` roughness ensemble
-actually vary results.
+while **preserving** the mesh topology and the land-cover association. Once that clearing runs,
+HEC-RAS re-derives per-cell n from the (perturbed) land-cover source.
+
+**Still live (layer 2 — the smart skip):** clearing only helps if `compute_plan()` gets far enough
+to do it. The smart skip is evaluated **before** the `clear_geompre` branch, and
+`are_plan_results_current()` compares only `.p##`/`.g##`/`.u##` mtimes against the results HDF. A
+sidecar/`LCMann` perturbation leaves all three untouched, so results still look "current",
+`compute_plan(clear_geompre=True)` returns success **without clearing and without running**, and the
+sample silently reuses the previous per-cell n. That reproduces the byte-identical symptom above
+even with layer 1 fixed. Pinned by
+`tests/test_rascmdr_compute_plan_control_flow.py::test_compute_plan_clear_geompre_is_skipped_when_results_are_current`.
+
+**When this bites, and when it doesn't.** The skip only fires when the results genuinely look newer
+than `.p##`/`.g##`/`.u##`. Anything that refreshes one of those mtimes defeats it:
+
+| Ensemble shape | Skip fires? | What to use |
+|---|---|---|
+| `RasMonteCarlo.run_ensemble(clone_geom=True, clear_geompre=True)` | No — cloning gives each `.g##` a fresh mtime | `clear_geompre=True` is sufficient |
+| Fresh `dest_folder` per sample | No — copied results are not current | `clear_geompre=True` is sufficient |
+| Perturb sidecar in place, reuse one geometry | **Yes** — `.g##` mtime never changes | `force_geompre=True` |
+
+```python
+# In-place sidecar perturbation: force the run past the skip.
+RasCmdr.compute_plan(plan_number, force_geompre=True, ras_object=ras)
+```
 
 ## Preprocessing: clear_geompre vs force_geompre
 
 When land cover associations exist in the geometry HDF:
 
 - **`clear_geompre=True`**: Deletes `.c##` binary files **and** clears the geometry-preprocessor tables (incl. cached per-cell `Cells Center Manning's n`) inside the `.g##.hdf` in place via `clear_geompre_hdf()`, while **preserving** the land cover filename attribute / association. Forces per-cell n re-derivation on next compute. **Use this.**
-- **`force_geompre=True`**: Deletes both `.g##.hdf` AND `.c##`. Destroys the land cover filename attribute that tells HEC-RAS where the sidecar is. **Avoid when land cover is configured.**
+- **`force_geompre=True`**: Does the same in-place clearing, then rebuilds the property tables immediately via `RasProcess.exe CompleteGeometry` instead of leaving the work to the solver. Also **implies `force_rerun`** — the currency check compares only `.p##`/`.g##`/`.u##` mtimes, so it cannot see a perturbed sidecar and would otherwise skip the run outright. **Use this for land cover sweeps** where the `.g##` mtime never changes.
 
 ```python
-RasCmdr.compute_plan(plan_number, clear_geompre=True)  # correct
+RasCmdr.compute_plan(plan_number, clear_geompre=True)   # geometry edited: mtime changed, no skip
+RasCmdr.compute_plan(plan_number, force_geompre=True)   # sidecar/LCMann edited: mtime unchanged
 ```
+
+> **Corrected (2026-07-16):** a prior version of this rule said `force_geompre=True` "deletes both
+> `.g##.hdf` AND `.c##`... destroys the land cover filename attribute... **Avoid when land cover is
+> configured**." That was true, and is now fixed: `force_geompre` clears the cached tables in place
+> rather than deleting the geometry HDF, so the association survives. Verified on
+> `BaldEagleCrkMulti2D` (HEC-RAS 7.0): after clear + rebuild, per-cell n returns identical
+> (89,879 cells, 0.030–0.150) with `Land Cover Filename` intact.
+>
+> Note `clear_geompre=True` alone does **not** defeat the smart skip. If the perturbation leaves the
+> `.g##` mtime untouched — the exact Monte Carlo case above — the run is skipped and `clear_geompre`
+> never fires. Use `force_geompre=True` (or add `force_rerun=True`) for those ensembles.
 
 ## Authoring Workflow
 

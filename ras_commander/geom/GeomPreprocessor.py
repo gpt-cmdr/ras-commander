@@ -890,9 +890,10 @@ class GeomPreprocessor:
 
         This is the missing piece for 2D land-cover preprocessing: ``.c##``
         files do not hold the 2D per-cell n (it lives in the ``.g##.hdf``).
-        It also makes ``force_geompre`` unnecessary for land-cover models --
-        ``force_geompre`` deletes the whole ``.g##.hdf`` and destroys the
-        land-cover association, collapsing per-cell n to the uniform default.
+        ``force_geompre`` uses this same in-place clearing and preserves the
+        land-cover association. It additionally bypasses the smart results skip
+        and requests an immediate ``RasProcess.exe CompleteGeometry`` rebuild,
+        which is useful when only a sidecar changed and the ``.g##`` mtime did not.
 
         Args:
             geom_hdf_path: Path to a geometry HDF (``<project>.g##.hdf``).

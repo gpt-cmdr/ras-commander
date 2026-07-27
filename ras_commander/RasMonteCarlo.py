@@ -2094,11 +2094,19 @@ class RasMonteCarlo:
            Manning's n`` is a geometry-preprocessing product cached in the
            ``.g##.hdf``; ``clear_geompre`` (now including the in-HDF preprocessor
            tables, association preserved) forces HEC-RAS to re-derive it from the
-           perturbed ``LCMann`` on each sample. ``force_geompre`` is NOT needed and
-           would collapse per-cell n to the uniform default.
+           perturbed ``LCMann`` on each sample. ``force_geompre`` is not needed
+           here: cloning the geometry per sample gives each ``.g##`` a fresh
+           mtime, so results never look current and the smart skip cannot fire.
 
         Without both, the ensemble runs but shows ZERO roughness sensitivity
         (identical per-cell n / WSE across all samples).
+
+        Note: ``clear_geompre`` is evaluated AFTER the smart skip, so it only runs
+        when the plan is not already current. That is safe here because condition 1
+        refreshes the ``.g##`` mtime every sample. An ensemble that perturbs only a
+        land-cover sidecar in place, without cloning the geometry, would leave the
+        ``.g##`` mtime untouched, be skipped, and silently reuse the cached n --
+        use ``force_geompre=True`` (which implies ``force_rerun``) for that shape.
         """
         if not isinstance(zone_column_map, dict) or not zone_column_map:
             raise ValueError(
