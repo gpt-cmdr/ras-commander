@@ -140,6 +140,21 @@ def test_download_info_is_concise_and_debug_keeps_paths(monkeypatch, tmp_path, c
     assert "AORC output grid shape" in debug_text
 
 
+def test_check_availability_accepts_polygon_and_explicit_buffer():
+    aorc_module = importlib.import_module("ras_commander.precip.PrecipAorc")
+    from shapely.geometry import box
+
+    result = aorc_module.PrecipAorc.check_availability(
+        bounds=box(-78.0, 40.0, -77.0, 42.0),
+        start_time="2020-01-01",
+        end_time="2020-01-02",
+        buffer_distance=0.25,
+    )
+
+    assert result["bounds"] == (-78.25, 39.75, -76.75, 42.25)
+    assert result["in_conus"] is True
+
+
 def test_get_storm_catalog_collapses_info_and_keeps_debug_details(monkeypatch, caplog):
     aorc_module = importlib.import_module("ras_commander.precip.PrecipAorc")
     monkeypatch.setattr(aorc_module, "_check_precip_dependencies", lambda: None)

@@ -6,6 +6,87 @@ RAS Commander provides comprehensive tools for working with HEC-RAS spatial data
 
 When you initialize a RAS project, the library automatically parses the RASMapper file (`.rasmap`) and populates the `rasmap_df` DataFrame with paths to all spatial datasets. This provides programmatic access to terrain models, land cover layers, soil data, and more.
 
+## Authoritative Extents for Raster Inputs
+
+Raster and acquisition workflows that accept an analysis/model extent use one
+shared validation contract. You can pass:
+
+- a non-empty, valid Shapely `Polygon`;
+- a `MultiPolygon` only when removing empty parts leaves exactly one polygon;
+- a GeoSeries or GeoDataFrame with exactly one effective polygonal part;
+- a legacy `(minx, miny, maxx, maxy)` tuple/list;
+- a bounds dict or object using `left/bottom/right/top`,
+  `xmin/ymin/xmax/ymax`, or `minx/miny/maxx/maxy`; or
+- `RasMapperLib.Extent`.
+
+True multipart geometry is ambiguous for lower-level raster/native APIs and
+fails closed. Empty, invalid, `Point`, `LineString`, `GeometryCollection`, and
+other non-polygon geometries also raise `ValueError`; ras-commander does not
+silently repair or replace the authoritative geometry.
+
+`buffer_distance` defaults to `0.0`, preserving existing raster bounds. The
+buffer is applied before bounds are derived and uses the units of the supplied
+geometry:
+
+- `RasMap.add_landcover_layer()` and `RasMap.add_soils_layer()` expect the
+  geometry and buffer in the project CRS.
+- `Usgs3depAws` acquisition methods and `PrecipAorc` methods expect WGS84, so
+  their buffer distance is in decimal degrees.
+
+No CRS transformation is inferred from a Shapely geometry. Reproject a
+GeoSeries/GeoDataFrame to the workflow's documented CRS before passing it.
+Legacy bounds inputs remain supported.
+
+```python
+from ras_commander import RasMap
+
+# basin_polygon is already in the HEC-RAS project CRS.
+landcover_hdf = RasMap.add_landcover_layer(
+    ras_project_path=project_path,
+    source_path=landcover_source,
+    classification_table=classification_table,
+    cell_size=30.0,
+    restrict_to_extent=basin_polygon,
+    buffer_distance=300.0,
+)
+
+soils_hdf = RasMap.add_soils_layer(
+    ras_project_path=project_path,
+    gssurgo_path=gssurgo_path,
+    cell_size=30.0,
+    restrict_to_extent=basin_polygon,
+    buffer_distance=300.0,
+)
+```
+
+### Extent API Audit
+
+| Workflow | Extent behavior |
+|----------|-----------------|
+| `RasMap.add_landcover_layer()` | Normalizes polygon or legacy bounds, applies a project-CRS buffer, then derives raster bounds. |
+| `RasMap.add_soils_layer()` | Uses the same normalization and buffer contract as land cover. |
+| `Usgs3depAws.query_tiles_api()`, `find_tiles_for_bbox()`, `list_projects_for_bbox()`, `download_tiles()` | Use the shared contract for WGS84 terrain acquisition; polygon intersection is preserved where the tile workflow supports it. |
+| `PrecipAorc.download()`, `check_availability()`, `get_storm_catalog()`, `create_storm_plans()` | Normalize a WGS84 polygon/legacy extent and optional degree buffer before precipitation subsetting. |
+| `RasMap.add_infiltration_layer()` | Registration/combination only. Its raster extent comes from the prepared land-cover and soils inputs, so no artificial extent parameter is added. |
+| `RasMap.add_terrain_layer()` | Registration only for an existing terrain HDF; terrain acquisition owns the analysis extent. |
+| `RasUnsteady.set_gridded_precipitation()` and `configure_gridded_dss_precipitation()` | Registration only for an existing NetCDF/DSS input; precipitation preparation owns the analysis extent. |
+
+### Downstream Spring Creek Validation
+
+Before treating the Commander change as consumable downstream:
+
+1. Update the reviewed ras-commander pin or capability evidence to a release or
+   commit containing this extent contract.
+2. Run the fresh Spring Creek HEC-RAS 6.6 workflow with the authoritative basin
+   polygon passed unchanged to land-cover and soils preparation.
+3. Confirm the derived raster bounds include the explicit purpose-specific
+   buffer and that legacy bounds calls still produce their prior extents.
+4. Rebuild/associate infiltration inputs and prove the final Manning's n and
+   curve-number arrays are populated, aligned to the 2D mesh, and solver-ready.
+
+Do not unblock the downstream adoption solely from source changes; use a
+released or otherwise reviewed, consumable ras-commander revision.
+
 ## Understanding rasmap_df
 
 The `rasmap_df` DataFrame is automatically populated when you call `init_ras_project()`. It contains paths and metadata for all spatial datasets referenced in your RASMapper configuration.

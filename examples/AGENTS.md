@@ -34,6 +34,7 @@ This file is the canonical local instruction file for `examples/`.
 - `100_using_ras_examples.ipynb` - extracting official example projects
 - `101_project_initialization.ipynb` - project metadata and DataFrame patterns
 - `110_single_plan_execution.ipynb` and `113_parallel_execution.ipynb` - execution patterns
+- `510_linux_execution.ipynb` and `511_headless_linux_wine_ras2cng.ipynb` - vendor Linux solver execution and qualified Wine/Ras2Cng setup
 - `201_1d_plaintext_geometry.ipynb`, `203_htab_parameter_optimization.ipynb`, `205_extract_xs_xyz_from_geometry.ipynb` - geometry parsing and HTAB work
 - `218_infiltration_base_override_authoring.ipynb` and `225_fixit_blocked_obstructions.ipynb` - infiltration and repair workflows
 - `312_boundary_df_qmult_dss_paths.ipynb` and `318_validating_dss_paths.ipynb` - DSS workflows

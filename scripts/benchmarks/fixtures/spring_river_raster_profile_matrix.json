@@ -1,0 +1,42 @@
+{
+  "schema": "ras-commander.raster-profile-matrix/1",
+  "description": "Selected memory-safe local/network StoreMap profiles for the large Spring River watershed fixture.",
+  "variables": {
+    "local_project": "C:\\Users\\billk_clb\\.config\\superpowers\\worktrees\\ras-commander\\feature-multicore-raster-processing\\working\\raster_profile_matrix_20260719\\fixtures\\spring_river_project",
+    "network_project": "H:\\Testing\\eBFE Model Organization\\Validation\\multicore_mapping\\spring_river_20260719\\project_copy_final",
+    "local_data": "C:\\Users\\billk_clb\\.config\\superpowers\\worktrees\\ras-commander\\feature-multicore-raster-processing\\working\\raster_profile_matrix_20260719\\spring_data_clean_v1",
+    "network_data": "H:\\Testing\\eBFE Model Organization\\Validation\\multicore_mapping\\spring_river_20260719\\spring_data_clean_v1"
+  },
+  "runs": [
+    {
+      "id": "spring_depth_serial_local",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{local_project}", "plan_number": "02", "ras_version": "7.0", "maps": "depth", "max_workers": "1", "skip_hdf_hash": true, "sample_interval": "0.2", "output_path": "{local_data}\\{instance_id}\\maps", "label": "Spring River depth serial local"}
+    },
+    {
+      "id": "spring_depth_serial_network",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{network_project}", "plan_number": "02", "ras_version": "7.0", "maps": "depth", "max_workers": "1", "skip_hdf_hash": true, "sample_interval": "0.2", "output_path": "{network_data}\\{instance_id}\\maps", "label": "Spring River depth serial network"}
+    },
+    {
+      "id": "spring_depth_cache64_gdal1_local",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{local_project}", "plan_number": "02", "ras_version": "7.0", "maps": "depth", "max_workers": "1", "gdal_cachemax_mb": "64", "gdal_num_threads": "1", "skip_hdf_hash": true, "sample_interval": "0.2", "output_path": "{local_data}\\{instance_id}\\maps", "label": "Spring River depth cache64 gdal1 local"}
+    },
+    {
+      "id": "spring_depth_cache64_gdal1_network",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{network_project}", "plan_number": "02", "ras_version": "7.0", "maps": "depth", "max_workers": "1", "gdal_cachemax_mb": "64", "gdal_num_threads": "1", "skip_hdf_hash": true, "sample_interval": "0.2", "output_path": "{network_data}\\{instance_id}\\maps", "label": "Spring River depth cache64 gdal1 network"}
+    },
+    {
+      "id": "spring_all3_auto_local",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{local_project}", "plan_number": "02", "ras_version": "7.0", "maps": "wse,depth,velocity", "max_workers": "auto", "skip_hdf_hash": true, "sample_interval": "0.2", "output_path": "{local_data}\\{instance_id}\\maps", "label": "Spring River all maps memory-safe auto local"}
+    },
+    {
+      "id": "spring_all3_auto_network",
+      "runner": "store_maps",
+      "args": {"operation": "store_maps", "project_folder": "{network_project}", "plan_number": "02", "ras_version": "7.0", "maps": "wse,depth,velocity", "max_workers": "auto", "skip_hdf_hash": true, "sample_interval": "0.2", "output_path": "{network_data}\\{instance_id}\\maps", "label": "Spring River all maps memory-safe auto network"}
+    }
+  ]
+}

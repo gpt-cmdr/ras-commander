@@ -58,6 +58,8 @@ RAS2CNG_RASTER_ROUTE_PREFIX=/ras-raster
 RAS2CNG_RASTER_MAX_VIEW_PIXELS=2097152
 RAS2CNG_RASTER_MAX_VIEW_DIMENSION=4096
 RAS2CNG_RASTER_CACHE_ENTRIES=512
+RAS2CNG_RASTER_MAX_COG_RANGE_BYTES=67108864
+RAS2CNG_RASTER_MAX_CONCURRENT_OPERATIONS=8
 MPLCONFIGDIR=/tmp/matplotlib
 XDG_CACHE_HOME=/tmp/cache
 EOF
@@ -86,25 +88,60 @@ ReadOnlyPaths=/var/www/rascommander-webgis
 MemoryHigh=6G
 MemoryMax=8G
 TasksMax=128
+LimitNOFILE=4096
+TimeoutStartSec=45
+TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target
 EOF
 chmod 0644 /etc/systemd/system/ras2cng-raster.service
 
+cat > /etc/nginx/conf.d/rascommander-webgis-cache.conf <<'EOF'
+# Successful immutable releases may be cached indefinitely. Mutable pointers
+# revalidate, and every generated or static error remains non-cacheable.
+map "$status:$uri" $ras_artifact_cache_control {
+    default "no-store";
+    ~"^[23][0-9][0-9]:/data/rasexamples/hec-ras-7\.0/releases/[A-Za-z0-9._-]+/" "public, max-age=31536000, immutable, no-transform";
+    ~"^[23][0-9][0-9]:/data/rasexamples/hec-ras-7\.0/(current/|catalog\.json$|example-projects\.geojson$|snapshot\.json$|current-release\.json$|raster-assets\.json$)" "no-cache, no-transform";
+    ~"^[23][0-9][0-9]:" "public, max-age=3600, no-transform";
+}
+
+# The API supplies its successful cache policy. This variable only covers
+# Nginx-generated errors such as request or connection limiting.
+map $status $ras_api_error_cache_control {
+    default "";
+    ~^[45] "no-store";
+}
+
+limit_req_zone $binary_remote_addr zone=ras_raster_requests:10m rate=40r/s;
+limit_conn_zone $binary_remote_addr zone=ras_raster_connections:10m;
+EOF
+chmod 0644 /etc/nginx/conf.d/rascommander-webgis-cache.conf
+
 python3 - "$SITE_CONFIG" <<'PY'
 import os
+import re
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
 source = path.read_text(encoding="utf-8")
+original = source
+cache_headers = (
+    'add_header Cache-Control "public, max-age=3600" always;',
+    'add_header Cache-Control "public, max-age=3600, no-transform" always;',
+)
+status_aware_cache_header = (
+    "add_header Cache-Control $ras_artifact_cache_control always;"
+)
+if status_aware_cache_header not in source:
+    matches = [header for header in cache_headers if header in source]
+    if len(matches) != 1:
+        raise SystemExit(f"Expected the artifact cache header in {path}")
+    source = source.replace(matches[0], status_aware_cache_header, 1)
 marker = "# ras2cng numeric raster service"
-if marker not in source:
-    needle = "    location / {\n"
-    if source.count(needle) != 1:
-        raise SystemExit(f"Expected one default location in {path}")
-    block = """    # ras2cng numeric raster service
+block = """    # ras2cng numeric raster service
     location /ras-raster/ {
         proxy_pass http://127.0.0.1:8087/ras-raster/;
         proxy_http_version 1.1;
@@ -113,12 +150,35 @@ if marker not in source:
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_connect_timeout 5s;
         proxy_read_timeout 60s;
+        proxy_send_timeout 15s;
         proxy_buffering on;
+        proxy_next_upstream off;
+        limit_req zone=ras_raster_requests burst=80 nodelay;
+        limit_req_status 429;
+        limit_conn ras_raster_connections 16;
+        limit_conn_status 429;
+        add_header Cache-Control $ras_api_error_cache_control always;
     }
 
 """
+if marker in source:
+    pattern = re.compile(
+        r"    # ras2cng numeric raster service\n"
+        r"    location /ras-raster/ \{\n.*?^    \}\n\n",
+        re.MULTILINE | re.DOTALL,
+    )
+    source, replacements = pattern.subn(block, source)
+    if replacements != 1:
+        raise SystemExit(f"Expected one numeric raster service block in {path}")
+else:
+    needle = "    location / {\n"
+    if source.count(needle) != 1:
+        raise SystemExit(f"Expected one default location in {path}")
+    source = source.replace(needle, block + needle)
+
+if source != original:
     temporary = path.with_name(f".{path.name}.ras2cng.tmp")
-    temporary.write_text(source.replace(needle, block + needle), encoding="utf-8")
+    temporary.write_text(source, encoding="utf-8")
     os.chmod(temporary, path.stat().st_mode)
     temporary.replace(path)
 PY
@@ -130,11 +190,13 @@ nginx -t
 systemctl reload nginx
 
 for _ in $(seq 1 30); do
-    if curl -fsS http://127.0.0.1:8087/ras-raster/health >/dev/null; then
+    if curl -fsS http://127.0.0.1:8087/ras-raster/ready >/dev/null; then
         break
     fi
     sleep 1
 done
-curl -fsS http://127.0.0.1:8087/ras-raster/health
-curl -fsS http://127.0.0.1/ras-raster/health
+curl -fsS -D - -o /dev/null http://127.0.0.1:8087/ras-raster/health \
+    | grep -qi '^cache-control: no-store'
+curl -fsS http://127.0.0.1:8087/ras-raster/ready
+curl -fsS http://127.0.0.1/ras-raster/ready
 printf '\nProvisioned the isolated numeric raster service.\n'

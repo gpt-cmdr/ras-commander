@@ -342,21 +342,14 @@ def _make_skip_scenario(monkeypatch, tmp_path, rebuild_error=None):
         "get_geom_hdf_path",
         staticmethod(lambda plan_number, ras_object: geom_hdf_path),
     )
-    monkeypatch.setattr(
-        GeomPreprocessor,
-        "clear_geompre_hdf",
-        staticmethod(
-            lambda geom_hdf_path: calls.__setitem__("cleared_hdf_tables", True) or []
-        ),
-    )
+    def fake_clear_geompre_files(plan_files=None, ras_object=None):
+        calls["cleared_geompre"] = True
+        calls["cleared_hdf_tables"] = True
+
     monkeypatch.setattr(
         GeomPreprocessor,
         "clear_geompre_files",
-        staticmethod(
-            lambda plan_files=None, ras_object=None: calls.__setitem__(
-                "cleared_geompre", True
-            )
-        ),
+        staticmethod(fake_clear_geompre_files),
     )
     monkeypatch.setattr(
         RasProcess, "compute_geometry", staticmethod(fake_rebuild)

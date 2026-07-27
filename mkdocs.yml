@@ -200,7 +200,7 @@ nav:
   - Example Notebooks:
     - Overview: examples/index.md
     - Example Projects: examples/example-projects.md
-    - Muncie Map Viewer: examples/example-project-viewer.md
+    - Example Project Viewer: examples/example-project-viewer.md
   - Parallel Compute:
     - Overview: parallel-compute/index.md
     - Local Parallel: parallel-compute/local-parallel.md

@@ -56,6 +56,7 @@ _VB_ROOT = r"Software\VB and VBA Program Settings"
 # Direct child sections of the per-version node that hold user-specific data.
 # Cleared when copying a donor unless keep_personal=True.
 _PERSONAL_SECTIONS = ("Projects", "Form Position")
+_PERSONAL_SECTION_NAMES = {section.casefold() for section in _PERSONAL_SECTIONS}
 
 HEC_TERMS_URL = "https://www.hec.usace.army.mil/software/hec-ras/"
 
@@ -71,7 +72,8 @@ class TcuStatus:
         install_dir: Folder containing Ras.exe, if resolved.
         registry_key: The per-version HKCU subkey that gates the TCU.
         reason: Short machine-readable reason
-            ("accepted" | "no-vb6-subtree" | "not-windows" | "version-unresolved").
+            ("accepted" | "no-vb6-subtree" | "personal-only-vb6-subtree" |
+            "seeded-unverified" | "not-windows" | "version-unresolved").
     """
 
     accepted: Optional[bool]
@@ -126,12 +128,37 @@ class RasTcu:
         return "ras" if str(label).strip().startswith("4") else "ras.exe"
 
     @staticmethod
-    def _node_has_subkeys(hive, subkey: str) -> bool:
+    def _node_exists(hive, subkey: str) -> bool:
+        import winreg
+
+        try:
+            with winreg.OpenKey(hive, subkey):
+                return True
+        except OSError:
+            return False
+
+    @staticmethod
+    def _node_has_acceptance_state(hive, subkey: str) -> bool:
+        """Return True only for a VB6 settings node that is not merely personal MRU state.
+
+        HEC-RAS stores recent projects and window layout under child sections such as
+        ``Projects`` and ``Form Position``. Those sections can exist without the TCU
+        having been accepted for the target version, and copying only those sections
+        can produce a false positive. Treat a node as acceptance-bearing only when it
+        has root values or at least one non-personal child section.
+        """
         import winreg
 
         try:
             with winreg.OpenKey(hive, subkey) as key:
-                return winreg.QueryInfoKey(key)[0] > 0
+                n_sub, n_val, _ = winreg.QueryInfoKey(key)
+                if n_val > 0:
+                    return True
+                for idx in range(n_sub):
+                    child = winreg.EnumKey(key, idx)
+                    if child.casefold() not in _PERSONAL_SECTION_NAMES:
+                        return True
+                return False
         except OSError:
             return False
 
@@ -174,8 +201,10 @@ class RasTcu:
 
         for node in ("ras.exe", "ras"):
             subkey = f"{_VB_ROOT}\\{install_dir}\\{node}"
-            if RasTcu._node_has_subkeys(winreg.HKEY_CURRENT_USER, subkey):
+            if RasTcu._node_has_acceptance_state(winreg.HKEY_CURRENT_USER, subkey):
                 return TcuStatus(True, version, install_dir, subkey, "accepted")
+            if RasTcu._node_exists(winreg.HKEY_CURRENT_USER, subkey):
+                return TcuStatus(False, version, install_dir, subkey, "personal-only-vb6-subtree")
 
         target = f"{_VB_ROOT}\\{install_dir}\\{RasTcu._node_name_for(version, install_dir)}"
         return TcuStatus(False, version, install_dir, target, "no-vb6-subtree")
@@ -204,7 +233,7 @@ class RasTcu:
                     idx += 1
                     for node in ("ras.exe", "ras"):
                         candidate = f"{vb_parent}\\{ver}\\{node}"
-                        if RasTcu._node_has_subkeys(hive, candidate):
+                        if RasTcu._node_has_acceptance_state(hive, candidate):
                             yield candidate
         except OSError:
             return
@@ -307,7 +336,8 @@ class RasTcu:
         Returns:
             TcuStatus reflecting the state after the operation (``reason`` is
             "accepted", "already-accepted", "no-donor-available", "not-windows",
-            or "version-unresolved").
+            "version-unresolved", "personal-only-vb6-subtree", or
+            "seeded-unverified").
         """
         pre = RasTcu.status(ras_object, ras_version)
         if pre.accepted is True:
@@ -326,7 +356,9 @@ class RasTcu:
         if donor_key is None:
             logger.warning(
                 "Cannot auto-accept the HEC-RAS %s TCU: no already-accepted HEC-RAS "
-                "settings exist on this machine to replicate. Open HEC-RAS %s once and "
+                "settings exist on this machine to replicate. MRU-only settings such as "
+                "Projects/Form Position are intentionally ignored because they do not "
+                "prove TCU acceptance. Open HEC-RAS %s once and "
                 "click \"I Agree\" (see RasTcu.open_gui_to_accept), or run the provisioning "
                 "script Set-HecRasTcuAccepted.ps1. Terms: %s",
                 pre.version, pre.version, HEC_TERMS_URL,
@@ -349,6 +381,16 @@ class RasTcu:
                 "acceptance into HKCU\\%s", pre.version, len(writes), target_key,
             )
             return TcuStatus(False, pre.version, install_dir, target_key, "no-vb6-subtree")
+
+        if not RasTcu._node_has_acceptance_state(winreg.HKEY_CURRENT_USER, target_key):
+            logger.warning(
+                "Seeded HEC-RAS %s TCU registry data, but the target key still does not "
+                "contain acceptance-bearing state. Refusing to report accepted for "
+                "HKCU\\%s.",
+                pre.version,
+                target_key,
+            )
+            return TcuStatus(None, pre.version, install_dir, target_key, "seeded-unverified")
 
         if write_ack:
             RasTcu._write_ack(pre.version, install_dir, target_key)

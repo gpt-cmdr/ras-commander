@@ -543,6 +543,39 @@ details[open] > summary > .ras-tree-node__disclosure::before {
   cursor: not-allowed;
 }
 
+.ras-vector-legend {
+  margin: 0.35rem 0 0.45rem;
+}
+
+.ras-vector-legend__heading,
+.ras-vector-legend__labels {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: #334155;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.ras-vector-legend__heading span {
+  color: var(--ras-muted);
+}
+
+.ras-vector-legend__bar {
+  width: 100%;
+  height: 10px;
+  margin: 0.22rem 0 0.15rem;
+  border: 1px solid rgba(51, 65, 85, 0.4);
+}
+
+.ras-vector-legend__note {
+  margin: 0.28rem 0 0;
+  color: var(--ras-muted);
+  font-size: 9.5px;
+  line-height: 1.25;
+}
+
 .ras-raster-style {
   margin-top: 0.42rem;
   padding-top: 0.4rem;
@@ -762,9 +795,12 @@ details[open] > summary > .ras-tree-node__disclosure::before {
 
 .ras-layer-status {
   flex: 0 0 auto;
+  max-width: 18rem;
+  overflow: hidden;
   color: var(--ras-muted);
   font-size: 0.7rem;
   line-height: 1.25;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -921,6 +957,25 @@ details[open] > summary > .ras-tree-node__disclosure::before {
   font-weight: 700;
 }
 
+.ras-identify-popup dl.ras-identify-raster-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.08rem;
+}
+
+.ras-identify-raster-list dt:not(:first-child) {
+  margin-top: 0.32rem;
+}
+
+.ras-identify-raster-list dd > span:first-child {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.ras-identify-raster-list dd .ras-identify-source {
+  min-width: 0;
+  overflow-wrap: normal;
+}
+
 .ras-identify-source {
   flex: 0 0 auto;
   color: var(--ras-muted);
@@ -1072,6 +1127,8 @@ details[open] > summary > .ras-tree-node__disclosure::before {
   }
 
   .ras-raster-legend__heading,
+  .ras-vector-legend__heading,
+  .ras-vector-legend__labels,
   .ras-raster-categories,
   .ras-raster-modes button,
   .ras-raster-exact,
@@ -1079,6 +1136,10 @@ details[open] > summary > .ras-tree-node__disclosure::before {
   .ras-raster-custom button,
   .ras-raster-style__status {
     font-size: 12px;
+  }
+
+  .ras-vector-legend__note {
+    font-size: 11px;
   }
 
   .ras-raster-modes button,

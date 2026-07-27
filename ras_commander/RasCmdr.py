@@ -985,11 +985,8 @@ class RasCmdr:
                 from .geom import GeomPreprocessor
                 try:
                     geom_hdf_path = RasCurrency.get_geom_hdf_path(plan_number, compute_ras)
-                    if geom_hdf_path is not None and Path(geom_hdf_path).exists():
-                        # Clear IN PLACE. Deleting the whole .g##.hdf destroys the land
-                        # cover and terrain association, which collapses per-cell n to the
-                        # uniform default -- the tables could then never be re-derived.
-                        GeomPreprocessor.clear_geompre_hdf(geom_hdf_path)
+                    # This helper clears both .c## files and cached HDF tables in
+                    # place, preserving the land-cover and terrain associations.
                     GeomPreprocessor.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
                     logger.debug(f"Force-cleared all geometry preprocessor files for plan: {plan_number}")
 

@@ -307,6 +307,7 @@ class TestLayerCreation:
         rasterio = pytest.importorskip("rasterio")
         pytest.importorskip("pyproj")
         from rasterio.transform import from_origin
+        from shapely.geometry import box
 
         project_dir = _make_temp_project(tmp_path, "LandcoverProject")
         source_raster = tmp_path / "landcover_source.tif"
@@ -348,10 +349,14 @@ class TestLayerCreation:
             source_raster,
             classification_table,
             cell_size=10.0,
+            restrict_to_extent=box(10, 10, 20, 20),
+            buffer_distance=10.0,
         )
 
         assert output_hdf.exists()
         assert output_hdf.with_suffix(".tif").exists()
+        with rasterio.open(output_hdf.with_suffix(".tif")) as raster:
+            assert tuple(raster.bounds) == (0.0, 0.0, 30.0, 30.0)
 
         with h5py.File(output_hdf, "r") as hdf_file:
             raster_map = hdf_file["Raster Map"][()]
@@ -369,9 +374,22 @@ class TestLayerCreation:
         parsed = RasMap.parse_rasmap(project_dir / "LandcoverProject.rasmap")
         assert parsed.at[0, "landcover_hdf_path"] == [str(output_hdf)]
 
+        legacy_output = RasMap.add_landcover_layer(
+            project_dir,
+            source_raster,
+            classification_table,
+            cell_size=10.0,
+            output_hdf_path=tmp_path / "legacy_landcover.hdf",
+            restrict_to_extent=(10, 10, 30, 30),
+            layer_name="Legacy Bounds",
+        )
+        with rasterio.open(legacy_output.with_suffix(".tif")) as raster:
+            assert tuple(raster.bounds) == (10.0, 10.0, 30.0, 30.0)
+
     def test_add_soils_layer_creates_outputs_and_registers_rasmap(self, tmp_path):
         pytest.importorskip("geopandas")
         pytest.importorskip("pyproj")
+        rasterio = pytest.importorskip("rasterio")
         from shapely.geometry import box
         import geopandas as gpd
 
@@ -402,10 +420,14 @@ class TestLayerCreation:
             project_dir,
             gssurgo_dir,
             cell_size=10.0,
+            restrict_to_extent=box(10, 0, 20, 10),
+            buffer_distance=10.0,
         )
 
         assert output_hdf.exists()
         assert output_hdf.with_suffix(".tif").exists()
+        with rasterio.open(output_hdf.with_suffix(".tif")) as raster:
+            assert tuple(raster.bounds) == (0.0, -10.0, 30.0, 20.0)
 
         with h5py.File(output_hdf, "r") as hdf_file:
             raster_map = hdf_file["Raster Map"][()]
@@ -418,6 +440,16 @@ class TestLayerCreation:
         assert set(layers["classification_kind"]) == {"soils"}
         parsed = RasMap.parse_rasmap(project_dir / "SoilsProject.rasmap")
         assert parsed.at[0, "soil_layer_path"] == [str(output_hdf)]
+
+        legacy_output = RasMap.add_soils_layer(
+            project_dir,
+            gssurgo_dir,
+            cell_size=10.0,
+            output_hdf_path=tmp_path / "legacy_soils.hdf",
+            restrict_to_extent=[0, 0, 40, 20],
+        )
+        with rasterio.open(legacy_output.with_suffix(".tif")) as raster:
+            assert tuple(raster.bounds) == (0.0, 0.0, 40.0, 20.0)
 
     @pytest.mark.parametrize(
         ("infiltration_method", "expected_fields"),

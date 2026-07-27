@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*129 notebooks indexed - 120 with runtime data, 9 without.*
+*131 notebooks indexed - 120 with runtime data, 11 without.*
 
 ## 100s - Initialization & Execution
 
@@ -18,7 +18,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [102 - Multiple Project Operations](../notebooks/102_multiple_project_operations.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/102_multiple_project_operations.ipynb) | 2.2 min |
 | [103 - Plan and Geometry Operations](../notebooks/103_plan_and_geometry_operations.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/103_plan_and_geometry_operations.ipynb) | 1.8 min |
 | [104 - Plan Parameter Operations](../notebooks/104_plan_parameter_operations.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/104_plan_parameter_operations.ipynb) | 1.3 min |
-| [110 - Single Plan Execution](../notebooks/110_single_plan_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/110_single_plan_execution.ipynb) | 8.1 min |
+| [110 - Single Plan Execution](../notebooks/110_single_plan_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/110_single_plan_execution.ipynb) | 8.3 min |
 | [111 - Executing Plan Sets](../notebooks/111_executing_plan_sets.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/111_executing_plan_sets.ipynb) | 3.0 min |
 | [112 - Sequential Plan Execution](../notebooks/112_sequential_plan_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/112_sequential_plan_execution.ipynb) | 3.3 min |
 | [113 - Parallel Execution](../notebooks/113_parallel_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/113_parallel_execution.ipynb) | 3.3 h |
@@ -113,6 +113,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | --- | --- | --- |
 | [500 - Remote Parallel Execution with PsExec](../notebooks/500_remote_execution_psexec.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/500_remote_execution_psexec.ipynb) | 8.7 min |
 | [510 - Linux HEC-RAS Execution](../notebooks/510_linux_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/510_linux_execution.ipynb) | N/A |
+| [511 - Headless Linux/Wine/Ras2Cng Setup and Qualification](../notebooks/511_headless_linux_wine_ras2cng.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/511_headless_linux_wine_ras2cng.ipynb) | N/A |
 | [560 - Modified Puls Routing Extraction from HEC-RAS 2D Models](../notebooks/560_modpuls_routing_extraction.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/560_modpuls_routing_extraction.ipynb) | 3.5 min |
 
 ## 600s - Floodplain Mapping
@@ -139,6 +140,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [723 - StormGenerator Alternating Block Method - Independent Textbook Validation](../notebooks/723_storm_generator_abm_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/723_storm_generator_abm_validation.ipynb) | 5 s |
 | [725 - Atlas 14 Spatial Variance Analysis](../notebooks/725_atlas14_spatial_variance.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/725_atlas14_spatial_variance.ipynb) | 1.3 min |
 | [726 - Gridded ABM Hyetograph Generation](../notebooks/726_abm_hyetograph_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/726_abm_hyetograph_grid.ipynb) | 2.4 min |
+| [730 - Raster Processing Performance Profiling](../notebooks/730_raster_processing_performance_profiling.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/730_raster_processing_performance_profiling.ipynb) | N/A |
 
 ## 800s - Quality Assurance
 

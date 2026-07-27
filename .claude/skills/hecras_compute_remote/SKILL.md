@@ -383,6 +383,7 @@ Read `ras_commander/remote/AGENTS.md` for the lazy loading pattern.
 
 **Skills** (related workflows):
 - `hecras_plan_execution` -- Upstream: mode selection (decides if remote is needed)
+- `hecras-setup-linux-wine-ras2cng` -- Provision and qualify isolated Linux/Wine/Ras2Cng workers
 - `hecras_compute_plans` -- Alternative: local execution
 - `hecras_extract_results` -- Downstream: extract results after remote execution
 

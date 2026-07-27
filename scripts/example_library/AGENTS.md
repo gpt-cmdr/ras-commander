@@ -16,6 +16,13 @@ be copied onto the public Example Project Library page.
 - Publish artifacts to the dedicated RAS Commander WebGIS service, then link the
   docs viewer to its hosted catalog and manifest.
 - The public artifact namespace is `/data/rasexamples/hec-ras-7.0/`.
+- Publish complete snapshots beneath
+  `/data/rasexamples/hec-ras-7.0/releases/<release-id>/`. Never overwrite a
+  completed release. The mutable `current` symlink is the only active-release
+  pointer and must be switched atomically after validation.
+- Project manifests and all absolute artifact URLs must reference their
+  immutable release path. Numeric-service asset IDs are release-qualified so
+  cached or already-open viewers remain valid across publication.
 - `rascommander.info` reverse-proxies `/data/*` to the isolated WebGIS artifact
   service. Do not put local file paths in public manifests.
 
@@ -59,14 +66,20 @@ applicable result family populated:
 
 1. **Vector Results** from raw HDF values joined to applicable cross sections,
    2D cells/faces, structures, pipes, and reference elements.
-2. **Raster Results** generated from RASMapper Stored Maps, beginning with
-   Depth, WSE, Velocity, and Inundation Boundary where supported by the plan.
-   This family is required for every 2D plan and every terrain-backed 1D plan.
+2. **Raster Results** generated from RASMapper Stored Maps. Every applicable
+   plan must publish the complete standard set: Depth, WSE, Velocity, Froude
+   Number, Shear Stress, Depth x Velocity, Depth x Velocity Squared, Arrival
+   Time, Duration, Percent Time Inundated, and Inundation Boundary. This family
+   is required for every 2D plan and every terrain-backed 1D plan.
 
 A pure 1D source project that contains no RASMapper terrain must still publish
 its computed raw cross-section results, but continuous Stored Map rasters are
-not applicable. Record that capability explicitly in manifest v2; do not add a
-substitute terrain or mislabel a derived surface as a RASMapper Stored Map.
+not applicable. Record that capability explicitly in manifest v2; do not
+mislabel a derived surface as a RASMapper Stored Map. A related project's
+terrain may be linked only as a shared display resource when the projects have
+the same study area and CRS. Mark it `modelOwned: false`, identify the source
+project, and do not use it to make Stored Maps appear applicable to the 1D
+model.
 
 Treat either of these public viewer messages as a failed publication:
 
@@ -89,8 +102,14 @@ source HDF, map type, and interpolation authority in result metadata.
   the native cell size that is at least 5 ft.
 - If native terrain is already 5 ft or coarser, retain its native resolution,
   including terrain coarser than 10 ft.
-- Mixed-native-resolution source sets require an explicit recorded target; do
-  not silently upsample any source during consolidation.
+- Mixed-native-resolution source sets require an explicit recorded target. Use
+  a whole-number multiple of the coarsest native source grid so mixed 2-foot
+  and 1-meter mosaics do not require an impractically coarse common multiple.
+  Record every source resolution and resampling factor, and do not silently
+  upsample any source during consolidation.
+- When relocated RASMapper paths cannot be resolved, call ras2cng's
+  `consolidate_terrain_files()` with the explicit priority-ordered TIFF list;
+  do not replace the provenance-bearing pipeline with an ad hoc GDAL command.
 - Preserve source priority, grid alignment, horizontal and vertical units and
   datums, resampling method, cutline, and source-file inventory.
 - Build tiled, compressed COGs with statistics and overviews, and verify that
@@ -122,6 +141,9 @@ Add projects one at a time only after all checks pass:
 - each 2D model has a consolidated, validated terrain COG;
 - manifests use hosted URLs and contain no local paths;
 - PMTiles and COG endpoints support HTTP range requests;
+- successful immutable release artifacts use a one-year immutable cache policy,
+  mutable current/catalog paths revalidate, and every `4xx` or `5xx` response
+  uses `Cache-Control: no-store`;
 - large layers have sensible default visibility;
 - desktop and mobile viewers open from the public docs URL;
 - Identify distinguishes raw HDF values from RASMapper raster values;
@@ -131,6 +153,23 @@ Add projects one at a time only after all checks pass:
 Do not add the 1D steady BLE collection to this landing page. Publish it later
 as a separate consolidated map after its grouping, symbology, and metadata
 contract is established.
+
+## Viewer Template Contract
+
+- All project links use the single shared `example-project-viewer.md` page and
+  its shared MapLibre JavaScript. Do not create project-specific viewer pages.
+- Every generated or published manifest v2 must carry ras2cng's current
+  `viewerTemplate` revision. The manifest revision is the compatibility
+  contract between generated project data and the shared viewer.
+- Before migrating an existing release, run
+  `upgrade_viewer_release.py --release-root <path> --dry-run`. Review the report,
+  then rerun without `--dry-run` only after every selected project passes the
+  layer, asset-reference, compatibility-payload, and schema checks.
+- Template conformance does not waive any terrain, results, CRS, license,
+  performance, or catalog-admission gate. A project may be compatible with the
+  shared viewer while still being ineligible for public publication.
+- Validate the public manifest after restricted publication; do not infer
+  success from the staged or durable copy.
 
 ## Current Expansion Priority
 
@@ -146,7 +185,13 @@ After publishing a manifest v2 release with numeric COGs, install or upgrade the
 bounded runtime inside CT230 with `provision_webgis_raster_service.sh`. Keep its
 application listener on `127.0.0.1:8087`; CT230 Nginx and the docs-origin proxy
 are the only public route to `/ras-raster/`.
-Run `provision_rasdocs_raster_proxy.sh` inside CLB-Web01 CT210 and the active
-serve-only rasdocs replica CT213 only after the CT230 health check passes. It
-adds the path-scoped Caddy proxy without changing the existing `/data/*`
-artifact route.
+The service readiness response must identify the active release and catalog,
+must be non-cacheable, and must report zero missing assets. The publisher must
+run `validate_public_webgis_release.py` after switching `current`; this validates
+public PMTiles and COG ranges, numeric sample/statistics/tile routes, cache
+headers, and non-cacheable API/static errors.
+Run `provision_rasdocs_raster_proxy.sh` inside the active CT210 `clb-rasdocs`
+guest on CLB-WebGIS and the serve-only rasdocs replica CT213 only after the
+CT230 readiness check passes. Former CLB-Web01 was retired on 2026-07-24. The
+script adds the path-scoped Caddy proxy without changing the existing
+`/data/*` artifact route.
