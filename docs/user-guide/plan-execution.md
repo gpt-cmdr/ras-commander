@@ -505,3 +505,42 @@ except ValueError as e:
 3. **Clear preprocessor**: Use `clear_geompre=True` after geometry changes
 4. **Check return values**: Always verify execution success
 5. **Use logging**: Enable DEBUG level for troubleshooting
+
+## Qualification Gates for Automated Scenarios
+
+For a cloned or externally forced unsteady plan, verify the preparation
+contract before calling `compute_plan()`:
+
+- the project `Current Plan` is the cloned plan;
+- the plan references the cloned `.u##` file;
+- the `Simulation Date` equals the intended forcing window;
+- every DSS reference is absolute or begins with `.\`/`..\` and resolves to an
+  existing file;
+- every exact DSS pathname covers the plan window; and
+- every river/reach/station or storage-area/2D/BC-line selector exists in the
+  geometry used by the plan.
+
+Preserve one newline convention in RAS text files. Mixed LF and CRLF records can
+cause the Windows GUI to load the project while leaving Plan, Geometry, and Flow
+sections blank.
+
+After compute, report two independent outcomes:
+
+1. **Execution completion**: the solver completed, the result HDF is populated,
+   its completed flag is true, and its time axis matches the plan window.
+2. **Hydraulic qualification**: compute messages and results satisfy the
+   study's engineering criteria.
+
+A run can pass the first outcome and remain conditional on ignored inflows,
+rainfall-grid/mesh coverage, maximum-iteration cells, volume accounting, or
+other model-specific warnings. Preserve those messages in the qualification
+record instead of collapsing them into a single success boolean.
+
+`RasScenario.execute()` performs the first set of checks automatically for a
+prepared scenario workspace. Its `RasRunArtifact.status` is `succeeded` only
+when the compute call returns success, the result HDF is nonempty, the HDF
+`Event Conditions/Completed Successfully` attribute is true, and the first and
+last unsteady output timestamps exactly match the workspace simulation window.
+The artifact records each check separately, including any HDF inspection
+error. This execution status is intentionally not a hydraulic acceptance
+decision.

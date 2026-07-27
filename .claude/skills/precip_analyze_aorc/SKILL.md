@@ -22,6 +22,13 @@ description: |
 
 **This skill is a NAVIGATOR** -- read the primary sources below for complete workflows and API documentation. Do not duplicate implementation details here.
 
+Treat the storm transposition/scoring domain and the hydraulic forcing-coverage
+domain as separate concepts. Before a rain-on-grid qualification, verify that
+the actual DSS grid footprint covers the active RAS mesh and report any faces
+or cells outside the precipitation raster. Do not expand a scientific
+transposition domain merely to suppress a hydraulic coverage warning without
+an approved hydrometeorologic policy.
+
 ## Primary Sources (Read These First!)
 
 ### 1. Canonical Precipitation Contract

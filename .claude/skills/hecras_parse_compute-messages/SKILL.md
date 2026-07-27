@@ -25,6 +25,10 @@ description: |
 
 When the user asks about execution status or compute messages, use these patterns. Read the primary sources above for implementation details.
 
+Keep `execution complete` distinct from `hydraulic QA/QC accepted`. Runtime
+data or the phrase `Complete Process` is supporting evidence, not a complete
+qualification decision.
+
 ---
 
 ## Quick Start
@@ -133,10 +137,20 @@ Use this variant in automated/parallel workflows where COM locking is problemati
 
 | Pattern | Meaning |
 |---------|---------|
-| `Complete Process` | Plan finished successfully |
+| `Complete Process` | Solver process reached completion; also verify HDF completion and time axis |
 | `Writing Results` | Output phase started |
 | `Completing Geometry` | Preprocessing successful |
 | `Completing Event Conditions` | Boundary setup successful |
+
+Also preserve conditional messages that may not stop the solver:
+
+- a lateral inflow ignored because its target is absent from geometry;
+- precipitation raster faces or cells outside forcing coverage;
+- cells reaching the maximum iteration count;
+- maximum WSEL error and volume-accounting metrics.
+
+Classify these under the study's documented thresholds. Do not silently convert
+them to either a fatal error or an unconditional pass.
 
 ---
 
