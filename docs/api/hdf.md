@@ -52,6 +52,49 @@ Mesh geometry data.
 - `get_profile_line_flow_timeseries(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Flow time series across a RAS Mapper profile/reference line
 - `get_profile_line_peak_flow(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Peak Q and peak time for a profile/reference line
 
+### HdfResultsProducts
+
+Deterministic client-oriented products from a completed unsteady plan HDF.
+
+- `inspect_result(hdf_path)` - Fail-closed completion, time-axis, mesh, CRS,
+  version, and units inspection
+- `export(hdf_path, output_directory, resolution=None, max_dimension=2048,
+  nodata=-9999, include_preview=True)` - Create checksum-pinned COG,
+  hydrograph, footprint, metadata, QAQC-summary, and optional preview assets
+
+```python
+from ras_commander import HdfResultsProducts
+
+manifest = HdfResultsProducts.export(
+    "project.p02.hdf",
+    "products/scenario-001/hydraulics",
+)
+```
+
+The output directory must not already exist. Stable assets are:
+
+- `maximum-wse.tif`
+- `maximum-depth.tif`
+- `maximum-velocity.tif`
+- `hydraulic-hydrographs.parquet`
+- `result-metadata.json`
+- `numerical-qaqc.json`
+- `result-footprint.geojson`
+- `maximum-depth-preview.png`, when the renderer is available
+- `hydraulic-products.json`
+
+The three rasters are Cloud Optimized GeoTIFFs on one grid and carry CRS,
+bounds, shape, transform, nodata, units, statistics, checksums, and sizes in
+the manifest. When the HDF does not store maximum depth directly, depth is
+derived as the maximum nonnegative difference between water-surface elevation
+and cell minimum elevation. Maximum velocity is the largest absolute adjacent
+face velocity assigned to each cell; it is not a velocity-vector product.
+
+`numerical-qaqc.json` preserves solver summaries, volume accounting, water
+surface errors, iterations, and classified compute-message findings.
+Extraction success does not imply hydraulic acceptance: the manifest keeps
+`hydraulic_qaqc` as `not_evaluated` for the owning study to decide.
+
 ## Plan Results
 
 ### HdfResultsPlan

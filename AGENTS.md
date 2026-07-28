@@ -128,6 +128,12 @@ This file is the canonical shared instruction contract for repository-local codi
   nonempty result HDF, HDF completion marker, and exact output time window all
   pass.
 - Keep execution completion and hydraulic qualification separate. A completed solver and populated HDF may still require review for ignored inflows, precipitation coverage, convergence, volume accounting, or other conditional warnings.
+- Use `HdfResultsProducts.export()` for deterministic client-oriented hydraulic
+  products from a completed plan HDF. Cross-repository orchestration consumes
+  its manifest and must not duplicate RAS HDF interpretation, rasterization,
+  hydrograph extraction, or numerical-summary rules.
+- A hydraulic product manifest records mechanical completion and extracted
+  evidence. It must leave hydraulic QA/QC as a separate, explicit gate.
 - Generate reviewable outputs:
   - HEC-RAS project artifacts that open in the GUI
   - plots or figures when results need visual checking
