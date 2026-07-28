@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*131 notebooks indexed - 120 with runtime data, 11 without.*
+*132 notebooks indexed - 121 with runtime data, 11 without.*
 
 ## 100s - Initialization & Execution
 
@@ -140,6 +140,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [723 - StormGenerator Alternating Block Method - Independent Textbook Validation](../notebooks/723_storm_generator_abm_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/723_storm_generator_abm_validation.ipynb) | 5 s |
 | [725 - Atlas 14 Spatial Variance Analysis](../notebooks/725_atlas14_spatial_variance.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/725_atlas14_spatial_variance.ipynb) | 1.3 min |
 | [726 - Gridded ABM Hyetograph Generation](../notebooks/726_abm_hyetograph_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/726_abm_hyetograph_grid.ipynb) | 2.4 min |
+| [727 - Atlas 14 Gridded Design Storm Rain-on-Grid in HEC-RAS](../notebooks/727_atlas14_gridded_rain_on_grid_hecras.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/727_atlas14_gridded_rain_on_grid_hecras.ipynb) | 16.5 min |
 | [730 - Raster Processing Performance Profiling](../notebooks/730_raster_processing_performance_profiling.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/730_raster_processing_performance_profiling.ipynb) | N/A |
 
 ## 800s - Quality Assurance

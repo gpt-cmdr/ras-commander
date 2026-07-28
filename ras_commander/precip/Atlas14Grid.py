@@ -6,7 +6,7 @@ estimates via the consolidated CONUS NetCDF file, enabling efficient downloads
 of only the data needed for a specific project extent.
 
 Key Features:
-- Remote spatial subsetting via HTTP byte-range requests (99.9% data reduction)
+- Remote spatial subsetting via HTTP byte-range requests
 - Integration with HEC-RAS project extents (2D flow areas or project bounds)
 - Support for all CONUS locations (24°N-50°N, -125°W to -66°W)
 - All standard durations (1hr to 168hr) and return periods (2yr to 1000yr)
@@ -40,7 +40,6 @@ References:
     - HDSC Precipitation Frequency Data Server
 """
 
-import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union, Literal
 
@@ -369,14 +368,18 @@ class Atlas14Grid:
                     f"range=[{np.nanmin(data):.2f}, {np.nanmax(data):.2f}] inches"
                 )
 
-        # Log data transfer efficiency
+        # Report the requested raw-grid payload relative to the equivalent
+        # full-grid payload. This is more accurate than rounding the reduction
+        # to 100.0%, which obscures the actual subset size.
         subset_size = len(result['lat']) * len(result['lon']) * len(durations) * 9 * 2
         full_size = 3121 * 7081 * len(durations) * 9 * 2
-        reduction = (1 - subset_size / full_size) * 100
+        subset_percent = subset_size / full_size * 100
+        subset_percent_text = f"{subset_percent:.3g}%"
         logger.info(
-            f"Data transfer: {subset_size/1024:.1f} KB "
-            f"(vs {full_size/1024/1024:.1f} MB full grid, "
-            f"{reduction:.1f}% reduction)"
+            f"Atlas 14 subset: {subset_size/1024:.1f} KB of "
+            f"{full_size/1024/1024:.1f} MB estimated full-grid payload "
+            f"({len(result['lat'])}x{len(result['lon'])} cells, "
+            f"{len(durations)} durations, {subset_percent_text} of full grid)"
         )
 
         return result
@@ -431,7 +434,12 @@ class Atlas14Grid:
         if not geom_hdf.exists():
             raise FileNotFoundError(f"Geometry HDF file not found: {geom_hdf}")
 
-        logger.info(f"Extracting extent from {geom_hdf} using {extent_source}")
+        logger.info(
+            "Extracting Atlas 14 extent from %s using %s",
+            geom_hdf.name,
+            extent_source,
+        )
+        logger.debug("Atlas 14 geometry HDF path: %s", geom_hdf.resolve())
 
         if extent_source == "2d_flow_area":
             # Get 2D flow area perimeters
