@@ -9,8 +9,9 @@ description: |
   depths, velocities, and flows for both steady and unsteady simulations. Handles cross section
   time series, 2D mesh results, maximum envelopes, and dam breach results. Use when you need to
   extract, analyze, or post-process HEC-RAS simulation outputs, retrieve water levels, query
-  velocity fields, get depth grids, extract flow data, analyze breach hydrographs, or pull
-  hydraulic variables from .hdf result files.
+  velocity fields, get depth grids, extract flow data, create deterministic
+  hydraulic product manifests, analyze breach hydrographs, or pull hydraulic
+  variables from .hdf result files.
   Triggers: HDF results, extract WSE, water surface elevation, depth grid, velocity,
   flow data, mesh results, cross section time series, maximum envelope, breach results,
   HdfResultsPlan, HdfResultsMesh, HdfResultsBreach, steady results, unsteady results,
@@ -26,6 +27,14 @@ and that its first/last output timestamps match the active plan window. Result
 arrays can be populated even when individual inflows were ignored or the run
 has convergence/coverage warnings, so retain compute-message qualification
 alongside extracted values.
+
+When the user needs reusable scenario-serving assets rather than exploratory
+DataFrames, use `HdfResultsProducts.inspect_result()` and
+`HdfResultsProducts.export()`. That package-owned operation fails closed on
+completion/time inconsistencies and emits stable COG, Parquet, footprint,
+metadata, numerical-summary, preview, and manifest assets without mutating the
+source HDF. Do not recreate that contract in orchestration code, and do not
+treat extraction success as hydraulic QA/QC acceptance.
 
 **Primary Sources**:
 - **HDF Class Reference**: `ras_commander/hdf/AGENTS.md` - Canonical HDF package contract, module families, lazy loading rules, decorators
@@ -129,6 +138,7 @@ Read this notebook when you need:
 | Class | Purpose | Primary Use |
 |-------|---------|-------------|
 | **HdfResultsPlan** | Plan-level results | Steady profiles, metadata, plan info, output times, computation messages |
+| **HdfResultsProducts** | Scenario product package | Stable COG, Parquet, footprint, metadata, QAQC-summary, preview, and manifest assets |
 | **HdfResultsMesh** | 2D mesh results | Maximum envelopes, time series, spatial grids |
 | **HdfResultsXsec** | Cross section results | 1D time series, longitudinal profiles |
 | **HdfResultsBreach** | Breach results | Dam breach time series, summary statistics, geometry evolution |
@@ -238,6 +248,26 @@ max_vel = HdfResultsMesh.get_mesh_maximum("01", variable="Velocity")
 **Returns**: GeoDataFrame with columns: cell_id, max_value, max_time, geometry (Polygon)
 
 **Full Details**: `examples/410_2d_hdf_data_extraction.ipynb`
+
+---
+
+### Deterministic Scenario Product Package
+
+```python
+from ras_commander import HdfResultsProducts
+
+inspection = HdfResultsProducts.inspect_result("project.p02.hdf")
+manifest = HdfResultsProducts.export(
+    "project.p02.hdf",
+    "products/scenario-001/hydraulics",
+)
+```
+
+The output directory must not already exist. Consume
+`hydraulic-products.json` downstream instead of reopening the HDF to
+reconstruct CRS, bounds, raster, time, table, checksum, or numerical-summary
+metadata. Keep the manifest's `hydraulic_qaqc = not_evaluated` state separate
+from solver completion.
 
 ---
 

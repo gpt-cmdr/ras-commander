@@ -57,6 +57,10 @@ This file is the canonical local instruction file for the `ras_commander/` packa
   nonempty result HDF, HDF completion marker, and exact output time window all
   pass.
 - Record solver completion separately from hydraulic QA/QC. Ignored inflows, mesh/raster coverage warnings, convergence limits, and volume-accounting metrics remain explicit review items even when the HDF reports successful completion.
+- `HdfResultsProducts` owns deterministic scenario serving products. It must
+  fail closed on incomplete results or inconsistent time axes, preserve the
+  source HDF, use stable asset keys and filenames, and emit checksum-pinned
+  metadata sufficient for STAC assembly without reopening the HDF.
 
 ## Testing Rules
 

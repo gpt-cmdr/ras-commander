@@ -1387,8 +1387,14 @@ class HdfResultsMesh:
     @standardize_input(file_type='plan_hdf')
     def get_mesh_max_depth(hdf_path: Path) -> gpd.GeoDataFrame:
         """
-        Get the maximum depth for each 2D mesh cell by reading the full Depth
-        time series and computing np.max(axis=0) per cell.
+        Get the maximum depth for each 2D mesh cell.
+
+        The preferred source is the stored ``Depth`` time series. HEC-RAS
+        projects may omit that optional output while retaining ``Water
+        Surface`` and ``Cells Minimum Elevation``. In that case this method
+        computes depth at every timestep as water surface minus minimum cell
+        elevation, clips negative values to zero, and then takes the temporal
+        maximum.
 
         Attribution: Implementation pattern derived from ras-agent
         (https://github.com/gheistand/ras-agent) by Glenn Heistand / CHAMP —
@@ -1409,10 +1415,15 @@ class HdfResultsMesh:
         try:
             dfs = []
             with h5py.File(hdf_path, 'r') as hdf_file:
+                crs = HdfBase.get_projection(hdf_file)
                 d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
                 if d2_flow_areas is None:
                     logger.debug("No 2D Flow Areas found in HDF file")
-                    return gpd.GeoDataFrame()
+                    return gpd.GeoDataFrame(
+                        columns=["mesh_name", "cell_id", "maximum_depth", "geometry"],
+                        geometry="geometry",
+                        crs=crs,
+                    )
 
                 for d2_flow_area in d2_flow_areas[:]:
                     mesh_name = HdfUtils.convert_ras_string(d2_flow_area[0])
@@ -1431,12 +1442,64 @@ class HdfResultsMesh:
                         f"Unsteady Time Series/2D Flow Areas/{mesh_name}/Depth"
                     )
                     depth_ds = hdf_file.get(depth_path)
-                    if depth_ds is None:
-                        logger.warning(f"Depth dataset not found for mesh '{mesh_name}'")
-                        continue
+                    if depth_ds is not None:
+                        depths = np.asarray(depth_ds, dtype=np.float32)
+                    else:
+                        wse_path = (
+                            f"Results/Unsteady/Output/Output Blocks/Base Output/"
+                            f"Unsteady Time Series/2D Flow Areas/{mesh_name}/"
+                            "Water Surface"
+                        )
+                        minimum_elevation_path = (
+                            f"Geometry/2D Flow Areas/{mesh_name}/"
+                            "Cells Minimum Elevation"
+                        )
+                        wse_ds = hdf_file.get(wse_path)
+                        minimum_elevation_ds = hdf_file.get(
+                            minimum_elevation_path
+                        )
+                        if wse_ds is None or minimum_elevation_ds is None:
+                            raise ValueError(
+                                f"Depth is absent for mesh '{mesh_name}' and "
+                                "Water Surface plus Cells Minimum Elevation "
+                                "are not both available"
+                            )
+                        water_surface = np.asarray(wse_ds, dtype=np.float32)
+                        minimum_elevation = np.asarray(
+                            minimum_elevation_ds,
+                            dtype=np.float32,
+                        )
+                        if (
+                            water_surface.ndim != 2
+                            or water_surface.shape[1] != len(minimum_elevation)
+                        ):
+                            raise ValueError(
+                                f"Water Surface shape {water_surface.shape} "
+                                "does not align with Cells Minimum Elevation "
+                                f"count {len(minimum_elevation)} for mesh "
+                                f"'{mesh_name}'"
+                            )
+                        depths = np.maximum(
+                            water_surface - minimum_elevation[np.newaxis, :],
+                            0.0,
+                        )
+                        logger.debug(
+                            "Computed depth from Water Surface and Cells "
+                            "Minimum Elevation for mesh '%s'",
+                            mesh_name,
+                        )
 
-                    depths = np.array(depth_ds, dtype=np.float32)  # (T, N)
-                    max_depth = np.max(depths, axis=0)  # (N,)
+                    if depths.ndim != 2 or depths.shape[1] != len(xy):
+                        raise ValueError(
+                            f"Depth shape {depths.shape} does not align with "
+                            f"cell-center count {len(xy)} for mesh '{mesh_name}'"
+                        )
+                    finite_cells = np.any(np.isfinite(depths), axis=0)
+                    max_depth = np.full(depths.shape[1], np.nan, dtype=np.float32)
+                    max_depth[finite_cells] = np.nanmax(
+                        depths[:, finite_cells],
+                        axis=0,
+                    )
 
                     geom = [Point(x, y) for x, y in xy]
                     df = gpd.GeoDataFrame({
@@ -1447,13 +1510,17 @@ class HdfResultsMesh:
                     dfs.append(df)
 
             if not dfs:
-                return gpd.GeoDataFrame()
+                return gpd.GeoDataFrame(
+                    columns=["mesh_name", "cell_id", "maximum_depth", "geometry"],
+                    geometry="geometry",
+                    crs=crs,
+                )
 
-            result = pd.concat(dfs, ignore_index=True)
-
-            # Set CRS
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                crs = HdfBase.get_projection(hdf_file)
+            result = gpd.GeoDataFrame(
+                pd.concat(dfs, ignore_index=True),
+                geometry="geometry",
+                crs=crs,
+            )
             if crs:
                 result.set_crs(crs, inplace=True)
 
@@ -2548,11 +2615,25 @@ class HdfResultsMesh:
                 )
                 
                 # Add metadata as coordinates
+                coordinate_names = {
+                    "flow": "flow_units",
+                    "stage": "stage_units",
+                    "2d area": "area_2d",
+                }
                 for key in bc_metadata[bc_names[0]]:
                     if key != 'Columns':  # Skip Columns attribute as it's used for Stage/Flow
                         try:
                             values = [bc_metadata[bc].get(key, '') for bc in bc_names]
-                            ds = ds.assign_coords({f'{key.lower()}': ('bc_name', values)})
+                            normalized_key = str(key).strip().lower()
+                            coordinate_name = coordinate_names.get(
+                                normalized_key,
+                                normalized_key.replace(" ", "_"),
+                            )
+                            if coordinate_name in ds.data_vars:
+                                coordinate_name = f"bc_{coordinate_name}"
+                            ds = ds.assign_coords(
+                                {coordinate_name: ('bc_name', values)}
+                            )
                         except Exception as e:
                             logger.debug(f"Could not add metadata coordinate '{key}': {str(e)}")
                 
