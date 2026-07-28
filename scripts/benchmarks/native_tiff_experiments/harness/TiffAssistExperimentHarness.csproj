@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <AssemblyName>TiffAssistExperimentHarness</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="TiffAssist">
+      <HintPath>$(TiffAssistRuntime)\TiffAssist.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="BitMiracle.LibTiff.NET">
+      <HintPath>$(TiffAssistRuntime)\BitMiracle.LibTiff.NET.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Utility.Core">
+      <HintPath>$(TiffAssistRuntime)\Utility.Core.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

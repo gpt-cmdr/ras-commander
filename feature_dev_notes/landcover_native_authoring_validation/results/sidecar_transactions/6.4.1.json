@@ -1,0 +1,21 @@
+{
+  "timestamp_utc": "2026-07-25T14:48:13.164575+00:00",
+  "version": "6.4.1",
+  "execution_host": "CLB12",
+  "session": "clb-runner interactive RDP session",
+  "output_dir": "C:\\CLB\\clb903-sidecar-64-20260725-1101",
+  "landcover": {
+    "requested": 0.124,
+    "observed": 0.12399999797344208,
+    "backup_path": "C:\\CLB\\clb903-sidecar-64-20260725-1101\\Land Classification\\LandCover.native_parameters.20260725_104811_129590.backup.hdf",
+    "recompute_required": true
+  },
+  "infiltration": {
+    "requested_curve_number": 79.0,
+    "observed_curve_number": 79.0,
+    "backup_path": "C:\\CLB\\clb903-sidecar-64-20260725-1101\\Soils Data\\Infiltration.native_parameters.20260725_104813_076845.backup.hdf",
+    "recompute_required": true,
+    "row_count": 136
+  },
+  "passed": true
+}

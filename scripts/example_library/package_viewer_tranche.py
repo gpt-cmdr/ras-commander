@@ -145,6 +145,7 @@ def package_project(
     ras2cng: str,
     scratch_root: Path,
     primary_geometry: str | None = None,
+    show_all_primary_geometry: bool = False,
     refreshed_archive: Path | None = None,
     stored_maps: Path | None = None,
     require_all_stored_maps: bool = True,
@@ -193,7 +194,11 @@ def package_project(
             "--vector-results",
             "--primary-geometry",
             primary,
-            "--standard-primary-geometry",
+            (
+                "--all-primary-geometry"
+                if show_all_primary_geometry
+                else "--standard-primary-geometry"
+            ),
             "--title",
             title,
             "--source-project",
@@ -253,23 +258,12 @@ def package_project(
         )
         _run(import_command, runner=runner)
 
-    if validate:
-        _run(
-            [
-                ras2cng,
-                "validate-publication",
-                str(viewer_dir / "manifest.json"),
-                str(working / "archive" / "manifest.json"),
-                "--json",
-            ],
-            runner=runner,
-        )
-
     status = {
         "schema": "rascommander.example-viewer-tranche-status/v1",
         "project": project_id,
         "title": title,
         "primaryGeometry": primary,
+        "allPrimaryGeometry": show_all_primary_geometry,
         "geometryCount": len(bindings),
         "terrainCount": terrain_count,
         "refreshedArchive": refreshed_archive is not None,
@@ -277,9 +271,66 @@ def package_project(
         "validated": validate,
     }
     _write_json(working / "viewer-v2-status.json", status)
+
+    if not validate:
+        if target.exists():
+            shutil.rmtree(target)
+        os.replace(working, target)
+        return status
+
+    previous = output_projects_root / f".{project_id}.previous"
+    failed = output_projects_root / f".{project_id}.failed"
+
+    # A hard process/host stop can occur after the live project is moved aside
+    # but before validation restores or commits the candidate. Recover the last
+    # known live project before starting another promotion; never delete the
+    # only rollback copy on restart.
+    if previous.exists():
+        if target.exists():
+            shutil.rmtree(failed, ignore_errors=True)
+            os.replace(target, failed)
+        os.replace(previous, target)
+
+    shutil.rmtree(failed, ignore_errors=True)
     if target.exists():
-        shutil.rmtree(target)
-    os.replace(working, target)
+        os.replace(target, previous)
+
+    try:
+        os.replace(working, target)
+        validation_catalog = scratch / "raster-assets.validation.json"
+        _run(
+            [
+                ras2cng,
+                "raster-service-catalog",
+                str(output_projects_root.parent),
+                str(validation_catalog),
+                "--manifest",
+                str(target / "viewer" / "manifest.json"),
+                "--attach-manifests",
+                "--service-base-url",
+                "/ras-raster",
+            ],
+            runner=runner,
+        )
+        _run(
+            [
+                ras2cng,
+                "validate-publication",
+                str(target / "viewer" / "manifest.json"),
+                str(target / "archive" / "manifest.json"),
+                "--json",
+                "--check-files",
+            ],
+            runner=runner,
+        )
+    except Exception:
+        if target.exists():
+            os.replace(target, failed)
+        if previous.exists():
+            os.replace(previous, target)
+        raise
+    else:
+        shutil.rmtree(previous, ignore_errors=True)
     return status
 
 
@@ -292,6 +343,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--scratch-root", type=Path, required=True)
     parser.add_argument("--path-map", action="append", default=[])
     parser.add_argument("--primary", action="append", default=[])
+    parser.add_argument(
+        "--all-primary-geometry",
+        action="append",
+        default=[],
+        metavar="PROJECT_ID",
+        help="Enable every populated layer in the primary geometry; repeat per project.",
+    )
     parser.add_argument("--archive", action="append", default=[])
     parser.add_argument("--stored-maps", action="append", default=[])
     parser.add_argument(
@@ -311,6 +369,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     path_maps = _assignments(args.path_map, label="--path-map")
     primary = _assignments(args.primary, label="--primary")
+    all_primary_geometry = set(args.all_primary_geometry)
     archives = {
         key: Path(value)
         for key, value in _assignments(args.archive, label="--archive").items()
@@ -326,7 +385,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if isinstance(item, dict) and item.get("id")
     }
     selected = args.project or list(projects)
-    unknown = sorted(set(selected) - set(projects))
+    unknown = sorted((set(selected) | all_primary_geometry) - set(projects))
     if unknown:
         raise TrancheError(f"Project(s) absent from metadata report: {', '.join(unknown)}")
 
@@ -345,6 +404,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     ras2cng=args.ras2cng,
                     scratch_root=args.scratch_root,
                     primary_geometry=primary.get(project_id),
+                    show_all_primary_geometry=project_id in all_primary_geometry,
                     refreshed_archive=archives.get(project_id),
                     stored_maps=stored_maps.get(project_id),
                     require_all_stored_maps=not args.allow_partial_stored_maps,

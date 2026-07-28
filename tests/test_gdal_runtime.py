@@ -6,11 +6,39 @@ from pathlib import Path
 from subprocess import CompletedProcess
 
 import pytest
+import rasterio
+from rasterio._env import PROJDataFinder, set_proj_data_search_path
 
 from ras_commander import _gdal_runtime
 from ras_commander.geom.GeomMesh import GeomMesh
 
 geom_mesh_module = importlib.import_module("ras_commander.geom.GeomMesh")
+clr_bootstrap = importlib.import_module("ras_commander.dotnet.clr_bootstrap")
+_PACKAGED_RASTERIO_PROJ_DATA = (
+    Path(rasterio.__file__).resolve().parent / "proj_data"
+)
+RASTERIO_PROJ_DATA = (
+    str(_PACKAGED_RASTERIO_PROJ_DATA)
+    if (_PACKAGED_RASTERIO_PROJ_DATA / "proj.db").is_file()
+    else PROJDataFinder().search()
+)
+
+
+@pytest.fixture(autouse=True)
+def _restore_rasterio_proj_search_path():
+    """Keep synthetic HEC-RAS data paths from leaking to later tests."""
+    environment_names = ("PATH", "GDAL_DATA", "PROJ_LIB", "PROJ_DATA")
+    original_environment = {name: os.environ.get(name) for name in environment_names}
+    original_sys_path = list(sys.path)
+    set_proj_data_search_path(RASTERIO_PROJ_DATA)
+    yield
+    for name, value in original_environment.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+    sys.path[:] = original_sys_path
+    set_proj_data_search_path(RASTERIO_PROJ_DATA)
 
 
 def _make_hecras_gdal_tree(tmp_path: Path) -> Path:
@@ -126,7 +154,9 @@ def test_configure_rasmapper_gdal_bridge_creates_venv_and_base_bridges(
         str(base_python_dir / "python.exe"),
         raising=False,
     )
-    monkeypatch.setattr(_gdal_runtime.sys, "prefix", str(tmp_path / "project" / ".venv"))
+    monkeypatch.setattr(
+        _gdal_runtime.sys, "prefix", str(tmp_path / "project" / ".venv")
+    )
     monkeypatch.setattr(_gdal_runtime.sys, "base_prefix", str(base_python_dir))
     monkeypatch.setattr(
         _gdal_runtime.sys,
@@ -154,7 +184,9 @@ def test_configure_rasmapper_gdal_bridge_creates_venv_and_base_bridges(
     assert len(commands) == 2
 
 
-def test_geom_mesh_setup_gdal_bridge_creates_python_gdal_by_default(monkeypatch, tmp_path):
+def test_geom_mesh_setup_gdal_bridge_creates_python_gdal_by_default(
+    monkeypatch, tmp_path
+):
     hecras_dir = _make_hecras_gdal_tree(tmp_path)
     python_dir = tmp_path / "uv-python"
     python_dir.mkdir()
@@ -198,6 +230,41 @@ def test_geom_mesh_load_dlls_stops_before_rasmapper_when_bridge_fails(monkeypatc
         geom_mesh_module._load_dlls("C:/HEC-RAS/7.0")
 
     assert add_reference_calls == []
+
+
+def test_clr_bootstrap_accepts_already_imported_pythonnet_module(
+    monkeypatch,
+    tmp_path,
+):
+    install = tmp_path / "HEC-RAS" / "7.0"
+    install.mkdir(parents=True)
+    (install / "RasMapperLib.dll").touch()
+    references = []
+
+    class ImportedClr:
+        __spec__ = None
+
+        @staticmethod
+        def AddReference(path):
+            references.append(Path(path).name)
+
+    monkeypatch.setitem(sys.modules, "clr", ImportedClr)
+    monkeypatch.setattr(clr_bootstrap, "_CLR_LOADED", False)
+    monkeypatch.setattr(clr_bootstrap, "_CLR_INSTALL_ROOT", None)
+    monkeypatch.setattr(
+        clr_bootstrap,
+        "configure_rasmapper_gdal_bridge",
+        lambda path: None,
+    )
+
+    clr_bootstrap.load_clr(install)
+
+    assert references == [
+        "Utility.Core.dll",
+        "Geospatial.Core.dll",
+        "H5Assist.dll",
+        "RasMapperLib.dll",
+    ]
 
 
 def test_resolve_hecras_gdal_paths_reports_missing_bin64(tmp_path):

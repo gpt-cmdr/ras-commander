@@ -905,13 +905,15 @@ notebooks:
   executed_cells: 9
 - id: 212_landcover_mannings_n_write
   filename: 212_landcover_mannings_n_write.ipynb
-  title: NLCD Land Cover Layer Authoring for RASMapper
+  title: Native NLCD Land Cover Authoring and Controlled Manning Validation
   series: 200
   series_name: Geometry & Calibration
-  summary: Create a RASMapper land-cover sidecar HDF from an NLCD-coded raster, register it in `.rasmap`,
-    write the authoritative base Manning's n table to the plain-text geometry file, and associate the
-    compiled geometry HDF with the new layer.
+  summary: Author matching NLCD land-cover layers through native RASMapper APIs, change exactly two Manning
+    classes, recompute and solve both projects, and validate final cell, face, WSE, and breach responses
+    with explicit active-cell and regenerated-key accounting.
   tags:
+  - 2d
+  - calibration
   - rasmapper
   difficulty: intermediate
   est_runtime: null
@@ -921,50 +923,83 @@ notebooks:
   - GeomLandCover.replace_base_mannings_n
   - GeomStorage.get_2d_flow_area_settings
   - GeomStorage.set_2d_flow_area_settings
+  - HdfBndry.get_bc_lines
+  - HdfBndry.get_breaklines
+  - HdfLandCover.audit_final_mannings_n
   - HdfLandCover.get_landcover_raster_map
   - HdfLandCover.get_preprocessed_mannings_n
+  - HdfLandCover.set_landcover_mannings_n
+  - HdfMesh.get_mesh_areas
+  - HdfMesh.get_mesh_cell_points
+  - HdfMesh.get_mesh_cell_polygons
+  - HdfMesh.get_mesh_face_property_tables
+  - HdfResultsBreach.get_breach_summary
+  - HdfResultsMesh.get_mesh_max_ws
+  - HdfStruc.get_structures
   - RasCmdr.compute_plan
   - RasExamples.extract_project
+  - RasExamples.get_example_projects
   - RasMap.add_landcover_layer
   - RasMap.associate_geometry_layers
+  - RasMap.get_geometry_layer_bounds
   - RasMap.get_hdf_geometry_association
   - RasMap.list_landcover_layers
   - RasMap.list_terrain_layers
-  - ras.geom_df
-  - ras.plan_df
+  - RasMap.recompute_property_tables
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 9
-  executed_cells: 8
+  code_cells: 11
+  executed_cells: 10
 - id: 213_land_classification_polygon_authoring
   filename: 213_land_classification_polygon_authoring.ipynb
-  title: Land Classification Polygon Authoring
+  title: Native Land Classification Polygon Authoring
   series: 200
   series_name: Geometry & Calibration
-  summary: When editing ras-commander locally, run this notebook from the repository root with `PYTHONPATH`
-    set to that root before launching Jupyter or `nbconvert`. Restore this pip-mode import cell before
-    committing.
-  tags: []
+  summary: Add, update, list, and delete existing-class land-cover polygons through native RASMapper,
+    reject unsupported multipart and interior-ring inputs before mutation, and verify final Manning, WSE,
+    association, backup, and breach behavior.
+  tags:
+  - 2d
+  - rasmapper
   difficulty: intermediate
   est_runtime: null
-  data_project: null
+  data_project: BaldEagleCrkMulti2D
   functions_used:
-  - HdfLandCover.get_classification_polygons
-  - HdfLandCover.get_landcover_association
+  - GeomLandCover.get_base_mannings_n
+  - GeomLandCover.get_region_mannings_n
+  - GeomLateral.get_connection_line_coords
+  - HdfBase.get_projection
+  - HdfBndry.get_bc_lines
+  - HdfLandCover.audit_final_mannings_n
   - HdfLandCover.get_landcover_raster_map
   - HdfLandCover.get_preprocessed_mannings_n
+  - HdfMesh.get_mesh_cell_points
+  - HdfMesh.get_mesh_cell_polygons
+  - HdfMesh.get_mesh_face_property_tables
+  - HdfPlan.get_plan_information
+  - HdfResultsBreach.get_breach_summary
+  - HdfResultsBreach.get_breach_timeseries
+  - HdfResultsMesh.get_mesh_max_ws
+  - HdfResultsPlan.get_unsteady_info
+  - HdfResultsPlan.get_unsteady_summary
   - RasCmdr.compute_plan
   - RasExamples.extract_project
+  - RasExamples.get_example_projects
   - RasMap.add_land_classification_polygon
   - RasMap.associate_geometry_layers
+  - RasMap.delete_land_classification_polygon
+  - RasMap.get_hdf_geometry_association
+  - RasMap.list_infiltration_layers
+  - RasMap.list_land_classification_polygons
   - RasMap.list_landcover_layers
-  - RasPlan.get_plan_path
-  - RasPlan.set_geom_preprocessor
+  - RasMap.list_terrain_layers
+  - RasMap.recompute_property_tables
+  - RasMap.update_land_classification_polygon
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 9
+  code_cells: 10
   executed_cells: 8
 - id: 214_connection_authoring
   filename: 214_connection_authoring.ipynb
@@ -1098,28 +1133,42 @@ notebooks:
   executed_cells: 14
 - id: 218_infiltration_base_override_authoring
   filename: 218_infiltration_base_override_authoring.ipynb
-  title: Infiltration Base Override Authoring
+  title: Native Infiltration Base and Region Override Authoring
   series: 200
   series_name: Geometry & Calibration
-  summary: Programmatically create and modify SCS Curve Number infiltration overrides in HEC-RAS geometry
-    HDF files — no GUI required. Demonstrates `HdfInfiltration.create_infiltration_group()` and `HdfInfiltration.set_infiltration_baseoverrides()`.
+  summary: Create native infiltration override regions, edit geometry-wide Base Overrides and one named
+    regional parameter table through RASMapper, then verify spatial attribution in final geometry and
+    plan infiltration arrays and hydraulic results.
   tags:
+  - 2d
   - infiltration
+  - rasmapper
   difficulty: intermediate
   est_runtime: null
   data_project: BaldEagleCrkMulti2D
   functions_used:
-  - HdfInfiltration.SOIL_GROUPS
-  - HdfInfiltration.create_infiltration_group
+  - HdfInfiltration.create_infiltration_override_regions
   - HdfInfiltration.get_infiltration_baseoverrides
-  - HdfInfiltration.set_infiltration_baseoverrides
+  - HdfInfiltration.get_infiltration_calibration_regions
+  - HdfInfiltration.get_infiltration_region_names
+  - HdfInfiltration.get_infiltration_region_overrides
+  - HdfInfiltration.get_infiltration_region_polygons
+  - HdfInfiltration.get_preprocessed_infiltration
+  - HdfInfiltration.set_infiltration_base_overrides
+  - HdfInfiltration.set_infiltration_region_overrides
+  - HdfMesh.get_mesh_cell_points
+  - HdfMesh.get_mesh_cell_polygons
+  - HdfResultsMesh.get_mesh_max_ws
+  - HdfResultsMesh.get_mesh_timeseries
+  - RasCmdr.compute_plan
   - RasExamples.extract_project
-  - ras.geom_df
+  - RasExamples.get_example_projects
+  - RasMap.recompute_property_tables
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 13
-  executed_cells: 12
+  code_cells: 10
+  executed_cells: 8
 - id: 219_1d_bridge_xs_plotting
   filename: 219_1d_bridge_xs_plotting.ipynb
   title: 1D Bridge Cross-Section Plotting with Deck/Pier Overlay
@@ -2269,33 +2318,43 @@ notebooks:
   executed_cells: 5
 - id: 414_depth_varying_mannings_n
   filename: 414_depth_varying_mannings_n.ipynb
-  title: Depth-Varying Manning's n for HEC-RAS 2D Models
+  title: Controlled Depth-Varying Manning's n for HEC-RAS 2D Linux Solves
   series: 400
   series_name: HDF Results
-  summary: Manning's roughness coefficient varies with flow depth — this is well-established in hydraulic
-    literature (Chow 1959, HEC-15, Limerinos 1970, Jarrett 1984) and is a frequent topic in HEC-RAS community
-    discussions because many 2D models s...
+  summary: Experimental, non-production comparison of baseline, table-extension control, and depth-varying-Manning
+    scenarios in the single tested HEC-RAS 7.0 April 2026 Windows-preprocess/Linux-solve temporary-HDF
+    workflow; all other versions and workflows are untested.
   tags:
   - 2d
+  - hdf
   difficulty: intermediate
   est_runtime: null
   data_project: null
   functions_used:
+  - GeomCrossSection.get_cross_sections
   - GeomLandCover.get_base_mannings_n
   - GeomStorage.get_2d_flow_area_settings
   - HdfFluvialPluvial.generate_fluvial_pluvial_polygons
   - HdfLandCover.get_mannings_region_polygons
-  - HdfMesh.extend_face_property_tables
+  - HdfMesh.extend_linux_tmp_face_property_tables
   - HdfMesh.get_face_ids_in_calibration_region
   - HdfMesh.get_face_ids_in_polygon
   - HdfMesh.get_mesh_cell_faces
+  - HdfMesh.get_mesh_cell_points
+  - HdfMesh.get_mesh_cell_polygons
   - HdfMesh.get_mesh_face_property_tables
-  - HdfMesh.get_mesh_sloped_topology
-  - HdfMesh.set_face_mannings_n_values
+  - HdfMesh.set_mesh_pinned_attribute
+  - HdfMesh.transform_linux_tmp_face_mannings_n
   - HdfResultsMesh.get_mesh_max_ws
+  - HdfResultsPlan.get_unsteady_summary
+  - HdfResultsPlan.get_volume_accounting
+  - HdfXsec.get_cross_sections
   - HdfXsec.get_river_bank_lines
+  - HdfXsec.get_river_centerlines
   - RasCmdr.compute_plan_linux
   - RasExamples.extract_project
+  - RasExamples.get_example_projects
+  - RasMap.list_terrain_layers
   - RasPreprocess.preprocess_plan
   hec_refs: []
   learning_paths: []
@@ -2466,6 +2525,32 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 8
+  executed_cells: 0
+- id: 511_headless_linux_wine_ras2cng
+  filename: 511_headless_linux_wine_ras2cng.ipynb
+  title: Headless Linux/Wine/Ras2Cng Setup and Qualification
+  series: 500
+  series_name: Remote Execution
+  summary: Set up an isolated Linux task that uses official HEC-RAS Linux executables where supported
+    and the same Windows HEC-RAS version under Wine only for RasProcess/RASMapper gaps and ras2cng stored-map
+    export. This is a qualification workflow...
+  tags:
+  - cloud-native
+  - execution
+  - linux
+  - ras2cng
+  - wine
+  difficulty: advanced
+  est_runtime: null
+  data_project: null
+  functions_used:
+  - RasProcess.check_wine_environment
+  - RasProcess.configure_wine
+  - RasTcu.status
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 4
   executed_cells: 0
 - id: 560_modpuls_routing_extraction
   filename: 560_modpuls_routing_extraction.ipynb
@@ -2947,8 +3032,8 @@ notebooks:
   functions_used:
   - HdfMesh.get_mesh_areas
   - HdfMesh.get_mesh_cell_polygons
-  - HdfResultsMesh.get_mesh_timeseries
   - HdfResultsMesh.get_mesh_max_ws
+  - HdfResultsMesh.get_mesh_timeseries
   - HdfResultsPlan.get_compute_messages_hdf_only
   - HdfStruc.get_structures
   - RasCmdr.compute_plan
@@ -2970,6 +3055,32 @@ notebooks:
   excluded: false
   code_cells: 20
   executed_cells: 20
+- id: 730_raster_processing_performance_profiling
+  filename: 730_raster_processing_performance_profiling.ipynb
+  title: Raster Processing Performance Profiling
+  series: 700
+  series_name: Sensitivity & Precipitation
+  summary: Measure stored-map and VRT-to-GeoTIFF configurations, graph CPU, memory, throughput, and IOPS
+    tradeoffs, and write an HTML decision report from a copied HEC-RAS project.
+  tags:
+  - performance
+  - raster
+  - rasmapper
+  - terrain
+  - profiling
+  difficulty: advanced
+  est_runtime: null
+  data_project: null
+  functions_used:
+  - RasMap.store_all_maps
+  - RasProcess.estimate_store_map_resources
+  - RasProcess.profile_store_maps
+  - RasTerrain.profile_vrt_to_tiff
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 14
+  executed_cells: 0
 - id: 800_quality_assurance_rascheck
   filename: 800_quality_assurance_rascheck.ipynb
   title: Quality Assurance with RasCheck

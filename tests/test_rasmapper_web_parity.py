@@ -183,3 +183,13 @@ def test_result_tree_renders_plan_and_geometry_titles() -> None:
     assert "semanticGeometryLabel(layer.geometry, layer.geometryTitle)" in source
     assert 'node.metadata?.geometryLabel' in source
     assert 'context.className = "ras-tree-node__context"' in source
+
+
+def test_raw_vector_results_use_graduated_styles_and_large_hit_targets() -> None:
+    source = VIEWER_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert "rendererColorExpression" in source
+    assert '"fill-opacity": 0.68' in source
+    assert 'const hitId = `${layer.id}-line-hit`' in source
+    assert 'const hitId = `${layer.id}-point-hit`' in source
+    assert "Raw HDF computation values; click an element" in source

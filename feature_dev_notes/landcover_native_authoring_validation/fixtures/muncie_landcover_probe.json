@@ -1,0 +1,70 @@
+{
+  "source": "G:\\RasProcess Testing\\wine_compare\\Muncie_simple_test\\LandCover\\LandCoverUserShapefile.tif",
+  "output": "C:\\Users\\bill\\.config\\superpowers\\worktrees\\ras-commander\\codex-clb903-landcover-pipeline\\feature_dev_notes\\landcover_native_authoring_validation\\fixtures\\muncie_landcover_probe.tif",
+  "source_sha256": "5c9c3b78771c100b449590518cc79cf2124f25473d5f42aec27e267c9c85317e",
+  "output_sha256": "9e4eb4e8fb5dd10221cbd1dee50deafe0bbd1a59365953dfb7b66095bfc44bfb",
+  "width": 1941,
+  "height": 1398,
+  "dtype": "uint8",
+  "crs": "EPSG:2965",
+  "transform": [
+    5.0,
+    0.0,
+    404112.085287251,
+    0.0,
+    -5.0,
+    1806670.07015604,
+    0.0,
+    0.0,
+    1.0
+  ],
+  "nodata": null,
+  "tiled": true,
+  "compression": "deflate",
+  "overviews": [
+    2,
+    4,
+    8
+  ],
+  "source_class_counts": {
+    "0": 1925774,
+    "1": 23560,
+    "2": 314956,
+    "3": 54559,
+    "4": 90767,
+    "5": 83645,
+    "6": 220257
+  },
+  "class_counts": {
+    "0": 1925774,
+    "1": 23560,
+    "2": 314956,
+    "3": 54559,
+    "4": 90767,
+    "5": 83645,
+    "6": 216657,
+    "7": 3600
+  },
+  "patch": {
+    "row": 1044,
+    "column": 1497,
+    "width": 60,
+    "height": 60,
+    "bounds": [
+      411597.085287251,
+      1801150.07015604,
+      411897.085287251,
+      1801450.07015604
+    ],
+    "source_class": 6,
+    "probe_class": 7,
+    "probe_name": "Qualification Probe",
+    "baseline_mannings_n": 0.07,
+    "edited_mannings_n": 0.077
+  },
+  "source_overviews": [
+    2,
+    4,
+    8
+  ]
+}

@@ -2,7 +2,31 @@
 
 ## Version History
 
-### Unreleased (target version 0.99.0)
+### v0.99.1 (Current published release — July 2026)
+
+**Qualified Raster Processing on Linux/Wine**
+
+- Add the `hecras-setup-linux-wine-ras2cng` skill, fail-closed host preflight,
+  and notebook 511 for isolated headless deployments.
+- Serialize RASMapper stored-map helpers under Wine and constrain the inherited
+  helper process tree to one CPU, avoiding nondeterministic CLR access
+  violations and non-returning mapper calls observed with unsafe CPU topology.
+- Require one writable Wine prefix and project copy per task; scale concurrent
+  work across isolated tasks rather than sharing an active prefix or HDF model.
+- Qualify Muncie HEC-RAS 7.0.1 WSE, depth, and velocity rasters against the
+  Windows golden with exact dimensions, georeferencing, and pixel hashes.
+- Deprecate `mode="native"` in favor of `mode="configured"`; configured maps use
+  the packaged RAS Mapper helper because `RasProcess.exe StoreAllMaps` does not
+  preserve the required stored-map interpolation/render behavior.
+
+**Raster Processing Performance**
+
+- Add typed StoreMap performance policies, physical-memory and Windows-commit
+  admission, terrain-based worker estimates, and child-scoped GDAL controls.
+- Add memory-aware independent-map processing on Windows with profiling and
+  self-contained performance decision reports.
+- Preserve ordered serial handling for products that cannot safely be generated
+  as independent map-helper processes.
 
 **Raster BenefitArea Analysis**
 
@@ -28,7 +52,7 @@
 - Basin-average INFO logging now reports record count, valid-time spacing, and
   the lead-hour range instead of treating every record as one hour.
 
-### v0.96.2 (Current published release — May 2026)
+### v0.96.2 (May 2026)
 
 **Precipitation & Dependencies**
 
@@ -57,7 +81,7 @@
 - **GeomStorage**: 2D flow area perimeter writer with breakline spacing, refinement regions, property tables
 - **RasPermutation**: Parameter sweep framework with Cartesian product generation
 - **HdfResultsQuery**: Spatial query class for 2D mesh results
-- **HdfLandCover**: `set_landcover_raster_map()` for sidecar HDF writes
+- **HdfLandCover**: `set_landcover_mannings_n()` for native RASMapper sidecar updates (`set_landcover_raster_map()` remains a compatibility alias)
 - **RasCalibrate**: Calibration framework with grid search and scipy optimize
 - **GeomReferenceFeatures**: Reference lines and points for 2D calibration
 - Cloud-native export notebooks (960–962) with GeoParquet and COG workflows

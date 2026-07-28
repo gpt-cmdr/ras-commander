@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import geopandas as gpd
-from shapely.geometry import MultiPolygon, box, shape
+from shapely.geometry import MultiPolygon, box, mapping, shape
 
 SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "example_library" / "build_extent_catalog.py"
 CATALOG_CONFIG_PATH = Path(__file__).parents[1] / "agent_tasks" / "rasexamples_extent_catalog.json"
@@ -67,11 +67,45 @@ def test_write_javascript_catalog_assigns_a_compact_bbox_fallback(tmp_path: Path
     }
 
 
+def test_write_javascript_catalog_derives_missing_bbox_from_geometry(tmp_path: Path) -> None:
+    output = tmp_path / "ras-example-projects-data.js"
+    catalog = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {
+                    "title": "Model without bbox",
+                    "projectId": "model-without-bbox",
+                },
+                "geometry": mapping(box(-111.5, 40.1, -111.4, 40.2)),
+            }
+        ],
+    }
+
+    builder._write_javascript_catalog(output, catalog)
+
+    prefix = "window.RAS_EXAMPLE_PROJECTS = "
+    fallback = json.loads(
+        output.read_text(encoding="utf-8")
+        .removeprefix(prefix)
+        .removesuffix(";\n")
+    )
+    assert fallback["features"][0]["id"] == "model-without-bbox"
+    assert fallback["features"][0]["bbox"] == [-111.5, 40.1, -111.4, 40.2]
+
+
 def test_project_feature_uses_display_crs_without_losing_definition(monkeypatch, tmp_path: Path) -> None:
     hdf_path = tmp_path / "model.g01.hdf"
     hdf_path.touch()
     extent = gpd.GeoDataFrame(geometry=[box(-85.0, 40.0, -84.9, 40.1)], crs="EPSG:4326")
-    monkeypatch.setattr(builder.HdfProject, "get_project_extent", lambda *args, **kwargs: (extent, extent.total_bounds))
+    calls = []
+
+    def get_project_extent(*args, **kwargs):
+        calls.append((args, kwargs))
+        return extent, extent.total_bounds
+
+    monkeypatch.setattr(builder.HdfProject, "get_project_extent", get_project_extent)
     project = {
         "id": "model-1",
         "title": "Model 1",
@@ -89,6 +123,17 @@ def test_project_feature_uses_display_crs_without_losing_definition(monkeypatch,
 
     assert feature["properties"]["crs"] == "WGS 84"
     assert feature["properties"]["crsDefinition"] == "EPSG:4326"
+    assert calls == [
+        (
+            (hdf_path,),
+            {
+                "geometry_type": "footprint",
+                "buffer_percent": 0,
+                "fill_holes": True,
+            },
+        )
+    ]
+    assert "fill_holes=True" in feature["properties"]["extentSource"]
 
 
 def test_project_feature_unions_configured_geometry_hdfs(monkeypatch, tmp_path: Path) -> None:
@@ -123,6 +168,48 @@ def test_project_feature_unions_configured_geometry_hdfs(monkeypatch, tmp_path: 
 
     assert feature["geometry"]["type"] == "MultiPolygon"
     assert feature["bbox"] == [-85.0, 40.0, -84.7, 40.1]
+
+
+def test_project_feature_accepts_api_generated_extent_geojson(tmp_path: Path) -> None:
+    extent_path = tmp_path / "viewer" / "model_extent.geojson"
+    extent_path.parent.mkdir()
+    extent_path.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {"geometry_id": "g01"},
+                        "geometry": box(-89.0, 42.0, -88.9, 42.1).__geo_interface__,
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {"geometry_id": "g02"},
+                        "geometry": box(-88.8, 42.0, -88.7, 42.1).__geo_interface__,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    project = {
+        "id": "model-1",
+        "title": "Model 1",
+        "source_family": "Example",
+        "crs": "EPSG:3435",
+        "extent_geojson": "viewer/model_extent.geojson",
+        "extent_geojson_crs": "EPSG:4326",
+        "webmap": "../viewer/",
+        "manifest": "https://example.test/manifest.json",
+        "project_manifest": "https://example.test/project.json",
+        "notes": "Test model",
+    }
+
+    feature = builder._project_feature(project, tmp_path)
+
+    assert feature["geometry"]["type"] == "MultiPolygon"
+    assert feature["bbox"] == [-89.0, 42.0, -88.7, 42.1]
 
 
 def test_catalog_uses_configured_landing_envelope_without_changing_exact_extent(

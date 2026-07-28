@@ -12,7 +12,8 @@ Classes:
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Iterator, Tuple, Any
+from typing import Any, Dict, Iterator, List, Optional
+
 import pandas as pd
 
 
@@ -29,6 +30,13 @@ class ComputeResult:
         results_df_row: Single row from results_df for the executed plan,
             or None if unavailable (e.g., failed execution, dest_folder used,
             or results_df extraction error).
+        completion_verified: ``True`` or ``False`` when ``verify=True`` checked
+            HEC-RAS completion; ``None`` when completion verification was not
+            requested.
+        artifact_verification_passed: Result of ``required_hdf_datasets``
+            verification, or ``None`` when no datasets were requested.
+        verification_failures: Missing, empty, or unreadable requested HDF
+            datasets. Any entry makes ``success`` false.
 
     Examples:
         # Old usage (still works):
@@ -42,6 +50,9 @@ class ComputeResult:
     """
     success: bool
     results_df_row: Optional[pd.Series] = None
+    completion_verified: Optional[bool] = None
+    artifact_verification_passed: Optional[bool] = None
+    verification_failures: List[str] = field(default_factory=list)
 
     def __bool__(self) -> bool:
         return self.success
@@ -49,7 +60,15 @@ class ComputeResult:
     def __repr__(self) -> str:
         status = 'SUCCESS' if self.success else 'FAILED'
         has_row = self.results_df_row is not None
-        return f"ComputeResult({status}, results_df_row={'available' if has_row else 'None'})"
+        verification = (
+            "unverified"
+            if self.completion_verified is None
+            else f"completion_verified={self.completion_verified}"
+        )
+        return (
+            f"ComputeResult({status}, {verification}, "
+            f"results_df_row={'available' if has_row else 'None'})"
+        )
 
 
 @dataclass

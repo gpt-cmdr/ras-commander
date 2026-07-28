@@ -55,14 +55,17 @@ These data types are **only stored in HDF** - there is no plain text representat
 | **Gridded Precipitation** | `.p##.hdf` | `/Event Conditions/Meteorology/` | Raster/gridded data too large for text |
 | **Gridded Land Cover** | `Land Cover.*.hdf` | `//Raster Map`, `//Variables` | Raster classification + attribute table |
 | **Gridded Soils** | `Soils.*.hdf` | `//Raster Map`, `//Variables` | Raster classification + attribute table |
-| **Infiltration Base Overrides** | `.g##.hdf` | `/Geometry/Infiltration/Base Overrides` | Calibration region table |
+| **Infiltration Base Overrides** | `.g##.hdf` | `/Geometry/Infiltration/Base Overrides` | Geometry-wide class-to-parameter fallback table |
+| **Infiltration Region Overrides** | `.g##.hdf` | `/Geometry/Infiltration/Variables/*` | Per-region class-to-parameter tables |
 | **Pipe Networks** | `.g##.hdf` | `/Geometry/Pipe Networks/` | Complex 3D pipe network |
 | **Terrain Data** | `Terrain.hdf` | `//Elevation` | Native raster format |
 | **Computed Results** | `.p##.hdf` | `/Results/` | Time series output |
 | **Computed Mesh Geometry** | `.g##.hdf` | `/Geometry/2D Flow Areas/*/Cells` | Generated from perimeter |
 | **Hydraulic Tables (HTAB)** | `.g##.hdf` | `/Geometry/Cross Sections/Property Tables/` | Computed cross section properties |
 
-**Rule**: For these data types, direct HDF editing is required - but with extreme care to match HEC-RAS's exact expectations. See the [HDF Writing Guide](hdf-writing-guide.md).
+**Rule**: HDF-only means HEC-RAS owns the serialized artifact. Author it
+through the applicable native HEC-RAS/RASMapper API; use `h5py` for read-only
+inspection. See the [HDF Writing Guide](hdf-writing-guide.md).
 
 ### Hybrid Cases
 
@@ -87,9 +90,9 @@ For hybrids, the plain text holds the **input definition** while HDF holds **com
 **For HDF-only data (gridded data, infiltration overrides):**
 
 1. **Create reference files** by doing the workflow manually in HEC-RAS
-2. **Analyze HDF structure** using HDFView or h5py
-3. **Match structure exactly** (dtype, compression, chunks, fill values)
-4. **Validate** by opening in HEC-RAS and running simulation
+2. **Identify the native owner and save path** with RASDecomp/reflection
+3. **Author through HEC-RAS/RASMapper**, with backup and rollback
+4. **Reload natively and run the model** to validate final solver arrays
 
 See the [HDF Writing Guide](hdf-writing-guide.md) for detailed instructions on safe HDF modification.
 

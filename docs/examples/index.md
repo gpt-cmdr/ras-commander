@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*129 notebooks indexed - 120 with runtime data, 9 without.*
+*132 notebooks indexed - 121 with runtime data, 11 without.*
 
 ## 100s - Initialization & Execution
 
@@ -18,7 +18,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [102 - Multiple Project Operations](../notebooks/102_multiple_project_operations.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/102_multiple_project_operations.ipynb) | 2.2 min |
 | [103 - Plan and Geometry Operations](../notebooks/103_plan_and_geometry_operations.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/103_plan_and_geometry_operations.ipynb) | 1.8 min |
 | [104 - Plan Parameter Operations](../notebooks/104_plan_parameter_operations.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/104_plan_parameter_operations.ipynb) | 1.3 min |
-| [110 - Single Plan Execution](../notebooks/110_single_plan_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/110_single_plan_execution.ipynb) | 8.1 min |
+| [110 - Single Plan Execution](../notebooks/110_single_plan_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/110_single_plan_execution.ipynb) | 8.3 min |
 | [111 - Executing Plan Sets](../notebooks/111_executing_plan_sets.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/111_executing_plan_sets.ipynb) | 3.0 min |
 | [112 - Sequential Plan Execution](../notebooks/112_sequential_plan_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/112_sequential_plan_execution.ipynb) | 3.3 min |
 | [113 - Parallel Execution](../notebooks/113_parallel_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/113_parallel_execution.ipynb) | 3.3 h |
@@ -49,13 +49,13 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [209 - Culvert Authoring](../notebooks/209_culvert_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/209_culvert_authoring.ipynb) | 8 s |
 | [210 - Cross-Section Interpolation Settings](../notebooks/210_xs_interpolation_settings.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/210_xs_interpolation_settings.ipynb) | 18 s |
 | [211 - Final Manning's N and Infiltration Analysis](../notebooks/211_final_mannings_and_infiltration.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/211_final_mannings_and_infiltration.ipynb) | 3 s |
-| [212 - NLCD Land Cover Layer Authoring for RASMapper](../notebooks/212_landcover_mannings_n_write.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/212_landcover_mannings_n_write.ipynb) | 38 s |
-| [213 - Land Classification Polygon Authoring](../notebooks/213_land_classification_polygon_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/213_land_classification_polygon_authoring.ipynb) | 19 s |
+| [212 - Native NLCD Land-Cover Authoring and Controlled Manning Verification](../notebooks/212_landcover_mannings_n_write.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/212_landcover_mannings_n_write.ipynb) | 7.6 min |
+| [213 - Native Land-Cover Classification Polygon CRUD](../notebooks/213_land_classification_polygon_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/213_land_classification_polygon_authoring.ipynb) | 6.7 min |
 | [214 - SA/2D Connection Authoring](../notebooks/214_connection_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/214_connection_authoring.ipynb) | 10 s |
 | [215 - SA/2D Bridge Connection Authoring](../notebooks/215_sa2d_bridge_connection_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/215_sa2d_bridge_connection_authoring.ipynb) | 21 s |
 | [216 - 1D Bridge Authoring](../notebooks/216_1d_bridge_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/216_1d_bridge_authoring.ipynb) | 4 s |
 | [217 - 1D Cross-Section Levee Authoring](../notebooks/217_1d_levee_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/217_1d_levee_authoring.ipynb) | 2.4 min |
-| [218 - Infiltration Base Override Authoring](../notebooks/218_infiltration_base_override_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/218_infiltration_base_override_authoring.ipynb) | 4 s |
+| [218 - Native Infiltration Base and Region Override Authoring](../notebooks/218_infiltration_base_override_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/218_infiltration_base_override_authoring.ipynb) | 16.8 min |
 | [219 - 1D Bridge Cross-Section Plotting with Deck/Pier Overlay](../notebooks/219_1d_bridge_xs_plotting.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/219_1d_bridge_xs_plotting.ipynb) | 5 s |
 | [220 - Kalamazoo River Calibration Workflow](../notebooks/220_calibration_workflow.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/220_calibration_workflow.ipynb) | 8 s |
 | [221 - 1D Manning's N Calibration Workflow](../notebooks/221_calibration_1d_workflow.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/221_calibration_1d_workflow.ipynb) | 36.6 min |
@@ -101,7 +101,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [411 - Pipes and Pumps](../notebooks/411_2d_hdf_pipes_and_pumps.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/411_2d_hdf_pipes_and_pumps.ipynb) | 3.3 min |
 | [412 - 2D Face Data Extraction](../notebooks/412_2d_detail_face_data_extraction.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/412_2d_detail_face_data_extraction.ipynb) | 3.3 min |
 | [413 - Profile Line Flow Extraction](../notebooks/413_profile_line_flow_extraction.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/413_profile_line_flow_extraction.ipynb) | 3 s |
-| [414 - Depth-Varying Manning's n for HEC-RAS 2D Models](../notebooks/414_depth_varying_mannings_n.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/414_depth_varying_mannings_n.ipynb) | 16.8 min |
+| [414 - Controlled Depth-Varying Manning's n for HEC-RAS 2D Linux Solves](../notebooks/414_depth_varying_mannings_n.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/414_depth_varying_mannings_n.ipynb) | 5.4 min |
 | [415 - 2D Spatial Result Queries with HdfResultsQuery](../notebooks/415_2d_spatial_result_queries.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/415_2d_spatial_result_queries.ipynb) | 5.5 min |
 | [416 - 2D Velocity Profile Line Extraction](../notebooks/416_2d_velocity_profile_line.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/416_2d_velocity_profile_line.ipynb) | 5 s |
 | [420 - Dam Breach Results](../notebooks/420_breach_results_extraction.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/420_breach_results_extraction.ipynb) | 2.9 min |
@@ -113,6 +113,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | --- | --- | --- |
 | [500 - Remote Parallel Execution with PsExec](../notebooks/500_remote_execution_psexec.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/500_remote_execution_psexec.ipynb) | 8.7 min |
 | [510 - Linux HEC-RAS Execution](../notebooks/510_linux_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/510_linux_execution.ipynb) | N/A |
+| [511 - Headless Linux/Wine/Ras2Cng Setup and Qualification](../notebooks/511_headless_linux_wine_ras2cng.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/511_headless_linux_wine_ras2cng.ipynb) | N/A |
 | [560 - Modified Puls Routing Extraction from HEC-RAS 2D Models](../notebooks/560_modpuls_routing_extraction.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/560_modpuls_routing_extraction.ipynb) | 3.5 min |
 
 ## 600s - Floodplain Mapping
@@ -139,6 +140,8 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [723 - StormGenerator Alternating Block Method - Independent Textbook Validation](../notebooks/723_storm_generator_abm_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/723_storm_generator_abm_validation.ipynb) | 5 s |
 | [725 - Atlas 14 Spatial Variance Analysis](../notebooks/725_atlas14_spatial_variance.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/725_atlas14_spatial_variance.ipynb) | 1.3 min |
 | [726 - Gridded ABM Hyetograph Generation](../notebooks/726_abm_hyetograph_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/726_abm_hyetograph_grid.ipynb) | 2.4 min |
+| [727 - Atlas 14 Gridded Design Storm Rain-on-Grid in HEC-RAS](../notebooks/727_atlas14_gridded_rain_on_grid_hecras.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/727_atlas14_gridded_rain_on_grid_hecras.ipynb) | 58.4 min |
+| [730 - Raster Processing Performance Profiling](../notebooks/730_raster_processing_performance_profiling.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/730_raster_processing_performance_profiling.ipynb) | N/A |
 
 ## 800s - Quality Assurance
 

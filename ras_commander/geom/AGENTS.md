@@ -91,11 +91,16 @@ Reconstruct and validate culvert placement from geometry; complements `GeomCulve
 HEC-RAS resolves per-cell Manning's n through a layered override hierarchy:
 
 1. **Sidecar HDF Variables** — authoritative base n-values per class
-2. **LCMann Table= (plain text .g##)** — optional base overrides
+2. **LCMann Table= (plain text .g##)** — optional base overrides; the
+   integer is the number of following base-table rows
 3. **LCMann Region Table=** — optional per-region calibration overrides
 4. **Geometry HDF Calibration Table** — final preprocessed values (NaN = use sidecar)
 
-`LCMann Table=0` means no overrides defined (empty table). NaN in the calibration table is normal — HEC-RAS reads the sidecar directly. There is no 16-class limit.
+`LCMann Table=0` means no overrides are defined and must not be followed by
+base-table rows. When overrides are present, the header count must equal the
+number of emitted rows; HEC-RAS 7.0 otherwise ignores those rows. NaN in the
+calibration table can be normal for an actually empty override table because
+HEC-RAS reads the sidecar directly. There is no 16-class limit.
 
 See `.claude/rules/hec-ras/land-cover-mannings-n.md` for full documentation.
 

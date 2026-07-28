@@ -1,0 +1,47 @@
+{
+  "hecras_version": "5.0.7",
+  "source_project": "G:\\RasProcess Testing\\wine_compare\\Muncie_simple_test\\Muncie.prj",
+  "disposable_project": "C:\\CLB\\landcover-public-api-proof-507\\Muncie\\Muncie.prj",
+  "plan": "04",
+  "geometry": "04",
+  "flow_area": "2D Interior Area",
+  "compute_success": true,
+  "completion_verified": true,
+  "complete_geometry": true,
+  "association": {
+    "filename": ".\\LandCover\\NativeAPI507.tif",
+    "layer": "NativeAPI507"
+  },
+  "raster": {
+    "width": 1941,
+    "height": 1398,
+    "dtype": "uint8",
+    "tiled": true,
+    "compression": "deflate",
+    "nodata": null,
+    "overviews": [2, 4, 8],
+    "class_counts": {
+      "0": 1925774,
+      "1": 23560,
+      "2": 314956,
+      "3": 54559,
+      "4": 90767,
+      "5": 83645,
+      "6": 220257
+    }
+  },
+  "final_mannings": {
+    "cell_count": 0,
+    "cell_note": "HEC-RAS 5.x does not emit Cells Center Manning's n",
+    "face_profile_row_count": 46505,
+    "face_distinct_count": 10,
+    "values": [0.036, 0.04, 0.054, 0.06, 0.072, 0.08, 0.09, 0.1, 0.12, 100.0],
+    "material_tolerance": 0.0001
+  },
+  "sha256": {
+    "landcover_hdf": "f09756f531def94c1886110bb2f63e063cd0def0b2f05852e83c7191d1014b9c",
+    "landcover_tif": "1fc39d4f42e49103ecd8e408e0ccb602b969330c7d59e53dc3319e6e6f2b344e",
+    "geometry_hdf": "b7a0fd12eb9a3da68369414f56ee042efbdc482e962ce38201285dde32b3b692",
+    "plan_hdf": "42b7cd4e3a853b6e302978aa2531a2bd42a1ba853706f28150561ca2c760e36e"
+  }
+}

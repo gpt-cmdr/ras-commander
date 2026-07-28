@@ -1,4 +1,5 @@
 from importlib import import_module
+from pathlib import Path
 import subprocess
 
 import pytest
@@ -23,6 +24,7 @@ def test_create_terrain_hdf_passes_custom_timeout(monkeypatch, tmp_path):
     (gdal_bin / "gdal_translate.exe").write_text("", encoding="utf-8")
 
     calls = []
+    resolved_paths = []
 
     def fake_run(cmd, capture_output, text, timeout, cwd, env):
         calls.append(
@@ -33,6 +35,7 @@ def test_create_terrain_hdf_passes_custom_timeout(monkeypatch, tmp_path):
                 "timeout": timeout,
                 "cwd": cwd,
                 "env_path": env["PATH"],
+                "gdal_num_threads": env.get("GDAL_NUM_THREADS"),
             }
         )
         with h5py.File(output_hdf, "w") as hdf:
@@ -44,6 +47,13 @@ def test_create_terrain_hdf_passes_custom_timeout(monkeypatch, tmp_path):
         RasTerrain,
         "_get_hecras_path",
         staticmethod(lambda version: tmp_path),
+    )
+    monkeypatch.setattr(
+        ras_terrain_module.RasUtils,
+        "safe_resolve",
+        staticmethod(
+            lambda path: resolved_paths.append(Path(path)) or Path(path).absolute()
+        ),
     )
     monkeypatch.setattr(ras_terrain_module.subprocess, "run", fake_run)
 
@@ -70,6 +80,8 @@ def test_create_terrain_hdf_passes_custom_timeout(monkeypatch, tmp_path):
     assert calls[0]["timeout"] == 7200
     assert calls[0]["cwd"] == str(tmp_path)
     assert str(gdal_bin) in calls[0]["env_path"]
+    assert calls[0]["gdal_num_threads"] is None
+    assert {input_raster, projection_prj, output_hdf} <= set(resolved_paths)
 
 
 def test_create_terrain_hdf_rejects_non_positive_timeout(tmp_path):
@@ -85,4 +97,43 @@ def test_create_terrain_hdf_rejects_non_positive_timeout(tmp_path):
             output_hdf=output_hdf,
             projection_prj=projection_prj,
             timeout_seconds=0,
+        )
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(1, "1"), (4, "4"), ("all_cpus", "ALL_CPUS"), (None, None)],
+)
+def test_build_hecras_terrain_env_controls_gdal_threads(
+    monkeypatch,
+    tmp_path,
+    value,
+    expected,
+):
+    gdal_bin = tmp_path / "GDAL" / "bin64"
+    gdal_bin.mkdir(parents=True)
+    (gdal_bin / "gdal_translate.exe").write_text("", encoding="utf-8")
+    monkeypatch.setenv("GDAL_NUM_THREADS", "inherited")
+
+    env = RasTerrain._build_hecras_terrain_env(
+        tmp_path,
+        gdal_num_threads=value,
+    )
+
+    assert env.get("GDAL_NUM_THREADS") == expected
+
+
+@pytest.mark.parametrize("value", [0, -1, "many"])
+def test_create_terrain_hdf_rejects_invalid_gdal_threads(tmp_path, value):
+    input_raster = tmp_path / "dem.tif"
+    input_raster.write_text("dem", encoding="utf-8")
+    projection_prj = tmp_path / "Projection.prj"
+    projection_prj.write_text("proj", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="gdal_num_threads"):
+        RasTerrain.create_terrain_hdf(
+            input_rasters=[input_raster],
+            output_hdf=tmp_path / "Terrain.hdf",
+            projection_prj=projection_prj,
+            gdal_num_threads=value,
         )

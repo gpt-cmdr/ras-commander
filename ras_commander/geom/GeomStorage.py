@@ -11,6 +11,8 @@ List of Functions:
 - get_elevation_volume() - Read elevation-volume curve for a storage area
 - set_elevation_volume() - Write elevation-volume curve to a storage area
 - get_storage_area_polygons() - Extract storage area polygon perimeter geometry
+- repair_viewing_rectangle_from_2d_areas() - Explicitly repair pathological
+  2D-only viewing/global extents from authored perimeters
 - set_2d_flow_area_perimeter() - Create/update 2D flow area perimeter geometry
 - get_2d_flow_area_settings() - Read 2D flow area cell/face property settings
 - set_2d_flow_area_settings() - Write 2D flow area cell/face property settings
@@ -1211,6 +1213,116 @@ class GeomStorage:
         except Exception as e:
             logger.error(f"Error reading storage area polygons: {str(e)}")
             raise IOError(f"Failed to read storage area polygons: {str(e)}")
+
+    @staticmethod
+    @log_call
+    def repair_viewing_rectangle_from_2d_areas(
+        geom_file: Union[str, Path],
+        buffer_percent: float = 1.0,
+        backup: bool = True,
+        update_hdf: bool = True,
+    ) -> tuple[float, float, float, float]:
+        """Repair global geometry extents from the union of 2D-area perimeters.
+
+        This is an explicit opt-in repair for 2D-only projects whose
+        ``Viewing Rectangle=`` and top-level geometry-HDF ``Extents`` are
+        pathological. It must not be used blindly for mixed 1D/2D projects,
+        because 1D reaches or structures may extend beyond the 2D perimeters.
+
+        Args:
+            geom_file: Plain-text HEC-RAS geometry file (``.g##``).
+            buffer_percent: Symmetric padding as a percentage of each union
+                span. Defaults to 1 percent.
+            backup: Write ``<geometry>.bak`` before changing the text file.
+            update_hdf: Also update the existing sibling ``.g##.hdf`` top-level
+                ``/Geometry`` Extents attribute.
+
+        Returns:
+            ``(xmin, xmax, ymin, ymax)`` written to the geometry artifacts.
+        """
+        import shutil
+
+        import numpy as np
+
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+        if buffer_percent < 0:
+            raise ValueError("buffer_percent must be non-negative")
+
+        polygons = GeomStorage.get_storage_area_polygons(
+            geom_file,
+            exclude_2d=False,
+        )
+        if polygons.empty or "is_2d" not in polygons.columns:
+            raise ValueError(f"No 2D flow-area perimeters found in {geom_file}")
+        two_d = polygons.loc[polygons["is_2d"] & polygons.geometry.notna()]
+        if two_d.empty:
+            raise ValueError(f"No 2D flow-area perimeters found in {geom_file}")
+
+        xmin, ymin, xmax, ymax = map(float, two_d.total_bounds)
+        values = np.asarray([xmin, xmax, ymin, ymax], dtype=float)
+        if not np.isfinite(values).all() or xmax <= xmin or ymax <= ymin:
+            raise ValueError(
+                f"2D flow-area perimeters have invalid bounds in {geom_file}: "
+                f"{values.tolist()}"
+            )
+
+        fraction = float(buffer_percent) / 100.0
+        x_padding = (xmax - xmin) * fraction
+        y_padding = (ymax - ymin) * fraction
+        xmin -= x_padding
+        xmax += x_padding
+        ymin -= y_padding
+        ymax += y_padding
+
+        lines = geom_file.read_text(
+            encoding="utf-8",
+            errors="replace",
+        ).splitlines(keepends=True)
+        replacement = (
+            f"Viewing Rectangle={xmin:g} , {xmax:g} , {ymax:g} , {ymin:g}\n"
+        )
+        for index, line in enumerate(lines):
+            if line.strip().startswith("Viewing Rectangle="):
+                lines[index] = replacement
+                break
+        else:
+            insert_index = 1 if lines else 0
+            lines.insert(insert_index, replacement)
+
+        if backup:
+            shutil.copy2(
+                geom_file,
+                geom_file.with_suffix(geom_file.suffix + ".bak"),
+            )
+        geom_file.write_text("".join(lines), encoding="utf-8")
+
+        if update_hdf:
+            geom_hdf = Path(str(geom_file) + ".hdf")
+            if geom_hdf.exists():
+                import h5py
+
+                with h5py.File(geom_hdf, "a") as hdf_file:
+                    geometry = hdf_file.get("Geometry")
+                    if geometry is None:
+                        raise RuntimeError(
+                            f"HDF is missing the /Geometry group: {geom_hdf}"
+                        )
+                    geometry.attrs["Extents"] = np.asarray(
+                        [xmin, xmax, ymin, ymax],
+                        dtype=np.float64,
+                    )
+
+        logger.info(
+            "Repaired 2D-only viewing extents for %s to [%g, %g, %g, %g]",
+            geom_file.name,
+            xmin,
+            xmax,
+            ymin,
+            ymax,
+        )
+        return xmin, xmax, ymin, ymax
 
     @staticmethod
     @log_call

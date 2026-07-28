@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import h5py
 import pandas as pd
 import pytest
 
@@ -67,6 +68,70 @@ def test_compute_plan_returns_failed_result_for_regular_exception():
     assert result.success is False
     assert result.results_df_row is None
     assert ras_obj.refresh_calls == ["plan", "geom", "flow", "unsteady"]
+
+
+def test_required_hdf_datasets_fail_closed_for_missing_final_array(tmp_path):
+    hdf_path = tmp_path / "partial.p01.hdf"
+    with h5py.File(hdf_path, "w") as hdf_file:
+        hdf_file.create_group("Geometry")
+
+    result = RasCmdr._build_compute_result(
+        success=True,
+        results_df_row=None,
+        verify=False,
+        required_hdf_datasets={
+            hdf_path.name: [
+                "Geometry/2D Flow Areas/MainArea/Cells Center Manning's n"
+            ]
+        },
+        base_folder=tmp_path,
+    )
+
+    assert result.success is False
+    assert result.completion_verified is None
+    assert result.artifact_verification_passed is False
+    assert "dataset missing" in result.verification_failures[0]
+
+
+def test_required_hdf_datasets_pass_only_for_nonempty_datasets(tmp_path):
+    hdf_path = tmp_path / "complete.g01.hdf"
+    dataset_path = (
+        "Geometry/2D Flow Areas/MainArea/Cells Center Manning's n"
+    )
+    with h5py.File(hdf_path, "w") as hdf_file:
+        hdf_file.create_dataset(dataset_path, data=[0.03, 0.04])
+
+    result = RasCmdr._build_compute_result(
+        success=True,
+        results_df_row=None,
+        verify=True,
+        required_hdf_datasets={hdf_path: [dataset_path]},
+        base_folder=tmp_path,
+    )
+
+    assert result.success is True
+    assert result.completion_verified is True
+    assert result.artifact_verification_passed is True
+    assert result.verification_failures == []
+
+
+def test_required_hdf_datasets_accepts_single_dataset_string(tmp_path):
+    hdf_path = tmp_path / "results.hdf"
+    dataset_path = "Results/Final Array"
+    with h5py.File(hdf_path, "w") as hdf_file:
+        hdf_file.create_dataset(dataset_path, data=[1.0])
+
+    result = RasCmdr._build_compute_result(
+        success=True,
+        results_df_row=None,
+        verify=False,
+        required_hdf_datasets={hdf_path: dataset_path},
+        base_folder=tmp_path,
+    )
+
+    assert result.success is True
+    assert result.artifact_verification_passed is True
+    assert result.verification_failures == []
 
 
 def test_compute_plan_does_not_swallow_keyboard_interrupt():
@@ -283,6 +348,204 @@ def test_compute_plan_same_dest_folder_does_not_remove_active_project(
     assert result.success is True
     assert prj_path.exists()
     assert plan_path.exists()
+
+
+def _make_skip_scenario(monkeypatch, tmp_path, rebuild_error=None):
+    """Build a project whose results are current, so the smart skip would fire.
+
+    Returns (ras_obj, calls) where calls records whether HEC-RAS was launched, whether
+    the geometry preprocessor caches were cleared, and whether the RasProcess.exe
+    rebuild was invoked. Pass rebuild_error to simulate RasProcess.exe being absent.
+    """
+    from ras_commander.RasCurrency import RasCurrency
+    from ras_commander.RasProcess import RasProcess
+    from ras_commander.geom import GeomPreprocessor
+
+    prj_path = tmp_path / "TestProject.prj"
+    plan_path = tmp_path / "TestProject.p01"
+    geom_hdf_path = tmp_path / "TestProject.g01.hdf"
+    prj_path.write_text("Proj Title=TestProject\n", encoding="utf-8")
+    plan_path.write_text("Plan Title=Plan 01\n", encoding="utf-8")
+    geom_hdf_path.write_bytes(b"fake hdf")
+
+    ras_obj = _DummyRas()
+    ras_obj.project_folder = tmp_path
+    ras_obj.project_name = "TestProject"
+    ras_obj.prj_file = prj_path
+    ras_obj.ras_exe_path = "Ras.exe"
+
+    calls = {
+        "ran": False,
+        "cleared_geompre": False,
+        "rebuilt": False,
+    }
+
+    def fake_run(*args, **kwargs):
+        calls["ran"] = True
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    def fake_rebuild(geom_hdf, **kwargs):
+        calls["rebuilt"] = True
+        if rebuild_error is not None:
+            raise rebuild_error
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda plan_number, ras_object: plan_path),
+    )
+    # Results are current: without an override, compute_plan must skip.
+    monkeypatch.setattr(
+        RasCurrency,
+        "are_plan_results_current",
+        staticmethod(lambda plan_number, ras_object: (True, "already current")),
+    )
+    monkeypatch.setattr(
+        RasCurrency,
+        "get_geom_hdf_path",
+        staticmethod(lambda plan_number, ras_object: geom_hdf_path),
+    )
+    def fake_clear_geompre_files(plan_files=None, ras_object=None):
+        calls["cleared_geompre"] = True
+
+    monkeypatch.setattr(
+        GeomPreprocessor,
+        "clear_geompre_files",
+        staticmethod(fake_clear_geompre_files),
+    )
+    monkeypatch.setattr(
+        RasProcess, "compute_geometry", staticmethod(fake_rebuild)
+    )
+    monkeypatch.setattr(
+        rascmdr_module.BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda plan_path: None),
+    )
+    monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
+
+    return ras_obj, calls
+
+
+def test_compute_plan_smart_skip_fires_when_results_are_current(monkeypatch, tmp_path):
+    """Baseline: current results skip execution when no override is requested."""
+    ras_obj, calls = _make_skip_scenario(monkeypatch, tmp_path)
+
+    result = RasCmdr.compute_plan("01", ras_object=ras_obj, dialog_watchdog=False)
+
+    assert result.success is True
+    assert calls["ran"] is False
+
+
+def test_compute_plan_force_geompre_bypasses_smart_skip(monkeypatch, tmp_path):
+    """force_geompre must execute even when results look current.
+
+    are_plan_results_current() only compares .p##/.g##/.u## mtimes against the results
+    HDF, so it cannot see a sidecar-only change. If the skip wins, the native
+    reprocessing request is dropped silently and compute_plan still reports
+    success -- the caller has no signal that reprocessing never happened.
+    """
+    ras_obj, calls = _make_skip_scenario(monkeypatch, tmp_path)
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_geompre=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is True
+    assert calls["ran"] is True, "force_geompre was skipped: HEC-RAS never launched"
+    assert calls["cleared_geompre"] is True, ".c## preprocessor files were not cleared"
+
+
+def test_compute_plan_clear_geompre_is_skipped_when_results_are_current(
+    monkeypatch, tmp_path
+):
+    """Documents a sharp edge: clear_geompre does NOT override the smart skip.
+
+    The skip is evaluated before the clearing branch, so when results look current
+    nothing is cleared and HEC-RAS never runs. That matters for land cover sweeps: a
+    perturbed sidecar leaves the .g## mtime untouched, so the results still look
+    current and the perturbation silently never reaches the solver. Use force_geompre
+    (or force_rerun) for those ensembles.
+    """
+    ras_obj, calls = _make_skip_scenario(monkeypatch, tmp_path)
+
+    result = RasCmdr.compute_plan(
+        "01",
+        clear_geompre=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is True
+    assert calls["ran"] is False
+    assert calls["cleared_geompre"] is False, (
+        "clear_geompre ran despite the skip -- if this now bypasses the skip, update "
+        "the land cover rule and this test's premise together"
+    )
+
+
+def test_compute_plan_force_geompre_preserves_hdf_then_requests_native_rebuild(
+    monkeypatch, tmp_path
+):
+    """force_geompre clears .c## files and requests native geometry processing.
+
+    It must not delete or selectively mutate the .g##.hdf: those actions can
+    destroy solver-owned data or the land-cover / terrain association.
+    """
+    from ras_commander.RasCurrency import RasCurrency
+
+    ras_obj, calls = _make_skip_scenario(monkeypatch, tmp_path)
+
+    deleted_whole_hdf = {"called": False}
+    monkeypatch.setattr(
+        RasCurrency,
+        "clear_geom_hdf",
+        staticmethod(
+            lambda plan_number, ras_object: deleted_whole_hdf.__setitem__("called", True)
+        ),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_geompre=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is True
+    assert calls["cleared_geompre"] is True
+    assert calls["rebuilt"] is True, "RasProcess.exe rebuild was not invoked"
+    assert deleted_whole_hdf["called"] is False, (
+        "force_geompre deleted the whole geometry HDF, destroying the land cover association"
+    )
+
+
+def test_compute_plan_force_geompre_survives_missing_rasprocess(monkeypatch, tmp_path):
+    """The RasProcess.exe rebuild is best effort and must not fail the compute.
+
+    This keeps force_geompre usable on HEC-RAS versions where the
+    CompleteGeometry verb is unavailable while still forcing the plan run.
+    """
+    ras_obj, calls = _make_skip_scenario(
+        monkeypatch,
+        tmp_path,
+        rebuild_error=FileNotFoundError("RasProcess.exe not found"),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_geompre=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is True, "a missing RasProcess.exe must not fail the compute"
+    assert calls["rebuilt"] is True
+    assert calls["cleared_geompre"] is True
+    assert calls["ran"] is True, "HEC-RAS must still run after native preprocessing fails"
 
 
 def test_windows_path_to_wsl_decodes_utf8(monkeypatch):
@@ -731,3 +994,132 @@ def test_wsl_linux_retry_script_uses_utf8_and_cleans_io_tmp(monkeypatch, tmp_pat
     )
     assert run_calls[0][0] == ["wsl", "bash", "-lc", expected_cleanup]
     assert run_calls[0][1]["encoding"] == "utf-8"
+
+
+def test_compute_plan_linux_wsl_uses_canonical_layout_without_c_file(
+    monkeypatch,
+    tmp_path,
+):
+    """The /mnt WSL branch must reach its adapter without an unbound layout."""
+    project_name = "Demo"
+    plan_path = tmp_path / f"{project_name}.p01"
+    plan_path.write_text("Geom File=g01\n", encoding="utf-8")
+    (tmp_path / f"{project_name}.p01.tmp.hdf").write_bytes(b"tmp")
+    (tmp_path / f"{project_name}.b01").write_bytes(b"boundary")
+    (tmp_path / f"{project_name}.x01").write_bytes(b"geometry")
+
+    ras_obj = SimpleNamespace(
+        project_folder=tmp_path,
+        project_name=project_name,
+        check_initialized=lambda: None,
+    )
+    captured = {}
+
+    def fake_wsl_compute(**kwargs):
+        captured.update(kwargs)
+        return ComputeResult(success=True)
+
+    monkeypatch.setattr(rascmdr_module, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda plan_number, ras_object: plan_path),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="",
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_compute_plan_linux_via_wsl",
+        staticmethod(fake_wsl_compute),
+    )
+
+    result = RasCmdr.compute_plan_linux(
+        "01",
+        ras_exe_dir="/mnt/c/HEC-RAS/7.0.1/Linux/Linux",
+        ras_object=ras_obj,
+        retry=False,
+    )
+
+    assert result.success is True
+    assert captured["geom_num"] == "01"
+    assert captured["tmp_hdf"] == tmp_path / f"{project_name}.p01.tmp.hdf"
+    assert not (tmp_path / f"{project_name}.c01").exists()
+
+
+def test_wsl_linux_exit_zero_does_not_promote_incomplete_hdf(
+    monkeypatch,
+    tmp_path,
+):
+    """Exit code zero is insufficient when the temporary HDF lacks results."""
+
+    class FakePopen:
+        returncode = 0
+
+        def __init__(self, args, **kwargs):
+            pass
+
+        def communicate(self, timeout=None):
+            return "", ""
+
+        def kill(self):
+            pass
+
+    tmp_hdf = tmp_path / "Demo.p01.tmp.hdf"
+    with h5py.File(tmp_hdf, "w") as hdf_file:
+        hdf_file.create_group("Geometry")
+    (tmp_path / "compute_linux_01.log").write_text(
+        "Finished Unsteady Flow Simulation\n",
+        encoding="utf-8",
+    )
+    plan_hdf = tmp_path / "Demo.p01.hdf"
+
+    monkeypatch.setattr(
+        RasCmdr,
+        "_windows_path_to_wsl",
+        staticmethod(lambda path: f"/mnt/test/{Path(path).name}"),
+    )
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="",
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_get_hdf_path",
+        staticmethod(
+            lambda *args, **kwargs: pytest.fail(
+                "Incomplete WSL result must not be promoted"
+            )
+        ),
+    )
+
+    result = RasCmdr._compute_plan_linux_via_wsl(
+        ras_exe="/mnt/c/HEC-RAS/RasUnsteady",
+        ras_exe_dir="/mnt/c/HEC-RAS",
+        plan_number="01",
+        geom_num="01",
+        project_dir=tmp_path,
+        project_name="Demo",
+        tmp_hdf=tmp_hdf,
+        timeout_sec=30,
+        dos2unix=False,
+        retry=False,
+        retry_delay_sec=0,
+        ras_obj=SimpleNamespace(),
+    )
+
+    assert result.success is False
+    assert tmp_hdf.exists()
+    assert not plan_hdf.exists()

@@ -5,7 +5,6 @@ Tests for RasMap land-classification parsing and API scaffolding.
 import inspect
 import os
 import runpy
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -16,12 +15,15 @@ import pandas as pd
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+NATIVE_TEST_HECRAS_VERSION = os.environ.get(
+    "RAS_COMMANDER_TEST_HECRAS_VERSION",
+    "6.6",
+)
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from ras_commander import RasMap
-from ras_commander.hdf import HdfInfiltration, HdfLandCover
-import ras_commander._land_classification_helper as _lch
+from ras_commander import RasMap  # noqa: E402
+import ras_commander._land_classification_helper as _lch  # noqa: E402
 
 
 def _read_projection_wkt() -> str:
@@ -34,7 +36,9 @@ def _read_projection_wkt() -> str:
     )
     if projection_path.exists():
         return projection_path.read_text(encoding="utf-8")
-    return "EPSG:2271"
+    from pyproj import CRS
+
+    return CRS.from_epsg(2271).to_wkt(version="WKT1_ESRI")
 
 
 def _make_temp_project(tmp_path: Path, project_name: str = "TestModel") -> Path:
@@ -44,7 +48,9 @@ def _make_temp_project(tmp_path: Path, project_name: str = "TestModel") -> Path:
         "Proj Title=Temp Project\nCurrent Plan=\n",
         encoding="utf-8",
     )
-    (project_dir / "Projection.prj").write_text(_read_projection_wkt(), encoding="utf-8")
+    (project_dir / "Projection.prj").write_text(
+        _read_projection_wkt(), encoding="utf-8"
+    )
     (project_dir / f"{project_name}.rasmap").write_text(
         (
             "<RASMapper>\n"
@@ -122,21 +128,66 @@ class TestPublicAPISurface:
         assert hasattr(RasMap, method_name)
         signature = inspect.signature(getattr(RasMap, method_name))
         assert "self" not in signature.parameters
+        if method_name in {
+            "add_land_classification_polygon",
+            "update_land_classification_polygon",
+            "delete_land_classification_polygon",
+        }:
+            assert list(signature.parameters)[-2:] == [
+                "hecras_version",
+                "ras_object",
+            ]
+            assert signature.parameters["hecras_version"].default is None
         assert list(signature.parameters)[-1] == "ras_object"
 
 
+class TestNativeVersionResolution:
+    @pytest.mark.parametrize(
+        ("explicit", "object_version", "expected"),
+        [
+            ("7.0", "6.6", "7.0"),
+            (None, "6.6", "6.6"),
+        ],
+    )
+    def test_explicit_then_supplied_object_precedence(
+        self,
+        explicit,
+        object_version,
+        expected,
+    ):
+        from ras_commander.RasMap import _resolve_native_hecras_version
+
+        project = type("Project", (), {"ras_version": object_version})()
+        assert _resolve_native_hecras_version(explicit, project) == expected
+
+    def test_initialized_global_is_third_precedence(self, monkeypatch):
+        import importlib
+
+        module = importlib.import_module("ras_commander.RasMap")
+        monkeypatch.setattr(
+            module.ras,
+            "ras_version",
+            "6.3.1",
+            raising=False,
+        )
+        assert module._resolve_native_hecras_version(None, None) == "6.3.1"
+
+    def test_missing_version_fails_instead_of_defaulting(self, monkeypatch):
+        import importlib
+
+        module = importlib.import_module("ras_commander.RasMap")
+        monkeypatch.setattr(
+            module.ras,
+            "ras_version",
+            None,
+            raising=False,
+        )
+        with pytest.raises(ValueError, match="hecras_version is required"):
+            module._resolve_native_hecras_version(None, None)
+
+
 class TestPackagedResources:
-    """Packaged land-classification templates and extras should stay valid."""
-
-    def test_packaged_land_classification_templates_open_with_h5py(self):
-        template_paths = [
-            _lch._RESOURCE_DIR / "landcover_template.hdf",
-            _lch._RESOURCE_DIR / "soils_template.hdf",
-        ]
-
-        for template_path in template_paths:
-            with h5py.File(template_path, "r") as hdf_file:
-                assert len(hdf_file.keys()) > 0
+    """Native dependencies should remain available in optional installs."""
 
     def test_all_extra_includes_pythonnet(self, monkeypatch):
         captured = {}
@@ -260,8 +311,12 @@ class TestRasmapPathResolution:
         project_dir = tmp_path / "project"
         project_dir.mkdir()
 
-        dot_slash = _lch.resolve_rasmap_relative_path(project_dir, "./Terrain/Projection.prj")
-        dot_backslash = _lch.resolve_rasmap_relative_path(project_dir, ".\\Terrain\\Projection.prj")
+        dot_slash = _lch.resolve_rasmap_relative_path(
+            project_dir, "./Terrain/Projection.prj"
+        )
+        dot_backslash = _lch.resolve_rasmap_relative_path(
+            project_dir, ".\\Terrain\\Projection.prj"
+        )
 
         assert dot_slash == project_dir / "Terrain" / "Projection.prj"
         assert dot_backslash == project_dir / "Terrain" / "Projection.prj"
@@ -280,7 +335,9 @@ class TestRasmapPathResolution:
 
         assert resolved == target_path
 
-    def test_expands_windows_style_environment_variable_paths(self, tmp_path, monkeypatch):
+    def test_expands_windows_style_environment_variable_paths(
+        self, tmp_path, monkeypatch
+    ):
         local_app_data = tmp_path / "LocalAppData"
         monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
 
@@ -307,6 +364,7 @@ class TestLayerCreation:
         rasterio = pytest.importorskip("rasterio")
         pytest.importorskip("pyproj")
         from rasterio.transform import from_origin
+        from shapely.geometry import box
 
         project_dir = _make_temp_project(tmp_path, "LandcoverProject")
         source_raster = tmp_path / "landcover_source.tif"
@@ -348,30 +406,62 @@ class TestLayerCreation:
             source_raster,
             classification_table,
             cell_size=10.0,
+            restrict_to_extent=box(10, 10, 20, 20),
+            buffer_distance=10.0,
+            hecras_version=NATIVE_TEST_HECRAS_VERSION,
         )
 
         assert output_hdf.exists()
         assert output_hdf.with_suffix(".tif").exists()
+        with rasterio.open(output_hdf.with_suffix(".tif")) as raster:
+            assert tuple(raster.bounds) == (0.0, 0.0, 30.0, 30.0)
+            assert raster.nodata is None
+            assert 0 not in np.unique(raster.read(1))
 
         with h5py.File(output_hdf, "r") as hdf_file:
             raster_map = hdf_file["Raster Map"][()]
             variables = hdf_file["Variables"][()]
+            assert hdf_file["Raster Map"].chunks == (100,)
+            assert hdf_file["Raster Map"].maxshape == (None,)
+            assert hdf_file["Variables"].chunks == (100,)
+            assert hdf_file["Variables"].maxshape == (None,)
             assert {int(row["ID"]) for row in raster_map} == {0, 11, 21}
-            assert {
-                row["Name"].decode("utf-8").strip()
-                for row in variables
-            } == {"NoData", "Open Water", "Developed"}
+            assert {row["Name"].decode("utf-8").strip() for row in variables} == {
+                "NoData",
+                "Open Water",
+                "Developed",
+            }
 
         layers = RasMap.list_land_classification_layers(project_dir)
         assert set(layers["classification_kind"]) == {"landcover"}
         assert layers.iloc[0]["resolved_path"] == str(output_hdf)
+        assert layers.iloc[0]["name"] == "LandCover"
 
         parsed = RasMap.parse_rasmap(project_dir / "LandcoverProject.rasmap")
         assert parsed.at[0, "landcover_hdf_path"] == [str(output_hdf)]
 
+        legacy_output = RasMap.add_landcover_layer(
+            project_dir,
+            source_raster,
+            classification_table,
+            cell_size=10.0,
+            output_hdf_path=tmp_path / "legacy_landcover.hdf",
+            restrict_to_extent=(10, 10, 30, 30),
+            layer_name="Legacy Bounds",
+            hecras_version=NATIVE_TEST_HECRAS_VERSION,
+        )
+        with rasterio.open(legacy_output.with_suffix(".tif")) as raster:
+            assert tuple(raster.bounds) == (10.0, 10.0, 30.0, 30.0)
+        legacy_layers = RasMap.list_land_classification_layers(project_dir)
+        legacy_record = legacy_layers.loc[
+            legacy_layers["resolved_path"] == str(legacy_output)
+        ].iloc[0]
+        assert legacy_record["name"] == "legacy_landcover"
+
     def test_add_soils_layer_creates_outputs_and_registers_rasmap(self, tmp_path):
         pytest.importorskip("geopandas")
         pytest.importorskip("pyproj")
+        rasterio = pytest.importorskip("rasterio")
         from shapely.geometry import box
         import geopandas as gpd
 
@@ -402,22 +492,39 @@ class TestLayerCreation:
             project_dir,
             gssurgo_dir,
             cell_size=10.0,
+            restrict_to_extent=box(10, 0, 20, 10),
+            buffer_distance=10.0,
+            hecras_version=NATIVE_TEST_HECRAS_VERSION,
         )
 
         assert output_hdf.exists()
         assert output_hdf.with_suffix(".tif").exists()
+        with rasterio.open(output_hdf.with_suffix(".tif")) as raster:
+            assert tuple(raster.bounds) == (0.0, -10.0, 30.0, 20.0)
 
         with h5py.File(output_hdf, "r") as hdf_file:
             raster_map = hdf_file["Raster Map"][()]
-            assert {
-                row["Name"].decode("utf-8").strip()
-                for row in raster_map
-            } == {"NoData", "A", "B"}
+            assert {row["Name"].decode("utf-8").strip() for row in raster_map} == {
+                "NoData",
+                "A",
+                "B",
+            }
 
         layers = RasMap.list_land_classification_layers(project_dir)
         assert set(layers["classification_kind"]) == {"soils"}
         parsed = RasMap.parse_rasmap(project_dir / "SoilsProject.rasmap")
         assert parsed.at[0, "soil_layer_path"] == [str(output_hdf)]
+
+        legacy_output = RasMap.add_soils_layer(
+            project_dir,
+            gssurgo_dir,
+            cell_size=10.0,
+            output_hdf_path=tmp_path / "legacy_soils.hdf",
+            restrict_to_extent=[0, 0, 40, 20],
+            hecras_version=NATIVE_TEST_HECRAS_VERSION,
+        )
+        with rasterio.open(legacy_output.with_suffix(".tif")) as raster:
+            assert tuple(raster.bounds) == (0.0, 0.0, 40.0, 20.0)
 
     @pytest.mark.parametrize(
         ("infiltration_method", "expected_fields"),
@@ -471,7 +578,9 @@ class TestLayerCreation:
             / "Hydrologic Soil Groups.hdf"
         )
         if not landcover_hdf_path.exists() or not soil_layer_path.exists():
-            pytest.skip("BaldEagleCrkMulti2D land-classification sidecars are not available")
+            pytest.skip(
+                "BaldEagleCrkMulti2D land-classification sidecars are not available"
+            )
 
         output_hdf = RasMap.add_infiltration_layer(
             project_dir,
@@ -479,6 +588,7 @@ class TestLayerCreation:
             landcover_hdf_path=landcover_hdf_path,
             soil_layer_path=soil_layer_path,
             scs_reset_time_hours=24.0,
+            hecras_version=NATIVE_TEST_HECRAS_VERSION,
         )
 
         assert output_hdf.exists()
@@ -494,206 +604,108 @@ class TestLayerCreation:
 
 
 class TestClassificationPolygonAuthoring:
-    """Classification polygon edits should update sidecar HDF structures."""
+    """Public polygon methods must delegate to the native RASMapper editor."""
 
-    def test_add_polygon_to_copied_landcover_sidecar_updates_hdf_readers(self, tmp_path):
-        rasterio = pytest.importorskip("rasterio")
-        pytest.importorskip("pyproj")
-        shapely_box = pytest.importorskip("shapely.geometry").box
-        from rasterio.transform import from_origin
-
-        project_dir = _make_temp_project(tmp_path, "LandcoverPolygonProject")
-        source_raster = tmp_path / "landcover_source.tif"
-        array = np.array([[1, 2], [2, 1]], dtype="int32")
-        with rasterio.open(
-            source_raster,
-            "w",
-            driver="GTiff",
-            height=array.shape[0],
-            width=array.shape[1],
-            count=1,
-            dtype=array.dtype,
-            crs=_read_projection_wkt(),
-            transform=from_origin(0, 20, 10, 10),
-            nodata=0,
-        ) as dst:
-            dst.write(array, 1)
-
-        output_hdf = RasMap.add_landcover_layer(
-            project_dir,
-            source_raster,
-            pd.DataFrame(
-                {
-                    "source_value": [1, 2],
-                    "class_id": [11, 21],
-                    "class_name": ["Open Water", "Developed"],
-                    "mannings_n": [0.03, 0.12],
-                    "percent_impervious": [0.0, 85.0],
-                }
+    @pytest.mark.parametrize(
+        "method_name,kwargs",
+        [
+            (
+                "add_land_classification_polygon",
+                {"polygon": object(), "class_name": "Test"},
             ),
-            cell_size=10.0,
-        )
-        copied_hdf = tmp_path / "CopiedLandCover.hdf"
-        shutil.copy2(output_hdf, copied_hdf)
+            (
+                "update_land_classification_polygon",
+                {"polygon_index": 0},
+            ),
+            (
+                "delete_land_classification_polygon",
+                {"polygon_index": 0},
+            ),
+        ],
+    )
+    def test_mutation_apis_delegate_to_native_editor(
+        self,
+        tmp_path,
+        monkeypatch,
+        method_name,
+        kwargs,
+    ):
+        import ras_commander._land_classification_polygon_native as native
 
-        polygons = RasMap.add_land_classification_polygon(
-            copied_hdf,
-            shapely_box(0, 0, 10, 10),
-            class_name="Parking Lot",
-            class_id=99,
-            variable_values={
-                "mannings_n": 0.105,
-                "percent_impervious": 95.0,
-            },
-        )
+        expected = object()
+        captured = {}
 
-        assert list(polygons["class_name"]) == ["Parking Lot"]
-        assert polygons.attrs["recompute_required"] is True
-        assert Path(polygons.attrs["backup_path"]).exists()
+        def fake_editor(**call_kwargs):
+            captured.update(call_kwargs)
+            return expected
 
-        with h5py.File(copied_hdf, "r") as hdf_file:
-            attrs = hdf_file["Classification Polygons/Attributes"][()]
-            assert attrs["Classification"][0].decode("utf-8") == "Parking Lot"
-            raster_map = hdf_file["Raster Map"][()]
-            variables = hdf_file["Variables"][()]
+        monkeypatch.setattr(native, method_name, fake_editor)
+        method = getattr(RasMap, method_name)
 
-        assert {
-            (int(row["ID"]), row["Name"].decode("utf-8").strip())
-            for row in raster_map
-        } >= {(99, "Parking Lot")}
-
-        variable_lookup = {
-            row["Name"].decode("utf-8").strip(): row
-            for row in variables
-        }
-        assert np.isclose(variable_lookup["Parking Lot"]["ManningsN"], 0.105)
-        assert np.isclose(
-            variable_lookup["Parking Lot"]["Percent Impervious"],
-            95.0,
+        result = method(
+            tmp_path / "LandCover.hdf",
+            **kwargs,
+            hecras_version="6.6",
         )
 
-        extracted = HdfLandCover.get_classification_polygons(copied_hdf)
-        assert list(extracted["class_name"]) == ["Parking Lot"]
+        assert result is expected
+        assert captured["hecras_version"] == "6.6"
 
-        raster_map_df = HdfLandCover.get_landcover_raster_map(copied_hdf)
-        parking_row = raster_map_df.loc[
-            raster_map_df["class_name"] == "Parking Lot"
-        ].iloc[0]
-        assert parking_row["pixel_value"] == 99
-        assert np.isclose(parking_row["mannings_n"], 0.105)
 
-    def test_update_and_delete_landcover_classification_polygon(self, tmp_path):
-        shapely_box = pytest.importorskip("shapely.geometry").box
-        sidecar = tmp_path / "LandCover.hdf"
-        _lch._rewrite_landcover_sidecar(
-            sidecar,
-            [(0, "NoData"), (11, "Open Water")],
-            [("NoData", 0.035, 0.0), ("Open Water", 0.03, 0.0)],
-            _read_projection_wkt(),
+def test_classification_polygon_reader_uses_feature_relative_part_offsets(
+    tmp_path: Path,
+):
+    sidecar = tmp_path / "LandCover.hdf"
+    attributes_dtype = np.dtype([("Classification", "S16")])
+    first_points = np.asarray(
+        [(20, 20), (24, 20), (24, 24), (20, 24), (20, 20)],
+        dtype=np.float64,
+    )
+    second_points = np.asarray(
+        [
+            (0, 0),
+            (0, 10),
+            (10, 10),
+            (10, 0),
+            (0, 0),
+            (2, 2),
+            (4, 2),
+            (4, 4),
+            (2, 4),
+            (2, 2),
+        ],
+        dtype=np.float64,
+    )
+    with h5py.File(sidecar, "w") as hdf:
+        group = hdf.create_group("Classification Polygons")
+        group.create_dataset(
+            "Attributes",
+            data=np.asarray(
+                [(b"First",), (b"With Hole",)],
+                dtype=attributes_dtype,
+            ),
+        )
+        group.create_dataset(
+            "Polygon Info",
+            data=np.asarray(
+                [(0, 5, 0, 1), (5, 10, 1, 2)],
+                dtype=np.int32,
+            ),
+        )
+        # RAS stores each part's point offset relative to its feature.
+        group.create_dataset(
+            "Polygon Parts",
+            data=np.asarray([(0, 5), (0, 5), (5, 5)], dtype=np.int32),
+        )
+        group.create_dataset(
+            "Polygon Points",
+            data=np.vstack([first_points, second_points]),
         )
 
-        RasMap.add_land_classification_polygon(
-            sidecar,
-            shapely_box(0, 0, 10, 10),
-            class_name="Temporary Class",
-            class_id=42,
-            variable_values={"mannings_n": 0.08},
-        )
+    records = _lch.read_land_classification_polygon_records(sidecar)
 
-        updated = RasMap.update_land_classification_polygon(
-            sidecar,
-            polygon_index=0,
-            polygon=shapely_box(10, 10, 20, 20),
-            class_name="Updated Class",
-            class_id=43,
-            variable_values={"mannings_n": 0.09},
-        )
-
-        assert list(updated["class_name"]) == ["Updated Class"]
-        raster_map_df = HdfLandCover.get_landcover_raster_map(sidecar)
-        assert "Updated Class" in set(raster_map_df["class_name"])
-
-        deleted = RasMap.delete_land_classification_polygon(
-            sidecar,
-            polygon_index=0,
-            remove_unused_class=True,
-        )
-
-        assert deleted.empty
-        with h5py.File(sidecar, "r") as hdf_file:
-            assert "Classification Polygons" not in hdf_file
-            names = {
-                row["Name"].decode("utf-8").strip()
-                for row in hdf_file["Variables"][()]
-            }
-        assert "Updated Class" not in names
-
-    def test_add_polygon_to_infiltration_sidecar_updates_variables(self, tmp_path):
-        shapely_box = pytest.importorskip("shapely.geometry").box
-        sidecar = tmp_path / "Infiltration.hdf"
-        dtype = np.dtype(
-            [
-                ("Name", "S16"),
-                ("Curve Number", "<f4"),
-                ("Abstraction Ratio", "<f4"),
-                ("Minimum Infiltration Rate", "<f4"),
-            ]
-        )
-        data = np.zeros(1, dtype=dtype)
-        data[0]["Name"] = b"NoData"
-        data[0]["Curve Number"] = 75.0
-        data[0]["Abstraction Ratio"] = 0.1
-        data[0]["Minimum Infiltration Rate"] = 0.12
-        with h5py.File(sidecar, "w") as hdf_file:
-            hdf_file.attrs["LC Type"] = np.bytes_("InfiltrationSCSCurveNumber")
-            hdf_file.attrs["Projection"] = np.bytes_(_read_projection_wkt())
-            hdf_file.create_dataset("Variables", data=data)
-
-        RasMap.add_land_classification_polygon(
-            sidecar,
-            shapely_box(0, 0, 10, 10),
-            class_name="Paved Override",
-            variable_values={
-                "curve_number": 98.0,
-                "abstraction_ratio": 0.05,
-                "minimum_infiltration_rate": 0.01,
-            },
-        )
-
-        layer_data = HdfInfiltration.get_infiltration_layer_data(sidecar)
-        row = layer_data.loc[layer_data["Name"] == "Paved Override"].iloc[0]
-        assert np.isclose(row["Curve Number"], 98.0)
-        assert np.isclose(row["Abstraction Ratio"], 0.05)
-        assert np.isclose(row["Minimum Infiltration Rate"], 0.01)
-        extracted = HdfInfiltration.get_classification_polygons(sidecar)
-        assert list(extracted["class_name"]) == ["Paved Override"]
-
-    def test_add_polygon_to_soils_sidecar_updates_raster_map(self, tmp_path):
-        shapely_box = pytest.importorskip("shapely.geometry").box
-        sidecar = tmp_path / "Hydrologic Soil Groups.hdf"
-        dtype = np.dtype([("ID", "<i4"), ("Name", "S6")])
-        data = np.zeros(2, dtype=dtype)
-        data[0]["ID"] = 0
-        data[0]["Name"] = b"NoData"
-        data[1]["ID"] = 1
-        data[1]["Name"] = b"A"
-        with h5py.File(sidecar, "w") as hdf_file:
-            hdf_file.attrs["LC Type"] = np.bytes_("Soils")
-            hdf_file.attrs["Projection"] = np.bytes_(_read_projection_wkt())
-            hdf_file.create_dataset("Raster Map", data=data)
-
-        RasMap.add_land_classification_polygon(
-            sidecar,
-            shapely_box(0, 0, 10, 10),
-            class_name="D",
-            class_id=4,
-        )
-
-        with h5py.File(sidecar, "r") as hdf_file:
-            raster_map = hdf_file["Raster Map"][()]
-        assert {
-            (int(row["ID"]), row["Name"].decode("utf-8").strip())
-            for row in raster_map
-        } >= {(4, "D")}
-        polygons = RasMap.list_land_classification_polygons(sidecar)
-        assert list(polygons["class_name"]) == ["D"]
+    assert len(records) == 2
+    assert records[1]["class_name"] == "With Hole"
+    assert len(records[1]["geometry"].interiors) == 1
+    assert records[1]["geometry"].bounds == (0.0, 0.0, 10.0, 10.0)
+    assert records[1]["geometry"].area == pytest.approx(96.0)

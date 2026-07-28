@@ -2090,15 +2090,22 @@ class RasMonteCarlo:
         1. ``run_ensemble(..., clone_geom=True)`` — clone the geometry PER sample
            so each ``.g##`` is independent; otherwise all samples share one
            geometry and the apply_fn writes collide.
-        2. ``run_ensemble(..., clear_geompre=True)`` — the per-cell ``Cells Center
-           Manning's n`` is a geometry-preprocessing product cached in the
-           ``.g##.hdf``; ``clear_geompre`` (now including the in-HDF preprocessor
-           tables, association preserved) forces HEC-RAS to re-derive it from the
-           perturbed ``LCMann`` on each sample. ``force_geompre`` is NOT needed and
-           would collapse per-cell n to the uniform default.
+        2. Run a native HEC-RAS geometry/plan computation after changing the
+           text geometry. ``clear_geompre=True`` may be used to remove the
+           corresponding ``.c##`` cache, but ras-commander no longer deletes
+           selected datasets inside ``.g##.hdf``. ``force_geompre`` is not
+           needed for a cloned Manning-table change because the fresh ``.g##``
+           mtime already defeats the smart results skip.
 
         Without both, the ensemble runs but shows ZERO roughness sensitivity
         (identical per-cell n / WSE across all samples).
+
+        Note: ``clear_geompre`` is evaluated AFTER the smart skip, so it only runs
+        when the plan is not already current. That is safe here because condition 1
+        refreshes the ``.g##`` mtime every sample. An ensemble that perturbs only a
+        land-cover sidecar in place, without cloning the geometry, would leave the
+        ``.g##`` mtime untouched, be skipped, and silently reuse the cached n --
+        use ``force_geompre=True`` (which implies ``force_rerun``) for that shape.
         """
         if not isinstance(zone_column_map, dict) or not zone_column_map:
             raise ValueError(
@@ -2185,7 +2192,7 @@ class RasMonteCarlo:
                     zone_name: float(param_row[column_name])
                     for zone_name, column_name in normalized_map.items()
                 }
-                HdfLandCover.set_landcover_raster_map(
+                HdfLandCover.set_landcover_mannings_n(
                     landcover_hdf,
                     class_mapping,
                     ras_object=ras_object,

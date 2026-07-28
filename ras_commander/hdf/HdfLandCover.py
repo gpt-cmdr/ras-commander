@@ -26,14 +26,16 @@ Example:
     cal = HdfLandCover.get_mannings_calibration_table("project.g01.hdf")
 """
 
-import logging
-import shutil
+import warnings
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, Union
 
 import h5py
 import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:
+    import geopandas as gpd
 
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
@@ -47,6 +49,20 @@ def _path_name(path: Union[str, Path]) -> str:
     """Return a concise path label for default log messages."""
     path = Path(path)
     return path.name or str(path)
+
+
+def _materially_distinct(values: np.ndarray, tolerance: float) -> np.ndarray:
+    """Collapse floating-point noise while preserving hydraulic differences."""
+    finite = np.asarray(values, dtype=np.float64).reshape(-1)
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        return np.array([], dtype=np.float64)
+    ordered = np.sort(finite)
+    distinct = [float(ordered[0])]
+    for value in ordered[1:]:
+        if abs(float(value) - distinct[-1]) > tolerance:
+            distinct.append(float(value))
+    return np.asarray(distinct, dtype=np.float64)
 
 
 class HdfLandCover:
@@ -65,6 +81,164 @@ class HdfLandCover:
     """
 
     # ---- Phase 1: Cell-Level Readers (preprocessed values) ----
+
+    @staticmethod
+    @log_call
+    def audit_final_mannings_n(
+        hdf_path: Union[str, Path],
+        mesh_name: Optional[str] = None,
+        tolerance: float = 1.0e-4,
+        minimum_distinct_values: int = 2,
+        expected_values: Optional[List[float]] = None,
+        require_complete_geometry: bool = True,
+        raise_on_failure: bool = True,
+        ras_object: Any = None,
+    ) -> pd.DataFrame:
+        """Audit the final Manning values embedded by HEC-RAS.
+
+        This reads the solver-owned geometry copied into either a geometry HDF
+        or a plan-result HDF. HEC-RAS 5.x is validated from column four of
+        ``Faces Area Elevation Values``; 6.x and newer are also validated from
+        ``Cells Center Manning's n``. Values closer than ``tolerance`` are
+        treated as the same class, preventing floating-point noise around one
+        default value from masquerading as spatial diversity.
+
+        Args:
+            hdf_path: Explicit ``.g##.hdf`` or ``.p##.hdf`` path.
+            mesh_name: Optional 2D flow-area name.
+            tolerance: Minimum difference between materially distinct values.
+            minimum_distinct_values: Required number of face Manning values.
+            expected_values: Optional values that must appear within tolerance.
+            require_complete_geometry: Require HEC-RAS's ``Complete Geometry``
+                attribute to be true. Disable only for an explicit intermediate
+                geometry-HDF diagnostic.
+            raise_on_failure: Raise ``RuntimeError`` if any selected area fails.
+            ras_object: Reserved for API consistency.
+
+        Returns:
+            One-row-per-area DataFrame with associations, cell and face value
+            summaries, and a strict ``passed`` gate.
+        """
+        del ras_object
+        hdf_path = Path(hdf_path)
+        if not hdf_path.exists():
+            raise FileNotFoundError(hdf_path)
+        if tolerance <= 0 or not np.isfinite(tolerance):
+            raise ValueError("tolerance must be a positive finite number.")
+        if minimum_distinct_values < 1:
+            raise ValueError("minimum_distinct_values must be at least 1.")
+
+        expected = [float(value) for value in (expected_values or [])]
+        records = []
+        with h5py.File(hdf_path, "r") as hdf:
+            areas_path = "Geometry/2D Flow Areas"
+            if areas_path not in hdf:
+                raise RuntimeError(f"No 2D flow areas in {hdf_path.name}.")
+            geometry = hdf.get("Geometry")
+            attributes = geometry.attrs if geometry is not None else {}
+
+            def decode_attribute(name: str) -> Optional[str]:
+                value = attributes.get(name)
+                if value is None:
+                    return None
+                if isinstance(value, (bytes, np.bytes_)):
+                    return value.decode("utf-8", errors="replace").strip("\x00")
+                return str(value)
+
+            complete_geometry = (
+                str(decode_attribute("Complete Geometry") or "").lower() == "true"
+            )
+            for area_name, area in hdf[areas_path].items():
+                if not isinstance(area, h5py.Group):
+                    continue
+                if mesh_name is not None and area_name != mesh_name:
+                    continue
+                face_dataset = area.get("Faces Area Elevation Values")
+                if (
+                    face_dataset is None
+                    or face_dataset.ndim != 2
+                    or face_dataset.shape[1] < 4
+                ):
+                    face_values = np.array([], dtype=np.float64)
+                else:
+                    face_values = np.asarray(face_dataset[:, 3], dtype=np.float64)
+                face_distinct = _materially_distinct(face_values, tolerance)
+
+                cell_dataset = area.get("Cells Center Manning's n")
+                cell_values = (
+                    np.asarray(cell_dataset[()], dtype=np.float64)
+                    if cell_dataset is not None
+                    else np.array([], dtype=np.float64)
+                )
+                cell_distinct = _materially_distinct(cell_values, tolerance)
+
+                missing_expected = [
+                    value
+                    for value in expected
+                    if not np.any(np.abs(face_distinct - value) <= tolerance)
+                ]
+                failures = []
+                if face_distinct.size < minimum_distinct_values:
+                    failures.append(
+                        "face Manning values are not materially diverse "
+                        f"({face_distinct.size} distinct)"
+                    )
+                if missing_expected:
+                    failures.append(
+                        "missing expected values "
+                        + ", ".join(f"{value:g}" for value in missing_expected)
+                    )
+                if require_complete_geometry and not complete_geometry:
+                    failures.append("HEC-RAS does not mark geometry complete")
+                if not decode_attribute("Land Cover Filename"):
+                    failures.append("land-cover association is missing")
+
+                records.append(
+                    {
+                        "hdf_path": str(hdf_path),
+                        "mesh_name": area_name,
+                        "complete_geometry": complete_geometry,
+                        "landcover_filename": decode_attribute(
+                            "Land Cover Filename"
+                        ),
+                        "landcover_layer_name": decode_attribute(
+                            "Land Cover Layername"
+                        ),
+                        "cell_value_count": int(cell_values.size),
+                        "cell_distinct_count": int(cell_distinct.size),
+                        "cell_distinct_values": tuple(
+                            float(value) for value in cell_distinct
+                        ),
+                        "face_value_count": int(face_values.size),
+                        "face_distinct_count": int(face_distinct.size),
+                        "face_distinct_values": tuple(
+                            float(value) for value in face_distinct
+                        ),
+                        "missing_expected_values": tuple(missing_expected),
+                        "passed": not failures,
+                        "failure_reason": "; ".join(failures),
+                    }
+                )
+
+        if mesh_name is not None and not records:
+            raise ValueError(f"2D flow area {mesh_name!r} was not found.")
+        report = pd.DataFrame(records)
+        if raise_on_failure and (
+            report.empty or not bool(report["passed"].all())
+        ):
+            details = (
+                "; ".join(
+                    f"{row.mesh_name}: {row.failure_reason}"
+                    for row in report.itertuples()
+                    if not row.passed
+                )
+                if not report.empty
+                else "no 2D flow-area groups were found"
+            )
+            raise RuntimeError(
+                f"Final Manning audit failed for {hdf_path.name}: {details}"
+            )
+        return report
 
     @staticmethod
     @log_call
@@ -274,7 +448,7 @@ class HdfLandCover:
             >>> regions = HdfLandCover.get_mannings_region_polygons("01")
         """
         import geopandas as gpd
-        from shapely.geometry import Polygon, MultiPolygon
+        from shapely.geometry import Polygon
 
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -491,36 +665,53 @@ class HdfLandCover:
         return _lch.list_land_classification_polygons(landcover_hdf_path)
 
     @staticmethod
-    def _detect_sidecar_format(
-        hdf_path: Union[str, Path]
-    ) -> str:
+    @log_call
+    def set_landcover_mannings_n(
+        landcover_hdf_path: Union[str, Path],
+        class_mapping: Mapping[str, float],
+        hecras_version: Optional[str] = None,
+        ras_object: Any = None,
+    ) -> dict:
+        """Update Manning values through RASMapper's native table editor.
+
+        Direct h5py edits of ``Variables``/``ManningsN`` are intentionally not
+        supported: HEC-RAS owns the sidecar schema and may maintain additional
+        state when the classification table is saved.
+
+        HEC-RAS 5.x does not expose a native sidecar table writer.  For 5.x,
+        use :meth:`GeomLandCover.set_base_mannings_n` or rebuild the native
+        layer with :meth:`RasMap.add_landcover_layer`.
+
+        Args:
+            landcover_hdf_path: Native RASMapper land-cover sidecar.
+            class_mapping: Class-name to Manning-value mapping.
+            hecras_version: Explicit HEC-RAS version. Required when
+                ``ras_object`` does not provide ``ras_version``.
+            ras_object: Initialized project object used to infer ``ras_version``.
         """
-        Detect land cover sidecar HDF format version.
+        version = hecras_version
+        if version is None and ras_object is not None:
+            version = getattr(ras_object, "ras_version", None)
+        if not version:
+            raise ValueError(
+                "hecras_version is required for native land-cover table edits."
+            )
+        from .._landcover_native import set_landcover_parameters
 
-        Returns:
-            'v5' -- Has IDs, ManningsN, Names flat arrays
-            'v6_0' -- Has Raster Map with ManningsN column + Variables
-            'v6_modern' -- Has Raster Map + Variables, no ManningsN in Raster Map
-        """
-        hdf_path = Path(hdf_path)
-
-        with h5py.File(hdf_path, 'r') as hdf_file:
-            if all(key in hdf_file for key in ('IDs', 'ManningsN', 'Names')):
-                return 'v5'
-
-            raster_map_path = None
-            for candidate in ['Raster Map', '//Raster Map']:
-                if candidate in hdf_file:
-                    raster_map_path = candidate
-                    break
-
-            if raster_map_path is not None:
-                raster_map_fields = hdf_file[raster_map_path].dtype.names or ()
-                if 'ManningsN' in raster_map_fields:
-                    return 'v6_0'
-                return 'v6_modern'
-
-            raise ValueError(f"Unknown sidecar format: {list(hdf_file.keys())}")
+        result = set_landcover_parameters(
+            landcover_hdf_path,
+            class_mapping,
+            hecras_version=str(version),
+        )
+        logger.info(
+            "Updated land cover sidecar %s through RASMapper %s: "
+            "changed=%d, unchanged=%d",
+            Path(landcover_hdf_path).name,
+            version,
+            result["changed"],
+            result["unchanged"],
+        )
+        return result
 
     @staticmethod
     @log_call
@@ -528,262 +719,25 @@ class HdfLandCover:
         hdf_path: Union[str, Path],
         class_mapping: Dict[str, float],
         ras_object: Any = None,
+        *,
+        hecras_version: Optional[str] = None,
     ) -> dict:
-        """
-        Write Manning's N values to a land cover sidecar HDF file.
-
-        Creates a .bak backup before any modification. Validates that all
-        class names in class_mapping exist in the sidecar before writing.
-
-        Args:
-            hdf_path: Path to the land cover sidecar HDF file
-            class_mapping: Dict mapping class name -> Manning's N value
-                Example: {"Open Water": 0.020, "Forest": 0.120}
-            ras_object: Optional RasPrj object
-
-        Returns:
-            dict with keys:
-                'changed': int -- number of classes modified
-                'unchanged': int -- number of classes not in mapping
-                'format': str -- detected format version
-                'backup_path': Path -- path to .bak file
-                'class_details': list of dicts with per-class info
-
-        Raises:
-            FileNotFoundError: If hdf_path doesn't exist
-            ValueError: If any class name in mapping not found in sidecar
-            ValueError: If unknown sidecar format detected
-        """
-        hdf_path = Path(hdf_path)
-        if not hdf_path.exists():
-            raise FileNotFoundError(f"Land cover HDF not found: {hdf_path}")
-
-        normalized_mapping = {
-            str(class_name): float(mannings_n)
-            for class_name, mannings_n in class_mapping.items()
-        }
-
-        backup_path = Path(str(hdf_path) + '.bak')
-        shutil.copy2(hdf_path, backup_path)
-        logger.debug(f"Created backup for land cover sidecar: {backup_path}")
-
-        sidecar_format = HdfLandCover._detect_sidecar_format(hdf_path)
-        class_names: List[str] = []
-        current_values: List[float] = []
-        variables_path = None
-        raster_map_path = None
-        raster_map_names: List[str] = []
-
-        with h5py.File(hdf_path, 'r') as hdf_file:
-            if sidecar_format == 'v5':
-                class_names = [
-                    str(HdfUtils.convert_ras_string(name)).strip()
-                    for name in hdf_file['Names'][()]
-                ]
-                current_values = [
-                    float(value) for value in hdf_file['ManningsN'][()]
-                ]
-            else:
-                for candidate in ['Variables', '//Variables']:
-                    if candidate in hdf_file:
-                        variables_path = candidate
-                        break
-                if variables_path is None:
-                    raise ValueError(
-                        f"Detected {sidecar_format} sidecar without Variables "
-                        f"dataset: {hdf_path}"
-                    )
-
-                variables_data = hdf_file[variables_path][()]
-                variable_fields = variables_data.dtype.names or ()
-                if 'Name' not in variable_fields or 'ManningsN' not in variable_fields:
-                    raise ValueError(
-                        f"Variables dataset missing Name or ManningsN fields: "
-                        f"{variables_path}"
-                    )
-
-                class_names = [
-                    str(HdfUtils.convert_ras_string(row['Name'])).strip()
-                    for row in variables_data
-                ]
-                current_values = [
-                    float(row['ManningsN']) for row in variables_data
-                ]
-
-                if sidecar_format == 'v6_0':
-                    for candidate in ['Raster Map', '//Raster Map']:
-                        if candidate in hdf_file:
-                            raster_map_path = candidate
-                            break
-                    if raster_map_path is None:
-                        raise ValueError(
-                            f"Detected v6_0 sidecar without Raster Map dataset: "
-                            f"{hdf_path}"
-                        )
-
-                    raster_map_data = hdf_file[raster_map_path][()]
-                    raster_map_fields = raster_map_data.dtype.names or ()
-                    if 'Name' not in raster_map_fields or 'ManningsN' not in raster_map_fields:
-                        raise ValueError(
-                            f"Raster Map dataset missing Name or ManningsN "
-                            f"fields: {raster_map_path}"
-                        )
-
-                    raster_map_names = [
-                        str(HdfUtils.convert_ras_string(row['Name'])).strip()
-                        for row in raster_map_data
-                    ]
-
-        seen_names = set()
-        duplicate_names = set()
-        for class_name in class_names:
-            if class_name in seen_names:
-                duplicate_names.add(class_name)
-            seen_names.add(class_name)
-        if duplicate_names:
-            duplicates = ', '.join(sorted(duplicate_names))
-            raise ValueError(
-                f"Duplicate land cover class names found in sidecar: {duplicates}"
-            )
-
-        missing_classes = sorted(
-            set(normalized_mapping) - set(class_names)
+        """Deprecated compatibility alias for ``set_landcover_mannings_n``."""
+        warnings.warn(
+            "set_landcover_raster_map() edits Manning parameters, not a raster "
+            "map. Use set_landcover_mannings_n(); the alias is retained through "
+            "the v1.1.x compatibility window and will be removed no earlier "
+            "than v1.2.0.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-        if missing_classes:
-            missing_str = ', '.join(missing_classes)
-            raise ValueError(
-                f"Class names not found in sidecar: {missing_str}"
-            )
-
-        if sidecar_format == 'v6_0':
-            seen_raster_names = set()
-            duplicate_raster_names = set()
-            for class_name in raster_map_names:
-                if class_name in seen_raster_names:
-                    duplicate_raster_names.add(class_name)
-                seen_raster_names.add(class_name)
-            if duplicate_raster_names:
-                duplicates = ', '.join(sorted(duplicate_raster_names))
-                raise ValueError(
-                    f"Duplicate Raster Map class names found in sidecar: "
-                    f"{duplicates}"
-                )
-
-            missing_raster_map_classes = sorted(
-                set(normalized_mapping) - set(raster_map_names)
-            )
-            if missing_raster_map_classes:
-                missing_str = ', '.join(missing_raster_map_classes)
-                raise ValueError(
-                    f"Class names not found in Raster Map dataset: {missing_str}"
-                )
-
-        if not normalized_mapping:
-            logger.debug(f"No land cover classes supplied for update in {hdf_path}")
-
-        name_to_index = {
-            class_name: idx for idx, class_name in enumerate(class_names)
-        }
-        changed = len(normalized_mapping)
-
-        if normalized_mapping:
-            if sidecar_format == 'v5':
-                with h5py.File(hdf_path, 'r+') as hdf_file:
-                    mannings = hdf_file['ManningsN'][()]
-                    for class_name, new_n in normalized_mapping.items():
-                        idx = name_to_index[class_name]
-                        old_n = float(mannings[idx])
-                        mannings[idx] = new_n
-                        logger.debug(
-                            f"Updated '{class_name}' in {hdf_path.name} "
-                            f"(v5): {old_n} -> {new_n}"
-                        )
-                    hdf_file['ManningsN'][()] = mannings
-
-            elif sidecar_format == 'v6_0':
-                with h5py.File(hdf_path, 'r+') as hdf_file:
-                    if variables_path is None or raster_map_path is None:
-                        raise ValueError(
-                            "Variables or Raster Map dataset path not resolved "
-                            "for v6_0 write"
-                        )
-
-                    variables = hdf_file[variables_path]
-                    raster_map = hdf_file[raster_map_path]
-                    raster_map_index = {
-                        class_name: idx
-                        for idx, class_name in enumerate(raster_map_names)
-                    }
-
-                    for class_name, new_n in normalized_mapping.items():
-                        idx = name_to_index[class_name]
-                        row = variables[idx]
-                        old_n = float(row['ManningsN'])
-                        row['ManningsN'] = new_n
-                        variables[idx] = row
-
-                        raster_idx = raster_map_index[class_name]
-                        raster_row = raster_map[raster_idx]
-                        raster_row['ManningsN'] = new_n
-                        raster_map[raster_idx] = raster_row
-
-                        logger.debug(
-                            f"Updated '{class_name}' in {hdf_path.name} "
-                            f"(v6_0 Variables + Raster Map): {old_n} -> {new_n}"
-                        )
-
-            elif sidecar_format == 'v6_modern':
-                with h5py.File(hdf_path, 'r+') as hdf_file:
-                    if variables_path is None:
-                        raise ValueError(
-                            "Variables dataset path not resolved for v6_modern "
-                            "write"
-                        )
-
-                    variables = hdf_file[variables_path]
-                    for class_name, new_n in normalized_mapping.items():
-                        idx = name_to_index[class_name]
-                        row = variables[idx]
-                        old_n = float(row['ManningsN'])
-                        row['ManningsN'] = new_n
-                        variables[idx] = row
-                        logger.debug(
-                            f"Updated '{class_name}' in {hdf_path.name} "
-                            f"(v6_modern Variables): {old_n} -> {new_n}"
-                        )
-
-        class_details = []
-        for class_name, old_n in zip(class_names, current_values):
-            new_n = float(normalized_mapping.get(class_name, old_n))
-            class_details.append({
-                'class_name': class_name,
-                'old_mannings_n': old_n,
-                'new_mannings_n': new_n,
-                'changed': class_name in normalized_mapping,
-                'value_changed': (
-                    class_name in normalized_mapping and
-                    not np.isclose(old_n, new_n)
-                ),
-            })
-
-        actually_changed = sum(1 for d in class_details if d['value_changed'])
-        logger.info(
-            f"Updated land cover sidecar {hdf_path.name}: "
-            f"format={sidecar_format}, changed={actually_changed}, "
-            f"unchanged={len(class_names) - len(normalized_mapping)}"
-        )
-        logger.debug(
-            f"Completed land cover update for {hdf_path}: "
-            f"backup={backup_path}"
+        return HdfLandCover.set_landcover_mannings_n(
+            hdf_path,
+            class_mapping,
+            hecras_version=hecras_version,
+            ras_object=ras_object,
         )
 
-        return {
-            'changed': actually_changed,
-            'unchanged': len(class_names) - len(normalized_mapping),
-            'format': sidecar_format,
-            'backup_path': backup_path,
-            'class_details': class_details,
-        }
 
     # ---- Phase 3: Comparison and Statistics ----
 
@@ -963,12 +917,41 @@ class HdfLandCover:
         output_tif_path: Optional[Union[str, Path]] = None,
         ras_object: Any = None
     ) -> Optional[np.ndarray]:
+        """Deprecated alias for the non-authoritative raster estimate."""
+        warnings.warn(
+            "compute_final_mannings_raster() is a Python estimate, not the "
+            "HEC-RAS Final Manning's N layer. Use "
+            "estimate_final_mannings_raster() for visualization or "
+            "audit_final_mannings_n() for solver-authoritative validation. "
+            "The alias remains available through v1.1.x and will not be "
+            "removed before v1.2.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return HdfLandCover.estimate_final_mannings_raster(
+            hdf_path,
+            landcover_hdf_path=landcover_hdf_path,
+            output_tif_path=output_tif_path,
+            ras_object=ras_object,
+        )
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def estimate_final_mannings_raster(
+        hdf_path: Path,
+        landcover_hdf_path: Optional[Union[str, Path]] = None,
+        output_tif_path: Optional[Union[str, Path]] = None,
+        ras_object: Any = None
+    ) -> Optional[np.ndarray]:
         """
-        Compute final Manning's n raster accounting for base + calibration overrides.
+        Estimate Manning's n raster from base + calibration overrides.
 
         Combines the base land cover raster with the calibration table and
-        region polygons to produce the full-resolution Final Manning's N raster.
-        This replicates what RASMapper's FinalNValueLayer computes internally.
+        region polygons to produce a full-resolution visualization estimate.
+        This is not the authoritative RASMapper ``FinalNValueLayer`` and must
+        not be used as proof of solver input. Use ``audit_final_mannings_n`` on
+        a completed geometry or plan HDF for that gate.
 
         The land cover HDF is auto-resolved from the geometry's ``Land Cover Filename``
         attribute (set via RASMapper's Manage Associations menu), or can be overridden.
@@ -985,8 +968,8 @@ class HdfLandCover:
             None if inputs cannot be resolved.
 
         Example:
-            >>> arr = HdfLandCover.compute_final_mannings_raster("01")  # auto-resolves LC
-            >>> arr = HdfLandCover.compute_final_mannings_raster(
+            >>> arr = HdfLandCover.estimate_final_mannings_raster("01")
+            >>> arr = HdfLandCover.estimate_final_mannings_raster(
             ...     "project.g01.hdf",
             ...     landcover_hdf_path="custom_landcover.hdf",  # override
             ...     output_tif_path="final_mannings_n.tif"
