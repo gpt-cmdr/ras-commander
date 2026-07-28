@@ -8,7 +8,11 @@ derived from the geometry.
 All methods are static and designed to be used without instantiation.
 
 List of Functions:
+- run_geometry_preprocessor() - Execute the native geometry preprocessor
 - clear_geompre_files() - Clear geometry preprocessor files for plan files
+- invalidate_legacy_geometry_hdf_preprocessor_cache() - Backup-first,
+  explicitly acknowledged recovery for exact HEC-RAS 5.x/6.x schemas
+- clear_geompre_hdf() - Deprecated compatibility wrapper for guarded recovery
 
 Example Usage:
     >>> from ras_commander import GeomPreprocessor, RasPlan
@@ -26,8 +30,10 @@ Example Usage:
 """
 
 import re
+import shutil
 import subprocess
 import time
+import warnings
 from pathlib import Path
 from typing import Any, List, Optional, Union
 
@@ -846,11 +852,10 @@ class GeomPreprocessor:
                 blocking_lines.append(stripped[:300])
         return blocking_lines
 
-    # Geometry-preprocessor datasets written INTO the .g##.hdf during
-    # preprocessing. Deleting these (while preserving the base mesh topology and
-    # the land-cover association) forces HEC-RAS to re-derive per-cell Manning's
-    # n from the current land-cover source on the next compute.
-    _GEOMPRE_HDF_ABSOLUTE_PATHS = (
+    # Solver-owned datasets removed by the legacy selective-invalidation
+    # recovery. This list is intentionally closed: an unfamiliar schema must
+    # be handled by native HEC-RAS recomputation, not broader deletion.
+    _LEGACY_GEOMPRE_HDF_ABSOLUTE_PATHS = (
         "Geometry/GeomPreprocess",
         "Geometry/Cross Sections/Property Tables",
         "Geometry/Cross Sections/Flow Distribution",
@@ -860,8 +865,7 @@ class GeomPreprocessor:
         "Geometry/Land Cover (Manning's n)/Internal Cells",
         "Geometry/Land Cover (Manning's n)/Internal Faces",
     )
-    # Per-2D-flow-area preprocessor property tables (deleted under each area group).
-    _GEOMPRE_HDF_AREA_DATASETS = (
+    _LEGACY_GEOMPRE_HDF_AREA_DATASETS = (
         "Cells Center Manning's n",
         "Cells Minimum Elevation",
         "Cells Surface Area",
@@ -872,71 +876,284 @@ class GeomPreprocessor:
         "Faces Low Elevation Centroid",
         "Faces Minimum Elevation",
     )
+    _LEGACY_GEOMPRE_HDF_AREA_DATASET_PAIRS = (
+        ("Cells Volume Elevation Info", "Cells Volume Elevation Values"),
+        ("Faces Area Elevation Info", "Faces Area Elevation Values"),
+    )
+    _LEGACY_GEOMETRY_HDF_PATTERN = re.compile(
+        r"\.g\d+\.hdf$",
+        re.IGNORECASE,
+    )
+    _LEGACY_HECRAS_VERSION_PATTERN = re.compile(
+        r"^HEC-RAS\s+(?P<major>\d+)\.(?P<minor>\d+)(?:\.\d+)?\b",
+        re.IGNORECASE,
+    )
+
+    @staticmethod
+    def _decode_hdf_attribute(value: Any) -> str:
+        """Decode a scalar HDF attribute for strict role/version checks."""
+        if value is None:
+            return ""
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="replace").strip("\x00")
+        if hasattr(value, "decode"):
+            return value.decode("utf-8", errors="replace").strip("\x00")
+        return str(value).strip("\x00")
+
+    @staticmethod
+    def _legacy_recovery_backup_path(
+        geom_hdf_path: Path,
+        backup_path: Optional[Union[str, Path]],
+    ) -> Path:
+        """Resolve a non-overwriting backup path for legacy recovery."""
+        if backup_path is None:
+            backup_path = geom_hdf_path.with_name(
+                f"{geom_hdf_path.stem}.legacy-recovery.bak.hdf"
+            )
+        resolved = Path(backup_path)
+        if resolved.resolve(strict=False) == geom_hdf_path.resolve(strict=False):
+            raise ValueError("backup_path must differ from geom_hdf_path.")
+        if not resolved.parent.exists():
+            raise FileNotFoundError(
+                f"Backup directory does not exist: {resolved.parent}"
+            )
+        if resolved.exists():
+            raise FileExistsError(
+                f"Legacy recovery backup already exists: {resolved}. "
+                "Provide a new backup_path rather than overwriting it."
+            )
+        return resolved
+
+    @staticmethod
+    def _validate_legacy_geometry_hdf_recovery(
+        hdf: Any,
+        geom_hdf_path: Path,
+        expected_file_version: str,
+    ) -> List[str]:
+        """Validate the known HEC-RAS 5/6 geometry-HDF recovery schema."""
+        import h5py
+
+        if not GeomPreprocessor._LEGACY_GEOMETRY_HDF_PATTERN.search(
+            geom_hdf_path.name
+        ):
+            raise ValueError(
+                "Legacy recovery accepts only geometry HDF filenames matching "
+                "'*.g##.hdf'."
+            )
+
+        file_type = GeomPreprocessor._decode_hdf_attribute(
+            hdf.attrs.get("File Type")
+        )
+        file_version = GeomPreprocessor._decode_hdf_attribute(
+            hdf.attrs.get("File Version")
+        )
+        if file_type != "HEC-RAS Geometry":
+            raise ValueError(
+                "Legacy recovery requires root File Type='HEC-RAS Geometry'; "
+                f"observed {file_type!r}."
+            )
+        if file_version != expected_file_version:
+            raise ValueError(
+                "Legacy recovery file-version guard failed: expected "
+                f"{expected_file_version!r}, observed {file_version!r}."
+            )
+        version_match = GeomPreprocessor._LEGACY_HECRAS_VERSION_PATTERN.match(
+            file_version
+        )
+        if version_match is None or int(version_match.group("major")) not in {5, 6}:
+            raise ValueError(
+                "Selective geometry-HDF invalidation is restricted to legacy "
+                "HEC-RAS 5.x/6.x artifacts. Use native recomputation for "
+                f"{file_version!r}."
+            )
+        if "Geometry" not in hdf or not isinstance(hdf["Geometry"], h5py.Group):
+            raise ValueError("Geometry HDF is missing the /Geometry group.")
+
+        targets: List[str] = []
+        for path in GeomPreprocessor._LEGACY_GEOMPRE_HDF_ABSOLUTE_PATHS:
+            if path in hdf:
+                targets.append(path)
+
+        areas_path = "Geometry/2D Flow Areas"
+        if areas_path in hdf:
+            areas = hdf[areas_path]
+            if not isinstance(areas, h5py.Group):
+                raise ValueError(f"{areas_path!r} is not an HDF group.")
+            for area_name, area in areas.items():
+                if not isinstance(area, h5py.Group):
+                    continue
+                for left, right in (
+                    GeomPreprocessor._LEGACY_GEOMPRE_HDF_AREA_DATASET_PAIRS
+                ):
+                    if (left in area) != (right in area):
+                        raise ValueError(
+                            f"Mesh {area_name!r} has an incomplete legacy "
+                            f"property-table pair: {left!r}/{right!r}."
+                        )
+                for dataset_name in (
+                    GeomPreprocessor._LEGACY_GEOMPRE_HDF_AREA_DATASETS
+                ):
+                    if dataset_name not in area:
+                        continue
+                    if not isinstance(area[dataset_name], h5py.Dataset):
+                        raise ValueError(
+                            f"Expected dataset at {areas_path}/{area_name}/"
+                            f"{dataset_name}."
+                        )
+                    targets.append(
+                        f"{areas_path}/{area_name}/{dataset_name}"
+                    )
+        return targets
 
     @staticmethod
     @log_call
-    def clear_geompre_hdf(geom_hdf_path: Union[str, Path]) -> List[str]:
-        """
-        Delete geometry-preprocessor datasets from a ``.g##.hdf`` in place.
+    def invalidate_legacy_geometry_hdf_preprocessor_cache(
+        geom_hdf_path: Union[str, Path],
+        *,
+        expected_file_version: str,
+        acknowledge_legacy_recovery: bool = False,
+        backup_path: Optional[Union[str, Path]] = None,
+    ) -> List[str]:
+        """Selectively invalidate a known HEC-RAS 5/6 geometry-HDF cache.
 
-        Removes the cached preprocessor output (the ``Geometry/GeomPreprocess``
-        group, the 2D cell/face property tables including ``Cells Center
-        Manning's n``, the land-cover per-cell/face assignments, and the 1D
-        cross-section property tables) while PRESERVING the base mesh topology
-        and the land-cover association (``Calibration Table``, ``Polygon
-        Points``). On the next compute, HEC-RAS re-derives per-cell Manning's n
-        from the current land-cover source, so edits to the sidecar ``Variables``
-        or the plain-text ``LCMann Table`` actually propagate to the solver.
+        This is an opt-in recovery utility for legacy projects where native
+        property-table recomputation is unavailable or has already failed. It
+        is not the normal preprocessing path. Prefer
+        ``RasMap.recompute_property_tables()`` or a completed native plan
+        recompute.
 
-        This is the missing piece for 2D land-cover preprocessing: ``.c##``
-        files do not hold the 2D per-cell n (it lives in the ``.g##.hdf``).
-        ``force_geompre`` uses this same in-place clearing and preserves the
-        land-cover association. It additionally bypasses the smart results skip
-        and requests an immediate ``RasProcess.exe CompleteGeometry`` rebuild,
-        which is useful when only a sidecar changed and the ``.g##`` mtime did not.
+        The method accepts only ``*.g##.hdf`` files whose root attributes are
+        exactly ``File Type='HEC-RAS Geometry'`` and the caller-supplied
+        ``expected_file_version``. HEC-RAS 7.x and unfamiliar schemas fail
+        closed. A non-overwriting full-file backup is created before any
+        dataset is removed.
+
+        ``force_geompre`` does not call this recovery utility. It preserves the
+        geometry HDF, bypasses the smart results skip, clears ``.c##`` files,
+        and requests native complete-geometry processing instead.
 
         Args:
-            geom_hdf_path: Path to a geometry HDF (``<project>.g##.hdf``).
+            geom_hdf_path: Existing HEC-RAS geometry HDF.
+            expected_file_version: Exact root ``File Version`` attribute,
+                including the release month/year text.
+            acknowledge_legacy_recovery: Must be explicitly ``True``.
+            backup_path: Optional backup destination. By default, writes
+                ``<stem>.legacy-recovery.bak.hdf`` beside the source and
+                refuses to overwrite an existing backup.
 
         Returns:
-            List[str]: HDF paths that were deleted (empty if none/no file).
+            HDF paths removed from the source file. An already-invalidated,
+            otherwise valid file returns an empty list without creating a
+            backup.
         """
+        if not acknowledge_legacy_recovery:
+            raise RuntimeError(
+                "Legacy geometry-HDF invalidation requires "
+                "acknowledge_legacy_recovery=True. Prefer native "
+                "RasMap.recompute_property_tables() or plan recomputation."
+            )
+        if not expected_file_version:
+            raise ValueError("expected_file_version must be provided exactly.")
+
+        import h5py
+
         geom_hdf_path = Path(geom_hdf_path)
         if not geom_hdf_path.exists():
-            return []
-        try:
-            import h5py
-        except ImportError:
-            logger.warning(
-                "h5py not available; cannot clear in-HDF geometry preprocessing "
-                f"for {geom_hdf_path.name}"
+            raise FileNotFoundError(geom_hdf_path)
+        if not geom_hdf_path.is_file():
+            raise ValueError(f"Geometry HDF path is not a file: {geom_hdf_path}")
+
+        with h5py.File(geom_hdf_path, "r") as hdf:
+            targets = GeomPreprocessor._validate_legacy_geometry_hdf_recovery(
+                hdf,
+                geom_hdf_path,
+                expected_file_version,
             )
-            return []
-
-        deleted: List[str] = []
-        with h5py.File(geom_hdf_path, "a") as hdf:
-            for path in GeomPreprocessor._GEOMPRE_HDF_ABSOLUTE_PATHS:
-                if path in hdf:
-                    del hdf[path]
-                    deleted.append(path)
-            areas_group = "Geometry/2D Flow Areas"
-            if areas_group in hdf:
-                for area_name in list(hdf[areas_group].keys()):
-                    area_obj = hdf[areas_group][area_name]
-                    if not isinstance(area_obj, h5py.Group):
-                        continue
-                    for dataset in GeomPreprocessor._GEOMPRE_HDF_AREA_DATASETS:
-                        full = f"{areas_group}/{area_name}/{dataset}"
-                        if full in hdf:
-                            del hdf[full]
-                            deleted.append(full)
-
-        if deleted:
+        if not targets:
             logger.info(
-                f"Cleared {len(deleted)} geometry-preprocessor path(s) from "
-                f"{geom_hdf_path.name}"
+                "No recognized legacy preprocessor datasets remain in %s",
+                geom_hdf_path.name,
             )
-        return deleted
+            return []
+
+        resolved_backup = GeomPreprocessor._legacy_recovery_backup_path(
+            geom_hdf_path,
+            backup_path,
+        )
+        shutil.copy2(geom_hdf_path, resolved_backup)
+
+        try:
+            with h5py.File(geom_hdf_path, "r+") as hdf:
+                for path in targets:
+                    if path in hdf:
+                        del hdf[path]
+            with h5py.File(geom_hdf_path, "r") as hdf:
+                remaining = [path for path in targets if path in hdf]
+                GeomPreprocessor._validate_legacy_geometry_hdf_recovery(
+                    hdf,
+                    geom_hdf_path,
+                    expected_file_version,
+                )
+            if remaining:
+                raise RuntimeError(
+                    "Legacy invalidation readback found undeleted paths: "
+                    + ", ".join(remaining)
+                )
+        except Exception as exc:
+            raise RuntimeError(
+                "Legacy geometry-HDF invalidation failed. The original backup "
+                f"is available at {resolved_backup}: {exc}"
+            ) from exc
+
+        logger.warning(
+            "Legacy recovery removed %d solver-owned path(s) from %s; "
+            "backup=%s",
+            len(targets),
+            geom_hdf_path.name,
+            resolved_backup,
+        )
+        return targets
+
+    @staticmethod
+    @log_call
+    def clear_geompre_hdf(
+        geom_hdf_path: Union[str, Path],
+        *,
+        expected_file_version: Optional[str] = None,
+        acknowledge_legacy_recovery: bool = False,
+        backup_path: Optional[Union[str, Path]] = None,
+    ) -> List[str]:
+        """Deprecated compatibility wrapper for guarded legacy recovery.
+
+        Prefer native ``RasMap.recompute_property_tables()`` or plan
+        recomputation. To intentionally retain the historical selective
+        invalidation behavior, callers must provide the exact file version and
+        set ``acknowledge_legacy_recovery=True``.
+        """
+        warnings.warn(
+            "GeomPreprocessor.clear_geompre_hdf() is deprecated. Prefer "
+            "RasMap.recompute_property_tables() or a native plan recompute; "
+            "for legacy recovery use "
+            "invalidate_legacy_geometry_hdf_preprocessor_cache(). The "
+            "compatibility name is retained through v1.1.x and will be "
+            "removed no earlier than v1.2.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if not acknowledge_legacy_recovery:
+            raise RuntimeError(
+                "clear_geompre_hdf() no longer mutates silently. Pass "
+                "acknowledge_legacy_recovery=True and expected_file_version, "
+                "or use native HEC-RAS recomputation."
+            )
+        if not expected_file_version:
+            raise ValueError("expected_file_version must be provided exactly.")
+        return GeomPreprocessor.invalidate_legacy_geometry_hdf_preprocessor_cache(
+            geom_hdf_path,
+            expected_file_version=expected_file_version,
+            acknowledge_legacy_recovery=True,
+            backup_path=backup_path,
+        )
 
     @staticmethod
     @log_call
@@ -951,11 +1168,9 @@ class GeomPreprocessor:
         from the geometry. These should be cleared when the geometry changes to ensure that
         HEC-RAS recomputes all hydraulic tables with updated geometry information.
 
-        This deletes the `.c##` geometry preprocessor file AND clears the geometry-preprocessor
-        tables baked into the `.g##.hdf` (incl. the 2D per-cell `Cells Center Manning's n` and
-        property tables) in place via `clear_geompre_hdf()`, while preserving the mesh topology and
-        the land-cover association. This ensures a 2D roughness / geometry edit actually propagates
-        (the `.c##` file alone does not hold the per-cell n, so clearing it is not sufficient).
+        This deletes the `.c##` geometry-preprocessor file only. It deliberately
+        does not mutate the `.g##.hdf`; use a native HEC-RAS geometry or plan
+        computation to refresh solver-owned HDF datasets.
 
         Limitations/Future Work:
         - It does not clear the IB (internal boundary) tables.
@@ -1017,26 +1232,6 @@ class GeomPreprocessor:
                     seen.add(candidate_str)
             return unique_candidates
 
-        def _resolve_geom_hdf(plan_path: Path, ras_obj) -> Optional[Path]:
-            """Resolve the geometry HDF (<project>.g##.hdf) for a plan."""
-            plan_match = re.search(r"\.p(\d+)$", plan_path.name, re.IGNORECASE)
-            plan_number = RasUtils.normalize_ras_number(plan_match.group(1)) if plan_match else None
-            geom_number = None
-            if (
-                plan_number is not None
-                and getattr(ras_obj, "plan_df", None) is not None
-                and not ras_obj.plan_df.empty
-                and "plan_number" in ras_obj.plan_df.columns
-                and "geometry_number" in ras_obj.plan_df.columns
-            ):
-                normalized_plan_numbers = ras_obj.plan_df["plan_number"].apply(RasUtils.normalize_ras_number)
-                matching = ras_obj.plan_df[normalized_plan_numbers == plan_number]
-                if not matching.empty:
-                    geom_number = RasUtils.normalize_ras_number(matching.iloc[0]["geometry_number"])
-            if geom_number is None:
-                return None
-            return plan_path.with_name(f"{plan_path.stem}.g{geom_number}.hdf")
-
         def clear_single_file(plan_file: Union[str, Path], ras_obj) -> None:
             plan_path = Path(plan_file)
             cleared_any = False
@@ -1054,17 +1249,6 @@ class GeomPreprocessor:
                 except OSError as e:
                     logger.error(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
                     raise OSError(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
-
-            # Also clear the geometry-preprocessor tables baked into the .g##.hdf
-            # (notably the 2D per-cell "Cells Center Manning's n" + property
-            # tables). The .c## file does NOT hold these, so without this step a
-            # 2D roughness/geometry edit silently fails to propagate because the
-            # cached per-cell n is reused. Base mesh + land-cover association are
-            # preserved, so HEC-RAS re-derives per-cell n on the next compute.
-            geom_hdf = _resolve_geom_hdf(plan_path, ras_obj)
-            if geom_hdf is not None and geom_hdf.exists():
-                if GeomPreprocessor.clear_geompre_hdf(geom_hdf):
-                    cleared_any = True
 
             if not cleared_any:
                 logger.debug("No geometry preprocessor artifacts found for plan: %s", plan_path.name)

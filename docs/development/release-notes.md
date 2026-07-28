@@ -81,7 +81,7 @@
 - **GeomStorage**: 2D flow area perimeter writer with breakline spacing, refinement regions, property tables
 - **RasPermutation**: Parameter sweep framework with Cartesian product generation
 - **HdfResultsQuery**: Spatial query class for 2D mesh results
-- **HdfLandCover**: `set_landcover_raster_map()` for sidecar HDF writes
+- **HdfLandCover**: `set_landcover_mannings_n()` for native RASMapper sidecar updates (`set_landcover_raster_map()` remains a compatibility alias)
 - **RasCalibrate**: Calibration framework with grid search and scipy optimize
 - **GeomReferenceFeatures**: Reference lines and points for 2D calibration
 - Cloud-native export notebooks (960–962) with GeoParquet and COG workflows

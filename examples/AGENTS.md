@@ -36,7 +36,7 @@ This file is the canonical local instruction file for `examples/`.
 - `110_single_plan_execution.ipynb` and `113_parallel_execution.ipynb` - execution patterns
 - `510_linux_execution.ipynb` and `511_headless_linux_wine_ras2cng.ipynb` - vendor Linux solver execution and qualified Wine/Ras2Cng setup
 - `201_1d_plaintext_geometry.ipynb`, `203_htab_parameter_optimization.ipynb`, `205_extract_xs_xyz_from_geometry.ipynb` - geometry parsing and HTAB work
-- `218_infiltration_base_override_authoring.ipynb` and `225_fixit_blocked_obstructions.ipynb` - infiltration and repair workflows
+- `218_infiltration_base_override_authoring.ipynb` and `225_fixit_blocked_obstructions.ipynb` - geometry-wide/regional infiltration and repair workflows
 - `312_boundary_df_qmult_dss_paths.ipynb` and `318_validating_dss_paths.ipynb` - DSS workflows
 - `410_2d_hdf_data_extraction.ipynb`, `412_2d_detail_face_data_extraction.ipynb`, `413_profile_line_flow_extraction.ipynb`, and `416_2d_velocity_profile_line.ipynb` - mesh and results extraction
 - `910_usgs_gauge_catalog.ipynb` through `919_operational_forecast_cycling.ipynb` - USGS, AORC validation, and forecast workflows

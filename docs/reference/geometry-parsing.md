@@ -551,8 +551,8 @@ def safe_modify_geometry(geom_path: Path, modify_func):
         temp_path.replace(geom_path)
 
         # 5. Clear geometry preprocessor
-        from ras_commander import RasGeo
-        RasGeo.clear_geompre_files()
+        from ras_commander import GeomPreprocessor
+        GeomPreprocessor.clear_geompre_files()
 
         return True
 
@@ -563,7 +563,10 @@ def safe_modify_geometry(geom_path: Path, modify_func):
 ```
 
 !!! warning "Always Clear Geompre"
-    After ANY geometry modification, call `RasGeo.clear_geompre_files()` to force HEC-RAS to regenerate hydraulic tables.
+    After any geometry modification, call
+    `GeomPreprocessor.clear_geompre_files()` to delete the `.c##` cache, then
+    run a native HEC-RAS geometry or plan computation. Do not selectively
+    delete datasets from the geometry HDF.
 
 ### HDF Reading Pattern
 

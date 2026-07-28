@@ -1,8 +1,7 @@
-"""Integration test for RasProcess.compute_geometry().
+"""Integration test for native ``RasProcess.compute_geometry()``.
 
-Verifies the real RasProcess.exe path that force_geompre relies on: clearing the
-cached geometry-preprocessor tables in place and rebuilding them from the land
-cover association, without destroying that association.
+Verifies the real RasProcess.exe path that ``force_geompre`` relies on without
+selectively deleting solver-owned geometry-HDF datasets.
 
 Opt-in (marked ``integration``) because it needs an installed HEC-RAS: RasProcess.exe
 plus a real 2D land-cover project. Skips cleanly when either is unavailable.
@@ -19,8 +18,6 @@ import pytest
 
 from ras_commander.RasExamples import RasExamples
 from ras_commander.RasProcess import RasProcess
-from ras_commander.geom import GeomPreprocessor
-
 h5py = pytest.importorskip("h5py")
 import numpy as np
 
@@ -71,43 +68,29 @@ def _land_cover_filename(hdf_path):
         return f["Geometry"].attrs.get("Land Cover Filename")
 
 
-def test_compute_geometry_rebuilds_per_cell_n(geom_hdf):
-    """clear_geompre_hdf() then compute_geometry() restores per-cell n.
-
-    This is exactly what force_geompre does for a 2D land-cover model. The rebuild
-    must repopulate Cells Center Manning's n AND leave the land cover association
-    intact -- if the association were lost, n would collapse to the uniform default.
-    """
-    # Seed the cache so the model starts in the state a computed project would be in.
+def test_compute_geometry_preserves_per_cell_n_and_land_cover_association(geom_hdf):
+    """Native complete-geometry processing preserves required model content."""
     RasProcess.compute_geometry(geom_hdf)
     seeded = _per_cell_n(geom_hdf)
-    assert seeded, "expected per-cell Manning's n after seeding the preprocessor cache"
+    assert seeded, "expected per-cell Manning's n after native geometry processing"
     lc_before = _land_cover_filename(geom_hdf)
-    assert lc_before is not None, "land cover association missing before clear"
+    assert lc_before is not None, "land cover association missing before rerun"
 
-    # Clear the cached tables in place (does not delete the .g##.hdf).
-    GeomPreprocessor.clear_geompre_hdf(geom_hdf)
-    assert not _per_cell_n(geom_hdf), "clear_geompre_hdf did not remove per-cell n"
-    assert _land_cover_filename(geom_hdf) == lc_before, (
-        "clear_geompre_hdf destroyed the land cover association"
-    )
-
-    # Rebuild via RasProcess.exe CompleteGeometry.
     result = RasProcess.compute_geometry(geom_hdf)
     assert result["return_code"] == 0
     assert not (result["stderr"] or "").strip().startswith("Error:"), (
         f"CompleteGeometry reported an argument error: {result['stderr']!r}"
     )
 
-    rebuilt = _per_cell_n(geom_hdf)
-    assert rebuilt, "compute_geometry did not rebuild per-cell n"
-    assert set(rebuilt) == set(seeded), "rebuilt mesh set differs from the seeded set"
-    for name, (cells, lo, hi) in rebuilt.items():
+    recomputed = _per_cell_n(geom_hdf)
+    assert recomputed, "compute_geometry removed per-cell n"
+    assert set(recomputed) == set(seeded), "recomputed mesh set differs from the seeded set"
+    for name, (cells, lo, hi) in recomputed.items():
         assert (cells, lo, hi) == seeded[name], (
-            f"rebuilt per-cell n for {name} differs from seeded values"
+            f"recomputed per-cell n for {name} differs from seeded values"
         )
     assert _land_cover_filename(geom_hdf) == lc_before, (
-        "land cover association changed across the rebuild"
+        "land cover association changed across native geometry processing"
     )
 
 

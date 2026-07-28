@@ -217,14 +217,14 @@ This enables rating curve generation without re-running HEC-RAS.
 Clear `.c##` files to force HEC-RAS to recalculate hydraulic tables:
 
 ```python
-from ras_commander import RasGeo, RasPlan
+from ras_commander import GeomPreprocessor, RasPlan
 
 # Clear for specific plan
 plan_path = RasPlan.get_plan_path("01")
-RasGeo.clear_geompre_files(plan_path)
+GeomPreprocessor.clear_geompre_files(plan_path)
 
 # Or clear for all plans
-RasGeo.clear_geompre_files()
+GeomPreprocessor.clear_geompre_files()
 ```
 
 ## File Format Notes
@@ -248,7 +248,7 @@ The `RasGeometryUtils` class handles these formats internally.
 ## Example: Modify Cross Section Elevations
 
 ```python
-from ras_commander import RasGeometry, RasGeo, RasCmdr, init_ras_project
+from ras_commander import GeomPreprocessor, RasGeometry, RasCmdr, init_ras_project
 import pandas as pd
 
 init_ras_project("/path/to/project", "6.5")
@@ -264,6 +264,6 @@ sta_elev['elevation'] = sta_elev['elevation'] - 2.0
 RasGeometry.set_station_elevation("01", river, reach, station, sta_elev)
 
 # Clear preprocessor and recompute
-RasGeo.clear_geompre_files()
+GeomPreprocessor.clear_geompre_files()
 success = RasCmdr.compute_plan("01", dest_folder="./modified_run")
 ```

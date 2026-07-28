@@ -139,7 +139,10 @@ winetricks -q corefonts     # Arial, Times New Roman, etc.
     Verified on the CLB07 Proxmox container `ras2cng-wine` (Debian 13, Wine 11.0). Custom `wine_executable` paths or wrappers are supported; helper tools such as `winepath` are resolved automatically.
 
 !!! note "Scope"
-    Wine support covers wrapped `RasProcess.exe` workflows. Full HEC-RAS simulation (`Ras.exe`) still requires Windows. HDF analysis and Python-native geometry association writes work on Linux without Wine.
+    Wine support covers wrapped `RasProcess.exe` workflows. Full HEC-RAS
+    simulation (`Ras.exe`) still requires Windows. Read-only HDF analysis works
+    on Linux without Wine; native geometry association requires the applicable
+    HEC-RAS/RASMapper runtime.
 
 **Verify installation**:
 

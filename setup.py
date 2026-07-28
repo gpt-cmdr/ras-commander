@@ -41,10 +41,11 @@ setup(
         "ras_commander": [
             "LLM_GUIDE.md",
             "resources/*.json",
-            "resources/land_classification/*.hdf",
             "resources/templates/*/*",
         ],
         "ras_commander.native": [
+            "InvokeRas5GeometryLandCover.ps1",
+            "InvokeRas5LandCover.ps1",
             "RasStoreMapHelper.exe",
             "RasStoreMapHelper.cs",
         ],

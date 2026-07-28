@@ -1,0 +1,47 @@
+{
+  "hecras_version": "6.6",
+  "source_project": "G:\\RasProcess Testing\\wine_compare\\Muncie_simple_test\\Muncie.prj",
+  "disposable_project": "C:\\CLB\\landcover-public-api-proof-66\\Muncie\\Muncie.prj",
+  "plan": "04",
+  "geometry": "04",
+  "flow_area": "2D Interior Area",
+  "compute_success": true,
+  "completion_verified": true,
+  "complete_geometry": true,
+  "association": {
+    "filename": ".\\LandCover\\NativeAPI66.hdf",
+    "layer": "NativeAPI66"
+  },
+  "raster": {
+    "width": 1941,
+    "height": 1398,
+    "dtype": "int32",
+    "tiled": true,
+    "compression": "deflate",
+    "nodata": null,
+    "overviews": [2, 4, 8],
+    "class_counts": {
+      "0": 1925774,
+      "1": 23560,
+      "2": 314956,
+      "3": 54559,
+      "4": 90767,
+      "5": 83645,
+      "6": 220257
+    }
+  },
+  "final_mannings": {
+    "cell_count": 5765,
+    "cell_distinct_count": 10,
+    "face_profile_row_count": 47055,
+    "face_distinct_count": 10,
+    "values": [0.036, 0.04, 0.054, 0.06, 0.072, 0.08, 0.09, 0.1, 0.12, 100.0],
+    "material_tolerance": 0.0001
+  },
+  "sha256": {
+    "landcover_hdf": "6e4f6a03aacd836a20034c9ffa5be5f930f21c380c23488d45bdd6a10e1fc959",
+    "landcover_tif": "242dba95ab2446740922e47b0d2281d3bdbdbae25f6973fecedf73a3a327bc0b",
+    "geometry_hdf": "6d696ce648ddac1aa7337662b7d6294e1877bd2b9d5b760b3fe09f0bb674159a",
+    "plan_hdf": "67eccf4f4725f4e7a992161bf82672b21457d0b806eb1818fa607f927b7118d4"
+  }
+}

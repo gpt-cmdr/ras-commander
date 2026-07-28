@@ -33,24 +33,28 @@ get_reference_line_internal_faces()
 get_mesh_cell_property_tables()
     Returns Cell Property Tables for each Cell in all 2D Flow Areas
 
-Write API (Face Property Tables) — EXPERIMENTAL:
--------------------------------------------------
-These write methods modify face-property tables in the geometry HDF. Edits are
-overwritten by the Windows HEC-RAS geometry preprocessor on the next plan
-execution. They are intended for use with the Linux two-phase execution
-workflow only. This is an undocumented and unsupported method of injecting modified HDF inputs
-into the solver and may produce erroneous results. Use with caution.
+Write API (Face Property Tables) — EXPERIMENTAL / NOT RECOMMENDED:
+------------------------------------------------------------------
+These methods are not recommended for production or any other
+non-experimental use. They have been tested only with HEC-RAS 7.0 April 2026
+``*.p##.tmp.hdf`` artifacts in one Windows-preprocess/Linux-solve workflow;
+all other versions and workflows are untested. They require explicit
+acknowledgement, create a full-file backup, validate the HDF role and schema,
+and verify the write by reopening the file. Windows preprocessing overwrites
+these edits.
 
-set_mesh_face_property_tables()
-    Write face property tables (all 4 columns) to geometry HDF
-extend_face_property_tables()
-    Extend face tables to higher elevations with depth-varying Manning's n
-set_face_mannings_n_values()
-    Replace Manning's n column in existing face tables via a user function
-recompute_face_mannings_n_from_landcover_curves()
-    Recompute face Manning's n from land-cover raster and depth-varying curves
-pin_property_tables()
-    Set or clear the Pinned attribute on the mesh group
+write_linux_tmp_face_property_tables()
+    Write complete face property tables to a guarded Linux ``.tmp.hdf``
+extend_linux_tmp_face_property_tables()
+    Extend guarded face tables to higher elevations
+transform_linux_tmp_face_mannings_n()
+    Transform the Manning's n column through a user function
+sample_linux_tmp_face_mannings_n_from_landcover_curves()
+    Apply an equal-class power mean from sampled land-cover curve classes
+set_mesh_pinned_attribute()
+    Set or clear the informational mesh ``Pinned`` attribute
+
+The historical method names remain deprecated compatibility wrappers.
 
 Spatial Filtering (Polygon Mask):
 ---------------------------------
@@ -73,16 +77,22 @@ combine_faces_to_linestring()
 Each function is decorated with @standardize_input and @log_call for consistent
 input handling and logging functionality.
 """
+import re
+import shutil
+import warnings
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, TYPE_CHECKING, Union
+from uuid import uuid4
+
 import h5py
 import numpy as np
 import pandas as pd
-from typing import List, Tuple, Optional, Dict, Any, Callable, Union, TYPE_CHECKING
-import logging
+
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from ..Decorators import standardize_input, log_call
-from ..LoggingConfig import setup_logging, get_logger
+from ..Decorators import log_call, standardize_input
+from ..LoggingConfig import get_logger
 
 # Type hints only - not imported at runtime
 if TYPE_CHECKING:
@@ -1368,8 +1378,6 @@ class HdfMesh:
         ... )
         >>> print(f"Found {len(profile_faces)} faces along profile")
         """
-        from shapely.geometry import Point
-
         # Filter by mesh_name if provided
         faces = cell_faces_gdf.copy()
         if mesh_name is not None:
@@ -1417,7 +1425,6 @@ class HdfMesh:
         result = faces.loc[list(selected_indices)].copy()
 
         # Calculate distance along profile for each face
-        profile_start = Point(profile_line.coords[0])
         result['distance_along_profile'] = result.geometry.apply(
             lambda g: profile_line.project(g.centroid)
         )
@@ -1682,6 +1689,454 @@ class HdfMesh:
     # Write API: Face Property Tables (Manning's n vs Elevation)
     # -------------------------------------------------------------------------
 
+    _LINUX_TMP_HDF_PATTERN = re.compile(
+        r"\.p\d+\.tmp\.hdf$",
+        re.IGNORECASE,
+    )
+    _LINUX_TMP_HDF_FILE_TYPE = "HEC-RAS Results"
+    _LINUX_TMP_HDF_FILE_VERSION = "HEC-RAS 7.0 April 2026"
+    _LINUX_TMP_EXPERIMENTAL_NOTICE = (
+        "EXPERIMENTAL / NOT RECOMMENDED FOR PRODUCTION OR OTHER "
+        "NON-EXPERIMENTAL USE. Tested only with HEC-RAS 7.0 April 2026 "
+        "in the Windows-preprocess/Linux-solve '*.p##.tmp.hdf' workflow; "
+        "all other versions and workflows are untested."
+    )
+    _FACE_PROPERTY_COLUMNS = (
+        "Elevation",
+        "Area",
+        "Wetted Perimeter",
+        "Manning's n",
+    )
+
+    @staticmethod
+    def _decode_hdf_attr(value: Any) -> str:
+        """Decode a scalar HDF attribute used by write-role guards."""
+        if value is None:
+            return ""
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="replace").strip("\x00")
+        if hasattr(value, "decode"):
+            return value.decode("utf-8", errors="replace").strip("\x00")
+        return str(value).strip("\x00")
+
+    @staticmethod
+    def _require_linux_tmp_write_acknowledgement(
+        acknowledge_unsupported: bool,
+    ) -> None:
+        """Require an explicit acknowledgement before direct HDF mutation."""
+        if not acknowledge_unsupported:
+            raise RuntimeError(
+                f"{HdfMesh._LINUX_TMP_EXPERIMENTAL_NOTICE} Direct "
+                "face-property HDF writes require "
+                "acknowledge_unsupported=True."
+            )
+        logger.warning(HdfMesh._LINUX_TMP_EXPERIMENTAL_NOTICE)
+
+    @staticmethod
+    def _validate_linux_tmp_face_table_schema(
+        hdf_file: h5py.File,
+        hdf_path: Path,
+        mesh_name: str,
+    ) -> Tuple[str, str, np.ndarray, np.ndarray]:
+        """Validate the exact HEC-RAS 7.0 Linux temporary-result schema."""
+        if not HdfMesh._LINUX_TMP_HDF_PATTERN.search(hdf_path.name):
+            raise ValueError(
+                "Direct face-property writes accept only filenames matching "
+                "'*.p##.tmp.hdf'."
+            )
+
+        file_type = HdfMesh._decode_hdf_attr(hdf_file.attrs.get("File Type"))
+        file_version = HdfMesh._decode_hdf_attr(
+            hdf_file.attrs.get("File Version")
+        )
+        if file_type != HdfMesh._LINUX_TMP_HDF_FILE_TYPE:
+            raise ValueError(
+                "Linux temporary-HDF role guard requires root "
+                f"File Type={HdfMesh._LINUX_TMP_HDF_FILE_TYPE!r}; "
+                f"observed {file_type!r}."
+            )
+        if file_version != HdfMesh._LINUX_TMP_HDF_FILE_VERSION:
+            raise ValueError(
+                "Linux temporary-HDF version guard requires root "
+                f"File Version={HdfMesh._LINUX_TMP_HDF_FILE_VERSION!r}; "
+                f"observed {file_version!r}."
+            )
+        if "Geometry" not in hdf_file:
+            raise ValueError("Temporary result HDF is missing /Geometry.")
+        complete = HdfMesh._decode_hdf_attr(
+            hdf_file["Geometry"].attrs.get("Complete Geometry")
+        )
+        if complete.lower() != "true":
+            raise ValueError(
+                "Temporary result HDF must have Complete Geometry=True before "
+                "face-property writes."
+            )
+
+        base_path = f"Geometry/2D Flow Areas/{mesh_name}"
+        info_path = f"{base_path}/Faces Area Elevation Info"
+        values_path = f"{base_path}/Faces Area Elevation Values"
+        facepoints_path = f"{base_path}/Faces FacePoint Indexes"
+        for dataset_path in (info_path, values_path, facepoints_path):
+            if dataset_path not in hdf_file:
+                raise KeyError(
+                    f"Required HEC-RAS 7.0 face-table dataset is missing: "
+                    f"{dataset_path}"
+                )
+            if not isinstance(hdf_file[dataset_path], h5py.Dataset):
+                raise ValueError(
+                    f"Expected an HDF dataset at {dataset_path!r}."
+                )
+
+        old_info = hdf_file[info_path][()]
+        old_values = hdf_file[values_path][()]
+        facepoints = hdf_file[facepoints_path]
+        if (
+            old_info.ndim != 2
+            or old_info.shape[1] != 2
+            or old_info.shape[0] == 0
+            or old_info.dtype.kind not in "iu"
+        ):
+            raise ValueError(
+                f"{info_path} must be a nonempty integer (N, 2) dataset."
+            )
+        if (
+            old_values.ndim != 2
+            or old_values.shape[1] != 4
+            or old_values.shape[0] == 0
+            or old_values.dtype.kind not in "f"
+        ):
+            raise ValueError(
+                f"{values_path} must be a nonempty floating-point (M, 4) "
+                "dataset."
+            )
+        if (
+            facepoints.ndim != 2
+            or facepoints.shape[0] != old_info.shape[0]
+            or facepoints.shape[1] < 2
+            or facepoints.dtype.kind not in "iu"
+        ):
+            raise ValueError(
+                f"{facepoints_path} must be an integer dataset with one row "
+                "per face."
+            )
+
+        starts = old_info[:, 0].astype(np.int64, copy=False)
+        counts = old_info[:, 1].astype(np.int64, copy=False)
+        if np.any(starts < 0) or np.any(counts <= 0):
+            raise ValueError(
+                "Face property-table starts must be nonnegative and counts "
+                "must be positive."
+            )
+        expected_starts = np.concatenate(
+            ([0], np.cumsum(counts[:-1], dtype=np.int64))
+        )
+        if not np.array_equal(starts, expected_starts):
+            raise ValueError(
+                "Faces Area Elevation Info is not contiguous from row zero."
+            )
+        if int(starts[-1] + counts[-1]) != old_values.shape[0]:
+            raise ValueError(
+                "Face property-table Info rows do not cover the Values "
+                "dataset exactly."
+            )
+        HdfMesh._validate_face_property_values(
+            old_values,
+            context="existing face property tables",
+            info=old_info,
+        )
+        return info_path, values_path, old_info, old_values
+
+    @staticmethod
+    def _validate_face_property_values(
+        values: np.ndarray,
+        *,
+        context: str,
+        info: Optional[np.ndarray] = None,
+    ) -> None:
+        """Require finite hydraulic values and nonnegative physical columns."""
+        values = np.asarray(values)
+        if values.ndim != 2 or values.shape[1] != 4 or values.shape[0] == 0:
+            raise ValueError(f"{context} must be a nonempty (N, 4) array.")
+        if not np.isfinite(values).all():
+            raise ValueError(f"{context} contains NaN or infinite values.")
+        if np.any(values[:, 1:] < 0):
+            raise ValueError(
+                f"{context} contains negative Area, Wetted Perimeter, or "
+                "Manning's n values."
+            )
+        if info is None:
+            if values.shape[0] > 1 and not np.all(np.diff(values[:, 0]) > 0):
+                raise ValueError(
+                    f"{context} elevations must be strictly increasing."
+                )
+            return
+        for face_id, (start, count) in enumerate(info):
+            elevations = values[int(start): int(start + count), 0]
+            if elevations.size > 1 and not np.all(np.diff(elevations) > 0):
+                raise ValueError(
+                    f"{context} face {face_id} elevations must be strictly "
+                    "increasing."
+                )
+
+    @staticmethod
+    def _normalize_linux_tmp_face_ids(
+        face_ids: Optional[List[int]],
+        num_faces: int,
+    ) -> Optional[List[int]]:
+        """Normalize face IDs and fail closed on duplicates or bounds errors."""
+        if face_ids is None:
+            return None
+        normalized: List[int] = []
+        seen = set()
+        for value in face_ids:
+            if isinstance(value, (bool, np.bool_)):
+                raise ValueError(f"Face ID must be an integer, got {value!r}.")
+            try:
+                face_id = int(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Face ID must be an integer, got {value!r}."
+                ) from exc
+            if isinstance(value, (float, np.floating)) and not float(
+                value
+            ).is_integer():
+                raise ValueError(f"Face ID must be an integer, got {value!r}.")
+            if face_id < 0 or face_id >= num_faces:
+                raise ValueError(
+                    f"Face ID {face_id} out of range; expected 0-"
+                    f"{num_faces - 1}."
+                )
+            if face_id in seen:
+                raise ValueError(f"Duplicate face ID: {face_id}.")
+            seen.add(face_id)
+            normalized.append(face_id)
+        return normalized
+
+    @staticmethod
+    def _create_linux_tmp_hdf_backup(hdf_path: Path) -> Path:
+        """Create a unique full-file backup immediately before a direct write."""
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        unique_suffix = uuid4().hex[:8]
+        backup_path = hdf_path.with_name(
+            f"{hdf_path.stem}.pre-write.{timestamp}_{unique_suffix}.bak.hdf"
+        )
+        shutil.copy2(hdf_path, backup_path)
+        logger.debug(
+            "Backed up guarded Linux temporary HDF: %s",
+            backup_path,
+        )
+        return backup_path
+
+    @staticmethod
+    @log_call
+    def write_linux_tmp_face_property_tables(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        face_tables: Mapping[int, pd.DataFrame],
+        pin_tables: bool = True,
+        *,
+        acknowledge_unsupported: bool = False,
+    ) -> Path:
+        """Write face tables to a guarded HEC-RAS 7.0 Linux ``.tmp.hdf``.
+
+        Warning:
+            EXPERIMENTAL. Not recommended for production or any other
+            non-experimental use. Tested only with HEC-RAS 7.0 April 2026 in
+            the Windows-preprocess/Linux-solve temporary-HDF workflow; all
+            other versions and workflows are untested.
+
+        This API is limited to the proven two-phase workflow: preprocess a plan
+        into ``*.p##.tmp.hdf``, modify that temporary result, then pass it to
+        ``RasCmdr.compute_plan_linux()``. The exact root file role/version,
+        mesh schema, face IDs, and hydraulic values are checked before a unique
+        full-file backup is created. The file is reopened after writing for
+        exact Info/Values readback verification.
+
+        ``pin_tables=True`` only sets the mesh ``Pinned`` metadata attribute.
+        It does not protect edits from Windows HEC-RAS preprocessing.
+
+        Args:
+            hdf_path: HEC-RAS 7.0 ``*.p##.tmp.hdf`` path.
+            mesh_name: Exact 2D flow-area name.
+            face_tables: Face ID to DataFrame mapping. Required columns are
+                ``Elevation``, ``Area``, ``Wetted Perimeter``, and
+                ``Manning's n``.
+            pin_tables: Set the informational ``Pinned`` attribute after the
+                table write.
+            acknowledge_unsupported: Must be explicitly ``True``.
+
+        Returns:
+            Path to the full-file pre-write backup.
+        """
+        HdfMesh._require_linux_tmp_write_acknowledgement(
+            acknowledge_unsupported
+        )
+        hdf_path = Path(hdf_path)
+        if not hdf_path.exists():
+            raise FileNotFoundError(hdf_path)
+        if not isinstance(face_tables, Mapping) or not face_tables:
+            raise ValueError("face_tables must be a nonempty mapping.")
+
+        base_path = f"Geometry/2D Flow Areas/{mesh_name}"
+        with h5py.File(hdf_path, "r") as hdf_file:
+            (
+                info_path,
+                values_path,
+                old_info,
+                old_values,
+            ) = HdfMesh._validate_linux_tmp_face_table_schema(
+                hdf_file,
+                hdf_path,
+                mesh_name,
+            )
+            old_info_ds = hdf_file[info_path]
+            old_values_ds = hdf_file[values_path]
+            num_faces = old_info.shape[0]
+            info_attrs = dict(old_info_ds.attrs)
+            values_attrs = dict(old_values_ds.attrs)
+
+        normalized_ids = HdfMesh._normalize_linux_tmp_face_ids(
+            list(face_tables),
+            num_faces,
+        )
+        normalized_tables: Dict[int, np.ndarray] = {}
+        for original_id, face_id in zip(face_tables, normalized_ids or []):
+            table = face_tables[original_id]
+            if not isinstance(table, pd.DataFrame):
+                raise TypeError(
+                    f"Face {face_id} table must be a pandas DataFrame."
+                )
+            missing = [
+                column
+                for column in HdfMesh._FACE_PROPERTY_COLUMNS
+                if column not in table.columns
+            ]
+            if missing:
+                raise ValueError(
+                    f"Face {face_id} table missing columns: {missing}"
+                )
+            try:
+                rows = table.loc[
+                    :,
+                    list(HdfMesh._FACE_PROPERTY_COLUMNS),
+                ].to_numpy(dtype=float)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Face {face_id} table contains nonnumeric values."
+                ) from exc
+            HdfMesh._validate_face_property_values(
+                rows,
+                context=f"face {face_id} replacement table",
+            )
+            normalized_tables[face_id] = rows.astype(
+                old_values.dtype,
+                copy=False,
+            )
+
+        new_face_slices = []
+        for face_id in range(num_faces):
+            if face_id in normalized_tables:
+                new_face_slices.append(normalized_tables[face_id])
+            else:
+                start, count = old_info[face_id]
+                new_face_slices.append(
+                    old_values[int(start): int(start + count)]
+                )
+
+        new_values = np.vstack(new_face_slices).astype(
+            old_values.dtype,
+            copy=False,
+        )
+        new_info = np.zeros((num_faces, 2), dtype=old_info.dtype)
+        offset = 0
+        for face_id, face_slice in enumerate(new_face_slices):
+            new_info[face_id, 0] = offset
+            new_info[face_id, 1] = len(face_slice)
+            offset += len(face_slice)
+        HdfMesh._validate_face_property_values(
+            new_values,
+            context="rewritten face property tables",
+            info=new_info,
+        )
+
+        # Creation kwargs depend on the final shapes, so reopen read-only after
+        # constructing the replacement arrays.
+        with h5py.File(hdf_path, "r") as hdf_file:
+            info_create_kwargs = HdfMesh._dataset_create_kwargs(
+                hdf_file[info_path],
+                new_shape=new_info.shape,
+            )
+            values_create_kwargs = HdfMesh._dataset_create_kwargs(
+                hdf_file[values_path],
+                new_shape=new_values.shape,
+            )
+
+        backup_path = HdfMesh._create_linux_tmp_hdf_backup(hdf_path)
+        try:
+            with h5py.File(hdf_path, "r+") as hdf_file:
+                del hdf_file[info_path]
+                del hdf_file[values_path]
+
+                ds_info = hdf_file.create_dataset(
+                    info_path,
+                    data=new_info,
+                    **info_create_kwargs,
+                )
+                for key, value in info_attrs.items():
+                    ds_info.attrs[key] = value
+
+                ds_values = hdf_file.create_dataset(
+                    values_path,
+                    data=new_values,
+                    **values_create_kwargs,
+                )
+                for key, value in values_attrs.items():
+                    ds_values.attrs[key] = value
+
+                if pin_tables:
+                    hdf_file[base_path].attrs["Pinned"] = np.bool_(True)
+
+            with h5py.File(hdf_path, "r") as hdf_file:
+                (
+                    _,
+                    _,
+                    observed_info,
+                    observed_values,
+                ) = HdfMesh._validate_linux_tmp_face_table_schema(
+                    hdf_file,
+                    hdf_path,
+                    mesh_name,
+                )
+                if not np.array_equal(observed_info, new_info):
+                    raise RuntimeError(
+                        "Faces Area Elevation Info failed exact readback."
+                    )
+                if not np.array_equal(observed_values, new_values):
+                    raise RuntimeError(
+                        "Faces Area Elevation Values failed exact readback."
+                    )
+                if pin_tables and not bool(
+                    hdf_file[base_path].attrs.get("Pinned", False)
+                ):
+                    raise RuntimeError(
+                        "Mesh Pinned attribute failed readback."
+                    )
+        except Exception as exc:
+            raise RuntimeError(
+                "Guarded face-property write failed. Restore the full-file "
+                f"backup at {backup_path}: {exc}"
+            ) from exc
+
+        logger.info(
+            "Wrote guarded face property tables for %d faces in mesh %r "
+            "(%d total rows); backup=%s",
+            len(normalized_tables),
+            mesh_name,
+            new_values.shape[0],
+            backup_path,
+        )
+        return backup_path
+
     @staticmethod
     @log_call
     def set_mesh_face_property_tables(
@@ -1689,122 +2144,24 @@ class HdfMesh:
         mesh_name: str,
         face_tables: Dict[int, pd.DataFrame],
         pin_tables: bool = True,
+        *,
+        acknowledge_unsupported: bool = False,
     ) -> None:
-        """
-        Write face property tables to geometry HDF.
-
-        Rewrites both the Info and Values datasets for the specified mesh
-        (non-atomic — back up the file before calling). Unmodified faces
-        retain their original tables.
-
-        .. warning::
-            Edits written by this method are overwritten by the Windows
-            HEC-RAS geometry preprocessor on the next plan execution. To
-            preserve edits through a solver run, use the Linux two-phase
-            workflow: (1) preprocess on Windows via
-            ``RasPreprocess.preprocess_plan()`` to generate the ``.tmp.hdf``,
-            (2) apply edits to the ``.tmp.hdf``, (3) execute with
-            ``RasCmdr.compute_plan_linux()``. This is an undocumented and unsupported method
-            of injecting modified HDF inputs into the solver and may produce
-            erroneous results. Use with caution.
-
-        Parameters
-        ----------
-        hdf_path : Union[str, Path]
-            Path to the HEC-RAS geometry HDF file (.g##.hdf).
-        mesh_name : str
-            Name of the 2D flow area / mesh.
-        face_tables : Dict[int, pd.DataFrame]
-            Dictionary mapping face_id (int) to a DataFrame with columns
-            ``['Elevation', 'Area', 'Wetted Perimeter', "Manning's n"]``.
-            Only faces present in this dict are replaced; others keep
-            their original tables.
-        pin_tables : bool, default True
-            If True, set the Pinned attribute on the mesh group to
-            prevent RASMapper from overwriting the modified tables.
-        """
-        hdf_path = Path(hdf_path)
-        base_path = f"Geometry/2D Flow Areas/{mesh_name}"
-        info_path = f"{base_path}/Faces Area Elevation Info"
-        values_path = f"{base_path}/Faces Area Elevation Values"
-
-        required_cols = ['Elevation', 'Area', 'Wetted Perimeter', "Manning's n"]
-
-        for fid, df in face_tables.items():
-            if int(fid) < 0:
-                raise ValueError(f"Face ID must be non-negative, got {fid}")
-            missing = [c for c in required_cols if c not in df.columns]
-            if missing:
-                raise ValueError(f"Face {fid} table missing columns: {missing}")
-            elevations = df['Elevation'].values
-            if len(elevations) > 1 and not np.all(np.diff(elevations) > 0):
-                raise ValueError(f"Face {fid} elevations must be monotonically increasing")
-
-        with h5py.File(str(hdf_path), 'r+') as hdf_file:
-            if info_path not in hdf_file or values_path not in hdf_file:
-                raise KeyError(f"Face property tables not found for mesh '{mesh_name}'")
-
-            old_info_ds = hdf_file[info_path]
-            old_values_ds = hdf_file[values_path]
-            old_info = old_info_ds[()]
-            old_values = old_values_ds[()]
-            num_faces = old_info.shape[0]
-
-            info_attrs = dict(old_info_ds.attrs)
-            values_attrs = dict(old_values_ds.attrs)
-
-            new_face_slices = []
-            for face_id in range(num_faces):
-                if face_id in face_tables:
-                    df = face_tables[face_id]
-                    rows = np.column_stack([
-                        df['Elevation'].values,
-                        df['Area'].values,
-                        df['Wetted Perimeter'].values,
-                        df["Manning's n"].values,
-                    ]).astype(np.float32)
-                    new_face_slices.append(rows)
-                else:
-                    start, count = old_info[face_id]
-                    new_face_slices.append(old_values[start:start + count])
-
-            new_values = np.vstack(new_face_slices).astype(old_values.dtype, copy=False)
-
-            new_info = np.zeros((num_faces, 2), dtype=old_info.dtype)
-            offset = 0
-            for i, sl in enumerate(new_face_slices):
-                new_info[i, 0] = offset
-                new_info[i, 1] = len(sl)
-                offset += len(sl)
-
-            info_create_kwargs = HdfMesh._dataset_create_kwargs(
-                old_info_ds, new_shape=new_info.shape
-            )
-            values_create_kwargs = HdfMesh._dataset_create_kwargs(
-                old_values_ds, new_shape=new_values.shape
-            )
-
-            del hdf_file[info_path]
-            del hdf_file[values_path]
-
-            ds_info = hdf_file.create_dataset(
-                info_path, data=new_info, **info_create_kwargs
-            )
-            for k, v in info_attrs.items():
-                ds_info.attrs[k] = v
-
-            ds_values = hdf_file.create_dataset(
-                values_path, data=new_values, **values_create_kwargs
-            )
-            for k, v in values_attrs.items():
-                ds_values.attrs[k] = v
-
-        if pin_tables:
-            HdfMesh.pin_property_tables(hdf_path, mesh_name, pinned=True)
-
-        logger.info(
-            f"Wrote face property tables for {len(face_tables)} faces "
-            f"in mesh '{mesh_name}' ({new_values.shape[0]} total rows)"
+        """Deprecated wrapper for :meth:`write_linux_tmp_face_property_tables`."""
+        warnings.warn(
+            "HdfMesh.set_mesh_face_property_tables() is deprecated; use "
+            "write_linux_tmp_face_property_tables(). The compatibility name "
+            "is retained through v1.1.x and will be removed no earlier than "
+            "v1.2.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        HdfMesh.write_linux_tmp_face_property_tables(
+            hdf_path,
+            mesh_name,
+            face_tables,
+            pin_tables=pin_tables,
+            acknowledge_unsupported=acknowledge_unsupported,
         )
 
     @staticmethod
@@ -1855,7 +2212,7 @@ class HdfMesh:
 
     @staticmethod
     @log_call
-    def extend_face_property_tables(
+    def extend_linux_tmp_face_property_tables(
         hdf_path: Union[str, Path],
         mesh_name: str,
         extension_elevation: float,
@@ -1865,9 +2222,11 @@ class HdfMesh:
         polygon=None,
         region_name: Optional[str] = None,
         pin_tables: bool = True,
-    ) -> Dict[int, int]:
+        *,
+        acknowledge_unsupported: bool = False,
+    ) -> Dict[str, Any]:
         """
-        Extend face tables to higher elevations with depth-varying Manning's n.
+        Extend guarded Linux temporary face tables to higher elevations.
 
         For each target face, appends rows from the current table maximum up
         to ``extension_elevation``. Area is extrapolated above the terrain
@@ -1877,20 +2236,22 @@ class HdfMesh:
         ``mannings_n_func``.
 
         .. warning::
-            Edits written by this method are overwritten by the Windows
-            HEC-RAS geometry preprocessor on the next plan execution. To
-            preserve edits through a solver run, use the Linux two-phase
-            workflow: (1) preprocess on Windows via
+            EXPERIMENTAL. Not recommended for production or any other
+            non-experimental use. Tested only with HEC-RAS 7.0 April 2026 in
+            the workflow below; all other versions and workflows are untested.
+            Edits are overwritten by the Windows HEC-RAS geometry preprocessor
+            on the next plan execution. The tested Linux two-phase workflow is:
+            (1) preprocess on Windows via
             ``RasPreprocess.preprocess_plan()`` to generate the ``.tmp.hdf``,
             (2) apply edits to the ``.tmp.hdf``, (3) execute with
-            ``RasCmdr.compute_plan_linux()``. This is an undocumented and unsupported method
-            of injecting modified HDF inputs into the solver and may produce
-            erroneous results. Use with caution.
+            ``RasCmdr.compute_plan_linux()``. This is an undocumented and
+            unsupported method of injecting modified HDF inputs into the
+            solver and may produce erroneous results.
 
         Parameters
         ----------
         hdf_path : Union[str, Path]
-            Path to the HEC-RAS geometry HDF file.
+            Guarded HEC-RAS 7.0 ``*.p##.tmp.hdf`` result artifact.
         mesh_name : str
             Name of the 2D flow area.
         extension_elevation : float
@@ -1916,24 +2277,49 @@ class HdfMesh:
 
         Returns
         -------
-        Dict[int, int]
-            Mapping of ``{face_id: rows_added}`` for each extended face.
+        Dict[str, Any]
+            Structured mutation report with ``rows_added``,
+            ``faces_modified``, ``total_rows_added``, and ``backup_path``.
         """
+        HdfMesh._require_linux_tmp_write_acknowledgement(
+            acknowledge_unsupported
+        )
         hdf_path = Path(hdf_path)
         base_path = f"Geometry/2D Flow Areas/{mesh_name}"
         info_path = f"{base_path}/Faces Area Elevation Info"
         values_path = f"{base_path}/Faces Area Elevation Values"
 
-        if elevation_step <= 0:
-            raise ValueError("elevation_step must be positive")
+        if not np.isfinite(extension_elevation):
+            raise ValueError("extension_elevation must be finite")
+        if not np.isfinite(elevation_step) or elevation_step <= 0:
+            raise ValueError("elevation_step must be finite and positive")
+
+        with h5py.File(hdf_path, "r") as hdf_file:
+            (
+                _,
+                _,
+                old_info,
+                _,
+            ) = HdfMesh._validate_linux_tmp_face_table_schema(
+                hdf_file,
+                hdf_path,
+                mesh_name,
+            )
+        num_faces = old_info.shape[0]
+        explicit_face_ids = HdfMesh._normalize_linux_tmp_face_ids(
+            face_ids,
+            num_faces,
+        )
 
         resolved = HdfMesh._resolve_face_ids(
-            hdf_path, mesh_name, face_ids, polygon, region_name
+            hdf_path,
+            mesh_name,
+            explicit_face_ids,
+            polygon,
+            region_name,
         )
 
         with h5py.File(str(hdf_path), 'r') as hdf_file:
-            if info_path not in hdf_file or values_path not in hdf_file:
-                raise KeyError(f"Face property tables not found for mesh '{mesh_name}'")
             old_info = hdf_file[info_path][()]
             old_values = hdf_file[values_path][()]
             normals_path = f"{base_path}/Faces NormalUnitVector and Length"
@@ -1943,20 +2329,18 @@ class HdfMesh:
                 else None
             )
 
-        num_faces = old_info.shape[0]
         if resolved is None:
             face_ids_to_extend = list(range(num_faces))
         else:
-            face_ids_to_extend = list(resolved)
+            face_ids_to_extend = HdfMesh._normalize_linux_tmp_face_ids(
+                list(resolved),
+                num_faces,
+            ) or []
 
         modified_tables: Dict[int, pd.DataFrame] = {}
         rows_added: Dict[int, int] = {}
 
         for fid in face_ids_to_extend:
-            if fid >= num_faces:
-                logger.warning(f"Face ID {fid} out of range (0-{num_faces - 1}), skipping")
-                continue
-
             start, count = old_info[fid]
             face_vals = old_values[start:start + count]
 
@@ -2000,20 +2384,68 @@ class HdfMesh:
             modified_tables[fid] = df
             rows_added[fid] = len(new_rows)
 
+        backup_path = None
         if modified_tables:
-            HdfMesh.set_mesh_face_property_tables(
-                hdf_path, mesh_name, modified_tables, pin_tables=pin_tables
+            backup_path = HdfMesh.write_linux_tmp_face_property_tables(
+                hdf_path,
+                mesh_name,
+                modified_tables,
+                pin_tables=pin_tables,
+                acknowledge_unsupported=True,
             )
 
         logger.info(
             f"Extended {len(rows_added)} face tables in mesh '{mesh_name}', "
             f"total rows added: {sum(rows_added.values())}"
         )
-        return rows_added
+        return {
+            "rows_added": rows_added,
+            "faces_modified": len(rows_added),
+            "total_rows_added": sum(rows_added.values()),
+            "backup_path": backup_path,
+        }
 
     @staticmethod
     @log_call
-    def set_face_mannings_n_values(
+    def extend_face_property_tables(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        extension_elevation: float,
+        mannings_n_func: Callable[[float, float], float],
+        elevation_step: float = 0.5,
+        face_ids: Optional[List[int]] = None,
+        polygon=None,
+        region_name: Optional[str] = None,
+        pin_tables: bool = True,
+        *,
+        acknowledge_unsupported: bool = False,
+    ) -> Dict[int, int]:
+        """Deprecated wrapper for guarded Linux temporary-table extension."""
+        warnings.warn(
+            "HdfMesh.extend_face_property_tables() is deprecated; use "
+            "extend_linux_tmp_face_property_tables(). The compatibility name "
+            "is retained through v1.1.x and will be removed no earlier than "
+            "v1.2.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        report = HdfMesh.extend_linux_tmp_face_property_tables(
+            hdf_path,
+            mesh_name,
+            extension_elevation,
+            mannings_n_func,
+            elevation_step=elevation_step,
+            face_ids=face_ids,
+            polygon=polygon,
+            region_name=region_name,
+            pin_tables=pin_tables,
+            acknowledge_unsupported=acknowledge_unsupported,
+        )
+        return report["rows_added"]
+
+    @staticmethod
+    @log_call
+    def transform_linux_tmp_face_mannings_n(
         hdf_path: Union[str, Path],
         mesh_name: str,
         mannings_n_func: Callable[[float, float, float], float],
@@ -2021,28 +2453,31 @@ class HdfMesh:
         polygon=None,
         region_name: Optional[str] = None,
         pin_tables: bool = True,
-    ) -> int:
-        """
-        Replace Manning's n values in existing face tables using a function.
+        *,
+        acknowledge_unsupported: bool = False,
+    ) -> Dict[str, Any]:
+        """Transform Manning's n in guarded Linux temporary face tables.
 
         Preserves Elevation, Area, and Wetted Perimeter columns. Only the
         Manning's n column is recomputed.
 
         .. warning::
-            Edits written by this method are overwritten by the Windows
-            HEC-RAS geometry preprocessor on the next plan execution. To
-            preserve edits through a solver run, use the Linux two-phase
-            workflow: (1) preprocess on Windows via
+            EXPERIMENTAL. Not recommended for production or any other
+            non-experimental use. Tested only with HEC-RAS 7.0 April 2026 in
+            the workflow below; all other versions and workflows are untested.
+            Edits are overwritten by the Windows HEC-RAS geometry preprocessor
+            on the next plan execution. The tested Linux two-phase workflow is:
+            (1) preprocess on Windows via
             ``RasPreprocess.preprocess_plan()`` to generate the ``.tmp.hdf``,
             (2) apply edits to the ``.tmp.hdf``, (3) execute with
-            ``RasCmdr.compute_plan_linux()``. This is an undocumented and unsupported method
-            of injecting modified HDF inputs into the solver and may produce
-            erroneous results. Use with caution.
+            ``RasCmdr.compute_plan_linux()``. This is an undocumented and
+            unsupported method of injecting modified HDF inputs into the
+            solver and may produce erroneous results.
 
         Parameters
         ----------
         hdf_path : Union[str, Path]
-            Path to the HEC-RAS geometry HDF file.
+            Guarded HEC-RAS 7.0 ``*.p##.tmp.hdf`` result artifact.
         mesh_name : str
             Name of the 2D flow area.
         mannings_n_func : Callable[[float, float, float], float]
@@ -2064,37 +2499,50 @@ class HdfMesh:
 
         Returns
         -------
-        int
-            Number of faces modified.
+        Dict[str, Any]
+            Structured mutation report with ``faces_modified`` and the
+            full-file ``backup_path``.
         """
+        HdfMesh._require_linux_tmp_write_acknowledgement(
+            acknowledge_unsupported
+        )
         hdf_path = Path(hdf_path)
-        base_path = f"Geometry/2D Flow Areas/{mesh_name}"
-        info_path = f"{base_path}/Faces Area Elevation Info"
-        values_path = f"{base_path}/Faces Area Elevation Values"
 
+        with h5py.File(hdf_path, "r") as hdf_file:
+            (
+                _,
+                _,
+                old_info,
+                old_values,
+            ) = HdfMesh._validate_linux_tmp_face_table_schema(
+                hdf_file,
+                hdf_path,
+                mesh_name,
+            )
+        num_faces = old_info.shape[0]
+        explicit_face_ids = HdfMesh._normalize_linux_tmp_face_ids(
+            face_ids,
+            num_faces,
+        )
         resolved = HdfMesh._resolve_face_ids(
-            hdf_path, mesh_name, face_ids, polygon, region_name
+            hdf_path,
+            mesh_name,
+            explicit_face_ids,
+            polygon,
+            region_name,
         )
 
-        with h5py.File(str(hdf_path), 'r') as hdf_file:
-            if info_path not in hdf_file or values_path not in hdf_file:
-                raise KeyError(f"Face property tables not found for mesh '{mesh_name}'")
-            old_info = hdf_file[info_path][()]
-            old_values = hdf_file[values_path][()]
-
-        num_faces = old_info.shape[0]
         if resolved is None:
             target_ids = list(range(num_faces))
         else:
-            target_ids = list(resolved)
+            target_ids = HdfMesh._normalize_linux_tmp_face_ids(
+                list(resolved),
+                num_faces,
+            ) or []
 
         modified_tables: Dict[int, pd.DataFrame] = {}
 
         for fid in target_ids:
-            if fid >= num_faces:
-                logger.warning(f"Face ID {fid} out of range (0-{num_faces - 1}), skipping")
-                continue
-
             start, count = old_info[fid]
             face_vals = old_values[start:start + count].copy()
 
@@ -2105,20 +2553,65 @@ class HdfMesh:
                 current_n = float(face_vals[i, 3])
                 face_vals[i, 3] = mannings_n_func(elev, depth, current_n)
 
-            df = pd.DataFrame(face_vals, columns=['Elevation', 'Area', 'Wetted Perimeter', "Manning's n"])
+            df = pd.DataFrame(
+                face_vals,
+                columns=HdfMesh._FACE_PROPERTY_COLUMNS,
+            )
             modified_tables[fid] = df
 
+        backup_path = None
         if modified_tables:
-            HdfMesh.set_mesh_face_property_tables(
-                hdf_path, mesh_name, modified_tables, pin_tables=pin_tables
+            backup_path = HdfMesh.write_linux_tmp_face_property_tables(
+                hdf_path,
+                mesh_name,
+                modified_tables,
+                pin_tables=pin_tables,
+                acknowledge_unsupported=True,
             )
 
         logger.info(f"Modified Manning's n for {len(modified_tables)} faces in mesh '{mesh_name}'")
-        return len(modified_tables)
+        return {
+            "faces_modified": len(modified_tables),
+            "backup_path": backup_path,
+        }
 
     @staticmethod
     @log_call
-    def recompute_face_mannings_n_from_landcover_curves(
+    def set_face_mannings_n_values(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        mannings_n_func: Callable[[float, float, float], float],
+        face_ids: Optional[List[int]] = None,
+        polygon=None,
+        region_name: Optional[str] = None,
+        pin_tables: bool = True,
+        *,
+        acknowledge_unsupported: bool = False,
+    ) -> int:
+        """Deprecated wrapper for guarded Linux temporary Manning transforms."""
+        warnings.warn(
+            "HdfMesh.set_face_mannings_n_values() is deprecated; use "
+            "transform_linux_tmp_face_mannings_n(). The compatibility name "
+            "is retained through v1.1.x and will be removed no earlier than "
+            "v1.2.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        report = HdfMesh.transform_linux_tmp_face_mannings_n(
+            hdf_path,
+            mesh_name,
+            mannings_n_func,
+            face_ids=face_ids,
+            polygon=polygon,
+            region_name=region_name,
+            pin_tables=pin_tables,
+            acknowledge_unsupported=acknowledge_unsupported,
+        )
+        return report["faces_modified"]
+
+    @staticmethod
+    @log_call
+    def sample_linux_tmp_face_mannings_n_from_landcover_curves(
         hdf_path: Union[str, Path],
         mesh_name: str,
         curves: pd.DataFrame,
@@ -2126,33 +2619,36 @@ class HdfMesh:
         face_ids: Optional[List[int]] = None,
         sample_spacing: float = 10.0,
         pin_tables: bool = True,
-    ) -> int:
-        """
-        Recompute face-table Manning's n values from land-cover roughness curves.
+        *,
+        acknowledge_unsupported: bool = False,
+    ) -> Dict[str, Any]:
+        """Sample land-cover curves into guarded Linux temporary face tables.
 
         The land-cover raster is sampled along each target face. For each face
-        property-table elevation, class-specific roughness values are interpolated
-        by depth and composited using a power-mean with exponent 1.5 to
-        approximate conveyance-weighted composite roughness across sampled
-        land-cover classes. Faces that fall outside the raster extent or have
-        only nodata pixels retain their original Manning's n values and are not
-        included in the returned count.
+        table elevation, class-specific roughness values are interpolated by
+        depth and combined with an equal-class power mean (exponent 1.5).
+        Repeated samples do not add weight: this is a class-presence heuristic,
+        not fraction-, length-, area-, or conveyance-weighted roughness.
+        Faces outside the raster or containing only nodata retain their original
+        values.
 
         .. warning::
-            Edits written by this method are overwritten by the Windows
-            HEC-RAS geometry preprocessor on the next plan execution. To
-            preserve edits through a solver run, use the Linux two-phase
-            workflow: (1) preprocess on Windows via
+            EXPERIMENTAL. Not recommended for production or any other
+            non-experimental use. Tested only with HEC-RAS 7.0 April 2026 in
+            the workflow below; all other versions and workflows are untested.
+            Edits are overwritten by the Windows HEC-RAS geometry preprocessor
+            on the next plan execution. The tested Linux two-phase workflow is:
+            (1) preprocess on Windows via
             ``RasPreprocess.preprocess_plan()`` to generate the ``.tmp.hdf``,
             (2) apply edits to the ``.tmp.hdf``, (3) execute with
-            ``RasCmdr.compute_plan_linux()``. This is an undocumented and unsupported method
-            of injecting modified HDF inputs into the solver and may produce
-            erroneous results. Use with caution.
+            ``RasCmdr.compute_plan_linux()``. This is an undocumented and
+            unsupported method of injecting modified HDF inputs into the
+            solver and may produce erroneous results.
 
         Parameters
         ----------
         hdf_path : Union[str, Path]
-            Path to the HEC-RAS geometry HDF file.
+            Guarded HEC-RAS 7.0 ``*.p##.tmp.hdf`` result artifact.
         mesh_name : str
             Name of the 2D flow area.
         curves : pd.DataFrame
@@ -2170,17 +2666,41 @@ class HdfMesh:
 
         Returns
         -------
-        int
-            Number of faces modified.
+        Dict[str, Any]
+            Structured mutation report with ``faces_modified`` and the
+            full-file ``backup_path``.
         """
+        HdfMesh._require_linux_tmp_write_acknowledgement(
+            acknowledge_unsupported
+        )
         if landcover_hdf_path is None:
             raise ValueError("landcover_hdf_path is required")
-        if sample_spacing <= 0:
-            raise ValueError("sample_spacing must be positive")
+        if not np.isfinite(sample_spacing) or sample_spacing <= 0:
+            raise ValueError("sample_spacing must be finite and positive")
 
         import rasterio
 
         hdf_path = Path(hdf_path)
+        with h5py.File(hdf_path, "r") as hdf_file:
+            (
+                _,
+                _,
+                old_info,
+                _,
+            ) = HdfMesh._validate_linux_tmp_face_table_schema(
+                hdf_file,
+                hdf_path,
+                mesh_name,
+            )
+            hdf_projection = HdfMesh._decode_hdf_attr(
+                hdf_file.attrs.get("Projection")
+            )
+        num_faces = old_info.shape[0]
+        explicit_face_ids = HdfMesh._normalize_linux_tmp_face_ids(
+            face_ids,
+            num_faces,
+        )
+
         landcover_hdf_path = Path(landcover_hdf_path)
         landcover_tif_path = landcover_hdf_path.with_suffix(".tif")
         if not landcover_tif_path.exists():
@@ -2197,14 +2717,37 @@ class HdfMesh:
         missing = required - set(curves.columns)
         if missing:
             raise ValueError(f"curves missing columns: {sorted(missing)}")
+        try:
+            curve_values = curves.loc[
+                :,
+                ["pixel_value", "depth", "mannings_n"],
+            ].to_numpy(dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("curves columns must be numeric.") from exc
+        if curve_values.size == 0:
+            raise ValueError("curves must contain at least one row.")
+        if not np.isfinite(curve_values).all():
+            raise ValueError("curves contains NaN or infinite values.")
+        if np.any(curve_values[:, 0] < 0):
+            raise ValueError("curves pixel_value values must be nonnegative.")
+        if not np.all(curve_values[:, 0] == np.floor(curve_values[:, 0])):
+            raise ValueError("curves pixel_value values must be integers.")
+        if np.any(curve_values[:, 1:] < 0):
+            raise ValueError(
+                "curves depth and mannings_n values must be nonnegative."
+            )
 
         curve_lookup = {}
         for pixel_value, group in curves.groupby("pixel_value"):
             group = group.sort_values("depth")
-            curve_lookup[int(pixel_value)] = (
-                group["depth"].to_numpy(dtype=float),
-                group["mannings_n"].to_numpy(dtype=float),
-            )
+            depths = group["depth"].to_numpy(dtype=float)
+            mannings_values = group["mannings_n"].to_numpy(dtype=float)
+            if depths.size > 1 and not np.all(np.diff(depths) > 0):
+                raise ValueError(
+                    f"curves depths for pixel_value {pixel_value!r} must be "
+                    "strictly increasing."
+                )
+            curve_lookup[int(pixel_value)] = (depths, mannings_values)
 
         face_tables_by_mesh = HdfMesh.get_mesh_face_property_tables(hdf_path)
         if mesh_name not in face_tables_by_mesh:
@@ -2213,13 +2756,16 @@ class HdfMesh:
 
         faces_gdf = HdfMesh.get_mesh_cell_faces(hdf_path)
         if faces_gdf.empty:
-            return 0
+            return {
+                "faces_modified": 0,
+                "backup_path": None,
+            }
         faces_gdf = faces_gdf[faces_gdf["mesh_name"] == mesh_name]
 
-        if face_ids is None:
+        if explicit_face_ids is None:
             target_ids = sorted(face_tables["Face ID"].astype(int).unique())
         else:
-            target_ids = [int(fid) for fid in face_ids]
+            target_ids = explicit_face_ids
 
         def _line_sample_points(line):
             points = list(line.coords)
@@ -2232,6 +2778,23 @@ class HdfMesh:
 
         modified_tables: Dict[int, pd.DataFrame] = {}
         with rasterio.open(landcover_tif_path) as src:
+            if src.crs is None:
+                raise ValueError("Land-cover raster has no CRS.")
+            if not hdf_projection:
+                raise ValueError(
+                    "Temporary result HDF has no root Projection attribute."
+                )
+            try:
+                hdf_crs = rasterio.crs.CRS.from_wkt(hdf_projection)
+            except Exception as exc:
+                raise ValueError(
+                    "Temporary result HDF Projection is not valid WKT."
+                ) from exc
+            if hdf_crs != src.crs:
+                raise ValueError(
+                    "Land-cover raster CRS does not match the temporary "
+                    "result HDF Projection."
+                )
             nodata = src.nodata
             for fid in target_ids:
                 face_rows = faces_gdf[faces_gdf["face_id"].astype(int) == fid]
@@ -2266,7 +2829,7 @@ class HdfMesh:
                 for idx, row in updated.iterrows():
                     depth = float(row["Elevation"]) - min_elev
                     n_values = []
-                    for pixel_value in sampled_classes:
+                    for pixel_value in sorted(sampled_classes):
                         depths, mannings_values = curve_lookup[pixel_value]
                         n_values.append(
                             float(np.interp(depth, depths, mannings_values))
@@ -2277,16 +2840,138 @@ class HdfMesh:
 
                 modified_tables[fid] = updated
 
+        backup_path = None
         if modified_tables:
-            HdfMesh.set_mesh_face_property_tables(
-                hdf_path, mesh_name, modified_tables, pin_tables=pin_tables
+            backup_path = HdfMesh.write_linux_tmp_face_property_tables(
+                hdf_path,
+                mesh_name,
+                modified_tables,
+                pin_tables=pin_tables,
+                acknowledge_unsupported=True,
             )
 
         logger.info(
             f"Recomputed face Manning's n for {len(modified_tables)} faces "
             f"in mesh '{mesh_name}'"
         )
-        return len(modified_tables)
+        return {
+            "faces_modified": len(modified_tables),
+            "backup_path": backup_path,
+        }
+
+    @staticmethod
+    @log_call
+    def recompute_face_mannings_n_from_landcover_curves(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        curves: pd.DataFrame,
+        landcover_hdf_path: Optional[Union[str, Path]] = None,
+        face_ids: Optional[List[int]] = None,
+        sample_spacing: float = 10.0,
+        pin_tables: bool = True,
+        *,
+        acknowledge_unsupported: bool = False,
+    ) -> int:
+        """Deprecated wrapper for the equal-class Linux temporary-table API."""
+        warnings.warn(
+            "HdfMesh.recompute_face_mannings_n_from_landcover_curves() is "
+            "deprecated; use "
+            "sample_linux_tmp_face_mannings_n_from_landcover_curves(). This "
+            "method is not conveyance-weighted. The compatibility name is "
+            "retained through v1.1.x and will be removed no earlier than "
+            "v1.2.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        report = HdfMesh.sample_linux_tmp_face_mannings_n_from_landcover_curves(
+            hdf_path,
+            mesh_name,
+            curves,
+            landcover_hdf_path=landcover_hdf_path,
+            face_ids=face_ids,
+            sample_spacing=sample_spacing,
+            pin_tables=pin_tables,
+            acknowledge_unsupported=acknowledge_unsupported,
+        )
+        return report["faces_modified"]
+
+    @staticmethod
+    @log_call
+    def set_mesh_pinned_attribute(
+        hdf_path: Union[str, Path],
+        mesh_name: str,
+        pinned: bool = True,
+        *,
+        acknowledge_unsupported: bool = False,
+    ) -> Path:
+        """Set or clear guarded Linux temporary-HDF ``Pinned`` metadata.
+
+        Warning:
+            EXPERIMENTAL. Not recommended for production or any other
+            non-experimental use. Tested only with HEC-RAS 7.0 April 2026 in
+            the Windows-preprocess/Linux-solve temporary-HDF workflow; all
+            other versions and workflows are untested.
+
+        ``Pinned`` is informational metadata that may be recognized by
+        RASMapper. It is ignored by Windows HEC-RAS preprocessing and does not
+        protect modified face tables. This method therefore accepts only the
+        guarded 7.0 Linux two-phase ``*.p##.tmp.hdf`` role, requires explicit
+        acknowledgement, creates a full-file backup, and verifies readback.
+
+        Returns:
+            Path to the full-file pre-write backup.
+        """
+        HdfMesh._require_linux_tmp_write_acknowledgement(
+            acknowledge_unsupported
+        )
+        hdf_path = Path(hdf_path)
+        if not hdf_path.exists():
+            raise FileNotFoundError(hdf_path)
+        group_path = f"Geometry/2D Flow Areas/{mesh_name}"
+
+        with h5py.File(hdf_path, "r") as hdf_file:
+            HdfMesh._validate_linux_tmp_face_table_schema(
+                hdf_file,
+                hdf_path,
+                mesh_name,
+            )
+
+        backup_path = HdfMesh._create_linux_tmp_hdf_backup(hdf_path)
+        try:
+            with h5py.File(hdf_path, "r+") as hdf_file:
+                group = hdf_file[group_path]
+                if pinned:
+                    group.attrs["Pinned"] = np.bool_(True)
+                elif "Pinned" in group.attrs:
+                    del group.attrs["Pinned"]
+
+            with h5py.File(hdf_path, "r") as hdf_file:
+                HdfMesh._validate_linux_tmp_face_table_schema(
+                    hdf_file,
+                    hdf_path,
+                    mesh_name,
+                )
+                group = hdf_file[group_path]
+                if pinned and not bool(group.attrs.get("Pinned", False)):
+                    raise RuntimeError("Mesh Pinned attribute failed readback.")
+                if not pinned and "Pinned" in group.attrs:
+                    raise RuntimeError(
+                        "Mesh Pinned attribute was not removed on readback."
+                    )
+        except Exception as exc:
+            raise RuntimeError(
+                "Guarded Pinned-attribute write failed. Restore the full-file "
+                f"backup at {backup_path}: {exc}"
+            ) from exc
+
+        action = "Pinned" if pinned else "Unpinned"
+        logger.info(
+            "%s informational metadata for mesh %r; backup=%s",
+            action,
+            mesh_name,
+            backup_path,
+        )
+        return backup_path
 
     @staticmethod
     @log_call
@@ -2294,42 +2979,25 @@ class HdfMesh:
         hdf_path: Union[str, Path],
         mesh_name: str,
         pinned: bool = True,
+        *,
+        acknowledge_unsupported: bool = False,
     ) -> None:
-        """
-        Set or clear the Pinned attribute on the mesh group.
-
-        .. warning::
-            This attribute may be recognized by RASMapper (the geometry
-            editor GUI) but is **ignored by the Windows HEC-RAS solver**
-            during geometry preprocessing. Face property table edits
-            survive a solver run only via the Linux two-phase workflow.
-            Do not rely on this attribute to protect edits when running
-            plans through the Windows solver.
-
-        Parameters
-        ----------
-        hdf_path : Union[str, Path]
-            Path to the HEC-RAS geometry HDF file.
-        mesh_name : str
-            Name of the 2D flow area.
-        pinned : bool, default True
-            True to pin (protect), False to unpin.
-        """
-        hdf_path = Path(hdf_path)
-        group_path = f"Geometry/2D Flow Areas/{mesh_name}"
-
-        with h5py.File(str(hdf_path), 'r+') as hdf_file:
-            if group_path not in hdf_file:
-                raise KeyError(f"Mesh group not found: '{group_path}'")
-            group = hdf_file[group_path]
-            if pinned:
-                group.attrs['Pinned'] = np.bool_(True)
-            else:
-                if 'Pinned' in group.attrs:
-                    del group.attrs['Pinned']
-
-        action = "Pinned" if pinned else "Unpinned"
-        logger.info(f"{action} property tables for mesh '{mesh_name}'")
+        """Deprecated wrapper for :meth:`set_mesh_pinned_attribute`."""
+        warnings.warn(
+            "HdfMesh.pin_property_tables() is deprecated; use "
+            "set_mesh_pinned_attribute(). The Pinned attribute is "
+            "informational and does not protect tables from Windows "
+            "preprocessing. The compatibility name is retained through "
+            "v1.1.x and will be removed no earlier than v1.2.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        HdfMesh.set_mesh_pinned_attribute(
+            hdf_path,
+            mesh_name,
+            pinned=pinned,
+            acknowledge_unsupported=acknowledge_unsupported,
+        )
 
     # -------------------------------------------------------------------------
     # Spatial Filtering: Polygon Mask for Selective Face Application

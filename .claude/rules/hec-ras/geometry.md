@@ -55,8 +55,12 @@ rivers = RasGeometry.get_rivers(geom_file)
 # Modify 2D Manning's n base table (plain text geometry)
 GeomLandCover.set_base_mannings_n(geom_file, mannings_df)
 
-# Modify land cover sidecar (raster class -> n mapping)
-HdfLandCover.set_landcover_raster_map(sidecar_hdf, {"Forest": 0.12})
+# Modify land-cover sidecar parameters through native RASMapperLib
+HdfLandCover.set_landcover_mannings_n(
+    sidecar_hdf,
+    {"Forest": 0.12},
+    hecras_version="7.0",
+)
 ```
 
 ## Manning's n Block Limit

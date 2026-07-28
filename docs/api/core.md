@@ -521,25 +521,32 @@ infiltration_layers = RasMap.list_infiltration_layers(project_path)
 
 #### Classification Polygon Overrides
 
-`RasMap.add_land_classification_polygon()` authors the RAS Mapper `Classification Polygons` sidecar group used by land-cover, soils, and infiltration layers. It also upserts the affected `Raster Map` and `Variables` class rows when those datasets exist.
+`RasMap.list_land_classification_polygons()` provides read-only extraction for
+land-classification sidecars. For HEC-RAS 6.x and 7.0.x
+`LC Type=LandCover` sidecars, `add_land_classification_polygon()`,
+`update_land_classification_polygon()`, and
+`delete_land_classification_polygon()` persist one polygon through the native
+RASMapper feature-layer API. The selected class must already exist; these
+methods do not remap raster classifications or create/remove classes.
 
-```python
-from shapely.geometry import box
-from ras_commander import RasMap
+Polygon input must contain one effective polygon. A one-member `MultiPolygon`
+is normalized, while true multipart input and interior rings are rejected
+before mutation. HEC-RAS 6.0 through 7.0.1 persists native polygon holes but
+its land-cover classification resampler flattens them; accepting them would
+therefore misrepresent their hydraulic effect. Model an exclusion by splitting
+the intended coverage into explicit, non-overlapping hole-free polygons.
+GeoPandas inputs must use the sidecar CRS; raw Shapely and GeoJSON coordinates
+are assumed to already use that CRS. Every supported mutation creates a durable
+backup, saves through RASMapper, and validates a fresh reload.
 
-polygons = RasMap.add_land_classification_polygon(
-    "Land Classification/LandCover.hdf",
-    box(2083000, 370500, 2083500, 371000),
-    class_name="Parking Lot",
-    class_id=99,
-    variable_values={
-        "mannings_n": 0.105,
-        "percent_impervious": 95.0,
-    },
-)
-```
+HEC-RAS 5.x, soils/infiltration polygon mutation, and
+`remove_unused_class=True` fail with migration guidance. Geometry Manning
+regions remain the supported 5.x override route, while soils and infiltration
+sidecars should be rebuilt through their native authoring APIs when their
+classification structure changes.
 
-Use `list_land_classification_polygons()`, `update_land_classification_polygon()`, and `delete_land_classification_polygon()` for extraction and maintenance. After editing sidecar polygons for an already-associated geometry, rerun preprocessing/property-table workflows so compiled geometry HDFs consume the new override.
+This is separate from polygon inputs accepted by `restrict_to_extent`: those
+inputs define a single buffered processing extent and remain supported.
 
 #### Terrain Display Settings
 
@@ -561,7 +568,11 @@ CLB-272 owns these terrain display toggles. CLB-253 remains the separate terrain
 
 #### Geometry HDF Layer Associations
 
-`RasMap.get_hdf_geometry_association()` reads `/Geometry` association attributes from geometry HDFs and plan/result HDFs without mutation. `RasMap.associate_geometry_layers()` writes the geometry HDF attributes through Python-native `h5py`.
+`RasMap.get_hdf_geometry_association()` reads `/Geometry` association
+attributes from geometry HDFs and plan/result HDFs without mutation.
+`RasMap.associate_geometry_layers()` delegates association changes to the
+selected HEC-RAS generation's native geometry-association API and validates
+the native readback.
 
 ```python
 association = RasMap.get_hdf_geometry_association("MyModel.g01.hdf")
@@ -577,7 +588,9 @@ RasMap.associate_geometry_layers(
 ```
 
 !!! warning "Compiled HDF only"
-    `associate_geometry_layers()` updates an existing `.g##.hdf`. It does not compile plain-text `.g##` geometry into HDF or create missing geometry datasets.
+    `associate_geometry_layers()` updates an existing `.g##.hdf` through
+    HEC-RAS. It does not compile plain-text `.g##` geometry into HDF or create
+    missing geometry datasets.
 
 ### RasProcess
 

@@ -404,23 +404,26 @@ RAS Commander currently fills the "missing middle" between manual single-run wor
 
 The current 99-run practical limit addresses most calibration and sensitivity workflows, but JPMOS (Joint Probability Method of Optimal Sampling) and Monte Carlo simulations may require thousands of runs.
 
-### HDF Writing & Modification Features
+### Native HDF Authoring Features
 
-HEC-RAS stores geometry, results, terrain, and infiltration data in HDF5 format. Currently, RAS Commander focuses on *reading* HDF data. Future development could enable:
+HEC-RAS stores geometry, results, terrain, land classification, and
+infiltration artifacts in HDF5. Ras Commander uses `h5py` for read-only
+analysis; production authoring must delegate to the HEC-RAS/RASMapper object
+that owns the artifact.
 
-**Programmatic HDF Modification:**
-- Infiltration parameter overrides (deficit, percolation rate)
-- Calibration region automation
-- Manning's n layer modifications
-- Boundary condition injection
+Infiltration has two distinct native artifacts:
 
-**Technical Notes:**
-- Infiltration layers are stored *only* in geometry HDF (not ASCII .g files) - they survive geometry saves
-- HDF modifications require exact matching of structured arrays, compression, and chunking options
-- HDFView inspection essential for understanding required data structures
-- New HEC-RAS features increasingly use HDF-only storage (no ASCII backport)
+- a land-classification sidecar containing raster classes and parameters; and
+- geometry-level override regions and Base Overrides, which take precedence.
 
-See `docs/reference/hdf-writing-guide.md` for current HDF modification patterns.
+Development of new writers starts by locating the native owner and scoped save
+path with RASDecomp/reflection. It then adds version/role/schema gates, unique
+durable backup and rollback, fresh native reload, and an end-to-end solver
+result check. Matching only structured arrays, compression, and chunking is
+not a safe authoring contract.
+
+See [HDF Writing Guide](../reference/hdf-writing-guide.md) for the current
+native-first policy and qualified recovery exceptions.
 
 ### Terrain Optimization Automation
 

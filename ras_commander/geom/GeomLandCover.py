@@ -14,7 +14,8 @@ List of Functions:
 - get_region_mannings_n() - Read Manning's n region overrides
 - set_region_mannings_n() - Write regional Manning's n overrides
 - set_mannings_region_polygons() - Write regional Manning's n polygon geometry
-- override_2d_mannings_n() - EXPERIMENTAL: Override preprocessed Manning's n in geometry HDF
+- override_2d_mannings_n() - Fail-closed legacy name; use durable text
+  setters, native property-table recomputation, and final-result auditing
 
 Example Usage:
     >>> from ras_commander import GeomLandCover, RasPlan
@@ -119,16 +120,8 @@ class GeomLandCover:
                 "Manning's n data must include land-cover name and n-value columns"
             )
 
-        if table_number is None:
-            if 'Table Number' in df.columns and not df['Table Number'].dropna().empty:
-                table_number = str(df['Table Number'].dropna().iloc[0])
-            else:
-                table_number = "16"
-        table_number = str(table_number)
-
         normalized = pd.DataFrame(
             {
-                'Table Number': table_number,
                 'Land Cover Name': df[name_col].astype(str).str.strip(),
                 'Base Mannings n Value': pd.to_numeric(df[value_col], errors='coerce'),
             }
@@ -139,7 +132,22 @@ class GeomLandCover:
         ].copy()
         if normalized.empty:
             raise ValueError("Manning's n table has no writable rows")
-        return table_number, normalized
+
+        row_count = len(normalized)
+        if table_number is not None:
+            try:
+                expected_count = int(table_number)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("table_number must be an integer row count") from exc
+            if expected_count != row_count:
+                raise ValueError(
+                    "table_number must equal the number of writable Manning's n "
+                    f"rows ({row_count}), got {expected_count}"
+                )
+
+        row_count_text = str(row_count)
+        normalized.insert(0, 'Table Number', row_count_text)
+        return row_count_text, normalized
 
     @staticmethod
     def _region_polygon_count(line: str) -> int:
@@ -500,7 +508,7 @@ class GeomLandCover:
             # background raster entries that also contain commas.
             if reading_base_table:
                 _stop = (
-                    not ',' in line
+                    ',' not in line
                     or line.startswith('LCMann')
                     or line.startswith('Chan Stop')
                     or line.startswith('Geom Raster')
@@ -677,9 +685,10 @@ class GeomLandCover:
                 n-values. Accepted name columns include ``Land Cover Name`` and
                 ``class_name``; accepted n-value columns include
                 ``Base Mannings n Value``, ``mannings_n``, and ``n_value``.
-            table_number: Optional ``LCMann Table`` number. Defaults to the
-                first table in the file, the input ``Table Number`` column, or
-                ``16`` for new tables.
+            table_number: Deprecated compatibility argument interpreted as the
+                expected number of writable rows. When provided, it must match
+                the normalized input row count. ``LCMann Table=`` is always
+                authored from the actual emitted row count.
             backup: If True, write ``.bak`` beside the geometry file first.
 
         Returns:
@@ -689,7 +698,7 @@ class GeomLandCover:
         import shutil
 
         geom_file_path = Path(geom_file_path)
-        requested_table_number, normalized = GeomLandCover._normalize_base_table(
+        row_count, normalized = GeomLandCover._normalize_base_table(
             mannings_data,
             table_number=table_number,
         )
@@ -701,20 +710,12 @@ class GeomLandCover:
         with open(geom_file_path, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
 
-        start_idx, end_idx, existing_table_number = GeomLandCover._find_lcmann_table_bounds(
+        start_idx, end_idx, _ = GeomLandCover._find_lcmann_table_bounds(
             lines,
-            table_number=str(table_number) if table_number is not None else None,
+            table_number=None,
         )
-        # If exact table_number wasn't found but one was specified, replace ANY
-        # existing LCMann Table (e.g. disabled "=0") instead of appending a duplicate.
-        if start_idx is None and table_number is not None:
-            start_idx, end_idx, _ = GeomLandCover._find_lcmann_table_bounds(
-                lines, table_number=None,
-            )
-        resolved_table_number = existing_table_number or requested_table_number
-        normalized['Table Number'] = str(resolved_table_number)
 
-        new_content = [f"LCMann Table={resolved_table_number}\n"]
+        new_content = [f"LCMann Table={row_count}\n"]
         for _, row in normalized.iterrows():
             n_value = float(row['Base Mannings n Value'])
             new_content.append(f"{row['Land Cover Name']},{n_value:g}\n")
@@ -798,7 +799,7 @@ class GeomLandCover:
                 continue
 
             # Stop reading when we hit a line without a comma or starting with LCMann
-            if reading_region_table and (not ',' in line or line.startswith('LCMann')):
+            if reading_region_table and (',' not in line or line.startswith('LCMann')):
                 reading_region_table = False
                 continue
 
@@ -1107,96 +1108,16 @@ class GeomLandCover:
         mannings_n: float,
         area_name: str = None,
     ) -> bool:
+        """Reject direct writes to solver-owned Manning datasets.
+
+        Use ``set_base_mannings_n`` or ``set_region_mannings_n`` followed by a
+        native HEC-RAS geometry/plan computation.  Generated HDF arrays are
+        outputs, not a supported input contract.
         """
-        EXPERIMENTAL — Override preprocessed Manning's n in a geometry HDF.
-
-        Writes a uniform Manning's n value directly to the preprocessed
-        ``/Geometry/2D Flow Areas/{area}/Mann`` dataset. This dataset is
-        normally generated by the HEC-RAS geometry preprocessor and is
-        OVERWRITTEN on every preprocessing pass.
-
-        .. warning::
-
-            **This is NOT an officially supported HEC-RAS workflow.** The
-            geometry HDF per-cell Manning's n is a *generated output* of
-            preprocessing, not a durable input. Any call to ``compute_plan()``
-            with ``clear_geompre=True`` or ``force_geompre=True`` will
-            regenerate these values from the plain-text geometry file and the
-            land cover sidecar HDF, discarding overrides written here.
-
-        **Intended use — demonstration / research only:**
-
-        1. Preprocess geometry first (run the plan once, or use
-           ``force_geompre=True`` on a prior run).
-        2. Call this function to inject override values into the HDF.
-        3. Run ``compute_plan()`` with ``clear_geompre=False`` and
-           ``force_geompre=False`` so the preprocessor does NOT regenerate.
-        4. Values take effect for that single compute pass only.
-
-        **For production workflows, use these durable APIs instead:**
-
-        - ``GeomLandCover.set_base_mannings_n(geom_file, df)`` — modify the
-          base calibration table in the plain-text .g## file.
-        - ``GeomLandCover.set_region_mannings_n(geom_file, df)`` — modify
-          region-specific overrides in the plain-text .g## file.
-        - ``HdfLandCover.set_landcover_raster_map(sidecar_hdf, mapping)`` —
-          modify the raster class-to-n mapping in the land cover sidecar HDF.
-
-        All three durable methods survive geometry preprocessing because
-        HEC-RAS reads FROM them to generate the per-cell values.
-
-        Parameters:
-            geom_hdf_path (Union[str, Path]): Path to the geometry HDF file (.g##.hdf)
-            mannings_n (float): Manning's n roughness coefficient to set uniformly.
-            area_name (str, optional): Name of specific 2D flow area to update.
-                If None, updates all 2D flow areas in the file.
-
-        Returns:
-            bool: True if at least one area was updated, False if no Mann datasets found.
-
-        Raises:
-            FileNotFoundError: If the geometry HDF file does not exist.
-            ValueError: If mannings_n is not a positive number.
-        """
-        logger.warning(
-            "override_2d_mannings_n() is EXPERIMENTAL. Values written here "
-            "will be overwritten by the geometry preprocessor. Use "
-            "GeomLandCover.set_base_mannings_n() or "
-            "HdfLandCover.set_landcover_raster_map() for durable changes."
+        del geom_hdf_path, mannings_n, area_name
+        raise NotImplementedError(
+            "Direct writes to generated 2D Manning HDF datasets are disabled. "
+            "Use GeomLandCover.set_base_mannings_n() or "
+            "GeomLandCover.set_region_mannings_n(), then let HEC-RAS rebuild "
+            "the property tables."
         )
-        import h5py
-        import numpy as np
-
-        geom_hdf_path = Path(geom_hdf_path)
-        if not geom_hdf_path.exists():
-            raise FileNotFoundError(f"Geometry HDF file not found: {geom_hdf_path}")
-        if not isinstance(mannings_n, (int, float)) or mannings_n <= 0:
-            raise ValueError(f"mannings_n must be a positive number, got {mannings_n}")
-
-        updated_count = 0
-        with h5py.File(str(geom_hdf_path), "a") as hf:
-            fa_group = hf.get("Geometry/2D Flow Areas")
-            if fa_group is None:
-                logger.warning(f"No 'Geometry/2D Flow Areas' group in {geom_hdf_path.name}")
-                return False
-
-            areas = [area_name] if area_name else list(fa_group.keys())
-            for area in areas:
-                mann_path = f"Geometry/2D Flow Areas/{area}/Mann"
-                if mann_path in hf:
-                    mann = hf[mann_path][:]
-                    mann[:, 1] = mannings_n
-                    hf[mann_path][:] = mann
-                    updated_count += 1
-                    logger.debug(
-                        f"Set Manning's n to {mannings_n} in {geom_hdf_path.name}/{area}"
-                    )
-                else:
-                    logger.debug(f"No Mann dataset at {mann_path}")
-
-        if updated_count == 0:
-            logger.warning(f"No Mann datasets found in {geom_hdf_path.name}")
-            return False
-
-        logger.info(f"Updated Manning's n in {updated_count} area(s)")
-        return True

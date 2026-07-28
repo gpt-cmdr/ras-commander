@@ -36,40 +36,30 @@ List of Functions in RasCmdr:
         
         
 """
+import logging
 import os
-import subprocess
-import shutil
 import shlex
-from collections import defaultdict
-from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from .RasPrj import ras, RasPrj, init_ras_project, get_ras_exe
-from .RasPlan import RasPlan
-from .RasGeo import RasGeo
-from .RasUtils import RasUtils
-import logging
-import time
-import queue
-from threading import Thread, Lock
-from typing import Union, List, Optional, Dict, Any
-from pathlib import Path
 import shutil
-import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock, Thread
-from itertools import cycle
-from ras_commander.RasPrj import RasPrj  # Ensure RasPrj is imported
-from threading import Lock, Thread, current_thread
+import subprocess
+import time
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import cycle
-from typing import Union, List, Optional, Dict, Any
 from numbers import Number
-from .LoggingConfig import get_logger
-from .Decorators import log_call
-from .RasBco import BcoMonitor
-from .ComputeResults import ComputeResult, ComputeParallelResult
+from pathlib import Path
+from threading import Lock, Thread
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Union
+
 import pandas as pd
-from typing import Callable
+
+from .ComputeResults import ComputeParallelResult, ComputeResult
+from .Decorators import log_call
+from .LoggingConfig import get_logger
+from .RasBco import BcoMonitor
+from .RasGeo import RasGeo
+from .RasPlan import RasPlan
+from .RasPrj import RasPrj, init_ras_project, ras
+from .RasUtils import RasUtils
 
 logger = get_logger(__name__)
 
@@ -104,6 +94,85 @@ class RasCmdr:
         plan_num_str = RasUtils.normalize_ras_number(plan_number)
 
         return Path(ras_object.project_folder) / f"{ras_object.project_name}.p{plan_num_str}.hdf"
+
+    @staticmethod
+    def _verify_required_hdf_datasets(
+        required_hdf_datasets: Optional[
+            Mapping[Union[str, Path], Union[str, Sequence[str]]]
+        ],
+        base_folder: Union[str, Path],
+    ) -> tuple[Optional[bool], List[str]]:
+        """Verify that requested HDF datasets exist, are datasets, and are nonempty."""
+        if required_hdf_datasets is None:
+            return None, []
+
+        import h5py
+
+        failures: List[str] = []
+        base_folder = Path(base_folder)
+        for file_value, dataset_paths in required_hdf_datasets.items():
+            if isinstance(dataset_paths, str):
+                dataset_paths = [dataset_paths]
+            hdf_path = Path(file_value)
+            if not hdf_path.is_absolute():
+                hdf_path = base_folder / hdf_path
+            if not hdf_path.exists():
+                failures.append(f"{hdf_path}: file missing")
+                continue
+
+            try:
+                with h5py.File(hdf_path, "r") as hdf_file:
+                    for dataset_path in dataset_paths:
+                        normalized = str(dataset_path).strip().strip("/")
+                        if not normalized:
+                            failures.append(f"{hdf_path}: empty dataset path")
+                            continue
+                        obj = hdf_file.get(normalized)
+                        if obj is None:
+                            failures.append(
+                                f"{hdf_path}:{normalized}: dataset missing"
+                            )
+                        elif not isinstance(obj, h5py.Dataset):
+                            failures.append(
+                                f"{hdf_path}:{normalized}: expected dataset, found group"
+                            )
+                        elif obj.size == 0:
+                            failures.append(
+                                f"{hdf_path}:{normalized}: dataset empty"
+                            )
+            except (OSError, RuntimeError, ValueError) as exc:
+                failures.append(f"{hdf_path}: unreadable HDF ({exc})")
+
+        return not failures, failures
+
+    @staticmethod
+    def _build_compute_result(
+        *,
+        success: bool,
+        results_df_row: Optional[pd.Series],
+        verify: bool,
+        required_hdf_datasets: Optional[
+            Mapping[Union[str, Path], Sequence[str]]
+        ],
+        base_folder: Union[str, Path],
+    ) -> ComputeResult:
+        """Apply requested artifact checks and return a qualified result."""
+        artifact_passed, failures = RasCmdr._verify_required_hdf_datasets(
+            required_hdf_datasets,
+            base_folder,
+        )
+        final_success = bool(success)
+        if artifact_passed is False:
+            final_success = False
+            for failure in failures:
+                logger.error("Required HDF artifact verification failed: %s", failure)
+        return ComputeResult(
+            success=final_success,
+            results_df_row=results_df_row,
+            completion_verified=bool(success) if verify else None,
+            artifact_verification_passed=artifact_passed,
+            verification_failures=failures,
+        )
 
     @staticmethod
     def _plan_entries_with_expected_hdf_paths(
@@ -712,6 +781,9 @@ class RasCmdr:
         hdf_output_variables: Optional[List[str]] = None,
         hdf_output_options: Optional[Dict[str, Any]] = None,
         hdf_output_profile: Optional[str] = None,
+        required_hdf_datasets: Optional[
+            Mapping[Union[str, Path], Sequence[str]]
+        ] = None,
         dialog_watchdog: bool = True,
     ) -> 'ComputeResult':
         """
@@ -732,16 +804,14 @@ class RasCmdr:
             clear_geompre (bool, optional): Whether to clear geometry preprocessor files (.c## files). Defaults to False.
                 Set to True when geometry has been modified to force recomputation of preprocessor files.
             force_geompre (bool, optional): Force full geometry reprocessing. Defaults to False.
-                Clears the cached preprocessor tables inside the .g##.hdf (including
-                Cells Center Manning's n) and the .c## files, then rebuilds the tables via
-                RasProcess.exe. The clearing is done in place: the land cover and terrain
-                association is preserved, so per-cell n is re-derived from the current land
-                cover source rather than collapsing to the uniform default.
+                Clears .c## files and requests native complete-geometry processing via
+                RasProcess.exe before running the plan. The geometry HDF is preserved:
+                ras-commander does not selectively delete solver-owned datasets, and the
+                land-cover and terrain associations remain intact.
                 Implies force_rerun: the currency check compares only .p##/.g##/.u## mtimes against
-                the results HDF, so it cannot detect changes to the cached .g##.hdf or to the land
-                cover sidecars that feed it. Skipping would silently drop the reprocessing request.
-                The RasProcess.exe rebuild is best effort -- if it is unavailable, the cleared
-                tables are re-derived by the solver-time preprocessor during the run instead.
+                the results HDF, so it cannot detect changes to land-cover sidecars. Skipping
+                would silently drop the reprocessing request. The RasProcess.exe request is
+                best effort; if unavailable, the plan still runs after .c## clearing.
             force_rerun (bool, optional): Force execution even if results are current. Defaults to False.
                 When False (default), checks file modification times and skips if results are current.
                 When True, always executes regardless of result currency.
@@ -780,6 +850,13 @@ class RasCmdr:
                 passed to ``RasPlan.set_hdf_output_options()`` before execution.
             hdf_output_profile (str, optional): Named HDF output profile to apply before
                 execution. Equivalent to ``use_optimal_hdf_settings=True`` with a profile.
+            required_hdf_datasets: Optional mapping of HDF filenames/paths to
+                required dataset paths. Relative HDF paths resolve inside the
+                compute project folder. Every requested object must be a
+                nonempty HDF dataset; otherwise ``ComputeResult.success`` is
+                false even when the HEC-RAS process exits successfully. This
+                check is independent of ``verify`` so geometry-only workflows
+                can state their exact artifact contract.
 
         Returns:
             ComputeResult: Result object with ``success`` bool and ``results_df_row`` (pd.Series or None).
@@ -787,6 +864,9 @@ class RasCmdr:
                 Access execution metrics via ``result.results_df_row`` (e.g., runtime, volume accounting).
                 ``results_df_row`` is None when dest_folder is used, execution fails, or extraction errors.
                 When skip_existing=True and results exist, returns ComputeResult(success=True).
+                ``completion_verified`` is None unless ``verify=True``.
+                Requested artifact failures are listed in
+                ``verification_failures`` and always make ``success`` false.
 
         Raises:
             ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
@@ -935,21 +1015,33 @@ class RasCmdr:
                 if RasCmdr._verify_completion(hdf_path, check_errors=False):
                     logger.info(f"Skipping plan {plan_number}: HDF results already exist with 'Complete Process'")
                     _success = True
-                    return ComputeResult(success=True, results_df_row=None)
+                    return RasCmdr._build_compute_result(
+                        success=True,
+                        results_df_row=None,
+                        verify=verify,
+                        required_hdf_datasets=required_hdf_datasets,
+                        base_folder=compute_ras.project_folder,
+                    )
 
             # Smart skip: check file modification times (unless force_rerun or skip_existing)
             # Note: Smart skip is bypassed when skip_existing=True since that provides explicit skip logic
-            # force_geompre also bypasses the skip: are_plan_results_current() only compares the
-            # .p##/.g##/.u## mtimes against the results HDF, so it cannot see the inputs that
-            # force_geompre exists to invalidate (the cached .g##.hdf, and land cover sidecars that
-            # feed it). Skipping here would drop the request silently and return success.
+            # force_geompre also bypasses the skip: are_plan_results_current() only
+            # compares .p##/.g##/.u## mtimes against the results HDF, so it cannot
+            # see sidecar-only changes. Skipping would silently drop the native
+            # reprocessing request and return success.
             if not force_rerun and not skip_existing and not force_geompre:
                 from .RasCurrency import RasCurrency
                 is_current, reason = RasCurrency.are_plan_results_current(plan_number, compute_ras)
                 if is_current:
                     logger.info(f"Skipping plan {plan_number}: {reason}")
                     _success = True
-                    return ComputeResult(success=True, results_df_row=None)
+                    return RasCmdr._build_compute_result(
+                        success=True,
+                        results_df_row=None,
+                        verify=verify,
+                        required_hdf_datasets=required_hdf_datasets,
+                        base_folder=compute_ras.project_folder,
+                    )
                 else:
                     logger.debug(f"Plan {plan_number} needs execution: {reason}")
 
@@ -979,22 +1071,18 @@ class RasCmdr:
 
             # Handle geometry preprocessor clearing
             if force_geompre:
-                # Force full geometry reprocessing: clear the cached preprocessor tables
-                # in the .g##.hdf, clear the .c## files, then rebuild the tables.
+                # Preserve the geometry HDF and its associations. Clear only .c##
+                # files, then ask HEC-RAS to perform complete geometry processing.
                 from .RasCurrency import RasCurrency
                 from .geom import GeomPreprocessor
                 try:
                     geom_hdf_path = RasCurrency.get_geom_hdf_path(plan_number, compute_ras)
-                    # This helper clears both .c## files and cached HDF tables in
-                    # place, preserving the land-cover and terrain associations.
                     GeomPreprocessor.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
-                    logger.debug(f"Force-cleared all geometry preprocessor files for plan: {plan_number}")
+                    logger.debug(f"Force-cleared .c## geometry preprocessor files for plan: {plan_number}")
 
-                    # Rebuild the property tables now that the cached ones are gone.
-                    # Best effort: RasProcess.exe may be absent, or the CompleteGeometry
-                    # verb may differ on other HEC-RAS versions. Either way the tables are
-                    # already cleared, so the solver-time preprocessor re-derives them at
-                    # compute -- this only front-loads that work and surfaces failures early.
+                    # Best effort: RasProcess.exe may be absent, or CompleteGeometry
+                    # may differ on other HEC-RAS versions. The plan run still
+                    # proceeds after .c## clearing if this native request is unavailable.
                     if geom_hdf_path is not None and Path(geom_hdf_path).exists():
                         try:
                             from .RasProcess import RasProcess
@@ -1004,7 +1092,7 @@ class RasCmdr:
                         except Exception as e:
                             logger.debug(
                                 f"RasProcess geometry rebuild unavailable for plan {plan_number} "
-                                f"({e}); the solver will re-derive the tables at compute time."
+                                f"({e}); continuing with the plan run."
                             )
                 except Exception as e:
                     logger.error(f"Error force-clearing geometry preprocessor files for plan {plan_number}: {str(e)}")
@@ -1291,7 +1379,18 @@ class RasCmdr:
                                 e_results,
                             )
 
-        return ComputeResult(success=_success, results_df_row=_results_df_row)
+        base_folder = (
+            compute_ras.project_folder
+            if "compute_ras" in locals()
+            else Path(".")
+        )
+        return RasCmdr._build_compute_result(
+            success=_success,
+            results_df_row=_results_df_row,
+            verify=verify,
+            required_hdf_datasets=required_hdf_datasets,
+            base_folder=base_folder,
+        )
 
 
 
@@ -2060,6 +2159,15 @@ class RasCmdr:
 
         if run_via_wsl:
             ras_exe = f"{ras_exe_dir_posix}/RasUnsteady"
+            # WSL supports the canonical 6.x/7.x layout. Keep the same adapter
+            # shape used by native Linux so prerequisite checks below do not
+            # depend on which host launches RasUnsteady.
+            layout = {
+                "ras_exe": ras_exe,
+                "needs_c_file": False,
+                "lib_dirs": [],
+                "label": "canonical (WSL)",
+            }
             probe = subprocess.run(
                 ["wsl", "test", "-x", ras_exe],
                 capture_output=True,
@@ -2773,36 +2881,62 @@ LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 
                 rc = proc.returncode
 
             if rc == 0:
-                subprocess.run(
-                    ["wsl", "bash", "-lc", cleanup_script],
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
+                ok, reason = RasCmdr._validate_linux_solve(
+                    log_path,
+                    tmp_hdf,
+                    plan_number,
                 )
-                if tmp_hdf.exists():
+                if ok:
+                    subprocess.run(
+                        ["wsl", "bash", "-lc", cleanup_script],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                    )
                     plan_hdf = RasCmdr._get_hdf_path(plan_number, ras_obj)
                     shutil.move(str(tmp_hdf), str(plan_hdf))
-                    logger.debug(f"Renamed {tmp_hdf.name} -> {plan_hdf.name}")
+                    logger.debug(
+                        f"Renamed {tmp_hdf.name} -> {plan_hdf.name}"
+                    )
 
+                    try:
+                        ras_obj.plan_df = ras_obj.get_plan_entries()
+                        ras_obj.update_results_df(plan_numbers=[plan_number])
+                        mask = ras_obj.results_df['plan_number'] == plan_number
+                        results_row = (
+                            ras_obj.results_df[mask].iloc[0].copy()
+                            if mask.any()
+                            else None
+                        )
+                    except Exception as e:
+                        logger.debug(
+                            f"Could not extract results_df_row: {e}"
+                        )
+                        results_row = None
+
+                    return ComputeResult(
+                        success=True,
+                        results_df_row=results_row,
+                    )
+
+                logger.error(
+                    f"Plan {plan_number}: WSL RasUnsteady exited 0 but the "
+                    f"solve did not produce a valid result: {reason}"
+                )
+            else:
                 try:
-                    ras_obj.plan_df = ras_obj.get_plan_entries()
-                    ras_obj.update_results_df(plan_numbers=[plan_number])
-                    mask = ras_obj.results_df['plan_number'] == plan_number
-                    results_row = ras_obj.results_df[mask].iloc[0].copy() if mask.any() else None
-                except Exception as e:
-                    logger.debug(f"Could not extract results_df_row: {e}")
-                    results_row = None
-
-                return ComputeResult(success=True, results_df_row=results_row)
-
-            try:
-                tail = log_path.read_text(errors='replace')[-800:] if log_path.exists() else ""
-            except OSError:
-                tail = "(log unreadable)"
-            logger.error(
-                f"Plan {plan_number}: WSL RasUnsteady exited with code {rc}. "
-                f"stdout={stdout.strip()} stderr={stderr.strip()} log tail={tail}"
-            )
+                    tail = (
+                        log_path.read_text(errors='replace')[-800:]
+                        if log_path.exists()
+                        else ""
+                    )
+                except OSError:
+                    tail = "(log unreadable)"
+                logger.error(
+                    f"Plan {plan_number}: WSL RasUnsteady exited with code "
+                    f"{rc}. stdout={stdout.strip()} stderr={stderr.strip()} "
+                    f"log tail={tail}"
+                )
 
             if attempt < max_attempts:
                 logger.info(f"Retrying in {retry_delay_sec}s...")

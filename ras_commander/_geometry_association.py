@@ -67,6 +67,7 @@ GEOMETRY_ASSOCIATION_FIELDS: Dict[str, Dict[str, Any]] = {
 FIELD_ORDER = tuple(GEOMETRY_ASSOCIATION_FIELDS)
 _WINDOWS_ENV_VAR_PATTERN = re.compile(r"%([^%]+)%")
 _PLAN_OR_RESULT_HDF_PATTERN = re.compile(r"\.[pou]\d{2}\.hdf$", re.IGNORECASE)
+_MAX_GLOBAL_TO_2D_EXTENT_SPAN_RATIO = 1000.0
 
 
 def safe_resolve_path(path: PathLike) -> Path:
@@ -162,6 +163,86 @@ def ensure_geometry_group(hdf_path: PathLike) -> None:
             raise RuntimeError(f"HDF is missing the /Geometry group: {hdf_path}")
 
 
+def validate_geometry_extents_for_2d_classification(hdf_path: PathLike) -> None:
+    """Reject pathological global extents before spatial classification.
+
+    HEC-RAS uses the top-level ``/Geometry`` extents while preparing spatial
+    land-cover and infiltration values. An absurd but technically containing
+    viewing rectangle can leave a run partial and its placeholder class arrays
+    indistinguishable from real output. Compare the global span with the union
+    of authoritative per-2D-area extents and fail with a repair path.
+    """
+    import h5py
+
+    hdf_path = safe_resolve_path(hdf_path)
+    with h5py.File(str(hdf_path), "r") as hdf_file:
+        geometry = hdf_file.get("Geometry")
+        flow_areas = hdf_file.get("Geometry/2D Flow Areas")
+        if geometry is None or flow_areas is None:
+            return
+
+        area_extents: list[np.ndarray] = []
+        for area in flow_areas.values():
+            values = np.asarray(area.attrs.get("Extents", []), dtype=float)
+            if (
+                values.shape == (4,)
+                and np.isfinite(values).all()
+                and values[1] > values[0]
+                and values[3] > values[2]
+            ):
+                area_extents.append(values)
+        if not area_extents:
+            return
+
+        two_d_union = np.asarray(
+            [
+                min(values[0] for values in area_extents),
+                max(values[1] for values in area_extents),
+                min(values[2] for values in area_extents),
+                max(values[3] for values in area_extents),
+            ],
+            dtype=float,
+        )
+        global_extents = np.asarray(geometry.attrs.get("Extents", []), dtype=float)
+
+    invalid = (
+        global_extents.shape != (4,)
+        or not np.isfinite(global_extents).all()
+        or global_extents[1] <= global_extents[0]
+        or global_extents[3] <= global_extents[2]
+    )
+    if not invalid:
+        global_span = np.asarray(
+            [
+                global_extents[1] - global_extents[0],
+                global_extents[3] - global_extents[2],
+            ]
+        )
+        two_d_span = np.asarray(
+            [two_d_union[1] - two_d_union[0], two_d_union[3] - two_d_union[2]]
+        )
+        span_ratio = global_span / two_d_span
+        invalid = bool(
+            (span_ratio > _MAX_GLOBAL_TO_2D_EXTENT_SPAN_RATIO).any()
+            or global_extents[0] > two_d_union[0]
+            or global_extents[1] < two_d_union[1]
+            or global_extents[2] > two_d_union[2]
+            or global_extents[3] < two_d_union[3]
+        )
+
+    if invalid:
+        geom_text = Path(str(hdf_path)[:-4])
+        raise RuntimeError(
+            "Geometry global extents are invalid or pathological relative to "
+            f"the 2D flow areas in {hdf_path.name}. Global="
+            f"{global_extents.tolist()}, 2D union={two_d_union.tolist()}. "
+            "Repair the full mixed-geometry bounds, or for a confirmed 2D-only "
+            "project explicitly call "
+            "GeomStorage.repair_viewing_rectangle_from_2d_areas("
+            f"{str(geom_text)!r}) before associating classification layers."
+        )
+
+
 def _field_attr_names() -> tuple[str, ...]:
     attrs = ["SI Units"]
     for field in GEOMETRY_ASSOCIATION_FIELDS.values():
@@ -229,12 +310,21 @@ def read_geometry_association(
 
 
 def _read_two_d_area_terrain_associations(hdf_file, hdf_path: Path, resolve_paths: bool):
+    import h5py
+
     area_records = []
     flow_areas = hdf_file.get("Geometry/2D Flow Areas")
     if flow_areas is None:
         return area_records
 
     for area_name, area_group in flow_areas.items():
+        # HEC-RAS stores collection-level tables (Attributes, Cell Info,
+        # Polygon Points, and related arrays) beside the named flow-area
+        # groups.  Only groups represent individual 2D flow areas.  Filtering
+        # by HDF object type also retains legitimate areas whose optional
+        # terrain-association attributes have not yet been populated.
+        if not isinstance(area_group, h5py.Group):
+            continue
         raw_filename = decode_hdf_attr(area_group.attrs.get("Terrain Filename"))
         record = {
             "flow_area": area_name,
@@ -317,7 +407,11 @@ def resolve_registered_layer_name(
     project_folder: Optional[PathLike] = None,
     rasmap_path: Optional[PathLike] = None,
 ) -> str:
-    """Resolve the RASMapper layer name for a path, falling back to its stem."""
+    """Resolve a RASMapper display name for discovery and UI reporting.
+
+    Geometry-association attributes do not use this display label. Native
+    HEC-RAS derives those layer names from the associated HDF filename stem.
+    """
     target = safe_resolve_path(target_path)
     if project_folder is not None or rasmap_path is not None:
         project = safe_resolve_path(project_folder or Path(rasmap_path).parent)
@@ -357,12 +451,13 @@ def build_expected_geometry_association_attrs(
             continue
         field = GEOMETRY_ASSOCIATION_FIELDS[key]
         resolved_path = safe_resolve_path(path_value)
-        layer_name = layer_names.get(key) or resolve_registered_layer_name(
-            resolved_path,
-            field["layer_kind"],
-            project_folder=project_folder,
-            rasmap_path=rasmap_path,
-        )
+        # RasMapper's SetGeometryAssociation command constructs each associated
+        # layer from the HDF filename. Its /Geometry "... Layername" attributes
+        # therefore use Path.stem, not the independently configurable display
+        # label in the project .rasmap. This is consistent in HEC-RAS 6.6 and
+        # 7.0. Retain an explicit layer_names override for compatibility, but
+        # make the default authoring path native-equivalent.
+        layer_name = layer_names.get(key) or resolved_path.stem
         file_date = format_hec_file_date(resolved_path)
 
         expected[field["filename_attr"]] = format_hec_relative_path(
@@ -424,6 +519,11 @@ def write_geometry_association(
         resolved_paths[key] = resolved_path
 
     ensure_geometry_group(hdf_path)
+    if {
+        "landcover_hdf_path",
+        "infiltration_hdf_path",
+    }.intersection(resolved_paths):
+        validate_geometry_extents_for_2d_classification(hdf_path)
     expected_attrs = build_expected_geometry_association_attrs(
         hdf_path,
         resolved_paths,

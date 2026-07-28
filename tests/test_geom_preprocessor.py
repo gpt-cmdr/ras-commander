@@ -2,11 +2,54 @@ import os
 import time
 from pathlib import Path
 
+import h5py
+import numpy as np
+import pytest
+
 from ras_commander.geom.GeomPreprocessor import (
     GEOMETRY_PREPROCESSOR_GEOMETRY_ONLY_RUN_FLAGS,
     GeomPreprocessor,
 )
 from ras_commander.hdf.HdfResultsPlan import HdfResultsPlan
+
+
+def _write_legacy_geometry_hdf(
+    path: Path,
+    *,
+    file_version: str = "HEC-RAS 6.6 September 2024",
+) -> Path:
+    with h5py.File(path, "w") as hdf:
+        hdf.attrs["File Type"] = "HEC-RAS Geometry"
+        hdf.attrs["File Version"] = file_version
+        hdf.create_group("Geometry/GeomPreprocess").create_dataset(
+            "Cache",
+            data=np.array([1], dtype=np.int32),
+        )
+        mesh = hdf.create_group("Geometry/2D Flow Areas/MainArea")
+        mesh.create_dataset(
+            "Faces Area Elevation Info",
+            data=np.array([[0, 2]], dtype=np.int32),
+        )
+        mesh.create_dataset(
+            "Faces Area Elevation Values",
+            data=np.array(
+                [[100.0, 0.0, 0.0, 0.04], [101.0, 5.0, 2.5, 0.04]],
+                dtype=np.float64,
+            ),
+        )
+        mesh.create_dataset(
+            "Faces FacePoint Indexes",
+            data=np.array([[0, 1]], dtype=np.int32),
+        )
+        landcover = hdf.create_group("Geometry/Land Cover (Manning's n)")
+        landcover.create_dataset(
+            "Calibration Table",
+            data=np.array(
+                [(b"Region", 1.0)],
+                dtype=[("Name", "S16"), ("Factor", "<f8")],
+            ),
+        )
+    return path
 
 
 def test_compute_message_paths_include_data_error_files(tmp_path):
@@ -109,3 +152,162 @@ def test_geometry_only_run_flags_disable_unsteady_flow(tmp_path):
     assert "Run UNet= 0" in updated
     assert "Run PostProcess= 0" in updated
     assert "Run RASMapper= 0" in updated
+
+
+def test_legacy_geometry_hdf_recovery_requires_explicit_acknowledgement(
+    tmp_path,
+):
+    hdf_path = _write_legacy_geometry_hdf(tmp_path / "Model.g01.hdf")
+
+    with pytest.raises(RuntimeError, match="acknowledge_legacy_recovery=True"):
+        GeomPreprocessor.invalidate_legacy_geometry_hdf_preprocessor_cache(
+            hdf_path,
+            expected_file_version="HEC-RAS 6.6 September 2024",
+        )
+
+    assert not list(tmp_path.glob("*.legacy-recovery.bak.hdf"))
+    with h5py.File(hdf_path, "r") as hdf:
+        assert "Geometry/GeomPreprocess" in hdf
+
+
+def test_legacy_geometry_hdf_recovery_requires_exact_version_before_backup(
+    tmp_path,
+):
+    hdf_path = _write_legacy_geometry_hdf(tmp_path / "Model.g01.hdf")
+
+    with pytest.raises(ValueError, match="file-version guard"):
+        GeomPreprocessor.invalidate_legacy_geometry_hdf_preprocessor_cache(
+            hdf_path,
+            expected_file_version="HEC-RAS 6.5 June 2024",
+            acknowledge_legacy_recovery=True,
+        )
+
+    assert not list(tmp_path.glob("*.legacy-recovery.bak.hdf"))
+
+
+def test_legacy_geometry_hdf_recovery_rejects_hec_ras_7(tmp_path):
+    hdf_path = _write_legacy_geometry_hdf(
+        tmp_path / "Model.g01.hdf",
+        file_version="HEC-RAS 7.0 April 2026",
+    )
+
+    with pytest.raises(ValueError, match="restricted to legacy"):
+        GeomPreprocessor.invalidate_legacy_geometry_hdf_preprocessor_cache(
+            hdf_path,
+            expected_file_version="HEC-RAS 7.0 April 2026",
+            acknowledge_legacy_recovery=True,
+        )
+
+    assert not list(tmp_path.glob("*.legacy-recovery.bak.hdf"))
+
+
+def test_legacy_geometry_hdf_recovery_backs_up_and_preserves_source_data(
+    tmp_path,
+):
+    hdf_path = _write_legacy_geometry_hdf(tmp_path / "Model.g01.hdf")
+
+    removed = (
+        GeomPreprocessor.invalidate_legacy_geometry_hdf_preprocessor_cache(
+            hdf_path,
+            expected_file_version="HEC-RAS 6.6 September 2024",
+            acknowledge_legacy_recovery=True,
+        )
+    )
+
+    backup_path = tmp_path / "Model.g01.legacy-recovery.bak.hdf"
+    assert backup_path.exists()
+    assert "Geometry/GeomPreprocess" in removed
+    assert (
+        "Geometry/2D Flow Areas/MainArea/Faces Area Elevation Info" in removed
+    )
+    assert (
+        "Geometry/2D Flow Areas/MainArea/Faces Area Elevation Values" in removed
+    )
+    with h5py.File(backup_path, "r") as backup:
+        assert "Geometry/GeomPreprocess" in backup
+        assert (
+            "Geometry/2D Flow Areas/MainArea/Faces Area Elevation Values"
+            in backup
+        )
+    with h5py.File(hdf_path, "r") as hdf:
+        assert "Geometry/GeomPreprocess" not in hdf
+        assert (
+            "Geometry/2D Flow Areas/MainArea/Faces Area Elevation Values"
+            not in hdf
+        )
+        assert (
+            "Geometry/2D Flow Areas/MainArea/Faces FacePoint Indexes" in hdf
+        )
+        assert (
+            "Geometry/Land Cover (Manning's n)/Calibration Table" in hdf
+        )
+
+
+def test_legacy_geometry_hdf_recovery_refuses_existing_backup(tmp_path):
+    hdf_path = _write_legacy_geometry_hdf(tmp_path / "Model.g01.hdf")
+    backup_path = tmp_path / "Model.g01.legacy-recovery.bak.hdf"
+    backup_path.write_bytes(b"existing")
+
+    with pytest.raises(FileExistsError, match="already exists"):
+        GeomPreprocessor.invalidate_legacy_geometry_hdf_preprocessor_cache(
+            hdf_path,
+            expected_file_version="HEC-RAS 6.6 September 2024",
+            acknowledge_legacy_recovery=True,
+        )
+
+    assert backup_path.read_bytes() == b"existing"
+    with h5py.File(hdf_path, "r") as hdf:
+        assert "Geometry/GeomPreprocess" in hdf
+
+
+def test_legacy_geometry_hdf_recovery_rejects_malformed_dataset_pair(
+    tmp_path,
+):
+    hdf_path = _write_legacy_geometry_hdf(tmp_path / "Model.g01.hdf")
+    with h5py.File(hdf_path, "r+") as hdf:
+        del hdf[
+            "Geometry/2D Flow Areas/MainArea/Faces Area Elevation Values"
+        ]
+
+    with pytest.raises(ValueError, match="incomplete legacy property-table pair"):
+        GeomPreprocessor.invalidate_legacy_geometry_hdf_preprocessor_cache(
+            hdf_path,
+            expected_file_version="HEC-RAS 6.6 September 2024",
+            acknowledge_legacy_recovery=True,
+        )
+
+    assert not list(tmp_path.glob("*.legacy-recovery.bak.hdf"))
+
+
+def test_legacy_geometry_hdf_recovery_is_idempotent_after_invalidation(
+    tmp_path,
+):
+    hdf_path = _write_legacy_geometry_hdf(tmp_path / "Model.g01.hdf")
+
+    first = GeomPreprocessor.invalidate_legacy_geometry_hdf_preprocessor_cache(
+        hdf_path,
+        expected_file_version="HEC-RAS 6.6 September 2024",
+        acknowledge_legacy_recovery=True,
+    )
+    second = GeomPreprocessor.invalidate_legacy_geometry_hdf_preprocessor_cache(
+        hdf_path,
+        expected_file_version="HEC-RAS 6.6 September 2024",
+        acknowledge_legacy_recovery=True,
+    )
+
+    assert first
+    assert second == []
+    assert len(list(tmp_path.glob("*.legacy-recovery.bak.hdf"))) == 1
+
+
+def test_clear_geompre_hdf_deprecated_wrapper_is_guarded(tmp_path):
+    hdf_path = _write_legacy_geometry_hdf(tmp_path / "Model.g01.hdf")
+
+    with pytest.warns(DeprecationWarning, match="deprecated"):
+        removed = GeomPreprocessor.clear_geompre_hdf(
+            hdf_path,
+            expected_file_version="HEC-RAS 6.6 September 2024",
+            acknowledge_legacy_recovery=True,
+        )
+
+    assert "Geometry/GeomPreprocess" in removed

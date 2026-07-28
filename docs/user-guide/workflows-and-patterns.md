@@ -492,7 +492,7 @@ Choosing the right data source for your workflow:
 | Task | Recommended Source | Method |
 |------|-------------------|--------|
 | Read boundary conditions | Plain text (.u##) | `RasUnsteady.extract_tables()` |
-| Modify Manning's n | Plain text (.g##) | `RasGeo.set_mannings_baseoverrides()` |
+| Modify Manning's n | Plain text (.g##) | `GeomLandCover.set_base_mannings_n()` |
 | Extract max WSE | HDF results (.p##.hdf) | `HdfResultsMesh.get_mesh_max_ws()` |
 | Read mesh geometry | HDF geometry (.g##.hdf) | `HdfMesh.get_mesh_cell_polygons()` |
 | Read pipe networks | HDF only | `HdfPipe.get_pipe_conduits()` |
