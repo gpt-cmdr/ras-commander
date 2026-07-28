@@ -803,8 +803,15 @@ class RasCmdr:
                 Useful when working with multiple projects simultaneously.
             clear_geompre (bool, optional): Whether to clear geometry preprocessor files (.c## files). Defaults to False.
                 Set to True when geometry has been modified to force recomputation of preprocessor files.
-            force_geompre (bool, optional): Force full geometry reprocessing (clears both .g##.hdf AND .c## files).
-                Defaults to False. Use when geometry HDF needs complete regeneration.
+            force_geompre (bool, optional): Force full geometry reprocessing. Defaults to False.
+                Clears .c## files and requests native complete-geometry processing via
+                RasProcess.exe before running the plan. The geometry HDF is preserved:
+                ras-commander does not selectively delete solver-owned datasets, and the
+                land-cover and terrain associations remain intact.
+                Implies force_rerun: the currency check compares only .p##/.g##/.u## mtimes against
+                the results HDF, so it cannot detect changes to land-cover sidecars. Skipping
+                would silently drop the reprocessing request. The RasProcess.exe request is
+                best effort; if unavailable, the plan still runs after .c## clearing.
             force_rerun (bool, optional): Force execution even if results are current. Defaults to False.
                 When False (default), checks file modification times and skips if results are current.
                 When True, always executes regardless of result currency.
@@ -1018,7 +1025,11 @@ class RasCmdr:
 
             # Smart skip: check file modification times (unless force_rerun or skip_existing)
             # Note: Smart skip is bypassed when skip_existing=True since that provides explicit skip logic
-            if not force_rerun and not skip_existing:
+            # force_geompre also bypasses the skip: are_plan_results_current() only
+            # compares .p##/.g##/.u## mtimes against the results HDF, so it cannot
+            # see sidecar-only changes. Skipping would silently drop the native
+            # reprocessing request and return success.
+            if not force_rerun and not skip_existing and not force_geompre:
                 from .RasCurrency import RasCurrency
                 is_current, reason = RasCurrency.are_plan_results_current(plan_number, compute_ras)
                 if is_current:
@@ -1060,18 +1071,36 @@ class RasCmdr:
 
             # Handle geometry preprocessor clearing
             if force_geompre:
-                # Force full geometry reprocessing (clears both .g##.hdf AND .c## files)
+                # Preserve the geometry HDF and its associations. Clear only .c##
+                # files, then ask HEC-RAS to perform complete geometry processing.
                 from .RasCurrency import RasCurrency
+                from .geom import GeomPreprocessor
                 try:
-                    RasCurrency.clear_geom_hdf(plan_number, compute_ras)
-                    RasGeo.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
-                    logger.debug(f"Force-cleared all geometry preprocessor files for plan: {plan_number}")
+                    geom_hdf_path = RasCurrency.get_geom_hdf_path(plan_number, compute_ras)
+                    GeomPreprocessor.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
+                    logger.debug(f"Force-cleared .c## geometry preprocessor files for plan: {plan_number}")
+
+                    # Best effort: RasProcess.exe may be absent, or CompleteGeometry
+                    # may differ on other HEC-RAS versions. The plan run still
+                    # proceeds after .c## clearing if this native request is unavailable.
+                    if geom_hdf_path is not None and Path(geom_hdf_path).exists():
+                        try:
+                            from .RasProcess import RasProcess
+                            RasProcess.compute_geometry(
+                                geom_hdf_path, ras_object=compute_ras
+                            )
+                        except Exception as e:
+                            logger.debug(
+                                f"RasProcess geometry rebuild unavailable for plan {plan_number} "
+                                f"({e}); continuing with the plan run."
+                            )
                 except Exception as e:
                     logger.error(f"Error force-clearing geometry preprocessor files for plan {plan_number}: {str(e)}")
             elif clear_geompre:
                 # Original behavior - only clear .c## files
+                from .geom import GeomPreprocessor
                 try:
-                    RasGeo.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
+                    GeomPreprocessor.clear_geompre_files(compute_plan_path, ras_object=compute_ras)
                     logger.debug(f"Cleared geometry preprocessor files for plan: {plan_number}")
                 except Exception as e:
                     logger.error(f"Error clearing geometry preprocessor files for plan {plan_number}: {str(e)}")
@@ -1402,8 +1431,13 @@ class RasCmdr:
                 For parallel execution, 2-4 cores per worker often provides the best balance.
             clear_geompre (bool): Whether to clear geometry preprocessor files (.c## files) before computation.
                 Set to True when geometry has been modified to force recomputation.
-            force_geompre (bool): Force full geometry reprocessing (clears both .g##.hdf AND .c## files).
-                Defaults to False. Use when geometry HDF needs complete regeneration.
+            force_geompre (bool): Force full geometry reprocessing. Defaults to False.
+                Clears the cached preprocessor tables inside each plan's .g##.hdf (in place,
+                preserving the land cover / terrain association) and the .c## files, then
+                rebuilds the tables via RasProcess.exe. Best effort: if RasProcess.exe is
+                unavailable the cleared tables are re-derived by the solver during the run.
+                Implies force_rerun for each plan, since the currency check cannot detect changes
+                to the cached .g##.hdf or to the land cover sidecars that feed it.
             force_rerun (bool): Force execution even if results are current. Defaults to False.
                 When False (default), checks file modification times and skips if results are current.
             ras_object (Optional[RasPrj]): RAS project object. If None, uses global 'ras' instance.
@@ -1787,8 +1821,13 @@ class RasCmdr:
             clear_geompre (bool, optional): Whether to clear geometry preprocessor files (.c## files).
                 Defaults to False.
                 Set to True when geometry has been modified to force recomputation.
-            force_geompre (bool, optional): Force full geometry reprocessing (clears both .g##.hdf AND .c## files).
-                Defaults to False. Use when geometry HDF needs complete regeneration.
+            force_geompre (bool, optional): Force full geometry reprocessing. Defaults to False.
+                Clears the cached preprocessor tables inside each plan's .g##.hdf (in place,
+                preserving the land cover / terrain association) and the .c## files, then
+                rebuilds the tables via RasProcess.exe. Best effort: if RasProcess.exe is
+                unavailable the cleared tables are re-derived by the solver during the run.
+                Implies force_rerun for each plan, since the currency check cannot detect changes
+                to the cached .g##.hdf or to the land cover sidecars that feed it.
             force_rerun (bool, optional): Force execution even if results are current. Defaults to False.
                 When False (default), checks file modification times and skips if results are current.
             num_cores (int, optional): Number of cores to use for each plan.

@@ -44,6 +44,8 @@ setup(
             "resources/templates/*/*",
         ],
         "ras_commander.native": [
+            "InvokeRas5GeometryLandCover.ps1",
+            "InvokeRas5LandCover.ps1",
             "RasStoreMapHelper.exe",
             "RasStoreMapHelper.cs",
         ],

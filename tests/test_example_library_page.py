@@ -48,3 +48,16 @@ def test_example_library_replaces_pins_with_readable_model_extents() -> None:
     assert 'id: "project-pins-hit"' in source
     assert 'map.on("moveend", updateProjectDisplay)' in source
     assert "Select a project pin or model extent." in page
+
+
+def test_example_library_consumes_only_the_atomic_current_release() -> None:
+    page = (ROOT / "docs" / "examples" / "example-projects.md").read_text(
+        encoding="utf-8"
+    )
+    javascript = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-library.js"
+    ).read_text(encoding="utf-8")
+
+    expected = "hec-ras-7.0/current/example-projects.geojson"
+    assert expected in page
+    assert expected in javascript

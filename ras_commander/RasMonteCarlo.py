@@ -2094,10 +2094,18 @@ class RasMonteCarlo:
            text geometry. ``clear_geompre=True`` may be used to remove the
            corresponding ``.c##`` cache, but ras-commander no longer deletes
            selected datasets inside ``.g##.hdf``. ``force_geompre`` is not
-           needed for a Manning-table change.
+           needed for a cloned Manning-table change because the fresh ``.g##``
+           mtime already defeats the smart results skip.
 
         Without both, the ensemble runs but shows ZERO roughness sensitivity
         (identical per-cell n / WSE across all samples).
+
+        Note: ``clear_geompre`` is evaluated AFTER the smart skip, so it only runs
+        when the plan is not already current. That is safe here because condition 1
+        refreshes the ``.g##`` mtime every sample. An ensemble that perturbs only a
+        land-cover sidecar in place, without cloning the geometry, would leave the
+        ``.g##`` mtime untouched, be skipped, and silently reuse the cached n --
+        use ``force_geompre=True`` (which implies ``force_rerun``) for that shape.
         """
         if not isinstance(zone_column_map, dict) or not zone_column_map:
             raise ValueError(

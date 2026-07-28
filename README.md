@@ -327,7 +327,7 @@ RasCmdr.compute_plan("01")  # Skips if HDF newer than inputs
 RasCmdr.compute_plan("01", force_rerun=True)  # Always executes
 
 # Force complete geometry reprocessing
-RasCmdr.compute_plan("01", force_geompre=True)  # Clears .g##.hdf + .c##
+RasCmdr.compute_plan("01", force_geompre=True)  # Clears caches in place; always executes
 
 # Efficiency: 10 plans, only 2 modified → 80% time savings
 RasCmdr.compute_parallel(["01", ..., "10"])  # Runs only modified plans

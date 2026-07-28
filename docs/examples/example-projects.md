@@ -9,7 +9,7 @@ below to review its geometry, terrain, and results.
 
 ## Project Explorer
 
-<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/example-projects.geojson?v=20260724Tlibrary-final03">
+<div class="ras-example-library" data-ras-example-library data-index="https://rascommander.info/data/rasexamples/hec-ras-7.0/current/example-projects.geojson">
   <div class="ras-library-map-shell">
     <div class="ras-library-map" data-library-map></div>
   </div>

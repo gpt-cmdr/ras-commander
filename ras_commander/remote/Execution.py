@@ -100,7 +100,7 @@ def compute_parallel_remote(
         ras_object: RasPrj object for the project. If None, uses global ras.
         num_cores: Number of cores to allocate per plan execution
         clear_geompre: Clear geometry preprocessor files (.c## files) before execution
-        force_geompre: Force full geometry reprocessing (clears both .g##.hdf AND .c## files)
+        force_geompre: Clear cached geometry products in place and force execution
         force_rerun: Force execution even if results are current. When False (default),
             checks file modification times and skips if results are current.
         max_concurrent: Maximum concurrent executions (default: sum of all worker slots)
@@ -422,7 +422,7 @@ def _execute_single_plan(
         ras_object: RAS project object
         num_cores: Number of cores
         clear_geompre: Clear geompre files (.c## only)
-        force_geompre: Force full geometry reprocessing (clears .g##.hdf AND .c##)
+        force_geompre: Clear cached geometry products in place and force execution
         force_rerun: Force execution even if results are current
         sub_worker_id: Sub-worker ID for multi-slot workers
         autoclean: Delete temporary worker folder after execution

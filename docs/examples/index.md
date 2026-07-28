@@ -18,7 +18,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [102 - Multiple Project Operations](../notebooks/102_multiple_project_operations.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/102_multiple_project_operations.ipynb) | 2.2 min |
 | [103 - Plan and Geometry Operations](../notebooks/103_plan_and_geometry_operations.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/103_plan_and_geometry_operations.ipynb) | 1.8 min |
 | [104 - Plan Parameter Operations](../notebooks/104_plan_parameter_operations.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/104_plan_parameter_operations.ipynb) | 1.3 min |
-| [110 - Single Plan Execution](../notebooks/110_single_plan_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/110_single_plan_execution.ipynb) | 8.1 min |
+| [110 - Single Plan Execution](../notebooks/110_single_plan_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/110_single_plan_execution.ipynb) | 8.3 min |
 | [111 - Executing Plan Sets](../notebooks/111_executing_plan_sets.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/111_executing_plan_sets.ipynb) | 3.0 min |
 | [112 - Sequential Plan Execution](../notebooks/112_sequential_plan_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/112_sequential_plan_execution.ipynb) | 3.3 min |
 | [113 - Parallel Execution](../notebooks/113_parallel_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/113_parallel_execution.ipynb) | 3.3 h |

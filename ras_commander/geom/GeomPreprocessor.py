@@ -1028,6 +1028,10 @@ class GeomPreprocessor:
         closed. A non-overwriting full-file backup is created before any
         dataset is removed.
 
+        ``force_geompre`` does not call this recovery utility. It preserves the
+        geometry HDF, bypasses the smart results skip, clears ``.c##`` files,
+        and requests native complete-geometry processing instead.
+
         Args:
             geom_hdf_path: Existing HEC-RAS geometry HDF.
             expected_file_version: Exact root ``File Version`` attribute,

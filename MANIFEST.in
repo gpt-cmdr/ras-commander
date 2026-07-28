@@ -1,5 +1,7 @@
 include ras_commander/LLM_GUIDE.md
 include CITATION.cff
+include ras_commander/native/InvokeRas5GeometryLandCover.ps1
+include ras_commander/native/InvokeRas5LandCover.ps1
 include ras_commander/native/RasStoreMapHelper.exe
 include ras_commander/native/RasStoreMapHelper.cs
 recursive-include ras_commander/resources/templates *
