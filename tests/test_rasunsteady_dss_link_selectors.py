@@ -75,9 +75,9 @@ def test_set_boundary_dss_link_preserves_legacy_1d_selector(tmp_path):
     )
 
     assert changed is True
-    assert "DSS Path=//S_OUACHIRI_2/FLOW/DATE/5MIN/RUN:FF_TEST/" in (
-        unsteady.read_text(encoding="utf-8")
-    )
+    content = unsteady.read_text(encoding="utf-8")
+    assert "DSS Path=//S_OUACHIRI_2/FLOW/DATE/5MIN/RUN:FF_TEST/" in content
+    assert r"DSS File=.\scenario.dss" in content
 
 
 def test_set_boundary_dss_link_rejects_ambiguous_partial_2d_selector(tmp_path):

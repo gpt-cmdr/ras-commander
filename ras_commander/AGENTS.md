@@ -50,6 +50,13 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 - Preserve originals when practical. Prefer `dest_folder=` for plan execution and isolated working directories for derived artifacts.
 - Be conservative with `max_workers * num_cores` when parallelizing runs.
 - Remote execution details live in [ras_commander/remote/AGENTS.md](remote/AGENTS.md).
+- RAS `.prj`, `.p##`, `.u##`, and related ASCII mutators must preserve the file's single newline convention. Fail closed on mixed LF/CRLF input instead of writing a hybrid file.
+- When cloning a scenario plan, set it as `Current Plan`, preserve the source plan's time-token style, and validate the active plan plus exact simulation window before compute.
+- Validate external boundary selectors against the cloned plan's geometry. Updating a matching unsteady-flow block alone is not proof that RAS will apply the boundary.
+- `RasScenario.execute()` must fail closed unless the compute return value,
+  nonempty result HDF, HDF completion marker, and exact output time window all
+  pass.
+- Record solver completion separately from hydraulic QA/QC. Ignored inflows, mesh/raster coverage warnings, convergence limits, and volume-accounting metrics remain explicit review items even when the HDF reports successful completion.
 
 ## Testing Rules
 

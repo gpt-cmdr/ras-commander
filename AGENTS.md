@@ -121,6 +121,13 @@ This file is the canonical shared instruction contract for repository-local codi
   - errors should include enough diagnostic detail to debug path issues, including discovered versions and relevant candidate paths
   - docs build scripts and committed notebook outputs must stay faithful to real output; do not sanitize or rewrite outputs during documentation generation
 - Keep original project folders immutable when practical. Prefer `dest_folder=` or separate working directories for execution outputs and experiments.
+- Preserve the existing newline convention when mutating HEC-RAS ASCII files. Reject mixed LF/CRLF input; mixed project or plan files can cause the Windows GUI to load only the Project section.
+- Scenario builders must make the cloned plan current and verify its simulation window before execution. A plan file's existence does not make it the active plan.
+- Crosswalk every external DSS boundary selector to the geometry used by the active plan. An inherited `.u##` boundary block may reference a storage area, 2D area, BC line, or cross section that no longer exists.
+- Scenario execution artifacts must fail closed unless the compute return value,
+  nonempty result HDF, HDF completion marker, and exact output time window all
+  pass.
+- Keep execution completion and hydraulic qualification separate. A completed solver and populated HDF may still require review for ignored inflows, precipitation coverage, convergence, volume accounting, or other conditional warnings.
 - Generate reviewable outputs:
   - HEC-RAS project artifacts that open in the GUI
   - plots or figures when results need visual checking

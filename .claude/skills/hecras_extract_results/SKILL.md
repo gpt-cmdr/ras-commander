@@ -21,6 +21,12 @@ description: |
 
 When the user asks to extract HEC-RAS results, use the patterns below. Read the primary sources for complete details -- do not duplicate their content here.
 
+Before interpreting values, verify that the HDF reports successful completion
+and that its first/last output timestamps match the active plan window. Result
+arrays can be populated even when individual inflows were ignored or the run
+has convergence/coverage warnings, so retain compute-message qualification
+alongside extracted values.
+
 **Primary Sources**:
 - **HDF Class Reference**: `ras_commander/hdf/AGENTS.md` - Canonical HDF package contract, module families, lazy loading rules, decorators
 - **Library Context**: `ras_commander/AGENTS.md` - HDF architecture overview, subpackage organization

@@ -1109,15 +1109,16 @@ class RasPrj:
             )
 
         try:
-            # Read the project file
-            with open(self.prj_file, 'r', encoding='utf-8', errors='replace') as f:
-                lines = f.readlines()
+            # Preserve the one newline convention used by the project file.
+            lines, newline = RasUtils._read_text_lines_preserving_newline(
+                self.prj_file
+            )
 
             # Find and update the Current Plan line
             updated = False
             for i, line in enumerate(lines):
                 if line.strip().startswith('Current Plan='):
-                    lines[i] = f"Current Plan=p{plan_number_str}\n"
+                    lines[i] = f"Current Plan=p{plan_number_str}{newline}"
                     updated = True
                     break
 
@@ -1125,16 +1126,19 @@ class RasPrj:
             if not updated:
                 for i, line in enumerate(lines):
                     if line.strip().startswith('Proj Title='):
-                        lines.insert(i + 1, f"Current Plan=p{plan_number_str}\n")
+                        lines.insert(
+                            i + 1,
+                            f"Current Plan=p{plan_number_str}{newline}",
+                        )
                         updated = True
                         break
 
             if not updated:
                 raise ValueError("Could not find 'Proj Title=' or 'Current Plan=' in project file")
 
-            # Write back to file
-            with open(self.prj_file, 'w', encoding='utf-8', errors='replace') as f:
-                f.writelines(lines)
+            RasUtils._write_text_lines_with_newline(
+                self.prj_file, lines, newline
+            )
 
             logger.info(f"Set current plan to p{plan_number_str} in {self.prj_file}")
 

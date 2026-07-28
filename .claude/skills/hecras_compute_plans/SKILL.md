@@ -18,6 +18,11 @@ description: |
 
 When the user asks to run HEC-RAS plans, use `RasCmdr.compute_plan()` for single plans or `RasCmdr.compute_parallel()` for multiple. Read the primary sources below for complete parameter details.
 
+For prepared external-forcing scenarios, do not compute until the project
+current plan, cloned flow file, simulation window, DSS references, and
+boundary-to-active-geometry crosswalk have been validated. Preserve the source
+newline convention in RAS text files; reject mixed LF/CRLF input.
+
 ## Primary Sources
 
 ### 1. Execution Patterns (AGENTS.md)
@@ -104,6 +109,18 @@ RasCmdr.compute_plan(
 - `verify` - True to check completion
 - `skip_existing` - True to resume interrupted runs
 - `stream_callback` - Real-time monitoring object
+
+The return value is an execution signal, not hydraulic acceptance. After
+compute, verify the result HDF completion flag and time axis, then use
+`hecras_parse_compute-messages` and `hecras_extract_results`. Report ignored
+inflows, raster coverage, convergence, and volume accounting as conditional
+review items.
+
+For a workspace prepared by `RasScenario.prepare_workspace()`, prefer
+`RasScenario.execute()`. Its run artifact fails closed unless the compute call,
+nonempty HDF, HDF completion flag, and exact output time window all pass. Treat
+that artifact as the execution-completion gate only; the conditional hydraulic
+review still follows.
 
 ### Parallel Execution
 

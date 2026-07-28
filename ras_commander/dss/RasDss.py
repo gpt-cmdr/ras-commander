@@ -47,6 +47,8 @@ Lazy Loading:
 
 import sys
 import os
+import shutil
+from numbers import Real
 from pathlib import Path
 from typing import Any, List, Dict, Optional, Tuple, Union
 import logging
@@ -217,7 +219,7 @@ class RasDss:
         RasDss._configure_jvm()
 
         # Import Java classes via pyjnius (lazy)
-        from jnius import autoclass
+        from jnius import autoclass, cast
         from ras_commander.RasUtils import RasUtils
 
         HecDss = autoclass('hec.heclib.dss.HecDss')
@@ -1499,6 +1501,300 @@ class RasDss:
 
     @staticmethod
     @log_call
+    def copy_grid_with_zero_tail(
+        source_dss: Union[str, Path],
+        output_dss: Union[str, Path],
+        pathname: str,
+        tail_intervals: int,
+        *,
+        time_shift_minutes: int = 0,
+        output_pathname: Optional[str] = None,
+        x_shift: float = 0.0,
+        y_shift: float = 0.0,
+        overwrite: bool = False,
+    ) -> Dict[str, Any]:
+        """Create a translated grid derivative with an explicit zero tail.
+
+        With no time, spatial, or pathname-family transform, the source file
+        is copied before HEC-DSS opens the derivative and only the zero tail is
+        appended. Otherwise, the matching source grid family is rewritten with
+        translated metadata before the tail is appended. Grid values are not
+        spatially resampled or time-distributed.
+
+        Args:
+            source_dss: Existing source DSS file.
+            output_dss: New writable derivative DSS file.
+            pathname: Six-part grid family selector with blank D and E parts,
+                such as ``/SHG/BASIN/PRECIPITATION///VERSION/``.
+            tail_intervals: Number of zero-valued intervals to append.
+            time_shift_minutes: Signed offset applied to all source grid
+                pathname windows. For example, ``-300`` expresses UTC source
+                records on an America/Chicago CDT model clock.
+            output_pathname: Optional six-part grid family for the derivative.
+                D and E must be blank. Defaults to ``pathname``.
+            x_shift: Signed spatial translation in the grid projection's
+                horizontal units. Must be a whole-cell increment.
+            y_shift: Signed spatial translation in the grid projection's
+                vertical units. Must be a whole-cell increment.
+            overwrite: Replace an existing output file when ``True``.
+
+        Returns:
+            Summary of source coverage, interval, and appended records.
+
+        Raises:
+            FileNotFoundError: If the source DSS does not exist.
+            FileExistsError: If output exists and overwrite is false.
+            ValueError: If the selector, timing, or grid metadata is invalid.
+        """
+        source = Path(source_dss).resolve()
+        output = Path(output_dss).resolve()
+        if not source.is_file():
+            raise FileNotFoundError(f"DSS file not found: {source}")
+        if source == output:
+            raise ValueError("output_dss must differ from source_dss")
+        if not isinstance(tail_intervals, int) or tail_intervals <= 0:
+            raise ValueError("tail_intervals must be a positive integer")
+        if isinstance(time_shift_minutes, bool) or not isinstance(
+            time_shift_minutes,
+            int,
+        ):
+            raise ValueError("time_shift_minutes must be an integer")
+        for label, value in (("x_shift", x_shift), ("y_shift", y_shift)):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, Real)
+                or not np.isfinite(value)
+            ):
+                raise ValueError(f"{label} must be a finite number")
+        x_shift = float(x_shift)
+        y_shift = float(y_shift)
+
+        _, selector_parts = RasDss._split_dss_pathname(pathname)
+        if selector_parts[3] or selector_parts[4]:
+            raise ValueError(
+                "pathname must select a grid family with blank D and E parts"
+            )
+        derivative_pathname = output_pathname or pathname
+        _, derivative_parts = RasDss._split_dss_pathname(derivative_pathname)
+        if derivative_parts[3] or derivative_parts[4]:
+            raise ValueError(
+                "output_pathname must select a grid family with blank D and E parts"
+            )
+        rewrite_source = (
+            time_shift_minutes != 0
+            or x_shift != 0
+            or y_shift != 0
+            or tuple(part.upper() for part in derivative_parts)
+            != tuple(part.upper() for part in selector_parts)
+        )
+
+        if output.exists():
+            if not overwrite:
+                raise FileExistsError(f"Output DSS already exists: {output}")
+            output.unlink()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        catalog_dss = source
+        if not rewrite_source:
+            shutil.copy2(source, output)
+            catalog_dss = output
+
+        catalog = RasDss.get_catalog(catalog_dss)
+        records: List[Tuple[pd.Timestamp, pd.Timestamp, str]] = []
+        selector_key = tuple(
+            selector_parts[index].upper() for index in (0, 1, 2, 5)
+        )
+        for candidate in catalog["pathname"].astype(str):
+            try:
+                _, candidate_parts = RasDss._split_dss_pathname(candidate)
+            except ValueError:
+                continue
+            candidate_key = tuple(
+                candidate_parts[index].upper() for index in (0, 1, 2, 5)
+            )
+            if candidate_key != selector_key:
+                continue
+            start = RasDss._parse_grid_dss_datetime(candidate_parts[3])
+            end = RasDss._parse_grid_dss_datetime(candidate_parts[4])
+            if start is None or end is None or end <= start:
+                raise ValueError(
+                    f"Grid record has an invalid time window: {candidate}"
+                )
+            records.append((start, end, candidate))
+
+        if not records:
+            raise ValueError(
+                f"No grid records matched pathname family {pathname} in {catalog_dss}"
+            )
+        records.sort(key=lambda item: (item[0], item[1], item[2]))
+        intervals = {end - start for start, end, _ in records}
+        if len(intervals) != 1:
+            raise ValueError("Matched grid records do not use one uniform interval")
+        interval = intervals.pop()
+        for previous, current in zip(records, records[1:]):
+            if current[0] != previous[1]:
+                raise ValueError(
+                    "Matched grid records are not contiguous: "
+                    f"{previous[2]} then {current[2]}"
+                )
+
+        last_grid = RasDss.read_grid(catalog_dss, records[-1][2])
+        metadata = last_grid["metadata"]
+        projection = metadata.get("projection", {})
+        lower_left = metadata.get("lower_left_cell")
+        if not lower_left or len(lower_left) != 2:
+            raise ValueError("Last grid record has no lower-left cell metadata")
+        cell_size = float(last_grid["cell_size"])
+        x_shift_cells = round(x_shift / cell_size)
+        y_shift_cells = round(y_shift / cell_size)
+        if not np.isclose(x_shift, x_shift_cells * cell_size):
+            raise ValueError("x_shift must be a whole grid-cell increment")
+        if not np.isclose(y_shift, y_shift_cells * cell_size):
+            raise ValueError("y_shift must be a whole grid-cell increment")
+        output_lower_left = (
+            int(lower_left[0]) + x_shift_cells,
+            int(lower_left[1]) + y_shift_cells,
+        )
+
+        zero_frame = np.where(
+            np.isfinite(last_grid["data"]),
+            np.float32(0.0),
+            np.float32(np.nan),
+        )
+        zero_data = np.repeat(
+            zero_frame[np.newaxis, :, :],
+            tail_intervals,
+            axis=0,
+        )
+        shift = pd.Timedelta(minutes=time_shift_minutes)
+        output_start = records[0][0] + shift
+        output_source_end = records[-1][1] + shift
+        grid_info = {
+            "cell_size": cell_size,
+            "lower_left_cell_x": output_lower_left[0],
+            "lower_left_cell_y": output_lower_left[1],
+            "x_coord_cell_zero": projection.get("x_coord_cell_zero", 0.0),
+            "y_coord_cell_zero": projection.get("y_coord_cell_zero", 0.0),
+            "crs": last_grid["crs"],
+            "grid_type": last_grid["grid_type"],
+            "units": last_grid["units"],
+            "data_type": last_grid["data_type"],
+            "nodata_value": metadata.get("nodata_value"),
+            "compression": "PRECIP_2_BYTE",
+            "projection_datum": projection.get("datum_code", "NAD83"),
+            "projection_units": projection.get("units", "METERS"),
+            "standard_parallel_1": projection.get("standard_parallel_1", 29.5),
+            "standard_parallel_2": projection.get("standard_parallel_2", 45.5),
+            "central_meridian": projection.get("central_meridian", -96.0),
+            "latitude_of_origin": projection.get("latitude_of_origin", 23.0),
+            "false_easting": projection.get("false_easting", 0.0),
+            "false_northing": projection.get("false_northing", 0.0),
+        }
+        shifted_pathnames: List[str] = []
+        if not rewrite_source:
+            tail_boundaries = [
+                output_source_end + index * interval
+                for index in range(tail_intervals + 1)
+            ]
+            appended_pathnames = RasDss.write_grid_timeseries(
+                dss_file=output,
+                pathname=derivative_pathname,
+                data=zero_data,
+                times=[value.to_pydatetime() for value in tail_boundaries],
+                grid_info=grid_info,
+                create_if_missing=False,
+            )
+            padded_end = tail_boundaries[-1]
+        else:
+            source_grids = [
+                RasDss.read_grid(catalog_dss, record_path)
+                for _, _, record_path in records
+            ]
+            source_shape = source_grids[0]["data"].shape
+            if any(grid["data"].shape != source_shape for grid in source_grids):
+                raise ValueError("Matched grid records do not use one grid shape")
+            shifted_data = np.stack(
+                [grid["data"] for grid in source_grids],
+                axis=0,
+            )
+            output_data = np.concatenate([shifted_data, zero_data], axis=0)
+            source_boundaries = [records[0][0]] + [
+                end for _, end, _ in records
+            ]
+            output_boundaries = [
+                boundary + shift for boundary in source_boundaries
+            ]
+            output_boundaries.extend(
+                output_source_end + index * interval
+                for index in range(1, tail_intervals + 1)
+            )
+            written = RasDss.write_grid_timeseries(
+                dss_file=output,
+                pathname=derivative_pathname,
+                data=output_data,
+                times=[
+                    value.to_pydatetime()
+                    for value in output_boundaries
+                ],
+                grid_info=grid_info,
+                create_if_missing=True,
+            )
+            shifted_pathnames = written[: len(records)]
+            appended_pathnames = written[len(records) :]
+            padded_end = output_boundaries[-1]
+
+        return {
+            "source_dss": str(source),
+            "output_dss": str(output),
+            "pathname": pathname,
+            "output_pathname": derivative_pathname,
+            "source_record_count": len(records),
+            "appended_record_count": len(appended_pathnames),
+            "interval_minutes": int(interval.total_seconds() // 60),
+            "time_shift_minutes": time_shift_minutes,
+            "x_shift": x_shift,
+            "y_shift": y_shift,
+            "output_lower_left_cell": output_lower_left,
+            "source_start": records[0][0].isoformat(),
+            "source_end": records[-1][1].isoformat(),
+            "output_start": output_start.isoformat(),
+            "output_source_end": output_source_end.isoformat(),
+            "padded_end": padded_end.isoformat(),
+            "shifted_pathnames": shifted_pathnames,
+            "appended_pathnames": appended_pathnames,
+        }
+
+    @staticmethod
+    @log_call
+    def get_file_version(dss_file: Union[str, Path]) -> int:
+        """Return the major HEC-DSS file version (6 or 7).
+
+        Parameters
+        ----------
+        dss_file : str or Path
+            Existing DSS file to inspect.
+        """
+        RasDss._configure_jvm()
+
+        from jnius import autoclass
+        from ras_commander.RasUtils import RasUtils
+
+        dss_path = Path(dss_file)
+        if not dss_path.is_file():
+            raise FileNotFoundError(f"DSS file not found: {dss_path}")
+        HecDataManager = autoclass("hec.heclib.dss.HecDataManager")
+        version = int(
+            HecDataManager.getDssFileVersion(
+                str(RasUtils.safe_resolve(dss_path))
+            )
+        )
+        if version not in (6, 7):
+            raise ValueError(
+                f"File is not a supported HEC-DSS database: {dss_path}"
+            )
+        return version
+
+    @staticmethod
+    @log_call
     def write_timeseries(
         dss_file: Union[str, Path],
         pathname: str,
@@ -1507,6 +1803,7 @@ class RasDss:
         units: str = "CFS",
         data_type: str = "INST-VAL",
         create_if_missing: bool = True,
+        dss_version: Optional[int] = None,
     ) -> None:
         """
         Write a time series to a DSS file.
@@ -1527,6 +1824,8 @@ class RasDss:
                 - "PER-CUM"  - Period cumulative
                 - "INST-CUM" - Instantaneous cumulative
             create_if_missing: Create DSS file if it doesn't exist (default True)
+            dss_version: Major version (6 or 7) to use when creating a new
+                DSS file. Existing files must match when this is specified.
 
         Raises:
             FileNotFoundError: If DSS file doesn't exist and create_if_missing=False
@@ -1559,10 +1858,12 @@ class RasDss:
         """
         RasDss._configure_jvm()
 
-        from jnius import autoclass
+        from jnius import autoclass, cast
         from ras_commander.RasUtils import RasUtils
 
         # Validate inputs
+        if dss_version not in (None, 6, 7):
+            raise ValueError("dss_version must be 6, 7, or None")
         values = np.asarray(values, dtype=np.float64)
         if len(times) != len(values):
             raise ValueError(
@@ -1573,6 +1874,13 @@ class RasDss:
 
         # Resolve DSS file path
         dss_path = Path(dss_file)
+        if dss_path.exists() and dss_version is not None:
+            existing_version = RasDss.get_file_version(dss_path)
+            if existing_version != dss_version:
+                raise ValueError(
+                    f"Existing DSS file is version {existing_version}, "
+                    f"not requested version {dss_version}: {dss_path}"
+                )
         if not dss_path.exists():
             if not create_if_missing:
                 raise FileNotFoundError(f"DSS file not found: {dss_path}")
@@ -1596,6 +1904,7 @@ class RasDss:
         # Load Java classes
         HecDss = autoclass('hec.heclib.dss.HecDss')
         TimeSeriesContainer = autoclass('hec.io.TimeSeriesContainer')
+        HecTimeArray = autoclass('hec.heclib.util.HecTimeArray')
 
         # Create TimeSeriesContainer
         tsc = TimeSeriesContainer()
@@ -1603,21 +1912,33 @@ class RasDss:
         tsc.units = units
         tsc.type = data_type
         tsc.interval = interval_minutes
+        tsc.setStoreAsDoubles(True)
 
-        # Set times array (Java int[])
+        # PyJNIus cannot assign primitive Java array fields directly. Use the
+        # container's typed setter methods so Python sequences are converted
+        # through the declared int[] and double[] method signatures.
         n = len(values)
+        time_status = tsc.setTimes(HecTimeArray(hec_times.tolist()))
+        value_status = tsc.setValues(values.tolist())
+        if time_status != 0 or value_status != 0:
+            raise RuntimeError(
+                "HEC time-series container rejected input arrays: "
+                f"times={time_status}, values={value_status}"
+            )
         tsc.numberValues = n
-
-        # Convert numpy arrays to Java-compatible arrays
-        # pyjnius handles int[] and double[] conversion from Python lists
-        tsc.times = hec_times.tolist()
-        tsc.values = values.tolist()
 
         # Open DSS file and write
         dss = None
         try:
-            dss = HecDss.open(dss_file_str)
-            dss.put(tsc)
+            dss = (
+                HecDss.open(dss_file_str, dss_version)
+                if dss_version is not None
+                else HecDss.open(dss_file_str)
+            )
+            # HecDss.put is overloaded for DataContainer and
+            # DataContainerTransformer. Cast explicitly so PyJNIus does not
+            # select the transformer overload for a TimeSeriesContainer.
+            dss.put(cast('hec.io.DataContainer', tsc))
             logger.info(f"Wrote {n} values to {Path(dss_file_str).name}")
             logger.debug(
                 f"DSS write details: file={dss_file_str}, pathname={pathname}, "
@@ -1644,6 +1965,7 @@ class RasDss:
         units: str = "CFS",
         data_type: str = "INST-VAL",
         create_if_missing: bool = True,
+        dss_version: Optional[int] = None,
     ) -> None:
         """
         Write a time series DataFrame to a DSS file.
@@ -1659,6 +1981,8 @@ class RasDss:
             units: Data units string
             data_type: DSS data type string
             create_if_missing: Create DSS file if it doesn't exist
+            dss_version: Major version (6 or 7) to use when creating a new
+                DSS file. Existing files must match when this is specified.
 
         Example:
             >>> # Read from one DSS file, write to another
@@ -1684,6 +2008,7 @@ class RasDss:
             units=units,
             data_type=data_type,
             create_if_missing=create_if_missing,
+            dss_version=dss_version,
         )
 
     @staticmethod
@@ -2012,7 +2337,7 @@ class RasDss:
         Returns:
             numpy int array of minutes since HEC epoch (1899-12-31 00:00:00)
         """
-        HEC_EPOCH = np.datetime64('1899-12-31T00:00:00')
+        HEC_EPOCH = np.datetime64('1899-12-31T00:00:00', 'm')
 
         if isinstance(times, pd.DatetimeIndex):
             dt64 = times.values.astype('datetime64[m]')
@@ -2024,13 +2349,8 @@ class RasDss:
 
         # Calculate minutes since HEC epoch
         delta = dt64 - HEC_EPOCH
-        minutes = delta.astype(np.int64)
+        minutes = delta.astype('timedelta64[m]').astype(np.int32)
 
-        if minutes.max() > np.iinfo(np.int32).max:
-            logger.warning(
-                f"HEC epoch minutes ({minutes.max()}) exceeds int32 range; "
-                "passing as int64 — verify HEC-DSS Java bridge accepts int64"
-            )
         return minutes
 
 

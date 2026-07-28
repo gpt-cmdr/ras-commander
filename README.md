@@ -80,6 +80,13 @@ HEC-RAS Project Management & Execution
 - Progress tracking and logging
 - Execution error handling and recovery
 
+Automated execution status is not hydraulic acceptance. For externally forced
+or cloned scenarios, first verify the project current plan, cloned flow file,
+simulation window, resolvable DSS references, and boundary-to-active-geometry
+crosswalk. After compute, verify the result HDF completion flag and time axis,
+then retain ignored inflows, precipitation coverage, convergence, WSEL error,
+and volume accounting as explicit engineering review items.
+
 Legacy Version Support (NEW in v0.81.0)
 - **RasControl class** for HEC-RAS 3.x-4.x via COM interface (HECRASController)
 - ras-commander style API - use plan numbers, not file paths
