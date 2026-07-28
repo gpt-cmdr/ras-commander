@@ -3027,7 +3027,7 @@ notebooks:
   - unsteady
   - precipitation
   difficulty: advanced
-  est_runtime: 55 min
+  est_runtime: 17 min
   data_project: BaldEagleCrkMulti2D
   functions_used:
   - HdfMesh.get_mesh_areas
