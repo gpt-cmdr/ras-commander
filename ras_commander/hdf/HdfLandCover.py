@@ -689,9 +689,9 @@ class HdfLandCover:
                 ``ras_object`` does not provide ``ras_version``.
             ras_object: Initialized project object used to infer ``ras_version``.
         """
-        if ras_object is None:
-            from ..RasPrj import ras as ras_object
-        version = hecras_version or getattr(ras_object, "ras_version", None)
+        version = hecras_version
+        if version is None and ras_object is not None:
+            version = getattr(ras_object, "ras_version", None)
         if not version:
             raise ValueError(
                 "hecras_version is required for native land-cover table edits."
