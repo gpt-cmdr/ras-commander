@@ -185,10 +185,11 @@ override regions, and property-table lifecycle.
 
 ## Compute result semantics
 
-`RasCmdr.compute_plan(required_hdf_datasets=...)` now prevents a successful
-return when specifically requested final arrays are missing or empty. The
-qualification matrix found the inverse legacy edge case in 6.0: the plan HDF
-ended in `Complete Process` and contained every requested array, but the
+`RasCmdr.compute_plan()` reports execution and optional solver-completion
+status only. The qualification harness privately checks its required final
+face arrays and, on 6.x and newer, cell-center arrays before accepting a run.
+The qualification matrix found the inverse legacy edge case in 6.0: the plan
+HDF ended in `Complete Process` and contained every required array, but the
 message parser treated the nonfatal line
 `WRITE ATTR ERROR: ... River Edge Lines not found` as a fatal compute error.
 
@@ -199,4 +200,4 @@ The matrix therefore records three independent facts:
 - exact required final datasets plus semantic Manning deltas.
 
 The parser now treats that exact completed-run 6.0 line as a nonfatal
-exclusion; the required-array gate remains unchanged.
+exclusion; the harness-local required-array gate remains unchanged.

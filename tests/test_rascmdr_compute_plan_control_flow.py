@@ -1,6 +1,7 @@
 """Focused control-flow regression tests for ``RasCmdr.compute_plan()``."""
 
 import importlib
+import inspect
 import logging
 import os
 import subprocess
@@ -70,68 +71,14 @@ def test_compute_plan_returns_failed_result_for_regular_exception():
     assert ras_obj.refresh_calls == ["plan", "geom", "flow", "unsteady"]
 
 
-def test_required_hdf_datasets_fail_closed_for_missing_final_array(tmp_path):
-    hdf_path = tmp_path / "partial.p01.hdf"
-    with h5py.File(hdf_path, "w") as hdf_file:
-        hdf_file.create_group("Geometry")
+def test_compute_plan_keeps_domain_artifact_contracts_out_of_execution_api():
+    """Plan execution must not expose caller-specific raw HDF requirements."""
+    parameters = inspect.signature(RasCmdr.compute_plan).parameters
 
-    result = RasCmdr._build_compute_result(
-        success=True,
-        results_df_row=None,
-        verify=False,
-        required_hdf_datasets={
-            hdf_path.name: [
-                "Geometry/2D Flow Areas/MainArea/Cells Center Manning's n"
-            ]
-        },
-        base_folder=tmp_path,
-    )
-
-    assert result.success is False
-    assert result.completion_verified is None
-    assert result.artifact_verification_passed is False
-    assert "dataset missing" in result.verification_failures[0]
-
-
-def test_required_hdf_datasets_pass_only_for_nonempty_datasets(tmp_path):
-    hdf_path = tmp_path / "complete.g01.hdf"
-    dataset_path = (
-        "Geometry/2D Flow Areas/MainArea/Cells Center Manning's n"
-    )
-    with h5py.File(hdf_path, "w") as hdf_file:
-        hdf_file.create_dataset(dataset_path, data=[0.03, 0.04])
-
-    result = RasCmdr._build_compute_result(
-        success=True,
-        results_df_row=None,
-        verify=True,
-        required_hdf_datasets={hdf_path: [dataset_path]},
-        base_folder=tmp_path,
-    )
-
-    assert result.success is True
-    assert result.completion_verified is True
-    assert result.artifact_verification_passed is True
-    assert result.verification_failures == []
-
-
-def test_required_hdf_datasets_accepts_single_dataset_string(tmp_path):
-    hdf_path = tmp_path / "results.hdf"
-    dataset_path = "Results/Final Array"
-    with h5py.File(hdf_path, "w") as hdf_file:
-        hdf_file.create_dataset(dataset_path, data=[1.0])
-
-    result = RasCmdr._build_compute_result(
-        success=True,
-        results_df_row=None,
-        verify=False,
-        required_hdf_datasets={hdf_path: dataset_path},
-        base_folder=tmp_path,
-    )
-
-    assert result.success is True
-    assert result.artifact_verification_passed is True
-    assert result.verification_failures == []
+    assert "required_hdf_datasets" not in parameters
+    result = ComputeResult(success=True)
+    assert not hasattr(result, "artifact_verification_passed")
+    assert not hasattr(result, "verification_failures")
 
 
 def test_compute_plan_does_not_swallow_keyboard_interrupt():

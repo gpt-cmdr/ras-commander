@@ -77,10 +77,11 @@ calls them.
 
 ## Related execution gates
 
-`RasCmdr.compute_plan(required_hdf_datasets=...)` verifies that requested arrays
-exist and are nonempty. It cannot prove that classifications or Manning values
-are hydraulically meaningful. Call `HdfLandCover.audit_final_mannings_n` after
-the completed plan for the semantic gate.
+`RasCmdr.compute_plan()` owns execution and optional solver-completion
+verification. It does not accept workflow-specific raw HDF dataset contracts.
+The qualification harness privately verifies its exact solver arrays, then
+calls `HdfLandCover.audit_final_mannings_n` after the completed plan for the
+semantic gate.
 
 `RasProcess.compute_geometry` and `RasGeometryCompute.compute_geometry` use
 legacy 1D completion heuristics that are insufficient for land-cover refresh
