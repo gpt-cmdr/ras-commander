@@ -71,8 +71,8 @@ process:
 - flow area: `2D Interior Area`
 - native authoring: `RasMap.add_landcover_layer`
 - native association: `RasMap.associate_geometry_layers`
-- final computation: `RasCmdr.compute_plan(..., force_rerun=True,
-  required_hdf_datasets=...)`
+- final computation: `RasCmdr.compute_plan(..., force_rerun=True)`
+- qualification-only structural check: private `_read_solver_arrays(...)`
 - final audit: `HdfLandCover.audit_final_mannings_n`
 
 Every row includes three completed plans:
@@ -104,6 +104,11 @@ Dataset existence is not enough. The previous notebook gate counted 13
 noise. The production audit now collapses values within `1e-4`, requires the
 land-cover association, requires `Complete Geometry=True` by default, and
 checks final face values. On 6.x it also reports cell-center values.
+
+The qualification harness separately fails closed when its required face
+arrays are missing or empty, and requires the cell-center array on 6.x and
+newer. This niche structural contract remains private to the harness rather
+than expanding the general `RasCmdr.compute_plan()` API.
 
 HEC-RAS 5.x does not emit `Cells Center Manning's n`; its authoritative final
 roughness is column four of `Faces Area Elevation Values`. HEC-RAS 6.x emits

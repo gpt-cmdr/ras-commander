@@ -33,11 +33,6 @@ class ComputeResult:
         completion_verified: ``True`` or ``False`` when ``verify=True`` checked
             HEC-RAS completion; ``None`` when completion verification was not
             requested.
-        artifact_verification_passed: Result of ``required_hdf_datasets``
-            verification, or ``None`` when no datasets were requested.
-        verification_failures: Missing, empty, or unreadable requested HDF
-            datasets. Any entry makes ``success`` false.
-
     Examples:
         # Old usage (still works):
         if RasCmdr.compute_plan("01"):
@@ -51,8 +46,6 @@ class ComputeResult:
     success: bool
     results_df_row: Optional[pd.Series] = None
     completion_verified: Optional[bool] = None
-    artifact_verification_passed: Optional[bool] = None
-    verification_failures: List[str] = field(default_factory=list)
 
     def __bool__(self) -> bool:
         return self.success

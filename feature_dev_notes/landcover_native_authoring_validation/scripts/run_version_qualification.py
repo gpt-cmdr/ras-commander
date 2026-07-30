@@ -206,14 +206,38 @@ def _array_delta(before: np.ndarray, after: np.ndarray) -> dict[str, Any]:
     }
 
 
-def _read_solver_arrays(plan_hdf_path: Path) -> dict[str, np.ndarray]:
+def _read_solver_arrays(
+    plan_hdf_path: Path,
+    *,
+    require_cell_values: bool,
+) -> dict[str, np.ndarray]:
+    """Read the exact solver arrays required by this qualification harness."""
     base = f"Geometry/2D Flow Areas/{MESH_NAME}"
     with h5py.File(plan_hdf_path, "r") as hdf:
-        face = np.asarray(hdf[f"{base}/Faces Area Elevation Values"][()])
+        face_path = f"{base}/Faces Area Elevation Values"
+        face_dataset = hdf.get(face_path)
+        if (
+            not isinstance(face_dataset, h5py.Dataset)
+            or face_dataset.ndim != 2
+            or face_dataset.shape[0] == 0
+            or face_dataset.shape[1] < 4
+        ):
+            raise RuntimeError(
+                f"{plan_hdf_path.name}:{face_path} is missing or empty."
+            )
+        face = np.asarray(face_dataset[()])
         cell_path = f"{base}/Cells Center Manning's n"
+        cell_dataset = hdf.get(cell_path)
+        if require_cell_values and (
+            not isinstance(cell_dataset, h5py.Dataset)
+            or cell_dataset.size == 0
+        ):
+            raise RuntimeError(
+                f"{plan_hdf_path.name}:{cell_path} is missing or empty."
+            )
         cells = (
-            np.asarray(hdf[cell_path][()])
-            if cell_path in hdf
+            np.asarray(cell_dataset[()])
+            if isinstance(cell_dataset, h5py.Dataset)
             else np.array([], dtype=np.float64)
         )
     return {
@@ -348,14 +372,6 @@ def _classification_table(probe_mannings_n: float = 0.07) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _required_hdf_datasets(project_name: str, major: int) -> dict[str, list[str]]:
-    base = f"Geometry/2D Flow Areas/{MESH_NAME}"
-    required = [f"{base}/Faces Area Elevation Values"]
-    if major >= 6:
-        required.append(f"{base}/Cells Center Manning's n")
-    return {f"{project_name}.p{PLAN_NUMBER}.hdf": required}
-
-
 def _compute(
     *,
     ras_object: Any,
@@ -371,10 +387,6 @@ def _compute(
         # Qualify completion and requested solver arrays independently below,
         # while retaining the parser result as evidence.
         verify=False,
-        required_hdf_datasets=_required_hdf_datasets(
-            project_paths["project"].stem,
-            _major_version(version),
-        ),
     )
     compute_messages = (
         HdfResultsPlan.get_compute_messages_hdf_only(project_paths["plan_hdf"])
@@ -390,25 +402,29 @@ def _compute(
             check_errors=False,
         )
     )
+    artifact_failure = None
+    try:
+        _read_solver_arrays(
+            project_paths["plan_hdf"],
+            require_cell_values=_major_version(version) >= 6,
+        )
+    except (OSError, KeyError, ValueError, RuntimeError) as exc:
+        artifact_failure = str(exc)
     payload = {
         "success": bool(result.success),
         "completion_verified": completion_verified,
         "compute_message_parse": _json_value(parsed_messages),
-        "artifact_verification_passed": _json_value(
-            getattr(result, "artifact_verification_passed", None)
+        "artifact_verification_passed": artifact_failure is None,
+        "verification_failures": (
+            [] if artifact_failure is None else [artifact_failure]
         ),
-        "verification_failures": [
-            str(item) for item in getattr(result, "verification_failures", [])
-        ],
     }
     if not payload["success"]:
         raise RuntimeError(f"HEC-RAS compute failed: {payload}")
     if not payload["completion_verified"]:
         raise RuntimeError(f"HEC-RAS completion was not verified: {payload}")
-    if not project_paths["plan_hdf"].exists():
-        raise RuntimeError(
-            f"Expected plan HDF was not created: {project_paths['plan_hdf']}"
-        )
+    if artifact_failure is not None:
+        raise RuntimeError(f"Required solver arrays were not produced: {payload}")
     return payload
 
 
@@ -468,7 +484,10 @@ def _author_associate_compute(
         tolerance=MATERIAL_TOLERANCE,
         minimum_distinct_values=2,
     )
-    arrays = _read_solver_arrays(paths["plan_hdf"])
+    arrays = _read_solver_arrays(
+        paths["plan_hdf"],
+        require_cell_values=major >= 6,
+    )
     raster = _read_raster(paths["landcover_tif"])
     if raster["class_counts"] != probe_manifest["class_counts"]:
         raise RuntimeError(
@@ -579,7 +598,10 @@ def _run_geometry_base_edit(
         project_paths=paths,
         version=version,
     )
-    arrays = _read_solver_arrays(paths["plan_hdf"])
+    arrays = _read_solver_arrays(
+        paths["plan_hdf"],
+        require_cell_values=_major_version(version) >= 6,
+    )
     cell_delta = _array_delta(baseline_arrays["cells"], arrays["cells"])
     face_delta = _array_delta(
         baseline_arrays["face_mannings"],
@@ -720,7 +742,10 @@ def _run_sidecar_edit(
         project_paths=paths,
         version=version,
     )
-    arrays = _read_solver_arrays(paths["plan_hdf"])
+    arrays = _read_solver_arrays(
+        paths["plan_hdf"],
+        require_cell_values=major >= 6,
+    )
     cell_delta = _array_delta(baseline_arrays["cells"], arrays["cells"])
     face_delta = _array_delta(
         baseline_arrays["face_mannings"],
