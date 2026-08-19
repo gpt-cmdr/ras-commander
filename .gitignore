@@ -268,3 +268,4 @@ terminal-logs/
 
 # test temp
 .test-tmp/
+.vscode/settings.json
