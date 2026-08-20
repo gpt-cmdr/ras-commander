@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from ras_commander import RasPlan, RasPrj
+from ras_commander import RasPlan, RasPrj, RasUnsteady
 from ras_commander.RasUtils import RasUtils
 
 
@@ -65,8 +65,7 @@ def test_update_simulation_date_preserves_crlf_and_time_style(
 
     assert _has_crlf_only(plan_file)
     assert (
-        f"Simulation Date={expected_time}\r\n".encode("utf-8")
-        in plan_file.read_bytes()
+        f"Simulation Date={expected_time}\r\n".encode("utf-8") in plan_file.read_bytes()
     )
 
 
@@ -82,6 +81,23 @@ def test_mutators_reject_mixed_newlines(tmp_path):
 
     with pytest.raises(ValueError, match="Mixed newline conventions"):
         project.set_current_plan("01")
+
+
+def test_gridded_precipitation_mutator_rejects_mixed_newlines(tmp_path):
+    unsteady_file = tmp_path / "mixed.u01"
+    unsteady_file.write_bytes(
+        b"Flow Title=Example\r\nPrecipitation Mode=Disable\n"
+        b"Met Point Raster Parameters=,,,,\r\n"
+    )
+
+    with pytest.raises(ValueError, match="Mixed newline conventions"):
+        RasUnsteady.set_met_precipitation_mode(
+            unsteady_file,
+            "Gridded",
+            source="DSS",
+            dss_filename="excess.dss",
+            dss_pathname="/SHG/BASIN/PRECIPITATION///EXCESS/",
+        )
 
 
 def test_update_file_preserves_lf_for_linux_projects(tmp_path):

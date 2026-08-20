@@ -4,4 +4,7 @@ include ras_commander/native/RasStoreMapHelper.exe
 include ras_commander/native/RasStoreMapHelper.cs
 include ras_commander/resources/land_classification/*.hdf
 recursive-include ras_commander/resources/templates *
+global-exclude *.py[cod]
+prune ras_commander/resources/templates/__pycache__
+recursive-include ras_commander/contracts *.schema.json
 

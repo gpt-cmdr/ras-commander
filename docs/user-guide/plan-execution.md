@@ -520,9 +520,11 @@ contract before calling `compute_plan()`:
 - every river/reach/station or storage-area/2D/BC-line selector exists in the
   geometry used by the plan.
 
-Preserve one newline convention in RAS text files. Mixed LF and CRLF records can
-cause the Windows GUI to load the project while leaving Plan, Geometry, and Flow
-sections blank.
+Preserve one newline convention in authored RAS project, plan, geometry, and
+flow text files. Mixed LF and CRLF records can cause the Windows GUI to load the
+project while leaving Plan, Geometry, and Flow sections blank. Generated
+compute artifacts such as `.b##`, `.c##`, `.o##`, `.r##`, and `.x##` are not
+part of this text-file check because they may be binary.
 
 After compute, report two independent outcomes:
 

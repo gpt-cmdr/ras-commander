@@ -71,6 +71,7 @@ plugins:
         User Guide:
           - user-guide/overview.md
           - user-guide/plan-execution.md
+          - user-guide/scenario-worker.md
           - user-guide/workflows-and-patterns.md
           - user-guide/hdf-data-extraction.md
           - user-guide/geometry-operations.md
@@ -171,6 +172,7 @@ nav:
       - Project Initialization: getting-started/project-initialization.md
     - Architecture Overview: user-guide/overview.md
     - Plan Execution: user-guide/plan-execution.md
+    - Scenario Worker: user-guide/scenario-worker.md
     - Workflows & Patterns: user-guide/workflows-and-patterns.md
     - Boundary Conditions: user-guide/boundary-conditions.md
     - Spatial Data & RASMapper: user-guide/spatial-data.md
@@ -210,6 +212,7 @@ nav:
   - API Reference:
     - Overview: api/index.md
     - Core Classes: api/core.md
+    - Scenario Worker: api/scenario-worker.md
     - Benefits Analysis: api/benefits.md
     - HDF Modules: api/hdf.md
     - Geometry Modules: api/geometry.md
