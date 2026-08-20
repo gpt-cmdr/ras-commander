@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ras-commander/scenario-worker-request/1.0",
+  "title": "RAS Commander scenario worker request 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "scenario",
+    "source_model",
+    "hydrology",
+    "boundary_links",
+    "forcing_excess",
+    "model_window",
+    "workspace",
+    "products",
+    "execution"
+  ],
+  "properties": {
+    "schema": {"const": "ras-commander/scenario-worker-request/1.0"},
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenario_id", "specification_sha256"],
+      "properties": {
+        "scenario_id": {"type": "string", "minLength": 1},
+        "specification_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "source_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project",
+        "project_file_sha256",
+        "template_plan",
+        "model_manifest",
+        "model_manifest_sha256"
+      ],
+      "properties": {
+        "project": {"type": "string", "minLength": 1},
+        "project_file_sha256": {"$ref": "#/$defs/sha256"},
+        "template_plan": {"type": "string", "minLength": 1},
+        "model_manifest": {"type": "string", "minLength": 1},
+        "model_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "linked_asset_directories": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "linked_asset_mode": {"enum": ["copy", "shared-cache"]}
+      }
+    },
+    "hydrology": {
+      "allOf": [{"$ref": "#/$defs/identityInput"}],
+      "properties": {
+        "dss": {"type": "string", "minLength": 1},
+        "product_manifest": {"type": "string", "minLength": 1},
+        "product_manifest_sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "required": ["dss", "sha256", "product_manifest", "product_manifest_sha256"],
+      "unevaluatedProperties": false
+    },
+    "boundary_links": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/boundaryLink"}
+    },
+    "forcing_excess": {
+      "allOf": [{"$ref": "#/$defs/identityInput"}],
+      "properties": {
+        "dss": {"type": "string", "minLength": 1},
+        "provenance_manifest": {"type": "string", "minLength": 1},
+        "provenance_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "pathname": {"type": "string", "pattern": "^/.+/$"},
+        "interpolation": {"enum": ["Nearest", "Bilinear"]}
+      },
+      "required": [
+        "dss",
+        "sha256",
+        "provenance_manifest",
+        "provenance_manifest_sha256",
+        "pathname"
+      ],
+      "unevaluatedProperties": false
+    },
+    "model_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end", "time_zone"],
+      "properties": {
+        "start": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"},
+        "end": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"},
+        "time_zone": {"type": "string", "minLength": 1}
+      }
+    },
+    "workspace": {"type": "string", "minLength": 1},
+    "products": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["directory"],
+      "properties": {
+        "directory": {"type": "string", "minLength": 1},
+        "resolution": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "max_dimension": {"type": "integer", "minimum": 64},
+        "nodata": {"type": "number"},
+        "include_preview": {"type": "boolean"}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ras_executable", "timeout_seconds", "cores"],
+      "properties": {
+        "ras_executable": {"type": "string", "minLength": 1},
+        "timeout_seconds": {"type": "integer", "minimum": 1},
+        "cores": {"type": "integer", "minimum": 1}
+      }
+    },
+    "retry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prior_request", "prior_result"],
+      "properties": {
+        "prior_request": {"type": "string", "minLength": 1},
+        "prior_result": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identityInput": {
+      "type": "object",
+      "properties": {"sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "boundaryLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mapping_id", "dss_path", "expected_bc_type"],
+      "properties": {
+        "mapping_id": {"type": "string", "minLength": 1},
+        "dss_path": {"type": "string", "pattern": "^/.+/$"},
+        "expected_bc_type": {"type": "string", "minLength": 1},
+        "interval": {"type": "string", "minLength": 1},
+        "river": {"type": "string"},
+        "reach": {"type": "string"},
+        "station": {"type": "string"},
+        "sa_2d_name": {"type": "string"},
+        "bc_line": {"type": "string"},
+        "boundary_index": {"type": "integer", "minimum": 0}
+      },
+      "anyOf": [
+        {"required": ["river", "reach", "station"]},
+        {"required": ["sa_2d_name"]},
+        {"required": ["boundary_index"]}
+      ]
+    }
+  }
+}

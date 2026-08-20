@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
 import shutil
+import stat
 from concurrent.futures import (
     ThreadPoolExecutor,
     TimeoutError as FutureTimeoutError,
@@ -27,6 +30,12 @@ from .geom import GeomCrossSection, GeomStorage
 from .hdf.HdfBase import HdfBase
 
 logger = get_logger(__name__)
+
+
+_RAS_AUTHORED_TEXT_SUFFIX = re.compile(
+    r"\.(?:f|g|p|q|s|u|w)\d+\Z",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -54,9 +63,7 @@ class RasBoundaryLink:
         has_1d = any(value for value in (self.river, self.reach, self.station))
         has_2d = any(value for value in (self.sa_2d_name, self.bc_line))
         if has_1d and has_2d:
-            raise ValueError(
-                "A boundary link cannot mix 1D and 2D selectors"
-            )
+            raise ValueError("A boundary link cannot mix 1D and 2D selectors")
         if not (has_1d or has_2d or self.boundary_index is not None):
             raise ValueError("A boundary link requires an exact boundary selector")
 
@@ -84,6 +91,12 @@ class RasScenarioWorkspace:
     boundary_mapping_ids: tuple[str, ...]
     simulation_start: Optional[str] = None
     simulation_end: Optional[str] = None
+    forcing_excess_source: Optional[Path] = None
+    forcing_excess_file: Optional[Path] = None
+    forcing_excess_pathname: Optional[str] = None
+    linked_asset_cache: Optional[Dict[str, Any]] = None
+    source_output_exclusions: Optional[Dict[str, Any]] = None
+    inactive_inherited_boundaries: tuple[Dict[str, Any], ...] = ()
 
     def to_dict(self) -> Dict[str, Any]:
         """Return a JSON-serializable workspace record."""
@@ -91,9 +104,7 @@ class RasScenarioWorkspace:
             key: (
                 str(value)
                 if isinstance(value, Path)
-                else list(value)
-                if isinstance(value, tuple)
-                else value
+                else list(value) if isinstance(value, tuple) else value
             )
             for key, value in asdict(self).items()
         }
@@ -150,6 +161,273 @@ def _write_json(path: Union[str, Path], payload: Dict[str, Any]) -> Path:
 class RasScenario:
     """Static namespace for HMS-to-RAS scenario preparation and execution."""
 
+    LINKED_ASSET_CACHE_SCHEMA = "ras-commander/linked-asset-cache/1.0"
+    LINKED_ASSET_CACHE_MANIFEST = ".ras-commander-linked-assets.json"
+    LINKED_ASSET_CACHE_LOCK = ".ras-commander-linked-assets.lock"
+
+    @staticmethod
+    def _scenario_output_exclusions(
+        source_folder: Path,
+        project_name: str,
+    ) -> Dict[str, Any]:
+        patterns = (
+            re.compile(re.escape(project_name) + r"\.dss$", re.IGNORECASE),
+            re.compile(
+                re.escape(project_name) + r"\.p\d+(?:\.tmp)?\.hdf$",
+                re.IGNORECASE,
+            ),
+            re.compile(r"PostProcessing\.hdf$", re.IGNORECASE),
+        )
+        excluded = []
+        for path in source_folder.rglob("*"):
+            if path.is_file() and any(
+                pattern.fullmatch(path.name) for pattern in patterns
+            ):
+                excluded.append(
+                    {
+                        "path": path.relative_to(source_folder).as_posix(),
+                        "size_bytes": path.stat().st_size,
+                    }
+                )
+        excluded.sort(key=lambda value: value["path"])
+        return {
+            "files": excluded,
+            "file_count": len(excluded),
+            "size_bytes": sum(value["size_bytes"] for value in excluded),
+        }
+
+    @staticmethod
+    def _scenario_copy_ignore(project_name: str):
+        output_patterns = (
+            re.compile(re.escape(project_name) + r"\.dss$", re.IGNORECASE),
+            re.compile(
+                re.escape(project_name) + r"\.p\d+(?:\.tmp)?\.hdf$",
+                re.IGNORECASE,
+            ),
+            re.compile(r"PostProcessing\.hdf$", re.IGNORECASE),
+        )
+
+        def ignore(directory: str, contents: list[str]) -> list[str]:
+            skipped = set(RasUtils.ignore_windows_reserved(directory, contents))
+            skipped.update(
+                name
+                for name in contents
+                if any(pattern.fullmatch(name) for pattern in output_patterns)
+            )
+            return sorted(skipped)
+
+        return ignore
+
+    @staticmethod
+    def _sha256_file(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    @staticmethod
+    def _tree_snapshot(root: Path) -> Dict[str, Any]:
+        """Return a content and metadata identity for one asset directory."""
+        records = []
+        tree_digest = hashlib.sha256()
+        total_size = 0
+        for path in sorted(
+            (candidate for candidate in root.rglob("*") if candidate.is_file()),
+            key=lambda candidate: candidate.relative_to(root).as_posix(),
+        ):
+            relative = path.relative_to(root).as_posix()
+            file_stat = path.stat()
+            file_sha256 = RasScenario._sha256_file(path)
+            record = {
+                "path": relative,
+                "size_bytes": file_stat.st_size,
+                "mtime_ns": file_stat.st_mtime_ns,
+                "sha256": file_sha256,
+            }
+            records.append(record)
+            total_size += file_stat.st_size
+            tree_digest.update(relative.encode("utf-8"))
+            tree_digest.update(b"\0")
+            tree_digest.update(str(file_stat.st_size).encode("ascii"))
+            tree_digest.update(b"\0")
+            tree_digest.update(file_sha256.encode("ascii"))
+            tree_digest.update(b"\n")
+        return {
+            "file_count": len(records),
+            "size_bytes": total_size,
+            "tree_sha256": tree_digest.hexdigest(),
+            "files": records,
+        }
+
+    @staticmethod
+    def _verify_tree_snapshot(
+        root: Path,
+        snapshot: Mapping[str, Any],
+        *,
+        label: str,
+    ) -> None:
+        """Fail closed when a cached or source tree changed after priming."""
+        expected = {str(record["path"]): record for record in snapshot.get("files", [])}
+        actual_paths = {
+            path.relative_to(root).as_posix(): path
+            for path in root.rglob("*")
+            if path.is_file()
+        }
+        if set(actual_paths) != set(expected):
+            raise ValueError(f"Linked asset cache {label} file population drifted")
+        for relative, record in expected.items():
+            file_stat = actual_paths[relative].stat()
+            if file_stat.st_size != record.get(
+                "size_bytes"
+            ) or file_stat.st_mtime_ns != record.get("mtime_ns"):
+                raise ValueError(
+                    f"Linked asset cache {label} metadata drifted: {relative}"
+                )
+
+    @staticmethod
+    def _set_tree_read_only(root: Path) -> None:
+        for path in root.rglob("*"):
+            if path.is_file():
+                path.chmod(stat.S_IREAD)
+
+    @staticmethod
+    def _prepare_linked_asset_cache(
+        cache_root: Path,
+        linked_sources: tuple[Path, ...],
+        cache_key: str,
+    ) -> Dict[str, Any]:
+        """Create, adopt, or verify shared immutable linked RAS assets.
+
+        Workspaces placed directly below ``cache_root`` retain the model's
+        ``..\\Terrain``-style relative references while sharing one authenticated
+        copy of large immutable assets.
+        """
+        if re.fullmatch(r"[0-9a-f]{64}", cache_key) is None:
+            raise ValueError("Linked asset cache key must be a SHA-256 digest")
+        cache_root.mkdir(parents=True, exist_ok=True)
+        manifest_path = cache_root / RasScenario.LINKED_ASSET_CACHE_MANIFEST
+        lock_path = cache_root / RasScenario.LINKED_ASSET_CACHE_LOCK
+        expected_names = [source.name for source in linked_sources]
+
+        if manifest_path.exists():
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+                raise ValueError(
+                    f"Linked asset cache manifest is unreadable: {manifest_path}"
+                ) from exc
+            if manifest.get("schema") != RasScenario.LINKED_ASSET_CACHE_SCHEMA:
+                raise ValueError("Linked asset cache manifest schema is unsupported")
+            if manifest.get("cache_key") != cache_key:
+                raise ValueError("Linked asset cache key does not match the request")
+            assets = manifest.get("assets")
+            if not isinstance(assets, list):
+                raise ValueError("Linked asset cache manifest assets are invalid")
+            if [asset.get("name") for asset in assets] != expected_names:
+                raise ValueError(
+                    "Linked asset cache population does not match the request"
+                )
+            for source, asset in zip(linked_sources, assets):
+                cached = cache_root / source.name
+                if str(source) != asset.get("source"):
+                    raise ValueError(
+                        f"Linked asset cache source changed for {source.name}"
+                    )
+                if not source.is_dir() or not cached.is_dir():
+                    raise ValueError(
+                        f"Linked asset cache directory is missing: {source.name}"
+                    )
+                RasScenario._verify_tree_snapshot(
+                    source,
+                    asset.get("source_snapshot", {}),
+                    label=f"source {source.name}",
+                )
+                RasScenario._verify_tree_snapshot(
+                    cached,
+                    asset.get("cache_snapshot", {}),
+                    label=f"copy {source.name}",
+                )
+            return {
+                "status": "reused",
+                "root": str(cache_root),
+                "manifest": str(manifest_path),
+                "cache_key": cache_key,
+                "asset_count": len(assets),
+                "size_bytes": sum(
+                    int(asset["cache_snapshot"]["size_bytes"]) for asset in assets
+                ),
+            }
+
+        try:
+            lock_fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError as exc:
+            raise FileExistsError(f"Linked asset cache is locked: {lock_path}") from exc
+        os.close(lock_fd)
+        statuses = []
+        assets = []
+        try:
+            for source in linked_sources:
+                if not source.is_dir():
+                    raise FileNotFoundError(
+                        f"Linked asset directory not found: {source}"
+                    )
+                cached = cache_root / source.name
+                source_snapshot = RasScenario._tree_snapshot(source)
+                if cached.exists():
+                    if not cached.is_dir():
+                        raise ValueError(
+                            f"Linked asset cache target is not a directory: {cached}"
+                        )
+                    statuses.append("adopted")
+                else:
+                    shutil.copytree(
+                        source,
+                        cached,
+                        ignore=RasUtils.ignore_windows_reserved,
+                    )
+                    statuses.append("created")
+                cache_snapshot = RasScenario._tree_snapshot(cached)
+                if (
+                    source_snapshot["file_count"] != cache_snapshot["file_count"]
+                    or source_snapshot["size_bytes"] != cache_snapshot["size_bytes"]
+                    or source_snapshot["tree_sha256"] != cache_snapshot["tree_sha256"]
+                ):
+                    raise ValueError(
+                        f"Linked asset cache content mismatch: {source.name}"
+                    )
+                RasScenario._set_tree_read_only(cached)
+                assets.append(
+                    {
+                        "name": source.name,
+                        "source": str(source),
+                        "source_snapshot": source_snapshot,
+                        "cache_snapshot": cache_snapshot,
+                    }
+                )
+            manifest = {
+                "schema": RasScenario.LINKED_ASSET_CACHE_SCHEMA,
+                "cache_key": cache_key,
+                "assets": assets,
+            }
+            _write_json(manifest_path, manifest)
+        finally:
+            lock_path.unlink(missing_ok=True)
+
+        status = "adopted" if statuses and set(statuses) == {"adopted"} else "created"
+        if len(set(statuses)) > 1:
+            status = "recovered"
+        return {
+            "status": status,
+            "root": str(cache_root),
+            "manifest": str(manifest_path),
+            "cache_key": cache_key,
+            "asset_count": len(assets),
+            "size_bytes": sum(
+                int(asset["cache_snapshot"]["size_bytes"]) for asset in assets
+            ),
+        }
+
     @staticmethod
     @log_call
     def format_dss_pathname_for_window(
@@ -171,12 +449,9 @@ class RasScenario:
         parts = pathname.split("/")[1:-1]
         if len(parts) != 6:
             raise ValueError(
-                "DSS pathname must contain six A-F parts: "
-                f"{pathname!r}"
+                "DSS pathname must contain six A-F parts: " f"{pathname!r}"
             )
-        parts[3] = (
-            f"{start_time:%d%b%Y}-{end_time:%d%b%Y}".upper()
-        )
+        parts[3] = f"{start_time:%d%b%Y}-{end_time:%d%b%Y}".upper()
         return "/" + "/".join(parts) + "/"
 
     @staticmethod
@@ -192,9 +467,11 @@ class RasScenario:
         end_time: datetime,
         *,
         ras_exe_path: Union[str, Path],
-        linked_asset_directories: Optional[
-            Iterable[Union[str, Path]]
-        ] = None,
+        linked_asset_directories: Optional[Iterable[Union[str, Path]]] = None,
+        linked_asset_cache_key: Optional[str] = None,
+        forcing_excess_dss: Optional[Union[str, Path]] = None,
+        forcing_excess_pathname: Optional[str] = None,
+        forcing_excess_interpolation: str = "Bilinear",
         copy_hydrology: bool = True,
         overwrite: bool = False,
     ) -> RasScenarioWorkspace:
@@ -203,20 +480,28 @@ class RasScenario:
         ``workspace`` is the destination project directory. Directories passed
         through ``linked_asset_directories`` are copied beside that directory,
         preserving the sibling layout used by relative paths in ``.prj`` and
-        ``.rasmap`` files.
+        ``.rasmap`` files. When ``linked_asset_cache_key`` is supplied, those
+        sibling copies are authenticated and reused by other workspaces under
+        the same parent directory.
         """
         source_file = RasScenario._resolve_project_file(source_project)
         source_folder = source_file.parent.resolve()
         destination = Path(workspace).resolve()
         hydrology_source = Path(hydrology_dss).resolve()
+        excess_source = (
+            Path(forcing_excess_dss).resolve()
+            if forcing_excess_dss is not None
+            else None
+        )
         linked_sources = tuple(
-            Path(path).resolve()
-            for path in (linked_asset_directories or ())
+            Path(path).resolve() for path in (linked_asset_directories or ())
         )
         raw_links = tuple(
-            link
-            if isinstance(link, RasBoundaryLink)
-            else RasBoundaryLink.from_mapping(link)
+            (
+                link
+                if isinstance(link, RasBoundaryLink)
+                else RasBoundaryLink.from_mapping(link)
+            )
             for link in boundary_links
         )
         links = tuple(
@@ -236,8 +521,15 @@ class RasScenario:
         if len({link.mapping_id for link in links}) != len(links):
             raise ValueError("boundary mapping IDs must be unique")
         if not hydrology_source.is_file():
+            raise FileNotFoundError(f"Hydrology DSS file not found: {hydrology_source}")
+        if (excess_source is None) != (forcing_excess_pathname is None):
+            raise ValueError(
+                "forcing_excess_dss and forcing_excess_pathname must be "
+                "provided together"
+            )
+        if excess_source is not None and not excess_source.is_file():
             raise FileNotFoundError(
-                f"Hydrology DSS file not found: {hydrology_source}"
+                f"Forcing-excess DSS file not found: {excess_source}"
             )
         if end_time <= start_time:
             raise ValueError("end_time must be later than start_time")
@@ -254,42 +546,48 @@ class RasScenario:
             linked_sources
         ):
             raise ValueError("linked asset directory names must be unique")
-        for source, linked_destination in zip(
-            linked_sources,
-            linked_destinations,
-        ):
+        for source, linked_destination in zip(linked_sources, linked_destinations):
             if not source.is_dir():
-                raise FileNotFoundError(
-                    f"Linked asset directory not found: {source}"
-                )
+                raise FileNotFoundError(f"Linked asset directory not found: {source}")
             RasScenario._validate_copy_boundaries(
                 source,
                 linked_destination,
             )
-            if linked_destination.exists():
+            if linked_asset_cache_key is None and linked_destination.exists():
                 raise FileExistsError(
-                    "Linked asset destination already exists: "
-                    f"{linked_destination}"
+                    "Linked asset destination already exists: " f"{linked_destination}"
                 )
         if destination.exists():
             if not overwrite:
                 raise FileExistsError(f"Workspace already exists: {destination}")
             shutil.rmtree(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
+        source_output_exclusions = RasScenario._scenario_output_exclusions(
+            source_folder,
+            source_file.stem,
+        )
+        linked_asset_cache = None
+        if linked_asset_cache_key is not None:
+            linked_asset_cache = RasScenario._prepare_linked_asset_cache(
+                destination.parent,
+                linked_sources,
+                linked_asset_cache_key,
+            )
         shutil.copytree(
             source_folder,
             destination,
-            ignore=RasUtils.ignore_windows_reserved,
+            ignore=RasScenario._scenario_copy_ignore(source_file.stem),
         )
-        for source, linked_destination in zip(
-            linked_sources,
-            linked_destinations,
-        ):
-            shutil.copytree(
-                source,
-                linked_destination,
-                ignore=RasUtils.ignore_windows_reserved,
-            )
+        if linked_asset_cache_key is None:
+            for source, linked_destination in zip(
+                linked_sources,
+                linked_destinations,
+            ):
+                shutil.copytree(
+                    source,
+                    linked_destination,
+                    ignore=RasUtils.ignore_windows_reserved,
+                )
 
         copied_project = destination / source_file.name
         project = init_ras_project(
@@ -310,9 +608,11 @@ class RasScenario:
         ]
         if plan_matches.empty:
             raise ValueError(f"Source plan {source_plan!r} was not found")
-        source_unsteady_number = str(
-            plan_matches.iloc[0].get("unsteady_number", "")
-        ).lower().removeprefix("u")
+        source_unsteady_number = (
+            str(plan_matches.iloc[0].get("unsteady_number", ""))
+            .lower()
+            .removeprefix("u")
+        )
         if not source_unsteady_number:
             raise ValueError(f"Source plan {source_plan!r} has no unsteady flow file")
 
@@ -342,12 +642,21 @@ class RasScenario:
         if copy_hydrology:
             hydrology_file = hydrology_dir / hydrology_source.name
             shutil.copy2(hydrology_source, hydrology_file)
-            dss_reference = str(
-                hydrology_file.relative_to(destination)
-            ).replace("/", "\\")
+            dss_reference = str(hydrology_file.relative_to(destination)).replace(
+                "/", "\\"
+            )
         else:
             hydrology_file = hydrology_source
             dss_reference = str(hydrology_source)
+
+        excess_file: Optional[Path] = None
+        if excess_source is not None:
+            if excess_source.name.casefold() == hydrology_source.name.casefold():
+                raise ValueError(
+                    "Hydrology and forcing-excess DSS filenames must be distinct"
+                )
+            excess_file = hydrology_dir / excess_source.name
+            shutil.copy2(excess_source, excess_file)
 
         unsteady_file = RasPlan.get_unsteady_path(
             unsteady_number,
@@ -372,9 +681,18 @@ class RasScenario:
                 expected_bc_type=link.expected_bc_type,
             )
             if not changed:
-                raise ValueError(
-                    f"Boundary mapping {link.mapping_id!r} did not match"
-                )
+                raise ValueError(f"Boundary mapping {link.mapping_id!r} did not match")
+
+        if excess_file is not None:
+            RasUnsteady.set_met_precipitation_mode(
+                unsteady_file,
+                "Gridded",
+                source="DSS",
+                dss_filename=excess_file,
+                dss_pathname=forcing_excess_pathname,
+                interpolation=forcing_excess_interpolation,
+                ras_object=project,
+            )
 
         plan_file = RasPlan.get_plan_path(plan_number, ras_object=project)
         if plan_file is None:
@@ -390,14 +708,152 @@ class RasScenario:
             unsteady_file=unsteady_file,
             hydrology_source=hydrology_source,
             hydrology_file=hydrology_file,
+            forcing_excess_source=excess_source,
+            forcing_excess_file=excess_file,
+            forcing_excess_pathname=forcing_excess_pathname,
+            linked_asset_cache=linked_asset_cache,
+            source_output_exclusions=source_output_exclusions,
             result_hdf=destination / f"{project.project_name}.p{plan_number}.hdf",
             boundary_mapping_ids=tuple(link.mapping_id for link in links),
             simulation_start=start_time.isoformat(),
             simulation_end=end_time.isoformat(),
         )
+        requested_crosswalk = RasScenario._geometry_boundary_crosswalk(
+            prepared,
+            links,
+            plan_file.read_text(encoding="utf-8", errors="replace"),
+        )
+        if all(requested_crosswalk.values()):
+            inactive_inherited = RasScenario._remove_inactive_inherited_dss_boundaries(
+                prepared,
+                links,
+            )
+            prepared = replace(
+                prepared,
+                inactive_inherited_boundaries=tuple(inactive_inherited),
+            )
         RasScenario.validate_workspace(prepared, links)
         logger.info("Prepared RAS scenario workspace: %s", destination)
         return prepared
+
+    @staticmethod
+    def _remove_inactive_inherited_dss_boundaries(
+        workspace: RasScenarioWorkspace,
+        requested_links: tuple[RasBoundaryLink, ...],
+    ) -> list[Dict[str, Any]]:
+        """Remove inherited DSS blocks absent from the active geometry.
+
+        A template unsteady file can retain boundary blocks from an older
+        geometry. HEC-RAS still attempts to open their DSS records during
+        preprocessing even though the active geometry cannot apply them. Keep
+        requested mappings fail-closed, but remove non-requested inherited
+        blocks from the scenario clone and retain an explicit audit record.
+        """
+        boundaries = RasUnsteady.get_dss_boundaries(workspace.unsteady_file)
+        if boundaries.empty:
+            return []
+
+        def clean(value: Any) -> Optional[str]:
+            text = str(value).strip()
+            return text if text and text.casefold() != "nan" else None
+
+        def is_requested(row: Mapping[str, Any]) -> bool:
+            row_index = int(row["boundary_index"])
+            for link in requested_links:
+                if link.boundary_index is not None:
+                    if row_index == link.boundary_index:
+                        return True
+                    continue
+                if link.river or link.reach or link.station:
+                    if (
+                        clean(row.get("river")) == clean(link.river)
+                        and clean(row.get("reach")) == clean(link.reach)
+                        and clean(row.get("station")) == clean(link.station)
+                    ):
+                        return True
+                    continue
+                if clean(row.get("sa_2d_name")) == clean(link.sa_2d_name) and clean(
+                    row.get("bc_line")
+                ) == clean(link.bc_line):
+                    return True
+            return False
+
+        candidates: list[tuple[int, RasBoundaryLink, Dict[str, Any]]] = []
+        for _, row in boundaries.iterrows():
+            record = row.to_dict()
+            if is_requested(record):
+                continue
+            boundary_index = int(record["boundary_index"])
+            selector: Dict[str, Any]
+            if any(clean(record.get(key)) for key in ("river", "reach", "station")):
+                selector = {
+                    "river": clean(record.get("river")),
+                    "reach": clean(record.get("reach")),
+                    "station": clean(record.get("station")),
+                }
+            elif any(clean(record.get(key)) for key in ("sa_2d_name", "bc_line")):
+                selector = {
+                    "sa_2d_name": clean(record.get("sa_2d_name")),
+                    "bc_line": clean(record.get("bc_line")),
+                }
+            else:
+                selector = {"boundary_index": boundary_index}
+            link = RasBoundaryLink(
+                mapping_id=f"inherited-boundary-{boundary_index:03d}",
+                dss_path=str(record["dss_path"]),
+                expected_bc_type=clean(record.get("bc_type")) or "Unknown",
+                **selector,
+            )
+            candidates.append((boundary_index, link, record))
+
+        if not candidates:
+            return []
+        plan_text = workspace.plan_file.read_text(
+            encoding="utf-8",
+            errors="replace",
+        )
+        crosswalk = RasScenario._geometry_boundary_crosswalk(
+            workspace,
+            tuple(link for _, link, _ in candidates),
+            plan_text,
+        )
+        inactive = [
+            (boundary_index, link, record)
+            for boundary_index, link, record in candidates
+            if not crosswalk[link.mapping_id]
+        ]
+        audit: list[Dict[str, Any]] = []
+        for boundary_index, link, record in sorted(
+            inactive,
+            key=lambda value: value[0],
+            reverse=True,
+        ):
+            deletion = RasUnsteady.delete_boundary(
+                workspace.unsteady_file,
+                boundary_index=boundary_index,
+                force=True,
+                ras_object=None,
+            )
+            audit.append(
+                {
+                    "mapping_id": link.mapping_id,
+                    "boundary_index": boundary_index,
+                    "boundary_name": clean(record.get("boundary_name")),
+                    "bc_type": clean(record.get("bc_type")),
+                    "dss_file": clean(record.get("dss_file")),
+                    "dss_path": clean(record.get("dss_path")),
+                    "river": clean(record.get("river")),
+                    "reach": clean(record.get("reach")),
+                    "station": clean(record.get("station")),
+                    "sa_2d_name": clean(record.get("sa_2d_name")),
+                    "bc_line": clean(record.get("bc_line")),
+                    "geometry_crosswalk": False,
+                    "disposition": "removed_from_clone_inactive_in_active_geometry",
+                    "lines_removed": deletion["lines_removed"],
+                }
+            )
+        audit.sort(key=lambda value: value["boundary_index"])
+        return audit
 
     @staticmethod
     @log_call
@@ -433,9 +889,7 @@ class RasScenario:
             workspace.unsteady_file,
         )
         linked_pathnames = {link.dss_path for link in links}
-        mapped_boundaries = boundaries[
-            boundaries["dss_path"].isin(linked_pathnames)
-        ]
+        mapped_boundaries = boundaries[boundaries["dss_path"].isin(linked_pathnames)]
         dss_references = tuple(
             str(reference).strip()
             for reference in mapped_boundaries["dss_file"]
@@ -481,6 +935,18 @@ class RasScenario:
             links,
             plan_text,
         )
+        newline_evidence = RasScenario.inspect_newlines(workspace.project_folder)
+        forcing_config = RasUnsteady.get_met_precipitation_config(
+            workspace.unsteady_file
+        )
+        forcing_expected = workspace.forcing_excess_file is not None
+        forcing_reference = (
+            str(
+                workspace.forcing_excess_file.relative_to(workspace.project_folder)
+            ).replace("/", "\\")
+            if workspace.forcing_excess_file is not None
+            else None
+        )
 
         checks = {
             "project_file_exists": workspace.project_file.is_file(),
@@ -492,8 +958,7 @@ class RasScenario:
             ),
             "project_uses_cloned_plan": (
                 current_plan_match is not None
-                and current_plan_match.group(1).zfill(2)
-                == workspace.plan_number
+                and current_plan_match.group(1).zfill(2) == workspace.plan_number
             ),
             "plan_window_matches_contract": (
                 expected_window is None or actual_window == expected_window
@@ -504,8 +969,7 @@ class RasScenario:
             "all_dss_file_references_resolvable": (
                 bool(dss_references)
                 and all(
-                    is_resolvable_reference(reference)
-                    for reference in dss_references
+                    is_resolvable_reference(reference) for reference in dss_references
                 )
             ),
             "all_dss_files_exist": (
@@ -520,16 +984,133 @@ class RasScenario:
                 == workspace.boundary_mapping_ids
             ),
             "all_boundaries_exist_in_active_geometry": (
-                bool(geometry_crosswalk)
-                and all(geometry_crosswalk.values())
+                bool(geometry_crosswalk) and all(geometry_crosswalk.values())
+            ),
+            "one_newline_convention": newline_evidence["consistent"],
+            "forcing_excess_file_exists": (
+                not forcing_expected
+                or (
+                    workspace.forcing_excess_file is not None
+                    and workspace.forcing_excess_file.is_file()
+                )
+            ),
+            "forcing_excess_link_matches": (
+                not forcing_expected
+                or (
+                    forcing_config["enabled"] is True
+                    and forcing_config["mode"] == "Gridded"
+                    and forcing_config["source"] == "DSS"
+                    and forcing_config["dss_filename"]
+                    in {forcing_reference, f".\\{forcing_reference}"}
+                    and forcing_config["dss_pathname"]
+                    == workspace.forcing_excess_pathname
+                )
             ),
         }
         if not all(checks.values()):
             failed = [name for name, passed in checks.items() if not passed]
+            details = []
+            if not checks["all_boundaries_exist_in_active_geometry"]:
+                inactive_mappings = [
+                    mapping_id
+                    for mapping_id, exists in geometry_crosswalk.items()
+                    if not exists
+                ]
+                if inactive_mappings:
+                    details.append("inactive mappings: " + ", ".join(inactive_mappings))
+            detail_suffix = f" ({'; '.join(details)})" if details else ""
             raise ValueError(
-                "Prepared RAS workspace failed validation: " + ", ".join(failed)
+                "Prepared RAS workspace failed validation: "
+                + ", ".join(failed)
+                + detail_suffix
             )
         return checks
+
+    @staticmethod
+    @log_call
+    def inspect_newlines(project_folder: Union[str, Path]) -> Dict[str, Any]:
+        """Return newline evidence for top-level HEC-RAS text files.
+
+        Each file must use exactly one line-ending style, and all recognized
+        authored project text files must agree. Generated compute artifacts
+        such as ``.b##``, ``.c##``, ``.o##``, ``.r##``, and ``.x##`` are not
+        authored project text and may be binary, so they are intentionally
+        excluded along with HDF, DSS, and XML rasmap files.
+        """
+        folder = Path(project_folder)
+        files = sorted(
+            path
+            for path in folder.iterdir()
+            if path.is_file()
+            and (
+                path.suffix.casefold() == ".prj"
+                or _RAS_AUTHORED_TEXT_SUFFIX.fullmatch(path.suffix)
+            )
+        )
+        conventions = {str(path): RasUtils._detect_text_newline(path) for path in files}
+        unique = sorted(set(conventions.values()))
+        return {
+            "consistent": bool(conventions) and len(unique) == 1,
+            "convention": unique[0] if len(unique) == 1 else None,
+            "files": conventions,
+        }
+
+    @staticmethod
+    @log_call
+    def inspect_workspace_evidence(
+        workspace: RasScenarioWorkspace,
+        boundary_links: Iterable[RasBoundaryLink],
+    ) -> Dict[str, Any]:
+        """Return read-only evidence for a prepared scenario workspace."""
+        plan_text = workspace.plan_file.read_text(
+            encoding="utf-8",
+            errors="replace",
+        )
+        links = tuple(boundary_links)
+        if workspace.simulation_start and workspace.simulation_end:
+            start_time = datetime.fromisoformat(workspace.simulation_start)
+            end_time = datetime.fromisoformat(workspace.simulation_end)
+            links = tuple(
+                replace(
+                    link,
+                    dss_path=RasScenario.format_dss_pathname_for_window(
+                        link.dss_path,
+                        start_time,
+                        end_time,
+                    ),
+                )
+                for link in links
+            )
+        current_plan = re.search(
+            r"^Current Plan=p(\w+)\s*$",
+            workspace.project_file.read_text(
+                encoding="utf-8",
+                errors="replace",
+            ),
+            flags=re.MULTILINE,
+        )
+        window = RasScenario._parse_simulation_window(plan_text)
+        return {
+            "current_plan": (
+                current_plan.group(1).zfill(2) if current_plan is not None else None
+            ),
+            "simulation_window": {
+                "start": window[0].isoformat() if window else None,
+                "end": window[1].isoformat() if window else None,
+            },
+            "geometry_crosswalk": RasScenario._geometry_boundary_crosswalk(
+                workspace,
+                links,
+                plan_text,
+            ),
+            "inactive_inherited_boundaries": list(
+                workspace.inactive_inherited_boundaries
+            ),
+            "newline": RasScenario.inspect_newlines(workspace.project_folder),
+            "forcing_excess": RasUnsteady.get_met_precipitation_config(
+                workspace.unsteady_file
+            ),
+        }
 
     @staticmethod
     def _parse_simulation_window(
@@ -537,8 +1118,7 @@ class RasScenario:
     ) -> Optional[tuple[datetime, datetime]]:
         """Parse a HEC-RAS ``Simulation Date`` line."""
         match = re.search(
-            r"^Simulation Date=([^,\r\n]+),([^,\r\n]+),"
-            r"([^,\r\n]+),([^,\r\n]+)\s*$",
+            r"^Simulation Date=([^,\r\n]+),([^,\r\n]+)," r"([^,\r\n]+),([^,\r\n]+)\s*$",
             plan_text,
             flags=re.MULTILINE,
         )
@@ -593,8 +1173,7 @@ class RasScenario:
             errors="replace",
         )
         area_names = {
-            str(value).strip().casefold()
-            for value in storage_areas.get("Name", ())
+            str(value).strip().casefold() for value in storage_areas.get("Name", ())
         }
         bc_line_names = {
             value.strip().casefold()
@@ -623,9 +1202,7 @@ class RasScenario:
                     for _, row in cross_sections.iterrows()
                 )
                 continue
-            area_exists = (
-                str(link.sa_2d_name).strip().casefold() in area_names
-            )
+            area_exists = str(link.sa_2d_name).strip().casefold() in area_names
             bc_line_exists = (
                 True
                 if not link.bc_line
@@ -680,9 +1257,7 @@ class RasScenario:
             executor.shutdown(wait=False, cancel_futures=True)
         finished = datetime.now(timezone.utc)
         result_exists = workspace.result_hdf.is_file()
-        result_size = (
-            workspace.result_hdf.stat().st_size if result_exists else 0
-        )
+        result_size = workspace.result_hdf.stat().st_size if result_exists else 0
         hdf_check = RasScenario._inspect_result_hdf(workspace)
         status = (
             "succeeded"
@@ -799,6 +1374,4 @@ class RasScenario:
             or source in destination.parents
             or destination in source.parents
         ):
-            raise ValueError(
-                "Source project and scenario workspace must not overlap"
-            )
+            raise ValueError("Source project and scenario workspace must not overlap")

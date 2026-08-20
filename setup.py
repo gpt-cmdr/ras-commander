@@ -40,9 +40,11 @@ setup(
     package_data={
         "ras_commander": [
             "LLM_GUIDE.md",
+            "contracts/*.schema.json",
             "resources/*.json",
             "resources/land_classification/*.hdf",
-            "resources/templates/*/*",
+            "resources/templates/RAS_6.6/*",
+            "resources/templates/RAS_7.0/*",
         ],
         "ras_commander.native": [
             "RasStoreMapHelper.exe",
@@ -65,6 +67,11 @@ setup(
     },
     cmdclass={
         'build_py': CustomBuildPy,
+    },
+    entry_points={
+        'console_scripts': [
+            'ras-scenario-worker=ras_commander.RasScenarioWorker:main',
+        ],
     },
     install_requires=[
         'h5py',

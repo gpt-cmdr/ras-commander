@@ -1,6 +1,7 @@
 """Tests for isolated HMS-to-RAS scenario workspaces."""
 
 import importlib
+import stat
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -32,8 +33,7 @@ def _write_result_hdf(
             b"True" if completed else b"False"
         )
         timestamps = hdf_file.create_group(
-            "Results/Unsteady/Output/Output Blocks/Base Output/"
-            "Unsteady Time Series"
+            "Results/Unsteady/Output/Output Blocks/Base Output/" "Unsteady Time Series"
         )
         timestamps.create_dataset(
             "Time Date Stamp (ms)",
@@ -149,25 +149,84 @@ def test_prepare_workspace_clones_plan_and_links_boundaries(tmp_path):
     unsteady_text = prepared.unsteady_file.read_text(encoding="utf-8")
     assert prepared.plan_number == "02"
     assert prepared.unsteady_number == "02"
-    assert "Current Plan=p02" in prepared.project_file.read_text(
-        encoding="utf-8"
-    )
+    assert "Current Plan=p02" in prepared.project_file.read_text(encoding="utf-8")
     assert "Flow File=u02" in plan_text
     assert "Simulation Date=01JAN2020,0000,02JAN2020,0000" in plan_text
     assert unsteady_text.count("DSS File=.\\hydrology\\hms-output.dss") == 2
     assert (
-        "DSS Path=//TRIBUTARY/FLOW/01JAN2020-02JAN2020/5MIN/"
-        "RUN:FF_TEST/"
+        "DSS Path=//TRIBUTARY/FLOW/01JAN2020-02JAN2020/5MIN/" "RUN:FF_TEST/"
     ) in unsteady_text
     assert (
-        "DSS Path=//JUNCTION/FLOW/01JAN2020-02JAN2020/5MIN/"
-        "RUN:FF_TEST/"
+        "DSS Path=//JUNCTION/FLOW/01JAN2020-02JAN2020/5MIN/" "RUN:FF_TEST/"
     ) in unsteady_text
+    assert "//MISSING/FLOW/DATE/1HOUR/RUN:BASE/" not in unsteady_text
+    assert prepared.inactive_inherited_boundaries == (
+        {
+            "mapping_id": "inherited-boundary-002",
+            "boundary_index": 2,
+            "boundary_name": "Missing Storage",
+            "bc_type": "Flow Hydrograph",
+            "dss_file": "baseline.dss",
+            "dss_path": "//MISSING/FLOW/DATE/1HOUR/RUN:BASE/",
+            "river": None,
+            "reach": None,
+            "station": None,
+            "sa_2d_name": "SA_NotInGeometry",
+            "bc_line": None,
+            "geometry_crosswalk": False,
+            "disposition": "removed_from_clone_inactive_in_active_geometry",
+            "lines_removed": 7,
+        },
+    )
     assert {
         path.name: path.read_bytes()
         for path in source_project.parent.iterdir()
         if path.is_file()
     } == original
+
+
+@pytest.mark.skipif(not RAS_EXE.is_file(), reason="HEC-RAS 6.6 not installed")
+def test_prepare_workspace_stages_and_validates_forcing_excess(tmp_path):
+    source_project = _write_project(tmp_path / "source")
+    hydrology = tmp_path / "hms-output.dss"
+    hydrology.write_bytes(b"hydrology")
+    excess = tmp_path / "ras-excess.dss"
+    excess.write_bytes(b"excess")
+    link = RasBoundaryLink(
+        mapping_id="tributary",
+        dss_path="//TRIBUTARY/FLOW//5MIN/RUN:FF_TEST/",
+        expected_bc_type="Lateral Inflow Hydrograph",
+        river="River",
+        reach="Reach",
+        station="1000",
+    )
+
+    prepared = RasScenario.prepare_workspace(
+        source_project,
+        tmp_path / "workspace",
+        "scenario-001",
+        "01",
+        hydrology,
+        [link],
+        datetime(2020, 1, 1),
+        datetime(2020, 1, 2),
+        ras_exe_path=RAS_EXE,
+        forcing_excess_dss=excess,
+        forcing_excess_pathname="/SHG/BASIN/PRECIPITATION///EXCESS/",
+        forcing_excess_interpolation="Nearest",
+    )
+
+    assert prepared.forcing_excess_file is not None
+    assert prepared.forcing_excess_file.read_bytes() == b"excess"
+    checks = RasScenario.validate_workspace(prepared, [link])
+    evidence = RasScenario.inspect_workspace_evidence(prepared, [link])
+    assert checks["forcing_excess_link_matches"] is True
+    assert checks["one_newline_convention"] is True
+    assert evidence["forcing_excess"]["dss_pathname"] == (
+        "/SHG/BASIN/PRECIPITATION///EXCESS/"
+    )
+    assert evidence["forcing_excess"]["interpolation"] == "Nearest"
+    assert evidence["geometry_crosswalk"] == {"tributary": True}
 
 
 @pytest.mark.skipif(not RAS_EXE.is_file(), reason="HEC-RAS 6.6 not installed")
@@ -179,7 +238,7 @@ def test_validate_workspace_rejects_inactive_geometry_boundary(tmp_path):
     with pytest.raises(
         ValueError,
         match="all_boundaries_exist_in_active_geometry",
-    ):
+    ) as error:
         RasScenario.prepare_workspace(
             source_project,
             tmp_path / "workspace",
@@ -198,6 +257,7 @@ def test_validate_workspace_rejects_inactive_geometry_boundary(tmp_path):
             datetime(2020, 1, 2),
             ras_exe_path=RAS_EXE,
         )
+    assert "inactive mappings: missing-storage" in str(error.value)
 
 
 def test_boundary_link_rejects_mixed_selector_groups():
@@ -218,9 +278,7 @@ def test_format_dss_pathname_for_window_materializes_blank_d_part():
         datetime(2019, 9, 22, 13),
     )
 
-    assert pathname == (
-        "//OUTLET/FLOW/18SEP2019-22SEP2019/5Minute/RUN:TEST/"
-    )
+    assert pathname == ("//OUTLET/FLOW/18SEP2019-22SEP2019/5Minute/RUN:TEST/")
 
 
 def test_prepare_workspace_is_non_destructive_by_default(tmp_path):
@@ -507,3 +565,98 @@ def test_execute_fails_when_hdf_time_axis_does_not_match(
     assert artifact.status == "failed"
     assert artifact.hdf_completed_successfully
     assert not artifact.time_window_matches
+
+
+def test_linked_asset_cache_adopts_existing_copy_and_reuses_it(tmp_path, monkeypatch):
+    source = tmp_path / "source" / "Terrain"
+    source.mkdir(parents=True)
+    (source / "terrain.hdf").write_bytes(b"immutable terrain")
+    cache_root = tmp_path / "cache"
+    cached = cache_root / "Terrain"
+    cached.mkdir(parents=True)
+    (cached / "terrain.hdf").write_bytes(b"immutable terrain")
+    cache_key = "a" * 64
+
+    adopted = RasScenario._prepare_linked_asset_cache(
+        cache_root, (source.resolve(),), cache_key
+    )
+
+    assert adopted["status"] == "adopted"
+    assert adopted["size_bytes"] == len(b"immutable terrain")
+    manifest = cache_root / RasScenario.LINKED_ASSET_CACHE_MANIFEST
+    assert manifest.is_file()
+
+    scenario_module = importlib.import_module("ras_commander.RasScenario")
+    monkeypatch.setattr(
+        scenario_module.shutil,
+        "copytree",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("cache reuse must not copy linked assets")
+        ),
+    )
+    reused = RasScenario._prepare_linked_asset_cache(
+        cache_root, (source.resolve(),), cache_key
+    )
+
+    assert reused["status"] == "reused"
+    assert reused["manifest"] == str(manifest)
+
+
+def test_linked_asset_cache_refuses_cached_file_drift(tmp_path):
+    source = tmp_path / "source" / "Terrain"
+    source.mkdir(parents=True)
+    (source / "terrain.hdf").write_bytes(b"immutable terrain")
+    cache_root = tmp_path / "cache"
+    RasScenario._prepare_linked_asset_cache(cache_root, (source.resolve(),), "b" * 64)
+    cached_file = cache_root / "Terrain" / "terrain.hdf"
+    cached_file.chmod(stat.S_IREAD | stat.S_IWRITE)
+    cached_file.write_bytes(b"tampered terrain")
+
+    with pytest.raises(ValueError, match="cache copy Terrain metadata drifted"):
+        RasScenario._prepare_linked_asset_cache(
+            cache_root, (source.resolve(),), "b" * 64
+        )
+
+
+def test_scenario_clone_excludes_generated_outputs_but_keeps_geometry_hdf(tmp_path):
+    source = tmp_path / "Model"
+    nested = source / "Maps"
+    nested.mkdir(parents=True)
+    files = {
+        source / "Model.dss": 10,
+        source / "Model.p01.hdf": 20,
+        source / "Model.p02.tmp.hdf": 30,
+        nested / "PostProcessing.hdf": 40,
+        source / "Model.g01.hdf": 50,
+        source / "Model.prj": 60,
+    }
+    for path, size in files.items():
+        path.write_bytes(b"x" * size)
+
+    exclusions = RasScenario._scenario_output_exclusions(source, "Model")
+    root_ignored = RasScenario._scenario_copy_ignore("Model")(
+        str(source), [path.name for path in source.iterdir()]
+    )
+    nested_ignored = RasScenario._scenario_copy_ignore("Model")(
+        str(nested), [path.name for path in nested.iterdir()]
+    )
+
+    assert exclusions["file_count"] == 4
+    assert exclusions["size_bytes"] == 100
+    assert "Model.dss" in root_ignored
+    assert "Model.p01.hdf" in root_ignored
+    assert "Model.p02.tmp.hdf" in root_ignored
+    assert "PostProcessing.hdf" in nested_ignored
+    assert "Model.g01.hdf" not in root_ignored
+    assert "Model.prj" not in root_ignored
+
+
+def test_newline_inspection_ignores_generated_compute_artifacts(tmp_path):
+    project_file = _write_project(tmp_path / "source")
+    compute_artifact = project_file.parent / "Example.c04"
+    compute_artifact.write_bytes(b"generated\r\ncompute\nartifact\x00")
+
+    evidence = RasScenario.inspect_newlines(project_file.parent)
+
+    assert evidence["consistent"] is True
+    assert str(compute_artifact) not in evidence["files"]

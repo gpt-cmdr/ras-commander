@@ -113,6 +113,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from .RasPrj import ras
+from .RasUtils import RasUtils
 from .LoggingConfig import get_logger
 from .Decorators import log_call
 import pandas as pd
@@ -3342,16 +3343,9 @@ class RasUnsteady:
         before inserting the requested state so transitions cannot leave stale
         Constant, Point, DSS, GDAL Group, or legacy GDAL Datasetname values.
         """
-        with open(
-            unsteady_path,
-            "r",
-            encoding="utf-8",
-            errors="replace",
-            newline="",
-        ) as file:
-            lines = file.readlines()
-
-        newline = RasUnsteady._detect_line_ending(lines)
+        lines, newline = RasUtils._read_text_lines_preserving_newline(
+            unsteady_path
+        )
         desired_lines = [
             f"{key}={value}{newline}" for key, value in desired_entries
         ]

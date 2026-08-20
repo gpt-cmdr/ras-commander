@@ -92,6 +92,7 @@ from .RasScenario import (
     RasScenario,
     RasScenarioWorkspace,
 )
+from .RasScenarioWorker import RasScenarioWorker, RasScenarioWorkerError
 from .RasCurrency import RasCurrency
 from .RasControl import RasControl
 from .RasTcu import RasTcu, TcuStatus
@@ -264,6 +265,7 @@ __all__ = [
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBoundaryLink', 'RasRunArtifact', 'RasScenario', 'RasScenarioWorkspace',
+    'RasScenarioWorker', 'RasScenarioWorkerError',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',
