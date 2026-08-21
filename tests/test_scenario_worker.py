@@ -115,13 +115,9 @@ def _request(tmp_path: Path):
 
 
 def _write_prior_preparation_failure(request, request_path, result_path):
-    """Write the evidence shape produced before cache/retry fields existed."""
+    """Write a preparation failure bound to the exact retained request."""
     worker_module = importlib.import_module("ras_commander.RasScenarioWorker")
-    normalized = RasScenarioWorker._validate_request(request)
-    legacy = json.loads(json.dumps(normalized))
-    legacy.pop("retry", None)
-    legacy["source_model"].pop("linked_asset_mode", None)
-    request_sha256 = worker_module._json_sha256(legacy)
+    request_sha256 = worker_module._json_sha256(request)
     Path(request["workspace"]).mkdir()
     request_path.write_text(json.dumps(request), encoding="utf-8")
     result_path.write_text(
@@ -374,6 +370,21 @@ def test_worker_refuses_existing_workspace(tmp_path):
     assert RasScenarioWorker.run(request_path, result_path) == 3
     result = json.loads(result_path.read_text(encoding="utf-8"))
     assert result["error"]["classification"] == "existing_workspace"
+
+
+def test_no_retry_request_identity_survives_validation_and_result_binding(
+    tmp_path, monkeypatch
+):
+    request, request_path, result_path = _request(tmp_path)
+    normalized = RasScenarioWorker._validate_request(request)
+    assert "retry" not in normalized
+    _install_success_fakes(monkeypatch, request)
+
+    assert RasScenarioWorker.run(request_path, result_path) == 0
+
+    worker_module = importlib.import_module("ras_commander.RasScenarioWorker")
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result["request"]["sha256"] == worker_module._json_sha256(request)
 
 
 def test_worker_authenticates_preparation_retry_and_preserves_prior_workspace(

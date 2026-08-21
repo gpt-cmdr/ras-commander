@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence, Union
 
 from .Decorators import log_call
+from .hdf.HdfResultsProducts import HdfResultsProducts
 from .LoggingConfig import get_logger
 from .RasScenario import RasBoundaryLink, RasRunArtifact, RasScenario
-from .hdf.HdfResultsProducts import HdfResultsProducts
 
 logger = get_logger(__name__)
 
@@ -73,10 +73,9 @@ class RasScenarioWorker:
         warnings: list[str] = []
 
         try:
-            request = RasScenarioWorker._validate_request(
-                RasScenarioWorker._load_request(request_file)
-            )
-            request_sha256 = _json_sha256(request)
+            retained_request = RasScenarioWorker._load_request(request_file)
+            request_sha256 = _json_sha256(retained_request)
+            request = RasScenarioWorker._validate_request(retained_request)
             if result_file.exists():
                 RasScenarioWorker._verify_completed_result(
                     result_file,
@@ -528,7 +527,7 @@ class RasScenarioWorker:
                 ),
             }
 
-        return {
+        normalized_request = {
             "schema": RasScenarioWorker.REQUEST_SCHEMA,
             "scenario": normalized_scenario,
             "source_model": normalized_source,
@@ -555,8 +554,10 @@ class RasScenarioWorker:
                 ),
                 "cores": _positive_int(execution["cores"], "execution.cores"),
             },
-            "retry": retry,
         }
+        if retry is not None:
+            normalized_request["retry"] = retry
+        return normalized_request
 
     @staticmethod
     def _verify_input_identities(request: Mapping[str, Any]) -> None:
@@ -671,8 +672,12 @@ class RasScenarioWorker:
             reject(f"Prior worker result does not exist: {prior_result_path}")
 
         try:
+            retained_prior_request = RasScenarioWorker._load_request(
+                prior_request_path
+            )
+            retained_prior_hash = _json_sha256(retained_prior_request)
             prior_request = RasScenarioWorker._validate_request(
-                RasScenarioWorker._load_request(prior_request_path)
+                retained_prior_request
             )
             prior_result = json.loads(prior_result_path.read_text(encoding="utf-8"))
         except RasScenarioWorkerError:
@@ -687,6 +692,7 @@ class RasScenarioWorker:
         legacy_prior_request.pop("retry", None)
         legacy_prior_request["source_model"].pop("linked_asset_mode", None)
         accepted_prior_hashes = {
+            retained_prior_hash,
             prior_request_sha256,
             _json_sha256(legacy_prior_request),
         }
