@@ -3055,6 +3055,32 @@ notebooks:
   excluded: false
   code_cells: 20
   executed_cells: 20
+- id: 728_prepare_gridded_dss_for_rain_on_grid
+  filename: 728_prepare_gridded_dss_for_rain_on_grid.ipynb
+  title: Preparing Gridded DSS Forcing for HEC-RAS Rain-on-Grid
+  series: 700
+  series_name: Sensitivity & Precipitation
+  summary: Create a run-local gridded precipitation or rainfall-excess DSS derivative, append an explicit
+    zero tail, verify source immutability and grid metadata, and record the reviewed handoff to HEC-RAS
+    rain-on-grid scenario preparation without executing HEC-RAS.
+  tags:
+  - dss
+  - precipitation
+  difficulty: intermediate
+  est_runtime: 1 min
+  data_project: null
+  functions_used:
+  - RasDss.copy_grid_with_zero_tail
+  - RasDss.get_catalog
+  - RasDss.get_file_version
+  - RasDss.read_grid
+  - RasDss.write_grid_timeseries
+  - RasDss.write_timeseries
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 8
+  executed_cells: 0
 - id: 730_raster_processing_performance_profiling
   filename: 730_raster_processing_performance_profiling.ipynb
   title: Raster Processing Performance Profiling
