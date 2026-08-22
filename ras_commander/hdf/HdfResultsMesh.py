@@ -1383,12 +1383,80 @@ class HdfResultsMesh:
             raise ValueError(f"Failed to get maximum iteration count: {str(e)}")
 
     @staticmethod
+    def _get_mesh_temporal_maximum(
+        result_ds,
+        minimum_elevation: Optional[np.ndarray] = None,
+        max_chunk_bytes: int = 16 * 1024 * 1024,
+        max_chunk_rows: int = 32,
+    ) -> np.ndarray:
+        """Reduce a ``(time, cell)`` HDF dataset without materializing it."""
+        time_count, cell_count = result_ds.shape
+        maximum = np.full(cell_count, np.nan, dtype=np.float32)
+        if time_count == 0 or cell_count == 0:
+            return maximum
+
+        row_bytes = cell_count * np.dtype(np.float32).itemsize
+        rows_by_bytes = max(1, max_chunk_bytes // row_bytes)
+        chunk_rows = max(1, min(max_chunk_rows, rows_by_bytes))
+
+        if minimum_elevation is not None:
+            minimum_elevation = np.asarray(
+                minimum_elevation,
+                dtype=np.float32,
+            )
+
+        for start in range(0, time_count, chunk_rows):
+            stop = min(start + chunk_rows, time_count)
+            values = np.array(
+                result_ds[start:stop, :],
+                dtype=np.float32,
+                copy=True,
+            )
+
+            if minimum_elevation is not None:
+                np.subtract(
+                    values,
+                    minimum_elevation[np.newaxis, :],
+                    out=values,
+                )
+
+            finite_values = np.isfinite(values)
+            if minimum_elevation is not None:
+                np.maximum(
+                    values,
+                    0.0,
+                    out=values,
+                    where=finite_values,
+                )
+            values[~finite_values] = np.nan
+
+            chunk_maximum = np.fmax.reduce(values, axis=0)
+            np.fmax(maximum, chunk_maximum, out=maximum)
+
+        return maximum
+
+    @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_mesh_max_depth(hdf_path: Path) -> gpd.GeoDataFrame:
         """
-        Get the maximum depth for each 2D mesh cell by reading the full Depth
-        time series and computing np.max(axis=0) per cell.
+        Get the maximum depth for each 2D mesh cell.
+
+        The preferred source is the stored ``Depth`` time series. HEC-RAS can
+        omit that optional output while retaining ``Water Surface`` and
+        ``Cells Minimum Elevation``. In that case, depth is derived at every
+        timestep as water surface minus minimum cell elevation, clipped at
+        zero, and then reduced to the temporal maximum.
+
+        Non-finite samples are ignored when a cell has at least one finite
+        sample. A cell with no finite samples is returned with a NaN maximum.
+        Both stored and derived time series are reduced in bounded time
+        chunks rather than materialized as a complete ``(time, cell)`` array.
+
+        One INFO message per mesh identifies provenance. If the HDF contains
+        ``Depth``, that stored HEC-RAS dataset is read only. Otherwise, depth
+        is derived in memory from ``Water Surface`` minus ``Cells Minimum
+        Elevation``; the method does not create or write a ``Depth`` dataset.
 
         Attribution: Implementation pattern derived from ras-agent
         (https://github.com/gheistand/ras-agent) by Glenn Heistand / CHAMP —
@@ -1403,16 +1471,36 @@ class HdfResultsMesh:
                 - cell_id (int): Cell index
                 - maximum_depth (float): Maximum depth at that cell
                 - geometry (Point): Cell center point geometry
+
+        Raises:
+            ValueError: If the HDF file cannot be read, a declared mesh is
+                missing required geometry or result datasets, or their
+                dimensions and cell counts are inconsistent.
         """
         from shapely.geometry import Point
 
         try:
+            source_name = Path(hdf_path).name
+
+            def empty_result(crs=None) -> gpd.GeoDataFrame:
+                return gpd.GeoDataFrame(
+                    {
+                        "mesh_name": pd.Series(dtype="object"),
+                        "cell_id": pd.Series(dtype="int64"),
+                        "maximum_depth": pd.Series(dtype="float32"),
+                        "geometry": gpd.GeoSeries([], crs=crs),
+                    },
+                    geometry="geometry",
+                    crs=crs,
+                )
+
             dfs = []
             with h5py.File(hdf_path, 'r') as hdf_file:
+                crs = HdfBase.get_projection(hdf_file)
                 d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
-                if d2_flow_areas is None:
+                if d2_flow_areas is None or len(d2_flow_areas) == 0:
                     logger.debug("No 2D Flow Areas found in HDF file")
-                    return gpd.GeoDataFrame()
+                    return empty_result(crs)
 
                 for d2_flow_area in d2_flow_areas[:]:
                     mesh_name = HdfUtils.convert_ras_string(d2_flow_area[0])
@@ -1421,9 +1509,15 @@ class HdfResultsMesh:
                     cc_path = f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"
                     cc_ds = hdf_file.get(cc_path)
                     if cc_ds is None:
-                        logger.warning(f"Cell centers not found for mesh '{mesh_name}'")
-                        continue
-                    xy = np.array(cc_ds, dtype=np.float64)
+                        raise ValueError(
+                            f"Cell centers are missing for mesh '{mesh_name}'"
+                        )
+                    xy = np.asarray(cc_ds, dtype=np.float64)
+                    if xy.ndim != 2 or xy.shape[1] != 2:
+                        raise ValueError(
+                            f"Cell-center shape {xy.shape} is not an (N, 2) "
+                            f"coordinate array for mesh '{mesh_name}'"
+                        )
 
                     # Read depth time series
                     depth_path = (
@@ -1431,12 +1525,87 @@ class HdfResultsMesh:
                         f"Unsteady Time Series/2D Flow Areas/{mesh_name}/Depth"
                     )
                     depth_ds = hdf_file.get(depth_path)
-                    if depth_ds is None:
-                        logger.warning(f"Depth dataset not found for mesh '{mesh_name}'")
-                        continue
+                    if depth_ds is not None:
+                        if depth_ds.ndim != 2 or depth_ds.shape[1] != len(xy):
+                            raise ValueError(
+                                f"Depth shape {depth_ds.shape} does not align "
+                                f"with cell-center count {len(xy)} for mesh "
+                                f"'{mesh_name}'"
+                            )
+                        max_depth = HdfResultsMesh._get_mesh_temporal_maximum(
+                            depth_ds
+                        )
+                        logger.info(
+                            "Maximum-depth source for mesh '%s' in '%s': "
+                            "stored HEC-RAS HDF 'Depth' time series (read only).",
+                            mesh_name,
+                            source_name,
+                        )
+                    else:
+                        wse_path = (
+                            f"Results/Unsteady/Output/Output Blocks/Base Output/"
+                            f"Unsteady Time Series/2D Flow Areas/{mesh_name}/"
+                            "Water Surface"
+                        )
+                        minimum_elevation_path = (
+                            f"Geometry/2D Flow Areas/{mesh_name}/"
+                            "Cells Minimum Elevation"
+                        )
+                        wse_ds = hdf_file.get(wse_path)
+                        minimum_elevation_ds = hdf_file.get(
+                            minimum_elevation_path
+                        )
+                        if wse_ds is None or minimum_elevation_ds is None:
+                            raise ValueError(
+                                f"Depth is absent for mesh '{mesh_name}' and "
+                                "Water Surface plus Cells Minimum Elevation "
+                                "are not both available"
+                            )
 
-                    depths = np.array(depth_ds, dtype=np.float32)  # (T, N)
-                    max_depth = np.max(depths, axis=0)  # (N,)
+                        minimum_elevation = np.asarray(
+                            minimum_elevation_ds,
+                            dtype=np.float32,
+                        )
+                        if minimum_elevation.ndim != 1:
+                            raise ValueError(
+                                "Cells Minimum Elevation shape "
+                                f"{minimum_elevation.shape} is not one-dimensional "
+                                f"for mesh '{mesh_name}'"
+                            )
+
+                        if (
+                            wse_ds.ndim != 2
+                            or wse_ds.shape[1] != minimum_elevation.shape[0]
+                        ):
+                            raise ValueError(
+                                f"Water Surface shape {wse_ds.shape} does not "
+                                "align with Cells Minimum Elevation count "
+                                f"{minimum_elevation.shape[0]} for mesh "
+                                f"'{mesh_name}'"
+                            )
+                        if wse_ds.shape[1] != len(xy):
+                            raise ValueError(
+                                f"Depth shape {wse_ds.shape} does not align "
+                                f"with cell-center count {len(xy)} for mesh "
+                                f"'{mesh_name}'"
+                            )
+
+                        max_depth = HdfResultsMesh._get_mesh_temporal_maximum(
+                            wse_ds,
+                            minimum_elevation=minimum_elevation,
+                        )
+                        logger.info(
+                            "Maximum-depth source for mesh '%s' in '%s': "
+                            "derived in memory by ras-commander from HEC-RAS "
+                            "HDF 'Water Surface' minus 'Cells Minimum "
+                            "Elevation'; no 'Depth' dataset was created or "
+                            "written.",
+                            mesh_name,
+                            source_name,
+                        )
+
+                    if len(max_depth) == 0:
+                        continue
 
                     geom = [Point(x, y) for x, y in xy]
                     df = gpd.GeoDataFrame({
@@ -1447,22 +1616,20 @@ class HdfResultsMesh:
                     dfs.append(df)
 
             if not dfs:
-                return gpd.GeoDataFrame()
+                return empty_result(crs)
 
-            result = pd.concat(dfs, ignore_index=True)
-
-            # Set CRS
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                crs = HdfBase.get_projection(hdf_file)
-            if crs:
-                result.set_crs(crs, inplace=True)
+            result = gpd.GeoDataFrame(
+                pd.concat(dfs, ignore_index=True),
+                geometry="geometry",
+                crs=crs,
+            )
 
             logger.debug(f"Extracted max depth for {len(result)} cells")
             return result
 
         except Exception as e:
             logger.error(f"Error in get_mesh_max_depth: {str(e)}")
-            raise ValueError(f"Failed to get maximum depth: {str(e)}")
+            raise ValueError(f"Failed to get maximum depth: {str(e)}") from e
 
     @staticmethod
     @log_call
@@ -1497,6 +1664,10 @@ class HdfResultsMesh:
 
         Returns:
             Path: Path to the written GeoTIFF file.
+
+        Raises:
+            ValueError: If no depth rows exist or no rows have both a finite
+                maximum depth and finite point coordinates.
         """
         import rasterio
         from rasterio.transform import from_bounds
@@ -1508,13 +1679,21 @@ class HdfResultsMesh:
 
         xy = np.column_stack([gdf.geometry.x, gdf.geometry.y])
         values = gdf["maximum_depth"].values
+        usable = np.isfinite(values) & np.all(np.isfinite(xy), axis=1)
+        if not np.any(usable):
+            raise ValueError("No usable finite depth points found in HDF file")
+        if not np.all(usable):
+            logger.debug(
+                "Excluded %s of %s maximum-depth rows with non-finite values "
+                "or coordinates before raster interpolation",
+                int(np.count_nonzero(~usable)),
+                len(usable),
+            )
+            xy = xy[usable]
+            values = values[usable]
 
-        if output_path is None:
-            import tempfile
-            tmp = tempfile.NamedTemporaryFile(suffix=".tif", delete=False)
-            output_path = Path(tmp.name)
-            tmp.close()
-        else:
+        owns_temporary_output = output_path is None
+        if output_path is not None:
             output_path = Path(output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1542,16 +1721,27 @@ class HdfResultsMesh:
         grid_vals = np.where(np.isnan(grid_vals), nodata, grid_vals)
         transform = from_bounds(x_min, y_min, x_max, y_max, cols, rows)
 
-        with rasterio.open(
-            str(output_path), "w",
-            driver="GTiff", height=rows, width=cols, count=1,
-            dtype=np.float32, crs=crs, transform=transform, nodata=nodata,
-            compress="lzw", tiled=True, blockxsize=256, blockysize=256,
-            BIGTIFF="IF_SAFER",
-        ) as dst:
-            dst.write(grid_vals, 1)
-            dst.build_overviews([2, 4, 8, 16], rasterio.enums.Resampling.average)
-            dst.update_tags(ns="rio_overview", resampling="average")
+        if owns_temporary_output:
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile(suffix=".tif", delete=False)
+            output_path = Path(tmp.name)
+            tmp.close()
+
+        try:
+            with rasterio.open(
+                str(output_path), "w",
+                driver="GTiff", height=rows, width=cols, count=1,
+                dtype=np.float32, crs=crs, transform=transform, nodata=nodata,
+                compress="lzw", tiled=True, blockxsize=256, blockysize=256,
+                BIGTIFF="IF_SAFER",
+            ) as dst:
+                dst.write(grid_vals, 1)
+                dst.build_overviews([2, 4, 8, 16], rasterio.enums.Resampling.average)
+                dst.update_tags(ns="rio_overview", resampling="average")
+        except Exception:
+            if owns_temporary_output:
+                output_path.unlink(missing_ok=True)
+            raise
 
         logger.info("Wrote max depth raster (%sx%s px, %sm): %s", rows, cols, resolution_m, output_path.name)
         logger.debug("Max depth raster path: %s", output_path)

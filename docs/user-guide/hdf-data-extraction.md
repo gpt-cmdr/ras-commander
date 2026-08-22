@@ -49,6 +49,17 @@ max_depth = HdfResultsMesh.get_mesh_max_depth(hdf_path)
 max_wse_time = HdfResultsMesh.get_mesh_max_ws_time(hdf_path)
 ```
 
+`get_mesh_max_depth()` reports one INFO provenance message for every mesh. If
+HEC-RAS stored the optional `Depth` time series, ras-commander reads that
+dataset without modifying the HDF. If `Depth` is absent, ras-commander derives
+depth in memory from `Water Surface - Cells Minimum Elevation`, clips finite
+negative values to zero, and does not create or write a `Depth` dataset.
+
+The source message describes the calculation path, not how the input file was
+created. Repository tests label temporary, synthetic HDF artifacts separately
+from pre-existing producer HDFs written by HEC-RAS. Reading either kind of file
+does not run HEC-RAS or generate model output.
+
 ### Time Series
 
 ```python

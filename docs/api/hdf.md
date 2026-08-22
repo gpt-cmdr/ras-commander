@@ -72,13 +72,21 @@ removed before v1.2.0:
 
 - `get_mesh_max_ws(hdf_path)` - Maximum water surface elevation
 - `get_mesh_max_ws_time(hdf_path)` - Time of maximum WSE
-- `get_mesh_max_depth(hdf_path)` - Maximum depth
+- `get_mesh_max_depth(hdf_path)` - Maximum depth from stored HEC-RAS `Depth`
+  when present, otherwise derived in memory from `Water Surface - Cells Minimum
+  Elevation`
 - `get_mesh_max_face_v(hdf_path)` - Maximum face velocity
 - `get_mesh_timeseries(hdf_path, mesh, var)` - Time series for mesh
 - `get_mesh_cells_timeseries(hdf_path, mesh, cell_ids, var)` - Cell time series
 - `get_mesh_faces_timeseries(hdf_path, mesh, face_ids, var)` - Face time series
 - `get_profile_line_flow_timeseries(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Flow time series across a RAS Mapper profile/reference line
 - `get_profile_line_peak_flow(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Peak Q and peak time for a profile/reference line
+
+`get_mesh_max_depth()` logs one INFO source message per mesh. Stored `Depth` is
+read only. The fallback is computed only in memory and does not create or write
+`Depth` in the HDF. Temporary synthetic test HDFs are test artifacts; they are
+not producer output and are labeled separately from pre-existing HEC-RAS result
+fixtures.
 
 ## Plan Results
 
