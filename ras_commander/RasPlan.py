@@ -1889,9 +1889,6 @@ class RasPlan:
             if plan_file_path is None or not Path(plan_file_path).exists():
                 raise ValueError(f"Plan file not found for plan number: {plan_number_or_path!r}")
 
-        # Format the dates
-        formatted_date = f"{start_date.strftime('%d%b%Y').upper()},{start_date.strftime('%H%M')},{end_date.strftime('%d%b%Y').upper()},{end_date.strftime('%H%M')}"
-
         try:
             # Read the file
             with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
@@ -1901,6 +1898,42 @@ class RasPlan:
             updated = False
             for i, line in enumerate(lines):
                 if line.startswith("Simulation Date="):
+                    fields = (
+                        line.removeprefix("Simulation Date=")
+                        .rstrip("\r\n")
+                        .split(",")
+                    )
+                    if len(fields) != 4:
+                        raise ValueError(
+                            "Malformed 'Simulation Date=' line in plan file: "
+                            f"{plan_file_path}. "
+                            "Expected four comma-separated fields."
+                        )
+
+                    start_time_token = fields[1]
+                    end_time_token = fields[3]
+                    time_formats = []
+                    for label, token in (
+                        ("start", start_time_token),
+                        ("end", end_time_token),
+                    ):
+                        if re.fullmatch(r"[0-9]{4}", token):
+                            time_formats.append("%H%M")
+                        elif re.fullmatch(r"[0-9]{2}:[0-9]{2}", token):
+                            time_formats.append("%H:%M")
+                        else:
+                            raise ValueError(
+                                f"Malformed {label} time {token!r} in "
+                                "'Simulation Date=' line in plan file: "
+                                f"{plan_file_path}. Expected HHMM or HH:MM."
+                            )
+
+                    formatted_date = (
+                        f"{start_date.strftime('%d%b%Y').upper()},"
+                        f"{start_date.strftime(time_formats[0])},"
+                        f"{end_date.strftime('%d%b%Y').upper()},"
+                        f"{end_date.strftime(time_formats[1])}"
+                    )
                     lines[i] = f"Simulation Date={formatted_date}\n"
                     updated = True
                     break
