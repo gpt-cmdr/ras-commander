@@ -2581,7 +2581,17 @@ class HdfResultsMesh:
                     - face_id: Face IDs (for per-face variables)
 
                 Coordinates:
-                    Metadata from HDF attributes (BC types, locations, etc.)
+                    Metadata from HDF attributes (BC types, locations, etc.).
+                    Ordinary metadata retains its legacy lowercase spelling,
+                    including spaces. HEC-RAS ``Flow`` and ``Stage`` attributes
+                    are exposed as ``flow_units`` and ``stage_units`` so they
+                    cannot replace the same-named hydrograph variables. ``2D
+                    Area`` remains available as legacy ``2d area`` and also as
+                    the additive ``area_2d`` alias. Canonical names are assigned
+                    before ordinary metadata, independent of HDF attribute
+                    order. A metadata name that conflicts with a data variable,
+                    structural coordinate, or canonical alias receives a
+                    deterministic ``bc_`` prefix.
 
                 When to use: Boundary condition analysis across model.
                 All BCs combined in single Dataset for easy comparison.
@@ -2601,7 +2611,7 @@ class HdfResultsMesh:
                 bc_base_path = f"{base_path}/Boundary Conditions"
                 
                 if bc_base_path not in hdf_file:
-                    logger.warning(f"No boundary conditions found in HDF file")
+                    logger.warning("No boundary conditions found in HDF file")
                     return xr.Dataset()
                 
                 # Get timestamps
@@ -2614,7 +2624,7 @@ class HdfResultsMesh:
                         if " - Flow per Face" not in name and " - Stage per Face" not in name]
                 
                 if not bc_names:
-                    logger.warning(f"No boundary conditions found in HDF file")
+                    logger.warning("No boundary conditions found in HDF file")
                     return xr.Dataset()
                 
                 # Initialize arrays for main stage and flow data
@@ -2737,14 +2747,82 @@ class HdfResultsMesh:
                     }
                 )
                 
-                # Add metadata as coordinates
-                for key in bc_metadata[bc_names[0]]:
-                    if key != 'Columns':  # Skip Columns attribute as it's used for Stage/Flow
-                        try:
-                            values = [bc_metadata[bc].get(key, '') for bc in bc_names]
-                            ds = ds.assign_coords({f'{key.lower()}': ('bc_name', values)})
-                        except Exception as e:
-                            logger.debug(f"Could not add metadata coordinate '{key}': {str(e)}")
+                # Give canonical HEC-RAS metadata fixed ownership before
+                # allocating ordinary attributes. This makes the result
+                # independent of the HDF attribute iteration order.
+                canonical_names = {
+                    "Stage": "stage_units",
+                    "Flow": "flow_units",
+                    "2D Area": "area_2d",
+                }
+                reserved_names = {
+                    "stage",
+                    "flow",
+                    "flow_per_face",
+                    "stage_per_face",
+                    "time",
+                    "bc_name",
+                    "face_id",
+                    "stage_units",
+                    "flow_units",
+                    "area_2d",
+                }
+
+                metadata_keys = [
+                    key
+                    for key in bc_metadata[bc_names[0]]
+                    if key != "Columns"
+                ]
+
+                for key, coordinate_name in canonical_names.items():
+                    if key not in metadata_keys:
+                        continue
+                    try:
+                        values = [
+                            bc_metadata[bc].get(key, "") for bc in bc_names
+                        ]
+                        ds = ds.assign_coords(
+                            {coordinate_name: ("bc_name", values)}
+                        )
+                        if key == "2D Area":
+                            ds = ds.assign_coords(
+                                {"2d area": ("bc_name", values)}
+                            )
+                    except Exception as e:
+                        logger.debug(
+                            "Could not add canonical metadata coordinate "
+                            f"'{key}': {str(e)}"
+                        )
+
+                ordinary_keys = [
+                    key for key in metadata_keys if key not in canonical_names
+                ]
+                ordinary_keys.sort(
+                    key=lambda key: (
+                        str(key).lower() not in reserved_names,
+                        str(key).lower(),
+                        str(key),
+                    )
+                )
+                for key in ordinary_keys:
+                    try:
+                        values = [
+                            bc_metadata[bc].get(key, "") for bc in bc_names
+                        ]
+                        coordinate_name = str(key).lower()
+                        while (
+                            coordinate_name in reserved_names
+                            or coordinate_name in ds.variables
+                        ):
+                            coordinate_name = f"bc_{coordinate_name}"
+                        ds = ds.assign_coords(
+                            {coordinate_name: ("bc_name", values)}
+                        )
+                    except Exception as e:
+                        logger.debug(
+                            f"Could not add metadata coordinate '{key}': "
+                            f"{str(e)}"
+                        )
                 
                 # Add face-specific data variables if available
                 if face_data['flow_per_face']:
