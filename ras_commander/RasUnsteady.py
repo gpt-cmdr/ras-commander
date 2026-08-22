@@ -3275,10 +3275,20 @@ class RasUnsteady:
 
     @staticmethod
     def _detect_line_ending(lines: List[str]) -> str:
-        """Return the dominant line ending used by a RAS text file."""
+        """Return the consistent line ending used by a RAS text file."""
+        detected_endings = set()
         for line in lines:
             if line.endswith("\r\n"):
-                return "\r\n"
+                detected_endings.add("\r\n")
+            elif line.endswith("\n"):
+                detected_endings.add("\n")
+            elif line.endswith("\r"):
+                detected_endings.add("\r")
+
+        if len(detected_endings) > 1:
+            raise ValueError("Mixed newline conventions are not supported")
+        if detected_endings:
+            return detected_endings.pop()
         return "\n"
 
     @staticmethod
@@ -3352,6 +3362,9 @@ class RasUnsteady:
             lines = file.readlines()
 
         newline = RasUnsteady._detect_line_ending(lines)
+        had_terminal_newline = bool(
+            lines and lines[-1].endswith(("\r\n", "\n", "\r"))
+        )
         desired_lines = [
             f"{key}={value}{newline}" for key, value in desired_entries
         ]
@@ -3380,6 +3393,8 @@ class RasUnsteady:
             and not filtered_lines[-1].endswith(("\n", "\r"))
         ):
             filtered_lines[-1] = f"{filtered_lines[-1]}{newline}"
+        if insert_index == len(filtered_lines) and not had_terminal_newline:
+            desired_lines[-1] = desired_lines[-1][:-len(newline)]
 
         updated_lines = (
             filtered_lines[:insert_index]
