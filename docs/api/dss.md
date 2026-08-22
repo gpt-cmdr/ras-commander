@@ -75,6 +75,125 @@ Write a time-varying spatial grid series to DSS.
 
 **Returns:** List of DSS pathnames written.
 
+#### copy_grid_with_zero_tail(source_dss, output_dss, pathname, tail_intervals, ...)
+
+Create a non-destructive DSS grid derivative containing one selected grid
+family followed by explicit zero-valued intervals.
+
+The intended workflow is to prepare a run-local gridded precipitation or
+rainfall-excess DSS derivative for a HEC-RAS rain-on-grid scenario. A caller can
+keep an AORC-like source immutable, optionally express UTC grid timestamps on
+the model clock with an explicitly chosen shift, optionally rename the forcing
+family and apply an approved whole-cell origin translation, then append
+explicit zero-forcing intervals. Those zero intervals allow the model run to
+continue through post-storm routing or recession after the source rainfall
+ends.
+
+In the source PR workflow, `RasScenario` accepted this already-prepared
+`forcing_excess_dss` and wired it to Gridded/DSS precipitation. The derivative
+was prepared upstream; `RasScenario` did not directly call this method.
+
+This method does not calculate rainfall or rainfall excess, scientifically
+transpose a storm, reproject, resample, or interpolate grids, infer a time
+zone, or decide engineering suitability. The caller remains responsible for
+those scientific and study-specific decisions.
+
+**Parameters:**
+
+- `source_dss` (str|Path): Existing DSS6 or DSS7 source. It is never modified.
+- `output_dss` (str|Path): Destination derivative. It must differ from the
+  source. An output symlink, junction, or other reparse point is rejected
+  before it can be followed. Only its parent directory is safely resolved;
+  the requested final path component is preserved lexically through
+  publication.
+- `pathname` (str): Exact A/B/C/F family selector with blank D and E parts,
+  such as `/SHG/BASIN/PRECIPITATION///AORC/`.
+- `tail_intervals` (int): Positive number of zero-valued intervals to append.
+- `time_shift_minutes` (int): Optional signed whole-minute shift applied to
+  every source and tail window.
+- `output_pathname` (str|None): Optional output A/B/C/F family, also with blank
+  D/E parts. When omitted, the caller selector's A/B/C/F casing is preserved;
+  source selection itself remains case-insensitive and rejects case-ambiguous
+  families.
+- `x_shift`, `y_shift` (float): Optional origin translations in the grid's
+  horizontal units. Each must be an exact whole-cell increment.
+- `overwrite` (bool): If `True`, atomically replace an existing destination
+  after complete temporary readback. If `False`, publish atomically with a
+  create-if-absent hard link; a filesystem without hard-link support fails
+  closed and never falls back to replacement.
+
+**Returns:** A summary dictionary containing DSS version, accepted source
+SHA-256, source/output coverage, interval, translations, rewritten source
+paths, and appended paths.
+
+The output always contains only the selected family plus its tail; unrelated
+source records are not copied. The source DSS major version is preserved. All
+matched records must form one unambiguous, uniform, contiguous family with
+consistent shape, spatial reference, resolution, origin, parameter metadata,
+NoData value and footprint, and compression configuration. Tail cells are zero
+where the source footprint contains data and remain NoData everywhere else.
+The safe-rewrite path currently supports Albers/SHG and specified grids; other
+grid metadata classes fail closed rather than being converted implicitly.
+Accepted legacy double-leading pathname syntax is canonicalized to the normal
+single-leading `/A/B/C/D/E/F/` form before records are written. D/E parts must
+use exact minute-granularity `DDMMMYYYY:HHMM` syntax with English uppercase
+month tokens. The narrow valid `2400` spelling means next-day midnight;
+`24:01` through `24:59` are rejected. Native HEC-DSS grid catalogs spell a
+midnight record end as prior-day `2400` and the same instant as a following
+record start as next-day `0000`. Returned derivative pathnames use this
+role-specific native spelling, while raw timing and parsed instants must still
+match exactly.
+
+The method validates the source in a streaming first pass, then rereads and
+writes one source frame per writer call and reuses one zero frame for the tail.
+It does not stack the source family or materialize the complete tail in memory.
+The source file is hashed in chunks before catalog access, after prevalidation,
+and after the write-read pass. Any detected digest mismatch aborts before
+publication; these checkpoints are not a continuous file lock.
+
+After writing, the temporary derivative must preserve the source DSS major
+version and contain the independently derived exact catalog. Every temporary
+record is then reopened one at a time. Rewritten source frames must match an
+exact normalized float32 digest (canonical NaN and signed zero), tails must
+contain exact zero on data cells and the stable source NoData mask, raw timing
+must match the expected window, and all write-relevant metadata must match the
+source reference except for the requested mechanical origin translation.
+
+For `overwrite=False`, hard-link creation is the atomic no-clobber instruction:
+if another writer wins the final race, `FileExistsError` is raised and that
+destination is preserved. Unsupported hard links raise `OSError` and leave the
+destination absent. For `overwrite=True`, same-directory `os.replace()` is
+atomic, but the new derivative replaces the old destination's timestamps,
+permissions/ACL details, hard-link identity, and other file metadata.
+Because the final output component is not resolved or followed after its
+initial reparse-point check, a competing entry at that exact name either wins
+the no-clobber hard-link race or is itself replaced under `overwrite=True`;
+the implementation does not redirect publication through that entry to a
+different target.
+
+Time, pathname, and origin changes are lexical/mechanical metadata transforms,
+not scientific transformations of the forcing.
+
+Stable failures include `FileNotFoundError` for a missing source,
+`FileExistsError` for no-clobber conflicts, `IsADirectoryError` for non-file DSS
+paths, `ValueError` for unsafe inputs/families/metadata, `ImportError` when the
+optional Java bridge is unavailable, `OSError` for filesystem publication
+failures, and `RuntimeError` for source-stability or DSS I/O/readback failures.
+
+```python
+result = RasDss.copy_grid_with_zero_tail(
+    "source.dss",
+    "derivative.dss",
+    "/SHG/BASIN/PRECIPITATION///AORC/",
+    3,
+    time_shift_minutes=-300,
+    output_pathname="/SHG/BASIN/PRECIPITATION///AORC-SHIFTED/",
+    x_shift=2000,
+    y_shift=3000,
+)
+print(result["appended_pathnames"])
+```
+
 Common SHG precipitation metadata:
 
 ```python
