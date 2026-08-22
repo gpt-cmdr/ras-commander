@@ -8,7 +8,6 @@ import pytest
 
 from ras_commander.dss.RasDss import RasDss
 
-
 LOGGER_NAME = "ras_commander.dss.RasDss"
 
 
@@ -166,9 +165,23 @@ def test_write_timeseries_info_is_concise_and_debug_keeps_details(
     output_dss = tmp_path / "output.dss"
     pathname = "/BASIN/LOC/FLOW//1HOUR/FORECAST/"
     written_containers = []
+    cast_targets = []
+
+    class FakeHecTimeArray:
+        def __init__(self, values):
+            self.values = values
 
     class FakeTimeSeriesContainer:
-        pass
+        def setStoreAsDoubles(self, enabled):
+            self.store_as_doubles = enabled
+
+        def setTimes(self, times):
+            self.times = times.values
+            return 0
+
+        def setValues(self, values):
+            self.values = values
+            return 0
 
     class FakeDssFile:
         def put(self, container):
@@ -187,13 +200,19 @@ def test_write_timeseries_info_is_concise_and_debug_keeps_details(
             return FakeHecDss
         if name == "hec.io.TimeSeriesContainer":
             return FakeTimeSeriesContainer
+        if name == "hec.heclib.util.HecTimeArray":
+            return FakeHecTimeArray
         raise AssertionError(f"Unexpected Java class requested: {name}")
+
+    def cast(name, container):
+        cast_targets.append(name)
+        return container
 
     monkeypatch.setattr(RasDss, "_configure_jvm", staticmethod(lambda: None))
     monkeypatch.setitem(
         sys.modules,
         "jnius",
-        types.SimpleNamespace(autoclass=autoclass),
+        types.SimpleNamespace(autoclass=autoclass, cast=cast),
     )
     monkeypatch.setattr(RasUtils, "safe_resolve", staticmethod(lambda path: Path(path)))
     caplog.set_level(logging.DEBUG, logger=LOGGER_NAME)
@@ -208,6 +227,7 @@ def test_write_timeseries_info_is_concise_and_debug_keeps_details(
     )
 
     assert len(written_containers) == 1
+    assert cast_targets == ["hec.io.DataContainer"]
     info_messages = [
         record.getMessage()
         for record in caplog.records

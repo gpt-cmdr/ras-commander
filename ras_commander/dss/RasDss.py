@@ -1518,7 +1518,8 @@ class RasDss:
             dss_file: Path to DSS file (created if missing and create_if_missing=True)
             pathname: DSS pathname (e.g., "//BASIN/LOCATION/FLOW//1HOUR/FORECAST/")
             times: Array of datetime values (datetime objects, DatetimeIndex, or
-                   numpy datetime64 array)
+                   numpy datetime64 array). Values must be aligned exactly to
+                   whole minutes.
             values: Array of numeric values (same length as times)
             units: Data units string (e.g., "CFS", "FEET", "MM", "IN")
             data_type: DSS data type string:
@@ -1530,7 +1531,9 @@ class RasDss:
 
         Raises:
             FileNotFoundError: If DSS file doesn't exist and create_if_missing=False
-            ValueError: If times and values have different lengths
+            ValueError: If times and values have different lengths, are empty,
+                or contain timestamps that cannot be represented exactly as
+                HEC int32 epoch minutes.
             ImportError: If pyjnius is not installed
             RuntimeError: If Java write operation fails
 
@@ -1559,7 +1562,7 @@ class RasDss:
         """
         RasDss._configure_jvm()
 
-        from jnius import autoclass
+        from jnius import autoclass, cast
         from ras_commander.RasUtils import RasUtils
 
         # Validate inputs
@@ -1596,6 +1599,7 @@ class RasDss:
         # Load Java classes
         HecDss = autoclass('hec.heclib.dss.HecDss')
         TimeSeriesContainer = autoclass('hec.io.TimeSeriesContainer')
+        HecTimeArray = autoclass('hec.heclib.util.HecTimeArray')
 
         # Create TimeSeriesContainer
         tsc = TimeSeriesContainer()
@@ -1603,21 +1607,25 @@ class RasDss:
         tsc.units = units
         tsc.type = data_type
         tsc.interval = interval_minutes
+        tsc.setStoreAsDoubles(True)
 
-        # Set times array (Java int[])
+        # Use typed Java setters. PyJNIus cannot reliably assign primitive
+        # array fields directly, and HecDss.put() has an ambiguous overload.
         n = len(values)
+        time_status = tsc.setTimes(HecTimeArray(hec_times.tolist()))
+        value_status = tsc.setValues(values.tolist())
+        if time_status != 0 or value_status != 0:
+            raise RuntimeError(
+                "HEC time-series container rejected input arrays: "
+                f"times={time_status}, values={value_status}"
+            )
         tsc.numberValues = n
-
-        # Convert numpy arrays to Java-compatible arrays
-        # pyjnius handles int[] and double[] conversion from Python lists
-        tsc.times = hec_times.tolist()
-        tsc.values = values.tolist()
 
         # Open DSS file and write
         dss = None
         try:
             dss = HecDss.open(dss_file_str)
-            dss.put(tsc)
+            dss.put(cast('hec.io.DataContainer', tsc))
             logger.info(f"Wrote {n} values to {Path(dss_file_str).name}")
             logger.debug(
                 f"DSS write details: file={dss_file_str}, pathname={pathname}, "
@@ -2010,28 +2018,44 @@ class RasDss:
             times: Array of datetime-like values
 
         Returns:
-            numpy int array of minutes since HEC epoch (1899-12-31 00:00:00)
+            numpy int32 array of minutes since HEC epoch
+            (1899-12-31 00:00:00)
         """
-        HEC_EPOCH = np.datetime64('1899-12-31T00:00:00')
+        hec_epoch = np.datetime64('1899-12-31T00:00:00', 'm')
 
-        if isinstance(times, pd.DatetimeIndex):
-            dt64 = times.values.astype('datetime64[m]')
-        elif isinstance(times, np.ndarray):
-            dt64 = times.astype('datetime64[m]')
-        else:
-            # List of datetime objects
-            dt64 = np.array(times, dtype='datetime64[m]')
+        try:
+            if isinstance(times, pd.DatetimeIndex):
+                datetime_values = times.values.astype('datetime64[us]')
+            elif isinstance(times, np.ndarray):
+                datetime_values = times.astype('datetime64[us]')
+            else:
+                datetime_values = pd.to_datetime(times).to_numpy(
+                    dtype='datetime64[us]'
+                )
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("times must contain valid datetime values") from exc
 
-        # Calculate minutes since HEC epoch
-        delta = dt64 - HEC_EPOCH
-        minutes = delta.astype(np.int64)
+        if np.isnat(datetime_values).any():
+            raise ValueError("times must not contain NaT values")
 
-        if minutes.max() > np.iinfo(np.int32).max:
-            logger.warning(
-                f"HEC epoch minutes ({minutes.max()}) exceeds int32 range; "
-                "passing as int64 — verify HEC-DSS Java bridge accepts int64"
-            )
-        return minutes
+        minute_values = datetime_values.astype('datetime64[m]')
+        if not np.array_equal(
+            datetime_values,
+            minute_values.astype('datetime64[us]'),
+        ):
+            raise ValueError("times must be aligned exactly to whole minutes")
+
+        minutes = (
+            (minute_values - hec_epoch)
+            .astype('timedelta64[m]')
+            .astype(np.int64)
+        )
+        if minutes.size:
+            int32_info = np.iinfo(np.int32)
+            if minutes.min() < int32_info.min or minutes.max() > int32_info.max:
+                raise ValueError("times exceed the supported HEC int32 minute range")
+
+        return minutes.astype(np.int32)
 
 
 if __name__ == "__main__":
