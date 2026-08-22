@@ -1499,6 +1499,48 @@ class RasDss:
 
     @staticmethod
     @log_call
+    def get_file_version(dss_file: Union[str, Path]) -> int:
+        """Return the major HEC-DSS file version (6 or 7).
+
+        Args:
+            dss_file: Existing DSS file to inspect.
+
+        Raises:
+            FileNotFoundError: If the path does not exist.
+            IsADirectoryError: If the path is not a file.
+            ValueError: If the file is not a supported DSS 6 or DSS 7 database.
+        """
+        dss_path = Path(dss_file)
+        if not dss_path.exists():
+            raise FileNotFoundError(f"DSS file not found: {dss_path}")
+        if not dss_path.is_file():
+            raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
+
+        RasDss._configure_jvm()
+
+        from jnius import autoclass
+        from ras_commander.RasUtils import RasUtils
+
+        HecDataManager = autoclass('hec.heclib.dss.HecDataManager')
+        resolved_path = str(RasUtils.safe_resolve(dss_path))
+        version = int(HecDataManager.getDssFileVersion(resolved_path))
+        if version not in (6, 7):
+            raise ValueError(
+                f"File is not a supported HEC-DSS database: {dss_path}"
+            )
+        return version
+
+    @staticmethod
+    def _validate_dss_version(dss_version: Optional[int]) -> Optional[int]:
+        """Validate an optional explicit HEC-DSS creation version."""
+        if dss_version is None:
+            return None
+        if type(dss_version) is not int or dss_version not in (6, 7):
+            raise ValueError("dss_version must be the integer 6, 7, or None")
+        return dss_version
+
+    @staticmethod
+    @log_call
     def write_timeseries(
         dss_file: Union[str, Path],
         pathname: str,
@@ -1507,6 +1549,8 @@ class RasDss:
         units: str = "CFS",
         data_type: str = "INST-VAL",
         create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
     ) -> None:
         """
         Write a time series to a DSS file.
@@ -1528,12 +1572,16 @@ class RasDss:
                 - "PER-CUM"  - Period cumulative
                 - "INST-CUM" - Instantaneous cumulative
             create_if_missing: Create DSS file if it doesn't exist (default True)
+            dss_version: Major DSS version to use when creating a new file.
+                Pass 6 or 7 explicitly, or omit it to preserve the bridge's
+                current default. Existing files must match an explicit value.
 
         Raises:
             FileNotFoundError: If DSS file doesn't exist and create_if_missing=False
             ValueError: If times and values have different lengths, are empty,
                 or contain timestamps that cannot be represented exactly as
-                HEC int32 epoch minutes.
+                HEC int32 epoch minutes; if ``dss_version`` is invalid; or if
+                an existing file does not match the requested version.
             ImportError: If pyjnius is not installed
             RuntimeError: If Java write operation fails
 
@@ -1560,10 +1608,9 @@ class RasDss:
             on first use. The HEC epoch is 1899-12-31 00:00:00; times are stored
             as integer minutes since that epoch.
         """
-        RasDss._configure_jvm()
-
-        from jnius import autoclass, cast
         from ras_commander.RasUtils import RasUtils
+
+        dss_version = RasDss._validate_dss_version(dss_version)
 
         # Validate inputs
         values = np.asarray(values, dtype=np.float64)
@@ -1576,7 +1623,17 @@ class RasDss:
 
         # Resolve DSS file path
         dss_path = Path(dss_file)
-        if not dss_path.exists():
+        file_existed = dss_path.exists()
+        if file_existed and not dss_path.is_file():
+            raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
+        if file_existed and dss_version is not None:
+            existing_version = RasDss.get_file_version(dss_path)
+            if existing_version != dss_version:
+                raise ValueError(
+                    f"Existing DSS file is version {existing_version}, not "
+                    f"requested version {dss_version}: {dss_path}"
+                )
+        if not file_existed:
             if not create_if_missing:
                 raise FileNotFoundError(f"DSS file not found: {dss_path}")
             # HecDss.open() will create the file
@@ -1595,6 +1652,10 @@ class RasDss:
             interval_minutes = int(np.median(intervals))
         else:
             interval_minutes = 60  # Default 1 hour
+
+        RasDss._configure_jvm()
+
+        from jnius import autoclass, cast
 
         # Load Java classes
         HecDss = autoclass('hec.heclib.dss.HecDss')
@@ -1624,7 +1685,11 @@ class RasDss:
         # Open DSS file and write
         dss = None
         try:
-            dss = HecDss.open(dss_file_str)
+            dss = (
+                HecDss.open(dss_file_str, dss_version)
+                if dss_version is not None and not file_existed
+                else HecDss.open(dss_file_str)
+            )
             dss.put(cast('hec.io.DataContainer', tsc))
             logger.info(f"Wrote {n} values to {Path(dss_file_str).name}")
             logger.debug(
@@ -1652,6 +1717,8 @@ class RasDss:
         units: str = "CFS",
         data_type: str = "INST-VAL",
         create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
     ) -> None:
         """
         Write a time series DataFrame to a DSS file.
@@ -1667,6 +1734,9 @@ class RasDss:
             units: Data units string
             data_type: DSS data type string
             create_if_missing: Create DSS file if it doesn't exist
+            dss_version: Major DSS version (6 or 7) for new-file creation.
+                Omit it to preserve the current default. Existing files must
+                match an explicit value.
 
         Example:
             >>> # Read from one DSS file, write to another
@@ -1692,6 +1762,7 @@ class RasDss:
             units=units,
             data_type=data_type,
             create_if_missing=create_if_missing,
+            dss_version=dss_version,
         )
 
     @staticmethod

@@ -35,7 +35,7 @@ Read multiple time series at once.
 
 **Returns:** Dict of {pathname: DataFrame}
 
-#### write_timeseries(dss_file, pathname, times, values)
+#### write_timeseries(dss_file, pathname, times, values, ..., dss_version=None)
 Write a single time series to DSS.
 
 **Parameters:**
@@ -45,6 +45,20 @@ Write a single time series to DSS.
 - `values` (list|ndarray): Numeric values
 - `units` (str): Units, default `CFS`
 - `data_type` (str): DSS data type, default `INST-VAL`
+- `create_if_missing` (bool): Create a missing file, default `True`
+- `dss_version` (int|None): Keyword-only DSS 6 or DSS 7 selection for new
+  files. The default `None` preserves the bridge's current default. An explicit
+  value must match an existing file.
+
+Datetime values must be aligned exactly to whole minutes.
+
+#### get_file_version(dss_file)
+Return the authoritative HEC-DSS major file version.
+
+**Parameters:**
+- `dss_file` (str|Path): Existing DSS file
+
+**Returns:** Integer `6` or `7`.
 
 #### write_grid_timeseries(dss_file, pathname, data, times, grid_info)
 Write a time-varying spatial grid series to DSS.
@@ -88,7 +102,8 @@ Get DSS file information.
 **Parameters:**
 - `dss_file` (str|Path): Path to DSS file
 
-**Returns:** Dict with version, num_records, pathnames, file_size
+**Returns:** Dict with filepath, filename, file size, total pathname count, and
+a preview of the first five catalog rows.
 
 ## Usage
 
