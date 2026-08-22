@@ -6601,7 +6601,7 @@ class RasUnsteady:
             - bc_type: Boundary condition type (Flow Hydrograph, Lateral Inflow, etc.)
             - interval: Time interval (e.g., 5MIN)
             - dss_file: DSS file path
-            - dss_path: Full DSS path (//A/B/C/D/E/F/)
+            - dss_path: Full DSS path (/A/B/C/D/E/F/; A may be empty)
             - dss_part_a: DSS Part A (project)
             - dss_part_b: DSS Part B (location/subbasin)
             - dss_part_c: DSS Part C (parameter)
@@ -6609,7 +6609,14 @@ class RasUnsteady:
             - dss_part_e: DSS Part E (interval)
             - dss_part_f: DSS Part F (run identifier)
             - use_dss: Boolean True/False
+            - data_count: Number of inline values declared by the boundary
             - line_number: Line number of Boundary Location in file
+            - downstream_station: Downstream river station (location field 3)
+            - sa_2d_name: Storage Area/2D Flow Area name (location field 5)
+            - bc_line: 2D boundary-condition line name (location field 7)
+            - boundary_name: Value from the block's Boundary Name record
+            - boundary_index: Zero-based position among all Boundary Location
+              blocks, including blocks that are not DSS-linked
 
         Example
         -------
@@ -6622,7 +6629,9 @@ class RasUnsteady:
 
         Notes
         -----
-        DSS Path Format: //A/B/C/D/E/F/
+        DSS Path Format: /A/B/C/D/E/F/
+        - An empty Part A with five B-F fields is represented as
+          //B/C/D/E/F/. The legacy //A/B/C/D/E/F/ form remains accepted.
         - Part A: Project identifier (often empty)
         - Part B: Location/Subbasin name (key for HMS matching)
         - Part C: Parameter (FLOW, STAGE, etc.)
@@ -6644,7 +6653,31 @@ class RasUnsteady:
         with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
             lines = f.readlines()
 
+        output_columns = [
+            'river',
+            'reach',
+            'station',
+            'bc_type',
+            'interval',
+            'dss_file',
+            'dss_path',
+            'dss_part_a',
+            'dss_part_b',
+            'dss_part_c',
+            'dss_part_d',
+            'dss_part_e',
+            'dss_part_f',
+            'use_dss',
+            'data_count',
+            'line_number',
+            'downstream_station',
+            'sa_2d_name',
+            'bc_line',
+            'boundary_name',
+            'boundary_index',
+        ]
         boundaries = []
+        boundary_index = 0
         i = 0
         while i < len(lines):
             line = lines[i]
@@ -6653,10 +6686,12 @@ class RasUnsteady:
                 bc = RasUnsteady._parse_boundary_block_dss(lines, i)
                 if bc.get('use_dss') == 'True':
                     bc['line_number'] = i + 1  # 1-indexed for user reference
+                    bc['boundary_index'] = boundary_index
                     boundaries.append(bc)
+                boundary_index += 1
             i += 1
 
-        df = pd.DataFrame(boundaries)
+        df = pd.DataFrame(boundaries, columns=output_columns)
         logger.debug(f"Found {len(df)} DSS-linked boundaries in {unsteady_path.name}")
         return df
 
@@ -6667,6 +6702,10 @@ class RasUnsteady:
             'river': '',
             'reach': '',
             'station': '',
+            'downstream_station': '',
+            'sa_2d_name': '',
+            'bc_line': '',
+            'boundary_name': '',
             'bc_type': '',
             'interval': '',
             'dss_file': '',
@@ -6682,7 +6721,7 @@ class RasUnsteady:
         }
 
         # Parse location line
-        loc_line = lines[start_idx].replace('Boundary Location=', '')
+        loc_line = lines[start_idx][len('Boundary Location='):].rstrip('\r\n')
         parts = [p.strip() for p in loc_line.split(',')]
         if len(parts) >= 1:
             bc['river'] = parts[0]
@@ -6690,6 +6729,12 @@ class RasUnsteady:
             bc['reach'] = parts[1]
         if len(parts) >= 3:
             bc['station'] = parts[2]
+        if len(parts) >= 4:
+            bc['downstream_station'] = parts[3]
+        if len(parts) >= 6:
+            bc['sa_2d_name'] = parts[5]
+        if len(parts) >= 8:
+            bc['bc_line'] = parts[7]
 
         # Scan following lines for DSS info
         i = start_idx + 1
@@ -6698,6 +6743,8 @@ class RasUnsteady:
 
             if line.startswith('Boundary Location='):
                 break
+            elif line.startswith('Boundary Name='):
+                bc['boundary_name'] = line.replace('Boundary Name=', '', 1).strip()
             elif line.startswith('Interval='):
                 bc['interval'] = line.replace('Interval=', '').strip()
             elif line.startswith('Flow Hydrograph='):
@@ -6710,6 +6757,14 @@ class RasUnsteady:
                 bc['bc_type'] = 'Lateral Inflow Hydrograph'
                 try:
                     bc['data_count'] = int(line.replace('Lateral Inflow Hydrograph=', '').strip())
+                except:
+                    pass
+            elif line.startswith('Uniform Lateral Inflow Hydrograph='):
+                bc['bc_type'] = 'Uniform Lateral Inflow Hydrograph'
+                try:
+                    bc['data_count'] = int(
+                        line.replace('Uniform Lateral Inflow Hydrograph=', '').strip()
+                    )
                 except:
                     pass
             elif line.startswith('Uniform Lateral Inflow='):
@@ -6745,8 +6800,13 @@ class RasUnsteady:
         """
         Parse a DSS path into its component parts.
 
-        DSS Path Format: //A/B/C/D/E/F/
-        Example: //P100A/FLOW/31MAY2007/5MIN/RUN:1%_24HR/
+        DSS Path Format: /A/B/C/D/E/F/
+        Empty-A Example: //P100A/FLOW/31MAY2007/5MIN/RUN:1%_24HR/
+
+        The legacy ``//A/B/C/D/E/F/`` form remains accepted as six populated
+        parts. A double-leading pathname represents an empty A-part only when
+        the remainder contains exactly five B-F fields. Those fields may be
+        empty, such as a blank D-part.
         """
         parts = {
             'dss_part_a': '',
@@ -6757,9 +6817,27 @@ class RasUnsteady:
             'dss_part_f': ''
         }
 
-        # Remove leading slashes and split
-        clean_path = dss_path.strip('/')
-        segments = clean_path.split('/')
+        clean_path = dss_path.strip()
+        has_double_leading_slash = clean_path.startswith('//')
+
+        # Remove exactly one outer delimiter from each end so empty A/F parts
+        # and empty internal parts remain represented in the split fields.
+        if clean_path.startswith('/'):
+            clean_path = clean_path[1:]
+        if clean_path.endswith('/'):
+            clean_path = clean_path[:-1]
+        segments = clean_path.split('/') if clean_path else []
+
+        # RAS Commander historically accepted ``//A/B/C/D/E/F/`` as six
+        # populated parts. Exact delimiter handling exposes a seventh leading
+        # empty field for that legacy form, so discard only that compatibility
+        # sentinel. A valid empty-A path has six fields at this point.
+        if (
+            has_double_leading_slash
+            and len(segments) == 7
+            and segments[0] == ''
+        ):
+            segments = segments[1:]
 
         if len(segments) >= 1:
             parts['dss_part_a'] = segments[0]
