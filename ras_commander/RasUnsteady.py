@@ -5259,12 +5259,15 @@ class RasUnsteady:
             raise
 
     @staticmethod
-    def _format_met_dss_filename(dss_filename: Union[str, Path], unsteady_path: Path) -> str:
+    def _format_ras_dss_filename(
+        dss_filename: Union[str, Path],
+        ras_text_path: Path,
+    ) -> str:
         """
-        Normalize a DSS filename for RAS meteorology text/HDF attributes.
+        Normalize a DSS filename for a RAS text-file reference.
 
         Relative paths are written with RAS' conventional ``.\\`` prefix. Absolute
-        paths under the unsteady file folder are converted to project-relative
+        paths under the RAS text-file folder are converted to project-relative
         paths; absolute paths elsewhere are preserved.
         """
         raw_filename = str(dss_filename).strip()
@@ -5274,7 +5277,7 @@ class RasUnsteady:
         dss_path = Path(raw_filename)
         if dss_path.is_absolute():
             try:
-                relative_path = dss_path.relative_to(unsteady_path.parent)
+                relative_path = dss_path.relative_to(ras_text_path.parent)
                 return f".\\{relative_path}".replace("/", "\\")
             except ValueError:
                 return str(dss_path)
@@ -5283,6 +5286,14 @@ class RasUnsteady:
         if normalized.startswith((".\\", "..\\", "\\")):
             return normalized
         return f".\\{normalized}"
+
+    @staticmethod
+    def _format_met_dss_filename(
+        dss_filename: Union[str, Path],
+        unsteady_path: Path,
+    ) -> str:
+        """Retain the meteorology-specific wrapper for DSS filename formatting."""
+        return RasUnsteady._format_ras_dss_filename(dss_filename, unsteady_path)
 
     @staticmethod
     def _normalize_gridded_interpolation(interpolation: str) -> str:
@@ -7169,13 +7180,18 @@ class RasUnsteady:
     @log_call
     def set_boundary_dss_link(
         unsteady_file: Union[str, Path],
-        river: str,
-        reach: str,
-        station: str,
+        river: Optional[str],
+        reach: Optional[str],
+        station: Optional[str],
         dss_file: str,
         dss_path: str,
         interval: str = "5MIN",
-        ras_object: Optional[Any] = None
+        ras_object: Optional[Any] = None,
+        *,
+        sa_2d_name: Optional[str] = None,
+        bc_line: Optional[str] = None,
+        boundary_index: Optional[int] = None,
+        expected_bc_type: Optional[str] = None,
     ) -> bool:
         """
         Convert an inline hydrograph boundary to use DSS linkage.
@@ -7189,12 +7205,12 @@ class RasUnsteady:
         ----------
         unsteady_file : str or Path
             Path to the unsteady flow file (.u##)
-        river : str
-            River name for the boundary
-        reach : str
-            Reach name for the boundary
-        station : str
-            River station for the boundary
+        river : str or None
+            River name for a 1D boundary; pass ``None`` for 2D selection.
+        reach : str or None
+            Reach name for a 1D boundary; pass ``None`` for 2D selection.
+        station : str or None
+            River station for a 1D boundary; pass ``None`` for 2D selection.
         dss_file : str
             Path to the DSS file (relative to project folder)
         dss_path : str
@@ -7203,11 +7219,29 @@ class RasUnsteady:
             Time interval for the boundary condition
         ras_object : optional
             Custom RAS object to use instead of the global one
+        sa_2d_name, bc_line : str, optional
+            Exact 2D selector fields. ``sa_2d_name`` matches field index 5 and
+            ``bc_line`` matches field index 7 of ``Boundary Location=``.
+            Partial selectors are allowed but must resolve to one block unless
+            ``boundary_index`` disambiguates them.
+        boundary_index : int, optional
+            Zero-based index among ``Boundary Location=`` blocks. It may be
+            used alone or as a cross-check for the semantic selectors.
+        expected_bc_type : str, optional
+            Require the selected block to have this boundary-condition type
+            before changing the file.
 
         Returns
         -------
         bool
             True if boundary was successfully updated, False if not found
+
+        Raises
+        ------
+        ValueError
+            If selector groups are mixed or absent, a selector is ambiguous,
+            ``boundary_index`` is invalid or inconsistent, the expected type
+            does not match, or the input has mixed newline conventions.
 
         Example
         -------
@@ -7222,163 +7256,259 @@ class RasUnsteady:
         ...     dss_path="//A119-01-00A/FLOW/31MAY2007/5MIN/RUN:1%_24HR/"
         ... )
         """
+        river_selector = RasUnsteady._clean_boundary_selector(river)
+        reach_selector = RasUnsteady._clean_boundary_selector(reach)
+        station_selector = RasUnsteady._clean_boundary_selector(station)
+        sa_2d_selector = RasUnsteady._clean_boundary_selector(sa_2d_name)
+        bc_line_selector = RasUnsteady._clean_boundary_selector(bc_line)
+        expected_type = RasUnsteady._clean_boundary_selector(expected_bc_type)
+
+        has_1d_selector = any(
+            selector is not None
+            for selector in (river_selector, reach_selector, station_selector)
+        )
+        has_2d_selector = any(
+            selector is not None
+            for selector in (sa_2d_selector, bc_line_selector)
+        )
+        if has_1d_selector and has_2d_selector:
+            raise ValueError(
+                "Provide either 1D selectors (river, reach, station) or 2D "
+                "selectors (sa_2d_name, bc_line), not both"
+            )
+
+        if boundary_index is not None:
+            if isinstance(boundary_index, bool) or not isinstance(boundary_index, int):
+                raise ValueError("boundary_index must be a zero-based integer")
+            if boundary_index < 0:
+                raise ValueError("boundary_index must be >= 0")
+
+        if boundary_index is None and not (has_1d_selector or has_2d_selector):
+            raise ValueError(
+                "Provide 1D or 2D boundary selectors, or boundary_index"
+            )
+
         ras_obj = ras_object or ras
         if ras_obj is not None:
             try:
                 ras_obj.check_initialized()
-            except:
+            except Exception:
                 pass
 
         unsteady_path = Path(unsteady_file)
         if not unsteady_path.exists():
             raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
 
-        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(
+            unsteady_path,
+            "r",
+            encoding="utf-8",
+            errors="ignore",
+            newline="",
+        ) as f:
             lines = f.readlines()
 
-        # Find the boundary location
-        boundary_idx = None
-        for i, line in enumerate(lines):
-            if line.startswith('Boundary Location='):
-                loc_line = line.replace('Boundary Location=', '')
-                parts = [p.strip() for p in loc_line.split(',')]
-                if (len(parts) >= 3 and
-                    parts[0] == river and
-                    parts[1] == reach and
-                    parts[2] == station):
-                    boundary_idx = i
-                    break
+        newline = RasUnsteady._detect_line_ending(lines)
+        had_terminal_newline = bool(
+            lines and lines[-1].endswith(("\r\n", "\n", "\r"))
+        )
+        blocks = RasUnsteady._find_boundary_blocks(lines)
 
-        if boundary_idx is None:
-            logger.warning(f"Boundary not found: {river}/{reach}/{station}")
-            return False
+        selected_block: Optional[Dict[str, Any]] = None
+        if boundary_index is not None:
+            selected_block = next(
+                (
+                    block
+                    for block in blocks
+                    if block["boundary_index"] == boundary_index
+                ),
+                None,
+            )
+            if selected_block is None:
+                raise ValueError(
+                    f"boundary_index {boundary_index} is out of range; "
+                    f"{len(blocks)} boundary blocks found"
+                )
+
+        if has_1d_selector or has_2d_selector:
+            matches = [
+                block
+                for block in blocks
+                if RasUnsteady._boundary_block_matches(
+                    block,
+                    river_selector,
+                    reach_selector,
+                    station_selector,
+                    sa_2d_selector,
+                    bc_line_selector,
+                )
+            ]
+            if selected_block is not None:
+                if selected_block not in matches:
+                    raise ValueError(
+                        f"boundary_index {boundary_index} does not match the "
+                        "provided boundary selectors"
+                    )
+            elif not matches:
+                selector = (
+                    f"river={river_selector!r}, reach={reach_selector!r}, "
+                    f"station={station_selector!r}"
+                    if has_1d_selector
+                    else f"sa_2d_name={sa_2d_selector!r}, "
+                    f"bc_line={bc_line_selector!r}"
+                )
+                logger.warning(
+                    "Boundary not found in %s for %s",
+                    unsteady_path.name,
+                    selector,
+                )
+                return False
+            elif len(matches) > 1:
+                choices = ", ".join(
+                    f"{block['boundary_index']}:"
+                    f"{RasUnsteady._boundary_block_name(block)}"
+                    for block in matches
+                )
+                raise ValueError(
+                    "Boundary selector is ambiguous. Provide boundary_index "
+                    f"to disambiguate one of: {choices}"
+                )
+            else:
+                selected_block = matches[0]
+
+        if selected_block is None:
+            raise ValueError("No boundary selected for DSS linkage")
+
+        actual_bc_type = selected_block["bc_type"]
+        if expected_type is not None and actual_bc_type != expected_type:
+            raise ValueError(
+                f"Selected boundary type is {actual_bc_type!r}, not the "
+                f"expected {expected_type!r}"
+            )
+
+        formatted_dss_file = RasUnsteady._format_ras_dss_filename(
+            dss_file,
+            unsteady_path,
+        )
 
         # Inline table type keywords that may have data to remove
-        TABLE_KEYWORDS = [
-            'Flow Hydrograph=', 'Stage Hydrograph=', 'Lateral Inflow Hydrograph=',
-            'Uniform Lateral Inflow=', 'Precipitation Hydrograph=',
-            'Uniform Lateral Inflow Hydrograph='
-        ]
+        table_keywords = (
+            "Flow Hydrograph=",
+            "Stage Hydrograph=",
+            "Lateral Inflow Hydrograph=",
+            "Uniform Lateral Inflow=",
+            "Precipitation Hydrograph=",
+            "Uniform Lateral Inflow Hydrograph=",
+        )
 
-        # Scan the boundary block to find all relevant lines and inline data
-        i = boundary_idx + 1
-        dss_file_idx = None
-        dss_path_idx = None
-        use_dss_idx = None
-        interval_idx = None
-        table_header_idx = None
-        table_keyword = None
-        inline_data_start = None
-        inline_data_end = None
+        start_idx = selected_block["start_idx"]
+        end_idx = selected_block["end_idx"]
+        block_lines = lines[start_idx:end_idx]
 
-        while i < len(lines) and i < boundary_idx + 500:
-            line = lines[i]
-
-            if line.startswith('Boundary Location='):
+        table_header_idx: Optional[int] = None
+        table_keyword: Optional[str] = None
+        inline_data_start: Optional[int] = None
+        inline_data_end: Optional[int] = None
+        for i, line in enumerate(block_lines[1:], start=1):
+            for keyword in table_keywords:
+                if line.startswith(keyword):
+                    table_header_idx = i
+                    table_keyword = keyword
+                    try:
+                        count = int(line[len(keyword):].strip())
+                    except ValueError:
+                        count = 0
+                    if count > 0:
+                        inline_data_start = i + 1
+                        inline_data_end = inline_data_start
+                        for data_idx in range(inline_data_start, len(block_lines)):
+                            if "=" in block_lines[data_idx]:
+                                inline_data_end = data_idx
+                                break
+                        else:
+                            inline_data_end = len(block_lines)
+                    break
+            if table_header_idx is not None:
                 break
-            elif line.startswith('DSS File='):
-                dss_file_idx = i
-            elif line.startswith('DSS Path='):
-                dss_path_idx = i
-            elif line.startswith('Use DSS='):
-                use_dss_idx = i
-            elif line.startswith('Interval='):
-                interval_idx = i
-            else:
-                # Check for table header keywords
-                for kw in TABLE_KEYWORDS:
-                    if line.startswith(kw):
-                        table_header_idx = i
-                        table_keyword = kw
-                        # Parse count
-                        try:
-                            count = int(line.replace(kw, '').strip())
-                        except ValueError:
-                            count = 0
-                        if count > 0:
-                            # Find extent of inline data lines
-                            inline_data_start = i + 1
-                            inline_data_end = inline_data_start
-                            for k in range(inline_data_start, len(lines)):
-                                data_line = lines[k]
-                                if '=' in data_line or data_line.startswith('Boundary Location='):
-                                    inline_data_end = k
-                                    break
-                                if not data_line.strip():
-                                    continue
-                            else:
-                                inline_data_end = len(lines)
-                        break
-            i += 1
 
-        # Step 1: Remove inline data lines (if any) - do this first to preserve indices
         lines_removed = 0
-        if inline_data_start is not None and inline_data_end is not None and inline_data_end > inline_data_start:
-            del lines[inline_data_start:inline_data_end]
+        if (
+            inline_data_start is not None
+            and inline_data_end is not None
+            and inline_data_end > inline_data_start
+        ):
+            del block_lines[inline_data_start:inline_data_end]
             lines_removed = inline_data_end - inline_data_start
-            logger.debug(f"Removed {lines_removed} inline data lines")
-            # Adjust indices for removed lines
-            if dss_file_idx is not None and dss_file_idx > inline_data_start:
-                dss_file_idx -= lines_removed
-            if dss_path_idx is not None and dss_path_idx > inline_data_start:
-                dss_path_idx -= lines_removed
-            if use_dss_idx is not None and use_dss_idx > inline_data_start:
-                use_dss_idx -= lines_removed
-            if interval_idx is not None and interval_idx > inline_data_start:
-                interval_idx -= lines_removed
+            logger.debug("Removed %d inline data lines", lines_removed)
 
-        # Step 2: Set table count to 0
         if table_header_idx is not None and table_keyword is not None:
-            lines[table_header_idx] = f'{table_keyword} 0 \n'
-            logger.debug(f"Set {table_keyword.strip()} count to 0")
+            block_lines[table_header_idx] = f"{table_keyword} 0 {newline}"
+            logger.debug("Set %s count to 0", table_keyword.strip())
 
-        # Step 3: Update existing DSS/interval lines or insert missing ones
+        def find_line(prefix: str) -> Optional[int]:
+            return next(
+                (
+                    i
+                    for i, line in enumerate(block_lines[1:], start=1)
+                    if line.startswith(prefix)
+                ),
+                None,
+            )
+
+        interval_idx = find_line("Interval=")
+        dss_file_idx = find_line("DSS File=")
+        dss_path_idx = find_line("DSS Path=")
+        use_dss_idx = find_line("Use DSS=")
+
         if interval_idx is not None:
-            lines[interval_idx] = f'Interval={interval}\n'
+            block_lines[interval_idx] = f"Interval={interval}{newline}"
         if dss_file_idx is not None:
-            lines[dss_file_idx] = f'DSS File={dss_file}\n'
+            block_lines[dss_file_idx] = (
+                f"DSS File={formatted_dss_file}{newline}"
+            )
         if dss_path_idx is not None:
-            lines[dss_path_idx] = f'DSS Path={dss_path}\n'
+            block_lines[dss_path_idx] = f"DSS Path={dss_path}{newline}"
         if use_dss_idx is not None:
-            lines[use_dss_idx] = 'Use DSS=True\n'
+            block_lines[use_dss_idx] = f"Use DSS=True{newline}"
 
-        # Insert any missing lines after the table header (or after boundary location)
-        insert_after = table_header_idx if table_header_idx is not None else boundary_idx
+        insert_after = table_header_idx if table_header_idx is not None else 0
         insert_idx = insert_after + 1
-
+        missing_lines = []
         if interval_idx is None:
-            lines.insert(insert_idx, f'Interval={interval}\n')
-            insert_idx += 1
-            # Adjust subsequent indices
-            if dss_file_idx is not None and dss_file_idx >= insert_idx - 1:
-                dss_file_idx += 1
-            if dss_path_idx is not None and dss_path_idx >= insert_idx - 1:
-                dss_path_idx += 1
-            if use_dss_idx is not None and use_dss_idx >= insert_idx - 1:
-                use_dss_idx += 1
-
+            missing_lines.append(f"Interval={interval}{newline}")
         if dss_file_idx is None:
-            lines.insert(insert_idx, f'DSS File={dss_file}\n')
-            insert_idx += 1
-            if dss_path_idx is not None and dss_path_idx >= insert_idx - 1:
-                dss_path_idx += 1
-            if use_dss_idx is not None and use_dss_idx >= insert_idx - 1:
-                use_dss_idx += 1
-
+            missing_lines.append(f"DSS File={formatted_dss_file}{newline}")
         if dss_path_idx is None:
-            lines.insert(insert_idx, f'DSS Path={dss_path}\n')
-            insert_idx += 1
-            if use_dss_idx is not None and use_dss_idx >= insert_idx - 1:
-                use_dss_idx += 1
-
+            missing_lines.append(f"DSS Path={dss_path}{newline}")
         if use_dss_idx is None:
-            lines.insert(insert_idx, 'Use DSS=True\n')
+            missing_lines.append(f"Use DSS=True{newline}")
 
-        with open(unsteady_path, 'w', encoding='utf-8') as f:
-            f.writelines(lines)
+        if missing_lines:
+            if (
+                insert_idx > 0
+                and not block_lines[insert_idx - 1].endswith(("\r\n", "\n", "\r"))
+            ):
+                block_lines[insert_idx - 1] += newline
+            block_lines[insert_idx:insert_idx] = missing_lines
 
-        logger.info(f"Updated boundary {river}/{reach}/{station} to use DSS link "
-                     f"(removed {lines_removed} inline data lines)")
+        updated_lines = lines[:start_idx] + block_lines + lines[end_idx:]
+        if updated_lines:
+            if had_terminal_newline:
+                if not updated_lines[-1].endswith(("\r\n", "\n", "\r")):
+                    updated_lines[-1] += newline
+            elif updated_lines[-1].endswith("\r\n"):
+                updated_lines[-1] = updated_lines[-1][:-2]
+            elif updated_lines[-1].endswith(("\n", "\r")):
+                updated_lines[-1] = updated_lines[-1][:-1]
+
+        RasUnsteady._detect_line_ending(updated_lines)
+        RasUnsteady._atomic_write_lines(unsteady_path, updated_lines)
+
+        logger.info(
+            "Updated boundary %s to use DSS link (removed %d inline data lines)",
+            RasUnsteady._boundary_block_name(selected_block),
+            lines_removed,
+        )
         return True
 
     @staticmethod
