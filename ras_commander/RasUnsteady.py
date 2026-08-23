@@ -6619,7 +6619,7 @@ class RasUnsteady:
             - dss_part_d: DSS Part D (date)
             - dss_part_e: DSS Part E (interval)
             - dss_part_f: DSS Part F (run identifier)
-            - use_dss: Boolean True/False
+            - use_dss: HEC-RAS text value, returned as ``"True"``
             - data_count: Number of inline values declared by the boundary
             - line_number: Line number of Boundary Location in file
             - downstream_station: Downstream river station (location field 3)

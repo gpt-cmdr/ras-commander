@@ -1890,19 +1890,25 @@ class RasPlan:
                 raise ValueError(f"Plan file not found for plan number: {plan_number_or_path!r}")
 
         try:
-            # Read the file
-            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
-                lines = file.readlines()
+            # Plan files are line-oriented text, but a targeted update must not
+            # normalize newline bytes or re-encode unrelated content.
+            original = Path(plan_file_path).read_bytes()
+            lines = original.splitlines(keepends=True)
 
             # Update the Simulation Date line
             updated = False
             for i, line in enumerate(lines):
-                if line.startswith("Simulation Date="):
-                    fields = (
-                        line.removeprefix("Simulation Date=")
-                        .rstrip("\r\n")
-                        .split(",")
-                    )
+                if line.startswith(b"Simulation Date="):
+                    if line.endswith(b"\r\n"):
+                        line_ending = b"\r\n"
+                    elif line.endswith(b"\n"):
+                        line_ending = b"\n"
+                    elif line.endswith(b"\r"):
+                        line_ending = b"\r"
+                    else:
+                        line_ending = b""
+                    body = line[: len(line) - len(line_ending)] if line_ending else line
+                    fields = body.removeprefix(b"Simulation Date=").split(b",")
                     if len(fields) != 4:
                         raise ValueError(
                             "Malformed 'Simulation Date=' line in plan file: "
@@ -1917,13 +1923,13 @@ class RasPlan:
                         ("start", start_time_token),
                         ("end", end_time_token),
                     ):
-                        if re.fullmatch(r"[0-9]{4}", token):
+                        if re.fullmatch(br"[0-9]{4}", token):
                             time_formats.append("%H%M")
-                        elif re.fullmatch(r"[0-9]{2}:[0-9]{2}", token):
+                        elif re.fullmatch(br"[0-9]{2}:[0-9]{2}", token):
                             time_formats.append("%H:%M")
                         else:
                             raise ValueError(
-                                f"Malformed {label} time {token!r} in "
+                                f"Malformed {label} time {token.decode('ascii', errors='replace')!r} in "
                                 "'Simulation Date=' line in plan file: "
                                 f"{plan_file_path}. Expected HHMM or HH:MM."
                             )
@@ -1934,7 +1940,10 @@ class RasPlan:
                         f"{end_date.strftime('%d%b%Y').upper()},"
                         f"{end_date.strftime(time_formats[1])}"
                     )
-                    lines[i] = f"Simulation Date={formatted_date}\n"
+                    lines[i] = (
+                        f"Simulation Date={formatted_date}".encode("ascii")
+                        + line_ending
+                    )
                     updated = True
                     break
 
@@ -1945,9 +1954,8 @@ class RasPlan:
                     "Cannot update simulation date."
                 )
 
-            # Write the updated content back to the file
-            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
-                file.writelines(lines)
+            # Write only after the complete target record has been validated.
+            Path(plan_file_path).write_bytes(b"".join(lines))
 
             logger.info("Updated simulation date in plan file: %s", plan_file_path.name)
             logger.debug("Updated simulation date in plan file path: %s", plan_file_path)

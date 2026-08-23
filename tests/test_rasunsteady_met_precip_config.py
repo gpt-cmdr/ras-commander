@@ -281,6 +281,36 @@ CLB673_FIXTURE_NAMES = [
 ]
 
 
+MANAGED_PRECIPITATION_PREFIXES = tuple(
+    prefix.encode("ascii")
+    for prefix in (
+        "Precipitation Mode=",
+        "Met BC=Precipitation|Mode=",
+        "Met BC=Precipitation|Constant Value=",
+        "Met BC=Precipitation|Constant Units=",
+        "Met BC=Precipitation|Point Interpolation=",
+        "Met BC=Precipitation|Gridded Source=",
+        "Met BC=Precipitation|Gridded Interpolation=",
+        "Met BC=Precipitation|Gridded DSS Filename=",
+        "Met BC=Precipitation|Gridded DSS Pathname=",
+        "Met BC=Precipitation|Gridded GDAL Filename=",
+        "Met BC=Precipitation|Gridded GDAL Group=",
+        "Met BC=Precipitation|Gridded GDAL Datasetname=",
+        "Met BC=Precipitation|Gridded GDAL Folder=",
+        "Met BC=Precipitation|Gridded GDAL Filter=",
+    )
+)
+
+
+def _unmanaged_precipitation_records(raw: bytes) -> list[bytes]:
+    """Return every raw record outside the precipitation editor's key set."""
+    return [
+        record
+        for record in raw.splitlines(keepends=True)
+        if not record.startswith(MANAGED_PRECIPITATION_PREFIXES)
+    ]
+
+
 MET_PRECIP_MODE_CASES = [
     pytest.param(
         {
@@ -506,6 +536,34 @@ def test_set_met_precipitation_mode_round_trips_each_mode_from_clb673_fixtures(
     config = RasUnsteady.get_met_precipitation_config(unsteady_file)
     for key, expected_value in case["expected"].items():
         assert config[key] == expected_value
+
+
+def test_set_met_precipitation_mode_changes_only_managed_raw_records(
+    tmp_path,
+):
+    assert MANAGED_PRECIPITATION_PREFIXES == tuple(
+        prefix.encode("ascii")
+        for prefix in RasUnsteady._MET_PRECIP_MANAGED_PREFIXES
+    )
+    source = FIXTURE_DIR / "precip_06_gridded_dss_official_baldeagle.u03"
+    unsteady_file = tmp_path / source.name
+    original = source.read_bytes()
+    unsteady_file.write_bytes(original)
+
+    RasUnsteady.set_met_precipitation_mode(
+        unsteady_file,
+        "Constant",
+        constant_value=2.5,
+        constant_units="mm/hr",
+    )
+
+    updated = unsteady_file.read_bytes()
+    assert updated != original
+    assert _unmanaged_precipitation_records(updated) == (
+        _unmanaged_precipitation_records(original)
+    )
+    assert b"Met BC=Precipitation|Mode=Constant" in updated
+    assert b"Met BC=Precipitation|Constant Value=2.5" in updated
 
 
 def test_set_met_precipitation_mode_creates_precipitation_block_from_scratch(tmp_path):

@@ -101,6 +101,121 @@ def test_exact_2d_selector_leaves_other_block_unchanged(tmp_path: Path) -> None:
     assert f"{'8':>8}".encode() not in after
 
 
+@pytest.mark.parametrize(
+    "bc_type",
+    [
+        "Stage Hydrograph",
+        "Lateral Inflow Hydrograph",
+        "Uniform Lateral Inflow",
+        "Uniform Lateral Inflow Hydrograph",
+        "Precipitation Hydrograph",
+    ],
+)
+def test_each_supported_inline_table_type_mutates_only_exact_target(
+    tmp_path: Path,
+    bc_type: str,
+) -> None:
+    unsteady = tmp_path / "model.u01"
+    untouched = _block(",,,,,Area2D,,Line A,", value="7")
+    target = _block(
+        ",,,,,Area2D,,Line B,",
+        bc_type=bc_type,
+        value="8",
+    )
+    untouched_bytes = ("\r\n".join(untouched) + "\r\n").encode()
+    _write_file(unsteady, untouched + target, newline="\r\n")
+
+    assert _set_link(
+        unsteady,
+        sa_2d_name="Area2D",
+        bc_line="Line B",
+        boundary_index=1,
+        expected_bc_type=bc_type,
+    )
+
+    after = unsteady.read_bytes()
+    assert after.startswith(untouched_bytes)
+    target_after = b"Boundary Location=" + after.split(
+        b"Boundary Location=",
+    )[2]
+    assert f"{bc_type}= 0 \r\n".encode() in target_after
+    assert f"{'8':>8}".encode() not in target_after
+    assert b"Interval=1HOUR\r\n" in target_after
+    assert b"DSS File=.\\hydrology\\scenario.dss\r\n" in target_after
+    assert f"DSS Path={DSS_PATH}\r\n".encode() in target_after
+    assert b"Use DSS=True\r\n" in target_after
+
+
+@pytest.mark.parametrize(
+    "first_editor",
+    ["precipitation", "boundary"],
+)
+def test_precipitation_and_boundary_editors_preserve_each_others_changes(
+    tmp_path: Path,
+    first_editor: str,
+) -> None:
+    unsteady = tmp_path / "composed.u01"
+    precipitation_records = [
+        "Flow Title=Editor composition",
+        "Program Version=6.60",
+        "Precipitation Mode=Disable",
+        "Met BC=Precipitation|Mode=None",
+        "Met BC=Precipitation|Expanded View=-1",
+        "Met BC=Evapotranspiration|Mode=None",
+    ]
+    untouched = _block(",,,,,Area2D,,Line A,", value="7")
+    target = _block(",,,,,Area2D,,Line B,", value="8")
+    untouched_bytes = ("\r\n".join(untouched) + "\r\n").encode()
+    _write_file(
+        unsteady,
+        precipitation_records + untouched + target,
+        newline="\r\n",
+    )
+
+    def edit_precipitation() -> None:
+        RasUnsteady.set_met_precipitation_mode(
+            unsteady,
+            "Gridded",
+            source="DSS",
+            interpolation="Nearest",
+            dss_filename=r"precipitation\scenario.dss",
+            dss_pathname="/SHG/AREA/PRECIPITATION///SCENARIO/",
+        )
+
+    def edit_boundary() -> None:
+        assert _set_link(
+            unsteady,
+            sa_2d_name="Area2D",
+            bc_line="Line B",
+            boundary_index=1,
+            expected_bc_type="Flow Hydrograph",
+        )
+
+    if first_editor == "precipitation":
+        edit_precipitation()
+        preserved = unsteady.read_bytes().split(b"Boundary Location=", 1)[0]
+        edit_boundary()
+        assert unsteady.read_bytes().split(b"Boundary Location=", 1)[0] == preserved
+    else:
+        edit_boundary()
+        preserved = unsteady.read_bytes().split(b"Boundary Location=", 1)[1]
+        edit_precipitation()
+        assert unsteady.read_bytes().split(b"Boundary Location=", 1)[1] == preserved
+
+    after = unsteady.read_bytes()
+    assert untouched_bytes in after
+    assert b"Flow Hydrograph= 0 \r\n" in after
+    assert b"DSS File=.\\hydrology\\scenario.dss\r\n" in after
+    assert b"Precipitation Mode=Enable\r\n" in after
+    assert b"Met BC=Precipitation|Mode=Gridded\r\n" in after
+    assert b"Met BC=Precipitation|Gridded Source=DSS\r\n" in after
+    assert (
+        b"Met BC=Precipitation|Gridded DSS Filename="
+        b".\\precipitation\\scenario.dss\r\n"
+    ) in after
+    assert after.endswith(b"\r\n")
+
+
 def test_ambiguous_partial_selector_rejected_without_write(tmp_path: Path) -> None:
     unsteady = tmp_path / "model.u01"
     before = _write_file(

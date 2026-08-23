@@ -44,6 +44,29 @@ def test_update_simulation_date_preserves_each_time_token_style(
     )
 
 
+@pytest.mark.parametrize("newline", [b"\n", b"\r\n", b"\r"])
+@pytest.mark.parametrize("terminal_newline", [False, True])
+def test_update_simulation_date_preserves_non_target_bytes_and_newline_state(
+    tmp_path,
+    newline,
+    terminal_newline,
+):
+    plan_file = tmp_path / "project.p01"
+    prefix = b"Plan Title=Byte exact \xff" + newline
+    original_record = b"Simulation Date=01JAN2000,00:00,02JAN2000,2359"
+    suffix = newline if terminal_newline else b""
+    plan_file.write_bytes(prefix + original_record + suffix)
+
+    RasPlan.update_simulation_date(
+        plan_file,
+        datetime(2026, 8, 22, 7, 15),
+        datetime(2026, 8, 23, 18, 45),
+    )
+
+    expected_record = b"Simulation Date=22AUG2026,07:15,23AUG2026,1845"
+    assert plan_file.read_bytes() == prefix + expected_record + suffix
+
+
 @pytest.mark.parametrize(
     "simulation_date",
     [
