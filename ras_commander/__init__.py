@@ -94,6 +94,16 @@ from .RasProject import (
     inspect_project_assets,
     stage_project,
 )
+from .RasBoundary import (
+    BoundaryFormatError,
+    BoundaryMutationError,
+    BoundaryMutationResult,
+    BoundaryPostPublicationError,
+    BoundaryPublicationError,
+    BoundarySelectorError,
+    BoundaryStageOwnershipError,
+    BoundaryStaleEvidenceError,
+)
 from .RasExamples import RasExamples
 from .sources.federal import RasEbfeModels
 from .sources.county import M3Model
@@ -267,6 +277,10 @@ __all__ = [
     'ProjectLockedError', 'ProjectDriftError', 'ProjectCopyVerificationError',
     'ProjectPublicationError',
     'StageProjectResult', 'inspect_project_assets', 'stage_project',
+    'BoundaryMutationResult', 'BoundaryMutationError',
+    'BoundaryStageOwnershipError', 'BoundarySelectorError',
+    'BoundaryStaleEvidenceError', 'BoundaryFormatError',
+    'BoundaryPublicationError', 'BoundaryPostPublicationError',
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
     'PreprocessResult', 'GeometryPreprocessResult',
     'GeometryLayerResult', 'GeometryCompleteResult',

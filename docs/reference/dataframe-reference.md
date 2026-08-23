@@ -73,6 +73,27 @@ container path is still inventoried normally. A future deeper reader will use a
 verified disposable copy, OS-denied writes, must-exist open, and a short-lived
 worker before returning snapshot-derived coverage.
 
+## Exact boundary-block inventory
+
+`RasUnsteady.inspect_boundary_blocks(staged, unsteady_number="01")` returns one
+row per exact `Boundary Location=` block in an owned `StageProjectResult`. This
+is a mutation-evidence table, not a replacement for the broader
+`ras.boundaries_df` summary. Its key groups are:
+
+| Column group | Meaning |
+|--------------|---------|
+| `inventory_schema_version`, `inventory_id`, `stage_operation_id` | Snapshot and owning stage identity |
+| `owner_relative_path`, `owner_sha256`, `owner_size_bytes`, `owner_mtime_ns`, `volume_id`, `file_id` | Exact staged unsteady-file evidence |
+| `boundary_index`, `occurrence_ordinal`, `boundary_count` | Raw order and duplicate disambiguation |
+| `boundary_location_raw`, `location_kind`, `river`, `reach`, `river_station`, `area_2d`, `bc_line` | Exact and parsed location evidence |
+| `bc_type`, `start_byte`, `end_byte_exclusive`, `block_length_bytes`, `block_sha256` | Detected type and byte-splice evidence |
+| `encoding`, `has_bom`, `newline`, `boundary_id` | File format and exact selector identity |
+| `inspection_state`, `reason_code`, `detail` | Explicit success/failure evidence |
+
+Every column has an exact Arrow dtype in `DATAFRAME_SCHEMAS`. A successful
+mutation invalidates this snapshot; inspect a newly staged copy before a
+subsequent edit.
+
 ## Plan-Number Normalization
 
 ras-commander normalizes RAS file numbers to a two-digit form before path

@@ -257,8 +257,66 @@ RasUnsteady.write_table_to_file(
 )
 ```
 
-!!! danger "File Backup"
-    Always backup your unsteady flow files (.u##) before modifying them. Incorrect modifications can corrupt the file and make it unreadable by HEC-RAS.
+### Deleting one exact boundary block
+
+`delete_boundary()` is a generic operation for recognized 1D and 2D boundary
+types. It no longer accepts a direct unsteady-file path, a boundary index,
+partial river/reach selectors, `force`, or a global `RasPrj`. Those inputs
+could identify the wrong repeated or ambiguously parsed block.
+
+Use a disposable, atomically staged project and bind the mutation to a row
+returned by `inspect_boundary_blocks()`:
+
+```python
+from ras_commander import RasUnsteady, stage_project
+
+staged = stage_project(
+    r"C:\Models\Source\Model.prj",
+    r"D:\Runs\model-boundary-edit",
+)
+inventory = RasUnsteady.inspect_boundary_blocks(
+    staged,
+    unsteady_number="01",
+)
+
+# Choose with explicit engineering criteria, then require uniqueness.
+matches = inventory.loc[
+    (inventory["bc_type"] == "Normal Depth")
+    & (inventory["area_2d"] == "Perimeter 1")
+    & (inventory["bc_line"] == "Downstream")
+]
+if len(matches) != 1:
+    raise RuntimeError(f"Expected one exact boundary, found {len(matches)}")
+row = matches.iloc[0]
+
+evidence = {
+    "unsteady_number": str(row["unsteady_number"]),
+    "boundary_id": str(row["boundary_id"]),
+    "expected_source_sha256": str(row["owner_sha256"]),
+    "expected_block_sha256": str(row["block_sha256"]),
+    "expected_bc_type": str(row["bc_type"]),
+    "expected_location_raw": str(row["boundary_location_raw"]),
+}
+
+preview = RasUnsteady.delete_boundary(staged, **evidence)
+assert preview.state == "previewed"  # no write
+
+result = RasUnsteady.delete_boundary(staged, **evidence, dry_run=False)
+assert result.state == "applied"
+```
+
+Apply is supported only on a fixed local volume. It verifies the stage
+manifest, full staged population, file identity, source digest, block digest,
+type, raw location, and exact byte range before atomic replacement. No `.bak`
+file is created; the immutable source project is the recovery copy. A successful
+edit invalidates the inventory, so make another fresh stage before another
+mutation. Do not use a truth test such as `if result:`; inspect `result.state`.
+
+!!! danger "Other in-place writers"
+    Older table-editing methods on this page still write their target file in
+    place. Use them only on a disposable project copy and retain an immutable
+    source project. The exact `delete_boundary()` workflow above enforces that
+    separation itself.
 
 ## Visualizing Boundary Conditions
 
