@@ -130,7 +130,15 @@ class RasPrj:
         self.project_crs_source = None
 
     @log_call
-    def initialize(self, project_folder, ras_exe_path, suppress_logging=True, prj_file=None, load_results_summary=True):
+    def initialize(
+        self,
+        project_folder,
+        ras_exe_path,
+        suppress_logging=True,
+        prj_file=None,
+        load_results_summary=True,
+        load_hdf_metadata=True,
+    ):
         """
         Initialize a RasPrj instance with project folder and RAS executable path.
 
@@ -147,6 +155,9 @@ class RasPrj:
                                                         HDF results summaries at initialization. This
                                                         enables quick queries of execution status and
                                                         basic results without re-scanning HDF files.
+            load_hdf_metadata (bool, default=True): If False, do not open HDF or
+                                                    raster datasets while initializing
+                                                    geometry metadata and project CRS.
 
         Raises:
             ValueError: If no HEC-RAS project file is found in the specified folder,
@@ -166,6 +177,7 @@ class RasPrj:
         self.project_path = self.project_folder  # Alias for compatibility
         self.project_crs = None
         self.project_crs_source = None
+        self.load_hdf_metadata = load_hdf_metadata
 
         # If user specified a .prj file directly, use it (Phase 2 optimization)
         if prj_file is not None:
@@ -212,7 +224,8 @@ class RasPrj:
                                                 'basemap_layer_names', 'basemap_layer_path',
                                                 'current_settings'])
 
-        self.refresh_project_crs()
+        if load_hdf_metadata:
+            self.refresh_project_crs()
 
         # Load results summaries if requested (default behavior)
         if load_results_summary and self.plan_df is not None and len(self.plan_df) > 0:
@@ -1370,7 +1383,11 @@ class RasPrj:
 
                         counts = GeomMetadata.get_geometry_counts(
                             geom_path=geom_path,
-                            hdf_path=hdf_path if hdf_path.exists() else None
+                            hdf_path=(
+                                hdf_path
+                                if self.load_hdf_metadata and hdf_path.exists()
+                                else None
+                            ),
                         )
 
                         # Update DataFrame row with extracted counts
@@ -2024,7 +2041,8 @@ def init_ras_project(
     ras_object=None,
     load_results_summary=True,
     hide_intro=False,
-    accept_tcu=False
+    accept_tcu=False,
+    load_hdf_metadata=True,
 ) -> 'RasPrj':
     """
     Initialize a RAS project for use with the ras-commander library.
@@ -2066,6 +2084,10 @@ def init_ras_project(
                                           recorded now for the current user (opt-in registry
                                           write) so unattended runs do not block. See
                                           ras_commander.RasTcu.
+        load_hdf_metadata (bool, default=True): If False, initialize project
+                                                tables without opening HDF or
+                                                raster datasets for geometry
+                                                metadata or CRS discovery.
 
     Returns:
         RasPrj: An initialized RasPrj instance.
@@ -2228,11 +2250,20 @@ def init_ras_project(
     # Initialize or re-initialize with the determined executable path
     # Pass specified_prj_file to avoid re-searching when user provided .prj file directly
     if specified_prj_file is not None:
-        ras_object.initialize(project_folder, ras_exe_path, prj_file=specified_prj_file,
-                              load_results_summary=load_results_summary)
+        ras_object.initialize(
+            project_folder,
+            ras_exe_path,
+            prj_file=specified_prj_file,
+            load_results_summary=load_results_summary,
+            load_hdf_metadata=load_hdf_metadata,
+        )
     else:
-        ras_object.initialize(project_folder, ras_exe_path,
-                              load_results_summary=load_results_summary)
+        ras_object.initialize(
+            project_folder,
+            ras_exe_path,
+            load_results_summary=load_results_summary,
+            load_hdf_metadata=load_hdf_metadata,
+        )
 
     # Store version for RasControl (legacy COM interface support)
     ras_object.ras_version = ras_version if ras_version else detected_version

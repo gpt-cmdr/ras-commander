@@ -6,10 +6,12 @@ import hashlib
 import json
 from pathlib import Path
 
+import h5py
 import pandas as pd
 import pytest
 
 import ras_commander.RasProject as project_module
+from ras_commander.schemas import DATAFRAME_SCHEMAS
 from ras_commander import (
     ProjectPathAmbiguityError,
     ProjectPublicationError,
@@ -18,7 +20,12 @@ from ras_commander import (
 )
 
 
-def _write_project(root: Path, *, dss: bool = False) -> Path:
+def _write_project(
+    root: Path,
+    *,
+    dss: bool = False,
+    geometry_hdf: bool = True,
+) -> Path:
     root.mkdir(parents=True)
     project = root / "Model.prj"
     project.write_text(
@@ -39,6 +46,9 @@ def _write_project(root: Path, *, dss: bool = False) -> Path:
         encoding="ascii",
     )
     (root / "Model.g01").write_text("Geom Title=Base Geometry\n", encoding="ascii")
+    if geometry_hdf:
+        with h5py.File(root / "Model.g01.hdf", "w") as hdf:
+            hdf.attrs["Projection"] = ""
     boundary = ""
     if dss:
         boundary = (
@@ -111,15 +121,20 @@ def _tree_hash(root: Path) -> str:
 
 
 def test_inspect_project_assets_returns_stable_arrow_schema(tmp_path: Path) -> None:
-    project = _write_project(tmp_path / "source")
+    project = _write_project(tmp_path / "source", geometry_hdf=False)
 
     assets = inspect_project_assets(project, depth="current_plan")
 
     assert list(assets.columns) == project_module._INVENTORY_COLUMNS
+    assert list(assets.columns) == [
+        column["name"]
+        for column in DATAFRAME_SCHEMAS["project_asset_inventory"]["columns"]
+    ]
     assert str(assets["asset_kind"].dtype) == "string[pyarrow]"
     assert str(assets["required"].dtype) == "bool[pyarrow]"
     assert str(assets["detail"].dtype) == "string[pyarrow]"
     assert str(assets["dataset_name"].dtype) == "string[pyarrow]"
+    assert str(assets["expected_start"].dtype) == "timestamp[ns, tz=UTC][pyarrow]"
     assert set(assets.loc[assets["asset_kind"] == "plan", "plan_number"]) == {"01"}
     geometry_hdf = assets.loc[assets["asset_kind"] == "geometry_hdf"].iloc[0]
     assert geometry_hdf["inspection_state"] == "missing"
@@ -142,12 +157,35 @@ def test_dss_dataset_remains_not_inspected_and_container_is_unchanged(
 
     file_row = assets.loc[assets["asset_kind"] == "dss_file"].iloc[0]
     pathname_row = assets.loc[assets["asset_kind"] == "dss_pathname"].iloc[0]
+    boundary_row = assets.loc[assets["asset_kind"] == "boundary"].iloc[0]
     assert file_row["inspection_state"] == "available"
     assert pathname_row["inspection_state"] == "not_inspected"
     assert pathname_row["readiness"] == "unknown"
     assert pathname_row["reason_code"] == "reader_not_source_immutable"
     assert pathname_row["expected_start"] == pd.Timestamp("2020-01-01", tz="UTC")
     assert pathname_row["expected_end"] == pd.Timestamp("2020-01-02", tz="UTC")
+    assert boundary_row["reference_raw"].startswith("Boundary Location=")
+    assert file_row["parent_asset_id"] == boundary_row["asset_id"]
+    assert pathname_row["parent_asset_id"] == file_row["asset_id"]
+    assert (dss_file.read_bytes(), dss_file.stat().st_mtime_ns) == before
+
+
+def test_stage_project_preserves_uninspected_active_dss_as_unknown(
+    tmp_path: Path,
+) -> None:
+    project = _write_project(tmp_path / "source", dss=True)
+    dss_file = project.parent / "input.dss"
+    before = (dss_file.read_bytes(), dss_file.stat().st_mtime_ns)
+
+    result = stage_project(project, tmp_path / "published-dss")
+
+    pathname = result.assets.loc[
+        result.assets["asset_kind"] == "dss_pathname"
+    ].iloc[0]
+    assert result.execution_readiness == "unknown"
+    assert pathname["required"] is True
+    assert pathname["inspection_state"] == "not_inspected"
+    assert pathname["readiness"] == "unknown"
     assert (dss_file.read_bytes(), dss_file.stat().st_mtime_ns) == before
 
 
@@ -175,6 +213,26 @@ def test_shared_dss_dependencies_are_scoped_per_plan_and_hashed_once(
     }
     assert len(set(pathname_rows["parent_asset_id"])) == 2
     assert calls[project.parent / "input.dss"] == 1
+    assert calls[project.parent / "Model.g01"] == 1
+    assert calls[project.parent / "Model.u01"] == 1
+    assert set(assets.loc[assets["asset_kind"] == "geometry", "plan_number"]) == {
+        "01",
+        "02",
+    }
+    assert set(
+        assets.loc[assets["asset_kind"] == "unsteady_flow", "plan_number"]
+    ) == {"01", "02"}
+    for plan_number in ("01", "02"):
+        flow_row = assets.loc[
+            (assets["asset_kind"] == "unsteady_flow")
+            & (assets["plan_number"] == plan_number)
+        ].iloc[0]
+        boundary_row = assets.loc[
+            (assets["asset_kind"] == "boundary")
+            & (assets["plan_number"] == plan_number)
+            & (assets["inspection_state"] == "available")
+        ].iloc[0]
+        assert boundary_row["parent_asset_id"] == flow_row["asset_id"]
 
 
 def test_steady_1d_geometry_hdf_is_not_required(tmp_path: Path) -> None:
@@ -195,6 +253,213 @@ def test_directory_input_fails_closed_when_multiple_projects_exist(tmp_path: Pat
 
     with pytest.raises(ValueError, match="Ambiguous"):
         inspect_project_assets(first.parent)
+
+
+def test_project_depth_initialization_does_not_open_hdf_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _write_project(tmp_path / "source")
+    (project.parent / "Model.g01.hdf").write_bytes(b"not an hdf")
+
+    from ras_commander.geom.GeomMetadata import GeomMetadata
+
+    observed_hdf_paths: list[object] = []
+
+    def geometry_counts(*, geom_path, hdf_path):
+        observed_hdf_paths.append(hdf_path)
+        return GeomMetadata.DEFAULT_COUNTS.copy()
+
+    def forbidden_crs_refresh(self):
+        raise AssertionError("project-depth inventory must not inspect HDF/raster CRS")
+
+    monkeypatch.setattr(GeomMetadata, "get_geometry_counts", geometry_counts)
+    monkeypatch.setattr(
+        project_module.RasPrj,
+        "refresh_project_crs",
+        forbidden_crs_refresh,
+    )
+
+    assets = inspect_project_assets(project, depth="project")
+
+    assert not assets.empty
+    assert observed_hdf_paths == [None]
+
+
+def test_current_plan_inventory_rejects_undeclared_plan(tmp_path: Path) -> None:
+    project = _write_project(tmp_path / "source")
+    project.write_text(
+        project.read_text(encoding="ascii").replace(
+            "Current Plan=p01",
+            "Current Plan=p99",
+        ),
+        encoding="ascii",
+    )
+
+    with pytest.raises(
+        project_module.ProjectPopulationError,
+        match="current_plan_undeclared",
+    ):
+        inspect_project_assets(project, depth="current_plan")
+
+
+def test_inventory_emits_rows_for_restart_and_precipitation_parser_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _write_project(tmp_path / "source")
+
+    def fail_restart(*args, **kwargs):
+        raise ValueError("bad restart block")
+
+    def fail_precipitation(*args, **kwargs):
+        raise ValueError("bad precipitation block")
+
+    monkeypatch.setattr(
+        project_module.RasUnsteady,
+        "get_restart_settings",
+        fail_restart,
+    )
+    monkeypatch.setattr(
+        project_module.RasUnsteady,
+        "get_met_precipitation_config",
+        fail_precipitation,
+    )
+
+    assets = inspect_project_assets(project, depth="current_plan")
+
+    failures = assets.loc[assets["inspection_state"] == "failed"]
+    assert set(failures["reason_code"]) >= {
+        "restart_parse_failed",
+        "precipitation_parse_failed",
+    }
+
+
+def test_gdal_precipitation_fields_are_inventoried_separately(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _write_project(tmp_path / "source")
+    raster = project.parent / "rain.nc"
+    raster.write_bytes(b"netcdf-placeholder")
+    raster_folder = project.parent / "rain-grid"
+    raster_folder.mkdir()
+
+    def gdal_config(*args, **kwargs):
+        return {
+            "enabled": True,
+            "mode": "Gridded",
+            "source": "GDAL Raster File(s)",
+            "gdal_filename": raster.name,
+            "gdal_folder": raster_folder.name,
+            "gdal_group": "precipitation/hourly",
+            "gdal_filter": "*.nc",
+            "raw": {
+                "Gridded GDAL Filename": raster.name,
+                "Gridded GDAL Folder": raster_folder.name,
+                "Gridded GDAL Group": "precipitation/hourly",
+                "Gridded GDAL Datasetname": "legacy-precipitation",
+                "Gridded GDAL Filter": "*.nc",
+            },
+        }
+
+    monkeypatch.setattr(
+        project_module.RasUnsteady,
+        "get_met_precipitation_config",
+        gdal_config,
+    )
+
+    assets = inspect_project_assets(project, depth="current_plan")
+
+    source_apis = set(assets["source_api"])
+    assert {
+        "RasUnsteady.get_met_precipitation_config.gdal_filename",
+        "RasUnsteady.get_met_precipitation_config.gdal_folder",
+        "RasUnsteady.get_met_precipitation_config.gdal_group",
+        "RasUnsteady.get_met_precipitation_config.gdal_datasetname",
+        "RasUnsteady.get_met_precipitation_config.gdal_filter",
+    }.issubset(source_apis)
+    group = assets.loc[
+        assets["source_api"]
+        == "RasUnsteady.get_met_precipitation_config.gdal_group"
+    ].iloc[0]
+    assert group["dataset_name"] == "precipitation/hourly"
+    assert group["inspection_state"] == "not_inspected"
+    datasetname = assets.loc[
+        assets["source_api"]
+        == "RasUnsteady.get_met_precipitation_config.gdal_datasetname"
+    ].iloc[0]
+    assert datasetname["reference_raw"] == "legacy-precipitation"
+    assert datasetname["dataset_name"] == "legacy-precipitation"
+
+
+def test_stage_project_preserves_uninspected_gdal_groups_as_unknown(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _write_project(tmp_path / "source")
+    raster = project.parent / "rain.nc"
+    raster.write_bytes(b"netcdf-placeholder")
+    raster_folder = project.parent / "rain-grid"
+    raster_folder.mkdir()
+
+    def gdal_config(*args, **kwargs):
+        return {
+            "enabled": True,
+            "mode": "Gridded",
+            "source": "GDAL Raster File(s)",
+            "gdal_filename": raster.name,
+            "gdal_folder": raster_folder.name,
+            "gdal_group": "precipitation/hourly",
+            "gdal_filter": "*.nc",
+            "raw": {
+                "Gridded GDAL Filename": raster.name,
+                "Gridded GDAL Folder": raster_folder.name,
+                "Gridded GDAL Group": "precipitation/hourly",
+                "Gridded GDAL Datasetname": "legacy-precipitation",
+                "Gridded GDAL Filter": "*.nc",
+            },
+        }
+
+    monkeypatch.setattr(
+        project_module.RasUnsteady,
+        "get_met_precipitation_config",
+        gdal_config,
+    )
+
+    result = stage_project(project, tmp_path / "published-gdal")
+
+    dataset_rows = result.assets.loc[
+        result.assets["source_api"].isin(
+            {
+                "RasUnsteady.get_met_precipitation_config.gdal_group",
+                "RasUnsteady.get_met_precipitation_config.gdal_datasetname",
+            }
+        )
+    ]
+    assert result.execution_readiness == "unknown"
+    assert len(dataset_rows) == 2
+    assert dataset_rows["required"].eq(True).all()  # noqa: E712
+    assert dataset_rows["inspection_state"].eq("not_inspected").all()
+
+
+def test_boundary_diagnostic_asset_ids_remain_unique(
+    tmp_path: Path,
+) -> None:
+    project = _write_project(tmp_path / "source", dss=True)
+    ras_object = project_module._explicit_ras(project, None)
+    ras_object.boundaries_df = pd.DataFrame()
+
+    assets = inspect_project_assets(
+        project,
+        ras_object=ras_object,
+        depth="current_plan",
+    )
+
+    boundary_rows = assets.loc[assets["asset_kind"] == "boundary"]
+    assert "boundary_inventory_mismatch" in set(boundary_rows["reason_code"])
+    assert boundary_rows["asset_id"].is_unique
+    assert assets["asset_id"].is_unique
 
 
 def test_rasmap_unknown_paths_and_required_shapefile_sidecars_are_inventoried(
@@ -224,6 +489,32 @@ def test_rasmap_unknown_paths_and_required_shapefile_sidecars_are_inventoried(
     assert sidecars["parent_asset_id"].nunique() == 1
 
 
+def test_empty_structured_rasmap_inventory_remains_explicit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _write_project(tmp_path / "source")
+    (project.parent / "Model.rasmap").write_text(
+        "<RASMapper />",
+        encoding="utf-8",
+    )
+
+    from ras_commander.RasMap import RasMap
+
+    def fail_rasmap(*args, **kwargs):
+        raise ValueError("structured parser failed")
+
+    monkeypatch.setattr(RasMap, "initialize_rasmap_df", fail_rasmap)
+
+    assets = inspect_project_assets(project, depth="project")
+
+    row = assets.loc[
+        assets["reason_code"] == "rasmap_structured_inventory_empty"
+    ].iloc[0]
+    assert row["inspection_state"] == "not_inspected"
+    assert row["readiness"] == "unknown"
+
+
 def test_stage_project_publishes_verified_copy_without_source_drift(tmp_path: Path) -> None:
     source_project = _write_project(tmp_path / "source")
     source_hash = _tree_hash(source_project.parent)
@@ -237,6 +528,7 @@ def test_stage_project_publishes_verified_copy_without_source_drift(tmp_path: Pa
     assert result.destination_project_file == destination / source_project.name
     assert result.ras_object.prj_file == result.destination_project_file
     assert result.ras_object.ras_version == "6.6"
+    assert result.ras_object.plan_df["full_path"].str.startswith(str(destination)).all()
     assert result.assets["resolved_path"].dropna().str.startswith(str(destination)).any()
     assert result.assets.loc[result.assets["is_file"] == True, "sha256"].notna().all()  # noqa: E712
     assert (destination / "empty-input-directory").is_dir()
@@ -247,6 +539,7 @@ def test_stage_project_publishes_verified_copy_without_source_drift(tmp_path: Pa
         "copied_source",
         "generated_stage_metadata",
     }
+    assert project_module._tree_snapshot(destination)[1] == result.published_fingerprint
     assert _tree_hash(source_project.parent) == source_hash
     assert not list(tmp_path.glob(".published.ras-stage-*"))
     assert not (tmp_path / ".published.rascommander-stage.lock").exists()
@@ -277,6 +570,25 @@ def test_stage_project_rejects_missing_declared_core_file(tmp_path: Path) -> Non
     assert not list(tmp_path.glob(".published.ras-stage-*"))
 
 
+def test_stage_project_rejects_missing_mechanically_required_hdf(
+    tmp_path: Path,
+) -> None:
+    source_project = _write_project(
+        tmp_path / "source",
+        geometry_hdf=False,
+    )
+    destination = tmp_path / "published"
+
+    with pytest.raises(
+        project_module.ProjectPopulationError,
+        match="required_component_unavailable",
+    ):
+        stage_project(source_project, destination)
+
+    assert not destination.exists()
+    assert not list(tmp_path.glob(".published.ras-stage-*"))
+
+
 def test_stage_project_rejects_overlap_and_lock_artifacts(tmp_path: Path) -> None:
     source_project = _write_project(tmp_path / "source")
 
@@ -288,6 +600,27 @@ def test_stage_project_rejects_overlap_and_lock_artifacts(tmp_path: Path) -> Non
     with pytest.raises(RuntimeError, match="lock file"):
         stage_project(source_project, tmp_path / "published")
     assert not (tmp_path / "published").exists()
+
+
+def test_stage_project_fails_when_physical_path_identity_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_project = _write_project(tmp_path / "source")
+    destination = tmp_path / "published"
+
+    def denied_identity(*args, **kwargs):
+        raise PermissionError("identity denied")
+
+    monkeypatch.setattr(project_module.os.path, "samefile", denied_identity)
+
+    with pytest.raises(
+        ProjectPathAmbiguityError,
+        match="path_identity_unavailable",
+    ):
+        stage_project(source_project, destination)
+
+    assert not destination.exists()
 
 
 def test_source_drift_failure_leaves_destination_absent_and_cleans_temp(
@@ -312,28 +645,235 @@ def test_source_drift_failure_leaves_destination_absent_and_cleans_temp(
     assert not (tmp_path / ".published.rascommander-stage.lock").exists()
 
 
+def test_staged_file_drift_after_inventory_fails_before_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_project = _write_project(tmp_path / "source")
+    (source_project.parent / "note.bin").write_bytes(b"original")
+    destination = tmp_path / "published"
+    original_inspect = project_module.inspect_project_assets
+
+    def mutating_inspect(project, **kwargs):
+        assets = original_inspect(project, **kwargs)
+        (Path(project).parent / "note.bin").write_bytes(b"changed after inspection")
+        return assets
+
+    monkeypatch.setattr(project_module, "inspect_project_assets", mutating_inspect)
+
+    with pytest.raises(
+        project_module.ProjectCopyVerificationError,
+        match="copy_content_mismatch",
+    ):
+        stage_project(source_project, destination)
+
+    assert not destination.exists()
+    assert not list(tmp_path.glob(".published.ras-stage-*"))
+
+
+def test_staged_file_drift_during_fsync_fails_before_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_project = _write_project(tmp_path / "source")
+    (source_project.parent / "note.bin").write_bytes(b"original")
+    destination = tmp_path / "published"
+    original_fsync_tree = project_module._fsync_tree
+
+    def mutating_fsync_tree(root: Path) -> None:
+        original_fsync_tree(root)
+        (Path(root) / "note.bin").write_bytes(b"changed during fsync")
+
+    monkeypatch.setattr(project_module, "_fsync_tree", mutating_fsync_tree)
+
+    with pytest.raises(
+        project_module.ProjectCopyVerificationError,
+        match="copy_content_mismatch",
+    ):
+        stage_project(source_project, destination)
+
+    assert not destination.exists()
+    assert not list(tmp_path.glob(".published.ras-stage-*"))
+
+
+def test_source_drift_during_fsync_fails_before_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_project = _write_project(tmp_path / "source")
+    destination = tmp_path / "published"
+    original_fsync_tree = project_module._fsync_tree
+
+    def mutating_fsync_tree(root: Path) -> None:
+        original_fsync_tree(root)
+        (source_project.parent / "Model.g01").write_text(
+            "changed during fsync\n",
+            encoding="ascii",
+        )
+
+    monkeypatch.setattr(project_module, "_fsync_tree", mutating_fsync_tree)
+
+    with pytest.raises(
+        project_module.ProjectDriftError,
+        match="source_changed_before_publish",
+    ):
+        stage_project(source_project, destination)
+
+    assert not destination.exists()
+    assert not list(tmp_path.glob(".published.ras-stage-*"))
+
+
 def test_publication_race_leaves_competing_destination_untouched(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source_project = _write_project(tmp_path / "source")
     destination = tmp_path / "published"
-    original_rename = project_module.os.rename
+    original_rename = project_module._native_rename_noreplace
 
     def racing_rename(source, target):
         Path(target).mkdir()
         (Path(target) / "competitor.txt").write_text("winner", encoding="ascii")
-        raise FileExistsError(target)
+        original_rename(source, target)
 
-    monkeypatch.setattr(project_module.os, "rename", racing_rename)
-    try:
-        with pytest.raises(ProjectPublicationError, match="atomic_rename_failed"):
-            stage_project(source_project, destination)
-    finally:
-        monkeypatch.setattr(project_module.os, "rename", original_rename)
+    monkeypatch.setattr(project_module, "_native_rename_noreplace", racing_rename)
+    with pytest.raises(ProjectPublicationError, match="destination_race") as error:
+        stage_project(source_project, destination)
 
+    assert error.value.publication_outcome == "not_committed"
     assert (destination / "competitor.txt").read_text(encoding="ascii") == "winner"
     assert not list(tmp_path.glob(".published.ras-stage-*"))
+
+
+def test_publication_fails_closed_when_atomic_noreplace_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_project = _write_project(tmp_path / "source")
+    destination = tmp_path / "published"
+
+    def unsupported_rename(source, target):
+        raise OSError(project_module.errno.ENOSYS, "unsupported")
+
+    monkeypatch.setattr(
+        project_module,
+        "_native_rename_noreplace",
+        unsupported_rename,
+    )
+
+    with pytest.raises(
+        ProjectPublicationError,
+        match="atomic_noreplace_unavailable",
+    ) as error:
+        stage_project(source_project, destination)
+
+    assert error.value.publication_outcome == "not_committed"
+    assert not destination.exists()
+    assert not list(tmp_path.glob(".published.ras-stage-*"))
+
+
+def test_publication_reconciles_error_reported_after_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "prepared"
+    source.mkdir()
+    (source / "payload.txt").write_text("verified", encoding="ascii")
+    destination = tmp_path / "published"
+    original_rename = project_module._native_rename_noreplace
+
+    def error_after_commit(source_path, destination_path):
+        original_rename(source_path, destination_path)
+        raise OSError(project_module.errno.EIO, "remote acknowledgement lost")
+
+    monkeypatch.setattr(
+        project_module,
+        "_native_rename_noreplace",
+        error_after_commit,
+    )
+
+    project_module._publish_directory_noreplace(source, destination)
+
+    assert not source.exists()
+    assert (destination / "payload.txt").read_text(encoding="ascii") == "verified"
+
+
+def test_unprovable_publication_outcome_is_explicit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "prepared"
+    source.mkdir()
+    destination = tmp_path / "published"
+
+    monkeypatch.setattr(
+        project_module,
+        "_native_rename_noreplace",
+        lambda source_path, destination_path: None,
+    )
+
+    with pytest.raises(
+        ProjectPublicationError,
+        match="publication_outcome_unknown",
+    ) as error:
+        project_module._publish_directory_noreplace(source, destination)
+
+    assert error.value.publication_outcome == "unknown"
+    assert source.is_dir()
+    assert not destination.exists()
+
+
+def test_post_publication_drift_reports_committed_and_retains_destination(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_project = _write_project(tmp_path / "source")
+    (source_project.parent / "note.bin").write_bytes(b"original")
+    destination = tmp_path / "published"
+    original_publish = project_module._publish_directory_noreplace
+
+    def mutating_publish(source, target):
+        original_publish(source, target)
+        (Path(target) / "note.bin").write_bytes(b"changed after commit")
+
+    monkeypatch.setattr(
+        project_module,
+        "_publish_directory_noreplace",
+        mutating_publish,
+    )
+
+    with pytest.raises(
+        ProjectPublicationError,
+        match="published_fingerprint_mismatch",
+    ) as error:
+        stage_project(source_project, destination)
+
+    assert error.value.publication_outcome == "committed"
+    assert error.value.publication_committed is True
+    assert destination.is_dir()
+    assert (destination / "note.bin").read_bytes() == b"changed after commit"
+
+
+def test_raw_prepublication_filesystem_error_is_typed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_project = _write_project(tmp_path / "source")
+    destination = tmp_path / "published"
+
+    def denied_temp(*args, **kwargs):
+        raise PermissionError("temporary directory denied")
+
+    monkeypatch.setattr(project_module.tempfile, "mkdtemp", denied_temp)
+
+    with pytest.raises(
+        project_module.ProjectStageError,
+        match="staging_filesystem_error",
+    ) as error:
+        stage_project(source_project, destination)
+
+    assert error.value.publication_outcome == "not_committed"
+    assert not destination.exists()
 
 
 def test_initialization_failure_cleans_only_owned_temporary_tree(
@@ -353,6 +893,48 @@ def test_initialization_failure_cleans_only_owned_temporary_tree(
     assert not destination.exists()
     assert not list(tmp_path.glob(".published.ras-stage-*"))
     assert not (tmp_path / ".published.rascommander-stage.lock").exists()
+
+
+def test_stage_project_initializes_ras_only_before_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_project = _write_project(tmp_path / "source")
+    destination = tmp_path / "published"
+    original_initialize = project_module.init_ras_project
+    calls = 0
+
+    def counting_initialize(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original_initialize(*args, **kwargs)
+
+    monkeypatch.setattr(project_module, "init_ras_project", counting_initialize)
+
+    result = stage_project(source_project, destination)
+
+    assert calls == 1
+    assert result.ras_object.prj_file == destination / source_project.name
+
+
+def test_stage_project_rejects_an_undeclared_current_plan(tmp_path: Path) -> None:
+    source_project = _write_project(tmp_path / "source")
+    source_project.write_text(
+        source_project.read_text(encoding="ascii").replace(
+            "Current Plan=p01",
+            "Current Plan=p99",
+        ),
+        encoding="ascii",
+    )
+    destination = tmp_path / "published"
+
+    with pytest.raises(
+        project_module.ProjectPopulationError,
+        match="current_plan_undeclared",
+    ):
+        stage_project(source_project, destination)
+
+    assert not destination.exists()
 
 
 def test_lock_cleanup_refuses_a_replaced_lock_file(tmp_path: Path) -> None:
@@ -388,6 +970,23 @@ def test_tree_fingerprint_includes_empty_directory_population(tmp_path: Path) ->
     _, after, _ = project_module._tree_snapshot(root)
 
     assert before != after
+
+
+def test_tree_snapshot_fails_closed_on_traversal_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "tree"
+    root.mkdir()
+
+    def failing_walk(*args, **kwargs):
+        kwargs["onerror"](PermissionError("access denied"))
+        yield from ()
+
+    monkeypatch.setattr(project_module.os, "walk", failing_walk)
+
+    with pytest.raises(ProjectPathAmbiguityError, match="tree_traversal_failed"):
+        project_module._tree_snapshot(root)
 
 
 def test_stage_project_rejects_a_source_reparse_ancestor(tmp_path: Path) -> None:

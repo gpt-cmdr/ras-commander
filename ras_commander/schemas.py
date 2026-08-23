@@ -28,9 +28,105 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.3"
 
 DATAFRAME_SCHEMAS = {
+    "project_asset_inventory": {
+        "description": (
+            "One row per HEC-RAS project asset reference or linked dataset, "
+            "with provenance, filesystem identity, inspection state, and readiness."
+        ),
+        "accessor": "inspect_project_assets(project, ...)",
+        "source": "RasProject.inspect_project_assets()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "inventory_schema_version", "dtype": "int64[pyarrow]", "description": "Row-schema version; currently 1."},
+            {"name": "inventory_id", "dtype": "string[pyarrow]", "description": "UUID shared by one inspection snapshot."},
+            {"name": "inspection_depth", "dtype": "string[pyarrow]", "description": "Requested project, current_plan, or all_plans depth."},
+            {"name": "asset_id", "dtype": "string[pyarrow]", "description": "Stable identity for this reference within the snapshot."},
+            {"name": "parent_asset_id", "dtype": "string[pyarrow] | null", "description": "Containing asset row, when applicable."},
+            {"name": "asset_kind", "dtype": "string[pyarrow]", "description": "Mechanical asset/reference category."},
+            {"name": "asset_role", "dtype": "string[pyarrow]", "description": "Declared input, derived prerequisite, existing result, display reference, or unknown."},
+            {"name": "plan_number", "dtype": "string[pyarrow] | null", "description": "Owning plan number when plan-scoped."},
+            {"name": "unsteady_number", "dtype": "string[pyarrow] | null", "description": "Owning unsteady-flow number when applicable."},
+            {"name": "required", "dtype": "bool[pyarrow] | null", "description": "Whether the reference is mechanically required; null means unknown."},
+            {"name": "owner_file", "dtype": "string[pyarrow] | null", "description": "File containing the reference."},
+            {"name": "owner_sha256", "dtype": "string[pyarrow] | null", "description": "Snapshot hash of owner_file when hashing was requested."},
+            {"name": "reference_raw", "dtype": "string[pyarrow] | null", "description": "Exact stored reference text."},
+            {"name": "resolved_path", "dtype": "string[pyarrow] | null", "description": "Mapped-drive-preserving resolved display path."},
+            {"name": "path_scope", "dtype": "string[pyarrow] | null", "description": "Internal, external, or ambiguous project scope."},
+            {"name": "portable", "dtype": "bool[pyarrow] | null", "description": "Whether the path is self-contained under the project root."},
+            {"name": "exists", "dtype": "bool[pyarrow] | null", "description": "Observed path existence."},
+            {"name": "is_file", "dtype": "bool[pyarrow] | null", "description": "Whether the path is a regular file."},
+            {"name": "is_dir", "dtype": "bool[pyarrow] | null", "description": "Whether the path is a directory."},
+            {"name": "volume_id", "dtype": "string[pyarrow] | null", "description": "Filesystem volume identity when obtainable."},
+            {"name": "file_id", "dtype": "string[pyarrow] | null", "description": "Filesystem object identity when obtainable."},
+            {"name": "size_bytes", "dtype": "int64[pyarrow] | null", "description": "Observed regular-file size."},
+            {"name": "mtime_ns", "dtype": "int64[pyarrow] | null", "description": "Observed nanosecond modification time."},
+            {"name": "sha256", "dtype": "string[pyarrow] | null", "description": "Streamed file digest when requested."},
+            {"name": "dataset_name", "dtype": "string[pyarrow] | null", "description": "Exact HDF, DSS, or GDAL dataset/pathname reference."},
+            {"name": "expected_start", "dtype": "timestamp[ns, tz=UTC][pyarrow] | null", "description": "Plan-window start applicable to the dataset."},
+            {"name": "expected_end", "dtype": "timestamp[ns, tz=UTC][pyarrow] | null", "description": "Plan-window end applicable to the dataset."},
+            {"name": "available_start", "dtype": "timestamp[ns, tz=UTC][pyarrow] | null", "description": "Observed dataset coverage start."},
+            {"name": "available_end", "dtype": "timestamp[ns, tz=UTC][pyarrow] | null", "description": "Observed dataset coverage end."},
+            {"name": "inspection_state", "dtype": "string[pyarrow]", "description": "Available, missing, ambiguous, not_inspected, failed, or not_applicable."},
+            {"name": "readiness", "dtype": "string[pyarrow]", "description": "Ready, not_ready, unknown, or not_required."},
+            {"name": "reason_code", "dtype": "string[pyarrow] | null", "description": "Machine-readable inspection reason."},
+            {"name": "detail", "dtype": "string[pyarrow] | null", "description": "Bounded human-readable diagnostic."},
+            {"name": "source_api", "dtype": "string[pyarrow]", "description": "Parser or API that produced the row."},
+        ],
+    },
+    "boundary_block_inventory": {
+        "description": (
+            "One exact, snapshot-bound row per unsteady-flow Boundary Location block "
+            "in an atomically staged project."
+        ),
+        "accessor": (
+            "RasUnsteady.inspect_boundary_blocks(staged_project, "
+            "unsteady_number=...)"
+        ),
+        "source": "RasBoundary.inspect_boundary_blocks()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "inventory_schema_version", "dtype": "int64[pyarrow]", "description": "Boundary inventory row-schema version."},
+            {"name": "inventory_id", "dtype": "string[pyarrow]", "description": "UUID shared by one exact boundary snapshot."},
+            {"name": "stage_operation_id", "dtype": "string[pyarrow]", "description": "Owning atomic-stage operation identity."},
+            {"name": "staged_project_file", "dtype": "string[pyarrow]", "description": "Exact staged HEC-RAS project file."},
+            {"name": "staged_root", "dtype": "string[pyarrow]", "description": "Verified staged project root."},
+            {"name": "unsteady_number", "dtype": "string[pyarrow]", "description": "Two-digit staged unsteady-flow number."},
+            {"name": "owner_relative_path", "dtype": "string[pyarrow]", "description": "Unsteady file path relative to the stage root."},
+            {"name": "owner_sha256", "dtype": "string[pyarrow]", "description": "Exact unsteady-file content digest."},
+            {"name": "owner_size_bytes", "dtype": "int64[pyarrow]", "description": "Exact unsteady-file byte length."},
+            {"name": "owner_mtime_ns", "dtype": "int64[pyarrow]", "description": "Observed unsteady-file nanosecond mtime."},
+            {"name": "volume_id", "dtype": "string[pyarrow]", "description": "Filesystem volume identity bound into the snapshot."},
+            {"name": "file_id", "dtype": "string[pyarrow]", "description": "Filesystem file identity bound into the snapshot."},
+            {"name": "boundary_index", "dtype": "int64[pyarrow]", "description": "Zero-based raw block order."},
+            {"name": "boundary_condition_number", "dtype": "int64[pyarrow]", "description": "One-based compatibility ordinal."},
+            {"name": "occurrence_ordinal", "dtype": "int64[pyarrow]", "description": "Zero-based occurrence among equal location/type blocks."},
+            {"name": "boundary_count", "dtype": "int64[pyarrow]", "description": "Total block count in this file snapshot."},
+            {"name": "boundary_location_raw", "dtype": "string[pyarrow]", "description": "Exact text following Boundary Location=."},
+            {"name": "location_kind", "dtype": "string[pyarrow]", "description": "Proved 1d or 2d location shape."},
+            {"name": "river", "dtype": "string[pyarrow]", "description": "First 1D location field."},
+            {"name": "reach", "dtype": "string[pyarrow]", "description": "Second 1D location field."},
+            {"name": "river_station", "dtype": "string[pyarrow]", "description": "Third 1D location field."},
+            {"name": "area_2d", "dtype": "string[pyarrow]", "description": "2D flow-area location field."},
+            {"name": "bc_line", "dtype": "string[pyarrow]", "description": "2D boundary-condition line field."},
+            {"name": "bc_type", "dtype": "string[pyarrow]", "description": "Exactly detected boundary block type."},
+            {"name": "start_byte", "dtype": "int64[pyarrow]", "description": "Inclusive block start byte."},
+            {"name": "end_byte_exclusive", "dtype": "int64[pyarrow]", "description": "Exclusive block end byte."},
+            {"name": "block_length_bytes", "dtype": "int64[pyarrow]", "description": "Exact byte length of the block."},
+            {"name": "block_sha256", "dtype": "string[pyarrow]", "description": "Exact block-content digest."},
+            {"name": "encoding", "dtype": "string[pyarrow]", "description": "Strictly detected source encoding."},
+            {"name": "has_bom", "dtype": "bool[pyarrow]", "description": "Whether the file begins with a supported BOM."},
+            {"name": "newline", "dtype": "string[pyarrow]", "description": "Uniform CRLF, LF, or CR convention."},
+            {"name": "boundary_id", "dtype": "string[pyarrow]", "description": "Snapshot-, identity-, extent-, and digest-bound selector."},
+            {"name": "inspection_state", "dtype": "string[pyarrow]", "description": "Available or explicit failed inspection state."},
+            {"name": "reason_code", "dtype": "string[pyarrow]", "description": "Machine-readable inspection reason when present."},
+            {"name": "detail", "dtype": "string[pyarrow]", "description": "Bounded human-readable diagnostic when present."},
+        ],
+    },
     "plan_df": {
         "description": "One row per HEC-RAS plan in the project, with its linked geometry and flow files.",
         "accessor": "ras.plan_df  (or RasPrj instance .plan_df; refreshed by RasPrj.get_plan_entries())",

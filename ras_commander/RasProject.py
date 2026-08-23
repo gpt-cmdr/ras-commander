@@ -21,7 +21,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal, NoReturn, Optional, Union
 
 import pandas as pd
 
@@ -30,48 +30,18 @@ from .LoggingConfig import get_logger
 from .RasPrj import RasPrj, init_ras_project
 from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
+from .schemas import DATAFRAME_SCHEMAS
 
 logger = get_logger(__name__)
 
 InspectionDepth = Literal["project", "current_plan", "all_plans"]
 DssInspection = Literal["none", "catalog", "coverage"]
+PublicationOutcome = Literal["not_committed", "committed", "unknown"]
 
 _INVENTORY_SCHEMA_VERSION = 1
 _INVENTORY_COLUMNS = [
-    "inventory_schema_version",
-    "inventory_id",
-    "inspection_depth",
-    "asset_id",
-    "parent_asset_id",
-    "asset_kind",
-    "asset_role",
-    "plan_number",
-    "unsteady_number",
-    "required",
-    "owner_file",
-    "owner_sha256",
-    "reference_raw",
-    "resolved_path",
-    "path_scope",
-    "portable",
-    "exists",
-    "is_file",
-    "is_dir",
-    "volume_id",
-    "file_id",
-    "size_bytes",
-    "mtime_ns",
-    "sha256",
-    "dataset_name",
-    "expected_start",
-    "expected_end",
-    "available_start",
-    "available_end",
-    "inspection_state",
-    "readiness",
-    "reason_code",
-    "detail",
-    "source_api",
+    column["name"]
+    for column in DATAFRAME_SCHEMAS["project_asset_inventory"]["columns"]
 ]
 
 _RASMAP_KINDS = {
@@ -94,8 +64,16 @@ _TEMP_SENTINEL = ".rascommander-stage-owned"
 class ProjectStageError(RuntimeError):
     """Base exception for fail-closed project staging failures."""
 
-    def __init__(self, reason_code: str, message: str) -> None:
+    def __init__(
+        self,
+        reason_code: str,
+        message: str,
+        *,
+        publication_outcome: PublicationOutcome = "not_committed",
+    ) -> None:
         self.reason_code = reason_code
+        self.publication_outcome = publication_outcome
+        self.publication_committed = publication_outcome == "committed"
         super().__init__(f"{reason_code}: {message}")
 
 
@@ -276,10 +254,7 @@ def _resolve_project_file(project: Union[str, Path]) -> Path:
 
 
 def _same_file(left: Path, right: Path) -> bool:
-    try:
-        return os.path.samefile(left, right)
-    except OSError:
-        return os.path.normcase(os.path.realpath(left)) == os.path.normcase(os.path.realpath(right))
+    return os.path.samefile(left, right)
 
 
 def _source_contains_destination(source_root: Path, destination_parent: Path) -> bool:
@@ -293,20 +268,33 @@ def _source_contains_destination(source_root: Path, destination_parent: Path) ->
         candidate = candidate.parent
 
 
-def _explicit_ras(project_file: Path, ras_object: Optional[RasPrj]) -> RasPrj:
+def _explicit_ras(
+    project_file: Path,
+    ras_object: Optional[RasPrj],
+    *,
+    load_hdf_metadata: bool = True,
+) -> RasPrj:
     if ras_object is None:
         return init_ras_project(
             project_file,
             ras_version=_declared_current_plan_version(project_file),
             ras_object=RasPrj(),
             load_results_summary=False,
+            load_hdf_metadata=load_hdf_metadata,
             hide_intro=True,
         )
     if not isinstance(ras_object, RasPrj):
         raise TypeError("ras_object must be an initialized RasPrj instance")
     ras_object.check_initialized()
     object_project = Path(ras_object.prj_file)
-    if not _same_file(project_file, object_project):
+    try:
+        same_project = _same_file(project_file, object_project)
+    except OSError as exc:
+        raise ProjectPathAmbiguityError(
+            "project_identity_unavailable",
+            "Could not prove the physical identity of project and ras_object",
+        ) from exc
+    if not same_project:
         raise ValueError(
             "ras_object does not identify the same physical project file as project"
         )
@@ -332,6 +320,44 @@ def _declared_current_plan_version(project_file: Path) -> Optional[str]:
     version = (_read_key(plan_file, "Program Version") or "").strip()
     match = re.fullmatch(r"(\d+)\.(\d)0", version)
     return f"{match.group(1)}.{match.group(2)}" if match else (version or None)
+
+
+def _validate_current_plan(project_file: Path, ras_object: RasPrj) -> str:
+    current = (_read_key(project_file, "Current Plan") or "").strip()
+    if not re.fullmatch(r"[pP]\d{2,3}", current):
+        raise ProjectPopulationError(
+            "current_plan_invalid",
+            "Project Current Plan must be an exact p## or p### declaration",
+        )
+    number = current[1:]
+    matches = ras_object.plan_df.loc[
+        ras_object.plan_df["plan_number"].astype(str) == number
+    ]
+    if len(matches) != 1:
+        raise ProjectPopulationError(
+            "current_plan_undeclared",
+            f"Current Plan {current.lower()} does not resolve to one declared plan",
+        )
+    expected_path = project_file.parent / f"{project_file.stem}.p{number}"
+    if not expected_path.is_file():
+        raise ProjectPopulationError(
+            "current_plan_missing",
+            f"Current Plan file is unavailable: {expected_path.name}",
+        )
+    actual_path = Path(str(matches.iloc[0].get("full_path")))
+    try:
+        same_plan = _same_file(expected_path, actual_path)
+    except OSError as exc:
+        raise ProjectPathAmbiguityError(
+            "current_plan_identity_unavailable",
+            "Could not prove Current Plan physical file identity",
+        ) from exc
+    if not same_plan:
+        raise ProjectPopulationError(
+            "current_plan_mismatch",
+            "Current Plan metadata resolves to a different physical file",
+        )
+    return number
 
 
 def _parse_ras_time(value: str) -> Optional[datetime]:
@@ -397,30 +423,30 @@ def _path_facts(path: Optional[Path], *, hash_file: bool) -> dict[str, Any]:
         "size_bytes": None,
         "mtime_ns": None,
         "sha256": None,
+        "access_error": None,
     }
     if path is None:
         return facts
     try:
-        exists = path.exists()
-        facts["exists"] = exists
-        if not exists:
-            facts["is_file"] = False
-            facts["is_dir"] = False
-            return facts
         info = path.stat()
+        is_file = stat.S_ISREG(info.st_mode)
+        is_dir = stat.S_ISDIR(info.st_mode)
         facts.update(
-            is_file=path.is_file(),
-            is_dir=path.is_dir(),
+            exists=True,
+            is_file=is_file,
+            is_dir=is_dir,
             volume_id=str(info.st_dev),
             file_id=str(info.st_ino),
-            size_bytes=info.st_size if path.is_file() else None,
+            size_bytes=info.st_size if is_file else None,
             mtime_ns=info.st_mtime_ns,
         )
-        if hash_file and path.is_file():
+        if hash_file and is_file:
             cache = _ACTIVE_INVENTORY_HASH_CACHE.get()
             facts["sha256"] = cache.digest(path) if cache is not None else _sha256_file(path)
-    except OSError:
-        pass
+    except FileNotFoundError:
+        facts.update(exists=False, is_file=False, is_dir=False)
+    except OSError as exc:
+        facts["access_error"] = str(exc)[:500]
     return facts
 
 
@@ -449,11 +475,21 @@ def _add_asset(
     reason_code: Optional[str] = None,
     detail: Optional[str] = None,
     occurrence: int = 0,
+    id_discriminator: Optional[str] = None,
 ) -> str:
     facts = _path_facts(path, hash_file=hash_files)
-    scope, portable = ("ambiguous", None) if path is None else _path_scope(project_root, path)
+    scope, portable = (
+        ("ambiguous", None)
+        if path is None or facts["access_error"] is not None
+        else _path_scope(project_root, path)
+    )
     if state is None:
-        state = "available" if facts["exists"] else "missing"
+        if facts["access_error"] is not None:
+            state = "ambiguous"
+            reason_code = reason_code or "path_access_failed"
+            detail = detail or facts["access_error"]
+        else:
+            state = "available" if facts["exists"] else "missing"
     if readiness is None:
         if required is False:
             readiness = "not_required"
@@ -484,6 +520,7 @@ def _add_asset(
         raw,
         dataset_name,
         occurrence,
+        id_discriminator,
     )
     row = {column: None for column in _INVENTORY_COLUMNS}
     row.update(
@@ -511,7 +548,7 @@ def _add_asset(
         reason_code=reason_code,
         detail=detail,
         source_api=source_api,
-        **facts,
+        **{key: value for key, value in facts.items() if key != "access_error"},
     )
     rows.append(row)
     return identifier
@@ -524,6 +561,31 @@ def _as_values(value: Any) -> list[str]:
         return [str(item) for item in value if item is not None and str(item).strip()]
     text = str(value).strip()
     return [text] if text else []
+
+
+def _normalized_optional_bool(value: Any) -> Optional[bool]:
+    """Normalize mixed bool/string project fields without guessing other values."""
+    try:
+        if value is None or pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        return None
+    normalized = str(value).strip().casefold()
+    if normalized in {"true", "1", "yes"}:
+        return True
+    if normalized in {"false", "0", "no"}:
+        return False
+    return None
+
+
+def _optional_text(value: Any) -> str:
+    """Return stripped scalar text while preserving null as an empty value."""
+    try:
+        if value is None or pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        return ""
+    return str(value).strip()
 
 
 def _add_implied_vector_sidecars(
@@ -589,6 +651,67 @@ def _to_arrow_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
     return frame.convert_dtypes(dtype_backend="pyarrow")
 
 
+def _rebase_value(value: Any, old_root: Path, new_root: Path) -> Any:
+    """Replace one staged-root prefix without touching unrelated values."""
+    if isinstance(value, Path):
+        try:
+            return new_root / value.relative_to(old_root)
+        except ValueError:
+            return value
+    if isinstance(value, str):
+        old_text = str(old_root)
+        normalized_value = os.path.normcase(value)
+        normalized_old = os.path.normcase(old_text)
+        if normalized_value == normalized_old:
+            return str(new_root)
+        for separator in ("\\", "/"):
+            prefix = normalized_old.rstrip("\\/") + separator
+            if normalized_value.startswith(prefix):
+                return str(new_root) + value[len(old_text):]
+        return value
+    if isinstance(value, list):
+        return [_rebase_value(item, old_root, new_root) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_rebase_value(item, old_root, new_root) for item in value)
+    if isinstance(value, set):
+        return {_rebase_value(item, old_root, new_root) for item in value}
+    if isinstance(value, dict):
+        return {
+            key: _rebase_value(item, old_root, new_root)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _rebase_frame(frame: pd.DataFrame, old_root: Path, new_root: Path) -> pd.DataFrame:
+    rebased = frame.copy(deep=True)
+    for column in rebased.columns:
+        if pd.api.types.is_object_dtype(rebased[column].dtype):
+            rebased[column] = rebased[column].map(
+                lambda value: _rebase_value(value, old_root, new_root)
+            )
+        elif pd.api.types.is_string_dtype(rebased[column].dtype):
+            rebased[column] = pd.array(
+                [
+                    _rebase_value(value, old_root, new_root)
+                    for value in rebased[column].tolist()
+                ],
+                dtype=rebased[column].dtype,
+            )
+    return rebased
+
+
+def _rebase_ras_object(ras_object: RasPrj, old_root: Path, new_root: Path) -> RasPrj:
+    """Rebase a validated explicit RasPrj before its tree is atomically renamed."""
+    for attribute, value in vars(ras_object).items():
+        if isinstance(value, pd.DataFrame):
+            rebased = _rebase_frame(value, old_root, new_root)
+        else:
+            rebased = _rebase_value(value, old_root, new_root)
+        setattr(ras_object, attribute, rebased)
+    return ras_object
+
+
 def _inspect_project_assets_impl(
     project: Union[str, Path],
     *,
@@ -611,7 +734,13 @@ def _inspect_project_assets_impl(
 
     project_file = _resolve_project_file(project)
     project_root = project_file.parent
-    ras_obj = _explicit_ras(project_file, ras_object)
+    ras_obj = _explicit_ras(
+        project_file,
+        ras_object,
+        load_hdf_metadata=depth != "project",
+    )
+    if depth == "current_plan":
+        _validate_current_plan(project_file, ras_obj)
     inventory_id = str(uuid.uuid4())
     rows: list[dict[str, Any]] = []
 
@@ -649,6 +778,7 @@ def _inspect_project_assets_impl(
 
     referenced_geometries: set[str] = set()
     referenced_flows: set[tuple[str, str]] = set()
+    plan_asset_ids: dict[str, str] = {}
     filter_components = depth != "project"
     for occurrence, (_, plan) in enumerate(component_plans.iterrows()):
         plan_number = str(plan.get("plan_number"))
@@ -670,6 +800,7 @@ def _inspect_project_assets_impl(
             parent_asset_id=project_id,
             occurrence=occurrence,
         )
+        plan_asset_ids[plan_number] = plan_id
         geometry_number = plan.get("geometry_number")
         if pd.notna(geometry_number):
             referenced_geometries.add(str(geometry_number))
@@ -758,22 +889,31 @@ def _inspect_project_assets_impl(
         if filter_components and number not in referenced_geometries:
             continue
         path = Path(str(geometry.get("full_path")))
-        _add_asset(
-            rows,
-            inventory_id=inventory_id,
-            depth=depth,
-            project_root=project_root,
-            kind="geometry",
-            role="declared_input",
-            owner=project_file,
-            raw=f"g{number}",
-            path=path,
-            required=True,
-            source_api="RasPrj.geom_df",
-            hash_files=hash_files,
-            parent_asset_id=project_id,
-            occurrence=occurrence,
-        )
+        plan_numbers: list[Optional[str]] = [None]
+        if depth != "project":
+            plan_numbers = [
+                str(plan.get("plan_number"))
+                for _, plan in plans.iterrows()
+                if str(plan.get("geometry_number")) == number
+            ]
+        for scope_index, plan_number in enumerate(plan_numbers):
+            _add_asset(
+                rows,
+                inventory_id=inventory_id,
+                depth=depth,
+                project_root=project_root,
+                kind="geometry",
+                role="declared_input",
+                owner=project_file,
+                raw=f"g{number}",
+                path=path,
+                required=True,
+                source_api="RasPrj.geom_df",
+                hash_files=hash_files,
+                plan_number=plan_number,
+                parent_asset_id=plan_asset_ids.get(plan_number, project_id),
+                occurrence=occurrence * max(len(plan_numbers), 1) + scope_index,
+            )
 
     flow_frames = (("steady_flow", ras_obj.flow_df), ("unsteady_flow", ras_obj.unsteady_df))
     for kind, frame in flow_frames:
@@ -783,23 +923,46 @@ def _inspect_project_assets_impl(
             if filter_components and (kind, number) not in referenced_flows:
                 continue
             path = Path(str(flow.get("full_path")))
-            _add_asset(
-                rows,
-                inventory_id=inventory_id,
-                depth=depth,
-                project_root=project_root,
-                kind=kind,
-                role="declared_input",
-                owner=project_file,
-                raw=("f" if kind == "steady_flow" else "u") + number,
-                path=path,
-                required=True,
-                source_api=f"RasPrj.{('flow_df' if kind == 'steady_flow' else 'unsteady_df')}",
-                hash_files=hash_files,
-                unsteady_number=number if kind == "unsteady_flow" else None,
-                parent_asset_id=project_id,
-                occurrence=occurrence,
-            )
+            plan_numbers = [None]
+            if depth != "project":
+                plan_numbers = [
+                    str(plan.get("plan_number"))
+                    for _, plan in plans.iterrows()
+                    if (
+                        (
+                            kind == "unsteady_flow"
+                            and str(plan.get("unsteady_number")) == number
+                        )
+                        or (
+                            kind == "steady_flow"
+                            and pd.isna(plan.get("unsteady_number"))
+                            and str(plan.get("Flow File")) == number
+                        )
+                    )
+                ]
+            for scope_index, plan_number in enumerate(plan_numbers):
+                _add_asset(
+                    rows,
+                    inventory_id=inventory_id,
+                    depth=depth,
+                    project_root=project_root,
+                    kind=kind,
+                    role="declared_input",
+                    owner=project_file,
+                    raw=("f" if kind == "steady_flow" else "u") + number,
+                    path=path,
+                    required=True,
+                    source_api=(
+                        "RasPrj.flow_df"
+                        if kind == "steady_flow"
+                        else "RasPrj.unsteady_df"
+                    ),
+                    hash_files=hash_files,
+                    plan_number=plan_number,
+                    unsteady_number=number if kind == "unsteady_flow" else None,
+                    parent_asset_id=plan_asset_ids.get(plan_number, project_id),
+                    occurrence=occurrence * max(len(plan_numbers), 1) + scope_index,
+                )
 
     rasmap_path = project_root / f"{project_file.stem}.rasmap"
     rasmap_id: Optional[str] = None
@@ -822,6 +985,30 @@ def _inspect_project_assets_impl(
 
     rasmap_df = getattr(ras_obj, "rasmap_df", pd.DataFrame())
     seen_map_paths: set[str] = set()
+    if rasmap_path.is_file() and rasmap_df.empty:
+        _add_asset(
+            rows,
+            inventory_id=inventory_id,
+            depth=depth,
+            project_root=project_root,
+            kind="unknown_reference",
+            role="unknown",
+            owner=rasmap_path,
+            raw=None,
+            path=None,
+            required=None,
+            source_api="RasMap.initialize_rasmap_df",
+            hash_files=hash_files,
+            parent_asset_id=rasmap_id,
+            state="not_inspected",
+            readiness="unknown",
+            reason_code="rasmap_structured_inventory_empty",
+            detail=(
+                "RASMapper exists but the structured parser returned no rows; "
+                "raw XML references are inventoried separately"
+            ),
+            id_discriminator="rasmap_structured_inventory_empty",
+        )
     if not rasmap_df.empty:
         for column, kind in _RASMAP_KINDS.items():
             if column not in rasmap_df.columns:
@@ -829,16 +1016,11 @@ def _inspect_project_assets_impl(
             for occurrence, raw_path in enumerate(_as_values(rasmap_df.iloc[0].get(column))):
                 path = RasUtils.safe_resolve(Path(raw_path))
                 seen_map_paths.add(os.path.normcase(str(path)))
-                map_required = (
-                    True
-                    if kind in {
-                        "terrain",
-                        "landcover",
-                        "infiltration",
-                        "soils",
-                        "projection",
-                    }
-                    else False
+                map_required = False if kind in {"stored_map", "projection"} else None
+                map_reason = (
+                    "rasmap_reference_not_plan_associated"
+                    if map_required is None
+                    else None
                 )
                 map_asset_id = _add_asset(
                     rows,
@@ -854,6 +1036,7 @@ def _inspect_project_assets_impl(
                     source_api=f"RasPrj.rasmap_df.{column}",
                     hash_files=hash_files,
                     parent_asset_id=rasmap_id,
+                    reason_code=map_reason,
                     occurrence=occurrence,
                 )
                 for sidecar in _add_implied_vector_sidecars(
@@ -940,6 +1123,7 @@ def _inspect_project_assets_impl(
                 readiness="unknown",
                 reason_code="rasmap_parse_failed",
                 detail=str(exc)[:500],
+                id_discriminator="rasmap_parse_failed",
             )
 
     if depth != "project":
@@ -957,25 +1141,39 @@ def _inspect_project_assets_impl(
             if len(plan_scopes) == 1:
                 window = _plan_window(Path(str(plan_matches.iloc[0]["full_path"])))
 
+            structured_boundaries = getattr(
+                ras_obj,
+                "boundaries_df",
+                pd.DataFrame(),
+            )
+            if not structured_boundaries.empty:
+                structured_boundaries = structured_boundaries.loc[
+                    structured_boundaries["unsteady_number"].astype(str)
+                    == unsteady_number
+                ]
             try:
-                dss_boundaries = RasUnsteady.get_dss_boundaries(
-                    unsteady_path,
-                    ras_object=ras_obj,
-                )
-            except Exception as exc:
-                dss_boundaries = pd.DataFrame()
+                with unsteady_path.open(
+                    "r",
+                    encoding="utf-8",
+                    errors="replace",
+                    newline="",
+                ) as stream:
+                    boundary_lines = stream.readlines()
+                raw_boundaries = RasUnsteady._find_boundary_blocks(boundary_lines)
+            except (OSError, UnicodeError, ValueError) as exc:
+                raw_boundaries = []
                 _add_asset(
                     rows,
                     inventory_id=inventory_id,
                     depth=depth,
                     project_root=project_root,
-                    kind="dss_pathname",
+                    kind="boundary",
                     role="declared_input",
                     owner=unsteady_path,
                     raw=None,
                     path=None,
                     required=None,
-                    source_api="RasUnsteady.get_dss_boundaries",
+                    source_api="RasPrj.boundaries_df + RasUnsteady raw block inventory",
                     hash_files=hash_files,
                     plan_number=first_plan,
                     unsteady_number=unsteady_number,
@@ -983,9 +1181,149 @@ def _inspect_project_assets_impl(
                     readiness="unknown",
                     reason_code="boundary_parse_failed",
                     detail=str(exc)[:500],
+                    id_discriminator="boundary_parse_failed",
                 )
-            for occurrence, (_, boundary) in enumerate(dss_boundaries.iterrows()):
-                raw_file = str(boundary.get("dss_file") or "").strip()
+
+            if len(raw_boundaries) != len(structured_boundaries):
+                _add_asset(
+                    rows,
+                    inventory_id=inventory_id,
+                    depth=depth,
+                    project_root=project_root,
+                    kind="boundary",
+                    role="declared_input",
+                    owner=unsteady_path,
+                    raw=None,
+                    path=None,
+                    required=None,
+                    source_api="RasPrj.boundaries_df + RasUnsteady raw block inventory",
+                    hash_files=hash_files,
+                    plan_number=first_plan,
+                    unsteady_number=unsteady_number,
+                    state="failed",
+                    readiness="unknown",
+                    reason_code="boundary_inventory_mismatch",
+                    detail=(
+                        f"structured={len(structured_boundaries)} "
+                        f"raw={len(raw_boundaries)}"
+                    ),
+                    id_discriminator="boundary_inventory_mismatch_count",
+                )
+
+            structured_by_number = {
+                int(boundary.get("boundary_condition_number")): boundary
+                for _, boundary in structured_boundaries.iterrows()
+                if pd.notna(boundary.get("boundary_condition_number"))
+            }
+            for occurrence, boundary_block in enumerate(raw_boundaries):
+                boundary = structured_by_number.get(occurrence + 1)
+                boundary_type = (
+                    _optional_text(boundary.get("bc_type"))
+                    if boundary is not None
+                    else ""
+                ) or _optional_text(boundary_block.get("bc_type")) or "Unknown"
+                raw_boundary_type = (
+                    _optional_text(boundary_block.get("bc_type")) or "Unknown"
+                )
+                boundary_id = _add_asset(
+                    rows,
+                    inventory_id=inventory_id,
+                    depth=depth,
+                    project_root=project_root,
+                    kind="boundary",
+                    role="declared_input",
+                    owner=unsteady_path,
+                    raw=f"Boundary Location={boundary_block['location']}",
+                    path=None,
+                    required=None,
+                    source_api="RasPrj.boundaries_df + RasUnsteady raw block inventory",
+                    hash_files=hash_files,
+                    plan_number=first_plan,
+                    unsteady_number=unsteady_number,
+                    dataset_name=boundary_type,
+                    state="available",
+                    readiness="unknown",
+                    reason_code="inline_or_structured_boundary",
+                    occurrence=occurrence,
+                )
+                structured_type = (
+                    _optional_text(boundary.get("bc_type"))
+                    if boundary is not None
+                    else ""
+                )
+                if boundary is None or (
+                    structured_type
+                    and structured_type.casefold() != "unknown"
+                    and raw_boundary_type.casefold() != "unknown"
+                    and structured_type.casefold() != raw_boundary_type.casefold()
+                ):
+                    _add_asset(
+                        rows,
+                        inventory_id=inventory_id,
+                        depth=depth,
+                        project_root=project_root,
+                        kind="boundary",
+                        role="declared_input",
+                        owner=unsteady_path,
+                        raw=f"Boundary Location={boundary_block['location']}",
+                        path=None,
+                        required=None,
+                        source_api=(
+                            "RasPrj.boundaries_df + RasUnsteady raw block inventory"
+                        ),
+                        hash_files=hash_files,
+                        plan_number=first_plan,
+                        unsteady_number=unsteady_number,
+                        parent_asset_id=boundary_id,
+                        dataset_name=raw_boundary_type,
+                        state="failed",
+                        readiness="unknown",
+                        reason_code="boundary_inventory_mismatch",
+                        detail=(
+                            f"ordinal={occurrence + 1} "
+                            f"structured_type={structured_type or '<missing>'!r} "
+                            f"raw_type={raw_boundary_type!r}"
+                        ),
+                        occurrence=occurrence,
+                        id_discriminator="boundary_inventory_mismatch_type",
+                    )
+                use_dss = (
+                    _normalized_optional_bool(boundary.get("Use DSS"))
+                    if boundary is not None
+                    else None
+                )
+                raw_use_dss = (
+                    _optional_text(boundary.get("Use DSS"))
+                    if boundary is not None
+                    else ""
+                )
+                if raw_use_dss and use_dss is None:
+                    _add_asset(
+                        rows,
+                        inventory_id=inventory_id,
+                        depth=depth,
+                        project_root=project_root,
+                        kind="boundary",
+                        role="declared_input",
+                        owner=unsteady_path,
+                        raw=raw_use_dss,
+                        path=None,
+                        required=None,
+                        source_api="RasPrj.boundaries_df.Use DSS",
+                        hash_files=hash_files,
+                        plan_number=first_plan,
+                        unsteady_number=unsteady_number,
+                        parent_asset_id=boundary_id,
+                        state="failed",
+                        readiness="unknown",
+                        reason_code="boundary_use_dss_unrecognized",
+                        detail=f"Unrecognized Use DSS value: {raw_use_dss!r}",
+                        occurrence=occurrence,
+                        id_discriminator="boundary_use_dss_unrecognized",
+                    )
+                if use_dss is not True:
+                    continue
+                raw_file = _optional_text(boundary.get("DSS File"))
                 dss_path = _resolve_reference(unsteady_path, raw_file) if raw_file else None
                 file_id = _add_asset(
                     rows,
@@ -998,21 +1336,29 @@ def _inspect_project_assets_impl(
                     raw=raw_file,
                     path=dss_path,
                     required=True,
-                    source_api="RasUnsteady.get_dss_boundaries",
+                    source_api="RasPrj.boundaries_df",
                     hash_files=hash_files,
                     plan_number=first_plan,
                     unsteady_number=unsteady_number,
                     expected_start=window[0],
                     expected_end=window[1],
+                    parent_asset_id=boundary_id,
                     occurrence=occurrence,
                     reason_code="reference_missing" if not raw_file else None,
                 )
-                raw_pathname = str(boundary.get("dss_path") or "").strip()
-                requested_reason = (
-                    "dss_inspection_not_requested"
-                    if dss_inspection == "none"
-                    else "reader_not_source_immutable"
-                )
+                raw_pathname = _optional_text(boundary.get("DSS Path"))
+                if raw_pathname:
+                    pathname_state = "not_inspected"
+                    pathname_readiness = "unknown"
+                    pathname_reason = (
+                        "dss_inspection_not_requested"
+                        if dss_inspection == "none"
+                        else "reader_not_source_immutable"
+                    )
+                else:
+                    pathname_state = "missing"
+                    pathname_readiness = "not_ready"
+                    pathname_reason = "reference_missing"
                 _add_asset(
                     rows,
                     inventory_id=inventory_id,
@@ -1024,7 +1370,7 @@ def _inspect_project_assets_impl(
                     raw=raw_pathname,
                     path=dss_path,
                     required=True,
-                    source_api="RasUnsteady.get_dss_boundaries",
+                    source_api="RasPrj.boundaries_df",
                     hash_files=hash_files,
                     plan_number=first_plan,
                     unsteady_number=unsteady_number,
@@ -1032,9 +1378,9 @@ def _inspect_project_assets_impl(
                     dataset_name=raw_pathname or None,
                     expected_start=window[0],
                     expected_end=window[1],
-                    state="not_inspected",
-                    readiness="unknown",
-                    reason_code=requested_reason,
+                    state=pathname_state,
+                    readiness=pathname_readiness,
+                    reason_code=pathname_reason,
                     occurrence=occurrence,
                 )
 
@@ -1059,8 +1405,28 @@ def _inspect_project_assets_impl(
                         unsteady_number=unsteady_number,
                         reason_code="reference_missing" if not raw_restart else None,
                     )
-            except (OSError, ValueError):
-                pass
+            except (OSError, ValueError) as exc:
+                _add_asset(
+                    rows,
+                    inventory_id=inventory_id,
+                    depth=depth,
+                    project_root=project_root,
+                    kind="restart",
+                    role="declared_input",
+                    owner=unsteady_path,
+                    raw=None,
+                    path=None,
+                    required=None,
+                    source_api="RasUnsteady.get_restart_settings",
+                    hash_files=hash_files,
+                    plan_number=first_plan,
+                    unsteady_number=unsteady_number,
+                    state="failed",
+                    readiness="unknown",
+                    reason_code="restart_parse_failed",
+                    detail=str(exc)[:500],
+                    id_discriminator="restart_parse_failed",
+                )
 
             prior_ws = _read_key(unsteady_path, "Prior WS Filename")
             if prior_ws:
@@ -1086,8 +1452,29 @@ def _inspect_project_assets_impl(
                     unsteady_path,
                     ras_object=ras_obj,
                 )
-            except (OSError, ValueError):
+            except (OSError, ValueError) as exc:
                 precipitation = {}
+                _add_asset(
+                    rows,
+                    inventory_id=inventory_id,
+                    depth=depth,
+                    project_root=project_root,
+                    kind="gridded_dataset",
+                    role="declared_input",
+                    owner=unsteady_path,
+                    raw=None,
+                    path=None,
+                    required=None,
+                    source_api="RasUnsteady.get_met_precipitation_config",
+                    hash_files=hash_files,
+                    plan_number=first_plan,
+                    unsteady_number=unsteady_number,
+                    state="failed",
+                    readiness="unknown",
+                    reason_code="precipitation_parse_failed",
+                    detail=str(exc)[:500],
+                    id_discriminator="precipitation_parse_failed",
+                )
             if precipitation.get("enabled") and precipitation.get("mode") == "Gridded":
                 source = precipitation.get("source")
                 if source == "DSS":
@@ -1111,6 +1498,18 @@ def _inspect_project_assets_impl(
                         reason_code="reference_missing" if not raw_file else None,
                     )
                     pathname = str(precipitation.get("dss_pathname") or "").strip()
+                    if pathname:
+                        dataset_state = "not_inspected"
+                        dataset_readiness = "unknown"
+                        dataset_reason = (
+                            "dss_inspection_not_requested"
+                            if dss_inspection == "none"
+                            else "reader_not_source_immutable"
+                        )
+                    else:
+                        dataset_state = "missing"
+                        dataset_readiness = "not_ready"
+                        dataset_reason = "reference_missing"
                     _add_asset(
                         rows,
                         inventory_id=inventory_id,
@@ -1130,37 +1529,155 @@ def _inspect_project_assets_impl(
                         dataset_name=pathname or None,
                         expected_start=window[0],
                         expected_end=window[1],
-                        state="not_inspected",
-                        readiness="unknown",
-                        reason_code=(
-                            "dss_inspection_not_requested"
-                            if dss_inspection == "none"
-                            else "reader_not_source_immutable"
-                        ),
+                        state=dataset_state,
+                        readiness=dataset_readiness,
+                        reason_code=dataset_reason,
                     )
                 elif source == "GDAL Raster File(s)":
-                    raw_file = str(precipitation.get("gdal_filename") or "").strip()
-                    raw_folder = str(precipitation.get("gdal_folder") or "").strip()
-                    raw = raw_file or raw_folder
-                    path = _resolve_reference(unsteady_path, raw) if raw else None
-                    _add_asset(
-                        rows,
-                        inventory_id=inventory_id,
-                        depth=depth,
-                        project_root=project_root,
-                        kind="gridded_dataset",
-                        role="declared_input",
-                        owner=unsteady_path,
-                        raw=raw,
-                        path=path,
-                        required=True,
-                        source_api="RasUnsteady.get_met_precipitation_config",
-                        hash_files=hash_files,
-                        plan_number=first_plan,
-                        unsteady_number=unsteady_number,
-                        dataset_name=str(precipitation.get("gdal_group") or "") or None,
-                        reason_code="reference_missing" if not raw else None,
+                    raw_config = precipitation.get("raw")
+                    if not isinstance(raw_config, dict):
+                        raw_config = {}
+                    raw_file = _optional_text(
+                        raw_config.get("Gridded GDAL Filename")
+                    ) or _optional_text(precipitation.get("gdal_filename"))
+                    raw_folder = _optional_text(
+                        raw_config.get("Gridded GDAL Folder")
+                    ) or _optional_text(precipitation.get("gdal_folder"))
+                    raw_group = _optional_text(
+                        raw_config.get("Gridded GDAL Group")
                     )
+                    raw_datasetname = _optional_text(
+                        raw_config.get("Gridded GDAL Datasetname")
+                    )
+                    if not raw_group and not raw_datasetname:
+                        raw_group = _optional_text(precipitation.get("gdal_group"))
+                    raw_filter = _optional_text(
+                        raw_config.get("Gridded GDAL Filter")
+                    ) or _optional_text(precipitation.get("gdal_filter"))
+                    primary_path: Optional[Path] = None
+                    primary_id: Optional[str] = None
+                    if raw_file:
+                        primary_path = _resolve_reference(unsteady_path, raw_file)
+                        primary_id = _add_asset(
+                            rows,
+                            inventory_id=inventory_id,
+                            depth=depth,
+                            project_root=project_root,
+                            kind="gridded_dataset",
+                            role="declared_input",
+                            owner=unsteady_path,
+                            raw=raw_file,
+                            path=primary_path,
+                            required=True,
+                            source_api=(
+                                "RasUnsteady.get_met_precipitation_config.gdal_filename"
+                            ),
+                            hash_files=hash_files,
+                            plan_number=first_plan,
+                            unsteady_number=unsteady_number,
+                        )
+                    if raw_folder:
+                        folder_path = _resolve_reference(unsteady_path, raw_folder)
+                        folder_id = _add_asset(
+                            rows,
+                            inventory_id=inventory_id,
+                            depth=depth,
+                            project_root=project_root,
+                            kind="directory",
+                            role="declared_input",
+                            owner=unsteady_path,
+                            raw=raw_folder,
+                            path=folder_path,
+                            required=True,
+                            source_api=(
+                                "RasUnsteady.get_met_precipitation_config.gdal_folder"
+                            ),
+                            hash_files=hash_files,
+                            plan_number=first_plan,
+                            unsteady_number=unsteady_number,
+                        )
+                        if primary_path is None:
+                            primary_path = folder_path
+                            primary_id = folder_id
+                    if not raw_file and not raw_folder:
+                        _add_asset(
+                            rows,
+                            inventory_id=inventory_id,
+                            depth=depth,
+                            project_root=project_root,
+                            kind="gridded_dataset",
+                            role="declared_input",
+                            owner=unsteady_path,
+                            raw=None,
+                            path=None,
+                            required=True,
+                            source_api="RasUnsteady.get_met_precipitation_config",
+                            hash_files=hash_files,
+                            plan_number=first_plan,
+                            unsteady_number=unsteady_number,
+                            state="missing",
+                            readiness="not_ready",
+                            reason_code="reference_missing",
+                        )
+                    for dataset_occurrence, (
+                        dataset_field,
+                        dataset_value,
+                    ) in enumerate(
+                        (
+                            ("gdal_group", raw_group),
+                            ("gdal_datasetname", raw_datasetname),
+                        )
+                    ):
+                        if not dataset_value:
+                            continue
+                        _add_asset(
+                            rows,
+                            inventory_id=inventory_id,
+                            depth=depth,
+                            project_root=project_root,
+                            kind="gridded_dataset",
+                            role="declared_input",
+                            owner=unsteady_path,
+                            raw=dataset_value,
+                            path=primary_path,
+                            required=True,
+                            source_api=(
+                                "RasUnsteady.get_met_precipitation_config."
+                                f"{dataset_field}"
+                            ),
+                            hash_files=hash_files,
+                            plan_number=first_plan,
+                            unsteady_number=unsteady_number,
+                            parent_asset_id=primary_id,
+                            dataset_name=dataset_value,
+                            state="not_inspected",
+                            readiness="unknown",
+                            reason_code="gdal_dataset_not_inspected",
+                            occurrence=dataset_occurrence,
+                        )
+                    if raw_filter:
+                        _add_asset(
+                            rows,
+                            inventory_id=inventory_id,
+                            depth=depth,
+                            project_root=project_root,
+                            kind="unknown_reference",
+                            role="declared_input",
+                            owner=unsteady_path,
+                            raw=raw_filter,
+                            path=None,
+                            required=True,
+                            source_api=(
+                                "RasUnsteady.get_met_precipitation_config.gdal_filter"
+                            ),
+                            hash_files=hash_files,
+                            plan_number=first_plan,
+                            unsteady_number=unsteady_number,
+                            parent_asset_id=primary_id,
+                            state="available",
+                            readiness="ready",
+                            reason_code="gdal_filter_declared",
+                        )
 
     rows = _scope_unsteady_dependencies(rows, plans)
     return _to_arrow_frame(rows)
@@ -1176,6 +1693,9 @@ def _scope_unsteady_dependencies(
         "gridded_dataset",
         "restart",
         "prior_ws",
+        "unknown_reference",
+        "boundary",
+        "directory",
     }
     scope: dict[str, list[tuple[str, Optional[datetime], Optional[datetime]]]] = {}
     for _, plan in plans.iterrows():
@@ -1186,6 +1706,15 @@ def _scope_unsteady_dependencies(
         start, end = _plan_window(Path(str(plan.get("full_path"))))
         scope.setdefault(str(unsteady), []).append((plan_number, start, end))
 
+    unsteady_parent_ids = {
+        (str(row.get("unsteady_number")), str(row.get("plan_number"))): str(
+            row["asset_id"]
+        )
+        for row in rows
+        if row.get("asset_kind") == "unsteady_flow"
+        and row.get("unsteady_number") is not None
+        and row.get("plan_number") is not None
+    }
     expanded: list[dict[str, Any]] = []
     parent_ids: dict[tuple[str, str], str] = {}
     for row in rows:
@@ -1196,6 +1725,16 @@ def _scope_unsteady_dependencies(
             or row.get("plan_number") is not None
             or len(plan_scopes) < 2
         ):
+            if (
+                row.get("asset_kind") in dependency_kinds
+                and row.get("parent_asset_id") is None
+                and row.get("unsteady_number") is not None
+                and row.get("plan_number") is not None
+            ):
+                row = dict(row)
+                row["parent_asset_id"] = unsteady_parent_ids.get(
+                    (str(row["unsteady_number"]), str(row["plan_number"]))
+                )
             expanded.append(row)
             continue
         for plan_number, start, end in plan_scopes:
@@ -1207,6 +1746,10 @@ def _scope_unsteady_dependencies(
                 scoped["parent_asset_id"] = parent_ids.get(
                     (str(row["parent_asset_id"]), plan_number),
                     row["parent_asset_id"],
+                )
+            else:
+                scoped["parent_asset_id"] = unsteady_parent_ids.get(
+                    (str(unsteady), plan_number)
                 )
             if row.get("asset_kind") in {"dss_file", "dss_pathname", "gridded_dataset"}:
                 scoped["expected_start"] = start
@@ -1253,7 +1796,18 @@ def _tree_snapshot(root: Path) -> tuple[dict[str, _FileSnapshot], str, int]:
     snapshots: dict[str, _FileSnapshot] = {}
     directories: set[str] = set()
     total_bytes = 0
-    for directory, directory_names, file_names in os.walk(root, topdown=True, followlinks=False):
+    def raise_traversal_error(exc: OSError) -> NoReturn:
+        raise ProjectPathAmbiguityError(
+            "tree_traversal_failed",
+            f"Could not traverse project tree: {root}",
+        ) from exc
+
+    for directory, directory_names, file_names in os.walk(
+        root,
+        topdown=True,
+        onerror=raise_traversal_error,
+        followlinks=False,
+    ):
         current = Path(directory)
         _assert_regular_path(current, expected_directory=True)
         directory_names.sort(key=str.casefold)
@@ -1302,7 +1856,18 @@ def _tree_snapshot(root: Path) -> tuple[dict[str, _FileSnapshot], str, int]:
 
 def _directory_population(root: Path) -> set[str]:
     directories: set[str] = set()
-    for directory, directory_names, _ in os.walk(root, topdown=True, followlinks=False):
+    def raise_traversal_error(exc: OSError) -> NoReturn:
+        raise ProjectPathAmbiguityError(
+            "tree_traversal_failed",
+            f"Could not traverse project directories: {root}",
+        ) from exc
+
+    for directory, directory_names, _ in os.walk(
+        root,
+        topdown=True,
+        onerror=raise_traversal_error,
+        followlinks=False,
+    ):
         current = Path(directory)
         _assert_regular_path(current, expected_directory=True)
         directory_names.sort(key=str.casefold)
@@ -1371,11 +1936,15 @@ def _stage_readiness(assets: pd.DataFrame) -> Literal["ready", "not_ready", "unk
 
 
 def _validate_project_population(assets: pd.DataFrame) -> None:
-    core_kinds = {"project", "plan", "geometry", "steady_flow", "unsteady_flow"}
+    intentionally_uninspected_dataset = (
+        assets["asset_kind"].isin({"dss_pathname", "gridded_dataset"})
+        & (assets["inspection_state"] == "not_inspected")
+        & (assets["readiness"] == "unknown")
+    )
     invalid = assets.loc[
-        assets["asset_kind"].isin(core_kinds)
-        & (assets["required"] == True)  # noqa: E712
+        (assets["required"] == True)  # noqa: E712
         & (assets["inspection_state"] != "available")
+        & ~intentionally_uninspected_dataset
     ]
     if invalid.empty:
         return
@@ -1446,7 +2015,12 @@ def _safe_remove_owned_lock(
         logger.error("Refusing cleanup of unverified staging lock %s: %s", lock_path, exc)
 
 
-def _fsync_path(path: Path, *, directory: bool = False) -> None:
+def _fsync_path(
+    path: Path,
+    *,
+    directory: bool = False,
+    raise_on_error: bool = True,
+) -> None:
     """Flush one path when the host filesystem exposes a usable primitive."""
     flags = os.O_RDONLY
     if directory and hasattr(os, "O_DIRECTORY"):
@@ -1462,20 +2036,29 @@ def _fsync_path(path: Path, *, directory: bool = False) -> None:
             errno.EINVAL,
             errno.ENOTSUP,
         } or getattr(exc, "winerror", None) in {5, 6, 50, 87}
-        if not unsupported:
+        if not unsupported and raise_on_error:
             raise ProjectPublicationError(
                 "fsync_failed",
                 f"Could not durably flush staging path: {path}",
             ) from exc
+        if not unsupported:
+            logger.warning("Post-publication directory flush failed: %s", path)
     finally:
         if descriptor is not None:
             os.close(descriptor)
 
 
 def _fsync_tree(root: Path) -> None:
+    def raise_traversal_error(exc: OSError) -> NoReturn:
+        raise ProjectPublicationError(
+            "fsync_traversal_failed",
+            f"Could not traverse the prepared staging tree: {root}",
+        ) from exc
+
     for directory, directory_names, file_names in os.walk(
         root,
         topdown=False,
+        onerror=raise_traversal_error,
         followlinks=False,
     ):
         current = Path(directory)
@@ -1488,6 +2071,126 @@ def _fsync_tree(root: Path) -> None:
             _assert_regular_path(child, expected_directory=True)
             _fsync_path(child, directory=True)
         _fsync_path(current, directory=True)
+
+
+def _directory_identity(path: Path) -> tuple[int, int]:
+    info = _assert_regular_path(path, expected_directory=True)
+    return info.st_dev, info.st_ino
+
+
+def _path_has_directory_identity(path: Path, identity: tuple[int, int]) -> bool:
+    try:
+        if _is_reparse_point(path):
+            return False
+        info = path.stat()
+    except OSError:
+        return False
+    return stat.S_ISDIR(info.st_mode) and (info.st_dev, info.st_ino) == identity
+
+
+def _native_rename_noreplace(source: Path, destination: Path) -> None:
+    """Atomically rename one directory without replacing a destination."""
+    if os.name == "nt":
+        # Windows directory rename already fails when the destination exists.
+        os.rename(source, destination)
+        return
+
+    import ctypes
+    import sys
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    source_bytes = os.fsencode(source)
+    destination_bytes = os.fsencode(destination)
+    result: int
+    if sys.platform.startswith("linux"):
+        renameat2 = getattr(libc, "renameat2", None)
+        if renameat2 is None:
+            raise OSError(errno.ENOSYS, "renameat2 is unavailable")
+        renameat2.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        renameat2.restype = ctypes.c_int
+        result = renameat2(
+            -100,  # AT_FDCWD
+            source_bytes,
+            -100,
+            destination_bytes,
+            1,  # RENAME_NOREPLACE
+        )
+    elif sys.platform == "darwin":
+        renamex_np = getattr(libc, "renamex_np", None)
+        if renamex_np is None:
+            raise OSError(errno.ENOSYS, "renamex_np is unavailable")
+        renamex_np.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        renamex_np.restype = ctypes.c_int
+        result = renamex_np(
+            source_bytes,
+            destination_bytes,
+            0x00000004,  # RENAME_EXCL
+        )
+    else:
+        raise OSError(errno.ENOSYS, "Atomic no-replace rename is unavailable")
+
+    if result != 0:
+        error_number = ctypes.get_errno() or errno.EIO
+        raise OSError(
+            error_number,
+            os.strerror(error_number),
+            str(destination),
+        )
+
+
+def _publish_directory_noreplace(source: Path, destination: Path) -> None:
+    """Publish once, reconciling remote-filesystem errors by directory identity."""
+    source_identity = _directory_identity(source)
+    try:
+        _native_rename_noreplace(source, destination)
+    except OSError as exc:
+        source_same = _path_has_directory_identity(source, source_identity)
+        destination_same = _path_has_directory_identity(destination, source_identity)
+        if destination_same and not os.path.lexists(source):
+            # Some remote filesystems can report an error after committing rename.
+            return
+        if source_same and not destination_same:
+            if os.path.lexists(destination):
+                raise ProjectPublicationError(
+                    "destination_race",
+                    f"Destination appeared during staging: {destination}",
+                ) from exc
+            unsupported_errors = {
+                errno.ENOSYS,
+                errno.EINVAL,
+                errno.ENOTSUP,
+                getattr(errno, "EOPNOTSUPP", errno.ENOTSUP),
+            }
+            if exc.errno in unsupported_errors:
+                raise ProjectPublicationError(
+                    "atomic_noreplace_unavailable",
+                    "The filesystem does not support atomic no-replace publication",
+                ) from exc
+            raise ProjectPublicationError(
+                "atomic_rename_failed",
+                f"Could not publish the verified staging directory: {destination}",
+            ) from exc
+        raise ProjectPublicationError(
+            "publication_outcome_unknown",
+            "The filesystem did not expose whether directory publication committed",
+            publication_outcome="unknown",
+        ) from exc
+    if (
+        _path_has_directory_identity(destination, source_identity)
+        and not os.path.lexists(source)
+    ):
+        return
+    raise ProjectPublicationError(
+        "publication_outcome_unknown",
+        "The rename primitive returned without a provable committed publication",
+        publication_outcome="unknown",
+    )
 
 
 @log_call
@@ -1547,7 +2250,17 @@ def stage_project(
         }
     except ValueError:
         overlap = False
-    if overlap or _source_contains_destination(source_root, destination_parent):
+    try:
+        identity_overlap = _source_contains_destination(
+            source_root,
+            destination_parent,
+        )
+    except OSError as exc:
+        raise ProjectPathAmbiguityError(
+            "path_identity_unavailable",
+            "Could not prove source/destination physical separation",
+        ) from exc
+    if overlap or identity_overlap:
         raise ProjectPathAmbiguityError(
             "path_overlap",
             "Source and destination project trees must not overlap",
@@ -1615,18 +2328,6 @@ def stage_project(
                 "copy_size_mismatch",
                 "Copied byte count differs from source snapshot",
             )
-        source_files_after, source_after, _ = _tree_snapshot(source_root)
-        source_directories_after = _directory_population(source_root)
-        if (
-            source_files_after != source_files_before
-            or source_directories_after != source_directories_before
-            or source_after != source_before
-        ):
-            raise ProjectDriftError(
-                "source_changed",
-                "Source project changed while staging",
-            )
-
         temp_project = temp_root / source_project.relative_to(source_root)
         try:
             staged_ras = init_ras_project(
@@ -1636,6 +2337,7 @@ def stage_project(
                 load_results_summary=False,
                 hide_intro=True,
             )
+            _validate_current_plan(temp_project, staged_ras)
             assets = inspect_project_assets(
                 temp_project,
                 ras_object=staged_ras,
@@ -1652,6 +2354,49 @@ def stage_project(
             ) from exc
         _validate_project_population(assets)
         readiness = _stage_readiness(assets)
+
+        sentinel.unlink()
+        try:
+            verified_files, verified_fingerprint, verified_total = _tree_snapshot(
+                temp_root
+            )
+            verified_directories = _directory_population(temp_root)
+        finally:
+            if temp_root.exists() and not sentinel.exists():
+                sentinel.write_text(operation_id, encoding="ascii")
+        _assert_copy_equal(source_files_before, verified_files)
+        if verified_fingerprint != copied_fingerprint:
+            raise ProjectCopyVerificationError(
+                "copy_fingerprint_drift",
+                "Verified copied-tree fingerprint changed during staged inspection",
+            )
+        if verified_directories != source_directories_before:
+            raise ProjectCopyVerificationError(
+                "copy_directory_drift",
+                "Copied directory population changed during staged inspection",
+            )
+        if verified_total != copied_bytes:
+            raise ProjectCopyVerificationError(
+                "copy_size_drift",
+                "Copied byte count changed during staged inspection",
+            )
+
+        source_files_after, source_after, _ = _tree_snapshot(source_root)
+        source_directories_after = _directory_population(source_root)
+        if (
+            source_files_after != source_files_before
+            or source_directories_after != source_directories_before
+            or source_after != source_before
+        ):
+            raise ProjectDriftError(
+                "source_changed",
+                "Source project changed while staging",
+            )
+
+        destination_project = destination_root / source_project.name
+        final_assets = _rebase_frame(assets, temp_root, destination_root)
+        final_ras = _rebase_ras_object(staged_ras, temp_root, destination_root)
+        state_counts = final_assets["inspection_state"].value_counts().to_dict()
 
         metadata_dir = temp_root / _STAGE_METADATA_DIR
         metadata_dir.mkdir(exist_ok=False)
@@ -1692,58 +2437,121 @@ def stage_project(
             stream.write("\n")
 
         sentinel.unlink()
-        _, published_fingerprint, _ = _tree_snapshot(temp_root)
         _fsync_tree(temp_root)
+        _fsync_path(destination_parent, directory=True)
+
+        source_files_final, source_after, _ = _tree_snapshot(source_root)
+        source_directories_final = _directory_population(source_root)
+        if (
+            source_files_final != source_files_before
+            or source_directories_final != source_directories_before
+            or source_after != source_before
+        ):
+            raise ProjectDriftError(
+                "source_changed_before_publish",
+                "Source project changed before publication",
+            )
+
+        final_files, prepared_fingerprint, prepared_total = _tree_snapshot(temp_root)
+        final_directories = _directory_population(temp_root)
+        metadata_prefix = f"{_STAGE_METADATA_DIR}/"
+        final_copied_files = {
+            relative: snapshot
+            for relative, snapshot in final_files.items()
+            if not relative.startswith(metadata_prefix)
+        }
+        metadata_files = {
+            relative
+            for relative in final_files
+            if relative.startswith(metadata_prefix)
+        }
+        expected_metadata_files = {
+            f"{_STAGE_METADATA_DIR}/{_STAGE_MANIFEST}",
+        }
+        if metadata_files != expected_metadata_files:
+            raise ProjectCopyVerificationError(
+                "generated_metadata_population_drift",
+                "Generated staging metadata population changed before publication",
+            )
+        final_copied_directories = {
+            relative
+            for relative in final_directories
+            if relative != _STAGE_METADATA_DIR
+            and not relative.startswith(metadata_prefix)
+        }
+        metadata_directories = {
+            relative
+            for relative in final_directories
+            if relative == _STAGE_METADATA_DIR
+            or relative.startswith(metadata_prefix)
+        }
+        if metadata_directories != {_STAGE_METADATA_DIR}:
+            raise ProjectCopyVerificationError(
+                "generated_metadata_directory_drift",
+                "Generated staging metadata directories changed before publication",
+            )
+        _assert_copy_equal(source_files_before, final_copied_files)
+        if final_copied_directories != source_directories_before:
+            raise ProjectCopyVerificationError(
+                "copy_directory_drift_before_publish",
+                "Copied directory population changed before publication",
+            )
+
         if os.path.lexists(destination_root):
             raise ProjectPublicationError(
                 "destination_race",
                 f"Destination appeared during staging: {destination_root}",
             )
-        try:
-            os.rename(temp_root, destination_root)
-        except OSError as exc:
-            raise ProjectPublicationError(
-                "atomic_rename_failed",
-                f"Could not publish the verified staging directory: {destination_root}",
-            ) from exc
+        _publish_directory_noreplace(temp_root, destination_root)
         published = True
         temp_root = None
-        _fsync_path(destination_parent, directory=True)
-
-        destination_project = destination_root / source_project.name
         try:
-            final_ras = init_ras_project(
-                destination_project,
-                ras_version=_declared_current_plan_version(destination_project),
-                ras_object=RasPrj(),
-                load_results_summary=False,
-                hide_intro=True,
+            published_files, published_fingerprint, published_total = _tree_snapshot(
+                destination_root
             )
-            final_assets = inspect_project_assets(
-                destination_project,
-                ras_object=final_ras,
-                depth="all_plans",
-                hash_files=True,
-                dss_inspection="none",
-            )
+            published_directories = _directory_population(destination_root)
+            if (
+                published_files != final_files
+                or published_fingerprint != prepared_fingerprint
+                or published_total != prepared_total
+                or published_directories != final_directories
+            ):
+                raise ProjectPublicationError(
+                    "published_fingerprint_mismatch",
+                    "Published project differs from the verified pre-publication tree",
+                    publication_outcome="committed",
+                )
+        except ProjectPublicationError:
+            raise
         except Exception as exc:
             raise ProjectPublicationError(
-                "post_publication_verification_failed",
-                f"Published project could not be reverified: {destination_project}",
+                "published_verification_failed",
+                "Project publication committed but post-publication verification failed",
+                publication_outcome="committed",
             ) from exc
-        state_counts = final_assets["inspection_state"].value_counts().to_dict()
-        logger.info(
-            "Project stage %s published %s: files=%d bytes=%d source=%s copy=%s "
-            "readiness=%s states=%s",
-            operation_id,
-            source_project.name,
-            len(source_files_before),
-            copied_bytes,
-            source_before[:12],
-            copied_fingerprint[:12],
-            readiness,
-            state_counts,
-        )
+        try:
+            _fsync_path(
+                destination_parent,
+                directory=True,
+                raise_on_error=False,
+            )
+            logger.info(
+                "Project stage %s published %s: files=%d bytes=%d source=%s copy=%s "
+                "readiness=%s states=%s",
+                operation_id,
+                source_project.name,
+                len(source_files_before),
+                copied_bytes,
+                source_before[:12],
+                copied_fingerprint[:12],
+                readiness,
+                state_counts,
+            )
+        except Exception:
+            logger.exception(
+                "Project stage %s published but post-publication logging failed",
+                operation_id,
+            )
         return StageProjectResult(
             source_project_file=source_project,
             destination_project_file=destination_project,
@@ -1760,7 +2568,12 @@ def stage_project(
             ras_object=final_ras,
         )
     except Exception as stage_error:
-        if not published:
+        publication_outcome = getattr(
+            stage_error,
+            "publication_outcome",
+            "not_committed",
+        )
+        if not published and publication_outcome != "unknown":
             try:
                 removed = _safe_remove_owned_temp(
                     temp_root,
@@ -1777,10 +2590,26 @@ def stage_project(
                     "owned_temp_cleanup_refused",
                     f"Staging failed and the unverified temporary path was retained: {temp_root}",
                 ) from stage_error
+        if isinstance(stage_error, ProjectStageError):
+            raise
+        if isinstance(stage_error, OSError):
+            if published:
+                raise ProjectPublicationError(
+                    "published_filesystem_error",
+                    "Project publication committed before a filesystem operation failed",
+                    publication_outcome="committed",
+                ) from stage_error
+            raise ProjectStageError(
+                "staging_filesystem_error",
+                "A filesystem operation failed before project publication",
+            ) from stage_error
         raise
     finally:
         if lock_handle is not None:
-            os.close(lock_handle)
+            try:
+                os.close(lock_handle)
+            except OSError:
+                logger.exception("Could not close staging lock handle")
         _safe_remove_owned_lock(lock_path, lock_identity, lock_token)
 
 
