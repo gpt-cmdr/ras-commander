@@ -61,7 +61,7 @@ Classes for parsing and authoring geometry files:
 - [`GeomStorage`](geometry.md#geomstorage) - Storage area and 2D flow area writing
 - [`GeomLevee`](geometry.md#geomlevee) - Levee read/write
 - [`RasGeometryUtils`](geometry.md#rasgeometryutils) - Parsing utilities
-- [`RasStruct`](geometry.md#rasstruct) - Inline structures
+- [`GeomInlineWeir`, `GeomBridge`, and `GeomCulvert`](geometry.md#structure-apis) - Inline structures
 - [`RasBreach`](geometry.md#rasbreach) - Breach parameters
 
 ## Terrain Modules

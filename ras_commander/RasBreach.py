@@ -62,7 +62,7 @@ from dataclasses import dataclass
 
 from .Decorators import log_call
 from .LoggingConfig import get_logger
-from .RasPrj import ras
+from .RasPrj import ras, read_file_with_fallback_encoding
 
 logger = get_logger(__name__)
 
@@ -145,18 +145,28 @@ class RasBreach:
         @classmethod
         def from_value(cls, value: str) -> "RasBreach.BreachLocation":
             parts = value.split(",")
-            if len(parts) < 5:
+            if len(parts) < 4:
                 raise ValueError(f"Unexpected Breach Loc format: '{value}'")
             river = parts[0].strip()
             reach = parts[1].strip()
             station = parts[2].strip()
             flag = parts[3].strip()
-            structure = ",".join(parts[4:]).strip()
+            normalized_flag = flag.casefold()
+            if normalized_flag in {"true", "1", "yes"}:
+                is_active = True
+            elif normalized_flag in {"false", "0", "no"}:
+                is_active = False
+            else:
+                raise ValueError(
+                    "Unexpected Breach Loc activation token "
+                    f"'{flag}' in '{value}'"
+                )
+            structure = ",".join(parts[4:]).strip() if len(parts) > 4 else ""
             return cls(
                 river=river,
                 reach=reach,
                 station=station,
-                is_active=flag.strip().lower() in {"true", "1", "yes"},
+                is_active=is_active,
                 structure=structure,
             )
 
@@ -1177,7 +1187,10 @@ class RasBreach:
     @staticmethod
     def _read_breach_blocks_internal(plan_path: Path) -> List["RasBreach.BreachBlock"]:
         """Internal method to read and parse breach blocks from plan file."""
-        lines = plan_path.read_text().splitlines()
+        content, _ = read_file_with_fallback_encoding(plan_path)
+        if content is None:
+            raise IOError(f"Failed to read plan file with any encoding: {plan_path}")
+        lines = content.splitlines()
         return RasBreach._parse_breach_blocks(lines)
 
     @staticmethod
@@ -1191,11 +1204,24 @@ class RasBreach:
                 start_idx = idx
                 block_lines = [line]
                 idx += 1
+                current_table_key: Optional[str] = None
                 while idx < len(lines):
                     candidate = lines[idx]
                     if candidate.startswith("Breach Loc=") and block_lines:
                         break
+                    if not RasBreach._is_breach_block_line(
+                        candidate,
+                        current_table_key=current_table_key,
+                    ):
+                        break
                     block_lines.append(candidate)
+                    if "=" in candidate:
+                        key = candidate.split("=", 1)[0].strip()
+                        current_table_key = (
+                            key
+                            if key in RasBreach.BreachBlock.NUMERIC_TABLE_KEYS
+                            else None
+                        )
                     idx += 1
                 end_idx = start_idx + len(block_lines)
                 block = RasBreach._parse_block(block_lines, start_idx, end_idx)
@@ -1203,6 +1229,39 @@ class RasBreach:
             else:
                 idx += 1
         return blocks
+
+    @staticmethod
+    def _is_breach_block_line(
+        line: str,
+        *,
+        current_table_key: Optional[str],
+    ) -> bool:
+        """Return whether a line belongs to the current stored breach block."""
+        if not line.strip():
+            return False
+
+        if "=" in line:
+            key = line.split("=", 1)[0].strip()
+            return key.startswith(
+                (
+                    "Breach ",
+                    "DLBreach ",
+                    "Simplified Physical Breach ",
+                    "Mass Wasting ",
+                )
+            ) or key in {
+                "Starting Notch Depth",
+                "Initial Piping Diameter",
+            }
+
+        if current_table_key is None:
+            return False
+
+        try:
+            [float(part) for part in line.split()]
+        except ValueError:
+            return False
+        return True
 
     @staticmethod
     def _parse_block(block_lines: List[str], start_index: int, end_index: int) -> "RasBreach.BreachBlock":
@@ -1259,14 +1318,18 @@ class RasBreach:
     @staticmethod
     def _set_activation(block: "RasBreach.BreachBlock", is_active: bool) -> None:
         """Set breach activation status."""
+        has_structure_field = len(block.values["Breach Loc"].split(",")) >= 5
         loc = block.location
         loc.is_active = bool(is_active)
         river = (loc.river or "").rjust(16)
         reach = (loc.reach or "").rjust(16)
         station = (loc.station or "").rjust(8)
         flag = "True" if loc.is_active else "False"
-        structure = (loc.structure or "").ljust(16)
-        block.values["Breach Loc"] = f"{river},{reach},{station},{flag},{structure}"
+        location_value = f"{river},{reach},{station},{flag}"
+        if has_structure_field:
+            structure = (loc.structure or "").ljust(16)
+            location_value = f"{location_value},{structure}"
+        block.values["Breach Loc"] = location_value
 
     @staticmethod
     def _set_progression(block: "RasBreach.BreachBlock", mode: int, pairs: Optional[List[Tuple[float, float]]]) -> None:

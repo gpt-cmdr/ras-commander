@@ -28,7 +28,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.3"
+SCHEMA_VERSION = "1.4"
 
 DATAFRAME_SCHEMAS = {
     "project_asset_inventory": {
@@ -142,6 +142,10 @@ DATAFRAME_SCHEMAS = {
             {"name": "Geom Path", "dtype": "str", "description": "Absolute path to the geometry file."},
             {"name": "Flow File", "dtype": "str", "description": "Normalized flow-file number for steady .f##, unsteady .u##, or quasi-unsteady .q## input."},
             {"name": "Flow Path", "dtype": "str", "description": "Absolute path to the flow file."},
+            {"name": "Sediment File", "dtype": "str | None", "description": "Normalized sediment-file number selected by the plan, if present."},
+            {"name": "Sediment Path", "dtype": "str | None", "description": "Absolute path expected for the selected sediment file; existence/readiness is reported by the asset inventory."},
+            {"name": "breach_definition_count", "dtype": "Int64", "description": "Number of stored Breach Loc definitions; zero means none were found and null means inspection failed."},
+            {"name": "breach_active_count", "dtype": "Int64", "description": "Number of stored definitions whose local RasBreach is_active flag is true; not evidence that a breach initiated."},
             {"name": "full_path", "dtype": "str", "description": "Absolute path to the plan file (e.g. 'project.p01')."},
         ],
     },

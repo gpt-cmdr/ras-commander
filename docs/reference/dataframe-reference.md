@@ -133,6 +133,10 @@ parsed from the plan text are strings unless noted:
 | `Geom Path` | str | resolved absolute `.g##` path |
 | `Flow File` | str | steady/unsteady flow reference number (`Flow File=`) |
 | `Flow Path` | str | resolved absolute `.f##` / `.u##` path |
+| `Sediment File` | str / None | normalized sediment-file number such as `01`; `None` when no recognized `s##` reference is present |
+| `Sediment Path` | str / None | expected absolute `.s##` path for the selected sediment file; file existence/readiness is reported separately by the asset inventory |
+| `breach_definition_count` | nullable Int64 | number of successfully parsed stored `Breach Loc` definitions; zero means none and null means inspection failed |
+| `breach_active_count` | nullable Int64 | number of stored definitions whose local `RasBreach` `is_active` flag is true; not evidence that a breach initiated during computation |
 | `Computation Interval` | str | computation time step (`Computation Interval=`) |
 | `Mapping Interval` | str | RAS Mapper output interval (`Mapping Interval=`) |
 | `Simulation Date` | str | simulation date/time window (`Simulation Date=`) |
@@ -149,9 +153,11 @@ parsed from the plan text are strings unless noted:
 | `flow_type` | str | Flow computation mode: `"Unsteady"`, `"Steady"`, `"Quasi-Unsteady"`, or `"Unknown"` (derived from the plan's `.u##`, `.f##`, or `.q##` reference). Sediment, dam breach, and topology are separate features. |
 
 !!! note
-    Columns derive directly from `_parse_plan_file()` in `ras_commander/RasPrj.py`,
-    so any plan key present in the file appears as a same-named column. Not every plan
-    contains every key; missing keys are simply absent or `None`.
+    Most source columns derive directly from `_parse_plan_file()` in
+    `ras_commander/RasPrj.py`, so a plan key appears under its source name.
+    `Sediment File` is normalized for consistency with `Geom File` and `Flow
+    File`; the two breach counts are derived through the existing `RasBreach`
+    reader. Not every plan contains every source key.
 
 Common patterns:
 
@@ -161,6 +167,12 @@ plans_with_results = ras.plan_df[ras.plan_df["HDF_Results_Path"].notna()]
 
 # Plans using a specific geometry
 g04_plans = ras.plan_df[ras.plan_df["geometry_number"] == "04"]
+
+# Plans with successfully parsed active stored breach definitions
+active_breach_plans = ras.plan_df[ras.plan_df["breach_active_count"].fillna(0) > 0]
+
+# Plans linked to a sediment file (independent of the Run Sediment flag)
+sediment_plans = ras.plan_df[ras.plan_df["Sediment File"].notna()]
 
 # Quick lookup through RasPrj helpers
 info = ras.get_plan_info("01")

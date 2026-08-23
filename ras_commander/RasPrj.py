@@ -270,25 +270,7 @@ class RasPrj:
             self.plan_df = self._get_prj_entries('Plan')
             self.flow_df = self._get_prj_entries('Flow')
             self.geom_df = self.get_geom_entries()
-            
-            # Ensure required columns exist
-            self._ensure_required_columns()
-            
-            # Set paths for geometry and flow files
-            self._set_file_paths()
-
-            # Make sure all plan paths are properly set
-            self._set_plan_paths()
-
-            # Add flow_type column without treating quasi-unsteady q## plans as steady.
-            if not self.plan_df.empty:
-                self.plan_df['flow_type'] = self.plan_df.apply(
-                    self._flow_type_for_plan,
-                    axis=1,
-                )
-            else:
-                if not self.plan_df.empty:
-                    self.plan_df['flow_type'] = 'Unknown'
+            self.plan_df = self._enrich_plan_dataframe(self.plan_df)
 
         except Exception as e:
             logger.error(f"Error loading project data: {e}")
@@ -296,19 +278,50 @@ class RasPrj:
 
     def _ensure_required_columns(self):
         """Ensure all required columns exist in plan_df."""
+        self.plan_df = self._enrich_plan_dataframe(self.plan_df)
+
+    def _enrich_plan_dataframe(self, plan_df: pd.DataFrame) -> pd.DataFrame:
+        """Apply the canonical plan columns, paths, dtypes, and flow type."""
         required_columns = [
             'plan_number', 'unsteady_number', 'geometry_number',
-            'Geom File', 'Geom Path', 'Flow File', 'Flow Path', 'full_path'
+            'Geom File', 'Geom Path', 'Flow File', 'Flow Path',
+            'Sediment File', 'Sediment Path',
+            'breach_definition_count', 'breach_active_count', 'full_path'
         ]
-        
+
         for col in required_columns:
-            if col not in self.plan_df.columns:
-                self.plan_df[col] = None
-        
-        if not self.plan_df['full_path'].any():
-            self.plan_df['full_path'] = self.plan_df['plan_number'].apply(
+            if col not in plan_df.columns:
+                plan_df[col] = None
+
+        for col in ('breach_definition_count', 'breach_active_count'):
+            plan_df[col] = plan_df[col].astype('Int64')
+
+        if not plan_df['full_path'].any():
+            plan_df['full_path'] = plan_df['plan_number'].apply(
                 lambda x: str(self.project_folder / f"{self.project_name}.p{x}")
             )
+
+        for idx, row in plan_df.iterrows():
+            if pd.notna(row['Geom File']):
+                geom_path = self.project_folder / f"{self.project_name}.g{row['Geom File']}"
+                plan_df.at[idx, 'Geom Path'] = str(geom_path)
+            if pd.notna(row['Flow File']):
+                prefix = self._flow_prefix_for_plan(row)
+                flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
+                plan_df.at[idx, 'Flow Path'] = str(flow_path)
+            if pd.notna(row['Sediment File']):
+                sediment_path = self.project_folder / f"{self.project_name}.s{row['Sediment File']}"
+                plan_df.at[idx, 'Sediment Path'] = str(sediment_path)
+
+        if plan_df.empty:
+            plan_df['flow_type'] = pd.Series(dtype='object')
+        else:
+            plan_df['flow_type'] = plan_df.apply(
+                self._flow_type_for_plan,
+                axis=1,
+            )
+
+        return plan_df
 
     def _set_file_paths(self):
         """Set geometry and flow paths in plan_df."""
@@ -316,6 +329,7 @@ class RasPrj:
             try:
                 self._set_geom_path(idx, row)
                 self._set_flow_path(idx, row)
+                self._set_sediment_path(idx, row)
                 
                 if not self.suppress_logging:
                     logger.debug(f"Plan {row['plan_number']} paths set up")
@@ -334,6 +348,12 @@ class RasPrj:
             prefix = self._flow_prefix_for_plan(row)
             flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
             self.plan_df.at[idx, 'Flow Path'] = str(flow_path)
+
+    def _set_sediment_path(self, idx: int, row: pd.Series):
+        """Set the sediment path for a plan entry."""
+        if pd.notna(row['Sediment File']):
+            sediment_path = self.project_folder / f"{self.project_name}.s{row['Sediment File']}"
+            self.plan_df.at[idx, 'Sediment Path'] = str(sediment_path)
 
     def _flow_prefix_for_plan(self, row: pd.Series) -> str:
         """Return the f/u/q prefix declared by a plan without exposing new columns."""
@@ -381,6 +401,8 @@ class RasPrj:
             self.plan_df['Geom Path'] = None
         if 'Flow Path' not in self.plan_df.columns:
             self.plan_df['Flow Path'] = None
+        if 'Sediment Path' not in self.plan_df.columns:
+            self.plan_df['Sediment Path'] = None
         
         # Update paths for each plan entry
         for idx, row in self.plan_df.iterrows():
@@ -395,6 +417,10 @@ class RasPrj:
                     prefix = self._flow_prefix_for_plan(row)
                     flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
                     self.plan_df.at[idx, 'Flow Path'] = str(flow_path)
+
+                if pd.notna(row['Sediment File']):
+                    sediment_path = self.project_folder / f"{self.project_name}.s{row['Sediment File']}"
+                    self.plan_df.at[idx, 'Sediment Path'] = str(sediment_path)
                 
                 if not self.suppress_logging:
                     logger.debug(f"Plan {row['plan_number']} paths set up")
@@ -453,6 +479,8 @@ class RasPrj:
         ValueError: If the plan file is not found
         IOError: If there's an error reading the plan file
         """
+        from .RasUtils import RasUtils
+
         logger = get_logger(__name__)
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -470,6 +498,7 @@ class RasPrj:
             'Run HTab',
             'Run PostProcess',
             'Run Sediment',
+            'Sediment File',
             'Run UNet',
             'Run WQNet',
             'Short Identifier',
@@ -570,6 +599,7 @@ class RasPrj:
                 'Run HTab': r'Run HTab=(.+)',
                 'Run PostProcess': r'Run PostProcess=(.+)',
                 'Run Sediment': r'Run Sediment=(.+)',
+                'Sediment File': r'Sediment File=(.+)',
                 'Run UNet': r'Run UNet=(.+)',
                 'Run WQNet': r'Run WQNet=(.+)',
                 'Short Identifier': r'Short Identifier=(.+)',
@@ -713,11 +743,13 @@ class RasPrj:
         # Fixes bug where empty dict {} evaluated to False, skipping these calls
         entry.update(self._process_flow_file(plan_info))
         entry.update(self._process_geom_file(plan_info))
+        entry.update(self._process_sediment_file(plan_info))
+        entry.update(self._process_breach_summary(Path(full_path)))
 
         # Add remaining plan info (only if data exists)
         if plan_info:
             for key, value in plan_info.items():
-                if key not in ['Flow File', 'Geom File']:
+                if key not in ['Flow File', 'Geom File', 'Sediment File']:
                     entry[key] = value
 
         # Add HDF results path
@@ -751,6 +783,42 @@ class RasPrj:
         return {
             'geometry_number': None,
             'Geom File': None
+        }
+
+    def _process_sediment_file(self, plan_info: dict) -> dict:
+        """Normalize the sediment file number stored by the plan."""
+        sediment_file = plan_info.get('Sediment File')
+        if sediment_file:
+            match = re.fullmatch(r'[sS](\d{2,3})', sediment_file.strip())
+            if match:
+                return {'Sediment File': match.group(1)}
+        return {'Sediment File': None}
+
+    def _process_breach_summary(self, plan_path: Path) -> dict:
+        """Derive nullable plan-level counts from the public breach reader."""
+        from .RasBreach import RasBreach
+
+        try:
+            breaches = RasBreach.list_breach_structures_plan(
+                plan_path,
+                ras_object=self,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not inspect breach definitions in %s: %s",
+                plan_path,
+                exc,
+            )
+            return {
+                'breach_definition_count': pd.NA,
+                'breach_active_count': pd.NA,
+            }
+
+        return {
+            'breach_definition_count': len(breaches),
+            'breach_active_count': sum(
+                bool(breach['is_active']) for breach in breaches
+            ),
         }
 
     def _parse_unsteady_file(self, unsteady_file_path):
@@ -1241,29 +1309,7 @@ class RasPrj:
             ...     print(plan_entries.iloc[0])
         """
         self.check_initialized()
-        plan_df = self._get_prj_entries('Plan')
-
-        # Ensure required columns exist and set file paths
-        # This mirrors what _load_project_data() does during initialization
-        required_columns = [
-            'plan_number', 'unsteady_number', 'geometry_number',
-            'Geom File', 'Geom Path', 'Flow File', 'Flow Path', 'full_path'
-        ]
-        for col in required_columns:
-            if col not in plan_df.columns:
-                plan_df[col] = None
-
-        # Set Geom Path and Flow Path for each row
-        for idx, row in plan_df.iterrows():
-            if pd.notna(row.get('Geom File')):
-                geom_path = self.project_folder / f"{self.project_name}.g{row['Geom File']}"
-                plan_df.at[idx, 'Geom Path'] = str(geom_path)
-            if pd.notna(row.get('Flow File')):
-                prefix = self._flow_prefix_for_plan(row)
-                flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
-                plan_df.at[idx, 'Flow Path'] = str(flow_path)
-
-        return plan_df
+        return self._enrich_plan_dataframe(self._get_prj_entries('Plan'))
 
     @log_call
     def get_flow_entries(self):
@@ -1782,7 +1828,10 @@ class RasPrj:
             ]
             
             # Additional convenience columns
-            file_path_cols = ['Geom File', 'Geom Path', 'Flow File', 'Flow Path']
+            file_path_cols = [
+                'Geom File', 'Geom Path', 'Flow File', 'Flow Path',
+                'Sediment File', 'Sediment Path',
+            ]
             
             # Special columns that must be preserved
             special_cols = ['HDF_Results_Path']
@@ -1821,7 +1870,11 @@ class RasPrj:
             
             # Return DataFrame with specified column order
             cols_to_return = [col for col in all_cols if col in df.columns]
-            return df[cols_to_return]
+            formatted = df[cols_to_return].copy()
+            for column in ('breach_definition_count', 'breach_active_count'):
+                if column in formatted.columns:
+                    formatted[column] = formatted[column].astype('Int64')
+            return formatted
         
         return df
 
