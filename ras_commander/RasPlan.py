@@ -3682,14 +3682,21 @@ class RasPlan:
             # Use flow_type column if available (preferred)
             if 'flow_type' in plan_row.columns:
                 flow_type = plan_row.iloc[0]['flow_type']
-                logger.debug(f"Plan {plan_num}: {flow_type} (from plan_df)")
-                return flow_type
+                if pd.notna(flow_type) and flow_type in {'Steady', 'Unsteady', 'Unknown'}:
+                    logger.debug(f"Plan {plan_num}: {flow_type} (from plan_df)")
+                    return flow_type
 
-            # Fallback: determine from unsteady_number
-            import pandas as pd
-            unsteady_num = plan_row.iloc[0]['unsteady_number']
-            flow_type = 'Unsteady' if pd.notna(unsteady_num) else 'Steady'
-            logger.debug(f"Plan {plan_num}: {flow_type} (from unsteady_number)")
+            # Fallback: determine from the normalized flow references.
+            row = plan_row.iloc[0]
+            unsteady_num = row.get('unsteady_number')
+            flow_number = row.get('Flow File')
+            if pd.notna(unsteady_num) and str(unsteady_num).strip():
+                flow_type = 'Unsteady'
+            elif pd.notna(flow_number) and str(flow_number).strip():
+                flow_type = 'Steady'
+            else:
+                flow_type = 'Unknown'
+            logger.debug(f"Plan {plan_num}: {flow_type} (from flow references)")
             return flow_type
 
         except Exception as e:

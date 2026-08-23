@@ -266,18 +266,164 @@ class RasPrj:
             # Make sure all plan paths are properly set
             self._set_plan_paths()
 
-            # Add flow_type column for deterministic steady/unsteady identification
-            if not self.plan_df.empty and 'unsteady_number' in self.plan_df.columns:
-                self.plan_df['flow_type'] = self.plan_df['unsteady_number'].apply(
-                    lambda x: 'Unsteady' if pd.notna(x) else 'Steady'
-                )
-            else:
-                if not self.plan_df.empty:
-                    self.plan_df['flow_type'] = 'Unknown'
+            # Combine the plan's flow-file reference with the associated
+            # geometry metadata.  The resulting plan_df is the source of truth
+            # for execution dispatch (steady/unsteady and 1D/2D/mixed).
+            self.plan_df = self._enrich_plan_classification(self.plan_df)
 
         except Exception as e:
             logger.error(f"Error loading project data: {e}")
             raise
+
+    @staticmethod
+    def _classify_plan_flow(row: pd.Series) -> str:
+        """Classify a plan from its normalized flow-file references."""
+        unsteady_number = row.get('unsteady_number')
+        if pd.notna(unsteady_number) and str(unsteady_number).strip():
+            return 'Unsteady'
+
+        flow_number = row.get('Flow File')
+        if pd.notna(flow_number) and str(flow_number).strip():
+            return 'Steady'
+
+        return 'Unknown'
+
+    @staticmethod
+    def _classify_geometry(row: pd.Series) -> str:
+        """Return ``1D``, ``2D``, ``1D/2D``, or ``Unknown`` for a plan row."""
+        metadata_valid = row.get('geometry_metadata_valid')
+        if pd.isna(metadata_valid) or not bool(metadata_valid):
+            return 'Unknown'
+
+        has_1d = row.get('has_1d_xs')
+        has_2d = row.get('has_2d_mesh')
+        has_1d = False if pd.isna(has_1d) else bool(has_1d)
+        has_2d = False if pd.isna(has_2d) else bool(has_2d)
+
+        if has_1d and has_2d:
+            return '1D/2D'
+        if has_2d:
+            return '2D'
+        if has_1d:
+            return '1D'
+        return 'Unknown'
+
+    @staticmethod
+    def _classify_plan_type(row: pd.Series) -> str:
+        """Combine flow and geometry classifications into a stable plan type."""
+        flow_type = row.get('flow_type')
+        geometry_type = row.get('geometry_type')
+        geometry_suffix = {
+            '1D': '1d',
+            '2D': '2d',
+            '1D/2D': '1d_2d',
+        }.get(geometry_type)
+
+        if flow_type not in {'Steady', 'Unsteady'} or geometry_suffix is None:
+            return 'unknown'
+        return f"{flow_type.lower()}_{geometry_suffix}"
+
+    def _enrich_plan_classification(self, plan_df: pd.DataFrame) -> pd.DataFrame:
+        """Join geometry metadata to plans and derive hydraulic plan classes.
+
+        ``flow_type`` comes from the plan's ``.f##``/``.u##`` reference.  The
+        dimensional classification comes from ``geom_df``, which prefers the
+        geometry HDF and falls back to the plain-text geometry.  Missing or
+        unreadable metadata remains ``Unknown`` so execution routing fails
+        closed instead of assuming 1D.
+        """
+        result = plan_df.copy()
+        geometry_columns = [
+            'has_1d_xs',
+            'has_2d_mesh',
+            'num_cross_sections',
+            'mesh_cell_count',
+            'mesh_area_names',
+            'geometry_metadata_source',
+            'geometry_metadata_valid',
+            'geometry_metadata_error',
+        ]
+        derived_columns = ['geometry_type', 'plan_type']
+
+        if result.empty:
+            for column in ['flow_type', *geometry_columns, *derived_columns]:
+                if column not in result.columns:
+                    result[column] = pd.Series(dtype='object')
+            return result
+
+        result['flow_type'] = result.apply(self._classify_plan_flow, axis=1)
+        result = result.drop(
+            columns=[
+                column for column in [*geometry_columns, *derived_columns]
+                if column in result.columns
+            ],
+            errors='ignore',
+        )
+
+        geom_df = getattr(self, 'geom_df', None)
+        if geom_df is not None and not geom_df.empty and 'geom_number' in geom_df.columns:
+            available_columns = [
+                column for column in geometry_columns if column in geom_df.columns
+            ]
+            geometry_lookup = geom_df[['geom_number', *available_columns]].copy()
+            geometry_lookup = geometry_lookup.rename(
+                columns={'geom_number': 'geometry_number'}
+            )
+            geometry_lookup['geometry_number'] = (
+                geometry_lookup['geometry_number'].astype(str).str.zfill(2)
+            )
+            geometry_lookup['_geometry_metadata_joined'] = True
+            geometry_lookup = geometry_lookup.drop_duplicates(
+                subset=['geometry_number'], keep='first'
+            )
+
+            result['geometry_number'] = result['geometry_number'].apply(
+                lambda value: str(value).zfill(2) if pd.notna(value) else value
+            )
+            result = result.merge(
+                geometry_lookup,
+                how='left',
+                on='geometry_number',
+                validate='many_to_one',
+            )
+            geometry_joined = result.pop('_geometry_metadata_joined').eq(True)
+        else:
+            geometry_joined = pd.Series(False, index=result.index)
+
+        defaults = {
+            'has_1d_xs': pd.NA,
+            'has_2d_mesh': pd.NA,
+            'num_cross_sections': 0,
+            'mesh_cell_count': 0,
+            'mesh_area_names': None,
+            'geometry_metadata_source': 'unavailable',
+            'geometry_metadata_valid': False,
+            'geometry_metadata_error': None,
+        }
+        for column, default in defaults.items():
+            if column not in result.columns:
+                result[column] = default
+
+        missing_geometry = ~geometry_joined.astype(bool)
+        result.loc[missing_geometry, 'geometry_metadata_source'] = 'unavailable'
+        result.loc[missing_geometry, 'geometry_metadata_valid'] = False
+        result.loc[missing_geometry, ['has_1d_xs', 'has_2d_mesh']] = pd.NA
+
+        missing_reference = missing_geometry & result['geometry_number'].isna()
+        missing_lookup = missing_geometry & ~result['geometry_number'].isna()
+        result.loc[missing_reference, 'geometry_metadata_error'] = (
+            'Plan geometry reference is missing'
+        )
+        result.loc[missing_lookup, 'geometry_metadata_error'] = (
+            'Referenced geometry was not found in geom_df'
+        )
+
+        for column in ['has_1d_xs', 'has_2d_mesh', 'geometry_metadata_valid']:
+            result[column] = result[column].astype('boolean')
+
+        result['geometry_type'] = result.apply(self._classify_geometry, axis=1)
+        result['plan_type'] = result.apply(self._classify_plan_type, axis=1)
+        return result
 
     def _ensure_required_columns(self):
         """Ensure all required columns exist in plan_df."""
@@ -1213,7 +1359,7 @@ class RasPrj:
                 flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
                 plan_df.at[idx, 'Flow Path'] = str(flow_path)
 
-        return plan_df
+        return self._enrich_plan_classification(plan_df)
 
     @log_call
     def get_flow_entries(self):
@@ -1281,6 +1427,8 @@ class RasPrj:
                 - description (str): Description from BEGIN/END DESCRIPTION block
                 - has_1d_xs (bool): True if geometry has 1D cross sections
                 - has_2d_mesh (bool): True if geometry has 2D mesh areas
+                - geometry_type (str): ``1D``, ``2D``, ``1D/2D``, or
+                  ``Unknown``
                 - num_cross_sections (int): Count of 1D cross sections
                 - num_inline_structures (int): Total count of bridges + culverts + weirs
                 - num_bridges (int): Count of bridge structures
@@ -1291,6 +1439,11 @@ class RasPrj:
                 - num_sa_2d_connections (int): Count of SA to 2D connections
                 - mesh_cell_count (int): Total 2D mesh cells across all areas
                 - mesh_area_names (list[str]): Names of 2D flow areas
+                - geometry_metadata_source (str): Geometry source used for
+                  classification (``hdf``, ``text``, or ``unavailable``)
+                - geometry_metadata_valid (bool): Whether geometry inspection
+                  succeeded
+                - geometry_metadata_error (str): Inspection error, when any
 
         Raises:
             RuntimeError: If the project has not been initialized.
@@ -1331,7 +1484,14 @@ class RasPrj:
             geom_df = pd.DataFrame({'geom_file': geom_entries})
             if geom_df.empty:
                 logger.warning(f"No geometry entries found in {self.prj_file}")
-                return pd.DataFrame(columns=['geom_file', 'geom_number', 'full_path', 'hdf_path'])
+                return pd.DataFrame(
+                    columns=[
+                        'geom_file', 'geom_number', 'full_path', 'hdf_path',
+                        'has_1d_xs', 'has_2d_mesh', 'geometry_type',
+                        'geometry_metadata_source', 'geometry_metadata_valid',
+                        'geometry_metadata_error',
+                    ]
+                )
             geom_df['geom_number'] = geom_df['geom_file'].str.extract(r'(\d+)$')
             geom_df['full_path'] = geom_df['geom_file'].apply(lambda x: str(self.project_folder / f"{self.project_name}.{x}"))
             geom_df['hdf_path'] = geom_df['full_path'] + ".hdf"
@@ -1349,7 +1509,9 @@ class RasPrj:
                     'has_1d_xs', 'has_2d_mesh', 'num_cross_sections',
                     'num_inline_structures', 'num_bridges', 'num_culverts',
                     'num_weirs', 'num_gates', 'num_lateral_structures',
-                    'num_sa_2d_connections', 'mesh_cell_count', 'mesh_area_names'
+                    'num_sa_2d_connections', 'mesh_cell_count', 'mesh_area_names',
+                    'geometry_metadata_source', 'geometry_metadata_valid',
+                    'geometry_metadata_error'
                 ]
                 for col in metadata_columns:
                     default = GeomMetadata.DEFAULT_COUNTS.get(col)
@@ -1377,7 +1539,14 @@ class RasPrj:
 
                     except Exception as e:
                         logger.debug(f"Failed to extract metadata for {row['geom_file']}: {e}")
-                        # Keep default values on failure
+                        geom_df.at[idx, 'geometry_metadata_source'] = 'unavailable'
+                        geom_df.at[idx, 'geometry_metadata_valid'] = False
+                        geom_df.at[idx, 'geometry_metadata_error'] = str(e)
+                        geom_df.at[idx, 'has_1d_xs'] = None
+                        geom_df.at[idx, 'has_2d_mesh'] = None
+
+                for column in ['has_1d_xs', 'has_2d_mesh', 'geometry_metadata_valid']:
+                    geom_df[column] = geom_df[column].astype('boolean')
 
                 metadata_elapsed = time.perf_counter() - metadata_start
                 if not self.suppress_logging:
@@ -1387,6 +1556,8 @@ class RasPrj:
                 logger.warning(f"GeomMetadata not available, skipping metadata extraction: {e}")
             except Exception as e:
                 logger.warning(f"Geometry metadata extraction failed: {e}")
+
+            geom_df['geometry_type'] = geom_df.apply(self._classify_geometry, axis=1)
 
             # Extract geom_title and description from each geometry file
             geom_df['geom_title'] = None

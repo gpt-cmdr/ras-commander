@@ -51,10 +51,14 @@ class GeomMetadata:
     All methods are static and designed to be used without instantiation.
     """
 
-    # Default return values for graceful degradation
+    # Default return values for graceful degradation.  The provenance fields
+    # distinguish a valid geometry with no 1D/2D elements from a geometry that
+    # could not be inspected.  Callers that dispatch compute engines must check
+    # geometry_metadata_valid rather than interpreting zero counts as proof of
+    # a one-dimensional model.
     DEFAULT_COUNTS = {
-        'has_1d_xs': False,
-        'has_2d_mesh': False,
+        'has_1d_xs': None,
+        'has_2d_mesh': None,
         'num_cross_sections': 0,
         'num_inline_structures': 0,
         'num_bridges': 0,
@@ -65,6 +69,9 @@ class GeomMetadata:
         'num_sa_2d_connections': 0,
         'mesh_cell_count': 0,
         'mesh_area_names': [],
+        'geometry_metadata_source': 'unavailable',
+        'geometry_metadata_valid': False,
+        'geometry_metadata_error': None,
     }
 
     @staticmethod
@@ -97,10 +104,18 @@ class GeomMetadata:
                 - num_sa_2d_connections (int): SA to 2D connections count
                 - mesh_cell_count (int): Total 2D mesh cells
                 - mesh_area_names (list[str]): Names of 2D flow areas
+                - geometry_metadata_source (str): ``hdf``, ``text``, or
+                  ``unavailable``
+                - geometry_metadata_valid (bool): Whether a geometry source
+                  was successfully inspected
+                - geometry_metadata_error (str | None): HDF/text inspection
+                  errors encountered before success or final failure
 
         Note:
-            Always returns a complete dict with all keys, using defaults on failure.
-            Graceful degradation is critical - never raises exceptions.
+            Always returns a complete dict with all keys and never raises.
+            ``has_1d_xs`` and ``has_2d_mesh`` are ``None`` when inspection
+            fails so unavailable metadata cannot be mistaken for a valid
+            geometry containing no hydraulic elements.
 
         Example:
             >>> counts = GeomMetadata.get_geometry_counts("model.g01", "model.g01.hdf")
@@ -114,37 +129,56 @@ class GeomMetadata:
         geom_path = Path(geom_path) if geom_path else None
         hdf_path = Path(hdf_path) if hdf_path else None
 
-        try:
-            # Try HDF extraction first (fast path)
-            if hdf_path and hdf_path.exists():
+        errors = []
+
+        # Try HDF extraction first (fast path).  A corrupt or unreadable HDF
+        # falls through to the plain-text geometry instead of silently
+        # returning zero counts.
+        if hdf_path and hdf_path.exists():
+            try:
                 logger.debug(f"Using HDF extraction for {hdf_path.name}")
                 result = GeomMetadata._get_counts_from_hdf(hdf_path, result)
+                result['geometry_metadata_source'] = 'hdf'
+                result['geometry_metadata_valid'] = True
 
                 # For lateral structures and SA/2D connections, need plain text
                 # (these are NOT stored in HDF geometry file)
                 if geom_path and geom_path.exists():
                     result = GeomMetadata._add_text_only_counts(geom_path, result)
+            except Exception as exc:
+                errors.append(f"HDF inspection failed: {exc}")
+                logger.warning(f"HDF extraction failed for {hdf_path}: {exc}")
 
-            # Fall back to plain text parsing
-            elif geom_path and geom_path.exists():
+        # Fall back to plain text when HDF is absent or could not be opened.
+        if not result['geometry_metadata_valid'] and geom_path and geom_path.exists():
+            try:
                 logger.debug(f"Using text extraction for {geom_path.name}")
+                # Establish that the source itself is readable.  Individual
+                # parsers remain deliberately tolerant of missing sections.
+                with open(geom_path, 'r', encoding='utf-8', errors='replace') as handle:
+                    handle.read(1)
                 result = GeomMetadata._get_counts_from_text(geom_path, result)
+                result['geometry_metadata_source'] = 'text'
+                result['geometry_metadata_valid'] = True
+            except Exception as exc:
+                errors.append(f"Text inspection failed: {exc}")
+                logger.warning(f"Text extraction failed for {geom_path}: {exc}")
 
-            else:
-                logger.warning("Neither HDF nor geometry file exists")
+        if not result['geometry_metadata_valid'] and not errors:
+            errors.append("Neither HDF nor geometry file exists")
+            logger.warning(errors[-1])
 
-        except Exception as e:
-            logger.warning(f"Failed to extract geometry metadata: {e}")
-            # Keep default values on failure
-
-        # Calculate derived fields
-        result['has_1d_xs'] = result['num_cross_sections'] > 0
-        result['has_2d_mesh'] = len(result['mesh_area_names']) > 0
+        # Calculate derived fields only after a source was inspected.  Leave
+        # them unknown on failure so downstream classification fails closed.
+        if result['geometry_metadata_valid']:
+            result['has_1d_xs'] = result['num_cross_sections'] > 0
+            result['has_2d_mesh'] = len(result['mesh_area_names']) > 0
         result['num_inline_structures'] = (
             result['num_bridges'] +
             result['num_culverts'] +
             result['num_weirs']
         )
+        result['geometry_metadata_error'] = '; '.join(errors) if errors else None
 
         return result
 
@@ -163,21 +197,17 @@ class GeomMetadata:
         Returns:
             Updated counts dict
         """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf:
-                # Cross sections
-                counts['num_cross_sections'] = GeomMetadata._get_xs_count_hdf(hdf)
+        with h5py.File(hdf_path, 'r') as hdf:
+            # Cross sections
+            counts['num_cross_sections'] = GeomMetadata._get_xs_count_hdf(hdf)
 
-                # Structures (bridges, culverts, weirs, gates)
-                structure_counts = GeomMetadata._get_structure_counts_hdf(hdf)
-                counts.update(structure_counts)
+            # Structures (bridges, culverts, weirs, gates)
+            structure_counts = GeomMetadata._get_structure_counts_hdf(hdf)
+            counts.update(structure_counts)
 
-                # 2D mesh areas and cell counts
-                mesh_info = GeomMetadata._get_2d_info_hdf(hdf)
-                counts.update(mesh_info)
-
-        except Exception as e:
-            logger.warning(f"HDF extraction failed for {hdf_path}: {e}")
+            # 2D mesh areas and cell counts
+            mesh_info = GeomMetadata._get_2d_info_hdf(hdf)
+            counts.update(mesh_info)
 
         return counts
 
