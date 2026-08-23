@@ -283,27 +283,41 @@ class _ProductRenderers:
             )
             if subset.empty:
                 raise ValueError(f"No {value_column} rows for mesh '{mesh_name}'")
-            geometry_valid = (
-                subset.geometry.notna()
-                & ~subset.geometry.is_empty
-                & np.isfinite(subset.geometry.x.to_numpy(dtype=float))
-                & np.isfinite(subset.geometry.y.to_numpy(dtype=float))
-            )
-            if not bool(geometry_valid.all()):
-                raise ValueError(
-                    f"Nonfinite or empty cell points for mesh '{mesh_name}'"
-                )
-            values = subset[value_column].to_numpy(dtype=np.float32)
-            if not np.isfinite(values).any():
-                raise ValueError(
-                    f"No finite {value_column} values for mesh '{mesh_name}'"
-                )
-            xy = np.column_stack(
+            coordinate_values = np.column_stack(
                 (
                     subset.geometry.x.to_numpy(dtype=float),
                     subset.geometry.y.to_numpy(dtype=float),
                 )
             )
+            finite_coordinates = (
+                subset.geometry.notna()
+                & ~subset.geometry.is_empty
+                & np.isfinite(coordinate_values).all(axis=1)
+            )
+            if not bool(finite_coordinates.any()):
+                raise ValueError(
+                    f"Nonfinite or empty cell points for mesh '{mesh_name}'"
+                )
+            values = subset[value_column].to_numpy(dtype=np.float32)
+            finite_values = np.isfinite(values)
+            if not finite_values.any():
+                raise ValueError(
+                    f"No finite {value_column} values for mesh '{mesh_name}'"
+                )
+            finite_observations = (
+                finite_coordinates.to_numpy(dtype=bool) & finite_values
+            )
+            if not finite_observations.any():
+                raise ValueError(
+                    "No finite coordinate/value pairs for "
+                    f"{value_column} in mesh '{mesh_name}'"
+                )
+            # Nonfinite result cells are not interpolation observations. Keep
+            # their mesh footprint in ``support``, but exclude their point/value
+            # pairs from the nearest-neighbor index so they cannot introduce
+            # nodata holes into otherwise finite derived rasters.
+            xy = coordinate_values[finite_observations]
+            values = values[finite_observations]
             tree = cKDTree(xy)
             area_mask = geometry_mask(
                 [area.geometry],
@@ -444,6 +458,12 @@ class _ProductRenderers:
                 if variable not in dataset.data_vars:
                     continue
                 frame = dataset[variable].to_dataframe(name="value").reset_index()
+                numeric_values = pd.to_numeric(
+                    frame["value"],
+                    errors="coerce",
+                ).to_numpy(dtype=float)
+                if not np.isfinite(numeric_values).any():
+                    continue
                 frame.insert(2, "variable", variable)
                 units_name = f"{variable}_units"
                 if units_name in dataset.coords:

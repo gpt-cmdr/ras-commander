@@ -42,6 +42,7 @@ def _write_inspection_hdf(
     velocity_time_count: int = 2,
     plain_time_offset_hours: int = 0,
     contradictory_units: bool = False,
+    message_text: str | None = None,
 ) -> None:
     """Write a minimal synthetic contract fixture in a pytest temp folder."""
     with h5py.File(path, "w") as hdf_file:
@@ -53,11 +54,13 @@ def _write_inspection_hdf(
         if completion_attribute is not None:
             event = hdf_file.create_group("Event Conditions")
             event.attrs["Completed Successfully"] = completion_attribute
-        messages = (
-            "Synthetic test messages\nComplete Process\n"
-            if complete_messages
-            else "Synthetic test messages\n"
-        )
+        messages = message_text
+        if messages is None:
+            messages = (
+                "Synthetic test messages\nComplete Process\n"
+                if complete_messages
+                else "Synthetic test messages\n"
+            )
         hdf_file.create_dataset(
             "Results/Summary/Compute Messages (text)",
             data=np.bytes_(messages),
@@ -214,6 +217,55 @@ def test_inspect_result_rejects_missing_completion(tmp_path):
 
     with pytest.raises(ValueError, match="no accepted completion evidence"):
         HdfResultsProducts.inspect_result(hdf_path)
+
+
+@pytest.mark.parametrize(
+    "message_text",
+    [
+        "Synthetic test messages\nDid not Complete Process\n",
+        "Synthetic test messages\nComplete Process failed\n",
+        "Synthetic test messages\nWaiting for Complete Process\n",
+    ],
+)
+def test_inspect_result_rejects_misleading_completion_substrings(
+    tmp_path,
+    message_text,
+):
+    hdf_path = tmp_path / "misleading-completion.p01.hdf"
+    _write_inspection_hdf(
+        hdf_path,
+        completion_attribute=None,
+        message_text=message_text,
+    )
+
+    with pytest.raises(ValueError, match="no accepted completion evidence"):
+        HdfResultsProducts.inspect_result(hdf_path)
+
+
+@pytest.mark.parametrize(
+    "message_text",
+    [
+        "Synthetic test messages\nComplete Process\n",
+        "Synthetic test messages\nComplete Process\t1 : 29\n",
+        "Synthetic test messages\nComplete Process\t6006x\n",
+    ],
+)
+def test_inspect_result_accepts_exact_legacy_completion_records(
+    tmp_path,
+    message_text,
+):
+    hdf_path = tmp_path / "exact-completion.p01.hdf"
+    _write_inspection_hdf(
+        hdf_path,
+        completion_attribute=None,
+        message_text=message_text,
+    )
+
+    result = HdfResultsProducts.inspect_result(hdf_path)
+
+    assert result["completion_evidence"][
+        "embedded_compute_messages_complete_process"
+    ] is True
 
 
 def test_inspect_result_rejects_disagreeing_timestamp_datasets(tmp_path):

@@ -199,7 +199,8 @@ class _SliceOnlyDataset:
 
 
 def test_pyarrow_is_a_required_core_dependency():
-    setup_text = Path("setup.py").read_text(encoding="utf-8")
+    setup_path = Path(__file__).absolute().parents[1] / "setup.py"
+    setup_text = setup_path.read_text(encoding="utf-8")
 
     install_requires = setup_text.split("install_requires=[", 1)[1].split(
         "],",
@@ -270,6 +271,93 @@ def test_raster_grid_preserves_exact_square_resolution():
     assert grid["bbox"] == (10.0, 19.0, 14.0, 25.0)
     assert grid["transform"].a == 2.0
     assert grid["transform"].e == -2.0
+
+
+def _write_single_variable_boundary_hdf(
+    path: Path,
+    *,
+    variable: str,
+    values: np.ndarray,
+    units: str,
+) -> None:
+    column = variable.title()
+    with h5py.File(path, "w") as hdf_file:
+        plan_information = hdf_file.create_group(
+            "Plan Data/Plan Information"
+        )
+        plan_information.attrs["Simulation Start Time"] = (
+            b"18Sep2019 13:00:00"
+        )
+        hdf_file.create_dataset(
+            f"{SERIES_BASE}/Time",
+            data=np.asarray([0.0, 1.0 / 24.0]),
+        )
+        boundary = hdf_file.create_dataset(
+            f"{SERIES_BASE}/Boundary Conditions/Only {column}",
+            data=np.asarray(values, dtype=np.float64).reshape(2, 1),
+        )
+        boundary.attrs["Columns"] = np.asarray([column.encode("utf-8")])
+        boundary.attrs[column] = units.encode("utf-8")
+        boundary.attrs["2D Area"] = b"Mesh"
+
+
+@pytest.mark.parametrize(
+    ("variable", "values", "units"),
+    [
+        ("flow", np.asarray([1.0, 2.0]), "cfs"),
+        ("stage", np.asarray([10.0, 11.0]), "ft"),
+    ],
+)
+def test_arrow_hydrograph_writer_omits_unavailable_real_reader_variable(
+    tmp_path,
+    variable,
+    values,
+    units,
+):
+    source = tmp_path / f"{variable}-only.p01.hdf"
+    output = tmp_path / f"{variable}-only.parquet"
+    _write_single_variable_boundary_hdf(
+        source,
+        variable=variable,
+        values=values,
+        units=units,
+    )
+
+    metadata = _ProductRenderers.write_hydrographs(source, output)
+
+    table = pq.read_table(output)
+    assert table.schema.remove_metadata() == EXPECTED_PARQUET_SCHEMA
+    assert table.column("variable").to_pylist() == [variable, variable]
+    assert table.column("value").to_pylist() == values.tolist()
+    assert table.column("units").to_pylist() == [units, units]
+    assert table.column("area_2d").to_pylist() == ["Mesh", "Mesh"]
+    assert metadata["variables"] == [variable]
+    assert metadata["units"] == {variable: [units]}
+    assert metadata["missing_value_count"] == 0
+    assert metadata["empty_reason"] is None
+
+
+def test_arrow_hydrograph_writer_omits_all_nonfinite_variables(tmp_path):
+    source = tmp_path / "nonfinite-boundary.p01.hdf"
+    output = tmp_path / "nonfinite-boundary.parquet"
+    _write_single_variable_boundary_hdf(
+        source,
+        variable="flow",
+        values=np.asarray([np.nan, np.inf]),
+        units="cfs",
+    )
+
+    metadata = _ProductRenderers.write_hydrographs(source, output)
+
+    table = pq.read_table(output)
+    assert table.schema.remove_metadata() == EXPECTED_PARQUET_SCHEMA
+    assert table.num_rows == 0
+    assert metadata["variables"] == []
+    assert metadata["units"] == {}
+    assert metadata["missing_value_count"] == 0
+    assert metadata["empty_reason"] == (
+        "no_available_flow_or_stage_series_in_result"
+    )
 
 
 def test_arrow_hydrograph_writer_accepts_one_available_variable(
@@ -422,6 +510,42 @@ def test_export_generates_deterministic_arrow_and_geospatial_package(
     assert mesh_names == ["Mesh"]
     assert "generated ras-commander hydraulic product package" in caplog.text.lower()
     assert "no HEC-RAS model output was created or modified" in caplog.text
+
+
+def test_export_excludes_nonfinite_points_from_all_raster_interpolation(
+    tmp_path,
+):
+    source = tmp_path / "nonfinite-cells.p01.hdf"
+    output = tmp_path / "products"
+    _write_export_hdf(source)
+    with h5py.File(source, "r+") as hdf_file:
+        hdf_file[
+            "Geometry/2D Flow Areas/Mesh/Cells Minimum Elevation"
+        ][0] = np.nan
+        hdf_file[
+            f"{SUMMARY_BASE}/2D Flow Areas/Mesh/Maximum Water Surface"
+        ][0, 0] = np.nan
+        hdf_file[
+            f"{SERIES_BASE}/2D Flow Areas/Mesh/Face Velocity"
+        ][:, :2] = np.nan
+
+    HdfResultsProducts.export(
+        source,
+        output,
+        max_dimension=64,
+        include_preview=False,
+    )
+
+    expected_values = {
+        "maximum-depth.tif": 1.0,
+        "maximum-wse.tif": -7.0,
+        "maximum-velocity.tif": 4.0,
+    }
+    for filename, expected in expected_values.items():
+        with rasterio.open(output / filename) as raster:
+            values = raster.read(1, masked=True).compressed()
+            assert values.size == raster.width * raster.height
+            assert np.allclose(values, expected)
 
 
 def test_export_rejects_negative_stored_depth_without_publishing(tmp_path):
