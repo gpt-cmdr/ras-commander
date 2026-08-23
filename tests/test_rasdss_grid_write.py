@@ -59,3 +59,33 @@ def test_parse_grid_dss_datetime_normalizes_2400():
     assert RasDss._parse_grid_dss_datetime("31DEC2022:2400") == pd.Timestamp(
         "2023-01-01 00:00"
     )
+
+
+def test_write_grid_rejects_timezone_aware_times_before_jvm_or_output(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setattr(
+        RasDss,
+        "_configure_jvm",
+        staticmethod(
+            lambda: pytest.fail("timezone rejection must precede JVM setup")
+        ),
+    )
+    output = tmp_path / "missing-parent" / "aware-grid.dss"
+
+    with pytest.raises(ValueError, match="timezone-naive"):
+        RasDss.write_grid_timeseries(
+            output,
+            "/SHG/TEST/PRECIP/01JAN2020:0000/01JAN2020:0100/TZ/",
+            data=[[[1.0]]],
+            times=pd.date_range(
+                "2020-01-01 01:00",
+                periods=1,
+                freq="h",
+                tz="UTC",
+            ),
+            grid_info={"cellsize": 2000, "crs": "SHG"},
+        )
+
+    assert not output.parent.exists()

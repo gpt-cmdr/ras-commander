@@ -1315,6 +1315,8 @@ class RasDss:
         times: Union[List, np.ndarray, pd.DatetimeIndex],
         grid_info: Dict[str, Any],
         create_if_missing: bool = True,
+        *,
+        dss_version: Optional[int] = None,
     ) -> List[str]:
         """
         Write a time-varying spatial grid series to HEC-DSS.
@@ -1334,11 +1336,11 @@ class RasDss:
             data: 3-D array with shape ``(n_times, n_rows, n_cols)``.
                 NaN/inf values and values equal to ``grid_info["nodata_value"]``
                 are written as the HEC grid no-data sentinel.
-            times: Datetime values. Pass ``n_times + 1`` values to provide
-                explicit interval boundaries, or ``n_times`` values to provide
-                interval end times. For ``n_times`` period data, the interval is
-                inferred from ``grid_info["interval_minutes"]``, consecutive
-                times, the pathname D/E parts, or 60 minutes.
+            times: Timezone-naive datetime values. Pass ``n_times + 1`` values
+                to provide explicit interval boundaries, or ``n_times`` values
+                to provide interval end times. For ``n_times`` period data, the
+                interval is inferred from ``grid_info["interval_minutes"]``,
+                consecutive times, the pathname D/E parts, or 60 minutes.
             grid_info: Grid metadata. Common keys are:
                 - ``cellsize`` or ``cell_size``: cell size in CRS units.
                 - ``origin``: physical lower-left coordinate ``(x, y)``.
@@ -1353,6 +1355,11 @@ class RasDss:
                 - ``compression``: ``"PRECIP_2_BYTE"``, ``"ZLIB"``, or
                   ``None``. Defaults to ``"PRECIP_2_BYTE"``.
             create_if_missing: Create DSS file if it doesn't exist.
+            dss_version: Major DSS version to use when creating a new file.
+                Pass 6 or 7 explicitly, or omit it to preserve the bridge's
+                current default. Existing files must match an explicit value.
+                For DSS6, default precipitation compression is configured with
+                the version-specific safe base/scale ordering.
 
         Returns:
             List of DSS pathnames written, one per timestep.
@@ -1360,7 +1367,9 @@ class RasDss:
         Raises:
             FileNotFoundError: If DSS file doesn't exist and
                 create_if_missing=False.
-            ValueError: If inputs are malformed or grid metadata is incomplete.
+            ValueError: If inputs are malformed, timestamps are timezone-aware,
+                grid metadata is incomplete, ``dss_version`` is invalid, or an
+                existing file does not match the requested version.
             ImportError: If pyjnius is not installed.
             RuntimeError: If the Java grid write operation fails.
 
@@ -1370,13 +1379,20 @@ class RasDss:
             writes through ``hec.heclib.grid.GriddedData.storeGriddedData()``
             because it is the stable Java API path from pyjnius for grid data.
         """
-        RasDss._configure_jvm()
-
-        from jnius import autoclass
-        from ras_commander.RasUtils import RasUtils
-
+        dss_version = RasDss._validate_dss_version(dss_version)
         if grid_info is None:
             raise ValueError("grid_info is required")
+        grid_info = dict(grid_info)
+
+        # HEC Monolith's DSS6 precipitation-compression setter exposes its
+        # base and scale positions opposite to DSS7. Supply the known-safe V6
+        # defaults when the caller selects DSS6 and has not overridden them.
+        compression = grid_info.get("compression", "PRECIP_2_BYTE")
+        if dss_version == 6 and isinstance(compression, str):
+            compression_text = compression.upper().replace("-", "_")
+            if compression_text in {"PRECIP", "PRECIP2BYTE", "PRECIP_2_BYTE"}:
+                grid_info.setdefault("compression_base", 100.0)
+                grid_info.setdefault("compression_scale_factor", 0.0)
 
         grid_array = np.asarray(data, dtype=np.float32)
         if grid_array.ndim != 3:
@@ -1404,13 +1420,35 @@ class RasDss:
         )
 
         dss_path = Path(dss_file)
-        if not dss_path.exists():
+        file_existed = dss_path.exists()
+        if file_existed and not dss_path.is_file():
+            raise IsADirectoryError(f"DSS path is not a file: {dss_path}")
+        if file_existed and dss_version is not None:
+            existing_version = RasDss.get_file_version(dss_path)
+            if existing_version != dss_version:
+                raise ValueError(
+                    f"Existing DSS file is version {existing_version}, not "
+                    f"requested version {dss_version}: {dss_path}"
+                )
+        if not file_existed:
             if not create_if_missing:
                 raise FileNotFoundError(f"DSS file not found: {dss_path}")
             dss_path.parent.mkdir(parents=True, exist_ok=True)
-            logger.info(f"DSS file will be created: {dss_path}")
+            logger.info(f"DSS file will be created: {dss_path.name}")
+            logger.debug(f"DSS file creation path: {dss_path}")
+
+        RasDss._configure_jvm()
+
+        from jnius import autoclass
+        from ras_commander.RasUtils import RasUtils
 
         dss_file_str = str(RasUtils.safe_resolve(dss_path))
+
+        # GriddedData creates a missing file with the bridge default. When the
+        # caller requests DSS6 or DSS7 explicitly, create that empty database
+        # first so the grid writer attaches to the requested file format.
+        if not file_existed and dss_version is not None:
+            RasDss._create_empty_dss(dss_path, dss_version)
 
         GridInfo = autoclass('hec.heclib.grid.GridInfo')
         GridData = autoclass('hec.heclib.grid.GridData')
@@ -2004,9 +2042,9 @@ class RasDss:
         Args:
             dss_file: Path to DSS file (created if missing and create_if_missing=True)
             pathname: DSS pathname (e.g., "//BASIN/LOCATION/FLOW//1HOUR/FORECAST/")
-            times: Array of datetime values (datetime objects, DatetimeIndex, or
-                   numpy datetime64 array). Values must be aligned exactly to
-                   whole minutes.
+            times: Array of timezone-naive datetime values (datetime objects,
+                   DatetimeIndex, or numpy datetime64 array). Values must be
+                   aligned exactly to whole minutes.
             values: Array of numeric values (same length as times)
             units: Data units string (e.g., "CFS", "FEET", "MM", "IN")
             data_type: DSS data type string:
@@ -2064,6 +2102,10 @@ class RasDss:
         if len(times) == 0:
             raise ValueError("times and values must not be empty")
 
+        # Validate the model-clock representation before JVM setup or any
+        # filesystem mutation.
+        hec_times = RasDss._datetimes_to_hec_times(times)
+
         # Resolve DSS file path
         dss_path = Path(dss_file)
         file_existed = dss_path.exists()
@@ -2085,9 +2127,6 @@ class RasDss:
             logger.debug(f"DSS file creation path: {dss_path}")
 
         dss_file_str = str(RasUtils.safe_resolve(dss_path))
-
-        # Convert times to HEC epoch (minutes since 1899-12-31)
-        hec_times = RasDss._datetimes_to_hec_times(times)
 
         # Detect interval from time spacing
         if len(hec_times) > 1:
@@ -2172,7 +2211,7 @@ class RasDss:
         Args:
             dss_file: Path to DSS file
             pathname: DSS pathname
-            df: DataFrame with DatetimeIndex and value column
+            df: DataFrame with a timezone-naive DatetimeIndex and value column
             value_column: Name of column containing values (default "value")
             units: Data units string
             data_type: DSS data type string
@@ -2963,6 +3002,51 @@ class RasDss:
         return data_type_codes[normalized]
 
     @staticmethod
+    def _reject_timezone_aware_times(
+        times: Union[List, np.ndarray, pd.DatetimeIndex],
+    ) -> None:
+        """Reject timestamps whose model-clock representation is ambiguous.
+
+        HEC-DSS records store calendar-clock values without timezone metadata.
+        Silently converting aware timestamps would choose a model clock on the
+        caller's behalf, so writers require callers to convert to the intended
+        clock and remove timezone metadata explicitly.
+        """
+        if isinstance(times, pd.DatetimeIndex):
+            if times.tz is not None:
+                raise ValueError(
+                    "times must be timezone-naive; explicitly convert to the "
+                    "intended HEC-RAS model clock and remove timezone metadata "
+                    "before writing"
+                )
+            return
+
+        if (
+            isinstance(times, np.ndarray)
+            and np.issubdtype(times.dtype, np.datetime64)
+        ):
+            return
+
+        values = [times] if isinstance(times, (str, bytes)) else list(times)
+        for value in values:
+            parsed = value
+            if isinstance(value, str):
+                try:
+                    parsed = pd.Timestamp(value)
+                except (TypeError, ValueError, OverflowError):
+                    continue
+            if getattr(parsed, "tzinfo", None) is not None or getattr(
+                parsed,
+                "tz",
+                None,
+            ) is not None:
+                raise ValueError(
+                    "times must be timezone-naive; explicitly convert to the "
+                    "intended HEC-RAS model clock and remove timezone metadata "
+                    "before writing"
+                )
+
+    @staticmethod
     def _grid_time_windows(
         times: Union[List, np.ndarray, pd.DatetimeIndex],
         n_times: int,
@@ -2971,9 +3055,8 @@ class RasDss:
         pathname_parts: List[str],
     ) -> List[Tuple[pd.Timestamp, pd.Timestamp]]:
         """Convert user times into per-grid start/end windows."""
+        RasDss._reject_timezone_aware_times(times)
         dt_index = pd.DatetimeIndex(pd.to_datetime(times))
-        if dt_index.tz is not None:
-            dt_index = dt_index.tz_convert(None)
 
         if len(dt_index) == n_times + 1:
             return [
@@ -3212,6 +3295,7 @@ class RasDss:
             (1899-12-31 00:00:00)
         """
         hec_epoch = np.datetime64('1899-12-31T00:00:00', 'm')
+        RasDss._reject_timezone_aware_times(times)
 
         try:
             if isinstance(times, pd.DatetimeIndex):

@@ -27,11 +27,39 @@ EXISTING_COLUMNS = {
 
 ADDITIVE_COLUMNS = {
     "downstream_station",
+    "area_2d",
+    "bc_line_name",
     "sa_2d_name",
     "bc_line",
     "boundary_name",
     "boundary_index",
 }
+
+EXPECTED_COLUMNS = [
+    "river",
+    "reach",
+    "station",
+    "bc_type",
+    "interval",
+    "dss_file",
+    "dss_path",
+    "dss_part_a",
+    "dss_part_b",
+    "dss_part_c",
+    "dss_part_d",
+    "dss_part_e",
+    "dss_part_f",
+    "use_dss",
+    "data_count",
+    "line_number",
+    "downstream_station",
+    "area_2d",
+    "bc_line_name",
+    "sa_2d_name",
+    "bc_line",
+    "boundary_name",
+    "boundary_index",
+]
 
 
 def _location(*fields: str) -> str:
@@ -76,6 +104,7 @@ def test_inventory_extracts_1d_and_2d_identity_and_unfiltered_index(
 
     result = RasUnsteady.get_dss_boundaries(unsteady_file)
 
+    assert result.columns.tolist() == EXPECTED_COLUMNS
     assert result["boundary_index"].tolist() == [1, 2]
 
     one_d = result.iloc[0]
@@ -84,6 +113,8 @@ def test_inventory_extracts_1d_and_2d_identity_and_unfiltered_index(
     assert one_d["station"] == "1000"
     assert one_d["downstream_station"] == "900"
     assert one_d["boundary_name"] == "Downstream 1D flow"
+    assert one_d["area_2d"] == ""
+    assert one_d["bc_line_name"] == ""
     assert one_d["sa_2d_name"] == ""
     assert one_d["bc_line"] == ""
 
@@ -92,9 +123,17 @@ def test_inventory_extracts_1d_and_2d_identity_and_unfiltered_index(
     assert two_d["reach"] == ""
     assert two_d["station"] == ""
     assert two_d["downstream_station"] == ""
+    assert two_d["area_2d"] == "Lower Area"
+    assert two_d["bc_line_name"] == "West Inflow"
     assert two_d["sa_2d_name"] == "Lower Area"
     assert two_d["bc_line"] == "West Inflow"
     assert two_d["boundary_name"] == "West 2D inflow line"
+    assert result["sa_2d_name"].equals(result["area_2d"])
+    assert result["bc_line"].equals(result["bc_line_name"])
+    assert result.attrs["deprecated_columns"] == {
+        "sa_2d_name": "area_2d",
+        "bc_line": "bc_line_name",
+    }
 
 
 @pytest.mark.parametrize(
@@ -210,5 +249,10 @@ def test_inventory_retains_existing_columns_when_no_dss_boundaries(
     result = RasUnsteady.get_dss_boundaries(unsteady_file)
 
     assert result.empty
+    assert result.columns.tolist() == EXPECTED_COLUMNS
     assert EXISTING_COLUMNS <= set(result.columns)
     assert ADDITIVE_COLUMNS <= set(result.columns)
+    assert result.attrs["deprecated_columns"] == {
+        "sa_2d_name": "area_2d",
+        "bc_line": "bc_line_name",
+    }

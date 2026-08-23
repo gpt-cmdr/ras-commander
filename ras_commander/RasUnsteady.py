@@ -145,6 +145,10 @@ class RasUnsteady:
         "precipitation",
         "rain",
     )
+    _DSS_BOUNDARY_DEPRECATED_COLUMNS = {
+        'sa_2d_name': 'area_2d',
+        'bc_line': 'bc_line_name',
+    }
     _BOUNDARY_TYPE_KEYWORDS: Tuple[Tuple[str, str], ...] = (
         ("Lateral Inflow Hydrograph=", "Lateral Inflow Hydrograph"),
         ("Uniform Lateral Inflow Hydrograph=", "Uniform Lateral Inflow Hydrograph"),
@@ -6623,8 +6627,10 @@ class RasUnsteady:
             - data_count: Number of inline values declared by the boundary
             - line_number: Line number of Boundary Location in file
             - downstream_station: Downstream river station (location field 3)
-            - sa_2d_name: Storage Area/2D Flow Area name (location field 5)
-            - bc_line: 2D boundary-condition line name (location field 7)
+            - area_2d: 2D Flow Area name (location field 5)
+            - bc_line_name: 2D boundary-condition line name (location field 7)
+            - sa_2d_name: Deprecated compatibility alias for ``area_2d``
+            - bc_line: Deprecated compatibility alias for ``bc_line_name``
             - boundary_name: Value from the block's Boundary Name record
             - boundary_index: Zero-based position among all Boundary Location
               blocks, including blocks that are not DSS-linked
@@ -6682,6 +6688,8 @@ class RasUnsteady:
             'data_count',
             'line_number',
             'downstream_station',
+            'area_2d',
+            'bc_line_name',
             'sa_2d_name',
             'bc_line',
             'boundary_name',
@@ -6703,6 +6711,9 @@ class RasUnsteady:
             i += 1
 
         df = pd.DataFrame(boundaries, columns=output_columns)
+        df.attrs['deprecated_columns'] = dict(
+            RasUnsteady._DSS_BOUNDARY_DEPRECATED_COLUMNS
+        )
         logger.debug(f"Found {len(df)} DSS-linked boundaries in {unsteady_path.name}")
         return df
 
@@ -6714,6 +6725,8 @@ class RasUnsteady:
             'reach': '',
             'station': '',
             'downstream_station': '',
+            'area_2d': '',
+            'bc_line_name': '',
             'sa_2d_name': '',
             'bc_line': '',
             'boundary_name': '',
@@ -6743,9 +6756,14 @@ class RasUnsteady:
         if len(parts) >= 4:
             bc['downstream_station'] = parts[3]
         if len(parts) >= 6:
-            bc['sa_2d_name'] = parts[5]
+            bc['area_2d'] = parts[5]
         if len(parts) >= 8:
-            bc['bc_line'] = parts[7]
+            bc['bc_line_name'] = parts[7]
+
+        # Compatibility aliases are derived from the canonical columns so the
+        # two naming surfaces cannot diverge during the deprecation window.
+        bc['sa_2d_name'] = bc['area_2d']
+        bc['bc_line'] = bc['bc_line_name']
 
         # Scan following lines for DSS info
         i = start_idx + 1

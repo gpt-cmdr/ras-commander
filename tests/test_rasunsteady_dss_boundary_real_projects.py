@@ -133,8 +133,12 @@ def test_bald_eagle_real_dss_inventory_is_exact_and_read_only(
     assert upstream["reach"] == "Lock Haven"
     assert upstream["station"] == "137520"
     assert upstream["bc_type"] == "Flow Hydrograph"
+    assert upstream["area_2d"] == ""
+    assert upstream["bc_line_name"] == ""
     assert upstream["sa_2d_name"] == ""
     assert upstream["bc_line"] == ""
+    assert result["area_2d"].equals(result["sa_2d_name"])
+    assert result["bc_line_name"].equals(result["bc_line"])
 
     uniform = result.loc[
         result["bc_type"] == "Uniform Lateral Inflow Hydrograph"
@@ -205,6 +209,8 @@ def test_chippewa_real_exact_2d_mutation_preserves_other_blocks(
     selected = inventory.loc[inventory["boundary_index"] == 1]
     assert len(selected) == 1
     row = selected.iloc[0]
+    assert row["area_2d"] == "Chippewa"
+    assert row["bc_line_name"] == "Lake Pepin"
     assert row["sa_2d_name"] == "Chippewa"
     assert row["bc_line"] == "Lake Pepin"
     assert row["bc_type"] == "Flow Hydrograph"

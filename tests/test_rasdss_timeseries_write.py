@@ -42,6 +42,40 @@ def test_datetimes_to_hec_times_supports_pre_epoch_values() -> None:
 
 
 @pytest.mark.parametrize(
+    "times",
+    [
+        pd.date_range("2020-01-01", periods=2, freq="h", tz="UTC"),
+        [pd.Timestamp("2020-01-01 00:00", tz="America/New_York")],
+        ["2020-01-01T00:00:00-05:00"],
+        [
+            "2020-01-01T00:00:00-05:00",
+            "2020-06-01T00:00:00-04:00",
+        ],
+    ],
+)
+def test_datetimes_to_hec_times_rejects_timezone_aware_values(times) -> None:
+    with pytest.raises(ValueError, match="timezone-naive"):
+        RasDss._datetimes_to_hec_times(times)
+
+
+def test_datetimes_to_hec_times_accepts_explicit_model_clock_conversion() -> None:
+    aware = pd.date_range(
+        "2020-01-01 00:00",
+        periods=2,
+        freq="h",
+        tz="America/New_York",
+    )
+    model_clock = aware.tz_localize(None)
+
+    result = RasDss._datetimes_to_hec_times(model_clock)
+    expected = RasDss._datetimes_to_hec_times(
+        pd.date_range("2020-01-01 00:00", periods=2, freq="h")
+    )
+
+    np.testing.assert_array_equal(result, expected)
+
+
+@pytest.mark.parametrize(
     ("times", "message"),
     [
         ([pd.NaT], "NaT"),
@@ -113,6 +147,54 @@ def test_setter_failure_occurs_before_dss_file_is_opened(
 
     assert opened == []
     assert not output.exists()
+
+
+def test_timezone_aware_times_fail_before_jvm_or_output_parent(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setattr(
+        RasDss,
+        "_configure_jvm",
+        staticmethod(
+            lambda: pytest.fail("timezone rejection must precede JVM setup")
+        ),
+    )
+    output = tmp_path / "missing-parent" / "aware.dss"
+
+    with pytest.raises(ValueError, match="timezone-naive"):
+        RasDss.write_timeseries(
+            output,
+            "/BASIN/UPSTREAM/FLOW//1HOUR/C03/",
+            pd.date_range("2020-01-01", periods=2, freq="h", tz="UTC"),
+            [1.0, 2.0],
+        )
+
+    assert not output.parent.exists()
+
+
+def test_dataframe_writer_rejects_timezone_aware_index_before_jvm(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    frame = pd.DataFrame(
+        {"value": [1.0, 2.0]},
+        index=pd.date_range("2020-01-01", periods=2, freq="h", tz="UTC"),
+    )
+    monkeypatch.setattr(
+        RasDss,
+        "_configure_jvm",
+        staticmethod(
+            lambda: pytest.fail("timezone rejection must precede JVM setup")
+        ),
+    )
+
+    with pytest.raises(ValueError, match="timezone-naive"):
+        RasDss.write_timeseries_from_dataframe(
+            tmp_path / "aware-frame.dss",
+            "/BASIN/UPSTREAM/FLOW//1HOUR/C03/",
+            frame,
+        )
 
 
 def test_write_timeseries_round_trips_through_real_java_bridge(tmp_path) -> None:

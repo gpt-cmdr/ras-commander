@@ -50,7 +50,12 @@ Write a single time series to DSS.
   files. The default `None` preserves the bridge's current default. An explicit
   value must match an existing file.
 
-Datetime values must be aligned exactly to whole minutes.
+Datetime values must be timezone-naive and aligned exactly to whole minutes.
+Callers with timezone-aware data must explicitly convert it to the intended
+HEC-RAS model clock and remove timezone metadata before writing.
+For simulations spanning a daylight-saving fallback, choose a fixed-offset or
+otherwise strictly increasing model clock; merely stripping timezone metadata
+from a repeated local hour creates ambiguous duplicate model times.
 
 #### get_file_version(dss_file)
 Return the authoritative HEC-DSS major file version.
@@ -60,7 +65,7 @@ Return the authoritative HEC-DSS major file version.
 
 **Returns:** Integer `6` or `7`.
 
-#### write_grid_timeseries(dss_file, pathname, data, times, grid_info)
+#### write_grid_timeseries(dss_file, pathname, data, times, grid_info, ..., dss_version=None)
 Write a time-varying spatial grid series to DSS.
 
 **Parameters:**
@@ -72,8 +77,17 @@ Write a time-varying spatial grid series to DSS.
   `n_times` interval end times
 - `grid_info` (dict): Grid metadata such as `cellsize`, `origin`, `crs`,
   `units`, and `data_type`
+- `create_if_missing` (bool): Create a missing file, default `True`
+- `dss_version` (int|None): Keyword-only DSS 6 or DSS 7 selection for new
+  files. The default `None` preserves the bridge's current default. An explicit
+  value must match an existing file. Explicit DSS6 writes use the Monolith's
+  version-specific safe precipitation-compression base/scale ordering unless
+  those values are supplied in `grid_info`.
 
 **Returns:** List of DSS pathnames written.
+
+Grid timestamps must also be timezone-naive. ras-commander does not infer a
+model timezone or silently convert aware timestamps.
 
 #### copy_grid_with_zero_tail(source_dss, output_dss, pathname, tail_intervals, ...)
 
@@ -288,6 +302,21 @@ payload is `GridData` plus a `GridInfo` subclass (`AlbersInfo`,
 `SpecifiedGridInfo`, or `HrapInfo`). This writer stores records through
 `GriddedData.storeGriddedData()` because that is the stable grid write path from
 pyjnius for the Monolith version used by ras-commander.
+
+## RasUnsteady DSS inventory
+
+### get_dss_boundaries(unsteady_file, ras_object=None)
+
+Return the DSS-linked boundary inventory for one unsteady-flow file. Canonical
+2D identity columns are `area_2d` and `bc_line_name`, matching
+`ras.boundaries_df`. The older `sa_2d_name` and `bc_line` columns remain equal
+compatibility aliases but are deprecated. The returned DataFrame records this
+mapping in `df.attrs["deprecated_columns"]`.
+
+The current mutation methods retain their compatibility parameter names. For
+example, pass `sa_2d_name=row["area_2d"]` and
+`bc_line=row["bc_line_name"]` to `set_boundary_dss_link()`. Canonical mutation
+keyword aliases are not added in this release.
 
 ## Requirements
 

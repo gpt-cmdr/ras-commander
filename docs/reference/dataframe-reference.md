@@ -220,6 +220,28 @@ dss_boundaries = ras.boundaries_df[ras.boundaries_df["Use DSS"] == "True"]
 flow_bcs = ras.boundaries_df[ras.boundaries_df["bc_type"] == "Flow Hydrograph"]
 ```
 
+## DSS boundary inventory
+
+`RasUnsteady.get_dss_boundaries(unsteady_file)` returns the DSS-linked subset
+from one unsteady-flow file with exact block identity and parsed pathname parts.
+Its canonical 2D identity columns match `boundaries_df`:
+
+| Column | Dtype | Meaning |
+|--------|-------|---------|
+| `area_2d` | str | 2D flow-area name when present |
+| `bc_line_name` | str | named 2D boundary-condition line when present |
+| `sa_2d_name` | str | deprecated compatibility alias for `area_2d` |
+| `bc_line` | str | deprecated compatibility alias for `bc_line_name` |
+
+The aliases remain equal to their canonical columns during the compatibility
+window. Machine-readable deprecation mappings are available from
+`inventory.attrs["deprecated_columns"]`.
+
+Boundary mutation methods retain their existing compatibility keywords during
+this window. Pass canonical inventory values explicitly, for example
+`sa_2d_name=row["area_2d"]` and `bc_line=row["bc_line_name"]` when calling
+`RasUnsteady.set_boundary_dss_link()`.
+
 ## `rasmap_df`
 
 `rasmap_df` is a **single-row compact summary** of the project `.rasmap`.
