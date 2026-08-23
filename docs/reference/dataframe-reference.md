@@ -41,6 +41,38 @@ Related live notebooks:
 - [212_landcover_mannings_n_write.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/212_landcover_mannings_n_write.ipynb)
 - [611_validating_map_layers.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/611_validating_map_layers.ipynb)
 
+## Project asset inventory
+
+`inspect_project_assets()` returns one row per file reference or referenced
+dataset. File and dataset state are separate: an available DSS container, for
+example, does not prove that a pathname exists or covers a plan window.
+
+The ordered schema is:
+
+| Column group | Meaning |
+|--------------|---------|
+| `inventory_schema_version`, `inventory_id`, `inspection_depth` | Snapshot identity and requested scope |
+| `asset_id`, `parent_asset_id`, `asset_kind`, `asset_role` | Stable row identity, containment, and mechanical role |
+| `plan_number`, `unsteady_number`, `required` | Plan/flow scope and whether the dependency is mechanically enabled |
+| `owner_file`, `owner_sha256`, `reference_raw`, `resolved_path` | Exact reference provenance and resolved path |
+| `path_scope`, `portable` | Internal/external/ambiguous path classification |
+| `exists`, `is_file`, `is_dir`, `volume_id`, `file_id`, `size_bytes`, `mtime_ns`, `sha256` | Filesystem and optional streamed-hash evidence |
+| `dataset_name`, `expected_start`, `expected_end`, `available_start`, `available_end` | HDF/DSS/GDAL dataset and coverage evidence |
+| `inspection_state`, `readiness`, `reason_code`, `detail`, `source_api` | Explicit observation state and parser provenance |
+
+`inspection_state` is one of `available`, `missing`, `ambiguous`,
+`not_inspected`, `failed`, or `not_applicable`. `readiness` is independently
+`ready`, `not_ready`, `unknown`, or `not_required`. In particular,
+`not_inspected` is never silently promoted to ready.
+
+Controlled DSS 6/7 tests found existing-file reads byte-stable, but the normal
+Java handle remained write-capable and several read APIs created a new DSS file
+when the target was missing. Direct source pathname and coverage requests
+therefore remain `not_inspected` with reason `reader_not_source_immutable`; the
+container path is still inventoried normally. A future deeper reader will use a
+verified disposable copy, OS-denied writes, must-exist open, and a short-lived
+worker before returning snapshot-derived coverage.
+
 ## Plan-Number Normalization
 
 ras-commander normalizes RAS file numbers to a two-digit form before path

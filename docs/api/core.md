@@ -61,6 +61,71 @@ Core classes for HEC-RAS project management and execution.
         - get_hdf_entries
         - get_boundary_conditions
 
+### Project asset inspection
+
+`inspect_project_assets()` builds a read-only, PyArrow-backed inventory of a
+project's declared components, plan dependency closure, HDF sidecars,
+RASMapper references, DSS links, restart/prior-water-surface inputs, and
+gridded precipitation inputs. Use an explicit inspection depth rather than
+assuming every file beside a project is required by the current plan.
+
+```python
+from ras_commander import inspect_project_assets
+
+assets = inspect_project_assets(
+    r"C:\Models\Source\Model.prj",
+    depth="current_plan",
+    hash_files=True,
+    dss_inspection="none",
+)
+
+not_ready = assets.loc[
+    (assets["required"] == True) & (assets["readiness"] == "not_ready")
+]
+```
+
+::: ras_commander.inspect_project_assets
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+### Atomic project staging
+
+`stage_project()` copies a complete project tree into a unique temporary
+sibling, verifies every source and copied file with streaming SHA-256, creates
+an explicit `RasPrj`, inventories the staged dependencies, writes a stage
+manifest, and publishes with one final directory rename. It never runs or
+preprocesses HEC-RAS.
+
+The destination's parent must already exist and the destination itself must
+not exist. The operation fails closed on overlap, reparse/symlink ambiguity,
+lock artifacts, source or copy drift, an invalid project population, and
+destination races. Failures use typed `ProjectStageError` subclasses with a
+machine-readable `reason_code`; an initially existing destination retains the
+standard `FileExistsError`. Existing `RasCmdr` copy behavior is unchanged.
+
+```python
+from ras_commander import stage_project
+
+staged = stage_project(
+    r"C:\Models\Source\Model.prj",
+    r"D:\Runs\model-2026-08-23",
+)
+
+print(staged.destination_project_file)
+print(staged.execution_readiness)
+```
+
+::: ras_commander.stage_project
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: ras_commander.StageProjectResult
+    options:
+      show_root_heading: true
+      heading_level: 3
+
 ## Plan Execution
 
 ### RasCmdr
